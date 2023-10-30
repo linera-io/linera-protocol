@@ -52,7 +52,7 @@ use std::{
     net::{AddrParseError, SocketAddr},
     str::FromStr,
     task::{Context, Poll},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use thiserror::Error;
 use tokio::{
@@ -103,6 +103,16 @@ pub static SERVER_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
         "server_request_error",
         "Server request error",
+        // Can add labels here
+        &["method_name"]
+    )
+    .expect("Counter can be created")
+});
+
+pub static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "server_request_latency_per_request_type",
+        "Server request latency per request type",
         // Can add labels here
         &["method_name"]
     )
@@ -180,7 +190,7 @@ where
     }
 
     fn call(&mut self, request: http::Request<Body>) -> Self::Future {
-        let start = std::time::Instant::now();
+        let start = Instant::now();
         let future = self.service.call(request);
         async move {
             let response = future.await?;
@@ -410,6 +420,15 @@ where
             }
         }
     }
+
+    fn log_request_success_and_latency(start: Instant, method_name: &str) {
+        SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE
+            .with_label_values(&[method_name])
+            .observe(start.elapsed().as_secs_f64());
+        SERVER_REQUEST_SUCCESS
+            .with_label_values(&[method_name])
+            .inc();
+    }
 }
 
 #[tonic::async_trait]
@@ -423,14 +442,13 @@ where
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
+        let start = Instant::now();
         let proposal = request.into_inner().try_into()?;
         debug!(?proposal, "Handling block proposal");
         Ok(Response::new(
             match self.state.clone().handle_block_proposal(proposal).await {
                 Ok((info, actions)) => {
-                    SERVER_REQUEST_SUCCESS
-                        .with_label_values(&["handle_block_proposal"])
-                        .inc();
+                    Self::log_request_success_and_latency(start, "handle_block_proposal");
                     self.handle_network_actions(actions);
                     info.try_into()?
                 }
@@ -450,6 +468,7 @@ where
         &self,
         request: Request<LiteCertificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
+        let start = Instant::now();
         let HandleLiteCertificateRequest {
             certificate,
             wait_for_outgoing_messages,
@@ -463,9 +482,7 @@ where
             .await
         {
             Ok((info, actions)) => {
-                SERVER_REQUEST_SUCCESS
-                    .with_label_values(&["handle_lite_certificate"])
-                    .inc();
+                Self::log_request_success_and_latency(start, "handle_lite_certificate");
                 self.handle_network_actions(actions);
                 if let Some(receiver) = receiver {
                     if let Err(e) = receiver.await {
@@ -493,6 +510,7 @@ where
         &self,
         request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
+        let start = Instant::now();
         let HandleCertificateRequest {
             certificate,
             blobs,
@@ -507,9 +525,7 @@ where
             .await
         {
             Ok((info, actions)) => {
-                SERVER_REQUEST_SUCCESS
-                    .with_label_values(&["handle_certificate"])
-                    .inc();
+                Self::log_request_success_and_latency(start, "handle_certificate");
                 self.handle_network_actions(actions);
                 if let Some(receiver) = receiver {
                     if let Err(e) = receiver.await {
@@ -533,13 +549,12 @@ where
         &self,
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
+        let start = Instant::now();
         let query = request.into_inner().try_into()?;
         debug!(?query, "Handling chain info query");
         match self.state.clone().handle_chain_info_query(query).await {
             Ok((info, actions)) => {
-                SERVER_REQUEST_SUCCESS
-                    .with_label_values(&["handle_chain_info_query"])
-                    .inc();
+                Self::log_request_success_and_latency(start, "handle_chain_info_query");
                 self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
             }
@@ -558,13 +573,12 @@ where
         &self,
         request: Request<CrossChainRequest>,
     ) -> Result<Response<()>, Status> {
+        let start = Instant::now();
         let request = request.into_inner().try_into()?;
         debug!(?request, "Handling cross-chain request");
         match self.state.clone().handle_cross_chain_request(request).await {
             Ok(actions) => {
-                SERVER_REQUEST_SUCCESS
-                    .with_label_values(&["handle_cross_chain_request"])
-                    .inc();
+                Self::log_request_success_and_latency(start, "handle_cross_chain_request");
                 self.handle_network_actions(actions)
             }
             Err(error) => {
