@@ -10,32 +10,19 @@ use common::INTEGRATION_TEST_GUARD;
 use linera_service::util::QuotedBashScript;
 use tokio::process::Command;
 
+#[test_case::test_case(".." ; "main")]
+#[test_case::test_case("../examples/fungible" ; "fungible")]
+#[test_case::test_case("../examples/crowd-funding" ; "crowd funding")]
+#[test_case::test_case("../examples/social" ; "social")]
 #[test_log::test(tokio::test)]
-async fn test_script_in_main_readme() -> std::io::Result<()> {
+async fn test_script_in_readme(path: &str) -> std::io::Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let script = QuotedBashScript::from_markdown("../README.md")?;
+    let script = QuotedBashScript::from_markdown(format!("{path}/README.md"))?;
     let status = Command::new("bash")
         // Run from the root of the repo.
         .current_dir("..")
         // Increase log verbosity to verify that services can write to stderr.
         .env("RUST_LOG", "linera_service=debug")
-        .arg("-e")
-        .arg("-x")
-        .arg(script.path())
-        .status()
-        .await?;
-
-    assert!(status.success());
-    Ok(())
-}
-
-#[test_log::test(tokio::test)]
-async fn test_script_in_fungible_readme() -> std::io::Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let script = QuotedBashScript::from_markdown("../examples/fungible/README.md")?;
-    let status = Command::new("bash")
-        // Run from the root of the repo.
-        .current_dir("..")
         .arg("-e")
         .arg("-x")
         .arg(script.path())
