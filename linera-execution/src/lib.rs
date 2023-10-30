@@ -75,7 +75,7 @@ pub struct RuntimeLimits {
 
 /// The entries of the runtime related to storage
 #[derive(Copy, Debug, Clone)]
-pub struct RuntimeTracker {
+pub struct ResourceTracker {
     /// The used fuel in the computation
     pub used_fuel: u64,
     /// The number of reads in the computation
@@ -84,16 +84,16 @@ pub struct RuntimeTracker {
     pub bytes_read: u64,
     /// The total number of bytes written
     pub bytes_written: u64,
-    /// The maximum size of read allowed per block
+    /// The maximum size of read that remains available for use
     pub maximum_bytes_read: u64,
-    /// The maximum size of write allowed per block
+    /// The maximum size of write that remains available for use
     pub maximum_bytes_written: u64,
 }
 
 #[cfg(any(test, feature = "test"))]
-impl Default for RuntimeTracker {
+impl Default for ResourceTracker {
     fn default() -> Self {
-        RuntimeTracker {
+        ResourceTracker {
             used_fuel: 0,
             num_reads: 0,
             bytes_read: 0,
@@ -116,7 +116,7 @@ impl Default for RuntimeLimits {
     }
 }
 
-impl RuntimeTracker {
+impl ResourceTracker {
     /// Update the limits for the maximum and update the balance.
     /// The substraction are guaranteed to work correctly and the
     /// checks are occurring in the runtime.

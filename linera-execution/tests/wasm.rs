@@ -13,8 +13,8 @@ use linera_base::{
 };
 use linera_execution::{
     policy::ResourceControlPolicy, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView,
-    Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response, RuntimeTracker,
-    SystemExecutionState, TestExecutionRuntimeContext, WasmApplication, WasmRuntime,
+    Operation, OperationContext, Query, QueryContext, RawExecutionResult, ResourceTracker,
+    Response, SystemExecutionState, TestExecutionRuntimeContext, WasmApplication, WasmRuntime,
 };
 use linera_views::{memory::MemoryContext, views::View};
 use serde_json::json;
@@ -73,7 +73,7 @@ async fn test_fuel_for_counter_wasm_application(
         fuel: Amount::from_atto(1),
         ..ResourceControlPolicy::default()
     };
-    let mut runtime_tracker = RuntimeTracker::default();
+    let mut tracker = ResourceTracker::default();
     let amount = Amount::from_tokens(1);
     *view.system.balance.get_mut() = amount;
     for increment in &increments {
@@ -82,7 +82,7 @@ async fn test_fuel_for_counter_wasm_application(
                 &context,
                 &Operation::user(app_id, increment).unwrap(),
                 &policy,
-                &mut runtime_tracker,
+                &mut tracker,
             )
             .await?;
         assert_eq!(
@@ -93,7 +93,7 @@ async fn test_fuel_for_counter_wasm_application(
             )]
         );
     }
-    assert_eq!(runtime_tracker.used_fuel, expected_fuel);
+    assert_eq!(tracker.used_fuel, expected_fuel);
 
     let context = QueryContext {
         chain_id: ChainId::root(0),

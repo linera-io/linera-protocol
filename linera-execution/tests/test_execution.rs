@@ -42,7 +42,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         authenticated_signer: None,
         next_message_index: 0,
     };
-    let mut runtime_tracker = RuntimeTracker::default();
+    let mut tracker = ResourceTracker::default();
     let policy = ResourceControlPolicy::default();
     let result = view
         .execute_operation(
@@ -52,7 +52,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
                 bytes: vec![],
             },
             &policy,
-            &mut runtime_tracker,
+            &mut tracker,
         )
         .await;
 
@@ -213,7 +213,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         authenticated_signer: Some(owner),
         next_message_index: 0,
     };
-    let mut runtime_tracker = RuntimeTracker::default();
+    let mut tracker = ResourceTracker::default();
     let policy = ResourceControlPolicy::default();
     let result = view
         .execute_operation(
@@ -223,7 +223,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
                 bytes: vec![1],
             },
             &policy,
-            &mut runtime_tracker,
+            &mut tracker,
         )
         .await
         .unwrap();
@@ -286,7 +286,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
         authenticated_signer: Some(owner),
         next_message_index: 0,
     };
-    let mut runtime_tracker = RuntimeTracker::default();
+    let mut tracker = ResourceTracker::default();
     let policy = ResourceControlPolicy::default();
     let result = view
         .execute_operation(
@@ -296,7 +296,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
                 bytes: vec![],
             },
             &policy,
-            &mut runtime_tracker,
+            &mut tracker,
         )
         .await;
 
