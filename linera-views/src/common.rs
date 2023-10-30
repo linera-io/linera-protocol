@@ -58,6 +58,16 @@ pub struct CommonStoreConfig {
     pub cache_size: usize,
 }
 
+impl Default for CommonStoreConfig {
+    fn default() -> Self {
+        CommonStoreConfig {
+            max_concurrent_queries: None,
+            max_stream_queries: 10,
+            cache_size: 1000,
+        }
+    }
+}
+
 /// The minimum value for the view tags. Values in 0..MIN_VIEW_TAG are used for other purposes.
 pub const MIN_VIEW_TAG: u8 = 1;
 

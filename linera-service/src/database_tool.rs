@@ -24,18 +24,6 @@ enum DatabaseToolCommand {
         /// Storage configuration for the blockchain history.
         #[structopt(long = "storage")]
         storage_config: String,
-
-        /// The maximal number of simultaneous queries to the database
-        #[structopt(long)]
-        max_concurrent_queries: Option<usize>,
-
-        /// The maximal number of simultaneous stream queries to the database
-        #[structopt(long, default_value = "10")]
-        max_stream_queries: usize,
-
-        /// The maximal number of entries in the storage cache.
-        #[structopt(long, default_value = "1000")]
-        cache_size: usize,
     },
 
     /// Delete a single table from the database
@@ -44,18 +32,6 @@ enum DatabaseToolCommand {
         /// Storage configuration for the blockchain history.
         #[structopt(long = "storage")]
         storage_config: String,
-
-        /// The maximal number of simultaneous queries to the database
-        #[structopt(long)]
-        max_concurrent_queries: Option<usize>,
-
-        /// The maximal number of simultaneous stream queries to the database
-        #[structopt(long, default_value = "10")]
-        max_stream_queries: usize,
-
-        /// The maximal number of entries in the storage cache.
-        #[structopt(long, default_value = "1000")]
-        cache_size: usize,
     },
 
     /// Check existence of a database
@@ -64,18 +40,6 @@ enum DatabaseToolCommand {
         /// Storage configuration for the blockchain history.
         #[structopt(long = "storage")]
         storage_config: String,
-
-        /// The maximal number of simultaneous queries to the database
-        #[structopt(long)]
-        max_concurrent_queries: Option<usize>,
-
-        /// The maximal number of simultaneous stream queries to the database
-        #[structopt(long, default_value = "10")]
-        max_stream_queries: usize,
-
-        /// The maximal number of entries in the storage cache.
-        #[structopt(long, default_value = "1000")]
-        cache_size: usize,
     },
 
     /// Check absence of a database
@@ -84,18 +48,6 @@ enum DatabaseToolCommand {
         /// Storage configuration for the blockchain history.
         #[structopt(long = "storage")]
         storage_config: String,
-
-        /// The maximal number of simultaneous queries to the database
-        #[structopt(long)]
-        max_concurrent_queries: Option<usize>,
-
-        /// The maximal number of simultaneous stream queries to the database
-        #[structopt(long, default_value = "10")]
-        max_stream_queries: usize,
-
-        /// The maximal number of entries in the storage cache.
-        #[structopt(long, default_value = "1000")]
-        cache_size: usize,
     },
 
     /// Initialize a table in the database
@@ -104,18 +56,6 @@ enum DatabaseToolCommand {
         /// Storage configuration for the blockchain history.
         #[structopt(long = "storage")]
         storage_config: String,
-
-        /// The maximal number of simultaneous queries to the database
-        #[structopt(long)]
-        max_concurrent_queries: Option<usize>,
-
-        /// The maximal number of simultaneous stream queries to the database
-        #[structopt(long, default_value = "10")]
-        max_stream_queries: usize,
-
-        /// The maximal number of entries in the storage cache.
-        #[structopt(long, default_value = "1000")]
-        cache_size: usize,
     },
 
     /// List the tables of the database
@@ -124,65 +64,26 @@ enum DatabaseToolCommand {
         /// Storage configuration for the blockchain history.
         #[structopt(long = "storage")]
         storage_config: String,
-
-        /// The maximal number of simultaneous queries to the database
-        #[structopt(long)]
-        max_concurrent_queries: Option<usize>,
-
-        /// The maximal number of simultaneous stream queries to the database
-        #[structopt(long, default_value = "10")]
-        max_stream_queries: usize,
-
-        /// The maximal number of entries in the storage cache.
-        #[structopt(long, default_value = "1000")]
-        cache_size: usize,
     },
 }
 
 async fn evaluate_options(options: DatabaseToolOptions) -> Result<i32, anyhow::Error> {
     match options.command {
-        DatabaseToolCommand::DeleteAll {
-            storage_config,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-        } => {
+        DatabaseToolCommand::DeleteAll { storage_config } => {
             let storage_config: StorageConfig = storage_config.parse()?;
-            let common_config = CommonStoreConfig {
-                max_concurrent_queries,
-                max_stream_queries,
-                cache_size,
-            };
+            let common_config = CommonStoreConfig::default();
             let full_storage_config = storage_config.add_common_config(common_config).await?;
             full_storage_config.delete_all().await?;
         }
-        DatabaseToolCommand::DeleteSingle {
-            storage_config,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-        } => {
+        DatabaseToolCommand::DeleteSingle { storage_config } => {
             let storage_config: StorageConfig = storage_config.parse()?;
-            let common_config = CommonStoreConfig {
-                max_concurrent_queries,
-                max_stream_queries,
-                cache_size,
-            };
+            let common_config = CommonStoreConfig::default();
             let full_storage_config = storage_config.add_common_config(common_config).await?;
             full_storage_config.delete_single().await?;
         }
-        DatabaseToolCommand::CheckExistence {
-            storage_config,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-        } => {
+        DatabaseToolCommand::CheckExistence { storage_config } => {
             let storage_config: StorageConfig = storage_config.parse()?;
-            let common_config = CommonStoreConfig {
-                max_concurrent_queries,
-                max_stream_queries,
-                cache_size,
-            };
+            let common_config = CommonStoreConfig::default();
             let full_storage_config = storage_config.add_common_config(common_config).await?;
             let test = full_storage_config.test_existence().await?;
             if test {
@@ -193,18 +94,9 @@ async fn evaluate_options(options: DatabaseToolOptions) -> Result<i32, anyhow::E
                 return Ok(1);
             }
         }
-        DatabaseToolCommand::CheckAbsence {
-            storage_config,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-        } => {
+        DatabaseToolCommand::CheckAbsence { storage_config } => {
             let storage_config: StorageConfig = storage_config.parse()?;
-            let common_config = CommonStoreConfig {
-                max_concurrent_queries,
-                max_stream_queries,
-                cache_size,
-            };
+            let common_config = CommonStoreConfig::default();
             let full_storage_config = storage_config.add_common_config(common_config).await?;
             let test = full_storage_config.test_existence().await?;
             if test {
@@ -215,33 +107,15 @@ async fn evaluate_options(options: DatabaseToolOptions) -> Result<i32, anyhow::E
                 return Ok(0);
             }
         }
-        DatabaseToolCommand::Initialize {
-            storage_config,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-        } => {
+        DatabaseToolCommand::Initialize { storage_config } => {
             let storage_config: StorageConfig = storage_config.parse()?;
-            let common_config = CommonStoreConfig {
-                max_concurrent_queries,
-                max_stream_queries,
-                cache_size,
-            };
+            let common_config = CommonStoreConfig::default();
             let full_storage_config = storage_config.add_common_config(common_config).await?;
             full_storage_config.initialize().await?;
         }
-        DatabaseToolCommand::ListTables {
-            storage_config,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-        } => {
+        DatabaseToolCommand::ListTables { storage_config } => {
             let storage_config: StorageConfig = storage_config.parse()?;
-            let common_config = CommonStoreConfig {
-                max_concurrent_queries,
-                max_stream_queries,
-                cache_size,
-            };
+            let common_config = CommonStoreConfig::default();
             let full_storage_config = storage_config.add_common_config(common_config).await?;
             let tables = full_storage_config.list_tables().await?;
             println!("The list of tables is {:?}", tables);
