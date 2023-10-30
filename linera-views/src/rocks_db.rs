@@ -19,6 +19,7 @@ use thiserror::Error;
 use {crate::lru_caching::TEST_CACHE_SIZE, tempfile::TempDir};
 
 /// The number of streams for the test
+#[cfg(any(test, feature = "test"))]
 const TEST_ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
 
 // The maximum size of values in RocksDB is 3 GB
@@ -182,13 +183,13 @@ impl KeyValueStoreClient for RocksDbClientInternal {
                             return Err(RocksDbContextError::KeyTooLong);
                         }
                         inner_batch.delete(&key)
-                    },
+                    }
                     WriteOperation::Put { key, value } => {
                         if key.len() > MAX_KEY_SIZE {
                             return Err(RocksDbContextError::KeyTooLong);
                         }
                         inner_batch.put(&key, value)
-                    },
+                    }
                     WriteOperation::DeletePrefix { key_prefix } => {
                         if key_prefix.len() > MAX_KEY_SIZE {
                             return Err(RocksDbContextError::KeyTooLong);

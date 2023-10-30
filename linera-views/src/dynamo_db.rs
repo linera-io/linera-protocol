@@ -170,9 +170,11 @@ const MAX_TRANSACT_WRITE_ITEM_BYTES: usize = 4194304;
 /// The DynamoDb database is potentially handling an infinite number of connections.
 /// However, for testing or some other purpose we really need to decrease the number of
 /// connections.
+#[cfg(any(test, feature = "test"))]
 const TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 
 /// The number of entries in a stream of the tests can be controlled by this parameter for tests.
+#[cfg(any(test, feature = "test"))]
 const TEST_DYNAMO_DB_MAX_STREAM_QUERIES: usize = 10;
 
 /// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 100.
@@ -795,9 +797,6 @@ impl DynamoDbClientInternal {
         key_prefix: &[u8],
         start_key_map: Option<HashMap<String, AttributeValue>>,
     ) -> Result<QueryOutput, DynamoDbContextError> {
-        if key_prefix.len() > MAX_KEY_BYTES {
-            return Err(DynamoDbContextError::KeyTooLong);
-        }
         let _guard = self.acquire().await;
         let response = self
             .client
@@ -1128,6 +1127,9 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
     }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
+        if key.len() > MAX_KEY_BYTES {
+            return Err(DynamoDbContextError::KeyTooLong);
+        }
         let key_db = build_key(key.to_vec());
         self.read_key_bytes_general(key_db).await
     }
@@ -1138,6 +1140,9 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
     ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbContextError> {
         let mut handles = Vec::new();
         for key in keys {
+            if key.len() > MAX_KEY_BYTES {
+                return Err(DynamoDbContextError::KeyTooLong);
+            }
             let key_db = build_key(key);
             let handle = self.read_key_bytes_general(key_db);
             handles.push(handle);

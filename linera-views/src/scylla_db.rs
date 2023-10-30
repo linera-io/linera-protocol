@@ -43,9 +43,11 @@ use thiserror::Error;
 type ScyllaDbClientPair = (Session, String);
 
 /// We limit the number of connections that can be done for tests.
-const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 1;
+#[cfg(any(test, feature = "test"))]
+const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 
 /// The number of connections in the stream is limited for tests.
+#[cfg(any(test, feature = "test"))]
 const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
 
 /// The maximal size of an operation on ScyllaDB seems to be 16M
@@ -55,7 +57,6 @@ const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
 /// So, we set up the maximal size of 15M for the values and 1M for the keys
 const MAX_VALUE_BYTES: usize = 15728640;
 const MAX_KEY_BYTES: usize = 1048576;
-
 
 /// The client itself and the keeping of the count of active connections.
 #[derive(Clone)]
@@ -276,6 +277,9 @@ impl ScyllaDbClientInternal {
         client: &ScyllaDbClientPair,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, ScyllaDbContextError> {
+        if key_prefix.len() > MAX_KEY_BYTES {
+            return Err(ScyllaDbContextError::KeyTooLong);
+        }
         let session = &client.0;
         let table_name = &client.1;
         // Read the value of a key
@@ -313,6 +317,9 @@ impl ScyllaDbClientInternal {
         client: &ScyllaDbClientPair,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ScyllaDbContextError> {
+        if key_prefix.len() > MAX_KEY_BYTES {
+            return Err(ScyllaDbContextError::KeyTooLong);
+        }
         let session = &client.0;
         let table_name = &client.1;
         // Read the value of a key
@@ -644,9 +651,9 @@ impl KeyValueStoreClient for ScyllaDbClient {
 
     async fn read_multi_key_bytes(
         &self,
-        key: Vec<Vec<u8>>,
+        keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        self.client.read_multi_key_bytes(key).await
+        self.client.read_multi_key_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
