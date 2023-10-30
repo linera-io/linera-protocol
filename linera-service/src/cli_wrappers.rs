@@ -616,8 +616,12 @@ impl LocalNetwork {
         10000 + i * 100
     }
 
-    fn metrics_port(i: usize) -> usize {
+    fn proxy_metrics_port(i: usize) -> usize {
         11000 + i * 100
+    }
+
+    fn shard_metrics_port(i: usize, j: usize) -> usize {
+        11000 + i * 100 + j
     }
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {
@@ -625,7 +629,7 @@ impl LocalNetwork {
         let path = self.tmp_dir.path().join(format!("validator_{n}.toml"));
         let port = Self::proxy_port(n);
         let internal_port = Self::internal_port(n);
-        let metrics_port = Self::metrics_port(n);
+        let metrics_port = Self::proxy_metrics_port(n);
         let external_protocol = self.network.external();
         let internal_protocol = self.network.internal();
         let mut content = format!(
@@ -635,13 +639,15 @@ impl LocalNetwork {
                 port = {port}
                 internal_host = "127.0.0.1"
                 internal_port = {internal_port}
+                metrics_host = "127.0.0.1"
+                metrics_port = {metrics_port}
                 external_protocol = {external_protocol}
                 internal_protocol = {internal_protocol}
             "#
         );
         for k in 1..=self.num_shards {
             let shard_port = Self::shard_port(n, k);
-            let shard_metrics_port = metrics_port + k;
+            let shard_metrics_port = Self::shard_metrics_port(n, k);
             content.push_str(&format!(
                 r#"
 

@@ -5,12 +5,12 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: validator
+      app: validator-1
   replicas: 1
   template:
     metadata:
       labels:
-        app: validator
+        app: validator-1
     spec:
       serviceAccountName: linera-admin
       terminationGracePeriodSeconds: 10
@@ -19,8 +19,8 @@ spec:
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
           image: {{ .Values.lineraImage }}
           ports:
-            - containerPort: 19100
-              name: linera-port
+            - name: linera-port
+              containerPort: 19100
           command: ["./linera-proxy"]
           args: ["server_1.json"]
           env:

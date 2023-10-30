@@ -20,6 +20,8 @@ host = "validator-${server}"
 port = 19100
 internal_host = "validator-${server}"
 internal_port = 20100
+metrics_host = "validator-${server}"
+metrics_port = 21100
 external_protocol = { Simple = "Tcp" }
 internal_protocol = { Simple = "Tcp" }
 EOF
