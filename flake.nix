@@ -18,6 +18,7 @@
       let
         cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         nonRustDeps = with pkgs; [
+          clang
           libclang.lib
           libiconv
           openssl

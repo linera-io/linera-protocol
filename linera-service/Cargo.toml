@@ -33,7 +33,7 @@ colored = { workspace = true }
 comfy-table = { workspace = true }
 current_platform = "0.2.0"
 dirs = { workspace = true }
-file-lock = "2.1.9"
+file-lock = "2.1.10"
 futures = { workspace = true }
 hex = { workspace = true }
 linera-base = { workspace = true }
