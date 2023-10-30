@@ -69,6 +69,16 @@ pub static PROXY_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter can be created")
 });
 
+pub static PROXY_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "proxy_request_error",
+        "Proxy request error",
+        // Can add labels here
+        &["method_name"]
+    )
+    .expect("Counter can be created")
+});
+
 #[derive(Clone)]
 pub struct PrometheusMetricsMiddlewareLayer;
 
@@ -240,7 +250,10 @@ impl GrpcProxy {
                     .inc();
                 Ok(chain_info_result)
             }
-            Err(status) => Err(status),
+            Err(status) => {
+                PROXY_REQUEST_ERROR.with_label_values(&[method_name]).inc();
+                Err(status)
+            }
         }
     }
 }
