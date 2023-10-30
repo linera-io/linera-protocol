@@ -22,7 +22,7 @@ use linera_rpc::{
     grpc_pool::ConnectionPool,
 };
 use once_cell::sync::Lazy;
-use prometheus::{register_histogram_vec, HistogramVec};
+use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
 use std::{
     fmt::Debug,
     net::SocketAddr,
@@ -43,6 +43,16 @@ pub static PROXY_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "proxy_request_latency",
         "Proxy request latency",
+        // Can add labels here
+        &[]
+    )
+    .expect("Counter can be created")
+});
+
+pub static PROXY_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "proxy_request_count",
+        "Proxy request count",
         // Can add labels here
         &[]
     )
@@ -86,6 +96,7 @@ where
             PROXY_REQUEST_LATENCY
                 .with_label_values(&[])
                 .observe(start.elapsed().as_secs_f64());
+            PROXY_REQUEST_COUNT.with_label_values(&[]).inc();
             Ok(response)
         }
         .boxed()
