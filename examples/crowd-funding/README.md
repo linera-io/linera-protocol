@@ -112,6 +112,9 @@ APP_ID_0=$(linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0" \
            project publish-and-create \
            examples/fungible \
            --json-argument '{ "accounts": { "User:'$OWNER_0'": "100", "User:'$OWNER_1'": "200" } }')
+
+# Wait for it to fully complete
+sleep 2
 ```
 
 We will remember the application ID for the newly created token as `$APP_ID_0`.
@@ -130,6 +133,9 @@ APP_ID_1=$(linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0" \
            --required-application-ids $APP_ID_0 \
            --json-argument '{ "owner": "User:'$OWNER_0'", "deadline": 4102473600000000, "target": "100." }' \
            --json-parameters '"'"$APP_ID_0"'"')
+
+# Wait for it to fully complete
+sleep 5
 ```
 
 ## Interacting with the campaign
@@ -138,7 +144,14 @@ First, a node service has to be started for each wallet, using two different por
 
 ```bash
 linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0" service --port 8080 &
+
+# Wait for it to fully complete
+sleep 2
+
 linera --wallet "$LINERA_WALLET_1" --storage "$LINERA_STORAGE_1" service --port 8081 &
+
+# Wait for it to fully complete
+sleep 2
 ```
 
 Point your browser to http://localhost:8080, and enter the query:

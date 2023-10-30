@@ -72,6 +72,10 @@ Now start a node service for each wallet, using two different ports:
 
 ```bash
 linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0" service --port 8080 &
+
+# Wait for it to complete
+sleep 2
+
 linera --wallet "$LINERA_WALLET_1" --storage "$LINERA_STORAGE_1" service --port 8081 &
 ```
 

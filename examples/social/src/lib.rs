@@ -1,6 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// TODO the following documentation involves `sleep`ing to avoid some race conditions.  See:
+// - https://github.com/linera-io/linera-protocol/issues/1176
+// - https://github.com/linera-io/linera-protocol/issues/1177
+
 /*!
 # A Social Media Example Application
 
@@ -74,6 +78,10 @@ Now start a node service for each wallet, using two different ports:
 
 ```bash
 linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0" service --port 8080 &
+
+# Wait for it to complete
+sleep 2
+
 linera --wallet "$LINERA_WALLET_1" --storage "$LINERA_STORAGE_1" service --port 8081 &
 ```
 
