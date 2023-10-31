@@ -911,7 +911,32 @@ impl LocalNet {
         }
         Ok(())
     }
+}
 
+#[cfg(any(test, feature = "test"))]
+impl LocalNet {
+    pub fn new_for_testing(database: Database, network: Network) -> Result<Self> {
+        let seed = 37;
+        let table_name = linera_views::test_utils::get_table_name();
+        let num_validators = 4;
+        let num_shards = match database {
+            Database::RocksDb => 1,
+            Database::DynamoDb => 4,
+            Database::ScyllaDb => 4,
+        };
+        Self::new(
+            database,
+            network,
+            Some(seed),
+            table_name,
+            num_validators,
+            num_shards,
+        )
+    }
+}
+
+#[cfg(any(test, feature = "test"))]
+impl ClientWrapper {
     pub async fn build_application(
         &self,
         path: &Path,
@@ -937,28 +962,6 @@ impl LocalNet {
         let service = release_dir.join(format!("{}_service.wasm", name.replace('-', "_")));
 
         Ok((contract, service))
-    }
-}
-
-#[cfg(any(test, feature = "test"))]
-impl LocalNet {
-    pub fn new_for_testing(database: Database, network: Network) -> Result<Self> {
-        let seed = 37;
-        let table_name = linera_views::test_utils::get_table_name();
-        let num_validators = 4;
-        let num_shards = match database {
-            Database::RocksDb => 1,
-            Database::DynamoDb => 4,
-            Database::ScyllaDb => 4,
-        };
-        Self::new(
-            database,
-            network,
-            Some(seed),
-            table_name,
-            num_validators,
-            num_shards,
-        )
     }
 
     pub async fn build_example(&self, name: &str) -> Result<(PathBuf, PathBuf)> {

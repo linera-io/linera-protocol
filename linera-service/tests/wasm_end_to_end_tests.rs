@@ -176,7 +176,7 @@ async fn run_wasm_end_to_end_counter(database: Database) {
     client.create_genesis_config().await.unwrap();
     let chain = client.get_wallet().unwrap().default_chain().unwrap();
     local_net.run().await.unwrap();
-    let (contract, service) = local_net.build_example("counter").await.unwrap();
+    let (contract, service) = client.build_example("counter").await.unwrap();
 
     let application_id = client
         .publish_and_create::<CounterAbi>(
@@ -245,7 +245,7 @@ async fn run_wasm_end_to_end_counter_publish_create(database: Database) {
     client.create_genesis_config().await.unwrap();
     let chain = client.get_wallet().unwrap().default_chain().unwrap();
     local_net.run().await.unwrap();
-    let (contract, service) = local_net.build_example("counter").await.unwrap();
+    let (contract, service) = client.build_example("counter").await.unwrap();
 
     let bytecode_id = client
         .publish_bytecode(contract, service, None)
@@ -311,10 +311,10 @@ async fn run_wasm_end_to_end_social_user_pub_sub(database: Database) {
 
     // Start local network.
     local_net.run().await.unwrap();
-    let (contract, service) = local_net.build_example("social").await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await.unwrap();
+    let (contract, service) = client1.build_example("social").await.unwrap();
     let bytecode_id = client1
         .publish_bytecode(contract, service, None)
         .await
@@ -419,7 +419,6 @@ async fn run_wasm_end_to_end_fungible(database: Database) {
 
     // Create initial server and client config.
     local_net.run().await.unwrap();
-    let (contract, service) = local_net.build_example("fungible").await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await.unwrap();
@@ -434,6 +433,7 @@ async fn run_wasm_end_to_end_fungible(database: Database) {
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
+    let (contract, service) = client1.build_example("fungible").await.unwrap();
     let application_id = client1
         .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, &[], None)
         .await
@@ -555,7 +555,6 @@ async fn run_wasm_end_to_end_same_wallet_fungible(database: Database) {
 
     // Create initial server and client config.
     local_net.run().await.unwrap();
-    let (contract, service) = local_net.build_example("fungible").await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = ChainId::root(2);
@@ -575,6 +574,7 @@ async fn run_wasm_end_to_end_same_wallet_fungible(database: Database) {
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
+    let (contract, service) = client1.build_example("fungible").await.unwrap();
     let application_id = client1
         .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, &[], None)
         .await
@@ -661,7 +661,6 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
 
     // Create initial server and client config.
     local_net.run().await.unwrap();
-    let (contract_fungible, service_fungible) = local_net.build_example("fungible").await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await.unwrap();
@@ -675,6 +674,7 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
     let state_fungible = InitialState { accounts };
 
     // Setting up the application fungible
+    let (contract_fungible, service_fungible) = client1.build_example("fungible").await.unwrap();
     let application_id_fungible = client1
         .publish_and_create::<FungibleTokenAbi>(
             contract_fungible,
@@ -695,7 +695,7 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
         deadline,
         target,
     };
-    let (contract_crowd, service_crowd) = local_net.build_example("crowd-funding").await.unwrap();
+    let (contract_crowd, service_crowd) = client1.build_example("crowd-funding").await.unwrap();
     let application_id_crowd = client1
         .publish_and_create::<CrowdFundingAbi>(
             contract_crowd,
@@ -810,9 +810,12 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
 
     // Create initial server and client config.
     local_net.run().await.unwrap();
-    let (contract_fungible, service_fungible) = local_net.build_example("fungible").await.unwrap();
+    let (contract_fungible_a, service_fungible_a) =
+        client_a.build_example("fungible").await.unwrap();
+    let (contract_fungible_b, service_fungible_b) =
+        client_a.build_example("fungible").await.unwrap();
     let (contract_matching, service_matching) =
-        local_net.build_example("matching-engine").await.unwrap();
+        client_a.build_example("matching-engine").await.unwrap();
 
     let chain_admin = client_admin.get_wallet().unwrap().default_chain().unwrap();
     let chain_a = client_admin.open_and_assign(&client_a).await.unwrap();
@@ -835,8 +838,8 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
     // Setting up the application fungible on chain_a and chain_b
     let token0 = client_a
         .publish_and_create::<FungibleTokenAbi>(
-            contract_fungible.clone(),
-            service_fungible.clone(),
+            contract_fungible_a,
+            service_fungible_a,
             &(),
             &state_fungible0,
             &[],
@@ -846,8 +849,8 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
         .unwrap();
     let token1 = client_b
         .publish_and_create::<FungibleTokenAbi>(
-            contract_fungible,
-            service_fungible,
+            contract_fungible_b,
+            service_fungible_b,
             &(),
             &state_fungible1,
             &[],
@@ -1087,8 +1090,9 @@ async fn run_wasm_end_to_end_amm(database: Database) {
     client1.wallet_init(&[]).await.unwrap();
 
     local_net.run().await.unwrap();
-    let (contract_fungible, service_fungible) = local_net.build_example("fungible").await.unwrap();
-    let (contract_amm, service_amm) = local_net.build_example("amm").await.unwrap();
+    let (contract_fungible, service_fungible) =
+        client_admin.build_example("fungible").await.unwrap();
+    let (contract_amm, service_amm) = client_admin.build_example("amm").await.unwrap();
 
     // Admin chain
     let chain_admin = client_admin.get_wallet().unwrap().default_chain().unwrap();

@@ -9,7 +9,7 @@ mod common;
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::{data_types::Amount, identifiers::ChainId};
 use linera_service::{
-    cli_wrappers::{Database, LineraNet, LocalNet, Network},
+    cli_wrappers::{ClientWrapper, Database, LineraNet, LocalNet, Network},
     util,
 };
 use linera_views::test_utils::get_table_name;
@@ -514,7 +514,7 @@ async fn run_project_new(database: Database) {
         .expect("CARGO_MANIFEST_DIR should not be at the root");
     let tmp_dir = client.project_new("init-test", linera_root).await.unwrap();
     let project_dir = tmp_dir.path().join("init-test");
-    local_net
+    client
         .build_application(project_dir.as_path(), "init-test", false)
         .await
         .unwrap();
@@ -547,7 +547,7 @@ async fn run_project_test(database: Database) {
     let mut local_net = LocalNet::new(database, network, None, table_name, 0, 0).unwrap();
     let client = local_net.make_client(network);
     client
-        .project_test(&LocalNet::example_path("counter").unwrap())
+        .project_test(&ClientWrapper::example_path("counter").unwrap())
         .await
         .unwrap();
 }
@@ -690,7 +690,7 @@ async fn run_example_publish(database: Database) {
     client.create_genesis_config().await.unwrap();
     local_net.run().await.unwrap();
 
-    let example_dir = LocalNet::example_path("counter").unwrap();
+    let example_dir = ClientWrapper::example_path("counter").unwrap();
     client
         .project_publish(example_dir, vec![], None, &0)
         .await

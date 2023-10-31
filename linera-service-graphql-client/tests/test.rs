@@ -67,7 +67,7 @@ async fn run_end_to_end_queries(database: Database) {
     let chain_id = node_chains.0.unwrap();
 
     // publishing an application
-    let (contract, service) = local_net.build_example("fungible").await.unwrap();
+    let (contract, service) = client.build_example("fungible").await.unwrap();
     let state = InitialState {
         accounts: BTreeMap::new(),
     };
