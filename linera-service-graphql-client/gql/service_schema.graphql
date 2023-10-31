@@ -464,11 +464,11 @@ input ResourceControlPolicy {
 	"""
 	The maximum data to read per block
 	"""
-	maximumBytesRead: Int!
+	maximumBytesReadPerBlock: Int!
 	"""
 	The maximum data to write per block
 	"""
-	maximumBytesWritten: Int!
+	maximumBytesWrittenPerBlock: Int!
 	"""
 	The cost to store and send cross-chain messages, per byte.
 	"""
