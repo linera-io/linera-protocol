@@ -420,22 +420,16 @@ where
     }
 
     async fn read_key_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError> {
-        // read a key from the KV store
-        match self
-            .active_view_user_states_mut()
-            .await
+        let state = self.active_view_user_states_mut().await;
+        let view = state
             .get(&self.application_id())
-        {
-            Some(view) => {
-                let result = view.get(&key).await?;
-                self.increment_num_reads()?;
-                if let Some(value) = &result {
-                    self.increment_bytes_read(value.len() as u64)?;
-                }
-                Ok(result)
-            }
-            None => Err(ExecutionError::ApplicationStateNotLocked),
+            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
+        let result = view.get(&key).await?;
+        self.increment_num_reads()?;
+        if let Some(value) = &result {
+            self.increment_bytes_read(value.len() as u64)?;
         }
+        Ok(result)
     }
 
     async fn find_keys_by_prefix(
@@ -443,23 +437,18 @@ where
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, ExecutionError> {
         // Read keys matching a prefix. We have to collect since iterators do not pass the wit barrier
-        match self
-            .active_view_user_states_mut()
-            .await
+        let state = self.active_view_user_states_mut().await;
+        let view = state
             .get(&self.application_id())
-        {
-            Some(view) => {
-                let keys = view.find_keys_by_prefix(&key_prefix).await?;
-                self.increment_num_reads()?;
-                let mut read_size = 0;
-                for key in &keys {
-                    read_size += key.len();
-                }
-                self.increment_bytes_read(read_size as u64)?;
-                Ok(keys)
-            }
-            None => Err(ExecutionError::ApplicationStateNotLocked),
+            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
+        let keys = view.find_keys_by_prefix(&key_prefix).await?;
+        self.increment_num_reads()?;
+        let mut read_size = 0;
+        for key in &keys {
+            read_size += key.len();
         }
+        self.increment_bytes_read(read_size as u64)?;
+        Ok(keys)
     }
 
     async fn find_key_values_by_prefix(
@@ -467,23 +456,18 @@ where
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
         // Read key/values matching a prefix. We have to collect since iterators do not pass the wit barrier
-        match self
-            .active_view_user_states_mut()
-            .await
+        let state = self.active_view_user_states_mut().await;
+        let view = state
             .get(&self.application_id())
-        {
-            Some(view) => {
-                let key_values = view.find_key_values_by_prefix(&key_prefix).await?;
-                self.increment_num_reads()?;
-                let mut read_size = 0;
-                for (key, value) in &key_values {
-                    read_size += key.len() + value.len();
-                }
-                self.increment_bytes_read(read_size as u64)?;
-                Ok(key_values)
-            }
-            None => Err(ExecutionError::ApplicationStateNotLocked),
+            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
+        let key_values = view.find_key_values_by_prefix(&key_prefix).await?;
+        self.increment_num_reads()?;
+        let mut read_size = 0;
+        for (key, value) in &key_values {
+            read_size += key.len() + value.len();
         }
+        self.increment_bytes_read(read_size as u64)?;
+        Ok(key_values)
     }
 }
 
