@@ -11,6 +11,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Context, Result};
 use async_graphql::InputType;
+use async_trait::async_trait;
 use linera_base::{
     abi::ContractAbi,
     crypto::PublicKey,
@@ -26,8 +27,8 @@ use std::{
     marker::PhantomData,
     ops::RangeInclusive,
     path::{Path, PathBuf},
-    rc::Rc,
     str::FromStr,
+    sync::Arc,
     time::Duration,
 };
 use tempfile::{tempdir, TempDir};
@@ -87,12 +88,12 @@ pub struct ClientWrapper {
     wallet: String,
     max_pending_messages: usize,
     network: Network,
-    pub tmp_dir: Rc<TempDir>,
+    pub tmp_dir: Arc<TempDir>,
 }
 
 impl ClientWrapper {
     fn new(
-        tmp_dir: Rc<TempDir>,
+        tmp_dir: Arc<TempDir>,
         network: Network,
         testing_prng_seed: Option<u64>,
         id: usize,
@@ -549,6 +550,24 @@ impl Validator {
     }
 }
 
+#[async_trait]
+pub trait LineraNet: Sized + Send + Sync + 'static {
+    async fn initialize(
+        database: Database,
+        network: Network,
+        testing_prng_seed: Option<u64>,
+        table_name: String,
+        num_initial_validators: usize,
+        num_shards: usize,
+    ) -> Result<(Self, ClientWrapper)>;
+
+    fn ensure_is_running(&mut self) -> Result<()>;
+
+    async fn terminate(mut self) -> Result<()>;
+
+    fn make_client(&mut self, network: Network) -> ClientWrapper;
+}
+
 pub struct LocalNet {
     database: Database,
     network: Network,
@@ -559,7 +578,62 @@ pub struct LocalNet {
     local_net: BTreeMap<usize, Validator>,
     table_name: String,
     set_init: HashSet<(usize, usize)>,
-    tmp_dir: Rc<TempDir>,
+    tmp_dir: Arc<TempDir>,
+}
+
+#[async_trait]
+impl LineraNet for LocalNet {
+    async fn initialize(
+        database: Database,
+        network: Network,
+        testing_prng_seed: Option<u64>,
+        table_name: String,
+        num_initial_validators: usize,
+        num_shards: usize,
+    ) -> Result<(Self, ClientWrapper)> {
+        let mut local_net = LocalNet::new(
+            database,
+            network,
+            testing_prng_seed,
+            table_name,
+            num_initial_validators,
+            num_shards,
+        )?;
+        let client = local_net.make_client(network);
+        local_net.generate_initial_validator_config().await.unwrap();
+        client.create_genesis_config().await.unwrap();
+        local_net.run().await.unwrap();
+        Ok((local_net, client))
+    }
+
+    async fn terminate(mut self) -> Result<()> {
+        let validators = std::mem::take(&mut self.local_net);
+        for (_, validator) in validators {
+            validator.terminate().await.context("in local network")?
+        }
+        Ok(())
+    }
+
+    fn ensure_is_running(&mut self) -> Result<()> {
+        for validator in self.local_net.values_mut() {
+            validator.ensure_is_running().context("in local network")?
+        }
+        Ok(())
+    }
+
+    fn make_client(&mut self, network: Network) -> ClientWrapper {
+        let client = ClientWrapper::new(
+            self.tmp_dir.clone(),
+            network,
+            self.testing_prng_seed,
+            self.next_client_id,
+        );
+        if let Some(seed) = self.testing_prng_seed {
+            self.testing_prng_seed = Some(seed + 1);
+        }
+        self.next_client_id += 1;
+        client
+    }
 }
 
 impl LocalNet {
@@ -581,37 +655,8 @@ impl LocalNet {
             local_net: BTreeMap::new(),
             table_name,
             set_init: HashSet::new(),
-            tmp_dir: Rc::new(tempdir()?),
+            tmp_dir: Arc::new(tempdir()?),
         })
-    }
-
-    pub async fn terminate(mut self) -> Result<()> {
-        let validators = std::mem::take(&mut self.local_net);
-        for (_, validator) in validators {
-            validator.terminate().await.context("in local network")?
-        }
-        Ok(())
-    }
-
-    pub fn ensure_is_running(&mut self) -> Result<()> {
-        for validator in self.local_net.values_mut() {
-            validator.ensure_is_running().context("in local network")?
-        }
-        Ok(())
-    }
-
-    pub fn make_client(&mut self, network: Network) -> ClientWrapper {
-        let client = ClientWrapper::new(
-            self.tmp_dir.clone(),
-            network,
-            self.testing_prng_seed,
-            self.next_client_id,
-        );
-        if let Some(seed) = self.testing_prng_seed {
-            self.testing_prng_seed = Some(seed + 1);
-        }
-        self.next_client_id += 1;
-        client
     }
 
     async fn command_for_binary(&self, name: &'static str) -> Result<Command> {

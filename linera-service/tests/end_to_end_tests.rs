@@ -9,7 +9,7 @@ mod common;
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::{data_types::Amount, identifiers::ChainId};
 use linera_service::{
-    cli_wrappers::{Database, LocalNet, Network},
+    cli_wrappers::{Database, LineraNet, LocalNet, Network},
     util,
 };
 use linera_views::test_utils::get_table_name;

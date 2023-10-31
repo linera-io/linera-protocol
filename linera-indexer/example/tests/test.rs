@@ -9,12 +9,12 @@ use linera_indexer_graphql_client::{
     operations::{get_operation, GetOperation, OperationKey},
 };
 use linera_service::{
-    cli_wrappers::{Database, LocalNet, Network},
+    cli_wrappers::{Database, LineraNet, LocalNet, Network},
     util::resolve_binary,
 };
 use linera_service_graphql_client::{block, request, transfer, Block, Transfer};
 use once_cell::sync::Lazy;
-use std::{rc::Rc, str::FromStr, time::Duration};
+use std::{str::FromStr, sync::Arc, time::Duration};
 use tempfile::TempDir;
 use tokio::{
     process::{Child, Command},
@@ -25,7 +25,7 @@ use tracing::{info, warn};
 /// A static lock to prevent integration tests from running in parallel.
 static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
-async fn run_indexer(tmp_dir: &Rc<TempDir>) -> Child {
+async fn run_indexer(tmp_dir: &Arc<TempDir>) -> Child {
     let port = 8081;
     let path = resolve_binary("linera-indexer", "linera-indexer-example")
         .await

@@ -12,7 +12,7 @@ use linera_base::{
     identifiers::ChainId,
 };
 use linera_service::cli_wrappers::{
-    ApplicationWrapper, ClientWrapper, Database, LocalNet, Network,
+    ApplicationWrapper, ClientWrapper, Database, LineraNet, LocalNet, Network,
 };
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, time::Duration};
