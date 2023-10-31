@@ -117,7 +117,7 @@ impl Default for RuntimeLimits {
 }
 
 impl ResourceTracker {
-    /// Update the limits for the maximum and update the balance.
+    /// Updates the limits for the maximum and updates the balance.
     /// The substraction are guaranteed to work correctly and the
     /// checks are occurring in the runtime.
     pub fn update_limits(
