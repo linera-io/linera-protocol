@@ -121,6 +121,17 @@ impl UserChain {
             next_block_height: BlockHeight::ZERO,
         }
     }
+
+    /// Creates an entry for a chain that we don't own.
+    pub fn make_other(description: ChainDescription, timestamp: Timestamp) -> Self {
+        Self {
+            chain_id: description.into(),
+            key_pair: None,
+            block_hash: None,
+            timestamp,
+            next_block_height: BlockHeight::ZERO,
+        }
+    }
 }
 
 /// A wrapper around `InnerWalletState` which owns a [`FileLock`] to prevent
