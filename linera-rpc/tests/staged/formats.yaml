@@ -268,8 +268,8 @@ Committee:
             TYPENAME: ValidatorName
           VALUE:
             TYPENAME: ValidatorState
-    - pricing:
-        TYPENAME: Pricing
+    - policy:
+        TYPENAME: ResourceControlPolicy
 CrossChainRequest:
   ENUM:
     0:
@@ -584,16 +584,6 @@ OutgoingMessage:
 Owner:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
-Pricing:
-  STRUCT:
-    - certificate:
-        TYPENAME: Amount
-    - fuel:
-        TYPENAME: Amount
-    - storage:
-        TYPENAME: Amount
-    - messages:
-        TYPENAME: Amount
 PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -607,6 +597,22 @@ Recipient:
       Account:
         NEWTYPE:
           TYPENAME: Account
+ResourceControlPolicy:
+  STRUCT:
+    - certificate:
+        TYPENAME: Amount
+    - fuel:
+        TYPENAME: Amount
+    - storage_num_reads:
+        TYPENAME: Amount
+    - storage_bytes_read:
+        TYPENAME: Amount
+    - storage_bytes_written:
+        TYPENAME: Amount
+    - maximum_bytes_read_per_block: U64
+    - maximum_bytes_written_per_block: U64
+    - messages:
+        TYPENAME: Amount
 RoundNumber:
   NEWTYPESTRUCT: U32
 RpcMessage:

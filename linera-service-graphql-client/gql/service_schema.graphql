@@ -209,9 +209,9 @@ input Committee {
 	"""
 	validityThreshold: Int!
 	"""
-	The pricing agreed on for this epoch.
+	The policy agreed on for this epoch.
 	"""
-	pricing: Pricing!
+	policy: ResourceControlPolicy!
 }
 
 """
@@ -419,29 +419,6 @@ The owner of a chain. This is currently the hash of the owner's public key used 
 scalar Owner
 
 """
-A collection of costs associated with blocks in validators.
-"""
-input Pricing {
-	"""
-	The base price for each certificate, to compensate for the communication and signing
-	overhead.
-	"""
-	certificate: Amount!
-	"""
-	The price per unit of fuel used when executing messages and operations for user applications.
-	"""
-	fuel: Amount!
-	"""
-	The cost to store a block's operations and incoming messages, per byte.
-	"""
-	storage: Amount!
-	"""
-	The cost to store and send cross-chain messages, per byte.
-	"""
-	messages: Amount!
-}
-
-"""
 A signature public key
 """
 scalar PublicKey
@@ -458,6 +435,45 @@ type QueryRoot {
 The recipient of a transfer
 """
 scalar Recipient
+
+"""
+A collection of costs associated with blocks in validators.
+"""
+input ResourceControlPolicy {
+	"""
+	The base price for each certificate, to compensate for the communication and signing
+	overhead.
+	"""
+	certificate: Amount!
+	"""
+	The price per unit of fuel used when executing messages and operations for user applications.
+	"""
+	fuel: Amount!
+	"""
+	The cost to read data per operation
+	"""
+	storageNumReads: Amount!
+	"""
+	The cost to read data per byte
+	"""
+	storageBytesRead: Amount!
+	"""
+	The cost to store data per byte
+	"""
+	storageBytesWritten: Amount!
+	"""
+	The maximum data to read per block
+	"""
+	maximumBytesReadPerBlock: Int!
+	"""
+	The maximum data to write per block
+	"""
+	maximumBytesWrittenPerBlock: Int!
+	"""
+	The cost to store and send cross-chain messages, per byte.
+	"""
+	messages: Amount!
+}
 
 """
 A number to identify successive attempts to decide a value in a consensus protocol.

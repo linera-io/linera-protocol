@@ -10,7 +10,7 @@ use linera_base::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorState},
-    pricing::Pricing,
+    policy::ResourceControlPolicy,
     system::Recipient,
     Operation, SystemOperation,
 };
@@ -128,7 +128,7 @@ impl VoteTestExt for Vote {
         };
         let committee = Committee::new(
             vec![(self.validator, state)].into_iter().collect(),
-            Pricing::only_fuel(),
+            ResourceControlPolicy::only_fuel(),
         );
         SignatureAggregator::new(self.value, self.round, &committee)
             .append(self.validator, self.signature)

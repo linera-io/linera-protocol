@@ -19,10 +19,11 @@ use linera_base::{
     identifiers::{ChainId, Destination, MessageId},
 };
 use linera_execution::{
+    sub_assign_fees,
     system::{Account, SystemMessage},
     ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, GenericApplicationId, Message,
     MessageContext, OperationContext, Query, QueryContext, RawExecutionResult, RawOutgoingMessage,
-    Response, UserApplicationDescription, UserApplicationId,
+    ResourceTracker, Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     common::Context,
@@ -478,7 +479,7 @@ where
             return Err(ChainError::InactiveChain(chain_id));
         };
 
-        let pricing = committee.pricing().clone();
+        let policy = committee.policy().clone();
         let credit: Amount = block
             .incoming_messages
             .iter()
@@ -494,14 +495,28 @@ where
         let balance = self.execution_state.system.balance.get_mut();
 
         balance.try_add_assign(credit)?;
-        Self::sub_assign_fees(balance, pricing.certificate_price())?;
-        Self::sub_assign_fees(balance, pricing.storage_price(&block.incoming_messages)?)?;
-        Self::sub_assign_fees(balance, pricing.storage_price(&block.operations)?)?;
+        sub_assign_fees(balance, policy.certificate_price())?;
+        sub_assign_fees(
+            balance,
+            policy.storage_bytes_written_price_raw(&block.incoming_messages)?,
+        )?;
+        sub_assign_fees(
+            balance,
+            policy.storage_bytes_written_price_raw(&block.operations)?,
+        )?;
 
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
-        let available_fuel = pricing.remaining_fuel(*balance);
-        let mut remaining_fuel = available_fuel;
+        let maximum_bytes_left_to_read = policy.maximum_bytes_read_per_block;
+        let maximum_bytes_left_to_write = policy.maximum_bytes_written_per_block;
+        let mut tracker = ResourceTracker {
+            used_fuel: 0,
+            num_reads: 0,
+            bytes_read: 0,
+            bytes_written: 0,
+            maximum_bytes_left_to_read,
+            maximum_bytes_left_to_write,
+        };
         for (index, message) in block.incoming_messages.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             // Execute the received message.
@@ -518,7 +533,7 @@ where
             };
             let results = self
                 .execution_state
-                .execute_message(&context, &message.event.message, &mut remaining_fuel)
+                .execute_message(&context, &message.event.message, &policy, &mut tracker)
                 .await
                 .map_err(|err| {
                     ChainError::ExecutionError(err, ChainExecutionContext::IncomingMessage(index))
@@ -542,7 +557,7 @@ where
             };
             let results = self
                 .execution_state
-                .execute_operation(&context, operation, &mut remaining_fuel)
+                .execute_operation(&context, operation, &policy, &mut tracker)
                 .await
                 .map_err(|err| {
                     ChainError::ExecutionError(err, ChainExecutionContext::Operation(index))
@@ -552,12 +567,8 @@ where
             message_counts
                 .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
         }
-        let used_fuel = available_fuel.saturating_sub(remaining_fuel);
-
         let balance = self.execution_state.system.balance.get_mut();
-        Self::sub_assign_fees(balance, credit)?;
-        Self::sub_assign_fees(balance, pricing.fuel_price(used_fuel)?)?;
-        Self::sub_assign_fees(balance, pricing.messages_price(&messages)?)?;
+        sub_assign_fees(balance, credit)?;
 
         // Recompute the state hash.
         let state_hash = self.execution_state.crypto_hash().await?;
@@ -576,7 +587,7 @@ where
             .observe(start_time.elapsed().as_secs_f64());
         WASM_FUEL_USED_PER_BLOCK
             .with_label_values(&[])
-            .observe(used_fuel as f64);
+            .observe(tracker.used_fuel as f64);
         Ok(BlockExecutionOutcome {
             messages,
             message_counts,
@@ -759,11 +770,5 @@ where
             }
         }
         Ok(())
-    }
-
-    fn sub_assign_fees(balance: &mut Amount, fees: Amount) -> Result<(), ChainError> {
-        balance
-            .try_sub_assign(fees)
-            .map_err(|_| ChainError::InsufficientBalance)
     }
 }

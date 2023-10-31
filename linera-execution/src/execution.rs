@@ -6,7 +6,8 @@ use crate::{
     system::SystemExecutionStateView,
     ContractRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeContext, Message,
     MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
-    RawOutgoingMessage, Response, SystemMessage, UserApplicationDescription, UserApplicationId,
+    RawOutgoingMessage, ResourceControlPolicy, ResourceTracker, Response, RuntimeLimits,
+    SystemMessage, UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{
     ensure,
@@ -128,7 +129,9 @@ where
             .user_applications()
             .insert(application_id, application);
 
-        self.run_user_action(application_id, chain_id, action, &mut 10_000_000)
+        let mut tracker = ResourceTracker::default();
+        let policy = ResourceControlPolicy::default();
+        self.run_user_action(application_id, chain_id, action, &policy, &mut tracker)
             .await?;
 
         Ok(())
@@ -163,8 +166,12 @@ where
         application_id: UserApplicationId,
         chain_id: ChainId,
         action: UserAction<'_>,
-        remaining_fuel: &mut u64,
+        policy: &ResourceControlPolicy,
+        tracker: &mut ResourceTracker,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
+        let balance = self.system.balance.get();
+        let runtime_limits = tracker.limits(policy, balance);
+        let initial_remaining_fuel = policy.remaining_fuel(*balance);
         // Try to load the application. This may fail if the corresponding
         // bytecode-publishing certificate doesn't exist yet on this validator.
         let description = self
@@ -192,7 +199,8 @@ where
             self,
             &mut session_manager,
             &mut results,
-            *remaining_fuel,
+            initial_remaining_fuel,
+            runtime_limits,
         );
         // Make the call to user code.
         let call_result = match action {
@@ -219,7 +227,9 @@ where
         };
         // Set the authenticated signer to be used in outgoing messages.
         result.authenticated_signer = signer;
-        *remaining_fuel = runtime.remaining_fuel();
+        let runtime_counts = runtime.runtime_counts();
+        let balance = self.system.balance.get_mut();
+        tracker.update_limits(balance, policy, runtime_counts)?;
 
         // Check that applications were correctly stacked and unstacked.
         assert_eq!(applications.len(), 1);
@@ -259,7 +269,8 @@ where
         &mut self,
         context: &OperationContext,
         operation: &Operation,
-        remaining_fuel: &mut u64,
+        policy: &ResourceControlPolicy,
+        tracker: &mut ResourceTracker,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
@@ -275,7 +286,8 @@ where
                             application_id,
                             context.chain_id,
                             user_action,
-                            remaining_fuel,
+                            policy,
+                            tracker,
                         )
                         .await?,
                     );
@@ -290,7 +302,8 @@ where
                     *application_id,
                     context.chain_id,
                     UserAction::Operation(context, bytes),
-                    remaining_fuel,
+                    policy,
+                    tracker,
                 )
                 .await
             }
@@ -301,7 +314,8 @@ where
         &mut self,
         context: &MessageContext,
         message: &Message,
-        remaining_fuel: &mut u64,
+        policy: &ResourceControlPolicy,
+        tracker: &mut ResourceTracker,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
@@ -317,7 +331,8 @@ where
                     *application_id,
                     context.chain_id,
                     UserAction::Message(context, bytes),
-                    remaining_fuel,
+                    policy,
+                    tracker,
                 )
                 .await
             }
@@ -358,13 +373,16 @@ where
                     parameters: description.parameters,
                     signer: None,
                 }];
+                let runtime_limits = RuntimeLimits::default();
+                let remaining_fuel = 0;
                 let runtime = ExecutionRuntime::new(
                     context.chain_id,
                     &mut applications,
                     self,
                     &mut session_manager,
                     &mut results,
-                    0,
+                    remaining_fuel,
+                    runtime_limits,
                 );
                 // Run the query.
                 let response = application.handle_query(context, &runtime, bytes).await?;

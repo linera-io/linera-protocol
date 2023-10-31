@@ -3,14 +3,14 @@
 
 use crate::{
     execution::ExecutionStateView, BaseRuntime, CallResult, ContractRuntime, ExecutionError,
-    ExecutionResult, ExecutionRuntimeContext, ServiceRuntime, SessionId, UserApplicationCode,
-    UserApplicationDescription, UserApplicationId,
+    ExecutionResult, ExecutionRuntimeContext, RuntimeCounts, RuntimeLimits, ServiceRuntime,
+    SessionId, UserApplicationCode, UserApplicationDescription, UserApplicationId,
 };
 use async_lock::{Mutex, MutexGuard, MutexGuardArc, RwLockWriteGuardArc};
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::Timestamp,
+    data_types::{ArithmeticError, Timestamp},
     ensure, hex_debug,
     identifiers::{ChainId, Owner},
 };
@@ -33,12 +33,20 @@ use std::{
 /// Runtime data tracked during the execution of a transaction.
 #[derive(Debug, Clone)]
 pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
+    /// The amount of fuel available for executing the application.
+    remaining_fuel: Arc<AtomicU64>,
+    /// The number of reads
+    num_reads: Arc<AtomicU64>,
+    /// the total size being read
+    bytes_read: Arc<AtomicU64>,
+    /// The total size being written
+    bytes_written: Arc<AtomicU64>,
+    /// The runtime limits
+    runtime_limits: RuntimeLimits,
     /// The current chain ID.
     chain_id: ChainId,
     /// The current stack of application descriptions.
     applications: Arc<Mutex<&'a mut Vec<ApplicationStatus>>>,
-    /// The amount of fuel available for executing the application.
-    remaining_fuel: Arc<AtomicU64>,
     /// The storage view on the execution state.
     execution_state: Arc<Mutex<&'a mut ExecutionStateView<C>>>,
     /// All the sessions and their IDs.
@@ -100,12 +108,21 @@ where
         session_manager: &'a mut SessionManager,
         execution_results: &'a mut Vec<ExecutionResult>,
         fuel: u64,
+        runtime_limits: RuntimeLimits,
     ) -> Self {
         assert_eq!(chain_id, execution_state.context().extra().chain_id());
+        let remaining_fuel = Arc::new(AtomicU64::new(fuel));
+        let num_reads = Arc::new(AtomicU64::new(0));
+        let bytes_read = Arc::new(AtomicU64::new(0));
+        let bytes_written = Arc::new(AtomicU64::new(0));
         Self {
+            remaining_fuel,
+            num_reads,
+            bytes_read,
+            bytes_written,
+            runtime_limits,
             chain_id,
             applications: Arc::new(Mutex::new(applications)),
-            remaining_fuel: Arc::new(AtomicU64::new(fuel)),
             execution_state: Arc::new(Mutex::new(execution_state)),
             session_manager: Arc::new(Mutex::new(session_manager)),
             active_simple_user_states: Arc::default(),
@@ -292,6 +309,47 @@ where
     }
 }
 
+impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W> {
+    fn increment_num_reads(&self) -> Result<(), ExecutionError> {
+        self.num_reads.fetch_add(1, Ordering::Relaxed);
+        let bytes = self.num_reads.load(Ordering::Acquire);
+        if bytes >= self.runtime_limits.max_budget_num_reads {
+            return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
+        }
+        Ok(())
+    }
+
+    fn increment_bytes_read(&self, increment: u64) -> Result<(), ExecutionError> {
+        if increment >= u64::MAX / 2 {
+            return Err(ExecutionError::ExcessiveRead);
+        }
+        self.bytes_read.fetch_add(increment, Ordering::Relaxed);
+        let bytes = self.bytes_read.load(Ordering::Acquire);
+        if bytes >= self.runtime_limits.max_budget_bytes_read {
+            return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
+        }
+        if bytes >= self.runtime_limits.maximum_bytes_left_to_read {
+            return Err(ExecutionError::ExcessiveRead);
+        }
+        Ok(())
+    }
+
+    fn increment_bytes_written(&self, increment: u64) -> Result<(), ExecutionError> {
+        if increment >= u64::MAX / 2 {
+            return Err(ExecutionError::ExcessiveWrite);
+        }
+        self.bytes_written.fetch_add(increment, Ordering::Relaxed);
+        let bytes = self.bytes_written.load(Ordering::Acquire);
+        if bytes >= self.runtime_limits.max_budget_bytes_written {
+            return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
+        }
+        if bytes >= self.runtime_limits.maximum_bytes_left_to_write {
+            return Err(ExecutionError::ExcessiveWrite);
+        }
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl<'a, C, const W: bool> BaseRuntime for ExecutionRuntime<'a, C, W>
 where
@@ -362,15 +420,16 @@ where
     }
 
     async fn read_key_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError> {
-        // read a key from the KV store
-        match self
-            .active_view_user_states_mut()
-            .await
+        let state = self.active_view_user_states_mut().await;
+        let view = state
             .get(&self.application_id())
-        {
-            Some(view) => Ok(view.get(&key).await?),
-            None => Err(ExecutionError::ApplicationStateNotLocked),
+            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
+        let result = view.get(&key).await?;
+        self.increment_num_reads()?;
+        if let Some(value) = &result {
+            self.increment_bytes_read(value.len() as u64)?;
         }
+        Ok(result)
     }
 
     async fn find_keys_by_prefix(
@@ -378,14 +437,18 @@ where
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, ExecutionError> {
         // Read keys matching a prefix. We have to collect since iterators do not pass the wit barrier
-        match self
-            .active_view_user_states_mut()
-            .await
+        let state = self.active_view_user_states_mut().await;
+        let view = state
             .get(&self.application_id())
-        {
-            Some(view) => Ok(view.find_keys_by_prefix(&key_prefix).await?),
-            None => Err(ExecutionError::ApplicationStateNotLocked),
+            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
+        let keys = view.find_keys_by_prefix(&key_prefix).await?;
+        self.increment_num_reads()?;
+        let mut read_size = 0;
+        for key in &keys {
+            read_size += key.len();
         }
+        self.increment_bytes_read(read_size as u64)?;
+        Ok(keys)
     }
 
     async fn find_key_values_by_prefix(
@@ -393,14 +456,18 @@ where
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
         // Read key/values matching a prefix. We have to collect since iterators do not pass the wit barrier
-        match self
-            .active_view_user_states_mut()
-            .await
+        let state = self.active_view_user_states_mut().await;
+        let view = state
             .get(&self.application_id())
-        {
-            Some(view) => Ok(view.find_key_values_by_prefix(&key_prefix).await?),
-            None => Err(ExecutionError::ApplicationStateNotLocked),
+            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
+        let key_values = view.find_key_values_by_prefix(&key_prefix).await?;
+        self.increment_num_reads()?;
+        let mut read_size = 0;
+        for (key, value) in &key_values {
+            read_size += key.len() + value.len();
         }
+        self.increment_bytes_read(read_size as u64)?;
+        Ok(key_values)
     }
 }
 
@@ -445,6 +512,19 @@ where
         self.remaining_fuel.load(Ordering::Acquire)
     }
 
+    fn runtime_counts(&self) -> RuntimeCounts {
+        let remaining_fuel = self.remaining_fuel.load(Ordering::Acquire);
+        let num_reads = self.num_reads.load(Ordering::Acquire);
+        let bytes_read = self.bytes_read.load(Ordering::Acquire);
+        let bytes_written = self.bytes_written.load(Ordering::Acquire);
+        RuntimeCounts {
+            remaining_fuel,
+            num_reads,
+            bytes_read,
+            bytes_written,
+        }
+    }
+
     fn set_remaining_fuel(&self, remaining_fuel: u64) {
         self.remaining_fuel.store(remaining_fuel, Ordering::Release);
     }
@@ -483,6 +563,8 @@ where
     }
 
     async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {
+        let size = batch.size() as u64;
+        self.increment_bytes_written(size)?;
         // Write the batch and make the view available again.
         match self
             .active_view_user_states_mut()

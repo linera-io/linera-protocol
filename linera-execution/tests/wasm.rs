@@ -8,13 +8,13 @@ mod utils;
 use self::utils::create_dummy_user_application_description;
 use counter::CounterAbi;
 use linera_base::{
-    data_types::BlockHeight,
+    data_types::{Amount, BlockHeight},
     identifiers::{ChainDescription, ChainId},
 };
 use linera_execution::{
-    ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, Operation, OperationContext,
-    Query, QueryContext, RawExecutionResult, Response, SystemExecutionState,
-    TestExecutionRuntimeContext, WasmApplication, WasmRuntime,
+    policy::ResourceControlPolicy, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView,
+    Operation, OperationContext, Query, QueryContext, RawExecutionResult, ResourceTracker,
+    Response, SystemExecutionState, TestExecutionRuntimeContext, WasmApplication, WasmRuntime,
 };
 use linera_views::{memory::MemoryContext, views::View};
 use serde_json::json;
@@ -69,14 +69,20 @@ async fn test_fuel_for_counter_wasm_application(
         next_message_index: 0,
     };
     let increments = [2_u64, 9, 7, 1000];
-    let available_fuel = 10_000_000;
-    let mut remaining_fuel = available_fuel;
+    let policy = ResourceControlPolicy {
+        fuel: Amount::from_atto(1),
+        ..ResourceControlPolicy::default()
+    };
+    let mut tracker = ResourceTracker::default();
+    let amount = Amount::from_tokens(1);
+    *view.system.balance.get_mut() = amount;
     for increment in &increments {
         let result = view
             .execute_operation(
                 &context,
                 &Operation::user(app_id, increment).unwrap(),
-                &mut remaining_fuel,
+                &policy,
+                &mut tracker,
             )
             .await?;
         assert_eq!(
@@ -87,8 +93,7 @@ async fn test_fuel_for_counter_wasm_application(
             )]
         );
     }
-
-    assert_eq!(available_fuel - remaining_fuel, expected_fuel);
+    assert_eq!(tracker.used_fuel, expected_fuel);
 
     let context = QueryContext {
         chain_id: ChainId::root(0),

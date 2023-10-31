@@ -16,7 +16,7 @@ use linera_base::{
 use linera_core::{client::ChainClient, node::ValidatorNodeProvider};
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
-    pricing::Pricing,
+    policy::ResourceControlPolicy,
 };
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Store;
@@ -78,7 +78,7 @@ impl Import for CommitteeConfig {}
 impl Export for CommitteeConfig {}
 
 impl CommitteeConfig {
-    pub fn into_committee(self, pricing: Pricing) -> Committee {
+    pub fn into_committee(self, policy: ResourceControlPolicy) -> Committee {
         let validators = self
             .validators
             .into_iter()
@@ -92,7 +92,7 @@ impl CommitteeConfig {
                 )
             })
             .collect();
-        Committee::new(validators, pricing)
+        Committee::new(validators, policy)
     }
 }
 
@@ -435,19 +435,23 @@ pub struct GenesisConfig {
     pub committee: CommitteeConfig,
     pub admin_id: ChainId,
     pub chains: Vec<(ChainDescription, PublicKey, Amount, Timestamp)>,
-    pub pricing: Pricing,
+    pub policy: ResourceControlPolicy,
 }
 
 impl Import for GenesisConfig {}
 impl Export for GenesisConfig {}
 
 impl GenesisConfig {
-    pub fn new(committee: CommitteeConfig, admin_id: ChainId, pricing: Pricing) -> Self {
+    pub fn new(
+        committee: CommitteeConfig,
+        admin_id: ChainId,
+        policy: ResourceControlPolicy,
+    ) -> Self {
         Self {
             committee,
             admin_id,
             chains: Vec::new(),
-            pricing,
+            policy,
         }
     }
 
@@ -472,6 +476,6 @@ impl GenesisConfig {
     }
 
     pub fn create_committee(&self) -> Committee {
-        self.committee.clone().into_committee(self.pricing.clone())
+        self.committee.clone().into_committee(self.policy.clone())
     }
 }

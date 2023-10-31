@@ -8,10 +8,11 @@ pub mod committee;
 mod execution;
 mod graphql;
 mod ownership;
-pub mod pricing;
+pub mod policy;
 mod runtime;
 pub mod system;
 mod wasm;
+use crate::policy::{PricingError, ResourceControlPolicy};
 
 pub use applications::{
     ApplicationRegistryView, BytecodeLocation, GenericApplicationId, UserApplicationDescription,
@@ -49,6 +50,134 @@ use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
 use std::{io, path::Path, str::FromStr, sync::Arc};
 use thiserror::Error;
+
+/// Substracts an amount from a balance and reports an error if that is impossible
+pub fn sub_assign_fees(balance: &mut Amount, fees: Amount) -> Result<(), PricingError> {
+    Ok(balance
+        .try_sub_assign(fees)
+        .map_err(|_| ArithmeticError::Underflow)?)
+}
+
+/// The entries of the runtime related to storage
+#[derive(Copy, Debug, Clone)]
+pub struct RuntimeLimits {
+    /// maximum_budget for reading
+    pub max_budget_num_reads: u64,
+    /// maximum budget of bytes read
+    pub max_budget_bytes_read: u64,
+    /// maximum budget of bytes written
+    pub max_budget_bytes_written: u64,
+    /// The maximum size of read allowed per block
+    pub maximum_bytes_left_to_read: u64,
+    /// The maximum size of write allowed per block
+    pub maximum_bytes_left_to_write: u64,
+}
+
+/// The entries of the runtime related to storage
+#[derive(Copy, Debug, Clone)]
+pub struct ResourceTracker {
+    /// The used fuel in the computation
+    pub used_fuel: u64,
+    /// The number of reads in the computation
+    pub num_reads: u64,
+    /// The total number of bytes read
+    pub bytes_read: u64,
+    /// The total number of bytes written
+    pub bytes_written: u64,
+    /// The maximum size of read that remains available for use
+    pub maximum_bytes_left_to_read: u64,
+    /// The maximum size of write that remains available for use
+    pub maximum_bytes_left_to_write: u64,
+}
+
+#[cfg(any(test, feature = "test"))]
+impl Default for ResourceTracker {
+    fn default() -> Self {
+        ResourceTracker {
+            used_fuel: 0,
+            num_reads: 0,
+            bytes_read: 0,
+            bytes_written: 0,
+            maximum_bytes_left_to_read: u64::MAX / 2,
+            maximum_bytes_left_to_write: u64::MAX / 2,
+        }
+    }
+}
+
+impl Default for RuntimeLimits {
+    fn default() -> Self {
+        RuntimeLimits {
+            max_budget_num_reads: u64::MAX / 2,
+            max_budget_bytes_read: u64::MAX / 2,
+            max_budget_bytes_written: u64::MAX / 2,
+            maximum_bytes_left_to_read: u64::MAX / 2,
+            maximum_bytes_left_to_write: u64::MAX / 2,
+        }
+    }
+}
+
+impl ResourceTracker {
+    /// Updates the limits for the maximum and updates the balance.
+    pub fn update_limits(
+        &mut self,
+        balance: &mut Amount,
+        policy: &ResourceControlPolicy,
+        runtime_counts: RuntimeCounts,
+    ) -> Result<(), ExecutionError> {
+        // The fuel being used
+        let initial_fuel = policy.remaining_fuel(*balance);
+        let used_fuel = initial_fuel.saturating_sub(runtime_counts.remaining_fuel);
+        self.used_fuel += used_fuel;
+        sub_assign_fees(balance, policy.fuel_price(used_fuel)?)?;
+        // The number of reads
+        sub_assign_fees(
+            balance,
+            policy.storage_num_reads_price(&runtime_counts.num_reads)?,
+        )?;
+        self.num_reads += runtime_counts.num_reads;
+        // The number of bytes read
+        let bytes_read = runtime_counts.bytes_read;
+        self.maximum_bytes_left_to_read -= bytes_read;
+        self.bytes_read += runtime_counts.bytes_read;
+        sub_assign_fees(balance, policy.storage_bytes_read_price(&bytes_read)?)?;
+        // The number of bytes written
+        let bytes_written = runtime_counts.bytes_written;
+        self.maximum_bytes_left_to_write -= bytes_written;
+        self.bytes_written += bytes_written;
+        sub_assign_fees(balance, policy.storage_bytes_written_price(&bytes_written)?)?;
+        Ok(())
+    }
+
+    /// Obtain the limits for the running of the system
+    pub fn limits(&self, policy: &ResourceControlPolicy, balance: &Amount) -> RuntimeLimits {
+        let max_budget_num_reads =
+            u64::try_from(balance.saturating_div(policy.storage_num_reads)).unwrap_or(u64::MAX);
+        let max_budget_bytes_read =
+            u64::try_from(balance.saturating_div(policy.storage_bytes_read)).unwrap_or(u64::MAX);
+        let max_budget_bytes_written =
+            u64::try_from(balance.saturating_div(policy.storage_bytes_read)).unwrap_or(u64::MAX);
+        RuntimeLimits {
+            max_budget_num_reads,
+            max_budget_bytes_read,
+            max_budget_bytes_written,
+            maximum_bytes_left_to_read: self.maximum_bytes_left_to_read,
+            maximum_bytes_left_to_write: self.maximum_bytes_left_to_write,
+        }
+    }
+}
+
+/// The entries of the runtime related to fuel and storage
+#[derive(Copy, Debug, Clone)]
+pub struct RuntimeCounts {
+    /// The remaining fuel available
+    pub remaining_fuel: u64,
+    /// The number of read operations
+    pub num_reads: u64,
+    /// The bytes that have been read
+    pub bytes_read: u64,
+    /// The bytes that have been written
+    pub bytes_written: u64,
+}
 
 /// An implementation of [`UserApplication`]
 pub type UserApplicationCode = Arc<dyn UserApplication + Send + Sync + 'static>;
@@ -89,6 +218,12 @@ pub enum ExecutionError {
     ApplicationIsInUse,
     #[error("Attempted to get an entry that is not locked")]
     ApplicationStateNotLocked,
+    #[error("Pricing error: {0}")]
+    PricingError(#[from] PricingError),
+    #[error("Excessive readings from storage")]
+    ExcessiveRead,
+    #[error("Excessive writings to storage")]
+    ExcessiveWrite,
 
     #[error("Bytecode ID {0:?} is invalid")]
     InvalidBytecodeId(BytecodeId),
@@ -311,6 +446,9 @@ pub struct CallResult {
 pub trait ContractRuntime: BaseRuntime {
     /// Returns the amount of execution fuel remaining before execution is aborted.
     fn remaining_fuel(&self) -> u64;
+
+    /// Returns the remaining fuel as well as the storage related information on the state
+    fn runtime_counts(&self) -> RuntimeCounts;
 
     /// Sets the amount of execution fuel remaining before execution is aborted.
     fn set_remaining_fuel(&self, remaining_fuel: u64);

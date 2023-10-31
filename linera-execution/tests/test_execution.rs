@@ -12,7 +12,7 @@ use linera_base::{
     data_types::BlockHeight,
     identifiers::{ChainDescription, ChainId, Owner, SessionId},
 };
-use linera_execution::*;
+use linera_execution::{policy::ResourceControlPolicy, *};
 use linera_views::{batch::Batch, common::Context, memory::MemoryContext, views::View};
 use std::sync::Arc;
 
@@ -42,7 +42,8 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         authenticated_signer: None,
         next_message_index: 0,
     };
-
+    let mut tracker = ResourceTracker::default();
+    let policy = ResourceControlPolicy::default();
     let result = view
         .execute_operation(
             &context,
@@ -50,7 +51,8 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
                 application_id: app_id,
                 bytes: vec![],
             },
-            &mut 10_000_000,
+            &policy,
+            &mut tracker,
         )
         .await;
 
@@ -211,6 +213,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         authenticated_signer: Some(owner),
         next_message_index: 0,
     };
+    let mut tracker = ResourceTracker::default();
+    let policy = ResourceControlPolicy::default();
     let result = view
         .execute_operation(
             &context,
@@ -218,7 +222,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
                 application_id: app_id,
                 bytes: vec![1],
             },
-            &mut 10_000_000,
+            &policy,
+            &mut tracker,
         )
         .await
         .unwrap();
@@ -281,7 +286,8 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
         authenticated_signer: Some(owner),
         next_message_index: 0,
     };
-
+    let mut tracker = ResourceTracker::default();
+    let policy = ResourceControlPolicy::default();
     let result = view
         .execute_operation(
             &context,
@@ -289,7 +295,8 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
                 application_id: app_id,
                 bytes: vec![],
             },
-            &mut 10_000_000,
+            &policy,
+            &mut tracker,
         )
         .await;
 

@@ -24,7 +24,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
-    pricing::Pricing,
+    policy::ResourceControlPolicy,
     system::{Account, UserData},
     Bytecode, ChainOwnership, UserApplicationId, WasmRuntime, WithWasmDefault,
 };
@@ -799,8 +799,8 @@ enum ClientCommand {
         name: ValidatorName,
     },
 
-    /// View or update the pricing.
-    Pricing {
+    /// View or update the resource control policy
+    ResourceControlPolicy {
         /// Set the base price for each certificate.
         #[structopt(long)]
         certificate: Option<Amount>,
@@ -809,9 +809,25 @@ enum ClientCommand {
         #[structopt(long)]
         fuel: Option<Amount>,
 
-        /// Set the price per byte to store a block's operations, incoming and outgoing messages.
+        /// Set the price per byte to read data per operation
         #[structopt(long)]
-        storage: Option<Amount>,
+        storage_num_reads: Option<Amount>,
+
+        /// Set the price per byte to read data per byte
+        #[structopt(long)]
+        storage_bytes_read: Option<Amount>,
+
+        /// Set the price per byte to write data per byte
+        #[structopt(long)]
+        storage_bytes_written: Option<Amount>,
+
+        /// Set the maximum quantity of data to read per block
+        #[structopt(long)]
+        maximum_bytes_read_per_block: Option<u64>,
+
+        /// Set the maximum quantity of data to write per block
+        #[structopt(long)]
+        maximum_bytes_written_per_block: Option<u64>,
 
         /// Set the price per byte to store and send outgoing cross-chain messages.
         #[structopt(long)]
@@ -865,9 +881,25 @@ enum ClientCommand {
         #[structopt(long, default_value = "0")]
         fuel_price: Amount,
 
-        /// Set the price per byte to store a block's operations, incoming and outgoing messages.
+        /// Set the price per operation to read data
         #[structopt(long, default_value = "0")]
-        storage_price: Amount,
+        storage_num_reads_price: Amount,
+
+        /// Set the price per byte to read data
+        #[structopt(long, default_value = "0")]
+        storage_bytes_read_price: Amount,
+
+        /// Set the price per byte to write data
+        #[structopt(long, default_value = "0")]
+        storage_bytes_written_price: Amount,
+
+        /// Set the maximum read data per block
+        #[structopt(long)]
+        maximum_bytes_read_per_block: Option<u64>,
+
+        /// Set the maximum write data per block
+        #[structopt(long)]
+        maximum_bytes_written_per_block: Option<u64>,
 
         /// Set the price per byte to store and send outgoing cross-chain messages.
         #[structopt(long, default_value = "0")]
@@ -1303,7 +1335,9 @@ impl Runnable for Job {
                 context.save_wallet();
             }
 
-            command @ (SetValidator { .. } | RemoveValidator { .. } | Pricing { .. }) => {
+            command @ (SetValidator { .. }
+            | RemoveValidator { .. }
+            | ResourceControlPolicy { .. }) => {
                 info!("Starting operations to change validator set");
                 let time_start = Instant::now();
 
@@ -1325,7 +1359,7 @@ impl Runnable for Job {
 
                 // Create the new committee.
                 let mut committee = chain_client.local_committee().await.unwrap();
-                let mut pricing = committee.pricing().clone();
+                let mut policy = committee.policy().clone();
                 let mut validators = committee.validators().clone();
                 match command {
                     SetValidator {
@@ -1347,35 +1381,69 @@ impl Runnable for Job {
                             return Ok(());
                         }
                     }
-                    Pricing {
+                    ResourceControlPolicy {
                         certificate,
                         fuel,
-                        storage,
+                        storage_num_reads,
+                        storage_bytes_read,
+                        storage_bytes_written,
+                        maximum_bytes_read_per_block,
+                        maximum_bytes_written_per_block,
                         messages,
                     } => {
                         if let Some(certificate) = certificate {
-                            pricing.certificate = certificate;
+                            policy.certificate = certificate;
                         }
                         if let Some(fuel) = fuel {
-                            pricing.fuel = fuel;
+                            policy.fuel = fuel;
                         }
-                        if let Some(storage) = storage {
-                            pricing.storage = storage;
+                        if let Some(storage_num_reads) = storage_num_reads {
+                            policy.storage_num_reads = storage_num_reads;
+                        }
+                        if let Some(storage_bytes_read) = storage_bytes_read {
+                            policy.storage_bytes_read = storage_bytes_read;
+                        }
+                        if let Some(storage_bytes_written) = storage_bytes_written {
+                            policy.storage_bytes_written = storage_bytes_written;
+                        }
+                        if let Some(maximum_bytes_read_per_block) = maximum_bytes_read_per_block {
+                            policy.maximum_bytes_read_per_block = maximum_bytes_read_per_block;
+                        }
+                        if let Some(maximum_bytes_written_per_block) =
+                            maximum_bytes_written_per_block
+                        {
+                            policy.maximum_bytes_written_per_block =
+                                maximum_bytes_written_per_block;
                         }
                         if let Some(messages) = messages {
-                            pricing.messages = messages;
+                            policy.messages = messages;
                         }
                         info!(
-                            "Pricing:\n\
+                            "ResourceControlPolicy:\n\
                             {:.2} base cost per block\n\
-                            {:.2} per unit of fuel used in executing user operations and messages\n\
-                            {:.2} per byte of operations and incoming messages\n\
-                            {:.2} per byte of outgoing messages",
-                            pricing.certificate, pricing.fuel, pricing.storage, pricing.messages
+                            {:.2} cost per byte of operations and incoming messages\n\
+                            {:.2} cost per byte operation\n\
+                            {:.2} cost per bytes read\n\
+                            {:.2} cost per bytes written\n\
+                            {:.2} per byte of outgoing messages\n\
+                            {:.2} maximum number bytes read per block\n\
+                            {:.2} maximum number bytes written per block",
+                            policy.certificate,
+                            policy.fuel,
+                            policy.storage_num_reads,
+                            policy.storage_bytes_read,
+                            policy.storage_bytes_written,
+                            policy.messages,
+                            policy.maximum_bytes_read_per_block,
+                            policy.maximum_bytes_written_per_block
                         );
                         if certificate.is_none()
                             && fuel.is_none()
-                            && storage.is_none()
+                            && storage_num_reads.is_none()
+                            && storage_bytes_read.is_none()
+                            && storage_bytes_written.is_none()
+                            && maximum_bytes_read_per_block.is_none()
+                            && maximum_bytes_written_per_block.is_none()
                             && messages.is_none()
                         {
                             return Ok(());
@@ -1383,7 +1451,7 @@ impl Runnable for Job {
                     }
                     _ => unreachable!(),
                 }
-                committee = Committee::new(validators, pricing);
+                committee = Committee::new(validators, policy);
                 let certificate = chain_client.stage_new_committee(committee).await.unwrap();
                 context.update_wallet_from_client(&mut chain_client).await;
                 info!("Staging committee:\n{:?}", certificate);
@@ -1748,20 +1816,36 @@ async fn main() -> Result<(), anyhow::Error> {
             num,
             certificate_price,
             fuel_price,
-            storage_price,
+            storage_num_reads_price,
+            storage_bytes_read_price,
+            storage_bytes_written_price,
+            maximum_bytes_read_per_block,
+            maximum_bytes_written_per_block,
             messages_price,
             testing_prng_seed,
         } => {
             let committee_config = CommitteeConfig::read(committee_config_path)
                 .expect("Unable to read committee config file");
-            let pricing = Pricing {
+            let maximum_bytes_read_per_block = match *maximum_bytes_read_per_block {
+                Some(value) => value,
+                None => u64::MAX,
+            };
+            let maximum_bytes_written_per_block = match *maximum_bytes_written_per_block {
+                Some(value) => value,
+                None => u64::MAX,
+            };
+            let policy = ResourceControlPolicy {
                 certificate: *certificate_price,
                 fuel: *fuel_price,
-                storage: *storage_price,
+                storage_num_reads: *storage_num_reads_price,
+                storage_bytes_read: *storage_bytes_read_price,
+                storage_bytes_written: *storage_bytes_written_price,
+                maximum_bytes_read_per_block,
+                maximum_bytes_written_per_block,
                 messages: *messages_price,
             };
             let mut genesis_config =
-                GenesisConfig::new(committee_config, ChainId::root(*admin_root), pricing);
+                GenesisConfig::new(committee_config, ChainId::root(*admin_root), policy);
             let timestamp = start_timestamp
                 .map(|st| {
                     Timestamp::from(

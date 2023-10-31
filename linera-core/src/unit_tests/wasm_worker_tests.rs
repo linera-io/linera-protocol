@@ -26,10 +26,12 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::Epoch,
+    policy::ResourceControlPolicy,
     system::{SystemChannel, SystemMessage, SystemOperation},
     Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription, ExecutionStateView,
-    GenericApplicationId, Message, Operation, OperationContext, SystemExecutionState,
-    UserApplicationDescription, UserApplicationId, WasmApplication, WasmRuntime,
+    GenericApplicationId, Message, Operation, OperationContext, ResourceTracker,
+    SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmApplication,
+    WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, Store};
 use linera_views::views::{CryptoHashView, ViewError};
@@ -422,6 +424,8 @@ where
         index: 0,
         next_message_index: 0,
     };
+    let mut tracker = ResourceTracker::default();
+    let policy = ResourceControlPolicy::default();
     creator_state
         .execute_operation(
             &operation_context,
@@ -429,7 +433,8 @@ where
                 application_id,
                 bytes: user_operation,
             },
-            &mut 10_000_000,
+            &policy,
+            &mut tracker,
         )
         .await?;
     creator_state.system.timestamp.set(Timestamp::from(5));
