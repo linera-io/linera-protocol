@@ -328,7 +328,7 @@ impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W> {
         if bytes >= self.runtime_limits.max_budget_bytes_read {
             return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
         }
-        if bytes >= self.runtime_limits.maximum_bytes_read {
+        if bytes >= self.runtime_limits.maximum_bytes_left_to_read {
             return Err(ExecutionError::ExcessiveRead);
         }
         Ok(())
@@ -343,7 +343,7 @@ impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W> {
         if bytes >= self.runtime_limits.max_budget_bytes_written {
             return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
         }
-        if bytes >= self.runtime_limits.maximum_bytes_written {
+        if bytes >= self.runtime_limits.maximum_bytes_left_to_write {
             return Err(ExecutionError::ExcessiveWrite);
         }
         Ok(())

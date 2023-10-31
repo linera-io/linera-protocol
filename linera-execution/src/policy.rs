@@ -23,9 +23,9 @@ pub struct ResourceControlPolicy {
     /// The cost to store data per byte
     pub storage_bytes_written: Amount,
     /// The maximum data to read per block
-    pub maximum_bytes_read: u64,
+    pub maximum_bytes_read_per_block: u64,
     /// The maximum data to write per block
-    pub maximum_bytes_written: u64,
+    pub maximum_bytes_written_per_block: u64,
     /// The cost to store and send cross-chain messages, per byte.
     pub messages: Amount,
 }
@@ -38,8 +38,8 @@ impl Default for ResourceControlPolicy {
             storage_num_reads: Amount::default(),
             storage_bytes_read: Amount::default(),
             storage_bytes_written: Amount::default(),
-            maximum_bytes_read: u64::MAX / 2,
-            maximum_bytes_written: u64::MAX / 2,
+            maximum_bytes_read_per_block: u64::MAX / 2,
+            maximum_bytes_written_per_block: u64::MAX / 2,
             messages: Amount::default(),
         }
     }
@@ -101,8 +101,8 @@ impl ResourceControlPolicy {
             storage_num_reads: Amount::ZERO,
             storage_bytes_read: Amount::ZERO,
             storage_bytes_written: Amount::ZERO,
-            maximum_bytes_read: u64::MAX / 2,
-            maximum_bytes_written: u64::MAX / 2,
+            maximum_bytes_read_per_block: u64::MAX / 2,
+            maximum_bytes_written_per_block: u64::MAX / 2,
             messages: Amount::ZERO,
         }
     }
@@ -119,8 +119,8 @@ impl ResourceControlPolicy {
             storage_num_reads: Amount::ZERO,
             storage_bytes_read: Amount::ZERO,
             storage_bytes_written: Amount::ZERO,
-            maximum_bytes_read: u64::MAX,
-            maximum_bytes_written: u64::MAX,
+            maximum_bytes_read_per_block: u64::MAX,
+            maximum_bytes_written_per_block: u64::MAX,
             messages: Amount::ZERO,
         }
     }
@@ -134,8 +134,8 @@ impl ResourceControlPolicy {
             storage_num_reads: Amount::ZERO,
             storage_bytes_read: Amount::from_atto(100),
             storage_bytes_written: Amount::from_atto(1_000),
-            maximum_bytes_read: u64::MAX,
-            maximum_bytes_written: u64::MAX,
+            maximum_bytes_read_per_block: u64::MAX,
+            maximum_bytes_written_per_block: u64::MAX,
             messages: Amount::from_atto(1),
         }
     }

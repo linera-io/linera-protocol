@@ -823,11 +823,11 @@ enum ClientCommand {
 
         /// Set the maximum quantity of data to read per block
         #[structopt(long)]
-        maximum_bytes_read: Option<u64>,
+        maximum_bytes_read_per_block: Option<u64>,
 
         /// Set the maximum quantity of data to write per block
         #[structopt(long)]
-        maximum_bytes_written: Option<u64>,
+        maximum_bytes_written_per_block: Option<u64>,
 
         /// Set the price per byte to store and send outgoing cross-chain messages.
         #[structopt(long)]
@@ -895,11 +895,11 @@ enum ClientCommand {
 
         /// Set the maximum read data per block
         #[structopt(long)]
-        maximum_bytes_read_price: Option<u64>,
+        maximum_bytes_read_per_block: Option<u64>,
 
         /// Set the maximum write data per block
         #[structopt(long)]
-        maximum_bytes_written_price: Option<u64>,
+        maximum_bytes_written_per_block: Option<u64>,
 
         /// Set the price per byte to store and send outgoing cross-chain messages.
         #[structopt(long, default_value = "0")]
@@ -1387,8 +1387,8 @@ impl Runnable for Job {
                         storage_num_reads,
                         storage_bytes_read,
                         storage_bytes_written,
-                        maximum_bytes_read,
-                        maximum_bytes_written,
+                        maximum_bytes_read_per_block,
+                        maximum_bytes_written_per_block,
                         messages,
                     } => {
                         if let Some(certificate) = certificate {
@@ -1406,11 +1406,14 @@ impl Runnable for Job {
                         if let Some(storage_bytes_written) = storage_bytes_written {
                             policy.storage_bytes_written = storage_bytes_written;
                         }
-                        if let Some(maximum_bytes_read) = maximum_bytes_read {
-                            policy.maximum_bytes_read = maximum_bytes_read;
+                        if let Some(maximum_bytes_read_per_block) = maximum_bytes_read_per_block {
+                            policy.maximum_bytes_read_per_block = maximum_bytes_read_per_block;
                         }
-                        if let Some(maximum_bytes_written) = maximum_bytes_written {
-                            policy.maximum_bytes_written = maximum_bytes_written;
+                        if let Some(maximum_bytes_written_per_block) =
+                            maximum_bytes_written_per_block
+                        {
+                            policy.maximum_bytes_written_per_block =
+                                maximum_bytes_written_per_block;
                         }
                         if let Some(messages) = messages {
                             policy.messages = messages;
@@ -1431,16 +1434,16 @@ impl Runnable for Job {
                             policy.storage_bytes_read,
                             policy.storage_bytes_written,
                             policy.messages,
-                            policy.maximum_bytes_read,
-                            policy.maximum_bytes_written
+                            policy.maximum_bytes_read_per_block,
+                            policy.maximum_bytes_written_per_block
                         );
                         if certificate.is_none()
                             && fuel.is_none()
                             && storage_num_reads.is_none()
                             && storage_bytes_read.is_none()
                             && storage_bytes_written.is_none()
-                            && maximum_bytes_read.is_none()
-                            && maximum_bytes_written.is_none()
+                            && maximum_bytes_read_per_block.is_none()
+                            && maximum_bytes_written_per_block.is_none()
                             && messages.is_none()
                         {
                             return Ok(());
@@ -1816,18 +1819,18 @@ async fn main() -> Result<(), anyhow::Error> {
             storage_num_reads_price,
             storage_bytes_read_price,
             storage_bytes_written_price,
-            maximum_bytes_read_price,
-            maximum_bytes_written_price,
+            maximum_bytes_read_per_block,
+            maximum_bytes_written_per_block,
             messages_price,
             testing_prng_seed,
         } => {
             let committee_config = CommitteeConfig::read(committee_config_path)
                 .expect("Unable to read committee config file");
-            let maximum_bytes_read = match *maximum_bytes_read_price {
+            let maximum_bytes_read_per_block = match *maximum_bytes_read_per_block {
                 Some(value) => value,
                 None => u64::MAX,
             };
-            let maximum_bytes_written = match *maximum_bytes_written_price {
+            let maximum_bytes_written_per_block = match *maximum_bytes_written_per_block {
                 Some(value) => value,
                 None => u64::MAX,
             };
@@ -1837,8 +1840,8 @@ async fn main() -> Result<(), anyhow::Error> {
                 storage_num_reads: *storage_num_reads_price,
                 storage_bytes_read: *storage_bytes_read_price,
                 storage_bytes_written: *storage_bytes_written_price,
-                maximum_bytes_read,
-                maximum_bytes_written,
+                maximum_bytes_read_per_block,
+                maximum_bytes_written_per_block,
                 messages: *messages_price,
             };
             let mut genesis_config =

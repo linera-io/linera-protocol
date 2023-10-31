@@ -507,15 +507,15 @@ where
 
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
-        let maximum_bytes_read = policy.maximum_bytes_read;
-        let maximum_bytes_written = policy.maximum_bytes_written;
+        let maximum_bytes_left_to_read = policy.maximum_bytes_read_per_block;
+        let maximum_bytes_left_to_write = policy.maximum_bytes_written_per_block;
         let mut tracker = ResourceTracker {
             used_fuel: 0,
             num_reads: 0,
             bytes_read: 0,
             bytes_written: 0,
-            maximum_bytes_read,
-            maximum_bytes_written,
+            maximum_bytes_left_to_read,
+            maximum_bytes_left_to_write,
         };
         for (index, message) in block.incoming_messages.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;

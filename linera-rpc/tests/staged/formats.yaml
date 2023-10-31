@@ -609,8 +609,8 @@ ResourceControlPolicy:
         TYPENAME: Amount
     - storage_bytes_written:
         TYPENAME: Amount
-    - maximum_bytes_read: U64
-    - maximum_bytes_written: U64
+    - maximum_bytes_read_per_block: U64
+    - maximum_bytes_written_per_block: U64
     - messages:
         TYPENAME: Amount
 RoundNumber:

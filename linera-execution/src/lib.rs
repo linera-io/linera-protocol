@@ -68,9 +68,9 @@ pub struct RuntimeLimits {
     /// maximum budget of bytes written
     pub max_budget_bytes_written: u64,
     /// The maximum size of read allowed per block
-    pub maximum_bytes_read: u64,
+    pub maximum_bytes_left_to_read: u64,
     /// The maximum size of write allowed per block
-    pub maximum_bytes_written: u64,
+    pub maximum_bytes_left_to_write: u64,
 }
 
 /// The entries of the runtime related to storage
@@ -85,9 +85,9 @@ pub struct ResourceTracker {
     /// The total number of bytes written
     pub bytes_written: u64,
     /// The maximum size of read that remains available for use
-    pub maximum_bytes_read: u64,
+    pub maximum_bytes_left_to_read: u64,
     /// The maximum size of write that remains available for use
-    pub maximum_bytes_written: u64,
+    pub maximum_bytes_left_to_write: u64,
 }
 
 #[cfg(any(test, feature = "test"))]
@@ -98,8 +98,8 @@ impl Default for ResourceTracker {
             num_reads: 0,
             bytes_read: 0,
             bytes_written: 0,
-            maximum_bytes_read: u64::MAX / 2,
-            maximum_bytes_written: u64::MAX / 2,
+            maximum_bytes_left_to_read: u64::MAX / 2,
+            maximum_bytes_left_to_write: u64::MAX / 2,
         }
     }
 }
@@ -110,8 +110,8 @@ impl Default for RuntimeLimits {
             max_budget_num_reads: u64::MAX / 2,
             max_budget_bytes_read: u64::MAX / 2,
             max_budget_bytes_written: u64::MAX / 2,
-            maximum_bytes_read: u64::MAX / 2,
-            maximum_bytes_written: u64::MAX / 2,
+            maximum_bytes_left_to_read: u64::MAX / 2,
+            maximum_bytes_left_to_write: u64::MAX / 2,
         }
     }
 }
@@ -139,12 +139,12 @@ impl ResourceTracker {
         self.num_reads += runtime_counts.num_reads;
         // The number of bytes read
         let bytes_read = runtime_counts.bytes_read;
-        self.maximum_bytes_read -= bytes_read;
+        self.maximum_bytes_left_to_read -= bytes_read;
         self.bytes_read += runtime_counts.bytes_read;
         sub_assign_fees(balance, policy.storage_bytes_read_price(&bytes_read)?)?;
         // The number of bytes written
         let bytes_written = runtime_counts.bytes_written;
-        self.maximum_bytes_written -= bytes_written;
+        self.maximum_bytes_left_to_write -= bytes_written;
         self.bytes_written += bytes_written;
         sub_assign_fees(balance, policy.storage_bytes_written_price(&bytes_written)?)?;
         Ok(())
@@ -162,8 +162,8 @@ impl ResourceTracker {
             max_budget_num_reads,
             max_budget_bytes_read,
             max_budget_bytes_written,
-            maximum_bytes_read: self.maximum_bytes_read,
-            maximum_bytes_written: self.maximum_bytes_written,
+            maximum_bytes_left_to_read: self.maximum_bytes_left_to_read,
+            maximum_bytes_left_to_write: self.maximum_bytes_left_to_write,
         }
     }
 }
