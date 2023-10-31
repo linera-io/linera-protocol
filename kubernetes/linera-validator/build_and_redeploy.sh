@@ -6,6 +6,7 @@ cloud_mode=false
 port_forward=false
 do_build=true
 clean=false
+copy=false
 
 # Guard clause check if required binaries are installed
 which kind > /dev/null || { echo "Error: kind not installed." ; exit 1 ; }
@@ -20,6 +21,7 @@ usage() {
     echo " --port-forward   Start port forwarding at the end of the script, so that the validator is accessible. Don't use this if you plan to use this terminal for something else after running this script"
     echo " --no-build       Don't actually build another version of the Docker image, just use the existing one for the current mode (cloud or not)"
     echo " --clean          Clean up DB state and delete kind cluster before starting a new one. This will guarantee that the Validator state will be clean for the new run"
+    echo " --copy           Have the Dockerfile copy over the already built binaries in the target/release directory. Binaries need to be built beforehand. Works only when --cloud is NOT set"
 }
 
 # Function to handle options and arguments
@@ -41,6 +43,9 @@ handle_options() {
             ;;
         --clean)
             clean=true
+            ;;
+        --copy)
+            copy=true
             ;;
         *)
             echo "Invalid option: $1" >&2
@@ -86,7 +91,9 @@ if [ "$cloud_mode" = true ]; then
 else
     docker_image="linera-test:latest"
     if [ "$do_build" = true ]; then
-        if [ "$(uname -m)" = "x86_64" ]; then
+        if [ "$copy" = true ]; then
+            docker build -f ../../docker/Dockerfile.copy ../../ -t $docker_image || exit 1
+        elif [ "$(uname -m)" = "x86_64" ]; then
             docker build -f ../../docker/Dockerfile.local ../../ -t $docker_image || exit 1
         else
             docker build -f ../../docker/Dockerfile.local-aarch64 ../../ -t $docker_image || exit 1

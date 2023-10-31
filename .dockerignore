@@ -13,7 +13,6 @@ npm-debug.log
 README-secret.md
 # github related files
 .github/
-target
 scripts/target
 examples/target
 Dockerfile
