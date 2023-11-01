@@ -50,6 +50,7 @@ where
         let poll_sender = PollSender::new(context.future_queue.take(), poll_request_sender);
         let actor = Self::new(context, poll_request_receiver);
 
+        // TODO(#1193): Use one thread per transaction instead of one per future
         thread::spawn(|| actor.run(parameters));
 
         poll_sender
