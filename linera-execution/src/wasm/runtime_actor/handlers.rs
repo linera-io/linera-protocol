@@ -15,3 +15,21 @@ pub trait RequestHandler<Request> {
     /// to this handler.
     async fn handle_request(&self, request: Request) -> Result<(), ExecutionError>;
 }
+
+/// Helper trait to send a response and log on failure.
+trait RespondExt {
+    type Response;
+
+    /// Responds to a request using the `response_sender` channel endpoint.
+    fn respond(self, response: Self::Response);
+}
+
+impl<Response> RespondExt for oneshot::Sender<Response> {
+    type Response = Response;
+
+    fn respond(self, response: Self::Response) {
+        if self.send(response).is_err() {
+            tracing::debug!("Request sent to `RuntimeActor` was canceled");
+        }
+    }
+}
