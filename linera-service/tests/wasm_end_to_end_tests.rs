@@ -672,9 +672,9 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     let (contract_fungible_a, service_fungible_a) =
         client_a.build_example("fungible").await.unwrap();
     let (contract_fungible_b, service_fungible_b) =
-        client_a.build_example("fungible").await.unwrap();
+        client_b.build_example("fungible").await.unwrap();
     let (contract_matching, service_matching) =
-        client_a.build_example("matching-engine").await.unwrap();
+        client_admin.build_example("matching-engine").await.unwrap();
 
     let chain_admin = client_admin.get_wallet().unwrap().default_chain().unwrap();
     let chain_a = client_admin.open_and_assign(&client_a).await.unwrap();

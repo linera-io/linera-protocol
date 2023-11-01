@@ -6,7 +6,7 @@ use crate::{
     util,
     util::{ChildExt, CommandExt},
 };
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use async_trait::async_trait;
 use std::{
     collections::{BTreeMap, HashSet},
@@ -137,11 +137,13 @@ impl LineraNetConfig for LocalNetConfig {
             self.num_shards,
         )?;
         let client = net.make_client();
-        if self.num_initial_validators > 0 {
-            net.generate_initial_validator_config().await.unwrap();
-            client.create_genesis_config().await.unwrap();
-            net.run().await.unwrap();
-        }
+        ensure!(
+            self.num_initial_validators > 0,
+            "There should be at least one initial validator"
+        );
+        net.generate_initial_validator_config().await.unwrap();
+        client.create_genesis_config().await.unwrap();
+        net.run().await.unwrap();
         Ok((net, client))
     }
 }

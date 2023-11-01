@@ -46,7 +46,7 @@ pub struct ClientWrapper {
 }
 
 impl ClientWrapper {
-    pub(crate) fn new(
+    pub fn new(
         tmp_dir: Arc<TempDir>,
         network: Network,
         testing_prng_seed: Option<u64>,

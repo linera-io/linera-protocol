@@ -16,7 +16,7 @@ use linera_service::{
     util,
 };
 use linera_views::test_utils::get_table_name;
-use std::{path::PathBuf, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 use test_case::test_case;
 
 #[tokio::test]
@@ -401,22 +401,10 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
     net.terminate().await.unwrap();
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_project_new(database: Database, network: Network) {
-    let table_name = get_table_name();
-    let config = LocalNetConfig {
-        database,
-        network,
-        testing_prng_seed: None,
-        table_name,
-        num_initial_validators: 0,
-        num_shards: 0,
-    };
-    let (mut net, client) = config.instantiate().await.unwrap();
-
+async fn test_project_new() {
+    let tmp_dir = Arc::new(tempfile::tempdir().unwrap());
+    let client = ClientWrapper::new(tmp_dir, Network::Grpc, None, 0);
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
         .parent()
@@ -427,26 +415,12 @@ async fn test_project_new(database: Database, network: Network) {
         .build_application(project_dir.as_path(), "init-test", false)
         .await
         .unwrap();
-
-    net.ensure_is_running().unwrap();
-    net.terminate().await.unwrap();
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_project_test(database: Database, network: Network) {
-    let table_name = get_table_name();
-    let config = LocalNetConfig {
-        database,
-        network,
-        testing_prng_seed: None,
-        table_name,
-        num_initial_validators: 0,
-        num_shards: 0,
-    };
-    let (_net, client) = config.instantiate().await.unwrap();
+async fn test_project_test() {
+    let tmp_dir = Arc::new(tempfile::tempdir().unwrap());
+    let client = ClientWrapper::new(tmp_dir, Network::Grpc, None, 0);
     client
         .project_test(&ClientWrapper::example_path("counter").unwrap())
         .await
