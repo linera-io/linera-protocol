@@ -36,11 +36,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-node@v3
-    - uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        target: wasm32-unknown-unknown
-    - uses: Swatinem/rust-cache@v2
+    - uses: Twey/setup-rust-toolchain@v1
     - name: Build
       run: |
         cd linera-explorer

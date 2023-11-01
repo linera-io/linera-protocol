@@ -37,12 +37,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        target: wasm32-unknown-unknown
-        components: clippy, rustfmt
-    - uses: Swatinem/rust-cache@v2
+    - uses: Twey/setup-rust-toolchain@v1
     - name: Clear up some space
       run: |
         sudo rm -rf /usr/share/dotnet
@@ -102,17 +97,11 @@ jobs:
       run: >
         find linera-* -name '*.rs' -a -not -wholename '*/target/*' -print0
         | xargs -0 -L1 ./scripts/target/release/check_copyright_header
-    - uses: actions-rs/toolchain@v1
+    - uses: Twey/setup-rust-toolchain@v1
       with:
-        profile: minimal
+        toolchain: nightly-2023-10-22
         target: wasm32-unknown-unknown
-        components: clippy
-    - uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: nightly
-        components: rustfmt
-    - uses: Swatinem/rust-cache@v2
+        components: clippy rustfmt
     - name: Install cargo-machete
       run: |
         cargo install cargo-machete --locked
@@ -131,7 +120,7 @@ jobs:
         cargo install cargo-sort --locked
     - name: Check formatting
       run: |
-        cargo +nightly fmt -- --check
+        cargo +nightly-2023-10-22 fmt -- --check
     - name: Check for unused dependencies
       run: |
         cargo machete
@@ -143,7 +132,7 @@ jobs:
     - name: Run Wasm application lints
       run: |
         cd examples
-        cargo +nightly fmt -- --check
+        cargo fmt -- --check
         cargo clippy --all-targets --all-features --target wasm32-unknown-unknown --locked
         cargo clippy --all-targets --all-features --target x86_64-unknown-linux-gnu --locked
     - name: Run clippy
