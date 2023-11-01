@@ -21,10 +21,43 @@ use tonic_health::proto::{
 };
 use tracing::{info, warn};
 
+/// The information needed to start a [`LocalNet`].
+pub struct LocalNetConfig {
+    pub database: Database,
+    pub network: Network,
+    pub testing_prng_seed: Option<u64>,
+    pub table_name: String,
+    pub num_initial_validators: usize,
+    pub num_shards: usize,
+}
+
+/// A simplified version of [`LocalNetConfig`]
+#[cfg(any(test, feature = "test"))]
+pub struct LocalNetTestingConfig {
+    pub database: Database,
+    pub network: Network,
+}
+
+/// A set of Linera validators running locally as native processes.
+pub struct LocalNet {
+    database: Database,
+    network: Network,
+    testing_prng_seed: Option<u64>,
+    next_client_id: usize,
+    num_initial_validators: usize,
+    num_shards: usize,
+    validator_names: BTreeMap<usize, String>,
+    running_validators: BTreeMap<usize, Validator>,
+    table_name: String,
+    set_init: HashSet<(usize, usize)>,
+    tmp_dir: Arc<TempDir>,
+}
+
 /// The name of the environment variable that allows specifying additional arguments to be passed
 /// to the binary when starting a server.
 const SERVER_ENV: &str = "LINERA_SERVER_PARAMS";
 
+/// Description of the database engine to use inside a local Linera network.
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum Database {
     RocksDb,
@@ -32,6 +65,7 @@ pub enum Database {
     ScyllaDb,
 }
 
+/// The processes of a running validator.
 struct Validator {
     proxy: Child,
     servers: Vec<Child>,
@@ -82,40 +116,11 @@ impl Validator {
     }
 }
 
-pub struct LocalNetConfig {
-    pub database: Database,
-    pub network: Network,
-    pub testing_prng_seed: Option<u64>,
-    pub table_name: String,
-    pub num_initial_validators: usize,
-    pub num_shards: usize,
-}
-
-#[cfg(any(test, feature = "test"))]
-pub struct LocalNetTestingConfig {
-    pub database: Database,
-    pub network: Network,
-}
-
 #[cfg(any(test, feature = "test"))]
 impl LocalNetTestingConfig {
     pub fn new(database: Database, network: Network) -> Self {
         Self { database, network }
     }
-}
-
-pub struct LocalNet {
-    database: Database,
-    network: Network,
-    testing_prng_seed: Option<u64>,
-    next_client_id: usize,
-    num_initial_validators: usize,
-    num_shards: usize,
-    validator_names: BTreeMap<usize, String>,
-    running_validators: BTreeMap<usize, Validator>,
-    table_name: String,
-    set_init: HashSet<(usize, usize)>,
-    tmp_dir: Arc<TempDir>,
 }
 
 #[async_trait]

@@ -35,6 +35,7 @@ use tracing::{info, warn};
 /// to the node-service command of the client.
 const CLIENT_SERVICE_ENV: &str = "LINERA_CLIENT_SERVICE_PARAMS";
 
+/// Wrapper to run a Linera client command.
 pub struct ClientWrapper {
     testing_prng_seed: Option<u64>,
     storage: String,
@@ -63,6 +64,7 @@ impl ClientWrapper {
         }
     }
 
+    /// Runs `linera project new`.
     pub async fn project_new(&self, project_name: &str, linera_root: &Path) -> Result<TempDir> {
         let tmp = TempDir::new()?;
         let mut command = self.command().await?;
@@ -78,6 +80,7 @@ impl ClientWrapper {
         Ok(tmp)
     }
 
+    /// Runs `linera project publish`.
     pub async fn project_publish<T: Serialize>(
         &self,
         path: PathBuf,
@@ -103,6 +106,7 @@ impl ClientWrapper {
         Ok(stdout.trim().to_string())
     }
 
+    /// Runs `linera project test`.
     pub async fn project_test(&self, path: &Path) -> Result<()> {
         self.command()
             .await
@@ -132,6 +136,7 @@ impl ClientWrapper {
         Ok(command)
     }
 
+    /// Runs `linera create-genesis-config`.
     pub async fn create_genesis_config(&self) -> Result<()> {
         let mut command = self.command().await?;
         command
@@ -146,6 +151,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera wallet init`.
     pub async fn wallet_init(&self, chain_ids: &[ChainId]) -> Result<()> {
         let mut command = self.command().await?;
         command
@@ -162,6 +168,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera wallet publish-and-create`.
     pub async fn publish_and_create<A: ContractAbi>(
         &self,
         contract: PathBuf,
@@ -192,6 +199,7 @@ impl ClientWrapper {
         Ok(stdout.trim().parse::<ApplicationId>()?.with_abi())
     }
 
+    /// Runs `linera publish-bytecode`.
     pub async fn publish_bytecode(
         &self,
         contract: PathBuf,
@@ -209,6 +217,7 @@ impl ClientWrapper {
         Ok(stdout.trim().parse()?)
     }
 
+    /// Runs `linera create-application`.
     pub async fn create_application<A: ContractAbi>(
         &self,
         bytecode_id: &BytecodeId,
@@ -228,6 +237,7 @@ impl ClientWrapper {
         Ok(stdout.trim().parse::<ApplicationId>()?.with_abi())
     }
 
+    /// Runs `linera service`.
     pub async fn run_node_service(&self, port: impl Into<Option<u16>>) -> Result<NodeService> {
         let port = port.into().unwrap_or(8080);
         let mut command = self.command().await?;
@@ -255,6 +265,7 @@ impl ClientWrapper {
         bail!("Failed to start node service");
     }
 
+    /// Runs `linera query-validators`.
     pub async fn query_validators(&self, chain_id: Option<ChainId>) -> Result<()> {
         let mut command = self.command().await?;
         command.arg("query-validators");
@@ -265,6 +276,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera query-balance`.
     pub async fn query_balance(&self, chain_id: ChainId) -> Result<Amount> {
         let stdout = self
             .command()
@@ -280,6 +292,7 @@ impl ClientWrapper {
         Ok(amount)
     }
 
+    /// Runs `linera transfer`.
     pub async fn transfer(&self, amount: Amount, from: ChainId, to: ChainId) -> Result<()> {
         self.command()
             .await?
@@ -292,6 +305,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera benchmark`.
     #[cfg(benchmark)]
     async fn benchmark(&self, max_in_flight: usize) -> Result<()> {
         self.command()
@@ -303,6 +317,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera open-chain`.
     pub async fn open_chain(
         &self,
         from: ChainId,
@@ -325,6 +340,7 @@ impl ClientWrapper {
         Ok((message_id, chain_id))
     }
 
+    /// Runs `linera open-chain` then `linera assign`.
     pub async fn open_and_assign(&self, client: &ClientWrapper) -> Result<ChainId> {
         let our_chain = self
             .get_wallet()?
@@ -409,6 +425,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera keygen`.
     pub async fn keygen(&self) -> Result<PublicKey> {
         let stdout = self
             .command()
@@ -419,10 +436,12 @@ impl ClientWrapper {
         Ok(PublicKey::from_str(stdout.trim())?)
     }
 
+    /// Returns the default chain.
     pub fn default_chain(&self) -> Option<ChainId> {
         self.get_wallet().ok()?.default_chain()
     }
 
+    /// Runs `linera assign`.
     pub async fn assign(&self, key: PublicKey, message_id: MessageId) -> Result<ChainId> {
         let stdout = self
             .command()
@@ -438,6 +457,7 @@ impl ClientWrapper {
         Ok(chain_id)
     }
 
+    /// Runs `linera sync-balance`.
     pub async fn synchronize_balance(&self, chain_id: ChainId) -> Result<Amount> {
         let stdout = self
             .command()
@@ -493,6 +513,7 @@ impl ClientWrapper {
     }
 }
 
+/// A running node service.
 pub struct NodeService {
     port: u16,
     child: Child,
@@ -682,6 +703,7 @@ impl NodeService {
     }
 }
 
+/// A running `Application` to be queried in GraphQL.
 pub struct ApplicationWrapper<A> {
     uri: String,
     _phantom: PhantomData<A>,
