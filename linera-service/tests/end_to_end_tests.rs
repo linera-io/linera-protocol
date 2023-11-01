@@ -654,3 +654,53 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     net.ensure_is_running().unwrap();
     net.terminate().await.unwrap();
 }
+
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    // Create runner and two clients.
+    let (mut net, client1) = config.instantiate().await.unwrap();
+
+    let client2 = net.make_client();
+    client2.wallet_init(&[]).await.unwrap();
+
+    let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
+
+    // Generate keys for client 2.
+    let client2_key = client2.keygen().await.unwrap();
+
+    let mut faucet = client1
+        .run_faucet(None, chain1, Amount::from_tokens(2))
+        .await
+        .unwrap();
+    let (message_id, chain2) = faucet.claim(&client2_key).await.unwrap();
+
+    // Assign chain2 to client2_key.
+    assert_eq!(
+        chain2,
+        client2.assign(client2_key, message_id).await.unwrap()
+    );
+
+    // Client 2 should have the tokens, and own the chain.
+    client2.synchronize_balance(chain2).await.unwrap();
+    assert_eq!(
+        client2.query_balance(chain2).await.unwrap(),
+        Amount::from_tokens(2)
+    );
+    client2
+        .transfer(Amount::from_tokens(1), chain2, chain1)
+        .await
+        .unwrap();
+    assert_eq!(
+        client2.query_balance(chain2).await.unwrap(),
+        Amount::from_tokens(1)
+    );
+
+    faucet.ensure_is_running().unwrap();
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
+}

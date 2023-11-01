@@ -276,6 +276,38 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera faucet`.
+    pub async fn run_faucet(
+        &self,
+        port: impl Into<Option<u16>>,
+        chain_id: ChainId,
+        amount: Amount,
+    ) -> Result<Faucet> {
+        let port = port.into().unwrap_or(8080);
+        let mut command = self.command().await?;
+        let child = command
+            .arg("faucet")
+            .arg(chain_id.to_string())
+            .args(["--port".to_string(), port.to_string()])
+            .args(["--amount".to_string(), amount.to_string()])
+            .spawn_into()?;
+        let client = reqwest::Client::new();
+        for i in 0..10 {
+            tokio::time::sleep(Duration::from_secs(i)).await;
+            let request = client
+                .get(format!("http://localhost:{}/", port))
+                .send()
+                .await;
+            if request.is_ok() {
+                info!("Faucet has started");
+                return Ok(Faucet::new(port, child));
+            } else {
+                warn!("Waiting for faucet to start");
+            }
+        }
+        bail!("Failed to start faucet");
+    }
+
     /// Runs `linera query-balance`.
     pub async fn query_balance(&self, chain_id: ChainId) -> Result<Amount> {
         let stdout = self
@@ -700,6 +732,54 @@ impl NodeService {
         let data = self.query_node(query).await?;
         serde_json::from_value(data["requestApplication"].clone())
             .context("missing requestApplication field in response")
+    }
+}
+
+/// A running faucet service.
+pub struct Faucet {
+    port: u16,
+    child: Child,
+}
+
+impl Faucet {
+    fn new(port: u16, child: Child) -> Self {
+        Self { port, child }
+    }
+
+    pub fn ensure_is_running(&mut self) -> Result<()> {
+        self.child.ensure_is_running()
+    }
+
+    pub async fn claim(&self, public_key: &PublicKey) -> Result<(MessageId, ChainId)> {
+        let query = format!("mutation {{ claim(publicKey: \"{public_key}\") }}");
+        let url = format!("http://localhost:{}/", self.port);
+        let client = reqwest::Client::new();
+        let response = client
+            .post(url)
+            .json(&json!({ "query": &query }))
+            .send()
+            .await
+            .context("failed to post query")?;
+        anyhow::ensure!(
+            response.status().is_success(),
+            "Query \"{}\" failed: {}",
+            query,
+            response
+                .text()
+                .await
+                .unwrap_or_else(|error| format!("Could not get response text: {error}"))
+        );
+        let value: Value = response.json().await.context("invalid JSON")?;
+        if let Some(errors) = value.get("errors") {
+            bail!("Query \"{}\" failed: {}", query, errors);
+        }
+        let message_id_str = value["data"]["claim"]
+            .as_str()
+            .context("message ID not found")?;
+        let message_id = message_id_str
+            .parse()
+            .context("could not parse message ID")?;
+        Ok((message_id, ChainId::child(message_id)))
     }
 }
 

@@ -7,6 +7,7 @@
 pub mod chain_listener;
 pub mod cli_wrappers;
 pub mod config;
+pub mod faucet;
 pub mod grpc_proxy;
 pub mod node_service;
 pub mod project;

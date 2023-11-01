@@ -1,21 +1,19 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
+use crate::{
+    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
+    util,
+};
 use async_graphql::{
     futures_util::Stream,
-    http::GraphiQLSource,
     parser::types::{DocumentOperations, ExecutableDocument, OperationType},
     Error, MergedObject, Object, Request, ScalarType, Schema, ServerError, SimpleObject,
     Subscription,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{
-    extract::Path,
-    http::{StatusCode, Uri},
-    response,
-    response::IntoResponse,
-    Extension, Router, Server,
+    extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router, Server,
 };
 use futures::lock::{Mutex, MutexGuard, OwnedMutexGuard};
 use linera_base::{
@@ -121,13 +119,13 @@ enum NodeServiceError {
     BcsError(#[from] bcs::Error),
     #[error(transparent)]
     JsonError(#[from] serde_json::Error),
-    #[error("missing graphql operation")]
+    #[error("missing GraphQL operation")]
     MissingOperation,
     #[error("unsupported query type: subscription")]
     UnsupportedQueryType,
-    #[error("graphql operations of different types submitted")]
+    #[error("GraphQL operations of different types submitted")]
     HeterogeneousOperations,
-    #[error("failed to parse graphql query: {error}")]
+    #[error("failed to parse GraphQL query: {error}")]
     GraphQLParseError { error: String },
     #[error("malformed application response")]
     MalformedApplicationResponse,
@@ -639,16 +637,6 @@ fn bytes_from_list(list: &[async_graphql::Value]) -> Option<Vec<u8>> {
         .collect()
 }
 
-/// An HTML response constructing the GraphiQL web page.
-async fn graphiql(uri: Uri) -> impl IntoResponse {
-    response::Html(
-        GraphiQLSource::build()
-            .endpoint(uri.path())
-            .subscription_endpoint("/ws")
-            .finish(),
-    )
-}
-
 /// The `NodeService` is a server that exposes a web-server to the client.
 /// The node service is primarily used to explore the state of a chain in GraphQL.
 pub struct NodeService<P, S> {
@@ -716,8 +704,9 @@ where
         C: ClientContext<P> + Send + 'static,
     {
         let port = self.port.get();
-        let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
-        let application_handler = axum::routing::get(graphiql).post(Self::application_handler);
+        let index_handler = axum::routing::get(util::graphiql).post(Self::index_handler);
+        let application_handler =
+            axum::routing::get(util::graphiql).post(Self::application_handler);
 
         let app = Router::new()
             .route("/", index_handler)
