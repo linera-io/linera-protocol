@@ -68,15 +68,12 @@ async fn test_scylla_db_end_to_end_reconfiguration_simple() {
 
 async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
-    let client = local_net.make_client(network);
+    let (mut local_net, client) = LocalNet::initialize_for_testing(database, network)
+        .await
+        .unwrap();
+
     let client_2 = local_net.make_client(network);
-
-    let servers = local_net.generate_initial_validator_config().await.unwrap();
-    client.create_genesis_config().await.unwrap();
     client_2.wallet_init(&[]).await.unwrap();
-    local_net.run().await.unwrap();
-
     let chain_1 = client.get_wallet().unwrap().default_chain().unwrap();
 
     let (node_service_2, chain_2) = match network {
@@ -112,9 +109,9 @@ async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
         .await
         .unwrap();
 
-    // Restart first shard (dropping it kills the process)
-    local_net.terminate_server(4, 0).await.unwrap();
-    local_net.start_server(4, 0).await.unwrap();
+    // Restart the first shard for the 4th validator.
+    local_net.terminate_server(3, 0).await.unwrap();
+    local_net.start_server(3, 0).await.unwrap();
 
     // Query balances again
     assert_eq!(
@@ -139,32 +136,51 @@ async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
     assert!(client.is_chain_present_in_wallet(chain_3).await);
 
     // Create configurations for two more validators
-    let server_5 = local_net.generate_validator_config(5).await.unwrap();
-    let server_6 = local_net.generate_validator_config(6).await.unwrap();
+    local_net.generate_validator_config(4).await.unwrap();
+    local_net.generate_validator_config(5).await.unwrap();
 
     // Start the validators
-    local_net.start_validators(5..=6).await.unwrap();
+    local_net.start_validator(4).await.unwrap();
+    local_net.start_validator(5).await.unwrap();
 
-    // Add validator 5
-    client.set_validator(&server_5, 9500, 100).await.unwrap();
-
-    client.query_validators(None).await.unwrap();
-    client.query_validators(Some(chain_1)).await.unwrap();
-
-    // Add validator 6
-    client.set_validator(&server_6, 9600, 100).await.unwrap();
-
-    // Remove validator 5
-    client.remove_validator(&server_5).await.unwrap();
-    local_net.remove_validator(5).unwrap();
+    // Add 5th validator
+    client
+        .set_validator(
+            local_net.validator_name(4).unwrap(),
+            LocalNet::proxy_port(4),
+            100,
+        )
+        .await
+        .unwrap();
 
     client.query_validators(None).await.unwrap();
     client.query_validators(Some(chain_1)).await.unwrap();
 
-    // Remove validators 1, 2, 3 and 4, so only 6 remains.
-    for (i, server) in servers.into_iter().enumerate() {
-        client.remove_validator(&server).await.unwrap();
-        local_net.remove_validator(i + 1).unwrap();
+    // Add 6th validator
+    client
+        .set_validator(
+            local_net.validator_name(5).unwrap(),
+            LocalNet::proxy_port(5),
+            100,
+        )
+        .await
+        .unwrap();
+
+    // Remove 5th validator
+    client
+        .remove_validator(local_net.validator_name(4).unwrap())
+        .await
+        .unwrap();
+    local_net.remove_validator(4).unwrap();
+
+    client.query_validators(None).await.unwrap();
+    client.query_validators(Some(chain_1)).await.unwrap();
+
+    // Remove the first 4 validators, so only the last one remains.
+    for i in 0..4 {
+        let name = local_net.validator_name(i).unwrap();
+        client.remove_validator(name).await.unwrap();
+        local_net.remove_validator(i).unwrap();
     }
 
     client
@@ -219,11 +235,9 @@ async fn test_scylla_db_open_chain_node_service() {
 async fn run_open_chain_node_service(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
-    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
-    let client = local_net.make_client(network);
-    local_net.generate_initial_validator_config().await.unwrap();
-    client.create_genesis_config().await.unwrap();
-    local_net.run().await.unwrap();
+    let (mut local_net, client) = LocalNet::initialize_for_testing(database, network)
+        .await
+        .unwrap();
 
     let default_chain = client.get_wallet().unwrap().default_chain().unwrap();
     let public_key = client
@@ -330,19 +344,15 @@ async fn run_end_to_end_retry_notification_stream(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
-    let client1 = local_net.make_client(network);
-    let client2 = local_net.make_client(network);
 
-    // Create initial server and client config.
-    local_net.generate_initial_validator_config().await.unwrap();
-    client1.create_genesis_config().await.unwrap();
+    let (mut local_net, client1) = LocalNet::initialize_for_testing(database, network)
+        .await
+        .unwrap();
+
+    let client2 = local_net.make_client(network);
     let chain = ChainId::root(0);
     let mut height = 0;
     client2.wallet_init(&[chain]).await.unwrap();
-
-    // Start local network.
-    local_net.run().await.unwrap();
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
     let mut node_service2 = client2.run_node_service(8081).await.unwrap();
@@ -357,9 +367,9 @@ async fn run_end_to_end_retry_notification_stream(database: Database) {
         Some(height)
     );
 
-    // Oh no! The validator has an outage and gets restarted!
-    local_net.remove_validator(1).unwrap();
-    local_net.start_validators(1..=1).await.unwrap();
+    // Oh no! The first validator has an outage and gets restarted!
+    local_net.remove_validator(0).unwrap();
+    local_net.start_validator(0).await.unwrap();
 
     // The node service should try to reconnect.
     'success: {
@@ -412,17 +422,12 @@ async fn run_end_to_end_multiple_wallets(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create local_net and two clients.
-    let mut local_net = LocalNet::new_for_testing(database, Network::Grpc).unwrap();
-    let client_1 = local_net.make_client(Network::Grpc);
+    let (mut local_net, client_1) = LocalNet::initialize_for_testing(database, Network::Grpc)
+        .await
+        .unwrap();
+
     let client_2 = local_net.make_client(Network::Grpc);
-
-    // Create initial server and client config.
-    local_net.generate_initial_validator_config().await.unwrap();
-    client_1.create_genesis_config().await.unwrap();
     client_2.wallet_init(&[]).await.unwrap();
-
-    // Start local network.
-    local_net.run().await.unwrap();
 
     // Get some chain owned by Client 1.
     let chain_1 = *client_1.get_wallet().unwrap().chain_ids().first().unwrap();
@@ -505,8 +510,9 @@ async fn test_scylla_db_project_new() {
 async fn run_project_new(database: Database) {
     let network = Network::Grpc;
     let table_name = get_table_name();
-    let mut local_net = LocalNet::new(database, network, None, table_name, 0, 0).unwrap();
-    let client = local_net.make_client(network);
+    let (mut local_net, client) = LocalNet::initialize(database, network, None, table_name, 0, 0)
+        .await
+        .unwrap();
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
@@ -544,8 +550,9 @@ async fn test_scylla_db_project_test() {
 async fn run_project_test(database: Database) {
     let network = Network::Grpc;
     let table_name = get_table_name();
-    let mut local_net = LocalNet::new(database, network, None, table_name, 0, 0).unwrap();
-    let client = local_net.make_client(network);
+    let (_local_net, client) = LocalNet::initialize(database, network, None, table_name, 0, 0)
+        .await
+        .unwrap();
     client
         .project_test(&ClientWrapper::example_path("counter").unwrap())
         .await
@@ -575,12 +582,10 @@ async fn run_project_publish(database: Database) {
 
     let network = Network::Grpc;
     let table_name = get_table_name();
-    let mut local_net = LocalNet::new(database, network, Some(37), table_name, 1, 1).unwrap();
-    let client = local_net.make_client(network);
-
-    local_net.generate_initial_validator_config().await.unwrap();
-    client.create_genesis_config().await.unwrap();
-    local_net.run().await.unwrap();
+    let (mut local_net, client) =
+        LocalNet::initialize(database, network, Some(37), table_name, 1, 1)
+            .await
+            .unwrap();
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
@@ -683,12 +688,10 @@ async fn run_example_publish(database: Database) {
 
     let network = Network::Grpc;
     let table_name = get_table_name();
-    let mut local_net = LocalNet::new(database, network, Some(37), table_name, 1, 1).unwrap();
-    let client = local_net.make_client(network);
-
-    local_net.generate_initial_validator_config().await.unwrap();
-    client.create_genesis_config().await.unwrap();
-    local_net.run().await.unwrap();
+    let (mut local_net, client) =
+        LocalNet::initialize(database, network, Some(37), table_name, 1, 1)
+            .await
+            .unwrap();
 
     let example_dir = ClientWrapper::example_path("counter").unwrap();
     client
@@ -734,17 +737,12 @@ async fn run_end_to_end_open_multi_owner_chain(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and two clients.
-    let mut local_net = LocalNet::new_for_testing(database, Network::Grpc).unwrap();
-    let client1 = local_net.make_client(Network::Grpc);
+    let (mut local_net, client1) = LocalNet::initialize_for_testing(database, Network::Grpc)
+        .await
+        .unwrap();
+
     let client2 = local_net.make_client(Network::Grpc);
-
-    // Create initial server and client config.
-    local_net.generate_initial_validator_config().await.unwrap();
-    client1.create_genesis_config().await.unwrap();
     client2.wallet_init(&[]).await.unwrap();
-
-    // Start local network.
-    local_net.run().await.unwrap();
 
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
 

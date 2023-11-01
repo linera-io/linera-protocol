@@ -1920,34 +1920,25 @@ async fn main() -> Result<(), anyhow::Error> {
                     panic!("The local test network must have at least one shard per validator.");
                 }
                 let network = Network::Grpc;
-                let mut net = LocalNet::new(
+                let (mut net, client1) = LocalNet::initialize(
                     Database::RocksDb,
                     network,
                     *testing_prng_seed,
                     table_name.to_string(),
                     *validators,
                     *shards,
-                )?;
-                let client1 = net.make_client(network);
+                )
+                .await?;
 
-                // Create the initial server and client config.
-                net.generate_initial_validator_config().await?;
-                client1.create_genesis_config().await?;
                 let default_chain = client1
                     .default_chain()
                     .expect("Initialized clients should always have a default chain");
-
-                // Start the validators.
-                net.run().await?;
 
                 // Make time to (hopefully) display the message after the tracing logs.
                 tokio::time::sleep(Duration::from_secs(1)).await;
 
                 // Create the wallet for the initial "root" chains.
-                eprintln!(
-                    "\nA local test network was started using the following temporary directory:\n{}\n",
-                    net.net_path().display()
-                );
+                info!("Local test network successfully started.");
                 let suffix = if let Some(extra_wallets) = *extra_wallets {
                     eprintln!(
                         "To use the initial wallet and the extra wallets of this test \

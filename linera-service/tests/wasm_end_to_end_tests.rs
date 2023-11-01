@@ -166,16 +166,14 @@ async fn run_wasm_end_to_end_counter(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
-    let client = local_net.make_client(network);
+    let (mut local_net, client) = LocalNet::initialize_for_testing(database, network)
+        .await
+        .unwrap();
 
     let original_counter_value = 35;
     let increment = 5;
 
-    local_net.generate_initial_validator_config().await.unwrap();
-    client.create_genesis_config().await.unwrap();
     let chain = client.get_wallet().unwrap().default_chain().unwrap();
-    local_net.run().await.unwrap();
     let (contract, service) = client.build_example("counter").await.unwrap();
 
     let application_id = client
@@ -235,16 +233,14 @@ async fn run_wasm_end_to_end_counter_publish_create(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
-    let client = local_net.make_client(network);
+    let (mut local_net, client) = LocalNet::initialize_for_testing(database, network)
+        .await
+        .unwrap();
 
     let original_counter_value = 35;
     let increment = 5;
 
-    local_net.generate_initial_validator_config().await.unwrap();
-    client.create_genesis_config().await.unwrap();
     let chain = client.get_wallet().unwrap().default_chain().unwrap();
-    local_net.run().await.unwrap();
     let (contract, service) = client.build_example("counter").await.unwrap();
 
     let bytecode_id = client
@@ -300,17 +296,12 @@ async fn run_wasm_end_to_end_social_user_pub_sub(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
-    let client1 = local_net.make_client(network);
+    let (mut local_net, client1) = LocalNet::initialize_for_testing(database, network)
+        .await
+        .unwrap();
+
     let client2 = local_net.make_client(network);
-
-    // Create initial server and client config.
-    local_net.generate_initial_validator_config().await.unwrap();
-    client1.create_genesis_config().await.unwrap();
     client2.wallet_init(&[]).await.unwrap();
-
-    // Start local network.
-    local_net.run().await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await.unwrap();
@@ -409,16 +400,12 @@ async fn run_wasm_end_to_end_fungible(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
-    let client1 = local_net.make_client(network);
+    let (mut local_net, client1) = LocalNet::initialize_for_testing(database, network)
+        .await
+        .unwrap();
+
     let client2 = local_net.make_client(network);
-
-    local_net.generate_initial_validator_config().await.unwrap();
-    client1.create_genesis_config().await.unwrap();
     client2.wallet_init(&[]).await.unwrap();
-
-    // Create initial server and client config.
-    local_net.run().await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await.unwrap();
@@ -545,16 +532,10 @@ async fn run_wasm_end_to_end_same_wallet_fungible(database: Database) {
     use fungible::{FungibleTokenAbi, InitialState};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     let network = Network::Grpc;
-    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
-    let client1 = local_net.make_client(network);
-
-    local_net.generate_initial_validator_config().await.unwrap();
-    client1.create_genesis_config().await.unwrap();
-
-    // Create initial server and client config.
-    local_net.run().await.unwrap();
+    let (mut local_net, client1) = LocalNet::initialize_for_testing(database, network)
+        .await
+        .unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = ChainId::root(2);
@@ -651,16 +632,12 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
-    let client1 = local_net.make_client(network);
+    let (mut local_net, client1) = LocalNet::initialize_for_testing(database, network)
+        .await
+        .unwrap();
+
     let client2 = local_net.make_client(network);
-
-    local_net.generate_initial_validator_config().await.unwrap();
-    client1.create_genesis_config().await.unwrap();
     client2.wallet_init(&[]).await.unwrap();
-
-    // Create initial server and client config.
-    local_net.run().await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await.unwrap();
@@ -798,18 +775,17 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
-    let client_admin = local_net.make_client(network);
+    let (mut local_net, client_admin) = LocalNet::initialize_for_testing(database, network)
+        .await
+        .unwrap();
+
     let client_a = local_net.make_client(network);
     let client_b = local_net.make_client(network);
 
-    local_net.generate_initial_validator_config().await.unwrap();
-    client_admin.create_genesis_config().await.unwrap();
     client_a.wallet_init(&[]).await.unwrap();
     client_b.wallet_init(&[]).await.unwrap();
 
     // Create initial server and client config.
-    local_net.run().await.unwrap();
     let (contract_fungible_a, service_fungible_a) =
         client_a.build_example("fungible").await.unwrap();
     let (contract_fungible_b, service_fungible_b) =
@@ -1079,17 +1055,15 @@ async fn run_wasm_end_to_end_amm(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
-    let client_admin = local_net.make_client(network);
+    let (mut local_net, client_admin) = LocalNet::initialize_for_testing(database, network)
+        .await
+        .unwrap();
+
     let client0 = local_net.make_client(network);
     let client1 = local_net.make_client(network);
-
-    local_net.generate_initial_validator_config().await.unwrap();
-    client_admin.create_genesis_config().await.unwrap();
     client0.wallet_init(&[]).await.unwrap();
     client1.wallet_init(&[]).await.unwrap();
 
-    local_net.run().await.unwrap();
     let (contract_fungible, service_fungible) =
         client_admin.build_example("fungible").await.unwrap();
     let (contract_amm, service_amm) = client_admin.build_example("amm").await.unwrap();

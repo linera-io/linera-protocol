@@ -53,12 +53,9 @@ async fn test_scylla_db_end_to_end_queries() {
 async fn run_end_to_end_queries(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
-    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
-    let client = local_net.make_client(network);
-    local_net.generate_initial_validator_config().await.unwrap();
-
-    client.create_genesis_config().await.unwrap();
-    local_net.run().await.unwrap();
+    let (local_net, client) = LocalNet::initialize_for_testing(database, network)
+        .await
+        .unwrap();
 
     let node_chains = {
         let wallet = client.get_wallet().unwrap();
@@ -136,6 +133,7 @@ async fn run_end_to_end_queries(database: Database) {
     .block;
 
     node_service.ensure_is_running().unwrap();
+    local_net.terminate().await.unwrap();
 }
 
 #[test_log::test(tokio::test)]
