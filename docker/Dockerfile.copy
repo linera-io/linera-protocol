@@ -1,5 +1,7 @@
 FROM debian:latest
 
+ARG environment=k8s-local
+
 RUN mkdir -p /opt/linera
 
 WORKDIR /opt/linera
@@ -11,7 +13,7 @@ COPY target/release/linera-proxy .
 COPY target/release/linera-db .
 
 # Copying configuration files
-COPY configuration/k8s-local/validator_1.toml .
+COPY configuration/$environment/validator_1.toml .
 
 # Copy entrypoint
 COPY docker/server-entrypoint.sh .

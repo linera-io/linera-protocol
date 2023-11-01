@@ -86,17 +86,24 @@ if [ "$cloud_mode" = true ]; then
 
     docker_image="us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-test-local:latest"
     opt_list+=" --cloud"
-    
+
     docker pull $docker_image || exit 1
 else
     docker_image="linera-test:latest"
     if [ "$do_build" = true ]; then
-        if [ "$copy" = true ]; then
-            docker build -f ../../docker/Dockerfile.copy ../../ -t $docker_image || exit 1
-        elif [ "$(uname -m)" = "x86_64" ]; then
-            docker build -f ../../docker/Dockerfile.local ../../ -t $docker_image || exit 1
+        if [[ "${copy-}" ]]; then
+            docker build \
+                -f ../../docker/Dockerfile.copy \
+                --build-arg environment=k8s-local \
+                ../../ \
+                -t "$docker_image"
         else
-            docker build -f ../../docker/Dockerfile.local-aarch64 ../../ -t $docker_image || exit 1
+            docker build \
+                -f ../../docker/Dockerfile \
+                ../../ \
+                --build-arg environment=k8s-local \
+                --build-arg target="$(uname -m)-unknown-linux-gnu" \
+                -t "$docker_image"
         fi
     fi
 fi
