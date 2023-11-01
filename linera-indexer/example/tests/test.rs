@@ -16,6 +16,7 @@ use linera_service_graphql_client::{block, request, transfer, Block, Transfer};
 use once_cell::sync::Lazy;
 use std::{str::FromStr, sync::Arc, time::Duration};
 use tempfile::TempDir;
+use test_case::test_case;
 use tokio::{
     process::{Child, Command},
     sync::Mutex,
@@ -76,28 +77,14 @@ const TRANSFER_DELAY_MILLIS: u64 = 1000;
 #[cfg(not(debug_assertions))]
 const TRANSFER_DELAY_MILLIS: u64 = 100;
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_end_to_end_operations_indexer() {
-    run_end_to_end_operations_indexer(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_end_to_end_operations_indexer() {
-    run_end_to_end_operations_indexer(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_end_to_end_operations_indexer() {
-    run_end_to_end_operations_indexer(Database::ScyllaDb).await
-}
-
-async fn run_end_to_end_operations_indexer(database: Database) {
+async fn test_end_to_end_operations_indexer(database: Database, network: Network) {
     // launching network, service and indexer
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let network = Network::Grpc;
+
     let (local_net, client) = LocalNet::initialize_for_testing(database, network)
         .await
         .unwrap();

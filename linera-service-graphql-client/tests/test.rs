@@ -16,6 +16,7 @@ use linera_service_graphql_client::{
 use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, io::Read, rc::Rc, str::FromStr};
 use tempfile::tempdir;
+use test_case::test_case;
 use tokio::{process::Command, sync::Mutex};
 
 /// A static lock to prevent integration tests from running in parallel.
@@ -32,27 +33,13 @@ async fn transfer(client: &reqwest::Client, url: &str, from: ChainId, to: ChainI
         .unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_end_to_end_queries() {
-    run_end_to_end_queries(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_end_to_end_queries() {
-    run_end_to_end_queries(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_end_to_end_queries() {
-    run_end_to_end_queries(Database::ScyllaDb).await
-}
-
-async fn run_end_to_end_queries(database: Database) {
+async fn test_end_to_end_queries(database: Database, network: Network) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let network = Network::Grpc;
+
     let (local_net, client) = LocalNet::initialize_for_testing(database, network)
         .await
         .unwrap();

@@ -16,6 +16,7 @@ use linera_service::cli_wrappers::{
 };
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, time::Duration};
+use test_case::test_case;
 use tracing::{info, warn};
 
 fn get_fungible_account_owner(client: &ClientWrapper) -> fungible::AccountOwner {
@@ -143,29 +144,14 @@ impl AmmApp {
     }
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_wasm_end_to_end_counter() {
-    run_wasm_end_to_end_counter(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_wasm_end_to_end_counter() {
-    run_wasm_end_to_end_counter(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_wasm_end_to_end_counter() {
-    run_wasm_end_to_end_counter(Database::ScyllaDb).await
-}
-
-async fn run_wasm_end_to_end_counter(database: Database) {
+async fn test_wasm_end_to_end_counter(database: Database, network: Network) {
     use counter::CounterAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
     let (mut local_net, client) = LocalNet::initialize_for_testing(database, network)
         .await
         .unwrap();
@@ -209,30 +195,15 @@ async fn run_wasm_end_to_end_counter(database: Database) {
     local_net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_wasm_end_to_end_counter_publish_create() {
-    run_wasm_end_to_end_counter_publish_create(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_wasm_end_to_end_counter_publish_create() {
-    run_wasm_end_to_end_counter_publish_create(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_wasm_end_to_end_counter_publish_create() {
-    run_wasm_end_to_end_counter_publish_create(Database::ScyllaDb).await
-}
-
-async fn run_wasm_end_to_end_counter_publish_create(database: Database) {
+async fn test_wasm_end_to_end_counter_publish_create(database: Database, network: Network) {
     use counter::CounterAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
     let (mut local_net, client) = LocalNet::initialize_for_testing(database, network)
         .await
         .unwrap();
@@ -273,29 +244,14 @@ async fn run_wasm_end_to_end_counter_publish_create(database: Database) {
     local_net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_wasm_end_to_end_social_user_pub_sub() {
-    run_wasm_end_to_end_social_user_pub_sub(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_wasm_end_to_end_social_user_pub_sub() {
-    run_wasm_end_to_end_social_user_pub_sub(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_wasm_end_to_end_social_user_pub_sub() {
-    run_wasm_end_to_end_social_user_pub_sub(Database::ScyllaDb).await
-}
-
-async fn run_wasm_end_to_end_social_user_pub_sub(database: Database) {
+async fn test_wasm_end_to_end_social_user_pub_sub(database: Database, network: Network) {
     use social::SocialAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
     let (mut local_net, client1) = LocalNet::initialize_for_testing(database, network)
         .await
         .unwrap();
@@ -376,30 +332,15 @@ async fn run_wasm_end_to_end_social_user_pub_sub(database: Database) {
     local_net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_wasm_end_to_end_fungible() {
-    run_wasm_end_to_end_fungible(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_wasm_end_to_end_fungible() {
-    run_wasm_end_to_end_fungible(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_wasm_end_to_end_fungible() {
-    run_wasm_end_to_end_fungible(Database::ScyllaDb).await
-}
-
-async fn run_wasm_end_to_end_fungible(database: Database) {
+async fn test_wasm_end_to_end_fungible(database: Database, network: Network) {
     use fungible::{FungibleTokenAbi, InitialState};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
     let (mut local_net, client1) = LocalNet::initialize_for_testing(database, network)
         .await
         .unwrap();
@@ -510,29 +451,14 @@ async fn run_wasm_end_to_end_fungible(database: Database) {
     local_net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_wasm_end_to_end_same_wallet_fungible() {
-    run_wasm_end_to_end_same_wallet_fungible(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_wasm_end_to_end_same_wallet_fungible() {
-    run_wasm_end_to_end_same_wallet_fungible(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_wasm_end_to_end_same_wallet_fungible() {
-    run_wasm_end_to_end_same_wallet_fungible(Database::ScyllaDb).await
-}
-
-async fn run_wasm_end_to_end_same_wallet_fungible(database: Database) {
+async fn test_wasm_end_to_end_same_wallet_fungible(database: Database, network: Network) {
     use fungible::{FungibleTokenAbi, InitialState};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let network = Network::Grpc;
     let (mut local_net, client1) = LocalNet::initialize_for_testing(database, network)
         .await
         .unwrap();
@@ -607,31 +533,16 @@ async fn run_wasm_end_to_end_same_wallet_fungible(database: Database) {
     local_net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_wasm_end_to_end_crowd_funding() {
-    run_wasm_end_to_end_crowd_funding(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_wasm_end_to_end_crowd_funding() {
-    run_wasm_end_to_end_crowd_funding(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_wasm_end_to_end_crowd_funding() {
-    run_wasm_end_to_end_crowd_funding(Database::ScyllaDb).await
-}
-
-async fn run_wasm_end_to_end_crowd_funding(database: Database) {
+async fn test_wasm_end_to_end_crowd_funding(database: Database, network: Network) {
     use crowd_funding::{CrowdFundingAbi, InitializationArgument};
     use fungible::{FungibleTokenAbi, InitialState};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
     let (mut local_net, client1) = LocalNet::initialize_for_testing(database, network)
         .await
         .unwrap();
@@ -750,31 +661,16 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
     local_net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_wasm_end_to_end_matching_engine() {
-    run_wasm_end_to_end_matching_engine(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_wasm_end_to_end_matching_engine() {
-    run_wasm_end_to_end_matching_engine(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_wasm_end_to_end_matching_engine() {
-    run_wasm_end_to_end_matching_engine(Database::ScyllaDb).await
-}
-
-async fn run_wasm_end_to_end_matching_engine(database: Database) {
+async fn test_wasm_end_to_end_matching_engine(database: Database, network: Network) {
     use fungible::{FungibleTokenAbi, InitialState};
     use matching_engine::{MatchingEngineAbi, OrderNature, Parameters, Price};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
     let (mut local_net, client_admin) = LocalNet::initialize_for_testing(database, network)
         .await
         .unwrap();
@@ -1031,30 +927,15 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
     local_net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_wasm_end_to_end_amm() {
-    run_wasm_end_to_end_amm(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_wasm_end_to_end_amm() {
-    run_wasm_end_to_end_amm(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_wasm_end_to_end_amm() {
-    run_wasm_end_to_end_amm(Database::ScyllaDb).await
-}
-
-async fn run_wasm_end_to_end_amm(database: Database) {
+async fn test_wasm_end_to_end_amm(database: Database, network: Network) {
     use amm::{AmmAbi, Parameters};
     use fungible::{FungibleTokenAbi, InitialState};
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
     let (mut local_net, client_admin) = LocalNet::initialize_for_testing(database, network)
         .await
         .unwrap();

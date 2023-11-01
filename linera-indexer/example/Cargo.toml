@@ -38,6 +38,7 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
+test-case = { workspace = true }
 test-log = { workspace = true, features = ["trace"] }
 tracing = { workspace = true }
 

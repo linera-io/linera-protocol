@@ -33,6 +33,7 @@ fungible = { workspace = true }
 linera-service = { workspace = true, features = ["test"] }
 once_cell = { workspace = true }
 tempfile = { workspace = true }
+test-case = { workspace = true }
 test-log = { workspace = true, features = ["trace"] }
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing = { workspace = true }
