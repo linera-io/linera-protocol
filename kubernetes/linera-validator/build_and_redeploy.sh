@@ -128,15 +128,9 @@ echo -e "\nServices:";
 kubectl get svc;
 
 docker rm linera-test-local;
-if [ "$cloud_mode" = true ]; then
-    docker run -d --name linera-test-local $docker_image \
-    && docker cp linera-test-local:/opt/linera/wallet.json /tmp/ \
-    && docker cp linera-test-local:/opt/linera/linera.db /tmp/
-else
-    docker run -d --name linera-test-local $docker_image \
-    && docker cp linera-test-local:/opt/linera/wallet.json /tmp/ \
-    && docker cp linera-test-local:/opt/linera/linera.db /tmp/
-fi
+docker run -d --name linera-test-local $docker_image \
+    && docker cp linera-test-local:wallet.json /tmp/ \
+    && docker cp linera-test-local:linera.db /tmp/
 
 echo -e "\nMake sure the terminal you'll run the linera client from has these exports:"
 echo 'export LINERA_WALLET=/tmp/wallet.json'

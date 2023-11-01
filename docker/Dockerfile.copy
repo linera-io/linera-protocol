@@ -2,10 +2,6 @@ FROM debian:latest
 
 ARG environment=k8s-local
 
-RUN mkdir -p /opt/linera
-
-WORKDIR /opt/linera
-
 # Copying binaries
 COPY target/release/linera .
 COPY target/release/linera-server .
