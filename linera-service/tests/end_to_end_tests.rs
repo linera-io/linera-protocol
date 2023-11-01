@@ -44,7 +44,7 @@ async fn test_end_to_end_reconfiguration(database: Database, network: Network) {
         .await
         .unwrap();
 
-    let client_2 = local_net.make_client(network);
+    let client_2 = local_net.make_client();
     client_2.wallet_init(&[]).await.unwrap();
     let chain_1 = client.get_wallet().unwrap().default_chain().unwrap();
 
@@ -290,7 +290,7 @@ async fn test_end_to_end_retry_notification_stream(database: Database, network: 
         .await
         .unwrap();
 
-    let client2 = local_net.make_client(network);
+    let client2 = local_net.make_client();
     let chain = ChainId::root(0);
     let mut height = 0;
     client2.wallet_init(&[chain]).await.unwrap();
@@ -353,7 +353,7 @@ async fn test_end_to_end_multiple_wallets(database: Database, network: Network) 
         .await
         .unwrap();
 
-    let client_2 = local_net.make_client(Network::Grpc);
+    let client_2 = local_net.make_client();
     client_2.wallet_init(&[]).await.unwrap();
 
     // Get some chain owned by Client 1.
@@ -594,7 +594,7 @@ async fn test_end_to_end_open_multi_owner_chain(database: Database, network: Net
         .await
         .unwrap();
 
-    let client2 = local_net.make_client(Network::Grpc);
+    let client2 = local_net.make_client();
     client2.wallet_init(&[]).await.unwrap();
 
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();

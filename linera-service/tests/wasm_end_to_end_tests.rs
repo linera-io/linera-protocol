@@ -256,7 +256,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(database: Database, network: N
         .await
         .unwrap();
 
-    let client2 = local_net.make_client(network);
+    let client2 = local_net.make_client();
     client2.wallet_init(&[]).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
@@ -345,7 +345,7 @@ async fn test_wasm_end_to_end_fungible(database: Database, network: Network) {
         .await
         .unwrap();
 
-    let client2 = local_net.make_client(network);
+    let client2 = local_net.make_client();
     client2.wallet_init(&[]).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
@@ -547,7 +547,7 @@ async fn test_wasm_end_to_end_crowd_funding(database: Database, network: Network
         .await
         .unwrap();
 
-    let client2 = local_net.make_client(network);
+    let client2 = local_net.make_client();
     client2.wallet_init(&[]).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
@@ -675,8 +675,8 @@ async fn test_wasm_end_to_end_matching_engine(database: Database, network: Netwo
         .await
         .unwrap();
 
-    let client_a = local_net.make_client(network);
-    let client_b = local_net.make_client(network);
+    let client_a = local_net.make_client();
+    let client_b = local_net.make_client();
 
     client_a.wallet_init(&[]).await.unwrap();
     client_b.wallet_init(&[]).await.unwrap();
@@ -940,8 +940,8 @@ async fn test_wasm_end_to_end_amm(database: Database, network: Network) {
         .await
         .unwrap();
 
-    let client0 = local_net.make_client(network);
-    let client1 = local_net.make_client(network);
+    let client0 = local_net.make_client();
+    let client1 = local_net.make_client();
     client0.wallet_init(&[]).await.unwrap();
     client1.wallet_init(&[]).await.unwrap();
 

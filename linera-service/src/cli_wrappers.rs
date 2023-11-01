@@ -564,7 +564,7 @@ pub trait LineraNet: Sized + Send + Sync + 'static {
 
     async fn terminate(mut self) -> Result<()>;
 
-    fn make_client(&mut self, network: Network) -> ClientWrapper;
+    fn make_client(&mut self) -> ClientWrapper;
 }
 
 pub struct LocalNet {
@@ -599,7 +599,7 @@ impl LineraNet for LocalNet {
             num_initial_validators,
             num_shards,
         )?;
-        let client = net.make_client(network);
+        let client = net.make_client();
         if num_initial_validators > 0 {
             net.generate_initial_validator_config().await.unwrap();
             client.create_genesis_config().await.unwrap();
@@ -623,10 +623,10 @@ impl LineraNet for LocalNet {
         Ok(())
     }
 
-    fn make_client(&mut self, network: Network) -> ClientWrapper {
+    fn make_client(&mut self) -> ClientWrapper {
         let client = ClientWrapper::new(
             self.tmp_dir.clone(),
-            network,
+            self.network,
             self.testing_prng_seed,
             self.next_client_id,
         );
