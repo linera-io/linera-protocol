@@ -87,7 +87,10 @@ impl ApplicationRuntimeContext for Contract {
             .runtime
             .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
             .recv()
-            .unwrap_or(0);
+            .unwrap_or_else(|oneshot::RecvError| {
+                tracing::debug!("Failed to read initial fuel for transaction");
+                0
+            });
 
         metering::set_remaining_points(
             &mut context.store,
@@ -96,21 +99,22 @@ impl ApplicationRuntimeContext for Contract {
         );
     }
 
-    fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>) {
+    fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), ()> {
         let remaining_fuel =
             match metering::get_remaining_points(&mut context.store, &context.extra.instance) {
                 MeteringPoints::Exhausted => 0,
                 MeteringPoints::Remaining(fuel) => fuel,
             };
 
-        let _ = context
+        context
             .extra
             .runtime
             .send_request(|response_sender| ContractRequest::SetRemainingFuel {
                 remaining_fuel,
                 response_sender,
             })
-            .recv();
+            .recv()
+            .map_err(|_| ())
     }
 }
 
@@ -126,7 +130,9 @@ impl ApplicationRuntimeContext for Service {
 
     fn configure_initial_fuel(_context: &mut WasmRuntimeContext<Self>) {}
 
-    fn persist_remaining_fuel(_context: &mut WasmRuntimeContext<Self>) {}
+    fn persist_remaining_fuel(_context: &mut WasmRuntimeContext<Self>) -> Result<(), ()> {
+        Ok(())
+    }
 }
 
 impl WasmApplication {

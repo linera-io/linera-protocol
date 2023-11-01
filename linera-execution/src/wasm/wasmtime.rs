@@ -102,21 +102,25 @@ impl ApplicationRuntimeContext for Contract {
             .expect("Fuel consumption wasn't properly enabled");
     }
 
-    fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>) {
+    fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), ()> {
         let runtime = &context.store.data().system_api.runtime;
         let initial_fuel = runtime
             .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
             .recv()
-            .unwrap_or(0);
+            .unwrap_or_else(|oneshot::RecvError| {
+                tracing::debug!("Failed to read initial fuel for transaction");
+                0
+            });
         let consumed_fuel = context.store.fuel_consumed().unwrap_or(0);
         let remaining_fuel = initial_fuel.saturating_sub(consumed_fuel);
 
-        let _ = runtime
+        runtime
             .send_request(|response_sender| ContractRequest::SetRemainingFuel {
                 remaining_fuel,
                 response_sender,
             })
-            .recv();
+            .recv()
+            .map_err(|_| ())
     }
 }
 
@@ -132,7 +136,9 @@ impl ApplicationRuntimeContext for Service {
 
     fn configure_initial_fuel(_context: &mut WasmRuntimeContext<Self>) {}
 
-    fn persist_remaining_fuel(_context: &mut WasmRuntimeContext<Self>) {}
+    fn persist_remaining_fuel(_context: &mut WasmRuntimeContext<Self>) -> Result<(), ()> {
+        Ok(())
+    }
 }
 
 impl WasmApplication {

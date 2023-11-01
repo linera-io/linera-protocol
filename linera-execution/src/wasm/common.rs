@@ -29,7 +29,7 @@ pub trait ApplicationRuntimeContext: Sized {
     fn configure_initial_fuel(context: &mut WasmRuntimeContext<Self>);
 
     /// Persists the remaining fuel after execution.
-    fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>);
+    fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), ()>;
 }
 
 /// Common interface to calling a user contract in a WebAssembly module.
@@ -362,6 +362,10 @@ where
     A: ApplicationRuntimeContext,
 {
     fn drop(&mut self) {
-        A::persist_remaining_fuel(self);
+        if A::persist_remaining_fuel(self).is_err() {
+            tracing::warn!(
+                "Failed to persist remaining fuel. This is okay if the transaction was canceled"
+            );
+        }
     }
 }
