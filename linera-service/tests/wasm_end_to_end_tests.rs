@@ -153,7 +153,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) {
     use counter::CounterAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut local_net, client) = config.start().await.unwrap();
+    let (mut net, client) = config.start().await.unwrap();
 
     let original_counter_value = 35;
     let increment = 5;
@@ -190,8 +190,8 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) {
 
     node_service.ensure_is_running().unwrap();
 
-    local_net.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
@@ -203,7 +203,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut local_net, client) = config.start().await.unwrap();
+    let (mut net, client) = config.start().await.unwrap();
 
     let original_counter_value = 35;
     let increment = 5;
@@ -237,8 +237,8 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 
     node_service.ensure_is_running().unwrap();
 
-    local_net.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
@@ -249,9 +249,9 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     use social::SocialAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut local_net, client1) = config.start().await.unwrap();
+    let (mut net, client1) = config.start().await.unwrap();
 
-    let client2 = local_net.make_client();
+    let client2 = net.make_client();
     client2.wallet_init(&[]).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
@@ -323,8 +323,8 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     node_service1.ensure_is_running().unwrap();
     node_service2.ensure_is_running().unwrap();
 
-    local_net.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
@@ -336,9 +336,9 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut local_net, client1) = config.start().await.unwrap();
+    let (mut net, client1) = config.start().await.unwrap();
 
-    let client2 = local_net.make_client();
+    let client2 = net.make_client();
     client2.wallet_init(&[]).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
@@ -440,8 +440,8 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
     node_service1.ensure_is_running().unwrap();
     node_service2.ensure_is_running().unwrap();
 
-    local_net.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
@@ -452,7 +452,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(config: impl LineraNetConfig)
     use fungible::{FungibleTokenAbi, InitialState};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let (mut local_net, client1) = config.start().await.unwrap();
+    let (mut net, client1) = config.start().await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = ChainId::root(2);
@@ -520,8 +520,8 @@ async fn test_wasm_end_to_end_same_wallet_fungible(config: impl LineraNetConfig)
 
     node_service.ensure_is_running().unwrap();
 
-    local_net.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
@@ -534,9 +534,9 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut local_net, client1) = config.start().await.unwrap();
+    let (mut net, client1) = config.start().await.unwrap();
 
-    let client2 = local_net.make_client();
+    let client2 = net.make_client();
     client2.wallet_init(&[]).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
@@ -646,8 +646,8 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
     node_service1.ensure_is_running().unwrap();
     node_service2.ensure_is_running().unwrap();
 
-    local_net.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
@@ -660,10 +660,10 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut local_net, client_admin) = config.start().await.unwrap();
+    let (mut net, client_admin) = config.start().await.unwrap();
 
-    let client_a = local_net.make_client();
-    let client_b = local_net.make_client();
+    let client_a = net.make_client();
+    let client_b = net.make_client();
 
     client_a.wallet_init(&[]).await.unwrap();
     client_b.wallet_init(&[]).await.unwrap();
@@ -910,8 +910,8 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     node_service_a.ensure_is_running().unwrap();
     node_service_b.ensure_is_running().unwrap();
 
-    local_net.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
@@ -923,10 +923,10 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     use fungible::{FungibleTokenAbi, InitialState};
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut local_net, client_admin) = config.start().await.unwrap();
+    let (mut net, client_admin) = config.start().await.unwrap();
 
-    let client0 = local_net.make_client();
-    let client1 = local_net.make_client();
+    let client0 = net.make_client();
+    let client1 = net.make_client();
     client0.wallet_init(&[]).await.unwrap();
     client1.wallet_init(&[]).await.unwrap();
 
@@ -1230,6 +1230,6 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     node_service0.ensure_is_running().unwrap();
     node_service1.ensure_is_running().unwrap();
 
-    local_net.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }

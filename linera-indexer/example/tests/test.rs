@@ -85,7 +85,7 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
     // launching network, service and indexer
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (local_net, client) = config.start().await.unwrap();
+    let (net, client) = config.start().await.unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
     let mut indexer = run_indexer(&client.tmp_dir).await;
 
@@ -176,5 +176,5 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
 
     indexer_running(&mut indexer);
     node_service.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.terminate().await.unwrap();
 }

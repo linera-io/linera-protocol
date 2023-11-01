@@ -40,7 +40,7 @@ async fn transfer(client: &reqwest::Client, url: &str, from: ChainId, to: ChainI
 async fn test_end_to_end_queries(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (local_net, client) = config.start().await.unwrap();
+    let (net, client) = config.start().await.unwrap();
 
     let node_chains = {
         let wallet = client.get_wallet().unwrap();
@@ -118,7 +118,7 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
     .block;
 
     node_service.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.terminate().await.unwrap();
 }
 
 #[test_log::test(tokio::test)]

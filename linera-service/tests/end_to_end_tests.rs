@@ -44,9 +44,9 @@ async fn test_resolve_binary() {
 async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = config.network;
-    let (mut local_net, client) = config.start().await.unwrap();
+    let (mut net, client) = config.start().await.unwrap();
 
-    let client_2 = local_net.make_client();
+    let client_2 = net.make_client();
     client_2.wallet_init(&[]).await.unwrap();
     let chain_1 = client.get_wallet().unwrap().default_chain().unwrap();
 
@@ -84,8 +84,8 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
         .unwrap();
 
     // Restart the first shard for the 4th validator.
-    local_net.terminate_server(3, 0).await.unwrap();
-    local_net.start_server(3, 0).await.unwrap();
+    net.terminate_server(3, 0).await.unwrap();
+    net.start_server(3, 0).await.unwrap();
 
     // Query balances again
     assert_eq!(
@@ -110,20 +110,16 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
     assert!(client.is_chain_present_in_wallet(chain_3).await);
 
     // Create configurations for two more validators
-    local_net.generate_validator_config(4).await.unwrap();
-    local_net.generate_validator_config(5).await.unwrap();
+    net.generate_validator_config(4).await.unwrap();
+    net.generate_validator_config(5).await.unwrap();
 
     // Start the validators
-    local_net.start_validator(4).await.unwrap();
-    local_net.start_validator(5).await.unwrap();
+    net.start_validator(4).await.unwrap();
+    net.start_validator(5).await.unwrap();
 
     // Add 5th validator
     client
-        .set_validator(
-            local_net.validator_name(4).unwrap(),
-            LocalNet::proxy_port(4),
-            100,
-        )
+        .set_validator(net.validator_name(4).unwrap(), LocalNet::proxy_port(4), 100)
         .await
         .unwrap();
 
@@ -132,29 +128,25 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
 
     // Add 6th validator
     client
-        .set_validator(
-            local_net.validator_name(5).unwrap(),
-            LocalNet::proxy_port(5),
-            100,
-        )
+        .set_validator(net.validator_name(5).unwrap(), LocalNet::proxy_port(5), 100)
         .await
         .unwrap();
 
     // Remove 5th validator
     client
-        .remove_validator(local_net.validator_name(4).unwrap())
+        .remove_validator(net.validator_name(4).unwrap())
         .await
         .unwrap();
-    local_net.remove_validator(4).unwrap();
+    net.remove_validator(4).unwrap();
 
     client.query_validators(None).await.unwrap();
     client.query_validators(Some(chain_1)).await.unwrap();
 
     // Remove the first 4 validators, so only the last one remains.
     for i in 0..4 {
-        let name = local_net.validator_name(i).unwrap();
+        let name = net.validator_name(i).unwrap();
         client.remove_validator(name).await.unwrap();
-        local_net.remove_validator(i).unwrap();
+        net.remove_validator(i).unwrap();
     }
 
     client
@@ -184,8 +176,8 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
         panic!("Failed to receive new block");
     }
 
-    local_net.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
@@ -194,7 +186,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
 #[test_log::test(tokio::test)]
 async fn test_open_chain_node_service(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let (mut local_net, client) = config.start().await.unwrap();
+    let (mut net, client) = config.start().await.unwrap();
 
     let default_chain = client.get_wallet().unwrap().default_chain().unwrap();
     let public_key = client
@@ -271,8 +263,8 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
         if response1["chain"]["executionState"]["system"]["balance"].as_str() == Some("6.")
             && response2["chain"]["executionState"]["system"]["balance"].as_str() == Some("4.")
         {
-            local_net.ensure_is_running().unwrap();
-            local_net.terminate().await.unwrap();
+            net.ensure_is_running().unwrap();
+            net.terminate().await.unwrap();
             return;
         }
     }
@@ -286,9 +278,9 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
 async fn test_end_to_end_retry_notification_stream(config: LocalNetTestingConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut local_net, client1) = config.start().await.unwrap();
+    let (mut net, client1) = config.start().await.unwrap();
 
-    let client2 = local_net.make_client();
+    let client2 = net.make_client();
     let chain = ChainId::root(0);
     let mut height = 0;
     client2.wallet_init(&[chain]).await.unwrap();
@@ -307,8 +299,8 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetTestingConfig
     );
 
     // Oh no! The first validator has an outage and gets restarted!
-    local_net.remove_validator(0).unwrap();
-    local_net.start_validator(0).await.unwrap();
+    net.remove_validator(0).unwrap();
+    net.start_validator(0).await.unwrap();
 
     // The node service should try to reconnect.
     'success: {
@@ -335,8 +327,8 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetTestingConfig
 
     node_service2.ensure_is_running().unwrap();
 
-    local_net.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
@@ -346,10 +338,10 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetTestingConfig
 async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    // Create local_net and two clients.
-    let (mut local_net, client1) = config.start().await.unwrap();
+    // Create net and two clients.
+    let (mut net, client1) = config.start().await.unwrap();
 
-    let client2 = local_net.make_client();
+    let client2 = net.make_client();
     client2.wallet_init(&[]).await.unwrap();
 
     // Get some chain owned by Client 1.
@@ -405,8 +397,8 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
         Amount::from_tokens(3)
     );
 
-    local_net.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
 #[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
@@ -423,7 +415,7 @@ async fn test_project_new(database: Database, network: Network) {
         num_initial_validators: 0,
         num_shards: 0,
     };
-    let (mut local_net, client) = config.start().await.unwrap();
+    let (mut net, client) = config.start().await.unwrap();
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
@@ -436,8 +428,8 @@ async fn test_project_new(database: Database, network: Network) {
         .await
         .unwrap();
 
-    local_net.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
 #[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
@@ -454,7 +446,7 @@ async fn test_project_test(database: Database, network: Network) {
         num_initial_validators: 0,
         num_shards: 0,
     };
-    let (_local_net, client) = config.start().await.unwrap();
+    let (_net, client) = config.start().await.unwrap();
     client
         .project_test(&ClientWrapper::example_path("counter").unwrap())
         .await
@@ -478,7 +470,7 @@ async fn test_project_publish(database: Database, network: Network) {
         num_shards: 1,
     };
 
-    let (mut local_net, client) = config.start().await.unwrap();
+    let (mut net, client) = config.start().await.unwrap();
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
@@ -504,8 +496,8 @@ async fn test_project_publish(database: Database, network: Network) {
         1
     );
 
-    local_net.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
 #[test_log::test(tokio::test)]
@@ -574,7 +566,7 @@ async fn test_example_publish(database: Database, network: Network) {
         num_initial_validators: 1,
         num_shards: 1,
     };
-    let (mut local_net, client) = config.start().await.unwrap();
+    let (mut net, client) = config.start().await.unwrap();
 
     let example_dir = ClientWrapper::example_path("counter").unwrap();
     client
@@ -594,8 +586,8 @@ async fn test_example_publish(database: Database, network: Network) {
         1
     );
 
-    local_net.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
@@ -606,9 +598,9 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and two clients.
-    let (mut local_net, client1) = config.start().await.unwrap();
+    let (mut net, client1) = config.start().await.unwrap();
 
-    let client2 = local_net.make_client();
+    let client2 = net.make_client();
     client2.wallet_init(&[]).await.unwrap();
 
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
@@ -685,6 +677,6 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
         Amount::from_tokens(3)
     );
 
-    local_net.ensure_is_running().unwrap();
-    local_net.terminate().await.unwrap();
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
