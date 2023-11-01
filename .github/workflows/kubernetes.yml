@@ -44,7 +44,11 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build client binary
         run: |
-          cargo build --release --locked --bin linera
+          cargo build --release --locked --bin linera --bin linera-proxy --bin linera-server --bin linera-db --features scylladb
+          strip target/release/linera
+          strip target/release/linera-proxy
+          strip target/release/linera-server
+          strip target/release/linera-db
       - name: Install Kind
         run: |
           curl -sL -o /tmp/kind https://kind.sigs.k8s.io/dl/v0.14.0/kind-linux-amd64
@@ -55,10 +59,11 @@ jobs:
           curl -sL -o /tmp/kubectl https://storage.googleapis.com/kubernetes-release/release/v1.24.1/bin/linux/amd64/kubectl
           chmod +x /tmp/kubectl
           mv /tmp/kubectl /usr/local/bin/
+        # Build the docker image copying the already built binaries
       - name: Build Docker and deploy locally with Kind
         run: |
           cd kubernetes/linera-validator
-          ./build_and_redeploy.sh
+          ./build_and_redeploy.sh --copy
       - name: Port Forward
         run: |
           kubectl get pods | grep validator | awk '{ print $1 }' | xargs -I % kubectl port-forward % 19100:19100 &
