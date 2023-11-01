@@ -39,7 +39,7 @@ use super::{
     async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     module_cache::ModuleCache,
-    runtime_actor::{BaseRequest, ContractRequest, SendRequestExt},
+    runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
     WasmApplication, WasmExecutionError,
 };
 use crate::{Bytecode, ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
@@ -107,7 +107,7 @@ pub struct Service<'runtime> {
 impl<'runtime> ApplicationRuntimeContext for Service<'runtime> {
     type Store = Store;
     type Error = RuntimeError;
-    type Extra = RuntimeGuard<'runtime, &'static dyn ServiceRuntime>;
+    type Extra = ();
 }
 
 impl WasmApplication {
@@ -180,16 +180,14 @@ impl WasmApplication {
     /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare_service_runtime_with_wasmer<'runtime>(
         service_module: &Module,
-        runtime: &'runtime dyn ServiceRuntime,
+        runtime: mpsc::UnboundedSender<ServiceRequest>,
     ) -> Result<WasmRuntimeContext<'static, Service<'runtime>>, WasmExecutionError> {
         let mut store = Store::new(&*SERVICE_ENGINE);
         let mut imports = imports! {};
         let waker_forwarder = WakerForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
-        let (system_api, runtime_guard) = SystemApi::new(waker_forwarder.clone(), runtime);
-        let system_api = Arc::new(Mutex::new(system_api));
-        let service_system_api = ServiceSystemApi::new(system_api.clone());
-        let view_system_api = ServiceViewSystemApi::new(system_api);
+        let service_system_api = ServiceSystemApi::new(runtime.clone(), waker_forwarder.clone());
+        let view_system_api = ServiceViewSystemApi::new(runtime, waker_forwarder.clone());
         let system_api_setup =
             service_system_api::add_to_imports(&mut store, &mut imports, service_system_api);
         let views_api_setup =
@@ -210,7 +208,7 @@ impl WasmApplication {
             application,
             future_queue,
             store,
-            extra: runtime_guard,
+            extra: (),
         })
     }
 
@@ -487,47 +485,23 @@ impl_contract_system_api!(ContractSystemApi);
 /// Implementation to forward service system calls from the guest Wasm module to the host
 /// implementation.
 pub struct ServiceSystemApi {
-    shared: Arc<Mutex<SystemApi<&'static dyn ServiceRuntime>>>,
+    runtime: mpsc::UnboundedSender<ServiceRequest>,
+    waker: WakerForwarder,
 }
 
 impl ServiceSystemApi {
     /// Creates a new [`ServiceSystemApi`] instance.
-    pub fn new(shared: Arc<Mutex<SystemApi<&'static dyn ServiceRuntime>>>) -> Self {
-        ServiceSystemApi { shared }
-    }
-
-    /// Safely obtains the [`ServiceRuntime`] trait object instance to handle a system call.
-    ///
-    /// # Panics
-    ///
-    /// If there is a concurrent call from the Wasm application (which is impossible as long as it
-    /// is executed in a single thread) or if the trait object is no longer alive (or more
-    /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
-    /// no longer alive).
-    fn runtime(&self) -> &'static dyn ServiceRuntime {
-        *self
-            .shared
-            .try_lock()
-            .expect("Unexpected concurrent system API access by application")
-            .runtime
-            .try_lock()
-            .expect("Unexpected concurrent runtime access by application")
-            .as_ref()
-            .expect("Application called runtime after it should have stopped")
+    pub fn new(runtime: mpsc::UnboundedSender<ServiceRequest>, waker: WakerForwarder) -> Self {
+        ServiceSystemApi { runtime, waker }
     }
 
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
-    fn waker(&mut self) -> MappedMutexGuard<'_, WakerForwarder> {
-        MutexGuard::map(
-            self.shared
-                .try_lock()
-                .expect("Unexpected concurrent system API access by application"),
-            |system_api| &mut system_api.waker,
-        )
+    fn waker(&mut self) -> &mut WakerForwarder {
+        &mut self.waker
     }
 }
 
-impl_service_system_api!(ServiceSystemApi);
+impl_service_system_api!(ServiceSystemApi, wasmer::RuntimeError);
 
 /// Implementation to forward view system calls from the contract guest Wasm module to the host
 /// implementation.
@@ -560,43 +534,19 @@ impl ContractViewSystemApi {
 /// Implementation to forward view system calls from the guest WASM module to the host
 /// implementation.
 pub struct ServiceViewSystemApi {
-    shared: Arc<Mutex<SystemApi<&'static dyn ServiceRuntime>>>,
+    runtime: mpsc::UnboundedSender<ServiceRequest>,
+    waker: WakerForwarder,
 }
 
 impl ServiceViewSystemApi {
     /// Creates a new [`ServiceViewSystemApi`] instance.
-    pub fn new(shared: Arc<Mutex<SystemApi<&'static dyn ServiceRuntime>>>) -> Self {
-        ServiceViewSystemApi { shared }
-    }
-
-    /// Safely obtains the [`ServiceRuntime`] trait object instance to handle a system call.
-    ///
-    /// # Panics
-    ///
-    /// If there is a concurrent call from the Wasm application (which is impossible as long as it
-    /// is executed in a single thread) or if the trait object is no longer alive (or more
-    /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
-    /// no longer alive).
-    fn runtime(&self) -> &'static dyn ServiceRuntime {
-        *self
-            .shared
-            .try_lock()
-            .expect("Unexpected concurrent system API access by application")
-            .runtime
-            .try_lock()
-            .expect("Unexpected concurrent runtime access by application")
-            .as_ref()
-            .expect("Application called runtime after it should have stopped")
+    pub fn new(runtime: mpsc::UnboundedSender<ServiceRequest>, waker: WakerForwarder) -> Self {
+        ServiceViewSystemApi { runtime, waker }
     }
 
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
-    fn waker(&mut self) -> MappedMutexGuard<'_, WakerForwarder> {
-        MutexGuard::map(
-            self.shared
-                .try_lock()
-                .expect("Unexpected concurrent system API access by application"),
-            |system_api| &mut system_api.waker,
-        )
+    fn waker(&mut self) -> &mut WakerForwarder {
+        &mut self.waker
     }
 }
 

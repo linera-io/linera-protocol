@@ -324,21 +324,31 @@ impl UserApplication for WasmApplication {
         runtime: &dyn ServiceRuntime,
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
-        let result = match self {
+        let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
+        let context = *context;
+        let argument = argument.to_owned();
+
+        let wasm_task = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { service, .. } => {
-                Self::prepare_service_runtime_with_wasmtime(service, runtime)?
-                    .handle_query(context, argument)
-                    .await?
+                let instance =
+                    Self::prepare_service_runtime_with_wasmtime(service, runtime_requests)?;
+
+                tokio::spawn(async move { instance.handle_query(&context, &argument).await })
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { service, .. } => {
-                Self::prepare_service_runtime_with_wasmer(service, runtime)?
-                    .handle_query(context, argument)
-                    .await?
+                let instance =
+                    Self::prepare_service_runtime_with_wasmer(service, runtime_requests)?;
+
+                tokio::spawn(async move { instance.handle_query(&context, &argument).await })
             }
         };
-        Ok(result)
+
+        runtime_actor.run().await?;
+        wasm_task
+            .await
+            .expect("Panic while running Wasm guest instance")
     }
 }
 
