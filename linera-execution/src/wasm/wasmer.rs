@@ -44,10 +44,7 @@ use super::{
 };
 use crate::{Bytecode, ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
 use bytes::Bytes;
-use futures::{
-    channel::{mpsc, oneshot},
-    FutureExt, TryFutureExt,
-};
+use futures::{channel::mpsc, FutureExt, TryFutureExt};
 use linera_views::{batch::Batch, views::ViewError};
 use once_cell::sync::Lazy;
 use std::{marker::PhantomData, mem, sync::Arc, task::Poll};

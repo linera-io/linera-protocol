@@ -47,10 +47,7 @@ use super::{
     WasmApplication, WasmExecutionError,
 };
 use crate::{Bytecode, ExecutionError, ServiceRuntime, SessionId};
-use futures::{
-    channel::{mpsc, oneshot},
-    FutureExt, TryFutureExt,
-};
+use futures::{channel::mpsc, FutureExt, TryFutureExt};
 use linera_views::{batch::Batch, views::ViewError};
 use once_cell::sync::Lazy;
 use std::{error::Error, task::Poll};

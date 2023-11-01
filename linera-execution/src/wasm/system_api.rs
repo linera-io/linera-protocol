@@ -19,7 +19,7 @@ macro_rules! impl_contract_system_api {
         impl$(<$param>)? contract_system_api::ContractSystemApi for $contract_system_api {
             type Error = ExecutionError;
 
-            type Lock = Mutex<oneshot::Receiver<Result<(), ExecutionError>>>;
+            type Lock = Mutex<futures::channel::oneshot::Receiver<Result<(), ExecutionError>>>;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -31,7 +31,7 @@ macro_rules! impl_contract_system_api {
                         ContractRequest::Base(BaseRequest::ChainId { response_sender })
                     })
                     .map(|chain_id| chain_id.into())
-                    .map_err(|::oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn application_id(
@@ -42,7 +42,7 @@ macro_rules! impl_contract_system_api {
                         ContractRequest::Base(BaseRequest::ApplicationId { response_sender })
                     })
                     .map(|application_id| application_id.into())
-                    .map_err(|::oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn application_parameters(&mut self) -> Result<Vec<u8>, Self::Error> {
@@ -50,7 +50,7 @@ macro_rules! impl_contract_system_api {
                     .sync_request(|response_sender| {
                         ContractRequest::Base(BaseRequest::ApplicationParameters { response_sender })
                     })
-                    .map_err(|::oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn read_system_balance(&mut self) -> Result<contract_system_api::Amount, Self::Error> {
@@ -59,7 +59,7 @@ macro_rules! impl_contract_system_api {
                         ContractRequest::Base(BaseRequest::ReadSystemBalance { response_sender })
                     })
                     .map(|balance| balance.into())
-                    .map_err(|::oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn read_system_timestamp(
@@ -70,7 +70,7 @@ macro_rules! impl_contract_system_api {
                         ContractRequest::Base(BaseRequest::ReadSystemTimestamp { response_sender })
                     })
                     .map(|timestamp| timestamp.micros())
-                    .map_err(|::oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn load(&mut self) -> Result<Vec<u8>, Self::Error> {
@@ -80,13 +80,13 @@ macro_rules! impl_contract_system_api {
                             response_sender,
                         })
                     })
-                    .map_err(|::oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn load_and_lock(&mut self) -> Result<Option<Vec<u8>>, Self::Error> {
                 self.runtime
                     .sync_request(|response_sender| ContractRequest::TryReadAndLockMyState { response_sender })
-                    .map_err(|::oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn store_and_unlock(&mut self, state: &[u8]) -> Result<bool, Self::Error> {
@@ -95,7 +95,7 @@ macro_rules! impl_contract_system_api {
                         state: state.to_owned(),
                         response_sender,
                     })
-                    .map_err(|::oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
@@ -153,7 +153,7 @@ macro_rules! impl_contract_system_api {
                         response_sender,
                     })
                     .map(|call_result| call_result.into())
-                    .map_err(|::oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn try_call_session(
@@ -178,7 +178,7 @@ macro_rules! impl_contract_system_api {
                         response_sender,
                     })
                     .map(|call_result| call_result.into())
-                    .map_err(|::oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn log(
@@ -463,11 +463,15 @@ macro_rules! impl_view_system_api_for_contract {
         impl$(<$param>)? view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
-            type ReadKeyBytes = Mutex<oneshot::Receiver<Result<Option<Vec<u8>>, ExecutionError>>>;
-            type FindKeys = Mutex<oneshot::Receiver<Result<Vec<Vec<u8>>, ExecutionError>>>;
-            type FindKeyValues =
-                Mutex<oneshot::Receiver<Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>>;
-            type WriteBatch = Mutex<oneshot::Receiver<Result<(), ExecutionError>>>;
+            type ReadKeyBytes =
+                Mutex<futures::channel::oneshot::Receiver<Result<Option<Vec<u8>>, ExecutionError>>>;
+            type FindKeys =
+                Mutex<futures::channel::oneshot::Receiver<Result<Vec<Vec<u8>>, ExecutionError>>>;
+            type FindKeyValues = Mutex<
+                futures::channel::oneshot::Receiver<Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>
+            >;
+            type WriteBatch =
+                Mutex<futures::channel::oneshot::Receiver<Result<(), ExecutionError>>>;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
