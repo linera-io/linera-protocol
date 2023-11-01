@@ -44,7 +44,7 @@ async fn test_resolve_binary() {
 async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = config.network;
-    let (mut net, client) = config.start().await.unwrap();
+    let (mut net, client) = config.instantiate().await.unwrap();
 
     let client_2 = net.make_client();
     client_2.wallet_init(&[]).await.unwrap();
@@ -186,7 +186,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
 #[test_log::test(tokio::test)]
 async fn test_open_chain_node_service(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let (mut net, client) = config.start().await.unwrap();
+    let (mut net, client) = config.instantiate().await.unwrap();
 
     let default_chain = client.get_wallet().unwrap().default_chain().unwrap();
     let public_key = client
@@ -278,7 +278,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
 async fn test_end_to_end_retry_notification_stream(config: LocalNetTestingConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut net, client1) = config.start().await.unwrap();
+    let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client();
     let chain = ChainId::root(0);
@@ -339,7 +339,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create net and two clients.
-    let (mut net, client1) = config.start().await.unwrap();
+    let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client();
     client2.wallet_init(&[]).await.unwrap();
@@ -415,7 +415,7 @@ async fn test_project_new(database: Database, network: Network) {
         num_initial_validators: 0,
         num_shards: 0,
     };
-    let (mut net, client) = config.start().await.unwrap();
+    let (mut net, client) = config.instantiate().await.unwrap();
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
@@ -446,7 +446,7 @@ async fn test_project_test(database: Database, network: Network) {
         num_initial_validators: 0,
         num_shards: 0,
     };
-    let (_net, client) = config.start().await.unwrap();
+    let (_net, client) = config.instantiate().await.unwrap();
     client
         .project_test(&ClientWrapper::example_path("counter").unwrap())
         .await
@@ -470,7 +470,7 @@ async fn test_project_publish(database: Database, network: Network) {
         num_shards: 1,
     };
 
-    let (mut net, client) = config.start().await.unwrap();
+    let (mut net, client) = config.instantiate().await.unwrap();
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
@@ -566,7 +566,7 @@ async fn test_example_publish(database: Database, network: Network) {
         num_initial_validators: 1,
         num_shards: 1,
     };
-    let (mut net, client) = config.start().await.unwrap();
+    let (mut net, client) = config.instantiate().await.unwrap();
 
     let example_dir = ClientWrapper::example_path("counter").unwrap();
     client
@@ -598,7 +598,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and two clients.
-    let (mut net, client1) = config.start().await.unwrap();
+    let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client();
     client2.wallet_init(&[]).await.unwrap();

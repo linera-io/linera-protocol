@@ -1927,7 +1927,7 @@ async fn main() -> Result<(), anyhow::Error> {
                     num_initial_validators: *validators,
                     num_shards: *shards,
                 };
-                let (mut net, client1) = config.start().await?;
+                let (mut net, client1) = config.instantiate().await?;
 
                 let default_chain = client1
                     .default_chain()

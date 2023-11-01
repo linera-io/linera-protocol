@@ -153,7 +153,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) {
     use counter::CounterAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut net, client) = config.start().await.unwrap();
+    let (mut net, client) = config.instantiate().await.unwrap();
 
     let original_counter_value = 35;
     let increment = 5;
@@ -203,7 +203,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut net, client) = config.start().await.unwrap();
+    let (mut net, client) = config.instantiate().await.unwrap();
 
     let original_counter_value = 35;
     let increment = 5;
@@ -249,7 +249,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     use social::SocialAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut net, client1) = config.start().await.unwrap();
+    let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client();
     client2.wallet_init(&[]).await.unwrap();
@@ -336,7 +336,7 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut net, client1) = config.start().await.unwrap();
+    let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client();
     client2.wallet_init(&[]).await.unwrap();
@@ -452,7 +452,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(config: impl LineraNetConfig)
     use fungible::{FungibleTokenAbi, InitialState};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let (mut net, client1) = config.start().await.unwrap();
+    let (mut net, client1) = config.instantiate().await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = ChainId::root(2);
@@ -534,7 +534,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut net, client1) = config.start().await.unwrap();
+    let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client();
     client2.wallet_init(&[]).await.unwrap();
@@ -660,7 +660,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut net, client_admin) = config.start().await.unwrap();
+    let (mut net, client_admin) = config.instantiate().await.unwrap();
 
     let client_a = net.make_client();
     let client_b = net.make_client();
@@ -923,7 +923,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     use fungible::{FungibleTokenAbi, InitialState};
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut net, client_admin) = config.start().await.unwrap();
+    let (mut net, client_admin) = config.instantiate().await.unwrap();
 
     let client0 = net.make_client();
     let client1 = net.make_client();

@@ -40,7 +40,7 @@ async fn transfer(client: &reqwest::Client, url: &str, from: ChainId, to: ChainI
 async fn test_end_to_end_queries(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (net, client) = config.start().await.unwrap();
+    let (net, client) = config.instantiate().await.unwrap();
 
     let node_chains = {
         let wallet = client.get_wallet().unwrap();

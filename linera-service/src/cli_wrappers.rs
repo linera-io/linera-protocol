@@ -554,7 +554,7 @@ impl Validator {
 pub trait LineraNetConfig {
     type Net: LineraNet + Sized + Send + Sync + 'static;
 
-    async fn start(self) -> Result<(Self::Net, ClientWrapper)>;
+    async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)>;
 }
 
 #[async_trait]
@@ -606,7 +606,7 @@ pub struct LocalNet {
 impl LineraNetConfig for LocalNetConfig {
     type Net = LocalNet;
 
-    async fn start(self) -> Result<(Self::Net, ClientWrapper)> {
+    async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
         let mut net = LocalNet::new(
             self.database,
             self.network,
@@ -630,7 +630,7 @@ impl LineraNetConfig for LocalNetConfig {
 impl LineraNetConfig for LocalNetTestingConfig {
     type Net = LocalNet;
 
-    async fn start(self) -> Result<(Self::Net, ClientWrapper)> {
+    async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
         let seed = 37;
         let table_name = linera_views::test_utils::get_table_name();
         let num_validators = 4;
