@@ -405,7 +405,7 @@ impl LocalNet {
                 if i_try == max_try {
                     bail!("Failed to initialize after {} attempts", max_try);
                 }
-                let one_second = std::time::Duration::from_millis(1000);
+                let one_second = std::time::Duration::from_secs(1);
                 std::thread::sleep(one_second);
             }
             self.set_init.insert(key);
