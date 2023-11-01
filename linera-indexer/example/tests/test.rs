@@ -9,7 +9,7 @@ use linera_indexer_graphql_client::{
     operations::{get_operation, GetOperation, OperationKey},
 };
 use linera_service::{
-    cli_wrappers::{Database, LineraNet, LocalNet, Network},
+    cli_wrappers::{Database, LineraNet, LineraNetConfig, LocalNetTestingConfig, Network},
     util::resolve_binary,
 };
 use linera_service_graphql_client::{block, request, transfer, Block, Transfer};
@@ -77,17 +77,15 @@ const TRANSFER_DELAY_MILLIS: u64 = 1000;
 #[cfg(not(debug_assertions))]
 const TRANSFER_DELAY_MILLIS: u64 = 100;
 
-#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_operations_indexer(database: Database, network: Network) {
+async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
     // launching network, service and indexer
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (local_net, client) = LocalNet::initialize_for_testing(database, network)
-        .await
-        .unwrap();
+    let (local_net, client) = config.start().await.unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
     let mut indexer = run_indexer(&client.tmp_dir).await;
 

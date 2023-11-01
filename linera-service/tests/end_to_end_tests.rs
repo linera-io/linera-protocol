@@ -9,7 +9,10 @@ mod common;
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::{data_types::Amount, identifiers::ChainId};
 use linera_service::{
-    cli_wrappers::{ClientWrapper, Database, LineraNet, LocalNet, Network},
+    cli_wrappers::{
+        ClientWrapper, Database, LineraNet, LineraNetConfig, LocalNet, LocalNetConfig,
+        LocalNetTestingConfig, Network,
+    },
     util,
 };
 use linera_views::test_utils::get_table_name;
@@ -31,18 +34,17 @@ async fn test_resolve_binary() {
     );
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
-#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Simple ; "rocksdb_simple"))]
-#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Simple ; "scylladb_simple"))]
-#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Simple ; "aws_simple"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Simple) ; "rocksdb_simple"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Simple) ; "scylladb_simple"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Simple) ; "aws_simple"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_reconfiguration(database: Database, network: Network) {
+async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let (mut local_net, client) = LocalNet::initialize_for_testing(database, network)
-        .await
-        .unwrap();
+    let network = config.network;
+    let (mut local_net, client) = config.start().await.unwrap();
 
     let client_2 = local_net.make_client();
     client_2.wallet_init(&[]).await.unwrap();
@@ -186,15 +188,13 @@ async fn test_end_to_end_reconfiguration(database: Database, network: Network) {
     local_net.terminate().await.unwrap();
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_open_chain_node_service(database: Database, network: Network) {
+async fn test_open_chain_node_service(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let (mut local_net, client) = LocalNet::initialize_for_testing(database, network)
-        .await
-        .unwrap();
+    let (mut local_net, client) = config.start().await.unwrap();
 
     let default_chain = client.get_wallet().unwrap().default_chain().unwrap();
     let public_key = client
@@ -279,16 +279,14 @@ async fn test_open_chain_node_service(database: Database, network: Network) {
     panic!("Failed to receive new block");
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_retry_notification_stream(database: Database, network: Network) {
+async fn test_end_to_end_retry_notification_stream(config: LocalNetTestingConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (mut local_net, client1) = LocalNet::initialize_for_testing(database, network)
-        .await
-        .unwrap();
+    let (mut local_net, client1) = config.start().await.unwrap();
 
     let client2 = local_net.make_client();
     let chain = ChainId::root(0);
@@ -341,17 +339,15 @@ async fn test_end_to_end_retry_notification_stream(database: Database, network: 
     local_net.terminate().await.unwrap();
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_multiple_wallets(database: Database, network: Network) {
+async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create local_net and two clients.
-    let (mut local_net, client_1) = LocalNet::initialize_for_testing(database, network)
-        .await
-        .unwrap();
+    let (mut local_net, client_1) = config.start().await.unwrap();
 
     let client_2 = local_net.make_client();
     client_2.wallet_init(&[]).await.unwrap();
@@ -422,9 +418,15 @@ async fn test_end_to_end_multiple_wallets(database: Database, network: Network) 
 #[test_log::test(tokio::test)]
 async fn test_project_new(database: Database, network: Network) {
     let table_name = get_table_name();
-    let (mut local_net, client) = LocalNet::initialize(database, network, None, table_name, 0, 0)
-        .await
-        .unwrap();
+    let config = LocalNetConfig {
+        database,
+        network,
+        testing_prng_seed: None,
+        table_name,
+        num_initial_validators: 0,
+        num_shards: 0,
+    };
+    let (mut local_net, client) = config.start().await.unwrap();
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
@@ -447,9 +449,15 @@ async fn test_project_new(database: Database, network: Network) {
 #[test_log::test(tokio::test)]
 async fn test_project_test(database: Database, network: Network) {
     let table_name = get_table_name();
-    let (_local_net, client) = LocalNet::initialize(database, network, None, table_name, 0, 0)
-        .await
-        .unwrap();
+    let config = LocalNetConfig {
+        database,
+        network,
+        testing_prng_seed: None,
+        table_name,
+        num_initial_validators: 0,
+        num_shards: 0,
+    };
+    let (_local_net, client) = config.start().await.unwrap();
     client
         .project_test(&ClientWrapper::example_path("counter").unwrap())
         .await
@@ -464,10 +472,16 @@ async fn test_project_publish(database: Database, network: Network) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let table_name = get_table_name();
-    let (mut local_net, client) =
-        LocalNet::initialize(database, network, Some(37), table_name, 1, 1)
-            .await
-            .unwrap();
+    let config = LocalNetConfig {
+        database,
+        network,
+        testing_prng_seed: Some(37),
+        table_name,
+        num_initial_validators: 1,
+        num_shards: 1,
+    };
+
+    let (mut local_net, client) = config.start().await.unwrap();
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
@@ -555,10 +569,15 @@ async fn test_example_publish(database: Database, network: Network) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let table_name = get_table_name();
-    let (mut local_net, client) =
-        LocalNet::initialize(database, network, Some(37), table_name, 1, 1)
-            .await
-            .unwrap();
+    let config = LocalNetConfig {
+        database,
+        network,
+        testing_prng_seed: Some(37),
+        table_name,
+        num_initial_validators: 1,
+        num_shards: 1,
+    };
+    let (mut local_net, client) = config.start().await.unwrap();
 
     let example_dir = ClientWrapper::example_path("counter").unwrap();
     client
@@ -582,17 +601,15 @@ async fn test_example_publish(database: Database, network: Network) {
     local_net.terminate().await.unwrap();
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_open_multi_owner_chain(database: Database, network: Network) {
+async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and two clients.
-    let (mut local_net, client1) = LocalNet::initialize_for_testing(database, network)
-        .await
-        .unwrap();
+    let (mut local_net, client1) = config.start().await.unwrap();
 
     let client2 = local_net.make_client();
     client2.wallet_init(&[]).await.unwrap();

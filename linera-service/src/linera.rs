@@ -31,7 +31,7 @@ use linera_execution::{
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
     chain_listener::{self, ChainListenerConfig},
-    cli_wrappers::{Database, LineraNet, LocalNet, Network},
+    cli_wrappers::{Database, LineraNet, LineraNetConfig, LocalNetConfig, Network},
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     node_service::NodeService,
     project::{self, Project},
@@ -1919,16 +1919,15 @@ async fn main() -> Result<(), anyhow::Error> {
                 if *shards < 1 {
                     panic!("The local test network must have at least one shard per validator.");
                 }
-                let network = Network::Grpc;
-                let (mut net, client1) = LocalNet::initialize(
-                    Database::RocksDb,
-                    network,
-                    *testing_prng_seed,
-                    table_name.to_string(),
-                    *validators,
-                    *shards,
-                )
-                .await?;
+                let config = LocalNetConfig {
+                    network: Network::Grpc,
+                    database: Database::RocksDb,
+                    testing_prng_seed: *testing_prng_seed,
+                    table_name: table_name.to_string(),
+                    num_initial_validators: *validators,
+                    num_shards: *shards,
+                };
+                let (mut net, client1) = config.start().await?;
 
                 let default_chain = client1
                     .default_chain()

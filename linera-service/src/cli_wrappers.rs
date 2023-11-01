@@ -531,6 +531,7 @@ impl Validator {
         self.servers.push(server)
     }
 
+    #[cfg(any(test, feature = "test"))]
     async fn terminate_server(&mut self, index: usize) -> Result<()> {
         let mut server = self.servers.remove(index);
         server
@@ -550,21 +551,41 @@ impl Validator {
 }
 
 #[async_trait]
-pub trait LineraNet: Sized + Send + Sync + 'static {
-    async fn initialize(
-        database: Database,
-        network: Network,
-        testing_prng_seed: Option<u64>,
-        table_name: String,
-        num_initial_validators: usize,
-        num_shards: usize,
-    ) -> Result<(Self, ClientWrapper)>;
+pub trait LineraNetConfig {
+    type Net: LineraNet + Sized + Send + Sync + 'static;
 
+    async fn start(self) -> Result<(Self::Net, ClientWrapper)>;
+}
+
+#[async_trait]
+pub trait LineraNet {
     fn ensure_is_running(&mut self) -> Result<()>;
 
-    async fn terminate(mut self) -> Result<()>;
-
     fn make_client(&mut self) -> ClientWrapper;
+
+    async fn terminate(mut self) -> Result<()>;
+}
+
+pub struct LocalNetConfig {
+    pub database: Database,
+    pub network: Network,
+    pub testing_prng_seed: Option<u64>,
+    pub table_name: String,
+    pub num_initial_validators: usize,
+    pub num_shards: usize,
+}
+
+#[cfg(any(test, feature = "test"))]
+pub struct LocalNetTestingConfig {
+    pub database: Database,
+    pub network: Network,
+}
+
+#[cfg(any(test, feature = "test"))]
+impl LocalNetTestingConfig {
+    pub fn new(database: Database, network: Network) -> Self {
+        Self { database, network }
+    }
 }
 
 pub struct LocalNet {
@@ -582,40 +603,62 @@ pub struct LocalNet {
 }
 
 #[async_trait]
-impl LineraNet for LocalNet {
-    async fn initialize(
-        database: Database,
-        network: Network,
-        testing_prng_seed: Option<u64>,
-        table_name: String,
-        num_initial_validators: usize,
-        num_shards: usize,
-    ) -> Result<(Self, ClientWrapper)> {
+impl LineraNetConfig for LocalNetConfig {
+    type Net = LocalNet;
+
+    async fn start(self) -> Result<(Self::Net, ClientWrapper)> {
         let mut net = LocalNet::new(
-            database,
-            network,
-            testing_prng_seed,
-            table_name,
-            num_initial_validators,
-            num_shards,
+            self.database,
+            self.network,
+            self.testing_prng_seed,
+            self.table_name,
+            self.num_initial_validators,
+            self.num_shards,
         )?;
         let client = net.make_client();
-        if num_initial_validators > 0 {
+        if self.num_initial_validators > 0 {
             net.generate_initial_validator_config().await.unwrap();
             client.create_genesis_config().await.unwrap();
             net.run().await.unwrap();
         }
         Ok((net, client))
     }
+}
 
-    async fn terminate(mut self) -> Result<()> {
-        let validators = std::mem::take(&mut self.running_validators);
-        for (_, validator) in validators {
-            validator.terminate().await.context("in local network")?
+#[cfg(any(test, feature = "test"))]
+#[async_trait]
+impl LineraNetConfig for LocalNetTestingConfig {
+    type Net = LocalNet;
+
+    async fn start(self) -> Result<(Self::Net, ClientWrapper)> {
+        let seed = 37;
+        let table_name = linera_views::test_utils::get_table_name();
+        let num_validators = 4;
+        let num_shards = match self.database {
+            Database::RocksDb => 1,
+            Database::DynamoDb => 4,
+            Database::ScyllaDb => 4,
+        };
+        let mut net = LocalNet::new(
+            self.database,
+            self.network,
+            Some(seed),
+            table_name,
+            num_validators,
+            num_shards,
+        )?;
+        let client = net.make_client();
+        if num_validators > 0 {
+            net.generate_initial_validator_config().await.unwrap();
+            client.create_genesis_config().await.unwrap();
+            net.run().await.unwrap();
         }
-        Ok(())
+        Ok((net, client))
     }
+}
 
+#[async_trait]
+impl LineraNet for LocalNet {
     fn ensure_is_running(&mut self) -> Result<()> {
         for validator in self.running_validators.values_mut() {
             validator.ensure_is_running().context("in local network")?
@@ -635,6 +678,14 @@ impl LineraNet for LocalNet {
         }
         self.next_client_id += 1;
         client
+    }
+
+    async fn terminate(mut self) -> Result<()> {
+        let validators = std::mem::take(&mut self.running_validators);
+        for (_, validator) in validators {
+            validator.terminate().await.context("in local network")?
+        }
+        Ok(())
     }
 }
 
@@ -870,33 +921,21 @@ impl LocalNet {
         }
         Ok(())
     }
+
+    pub async fn start_validator(&mut self, i: usize) -> Result<()> {
+        let proxy = self.run_proxy(i).await?;
+        let mut validator = Validator::new(proxy);
+        for j in 0..self.num_shards {
+            let server = self.run_server(i, j).await?;
+            validator.add_server(server);
+        }
+        self.running_validators.insert(i, validator);
+        Ok(())
+    }
 }
 
 #[cfg(any(test, feature = "test"))]
 impl LocalNet {
-    pub async fn initialize_for_testing(
-        database: Database,
-        network: Network,
-    ) -> Result<(Self, ClientWrapper)> {
-        let seed = 37;
-        let table_name = linera_views::test_utils::get_table_name();
-        let num_validators = 4;
-        let num_shards = match database {
-            Database::RocksDb => 1,
-            Database::DynamoDb => 4,
-            Database::ScyllaDb => 4,
-        };
-        Self::initialize(
-            database,
-            network,
-            Some(seed),
-            table_name,
-            num_validators,
-            num_shards,
-        )
-        .await
-    }
-
     pub fn validator_name(&self, i: usize) -> Option<&String> {
         self.validator_names.get(&i)
     }
@@ -936,17 +975,6 @@ impl LocalNet {
             .get_mut(&i)
             .context("could not find server")?
             .add_server(server);
-        Ok(())
-    }
-
-    pub async fn start_validator(&mut self, i: usize) -> Result<()> {
-        let proxy = self.run_proxy(i).await?;
-        let mut validator = Validator::new(proxy);
-        for j in 0..self.num_shards {
-            let server = self.run_server(i, j).await?;
-            validator.add_server(server);
-        }
-        self.running_validators.insert(i, validator);
         Ok(())
     }
 }

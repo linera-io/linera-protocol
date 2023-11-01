@@ -6,7 +6,7 @@
 use fungible::{FungibleTokenAbi, InitialState};
 use linera_base::{data_types::Amount, identifiers::ChainId};
 use linera_service::{
-    cli_wrappers::{Database, LineraNet, LocalNet, Network},
+    cli_wrappers::{Database, LineraNet, LineraNetConfig, LocalNetTestingConfig, Network},
     util::resolve_binary,
 };
 use linera_service_graphql_client::{
@@ -33,16 +33,14 @@ async fn transfer(client: &reqwest::Client, url: &str, from: ChainId, to: ChainI
         .unwrap();
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_queries(database: Database, network: Network) {
+async fn test_end_to_end_queries(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let (local_net, client) = LocalNet::initialize_for_testing(database, network)
-        .await
-        .unwrap();
+    let (local_net, client) = config.start().await.unwrap();
 
     let node_chains = {
         let wallet = client.get_wallet().unwrap();
