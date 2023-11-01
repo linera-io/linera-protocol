@@ -202,8 +202,7 @@ impl LineraNet for LocalNet {
     }
 
     async fn terminate(mut self) -> Result<()> {
-        let validators = std::mem::take(&mut self.running_validators);
-        for (_, validator) in validators {
+        for (_, validator) in self.running_validators {
             validator.terminate().await.context("in local network")?
         }
         Ok(())
@@ -299,7 +298,7 @@ impl LocalNet {
         fs::write(&path, content)?;
         path.into_os_string().into_string().map_err(|error| {
             anyhow!(
-                "could not parse string into OS string: {}",
+                "could not parse OS string into string: {}",
                 error.to_string_lossy()
             )
         })
