@@ -12,8 +12,8 @@ use linera_base::{
     identifiers::ChainId,
 };
 use linera_service::cli_wrappers::{
-    ApplicationWrapper, ClientWrapper, Database, LineraNet, LineraNetConfig, LocalNetTestingConfig,
-    Network,
+    local_net::{Database, LocalNetTestingConfig},
+    ApplicationWrapper, ClientWrapper, LineraNet, LineraNetConfig, Network,
 };
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, time::Duration};

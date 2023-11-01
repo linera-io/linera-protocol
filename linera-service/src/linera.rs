@@ -31,7 +31,10 @@ use linera_execution::{
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
     chain_listener::{self, ChainListenerConfig},
-    cli_wrappers::{Database, LineraNet, LineraNetConfig, LocalNetConfig, Network},
+    cli_wrappers::{
+        local_net::{Database, LocalNetConfig},
+        LineraNet, LineraNetConfig, Network,
+    },
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     node_service::NodeService,
     project::{self, Project},

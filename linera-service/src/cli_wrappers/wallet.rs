@@ -2,28 +2,33 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cli_wrappers::{Network, NodeService},
+    cli_wrappers::Network,
     config::WalletState,
     util,
-    util::CommandExt,
+    util::{ChildExt, CommandExt},
 };
 use anyhow::{bail, Context, Result};
+use async_graphql::InputType;
 use linera_base::{
     abi::ContractAbi,
     crypto::PublicKey,
     data_types::{Amount, RoundNumber},
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
-use serde::ser::Serialize;
+use linera_execution::Bytecode;
+use serde::{de::DeserializeOwned, ser::Serialize};
+use serde_json::{json, Value};
 use std::{
+    collections::HashMap,
     env,
+    marker::PhantomData,
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
     time::Duration,
 };
 use tempfile::TempDir;
-use tokio::process::Command;
+use tokio::process::{Child, Command};
 use tracing::{info, warn};
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -446,5 +451,298 @@ impl ClientWrapper {
             .parse()
             .context("error while parsing the result of `linera sync-balance`")?;
         Ok(amount)
+    }
+}
+
+#[cfg(any(test, feature = "test"))]
+impl ClientWrapper {
+    pub async fn build_application(
+        &self,
+        path: &Path,
+        name: &str,
+        is_workspace: bool,
+    ) -> Result<(PathBuf, PathBuf)> {
+        Command::new("cargo")
+            .current_dir(self.tmp_dir.path())
+            .arg("build")
+            .arg("--release")
+            .args(["--target", "wasm32-unknown-unknown"])
+            .arg("--manifest-path")
+            .arg(path.join("Cargo.toml"))
+            .spawn_and_wait_for_stdout()
+            .await?;
+
+        let release_dir = match is_workspace {
+            true => path.join("../target/wasm32-unknown-unknown/release"),
+            false => path.join("target/wasm32-unknown-unknown/release"),
+        };
+
+        let contract = release_dir.join(format!("{}_contract.wasm", name.replace('-', "_")));
+        let service = release_dir.join(format!("{}_service.wasm", name.replace('-', "_")));
+
+        Ok((contract, service))
+    }
+
+    pub async fn build_example(&self, name: &str) -> Result<(PathBuf, PathBuf)> {
+        self.build_application(Self::example_path(name)?.as_path(), name, true)
+            .await
+    }
+
+    pub fn example_path(name: &str) -> Result<PathBuf> {
+        Ok(env::current_dir()?.join("../examples/").join(name))
+    }
+}
+
+pub struct NodeService {
+    port: u16,
+    child: Child,
+}
+
+impl NodeService {
+    fn new(port: u16, child: Child) -> Self {
+        Self { port, child }
+    }
+
+    pub async fn terminate(mut self) -> Result<()> {
+        self.child.kill().await.context("terminating node service")
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
+    pub fn ensure_is_running(&mut self) -> Result<()> {
+        self.child.ensure_is_running()
+    }
+
+    pub async fn process_inbox(&self, chain_id: &ChainId) -> Result<()> {
+        let query = format!("mutation {{ processInbox(chainId: \"{chain_id}\") }}");
+        self.query_node(query).await?;
+        Ok(())
+    }
+
+    pub async fn make_application<A: ContractAbi>(
+        &self,
+        chain_id: &ChainId,
+        application_id: &ApplicationId<A>,
+    ) -> Result<ApplicationWrapper<A>> {
+        let application_id = application_id.forget_abi().to_string();
+        let n_try = 30;
+        for i in 0..n_try {
+            tokio::time::sleep(Duration::from_secs(i)).await;
+            let values = self.try_get_applications_uri(chain_id).await?;
+            if let Some(link) = values.get(&application_id) {
+                return Ok(ApplicationWrapper::from(link.to_string()));
+            }
+            warn!("Waiting for application {application_id:?} to be visible on chain {chain_id:?}");
+        }
+        bail!("Could not find application URI: {application_id} after {n_try} tries");
+    }
+
+    pub async fn try_get_applications_uri(
+        &self,
+        chain_id: &ChainId,
+    ) -> Result<HashMap<String, String>> {
+        let query = format!("query {{ applications(chainId: \"{chain_id}\") {{ id link }}}}");
+        let data = self.query_node(query).await?;
+        data["applications"]
+            .as_array()
+            .context("missing applications in response")?
+            .iter()
+            .map(|a| {
+                let id = a["id"]
+                    .as_str()
+                    .context("missing id field in response")?
+                    .to_string();
+                let link = a["link"]
+                    .as_str()
+                    .context("missing link field in response")?
+                    .to_string();
+                Ok((id, link))
+            })
+            .collect()
+    }
+
+    pub async fn publish_bytecode(
+        &self,
+        chain_id: &ChainId,
+        contract: PathBuf,
+        service: PathBuf,
+    ) -> Result<BytecodeId> {
+        let contract_code = Bytecode::load_from_file(&contract).await?;
+        let service_code = Bytecode::load_from_file(&service).await?;
+        let query = format!(
+            "mutation {{ publishBytecode(chainId: {}, contract: {}, service: {}) }}",
+            chain_id.to_value(),
+            contract_code.to_value(),
+            service_code.to_value(),
+        );
+        let data = self.query_node(query).await?;
+        let bytecode_str = data["publishBytecode"]
+            .as_str()
+            .context("bytecode ID not found")?;
+        bytecode_str.parse().context("could not parse bytecode ID")
+    }
+
+    pub async fn query_node(&self, query: impl AsRef<str>) -> Result<Value> {
+        let n_try = 30;
+        let query = query.as_ref();
+        for i in 0..n_try {
+            tokio::time::sleep(Duration::from_secs(i)).await;
+            let url = format!("http://localhost:{}/", self.port);
+            let client = reqwest::Client::new();
+            let response = client
+                .post(url)
+                .json(&json!({ "query": query }))
+                .send()
+                .await
+                .context("failed to post query")?;
+            anyhow::ensure!(
+                response.status().is_success(),
+                "Query \"{}\" failed: {}",
+                query.get(..200).unwrap_or(query),
+                response
+                    .text()
+                    .await
+                    .unwrap_or_else(|error| format!("Could not get response text: {error}"))
+            );
+            let value: Value = response.json().await.context("invalid JSON")?;
+            if let Some(errors) = value.get("errors") {
+                warn!(
+                    "Query \"{}\" failed: {}",
+                    query.get(..200).unwrap_or(query),
+                    errors
+                );
+            } else {
+                return Ok(value["data"].clone());
+            }
+        }
+        bail!(
+            "Query \"{}\" failed after {} retries.",
+            query.get(..200).unwrap_or(query),
+            n_try
+        );
+    }
+
+    pub async fn create_application<A: ContractAbi>(
+        &self,
+        chain_id: &ChainId,
+        bytecode_id: &BytecodeId,
+        parameters: &A::Parameters,
+        argument: &A::InitializationArgument,
+        required_application_ids: &[ApplicationId],
+    ) -> Result<ApplicationId<A>> {
+        let json_required_applications_ids = required_application_ids
+            .iter()
+            .map(ApplicationId::to_string)
+            .collect::<Vec<_>>()
+            .to_value();
+        // Convert to `serde_json::Value` then `async_graphql::Value` via the trait `InputType`.
+        let new_parameters = serde_json::to_value(parameters)
+            .context("could not create parameters JSON")?
+            .to_value();
+        let new_argument = serde_json::to_value(argument)
+            .context("could not create argument JSON")?
+            .to_value();
+        let query = format!(
+            "mutation {{ createApplication(\
+                 chainId: \"{chain_id}\",
+                 bytecodeId: \"{bytecode_id}\", \
+                 parameters: {new_parameters}, \
+                 initializationArgument: {new_argument}, \
+                 requiredApplicationIds: {json_required_applications_ids}) \
+             }}"
+        );
+        let data = self.query_node(query).await?;
+        let app_id_str = data["createApplication"]
+            .as_str()
+            .context("missing createApplication string in response")?
+            .trim();
+        Ok(app_id_str
+            .parse::<ApplicationId>()
+            .context("invalid application ID")?
+            .with_abi())
+    }
+
+    pub async fn request_application<A: ContractAbi>(
+        &self,
+        chain_id: &ChainId,
+        application_id: &ApplicationId<A>,
+    ) -> Result<String> {
+        let application_id = application_id.forget_abi();
+        let query = format!(
+            "mutation {{ requestApplication(\
+                 chainId: \"{chain_id}\", \
+                 applicationId: \"{application_id}\") \
+             }}"
+        );
+        let data = self.query_node(query).await?;
+        serde_json::from_value(data["requestApplication"].clone())
+            .context("missing requestApplication field in response")
+    }
+}
+
+pub struct ApplicationWrapper<A> {
+    uri: String,
+    _phantom: PhantomData<A>,
+}
+
+impl<A> ApplicationWrapper<A> {
+    pub async fn raw_query(&self, query: impl AsRef<str>) -> Result<Value> {
+        let query = query.as_ref();
+        let client = reqwest::Client::new();
+        let response = client
+            .post(&self.uri)
+            .json(&json!({ "query": query }))
+            .send()
+            .await
+            .context("failed to post query")?;
+        anyhow::ensure!(
+            response.status().is_success(),
+            "Query \"{}\" failed: {}",
+            query.get(..200).unwrap_or(query),
+            response
+                .text()
+                .await
+                .unwrap_or_else(|error| format!("Could not get response text: {error}"))
+        );
+        let value: Value = response.json().await.context("invalid JSON")?;
+        if let Some(errors) = value.get("errors") {
+            bail!(
+                "Query \"{}\" failed: {}",
+                query.get(..200).unwrap_or(query),
+                errors
+            );
+        }
+        Ok(value["data"].clone())
+    }
+
+    pub async fn query(&self, query: impl AsRef<str>) -> Result<Value> {
+        let query = query.as_ref();
+        self.raw_query(&format!("query {{ {query} }}")).await
+    }
+
+    pub async fn query_json<T: DeserializeOwned>(&self, query: impl AsRef<str>) -> Result<T> {
+        let query = query.as_ref().trim();
+        let name = query
+            .split_once(|ch: char| !ch.is_alphanumeric())
+            .map_or(query, |(name, _)| name);
+        let data = self.query(query).await?;
+        serde_json::from_value(data[name].clone())
+            .with_context(|| format!("{name} field missing in response"))
+    }
+
+    pub async fn mutate(&self, mutation: impl AsRef<str>) -> Result<Value> {
+        let mutation = mutation.as_ref();
+        self.raw_query(&format!("mutation {{ {mutation} }}")).await
+    }
+}
+
+impl<A> From<String> for ApplicationWrapper<A> {
+    fn from(uri: String) -> ApplicationWrapper<A> {
+        ApplicationWrapper {
+            uri,
+            _phantom: PhantomData,
+        }
     }
 }

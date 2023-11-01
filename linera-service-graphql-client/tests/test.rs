@@ -6,7 +6,10 @@
 use fungible::{FungibleTokenAbi, InitialState};
 use linera_base::{data_types::Amount, identifiers::ChainId};
 use linera_service::{
-    cli_wrappers::{Database, LineraNet, LineraNetConfig, LocalNetTestingConfig, Network},
+    cli_wrappers::{
+        local_net::{Database, LocalNetTestingConfig},
+        LineraNet, LineraNetConfig, Network,
+    },
     util::resolve_binary,
 };
 use linera_service_graphql_client::{

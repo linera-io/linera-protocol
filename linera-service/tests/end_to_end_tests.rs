@@ -10,8 +10,8 @@ use common::INTEGRATION_TEST_GUARD;
 use linera_base::{data_types::Amount, identifiers::ChainId};
 use linera_service::{
     cli_wrappers::{
-        ClientWrapper, Database, LineraNet, LineraNetConfig, LocalNet, LocalNetConfig,
-        LocalNetTestingConfig, Network,
+        local_net::{Database, LocalNet, LocalNetConfig, LocalNetTestingConfig},
+        ClientWrapper, LineraNet, LineraNetConfig, Network,
     },
     util,
 };

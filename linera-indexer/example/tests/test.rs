@@ -9,7 +9,10 @@ use linera_indexer_graphql_client::{
     operations::{get_operation, GetOperation, OperationKey},
 };
 use linera_service::{
-    cli_wrappers::{Database, LineraNet, LineraNetConfig, LocalNetTestingConfig, Network},
+    cli_wrappers::{
+        local_net::{Database, LocalNetTestingConfig},
+        LineraNet, LineraNetConfig, Network,
+    },
     util::resolve_binary,
 };
 use linera_service_graphql_client::{block, request, transfer, Block, Transfer};
