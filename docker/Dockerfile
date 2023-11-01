@@ -10,8 +10,23 @@
 # takes considerably longer. The default timeout is 1h, which you'll likely hit if you run with
 # the default machine type.
 
+# Build arguments:
+
+# - `environment` is the name of a runtime environment, and used to
+#   select the configuration.  The name of a directory in
+#   `/configuration`.
+# - `target` is a Rust target quadruple.  Currently known to be
+#   supported are `x86_64-unknown-linux-gnu` and
+#   `aarch64-unknown-linux-gnu`.
+
 # Stage 1 - Generate recipe file for dependencies
 FROM lukemathwalker/cargo-chef:latest-rust-slim AS chef
+
+ARG environment=k8s-local
+# Modern Docker provides TARGETPLATFORM and friends, but these do not
+# provide enough information to reconstruct the whole Rust target and
+# switching on them to map to a subset of targets seems unwise
+ARG target=x86_64-unknown-linux-gnu
 
 RUN mkdir -p /opt/linera/build
 WORKDIR /opt/linera/build
@@ -33,10 +48,12 @@ RUN apt-get update && apt-get install -y \
     protobuf-compiler \
     clang
 
-RUN cargo chef cook --release --recipe-path recipe.json --target x86_64-unknown-linux-gnu
+RUN cargo chef cook --release --recipe-path recipe.json --target "$target"
 
 # Stage 3 - Do actual build
 FROM chef as builder
+ARG environment
+ARG target
 
 COPY . .
 
@@ -50,19 +67,22 @@ COPY --from=cacher /opt/linera/build/target target
 COPY --from=cacher /usr/local/cargo /usr/local/cargo
 
 RUN cargo build --release \
-    --target x86_64-unknown-linux-gnu \
+    --target "$target" \
     --bin linera \
     --bin linera-proxy \
     --bin linera-server \
     --bin linera-db \
     --features scylladb \
-    && strip target/x86_64-unknown-linux-gnu/release/linera \
-    && strip target/x86_64-unknown-linux-gnu/release/linera-proxy \
-    && strip target/x86_64-unknown-linux-gnu/release/linera-server \
-    && strip target/x86_64-unknown-linux-gnu/release/linera-db
+    && strip target/"$target"/release/linera \
+    && strip target/"$target"/release/linera-proxy \
+    && strip target/"$target"/release/linera-server \
+    && strip target/"$target"/release/linera-db
 
 # Stage 4 - Setup running environment for container
 FROM debian:latest
+
+ARG environment
+ARG target
 
 WORKDIR /opt/linera
 
@@ -71,13 +91,13 @@ RUN apt-get update && apt-get install -y libssl-dev
 ENV BUILD_PATH=/opt/linera/build
 
 # Copying binaries
-COPY --from=builder $BUILD_PATH/target/x86_64-unknown-linux-gnu/release/linera ./
-COPY --from=builder $BUILD_PATH/target/x86_64-unknown-linux-gnu/release/linera-server ./
-COPY --from=builder $BUILD_PATH/target/x86_64-unknown-linux-gnu/release/linera-proxy ./
-COPY --from=builder $BUILD_PATH/target/x86_64-unknown-linux-gnu/release/linera-db ./
+COPY --from=builder $BUILD_PATH/target/$target/release/linera ./
+COPY --from=builder $BUILD_PATH/target/$target/release/linera-server ./
+COPY --from=builder $BUILD_PATH/target/$target/release/linera-proxy ./
+COPY --from=builder $BUILD_PATH/target/$target/release/linera-db ./
 
 # Copying configuration files
-COPY --from=builder $BUILD_PATH/configuration/prod/validator_1.toml ./
+COPY --from=builder $BUILD_PATH/configuration/$environment/validator_1.toml ./
 
 # Copy entrypoint
 COPY docker/server-entrypoint.sh .
