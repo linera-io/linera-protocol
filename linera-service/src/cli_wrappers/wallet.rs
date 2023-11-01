@@ -1,11 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Helper module to call the binaries of `linera-service` with appropriate command-line
-//! arguments.
-
-use crate::{config::WalletState, util, util::CommandExt};
-use anyhow::{anyhow, bail, Context, Result};
+use crate::{
+    cli_wrappers::Network,
+    config::WalletState,
+    util,
+    util::{ChildExt, CommandExt},
+};
+use anyhow::{bail, Context, Result};
 use async_graphql::InputType;
 use linera_base::{
     abi::ContractAbi,
@@ -15,80 +17,37 @@ use linera_base::{
 };
 use linera_execution::Bytecode;
 use serde::{de::DeserializeOwned, ser::Serialize};
-use serde_json::{json, value::Value};
+use serde_json::{json, Value};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    env, fs,
+    collections::HashMap,
+    env,
     marker::PhantomData,
-    ops::RangeInclusive,
     path::{Path, PathBuf},
-    rc::Rc,
     str::FromStr,
+    sync::Arc,
     time::Duration,
 };
-use tempfile::{tempdir, TempDir};
+use tempfile::TempDir;
 use tokio::process::{Child, Command};
-use tonic_health::proto::{
-    health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
-};
 use tracing::{info, warn};
-
-/// The name of the environment variable that allows specifying additional arguments to be passed
-/// to the binary when starting a server.
-const SERVER_ENV: &str = "LINERA_SERVER_PARAMS";
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
 /// to the node-service command of the client.
 const CLIENT_SERVICE_ENV: &str = "LINERA_CLIENT_SERVICE_PARAMS";
 
-#[derive(Copy, Clone)]
-pub enum Network {
-    Grpc,
-    Simple,
-}
-
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub enum Database {
-    RocksDb,
-    DynamoDb,
-    ScyllaDb,
-}
-
-impl Network {
-    fn internal(&self) -> &'static str {
-        match self {
-            Network::Grpc => "\"Grpc\"",
-            Network::Simple => "{ Simple = \"Tcp\" }",
-        }
-    }
-
-    fn external(&self) -> &'static str {
-        match self {
-            Network::Grpc => "\"Grpc\"",
-            Network::Simple => "{ Simple = \"Tcp\" }",
-        }
-    }
-
-    fn external_short(&self) -> &'static str {
-        match self {
-            Network::Grpc => "grpc",
-            Network::Simple => "tcp",
-        }
-    }
-}
-
+/// Wrapper to run a Linera client command.
 pub struct ClientWrapper {
     testing_prng_seed: Option<u64>,
     storage: String,
     wallet: String,
     max_pending_messages: usize,
     network: Network,
-    pub tmp_dir: Rc<TempDir>,
+    pub tmp_dir: Arc<TempDir>,
 }
 
 impl ClientWrapper {
-    fn new(
-        tmp_dir: Rc<TempDir>,
+    pub fn new(
+        tmp_dir: Arc<TempDir>,
         network: Network,
         testing_prng_seed: Option<u64>,
         id: usize,
@@ -105,6 +64,7 @@ impl ClientWrapper {
         }
     }
 
+    /// Runs `linera project new`.
     pub async fn project_new(&self, project_name: &str, linera_root: &Path) -> Result<TempDir> {
         let tmp = TempDir::new()?;
         let mut command = self.command().await?;
@@ -120,6 +80,7 @@ impl ClientWrapper {
         Ok(tmp)
     }
 
+    /// Runs `linera project publish`.
     pub async fn project_publish<T: Serialize>(
         &self,
         path: PathBuf,
@@ -145,6 +106,7 @@ impl ClientWrapper {
         Ok(stdout.trim().to_string())
     }
 
+    /// Runs `linera project test`.
     pub async fn project_test(&self, path: &Path) -> Result<()> {
         self.command()
             .await
@@ -174,6 +136,7 @@ impl ClientWrapper {
         Ok(command)
     }
 
+    /// Runs `linera create-genesis-config`.
     pub async fn create_genesis_config(&self) -> Result<()> {
         let mut command = self.command().await?;
         command
@@ -188,6 +151,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera wallet init`.
     pub async fn wallet_init(&self, chain_ids: &[ChainId]) -> Result<()> {
         let mut command = self.command().await?;
         command
@@ -204,6 +168,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera wallet publish-and-create`.
     pub async fn publish_and_create<A: ContractAbi>(
         &self,
         contract: PathBuf,
@@ -234,6 +199,7 @@ impl ClientWrapper {
         Ok(stdout.trim().parse::<ApplicationId>()?.with_abi())
     }
 
+    /// Runs `linera publish-bytecode`.
     pub async fn publish_bytecode(
         &self,
         contract: PathBuf,
@@ -251,6 +217,7 @@ impl ClientWrapper {
         Ok(stdout.trim().parse()?)
     }
 
+    /// Runs `linera create-application`.
     pub async fn create_application<A: ContractAbi>(
         &self,
         bytecode_id: &BytecodeId,
@@ -270,6 +237,7 @@ impl ClientWrapper {
         Ok(stdout.trim().parse::<ApplicationId>()?.with_abi())
     }
 
+    /// Runs `linera service`.
     pub async fn run_node_service(&self, port: impl Into<Option<u16>>) -> Result<NodeService> {
         let port = port.into().unwrap_or(8080);
         let mut command = self.command().await?;
@@ -289,7 +257,7 @@ impl ClientWrapper {
                 .await;
             if request.is_ok() {
                 info!("Node service has started");
-                return Ok(NodeService { port, child });
+                return Ok(NodeService::new(port, child));
             } else {
                 warn!("Waiting for node service to start");
             }
@@ -297,6 +265,7 @@ impl ClientWrapper {
         bail!("Failed to start node service");
     }
 
+    /// Runs `linera query-validators`.
     pub async fn query_validators(&self, chain_id: Option<ChainId>) -> Result<()> {
         let mut command = self.command().await?;
         command.arg("query-validators");
@@ -307,6 +276,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera query-balance`.
     pub async fn query_balance(&self, chain_id: ChainId) -> Result<Amount> {
         let stdout = self
             .command()
@@ -322,6 +292,7 @@ impl ClientWrapper {
         Ok(amount)
     }
 
+    /// Runs `linera transfer`.
     pub async fn transfer(&self, amount: Amount, from: ChainId, to: ChainId) -> Result<()> {
         self.command()
             .await?
@@ -334,6 +305,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera benchmark`.
     #[cfg(benchmark)]
     async fn benchmark(&self, max_in_flight: usize) -> Result<()> {
         self.command()
@@ -345,6 +317,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera open-chain`.
     pub async fn open_chain(
         &self,
         from: ChainId,
@@ -367,6 +340,7 @@ impl ClientWrapper {
         Ok((message_id, chain_id))
     }
 
+    /// Runs `linera open-chain` then `linera assign`.
     pub async fn open_and_assign(&self, client: &ClientWrapper) -> Result<ChainId> {
         let our_chain = self
             .get_wallet()?
@@ -451,6 +425,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera keygen`.
     pub async fn keygen(&self) -> Result<PublicKey> {
         let stdout = self
             .command()
@@ -461,10 +436,12 @@ impl ClientWrapper {
         Ok(PublicKey::from_str(stdout.trim())?)
     }
 
+    /// Returns the default chain.
     pub fn default_chain(&self) -> Option<ChainId> {
         self.get_wallet().ok()?.default_chain()
     }
 
+    /// Runs `linera assign`.
     pub async fn assign(&self, key: PublicKey, message_id: MessageId) -> Result<ChainId> {
         let stdout = self
             .command()
@@ -480,6 +457,7 @@ impl ClientWrapper {
         Ok(chain_id)
     }
 
+    /// Runs `linera sync-balance`.
     pub async fn synchronize_balance(&self, chain_id: ChainId) -> Result<Amount> {
         let stdout = self
             .command()
@@ -496,359 +474,8 @@ impl ClientWrapper {
     }
 }
 
-struct Validator {
-    proxy: Child,
-    servers: Vec<Child>,
-}
-
-impl Validator {
-    fn new(proxy: Child) -> Self {
-        Self {
-            proxy,
-            servers: vec![],
-        }
-    }
-
-    fn add_server(&mut self, server: Child) {
-        self.servers.push(server)
-    }
-
-    fn kill_server(&mut self, index: usize) {
-        self.servers.remove(index);
-    }
-
-    fn ensure_is_running(&mut self) -> Result<()> {
-        if let Some(status) = self
-            .proxy
-            .try_wait()
-            .context("failed waiting for proxy process")?
-        {
-            anyhow::ensure!(status.success(), "proxy returned status: {}", status);
-        }
-        for child in &mut self.servers {
-            if let Some(status) = child
-                .try_wait()
-                .context("failed waiting for server process")?
-            {
-                anyhow::ensure!(status.success(), "server returned status: {}", status);
-            }
-        }
-        Ok(())
-    }
-}
-
-pub struct LocalNetwork {
-    database: Database,
-    network: Network,
-    testing_prng_seed: Option<u64>,
-    next_client_id: usize,
-    num_initial_validators: usize,
-    num_shards: usize,
-    local_net: BTreeMap<usize, Validator>,
-    table_name: String,
-    set_init: HashSet<(usize, usize)>,
-    tmp_dir: Rc<TempDir>,
-}
-
-impl Drop for LocalNetwork {
-    fn drop(&mut self) {
-        for validator in self.local_net.values_mut() {
-            if let Err(error) = validator.ensure_is_running() {
-                tracing::error!("validator not running when dropped: {}", error);
-            }
-        }
-    }
-}
-
-impl LocalNetwork {
-    pub fn new(
-        database: Database,
-        network: Network,
-        testing_prng_seed: Option<u64>,
-        table_name: String,
-        num_initial_validators: usize,
-        num_shards: usize,
-    ) -> Result<Self> {
-        Ok(Self {
-            database,
-            network,
-            testing_prng_seed,
-            next_client_id: 0,
-            num_initial_validators,
-            num_shards,
-            local_net: BTreeMap::new(),
-            table_name,
-            set_init: HashSet::new(),
-            tmp_dir: Rc::new(tempdir()?),
-        })
-    }
-
-    pub fn make_client(&mut self, network: Network) -> ClientWrapper {
-        let client = ClientWrapper::new(
-            self.tmp_dir.clone(),
-            network,
-            self.testing_prng_seed,
-            self.next_client_id,
-        );
-        if let Some(seed) = self.testing_prng_seed {
-            self.testing_prng_seed = Some(seed + 1);
-        }
-        self.next_client_id += 1;
-        client
-    }
-
-    async fn command_for_binary(&self, name: &'static str) -> Result<Command> {
-        let path = util::resolve_binary(name, env!("CARGO_PKG_NAME")).await?;
-        let mut command = Command::new(path);
-        command.current_dir(self.tmp_dir.path());
-        Ok(command)
-    }
-
-    fn proxy_port(i: usize) -> usize {
-        9000 + i * 100
-    }
-
-    fn shard_port(i: usize, j: usize) -> usize {
-        9000 + i * 100 + j
-    }
-
-    fn internal_port(i: usize) -> usize {
-        10000 + i * 100
-    }
-
-    fn proxy_metrics_port(i: usize) -> usize {
-        11000 + i * 100
-    }
-
-    fn shard_metrics_port(i: usize, j: usize) -> usize {
-        11000 + i * 100 + j
-    }
-
-    fn configuration_string(&self, server_number: usize) -> Result<String> {
-        let n = server_number;
-        let path = self.tmp_dir.path().join(format!("validator_{n}.toml"));
-        let port = Self::proxy_port(n);
-        let internal_port = Self::internal_port(n);
-        let metrics_port = Self::proxy_metrics_port(n);
-        let external_protocol = self.network.external();
-        let internal_protocol = self.network.internal();
-        let mut content = format!(
-            r#"
-                server_config_path = "server_{n}.json"
-                host = "127.0.0.1"
-                port = {port}
-                internal_host = "127.0.0.1"
-                internal_port = {internal_port}
-                metrics_host = "127.0.0.1"
-                metrics_port = {metrics_port}
-                external_protocol = {external_protocol}
-                internal_protocol = {internal_protocol}
-            "#
-        );
-        for k in 1..=self.num_shards {
-            let shard_port = Self::shard_port(n, k);
-            let shard_metrics_port = Self::shard_metrics_port(n, k);
-            content.push_str(&format!(
-                r#"
-
-                [[shards]]
-                host = "127.0.0.1"
-                port = {shard_port}
-                metrics_host = "127.0.0.1"
-                metrics_port = {shard_metrics_port}
-                "#
-            ));
-        }
-        fs::write(&path, content)?;
-        path.into_os_string().into_string().map_err(|error| {
-            anyhow!(
-                "could not parse string into OS string: {}",
-                error.to_string_lossy()
-            )
-        })
-    }
-
-    pub async fn generate_initial_validator_config(&mut self) -> Result<Vec<String>> {
-        let mut command = self.command_for_binary("linera-server").await?;
-        command.arg("generate");
-        if let Some(seed) = self.testing_prng_seed {
-            command.arg("--testing-prng-seed").arg(seed.to_string());
-            self.testing_prng_seed = Some(seed + 1);
-        }
-        command.arg("--validators");
-        for i in 1..=self.num_initial_validators {
-            command.arg(&self.configuration_string(i)?);
-        }
-        let output = command
-            .args(["--committee", "committee.json"])
-            .spawn_and_wait_for_stdout()
-            .await?;
-        Ok(output.split_whitespace().map(str::to_string).collect())
-    }
-
-    pub async fn generate_validator_config(&self, i: usize) -> Result<String> {
-        let stdout = self
-            .command_for_binary("linera-server")
-            .await?
-            .arg("generate")
-            .arg("--validators")
-            .arg(&self.configuration_string(i)?)
-            .spawn_and_wait_for_stdout()
-            .await?;
-        Ok(stdout.trim().to_string())
-    }
-
-    async fn run_proxy(&self, i: usize) -> Result<Child> {
-        let child = self
-            .command_for_binary("linera-proxy")
-            .await?
-            .arg(format!("server_{}.json", i))
-            .spawn_into()?;
-
-        match self.network {
-            Network::Grpc => {
-                let port = Self::proxy_port(i);
-                let nickname = format!("validator proxy {i}");
-                Self::ensure_grpc_server_has_started(&nickname, port).await?;
-            }
-            Network::Simple => {
-                info!("Letting validator proxy {i} start");
-                tokio::time::sleep(Duration::from_secs(2)).await;
-            }
-        }
-        Ok(child)
-    }
-
-    async fn ensure_grpc_server_has_started(nickname: &str, port: usize) -> Result<()> {
-        let connection = tonic::transport::Endpoint::new(format!("http://127.0.0.1:{port}"))
-            .context("endpoint should always parse")?
-            .connect_lazy();
-        let mut client = HealthClient::new(connection);
-        for i in 0..10 {
-            tokio::time::sleep(Duration::from_secs(i)).await;
-            let result = client.check(HealthCheckRequest::default()).await;
-            if result.is_ok() && result.unwrap().get_ref().status() == ServingStatus::Serving {
-                info!("Successfully started {nickname}");
-                return Ok(());
-            } else {
-                warn!("Waiting for {nickname} to start");
-            }
-        }
-        bail!("Failed to start {nickname}");
-    }
-
-    async fn run_server(&mut self, i: usize, j: usize) -> Result<Child> {
-        let (storage, key) = match self.database {
-            Database::RocksDb => (format!("rocksdb:server_{}_{}.db", i, j), (i, j)),
-            Database::DynamoDb => (
-                format!("dynamodb:{}_server_{}.db:localstack", self.table_name, i),
-                (i, 0),
-            ),
-            Database::ScyllaDb => (
-                format!("scylladb:{}_server_{}_db", self.table_name, i),
-                (i, 0),
-            ),
-        };
-        if !self.set_init.contains(&key) {
-            let max_try = 4;
-            let mut i_try = 0;
-            loop {
-                let mut command = self.command_for_binary("linera-server").await?;
-                command.arg("initialize");
-                if let Ok(var) = env::var(SERVER_ENV) {
-                    command.args(var.split_whitespace());
-                }
-                let result = command
-                    .args(["--storage", &storage])
-                    .args(["--genesis", "genesis.json"])
-                    .spawn_and_wait_for_stdout()
-                    .await;
-                if result.is_ok() {
-                    break;
-                }
-                warn!(
-                    "Failed to initialize storage={} using linera-server, i_try={}, error={:?}",
-                    storage, i_try, result
-                );
-                i_try += 1;
-                if i_try == max_try {
-                    bail!("Failed to initialize after {} attempts", max_try);
-                }
-                let one_second = std::time::Duration::from_millis(1000);
-                std::thread::sleep(one_second);
-            }
-            self.set_init.insert(key);
-        }
-
-        let mut command = self.command_for_binary("linera-server").await?;
-        command.arg("run");
-        if let Ok(var) = env::var(SERVER_ENV) {
-            command.args(var.split_whitespace());
-        }
-        let child = command
-            .args(["--storage", &storage])
-            .args(["--server", &format!("server_{}.json", i)])
-            .args(["--shard", &j.to_string()])
-            .args(["--genesis", "genesis.json"])
-            .spawn_into()?;
-
-        match self.network {
-            Network::Grpc => {
-                let port = Self::shard_port(i, j);
-                let nickname = format!("validator server {i}:{j}");
-                Self::ensure_grpc_server_has_started(&nickname, port).await?;
-            }
-            Network::Simple => {
-                info!("Letting validator server {i}:{j} start");
-                tokio::time::sleep(Duration::from_secs(2)).await;
-            }
-        }
-        Ok(child)
-    }
-
-    pub async fn run(&mut self) -> Result<()> {
-        self.start_validators(1..=self.num_initial_validators).await
-    }
-
-    pub fn net_path(&self) -> &Path {
-        self.tmp_dir.path()
-    }
-
-    pub fn kill_server(&mut self, i: usize, j: usize) -> Result<()> {
-        self.local_net
-            .get_mut(&i)
-            .context("server not found")?
-            .kill_server(j);
-        Ok(())
-    }
-
-    pub fn remove_validator(&mut self, i: usize) -> Result<()> {
-        self.local_net.remove(&i).context("validator not found")?;
-        Ok(())
-    }
-
-    pub async fn start_server(&mut self, i: usize, j: usize) -> Result<()> {
-        let server = self.run_server(i, j).await?;
-        self.local_net
-            .get_mut(&i)
-            .context("could not find server")?
-            .add_server(server);
-        Ok(())
-    }
-
-    pub async fn start_validators(&mut self, validator_range: RangeInclusive<usize>) -> Result<()> {
-        for i in validator_range {
-            let proxy = self.run_proxy(i).await?;
-            let mut validator = Validator::new(proxy);
-            for j in 0..self.num_shards {
-                let server = self.run_server(i, j).await?;
-                validator.add_server(server);
-            }
-            self.local_net.insert(i, validator);
-        }
-        Ok(())
-    }
-
+#[cfg(any(test, feature = "test"))]
+impl ClientWrapper {
     pub async fn build_application(
         &self,
         path: &Path,
@@ -875,28 +502,6 @@ impl LocalNetwork {
 
         Ok((contract, service))
     }
-}
-
-#[cfg(any(test, feature = "test"))]
-impl LocalNetwork {
-    pub fn new_for_testing(database: Database, network: Network) -> Result<Self> {
-        let seed = 37;
-        let table_name = linera_views::test_utils::get_table_name();
-        let num_validators = 4;
-        let num_shards = match database {
-            Database::RocksDb => 1,
-            Database::DynamoDb => 4,
-            Database::ScyllaDb => 4,
-        };
-        Self::new(
-            database,
-            network,
-            Some(seed),
-            table_name,
-            num_validators,
-            num_shards,
-        )
-    }
 
     pub async fn build_example(&self, name: &str) -> Result<(PathBuf, PathBuf)> {
         self.build_application(Self::example_path(name)?.as_path(), name, true)
@@ -908,25 +513,27 @@ impl LocalNetwork {
     }
 }
 
+/// A running node service.
 pub struct NodeService {
     port: u16,
     child: Child,
 }
 
 impl NodeService {
+    fn new(port: u16, child: Child) -> Self {
+        Self { port, child }
+    }
+
+    pub async fn terminate(mut self) -> Result<()> {
+        self.child.kill().await.context("terminating node service")
+    }
+
     pub fn port(&self) -> u16 {
         self.port
     }
 
     pub fn ensure_is_running(&mut self) -> Result<()> {
-        if let Some(status) = self
-            .child
-            .try_wait()
-            .context("failed waiting for child process")?
-        {
-            anyhow::ensure!(status.success(), "child returned status: {}", status);
-        }
-        Ok(())
+        self.child.ensure_is_running()
     }
 
     pub async fn process_inbox(&self, chain_id: &ChainId) -> Result<()> {
@@ -1096,6 +703,7 @@ impl NodeService {
     }
 }
 
+/// A running `Application` to be queried in GraphQL.
 pub struct ApplicationWrapper<A> {
     uri: String,
     _phantom: PhantomData<A>,

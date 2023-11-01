@@ -12,10 +12,12 @@ use linera_base::{
     identifiers::ChainId,
 };
 use linera_service::cli_wrappers::{
-    ApplicationWrapper, ClientWrapper, Database, LocalNetwork, Network,
+    local_net::{Database, LocalNetTestingConfig},
+    ApplicationWrapper, ClientWrapper, LineraNet, LineraNetConfig, Network,
 };
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, time::Duration};
+use test_case::test_case;
 use tracing::{info, warn};
 
 fn get_fungible_account_owner(client: &ClientWrapper) -> fungible::AccountOwner {
@@ -143,40 +145,21 @@ impl AmmApp {
     }
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_wasm_end_to_end_counter() {
-    run_wasm_end_to_end_counter(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_wasm_end_to_end_counter() {
-    run_wasm_end_to_end_counter(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_wasm_end_to_end_counter() {
-    run_wasm_end_to_end_counter(Database::ScyllaDb).await
-}
-
-async fn run_wasm_end_to_end_counter(database: Database) {
+async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) {
     use counter::CounterAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
-    let client = local_net.make_client(network);
+    let (mut net, client) = config.instantiate().await.unwrap();
 
     let original_counter_value = 35;
     let increment = 5;
 
-    local_net.generate_initial_validator_config().await.unwrap();
-    client.create_genesis_config().await.unwrap();
     let chain = client.get_wallet().unwrap().default_chain().unwrap();
-    local_net.run().await.unwrap();
-    let (contract, service) = local_net.build_example("counter").await.unwrap();
+    let (contract, service) = client.build_example("counter").await.unwrap();
 
     let application_id = client
         .publish_and_create::<CounterAbi>(
@@ -206,43 +189,27 @@ async fn run_wasm_end_to_end_counter(database: Database) {
     assert_eq!(counter_value, original_counter_value + increment);
 
     node_service.ensure_is_running().unwrap();
+
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_wasm_end_to_end_counter_publish_create() {
-    run_wasm_end_to_end_counter_publish_create(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_wasm_end_to_end_counter_publish_create() {
-    run_wasm_end_to_end_counter_publish_create(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_wasm_end_to_end_counter_publish_create() {
-    run_wasm_end_to_end_counter_publish_create(Database::ScyllaDb).await
-}
-
-async fn run_wasm_end_to_end_counter_publish_create(database: Database) {
+async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfig) {
     use counter::CounterAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
-    let client = local_net.make_client(network);
+    let (mut net, client) = config.instantiate().await.unwrap();
 
     let original_counter_value = 35;
     let increment = 5;
 
-    local_net.generate_initial_validator_config().await.unwrap();
-    client.create_genesis_config().await.unwrap();
     let chain = client.get_wallet().unwrap().default_chain().unwrap();
-    local_net.run().await.unwrap();
-    let (contract, service) = local_net.build_example("counter").await.unwrap();
+    let (contract, service) = client.build_example("counter").await.unwrap();
 
     let bytecode_id = client
         .publish_bytecode(contract, service, None)
@@ -269,46 +236,27 @@ async fn run_wasm_end_to_end_counter_publish_create(database: Database) {
     assert_eq!(counter_value, original_counter_value + increment);
 
     node_service.ensure_is_running().unwrap();
+
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_wasm_end_to_end_social_user_pub_sub() {
-    run_wasm_end_to_end_social_user_pub_sub(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_wasm_end_to_end_social_user_pub_sub() {
-    run_wasm_end_to_end_social_user_pub_sub(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_wasm_end_to_end_social_user_pub_sub() {
-    run_wasm_end_to_end_social_user_pub_sub(Database::ScyllaDb).await
-}
-
-async fn run_wasm_end_to_end_social_user_pub_sub(database: Database) {
+async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) {
     use social::SocialAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
-    let client1 = local_net.make_client(network);
-    let client2 = local_net.make_client(network);
+    let (mut net, client1) = config.instantiate().await.unwrap();
 
-    // Create initial server and client config.
-    local_net.generate_initial_validator_config().await.unwrap();
-    client1.create_genesis_config().await.unwrap();
+    let client2 = net.make_client();
     client2.wallet_init(&[]).await.unwrap();
-
-    // Start local network.
-    local_net.run().await.unwrap();
-    let (contract, service) = local_net.build_example("social").await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await.unwrap();
+    let (contract, service) = client1.build_example("social").await.unwrap();
     let bytecode_id = client1
         .publish_bytecode(contract, service, None)
         .await
@@ -374,43 +322,24 @@ async fn run_wasm_end_to_end_social_user_pub_sub(database: Database) {
 
     node_service1.ensure_is_running().unwrap();
     node_service2.ensure_is_running().unwrap();
+
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_wasm_end_to_end_fungible() {
-    run_wasm_end_to_end_fungible(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_wasm_end_to_end_fungible() {
-    run_wasm_end_to_end_fungible(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_wasm_end_to_end_fungible() {
-    run_wasm_end_to_end_fungible(Database::ScyllaDb).await
-}
-
-async fn run_wasm_end_to_end_fungible(database: Database) {
+async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
     use fungible::{FungibleTokenAbi, InitialState};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
-    let client1 = local_net.make_client(network);
-    let client2 = local_net.make_client(network);
+    let (mut net, client1) = config.instantiate().await.unwrap();
 
-    local_net.generate_initial_validator_config().await.unwrap();
-    client1.create_genesis_config().await.unwrap();
+    let client2 = net.make_client();
     client2.wallet_init(&[]).await.unwrap();
-
-    // Create initial server and client config.
-    local_net.run().await.unwrap();
-    let (contract, service) = local_net.build_example("fungible").await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await.unwrap();
@@ -425,6 +354,7 @@ async fn run_wasm_end_to_end_fungible(database: Database) {
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
+    let (contract, service) = client1.build_example("fungible").await.unwrap();
     let application_id = client1
         .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, &[], None)
         .await
@@ -509,41 +439,20 @@ async fn run_wasm_end_to_end_fungible(database: Database) {
 
     node_service1.ensure_is_running().unwrap();
     node_service2.ensure_is_running().unwrap();
+
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_wasm_end_to_end_same_wallet_fungible() {
-    run_wasm_end_to_end_same_wallet_fungible(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_wasm_end_to_end_same_wallet_fungible() {
-    run_wasm_end_to_end_same_wallet_fungible(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_wasm_end_to_end_same_wallet_fungible() {
-    run_wasm_end_to_end_same_wallet_fungible(Database::ScyllaDb).await
-}
-
-async fn run_wasm_end_to_end_same_wallet_fungible(database: Database) {
+async fn test_wasm_end_to_end_same_wallet_fungible(config: impl LineraNetConfig) {
     use fungible::{FungibleTokenAbi, InitialState};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
-    let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
-    let client1 = local_net.make_client(network);
-
-    local_net.generate_initial_validator_config().await.unwrap();
-    client1.create_genesis_config().await.unwrap();
-
-    // Create initial server and client config.
-    local_net.run().await.unwrap();
-    let (contract, service) = local_net.build_example("fungible").await.unwrap();
+    let (mut net, client1) = config.instantiate().await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = ChainId::root(2);
@@ -563,6 +472,7 @@ async fn run_wasm_end_to_end_same_wallet_fungible(database: Database) {
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
+    let (contract, service) = client1.build_example("fungible").await.unwrap();
     let application_id = client1
         .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, &[], None)
         .await
@@ -609,44 +519,25 @@ async fn run_wasm_end_to_end_same_wallet_fungible(database: Database) {
     app2.assert_balances([(account_owner2, Amount::ONE)]).await;
 
     node_service.ensure_is_running().unwrap();
+
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_wasm_end_to_end_crowd_funding() {
-    run_wasm_end_to_end_crowd_funding(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_wasm_end_to_end_crowd_funding() {
-    run_wasm_end_to_end_crowd_funding(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_wasm_end_to_end_crowd_funding() {
-    run_wasm_end_to_end_crowd_funding(Database::ScyllaDb).await
-}
-
-async fn run_wasm_end_to_end_crowd_funding(database: Database) {
+async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
     use crowd_funding::{CrowdFundingAbi, InitializationArgument};
     use fungible::{FungibleTokenAbi, InitialState};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
-    let client1 = local_net.make_client(network);
-    let client2 = local_net.make_client(network);
+    let (mut net, client1) = config.instantiate().await.unwrap();
 
-    local_net.generate_initial_validator_config().await.unwrap();
-    client1.create_genesis_config().await.unwrap();
+    let client2 = net.make_client();
     client2.wallet_init(&[]).await.unwrap();
-
-    // Create initial server and client config.
-    local_net.run().await.unwrap();
-    let (contract_fungible, service_fungible) = local_net.build_example("fungible").await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await.unwrap();
@@ -660,6 +551,7 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
     let state_fungible = InitialState { accounts };
 
     // Setting up the application fungible
+    let (contract_fungible, service_fungible) = client1.build_example("fungible").await.unwrap();
     let application_id_fungible = client1
         .publish_and_create::<FungibleTokenAbi>(
             contract_fungible,
@@ -680,7 +572,7 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
         deadline,
         target,
     };
-    let (contract_crowd, service_crowd) = local_net.build_example("crowd-funding").await.unwrap();
+    let (contract_crowd, service_crowd) = client1.build_example("crowd-funding").await.unwrap();
     let application_id_crowd = client1
         .publish_and_create::<CrowdFundingAbi>(
             contract_crowd,
@@ -753,48 +645,36 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
 
     node_service1.ensure_is_running().unwrap();
     node_service2.ensure_is_running().unwrap();
+
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_wasm_end_to_end_matching_engine() {
-    run_wasm_end_to_end_matching_engine(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_wasm_end_to_end_matching_engine() {
-    run_wasm_end_to_end_matching_engine(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_wasm_end_to_end_matching_engine() {
-    run_wasm_end_to_end_matching_engine(Database::ScyllaDb).await
-}
-
-async fn run_wasm_end_to_end_matching_engine(database: Database) {
+async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     use fungible::{FungibleTokenAbi, InitialState};
     use matching_engine::{MatchingEngineAbi, OrderNature, Parameters, Price};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
-    let client_admin = local_net.make_client(network);
-    let client_a = local_net.make_client(network);
-    let client_b = local_net.make_client(network);
+    let (mut net, client_admin) = config.instantiate().await.unwrap();
 
-    local_net.generate_initial_validator_config().await.unwrap();
-    client_admin.create_genesis_config().await.unwrap();
+    let client_a = net.make_client();
+    let client_b = net.make_client();
+
     client_a.wallet_init(&[]).await.unwrap();
     client_b.wallet_init(&[]).await.unwrap();
 
     // Create initial server and client config.
-    local_net.run().await.unwrap();
-    let (contract_fungible, service_fungible) = local_net.build_example("fungible").await.unwrap();
+    let (contract_fungible_a, service_fungible_a) =
+        client_a.build_example("fungible").await.unwrap();
+    let (contract_fungible_b, service_fungible_b) =
+        client_b.build_example("fungible").await.unwrap();
     let (contract_matching, service_matching) =
-        local_net.build_example("matching-engine").await.unwrap();
+        client_admin.build_example("matching-engine").await.unwrap();
 
     let chain_admin = client_admin.get_wallet().unwrap().default_chain().unwrap();
     let chain_a = client_admin.open_and_assign(&client_a).await.unwrap();
@@ -817,8 +697,8 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
     // Setting up the application fungible on chain_a and chain_b
     let token0 = client_a
         .publish_and_create::<FungibleTokenAbi>(
-            contract_fungible.clone(),
-            service_fungible.clone(),
+            contract_fungible_a,
+            service_fungible_a,
             &(),
             &state_fungible0,
             &[],
@@ -828,8 +708,8 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
         .unwrap();
     let token1 = client_b
         .publish_and_create::<FungibleTokenAbi>(
-            contract_fungible,
-            service_fungible,
+            contract_fungible_b,
+            service_fungible_b,
             &(),
             &state_fungible1,
             &[],
@@ -1029,45 +909,30 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
     node_service_admin.ensure_is_running().unwrap();
     node_service_a.ensure_is_running().unwrap();
     node_service_b.ensure_is_running().unwrap();
+
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_wasm_end_to_end_amm() {
-    run_wasm_end_to_end_amm(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_wasm_end_to_end_amm() {
-    run_wasm_end_to_end_amm(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_wasm_end_to_end_amm() {
-    run_wasm_end_to_end_amm(Database::ScyllaDb).await
-}
-
-async fn run_wasm_end_to_end_amm(database: Database) {
+async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     use amm::{AmmAbi, Parameters};
     use fungible::{FungibleTokenAbi, InitialState};
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
-    let client_admin = local_net.make_client(network);
-    let client0 = local_net.make_client(network);
-    let client1 = local_net.make_client(network);
+    let (mut net, client_admin) = config.instantiate().await.unwrap();
 
-    local_net.generate_initial_validator_config().await.unwrap();
-    client_admin.create_genesis_config().await.unwrap();
+    let client0 = net.make_client();
+    let client1 = net.make_client();
     client0.wallet_init(&[]).await.unwrap();
     client1.wallet_init(&[]).await.unwrap();
 
-    local_net.run().await.unwrap();
-    let (contract_fungible, service_fungible) = local_net.build_example("fungible").await.unwrap();
-    let (contract_amm, service_amm) = local_net.build_example("amm").await.unwrap();
+    let (contract_fungible, service_fungible) =
+        client_admin.build_example("fungible").await.unwrap();
+    let (contract_amm, service_amm) = client_admin.build_example("amm").await.unwrap();
 
     // Admin chain
     let chain_admin = client_admin.get_wallet().unwrap().default_chain().unwrap();
@@ -1364,4 +1229,7 @@ async fn run_wasm_end_to_end_amm(database: Database) {
     node_service_admin.ensure_is_running().unwrap();
     node_service0.ensure_is_running().unwrap();
     node_service1.ensure_is_running().unwrap();
+
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }

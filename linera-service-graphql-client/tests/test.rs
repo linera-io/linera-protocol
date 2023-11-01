@@ -6,7 +6,10 @@
 use fungible::{FungibleTokenAbi, InitialState};
 use linera_base::{data_types::Amount, identifiers::ChainId};
 use linera_service::{
-    cli_wrappers::{Database, LocalNetwork, Network},
+    cli_wrappers::{
+        local_net::{Database, LocalNetTestingConfig},
+        LineraNet, LineraNetConfig, Network,
+    },
     util::resolve_binary,
 };
 use linera_service_graphql_client::{
@@ -16,6 +19,7 @@ use linera_service_graphql_client::{
 use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, io::Read, rc::Rc, str::FromStr};
 use tempfile::tempdir;
+use test_case::test_case;
 use tokio::{process::Command, sync::Mutex};
 
 /// A static lock to prevent integration tests from running in parallel.
@@ -32,33 +36,14 @@ async fn transfer(client: &reqwest::Client, url: &str, from: ChainId, to: ChainI
         .unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_end_to_end_queries() {
-    run_end_to_end_queries(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_end_to_end_queries() {
-    run_end_to_end_queries(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_end_to_end_queries() {
-    run_end_to_end_queries(Database::ScyllaDb).await
-}
-
-async fn run_end_to_end_queries(database: Database) {
+async fn test_end_to_end_queries(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
-    let client = local_net.make_client(network);
-    local_net.generate_initial_validator_config().await.unwrap();
 
-    client.create_genesis_config().await.unwrap();
-    local_net.run().await.unwrap();
+    let (net, client) = config.instantiate().await.unwrap();
 
     let node_chains = {
         let wallet = client.get_wallet().unwrap();
@@ -67,7 +52,7 @@ async fn run_end_to_end_queries(database: Database) {
     let chain_id = node_chains.0.unwrap();
 
     // publishing an application
-    let (contract, service) = local_net.build_example("fungible").await.unwrap();
+    let (contract, service) = client.build_example("fungible").await.unwrap();
     let state = InitialState {
         accounts: BTreeMap::new(),
     };
@@ -136,6 +121,7 @@ async fn run_end_to_end_queries(database: Database) {
     .block;
 
     node_service.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
 #[test_log::test(tokio::test)]

@@ -114,7 +114,7 @@ APP_ID_0=$(linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0" \
            --json-argument '{ "accounts": { "User:'$OWNER_0'": "100", "User:'$OWNER_1'": "200" } }')
 
 # Wait for it to fully complete
-sleep 2
+sleep 4
 ```
 
 We will remember the application ID for the newly created token as `$APP_ID_0`.

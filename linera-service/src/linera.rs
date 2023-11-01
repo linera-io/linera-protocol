@@ -31,7 +31,10 @@ use linera_execution::{
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
     chain_listener::{self, ChainListenerConfig},
-    cli_wrappers::{Database, LocalNetwork, Network},
+    cli_wrappers::{
+        local_net::{Database, LocalNetConfig},
+        LineraNet, LineraNetConfig, Network,
+    },
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     node_service::NodeService,
     project::{self, Project},
@@ -1919,35 +1922,25 @@ async fn main() -> Result<(), anyhow::Error> {
                 if *shards < 1 {
                     panic!("The local test network must have at least one shard per validator.");
                 }
-                let network = Network::Grpc;
-                let mut net = LocalNetwork::new(
-                    Database::RocksDb,
-                    network,
-                    *testing_prng_seed,
-                    table_name.to_string(),
-                    *validators,
-                    *shards,
-                )?;
-                let client1 = net.make_client(network);
+                let config = LocalNetConfig {
+                    network: Network::Grpc,
+                    database: Database::RocksDb,
+                    testing_prng_seed: *testing_prng_seed,
+                    table_name: table_name.to_string(),
+                    num_initial_validators: *validators,
+                    num_shards: *shards,
+                };
+                let (mut net, client1) = config.instantiate().await?;
 
-                // Create the initial server and client config.
-                net.generate_initial_validator_config().await?;
-                client1.create_genesis_config().await?;
                 let default_chain = client1
                     .default_chain()
                     .expect("Initialized clients should always have a default chain");
-
-                // Start the validators.
-                net.run().await?;
 
                 // Make time to (hopefully) display the message after the tracing logs.
                 tokio::time::sleep(Duration::from_secs(1)).await;
 
                 // Create the wallet for the initial "root" chains.
-                eprintln!(
-                    "\nA local test network was started using the following temporary directory:\n{}\n",
-                    net.net_path().display()
-                );
+                info!("Local test network successfully started.");
                 let suffix = if let Some(extra_wallets) = *extra_wallets {
                     eprintln!(
                         "To use the initial wallet and the extra wallets of this test \
@@ -1982,7 +1975,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 // Create the extra wallets.
                 if let Some(extra_wallets) = *extra_wallets {
                     for wallet in 1..=extra_wallets {
-                        let extra_wallet = net.make_client(network);
+                        let extra_wallet = net.make_client();
                         extra_wallet.wallet_init(&[]).await?;
                         let unassigned_key = extra_wallet.keygen().await?;
                         let new_chain_msg_id = client1
@@ -2014,10 +2007,16 @@ async fn main() -> Result<(), anyhow::Error> {
                 eprintln!("\nREADY!\nPress ^C to terminate the local test network and clean the temporary directory.");
                 let mut sigint = unix::signal(unix::SignalKind::interrupt())?;
                 let mut sigterm = unix::signal(unix::SignalKind::terminate())?;
+                let mut sigpipe = unix::signal(unix::SignalKind::pipe())?;
+                let mut sighup = unix::signal(unix::SignalKind::hangup())?;
                 tokio::select! {
                     _ = sigint.recv() => (),
                     _ = sigterm.recv() => (),
+                    _ = sigpipe.recv() => (),
+                    _ = sighup.recv() => (),
                 }
+                eprintln!("\nTerminating the local test network...");
+                net.terminate().await?;
                 eprintln!("\nDone.");
                 Ok(())
             }

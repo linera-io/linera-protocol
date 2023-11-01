@@ -9,13 +9,17 @@ use linera_indexer_graphql_client::{
     operations::{get_operation, GetOperation, OperationKey},
 };
 use linera_service::{
-    cli_wrappers::{Database, LocalNetwork, Network},
+    cli_wrappers::{
+        local_net::{Database, LocalNetTestingConfig},
+        LineraNet, LineraNetConfig, Network,
+    },
     util::resolve_binary,
 };
 use linera_service_graphql_client::{block, request, transfer, Block, Transfer};
 use once_cell::sync::Lazy;
-use std::{rc::Rc, str::FromStr, time::Duration};
+use std::{str::FromStr, sync::Arc, time::Duration};
 use tempfile::TempDir;
+use test_case::test_case;
 use tokio::{
     process::{Child, Command},
     sync::Mutex,
@@ -25,7 +29,7 @@ use tracing::{info, warn};
 /// A static lock to prevent integration tests from running in parallel.
 static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
-async fn run_indexer(tmp_dir: &Rc<TempDir>) -> Child {
+async fn run_indexer(tmp_dir: &Arc<TempDir>) -> Child {
     let port = 8081;
     let path = resolve_binary("linera-indexer", "linera-indexer-example")
         .await
@@ -76,33 +80,15 @@ const TRANSFER_DELAY_MILLIS: u64 = 1000;
 #[cfg(not(debug_assertions))]
 const TRANSFER_DELAY_MILLIS: u64 = 100;
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_end_to_end_operations_indexer() {
-    run_end_to_end_operations_indexer(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_end_to_end_operations_indexer() {
-    run_end_to_end_operations_indexer(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_end_to_end_operations_indexer() {
-    run_end_to_end_operations_indexer(Database::ScyllaDb).await
-}
-
-async fn run_end_to_end_operations_indexer(database: Database) {
+async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
     // launching network, service and indexer
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
-    let client = local_net.make_client(network);
-    local_net.generate_initial_validator_config().await.unwrap();
-    client.create_genesis_config().await.unwrap();
-    local_net.run().await.unwrap();
+
+    let (net, client) = config.instantiate().await.unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
     let mut indexer = run_indexer(&client.tmp_dir).await;
 
@@ -193,4 +179,5 @@ async fn run_end_to_end_operations_indexer(database: Database) {
 
     indexer_running(&mut indexer);
     node_service.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }

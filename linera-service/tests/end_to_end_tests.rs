@@ -9,11 +9,15 @@ mod common;
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::{data_types::Amount, identifiers::ChainId};
 use linera_service::{
-    cli_wrappers::{Database, LocalNetwork, Network},
+    cli_wrappers::{
+        local_net::{Database, LocalNet, LocalNetConfig, LocalNetTestingConfig},
+        ClientWrapper, LineraNet, LineraNetConfig, Network,
+    },
     util,
 };
 use linera_views::test_utils::get_table_name;
-use std::{path::PathBuf, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
+use test_case::test_case;
 
 #[tokio::test]
 async fn test_resolve_binary() {
@@ -30,53 +34,20 @@ async fn test_resolve_binary() {
     );
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Simple) ; "rocksdb_simple"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Simple) ; "scylladb_simple"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Simple) ; "aws_simple"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_end_to_end_reconfiguration_grpc() {
-    run_end_to_end_reconfiguration(Database::RocksDb, Network::Grpc).await;
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_end_to_end_reconfiguration_grpc() {
-    run_end_to_end_reconfiguration(Database::DynamoDb, Network::Grpc).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_end_to_end_reconfiguration_grpc() {
-    run_end_to_end_reconfiguration(Database::ScyllaDb, Network::Grpc).await;
-}
-
-#[cfg(feature = "rocksdb")]
-#[test_log::test(tokio::test)]
-async fn test_rocks_db_end_to_end_reconfiguration_simple() {
-    run_end_to_end_reconfiguration(Database::RocksDb, Network::Simple).await;
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_end_to_end_reconfiguration_simple() {
-    run_end_to_end_reconfiguration(Database::DynamoDb, Network::Simple).await;
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_end_to_end_reconfiguration_simple() {
-    run_end_to_end_reconfiguration(Database::ScyllaDb, Network::Simple).await;
-}
-
-async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
+async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
-    let client = local_net.make_client(network);
-    let client_2 = local_net.make_client(network);
+    let network = config.network;
+    let (mut net, client) = config.instantiate().await.unwrap();
 
-    let servers = local_net.generate_initial_validator_config().await.unwrap();
-    client.create_genesis_config().await.unwrap();
+    let client_2 = net.make_client();
     client_2.wallet_init(&[]).await.unwrap();
-    local_net.run().await.unwrap();
-
     let chain_1 = client.get_wallet().unwrap().default_chain().unwrap();
 
     let (node_service_2, chain_2) = match network {
@@ -112,9 +83,9 @@ async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
         .await
         .unwrap();
 
-    // Restart first shard (dropping it kills the process)
-    local_net.kill_server(4, 0).unwrap();
-    local_net.start_server(4, 0).await.unwrap();
+    // Restart the first shard for the 4th validator.
+    net.terminate_server(3, 0).await.unwrap();
+    net.start_server(3, 0).await.unwrap();
 
     // Query balances again
     assert_eq!(
@@ -139,32 +110,43 @@ async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
     assert!(client.is_chain_present_in_wallet(chain_3).await);
 
     // Create configurations for two more validators
-    let server_5 = local_net.generate_validator_config(5).await.unwrap();
-    let server_6 = local_net.generate_validator_config(6).await.unwrap();
+    net.generate_validator_config(4).await.unwrap();
+    net.generate_validator_config(5).await.unwrap();
 
     // Start the validators
-    local_net.start_validators(5..=6).await.unwrap();
+    net.start_validator(4).await.unwrap();
+    net.start_validator(5).await.unwrap();
 
-    // Add validator 5
-    client.set_validator(&server_5, 9500, 100).await.unwrap();
-
-    client.query_validators(None).await.unwrap();
-    client.query_validators(Some(chain_1)).await.unwrap();
-
-    // Add validator 6
-    client.set_validator(&server_6, 9600, 100).await.unwrap();
-
-    // Remove validator 5
-    client.remove_validator(&server_5).await.unwrap();
-    local_net.remove_validator(5).unwrap();
+    // Add 5th validator
+    client
+        .set_validator(net.validator_name(4).unwrap(), LocalNet::proxy_port(4), 100)
+        .await
+        .unwrap();
 
     client.query_validators(None).await.unwrap();
     client.query_validators(Some(chain_1)).await.unwrap();
 
-    // Remove validators 1, 2, 3 and 4, so only 6 remains.
-    for (i, server) in servers.into_iter().enumerate() {
-        client.remove_validator(&server).await.unwrap();
-        local_net.remove_validator(i + 1).unwrap();
+    // Add 6th validator
+    client
+        .set_validator(net.validator_name(5).unwrap(), LocalNet::proxy_port(5), 100)
+        .await
+        .unwrap();
+
+    // Remove 5th validator
+    client
+        .remove_validator(net.validator_name(4).unwrap())
+        .await
+        .unwrap();
+    net.remove_validator(4).unwrap();
+
+    client.query_validators(None).await.unwrap();
+    client.query_validators(Some(chain_1)).await.unwrap();
+
+    // Remove the first 4 validators, so only the last one remains.
+    for i in 0..4 {
+        let name = net.validator_name(i).unwrap();
+        client.remove_validator(name).await.unwrap();
+        net.remove_validator(i).unwrap();
     }
 
     client
@@ -193,34 +175,18 @@ async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
         }
         panic!("Failed to receive new block");
     }
+
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_open_chain_node_service() {
-    run_open_chain_node_service(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_open_chain_node_service() {
-    run_open_chain_node_service(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_open_chain_node_service() {
-    run_open_chain_node_service(Database::ScyllaDb).await
-}
-
-async fn run_open_chain_node_service(database: Database) {
+async fn test_open_chain_node_service(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
-    let client = local_net.make_client(network);
-    local_net.generate_initial_validator_config().await.unwrap();
-    client.create_genesis_config().await.unwrap();
-    local_net.run().await.unwrap();
+    let (mut net, client) = config.instantiate().await.unwrap();
 
     let default_chain = client.get_wallet().unwrap().default_chain().unwrap();
     let public_key = client
@@ -297,47 +263,27 @@ async fn run_open_chain_node_service(database: Database) {
         if response1["chain"]["executionState"]["system"]["balance"].as_str() == Some("6.")
             && response2["chain"]["executionState"]["system"]["balance"].as_str() == Some("4.")
         {
+            net.ensure_is_running().unwrap();
+            net.terminate().await.unwrap();
             return;
         }
     }
     panic!("Failed to receive new block");
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_end_to_end_retry_notification_stream() {
-    run_end_to_end_retry_notification_stream(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_end_to_end_retry_notification_stream() {
-    run_end_to_end_retry_notification_stream(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_end_to_end_retry_notification_stream() {
-    run_end_to_end_retry_notification_stream(Database::ScyllaDb).await
-}
-
-async fn run_end_to_end_retry_notification_stream(database: Database) {
+async fn test_end_to_end_retry_notification_stream(config: LocalNetTestingConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
-    let client1 = local_net.make_client(network);
-    let client2 = local_net.make_client(network);
+    let (mut net, client1) = config.instantiate().await.unwrap();
 
-    // Create initial server and client config.
-    local_net.generate_initial_validator_config().await.unwrap();
-    client1.create_genesis_config().await.unwrap();
+    let client2 = net.make_client();
     let chain = ChainId::root(0);
     let mut height = 0;
     client2.wallet_init(&[chain]).await.unwrap();
-
-    // Start local network.
-    local_net.run().await.unwrap();
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
     let mut node_service2 = client2.run_node_service(8081).await.unwrap();
@@ -352,9 +298,9 @@ async fn run_end_to_end_retry_notification_stream(database: Database) {
         Some(height)
     );
 
-    // Oh no! The validator has an outage and gets restarted!
-    local_net.remove_validator(1).unwrap();
-    local_net.start_validators(1..=1).await.unwrap();
+    // Oh no! The first validator has an outage and gets restarted!
+    net.remove_validator(0).unwrap();
+    net.start_validator(0).await.unwrap();
 
     // The node service should try to reconnect.
     'success: {
@@ -380,193 +326,125 @@ async fn run_end_to_end_retry_notification_stream(database: Database) {
     }
 
     node_service2.ensure_is_running().unwrap();
+
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_end_to_end_multiple_wallets() {
-    run_end_to_end_multiple_wallets(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_end_to_end_multiple_wallets() {
-    run_end_to_end_multiple_wallets(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_end_to_end_multiple_wallets() {
-    run_end_to_end_multiple_wallets(Database::ScyllaDb).await
-}
-
-async fn run_end_to_end_multiple_wallets(database: Database) {
+async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    // Create local_net and two clients.
-    let mut local_net = LocalNetwork::new_for_testing(database, Network::Grpc).unwrap();
-    let client_1 = local_net.make_client(Network::Grpc);
-    let client_2 = local_net.make_client(Network::Grpc);
+    // Create net and two clients.
+    let (mut net, client1) = config.instantiate().await.unwrap();
 
-    // Create initial server and client config.
-    local_net.generate_initial_validator_config().await.unwrap();
-    client_1.create_genesis_config().await.unwrap();
-    client_2.wallet_init(&[]).await.unwrap();
-
-    // Start local network.
-    local_net.run().await.unwrap();
+    let client2 = net.make_client();
+    client2.wallet_init(&[]).await.unwrap();
 
     // Get some chain owned by Client 1.
-    let chain_1 = *client_1.get_wallet().unwrap().chain_ids().first().unwrap();
+    let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
 
     // Generate a key for Client 2.
-    let client_2_key = client_2.keygen().await.unwrap();
+    let client2_key = client2.keygen().await.unwrap();
 
     // Open chain on behalf of Client 2.
-    let (message_id, chain_2) = client_1
-        .open_chain(chain_1, Some(client_2_key))
-        .await
-        .unwrap();
+    let (message_id, chain2) = client1.open_chain(chain1, Some(client2_key)).await.unwrap();
 
-    // Assign chain_2 to client_2_key.
+    // Assign chain2 to client2_key.
     assert_eq!(
-        chain_2,
-        client_2.assign(client_2_key, message_id).await.unwrap()
+        chain2,
+        client2.assign(client2_key, message_id).await.unwrap()
     );
 
     // Check initial balance of Chain 1.
     assert_eq!(
-        client_1.query_balance(chain_1).await.unwrap(),
+        client1.query_balance(chain1).await.unwrap(),
         Amount::from_tokens(10)
     );
 
     // Transfer 5 units from Chain 1 to Chain 2.
-    client_1
-        .transfer(Amount::from_tokens(5), chain_1, chain_2)
+    client1
+        .transfer(Amount::from_tokens(5), chain1, chain2)
         .await
         .unwrap();
-    client_2.synchronize_balance(chain_2).await.unwrap();
+    client2.synchronize_balance(chain2).await.unwrap();
 
     assert_eq!(
-        client_1.query_balance(chain_1).await.unwrap(),
+        client1.query_balance(chain1).await.unwrap(),
         Amount::from_tokens(5)
     );
     assert_eq!(
-        client_2.query_balance(chain_2).await.unwrap(),
+        client2.query_balance(chain2).await.unwrap(),
         Amount::from_tokens(5)
     );
 
     // Transfer 2 units from Chain 2 to Chain 1.
-    client_2
-        .transfer(Amount::from_tokens(2), chain_2, chain_1)
+    client2
+        .transfer(Amount::from_tokens(2), chain2, chain1)
         .await
         .unwrap();
-    client_1.synchronize_balance(chain_1).await.unwrap();
+    client1.synchronize_balance(chain1).await.unwrap();
 
     assert_eq!(
-        client_1.query_balance(chain_1).await.unwrap(),
+        client1.query_balance(chain1).await.unwrap(),
         Amount::from_tokens(7)
     );
     assert_eq!(
-        client_2.query_balance(chain_2).await.unwrap(),
+        client2.query_balance(chain2).await.unwrap(),
         Amount::from_tokens(3)
     );
+
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_project_new() {
-    run_project_new(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_project_new() {
-    run_project_new(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_project_new() {
-    run_project_new(Database::ScyllaDb).await
-}
-
-async fn run_project_new(database: Database) {
-    let network = Network::Grpc;
-    let table_name = get_table_name();
-    let mut local_net = LocalNetwork::new(database, network, None, table_name, 0, 0).unwrap();
-    let client = local_net.make_client(network);
-
+async fn test_project_new() {
+    let tmp_dir = Arc::new(tempfile::tempdir().unwrap());
+    let client = ClientWrapper::new(tmp_dir, Network::Grpc, None, 0);
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
         .parent()
         .expect("CARGO_MANIFEST_DIR should not be at the root");
     let tmp_dir = client.project_new("init-test", linera_root).await.unwrap();
     let project_dir = tmp_dir.path().join("init-test");
-    local_net
+    client
         .build_application(project_dir.as_path(), "init-test", false)
         .await
         .unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_project_test() {
-    run_project_test(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_project_test() {
-    run_project_test(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_project_test() {
-    run_project_test(Database::ScyllaDb).await
-}
-
-async fn run_project_test(database: Database) {
-    let network = Network::Grpc;
-    let table_name = get_table_name();
-    let mut local_net = LocalNetwork::new(database, network, None, table_name, 0, 0).unwrap();
-    let client = local_net.make_client(network);
+async fn test_project_test() {
+    let tmp_dir = Arc::new(tempfile::tempdir().unwrap());
+    let client = ClientWrapper::new(tmp_dir, Network::Grpc, None, 0);
     client
-        .project_test(&LocalNetwork::example_path("counter").unwrap())
+        .project_test(&ClientWrapper::example_path("counter").unwrap())
         .await
         .unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_project_publish() {
-    run_project_publish(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_project_publish() {
-    run_project_publish(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_project_publish() {
-    run_project_publish(Database::ScyllaDb).await
-}
-
-async fn run_project_publish(database: Database) {
+async fn test_project_publish(database: Database, network: Network) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
     let table_name = get_table_name();
-    let mut local_net = LocalNetwork::new(database, network, Some(37), table_name, 1, 1).unwrap();
-    let client = local_net.make_client(network);
+    let config = LocalNetConfig {
+        database,
+        network,
+        testing_prng_seed: Some(37),
+        table_name,
+        num_initial_validators: 1,
+        num_shards: 1,
+    };
 
-    local_net.generate_initial_validator_config().await.unwrap();
-    client.create_genesis_config().await.unwrap();
-    local_net.run().await.unwrap();
+    let (mut net, client) = config.instantiate().await.unwrap();
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
@@ -590,7 +468,10 @@ async fn run_project_publish(database: Database) {
             .unwrap()
             .len(),
         1
-    )
+    );
+
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
 #[test_log::test(tokio::test)]
@@ -643,37 +524,25 @@ async fn test_linera_net_up_simple() {
     panic!("Unexpected EOF for stderr");
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(Database::RocksDb, Network::Grpc ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_example_publish() {
-    run_example_publish(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_example_publish() {
-    run_example_publish(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_example_publish() {
-    run_example_publish(Database::ScyllaDb).await
-}
-
-async fn run_example_publish(database: Database) {
+async fn test_example_publish(database: Database, network: Network) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let network = Network::Grpc;
     let table_name = get_table_name();
-    let mut local_net = LocalNetwork::new(database, network, Some(37), table_name, 1, 1).unwrap();
-    let client = local_net.make_client(network);
+    let config = LocalNetConfig {
+        database,
+        network,
+        testing_prng_seed: Some(37),
+        table_name,
+        num_initial_validators: 1,
+        num_shards: 1,
+    };
+    let (mut net, client) = config.instantiate().await.unwrap();
 
-    local_net.generate_initial_validator_config().await.unwrap();
-    client.create_genesis_config().await.unwrap();
-    local_net.run().await.unwrap();
-
-    let example_dir = LocalNetwork::example_path("counter").unwrap();
+    let example_dir = ClientWrapper::example_path("counter").unwrap();
     client
         .project_publish(example_dir, vec![], None, &0)
         .await
@@ -689,42 +558,24 @@ async fn run_example_publish(database: Database) {
             .unwrap()
             .len(),
         1
-    )
+    );
+
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_rocks_db_end_to_end_open_multi_owner_chain() {
-    run_end_to_end_open_multi_owner_chain(Database::RocksDb).await
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_end_to_end_open_multi_owner_chain() {
-    run_end_to_end_open_multi_owner_chain(Database::DynamoDb).await
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_end_to_end_open_multi_owner_chain() {
-    run_end_to_end_open_multi_owner_chain(Database::ScyllaDb).await
-}
-
-async fn run_end_to_end_open_multi_owner_chain(database: Database) {
+async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and two clients.
-    let mut runner = LocalNetwork::new_for_testing(database, Network::Grpc).unwrap();
-    let client1 = runner.make_client(Network::Grpc);
-    let client2 = runner.make_client(Network::Grpc);
+    let (mut net, client1) = config.instantiate().await.unwrap();
 
-    // Create initial server and client config.
-    runner.generate_initial_validator_config().await.unwrap();
-    client1.create_genesis_config().await.unwrap();
+    let client2 = net.make_client();
     client2.wallet_init(&[]).await.unwrap();
-
-    // Start local network.
-    runner.run().await.unwrap();
 
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
 
@@ -799,4 +650,7 @@ async fn run_end_to_end_open_multi_owner_chain(database: Database) {
         client2.query_balance(chain2).await.unwrap(),
         Amount::from_tokens(3)
     );
+
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
 }

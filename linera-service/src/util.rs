@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, Context as _, Result};
+use anyhow::{bail, ensure, Context as _, Result};
 use async_trait::async_trait;
 use std::{
     path::{Path, PathBuf},
@@ -127,19 +127,39 @@ impl CommandExt for tokio::process::Command {
         debug!("Spawning and waiting for {:?}", self);
         self.stdout(Stdio::piped());
         self.stderr(Stdio::inherit());
+        self.kill_on_drop(true);
 
         let child = self.spawn().with_context(|| self.description())?;
         let output = child
             .wait_with_output()
             .await
             .with_context(|| self.description())?;
-        anyhow::ensure!(
+        ensure!(
             output.status.success(),
             "{}: got non-zero error code {}",
             self.description(),
             output.status
         );
         String::from_utf8(output.stdout).with_context(|| self.description())
+    }
+}
+
+/// Extension trait for [`tokio::process::Child`].
+pub trait ChildExt: std::fmt::Debug {
+    fn ensure_is_running(&mut self) -> Result<()>;
+}
+
+impl ChildExt for tokio::process::Child {
+    fn ensure_is_running(&mut self) -> Result<()> {
+        if let Some(status) = self.try_wait().context("try_wait child process")? {
+            bail!(
+                "Child process {:?} already exited with status: {}",
+                self,
+                status
+            );
+        }
+        debug!("Child process {:?} is running as expected.", self);
+        Ok(())
     }
 }
 
