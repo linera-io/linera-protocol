@@ -8,6 +8,16 @@
 pub mod local_net;
 /// How to run a linera wallet and its GraphQL service.
 mod wallet;
+/// How to run Linera validators locally as a Kubernetes deployment.
+pub mod local_kubernetes_net;
+/// How to run kind operations
+mod kind_wrapper;
+/// How to run docker operations
+mod docker_wrapper;
+/// How to run helm operations
+mod helm_wrapper;
+/// Util functions for the wrappers
+mod util;
 
 pub use wallet::{ApplicationWrapper, ClientWrapper, Faucet, NodeService};
 
