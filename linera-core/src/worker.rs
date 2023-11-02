@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::{future, FutureExt};
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{ArithmeticError, BlockHeight, RoundId},
+    data_types::{ArithmeticError, BlockHeight, Round},
     doc_scalar, ensure,
     identifiers::{ChainId, Owner},
 };
@@ -160,7 +160,7 @@ pub enum Reason {
     },
     NewRound {
         height: BlockHeight,
-        round: RoundId,
+        round: Round,
     },
 }
 

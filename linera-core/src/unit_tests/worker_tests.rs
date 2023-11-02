@@ -143,14 +143,14 @@ fn make_certificate<S>(
     worker: &WorkerState<S>,
     value: HashedValue,
 ) -> Certificate {
-    make_certificate_with_round(committee, worker, value, RoundId::Fast)
+    make_certificate_with_round(committee, worker, value, Round::Fast)
 }
 
 fn make_certificate_with_round<S>(
     committee: &Committee,
     worker: &WorkerState<S>,
     value: HashedValue,
-    round: RoundId,
+    round: Round,
 ) -> Certificate {
     let vote = LiteVote::new(value.lite(), round, worker.key_pair.as_ref().unwrap());
     let mut builder = SignatureAggregator::new(value, round, committee);
@@ -3349,14 +3349,14 @@ where
 
     // So owner 0 cannot propose a block in this round. And the next round hasn't started yet.
     let proposal =
-        make_child_block(&value0).into_proposal_with_round(&key_pairs[0], RoundId::SingleLeader(0));
+        make_child_block(&value0).into_proposal_with_round(&key_pairs[0], Round::SingleLeader(0));
     let result = worker.handle_block_proposal(proposal).await;
     assert!(matches!(result, Err(WorkerError::InvalidOwner)));
     let proposal =
-        make_child_block(&value0).into_proposal_with_round(&key_pairs[0], RoundId::SingleLeader(1));
+        make_child_block(&value0).into_proposal_with_round(&key_pairs[0], Round::SingleLeader(1));
     let result = worker.handle_block_proposal(proposal).await;
     assert!(matches!(result, Err(WorkerError::ChainError(ref error))
-        if matches!(**error, ChainError::WrongRound(RoundId::SingleLeader(0)))
+        if matches!(**error, ChainError::WrongRound(Round::SingleLeader(0)))
     ));
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
@@ -3391,12 +3391,12 @@ where
     let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await.unwrap();
     let proposal1_wrong_owner = block1
         .clone()
-        .into_proposal_with_round(&key_pairs[1], RoundId::SingleLeader(1));
+        .into_proposal_with_round(&key_pairs[1], Round::SingleLeader(1));
     let result = worker.handle_block_proposal(proposal1_wrong_owner).await;
     assert!(matches!(result, Err(WorkerError::InvalidOwner)));
     let proposal1 = block1
         .clone()
-        .into_proposal_with_round(&key_pairs[0], RoundId::SingleLeader(1));
+        .into_proposal_with_round(&key_pairs[0], Round::SingleLeader(1));
     let (response, _) = worker.handle_block_proposal(proposal1).await.unwrap();
     let value1 = HashedValue::new_validated(executed_block1.clone());
 
@@ -3416,17 +3416,14 @@ where
         &committee,
         &worker,
         value_timeout.clone(),
-        RoundId::SingleLeader(4),
+        Round::SingleLeader(4),
     );
     let (response, _) = worker
         .handle_certificate(certificate_timeout, vec![], None)
         .await
         .unwrap();
     assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key1)));
-    assert_eq!(
-        response.info.manager.current_round,
-        RoundId::SingleLeader(5)
-    );
+    assert_eq!(response.info.manager.current_round, Round::SingleLeader(5));
 
     // Create block2, also at height 1, but different from block 1.
     let amount = Amount::from_tokens(1);
@@ -3436,12 +3433,8 @@ where
     // Since round 3 is already over, a validated block from round 3 won't update the validator's
     // locked block; certificate1 (with block1) remains locked.
     let value2 = HashedValue::new_validated(executed_block2.clone());
-    let certificate = make_certificate_with_round(
-        &committee,
-        &worker,
-        value2.clone(),
-        RoundId::SingleLeader(2),
-    );
+    let certificate =
+        make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(2));
     worker
         .handle_certificate(certificate, vec![], None)
         .await
@@ -3456,21 +3449,17 @@ where
     // Proposing block2 now would fail.
     let proposal = block2
         .clone()
-        .into_proposal_with_round(&key_pairs[1], RoundId::SingleLeader(5));
+        .into_proposal_with_round(&key_pairs[1], Round::SingleLeader(5));
     let result = worker.handle_block_proposal(proposal.clone()).await;
     assert!(matches!(result, Err(WorkerError::ChainError(error))
          if matches!(*error, ChainError::HasLockedBlock(_, _))
     ));
 
     // But with the validated block certificate for block2, it is allowed.
-    let mut proposal = block2.into_proposal_with_round(&key_pairs[1], RoundId::SingleLeader(5));
+    let mut proposal = block2.into_proposal_with_round(&key_pairs[1], Round::SingleLeader(5));
     let lite_value2 = value2.lite();
-    let certificate2 = make_certificate_with_round(
-        &committee,
-        &worker,
-        value2.clone(),
-        RoundId::SingleLeader(4),
-    );
+    let certificate2 =
+        make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(4));
     proposal.validated = Some(certificate2.clone());
     let (_, _) = worker.handle_block_proposal(proposal).await.unwrap();
     let (response, _) = worker
@@ -3480,27 +3469,24 @@ where
     assert_eq!(response.info.manager.requested_locked, Some(certificate2));
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
-    assert_eq!(vote.round, RoundId::SingleLeader(5));
+    assert_eq!(vote.round, Round::SingleLeader(5));
 
     // Let round 5 time out, too.
     let certificate_timeout = make_certificate_with_round(
         &committee,
         &worker,
         value_timeout.clone(),
-        RoundId::SingleLeader(5),
+        Round::SingleLeader(5),
     );
     let (response, _) = worker
         .handle_certificate(certificate_timeout, vec![], None)
         .await
         .unwrap();
     assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key0)));
-    assert_eq!(
-        response.info.manager.current_round,
-        RoundId::SingleLeader(6)
-    );
+    assert_eq!(response.info.manager.current_round, Round::SingleLeader(6));
 
     // Since the validator now voted for block2, it can't vote for block1 anymore.
-    let proposal = block1.into_proposal_with_round(&key_pairs[0], RoundId::SingleLeader(6));
+    let proposal = block1.into_proposal_with_round(&key_pairs[0], Round::SingleLeader(6));
     let result = worker.handle_block_proposal(proposal.clone()).await;
     assert!(matches!(result, Err(WorkerError::ChainError(error))
          if matches!(*error, ChainError::HasLockedBlock(_, _))
@@ -3508,20 +3494,17 @@ where
 
     // Let rounds 6 and 7 time out.
     let certificate_timeout =
-        make_certificate_with_round(&committee, &worker, value_timeout, RoundId::SingleLeader(7));
+        make_certificate_with_round(&committee, &worker, value_timeout, Round::SingleLeader(7));
     let (response, _) = worker
         .handle_certificate(certificate_timeout, vec![], None)
         .await
         .unwrap();
-    assert_eq!(
-        response.info.manager.current_round,
-        RoundId::SingleLeader(8)
-    );
+    assert_eq!(response.info.manager.current_round, Round::SingleLeader(8));
 
     // If the worker does not belong to a validator, it does update its locked block even if it's
     // from a past round.
     let certificate =
-        make_certificate_with_round(&committee, &worker, value1, RoundId::SingleLeader(7));
+        make_certificate_with_round(&committee, &worker, value1, Round::SingleLeader(7));
     let mut worker = worker.with_key_pair(None); // Forget validator keys.
     worker
         .handle_certificate(certificate.clone(), vec![], None)
@@ -3588,19 +3571,19 @@ where
         .unwrap();
 
     // The first round is the fast-block round, and owner 0 is a super owner.
-    assert_eq!(response.info.manager.current_round, RoundId::Fast);
-    assert_eq!(response.info.manager.next_round(), Some(RoundId::Fast));
+    assert_eq!(response.info.manager.current_round, Round::Fast);
+    assert_eq!(response.info.manager.next_round(), Some(Round::Fast));
     assert_eq!(response.info.manager.leader, None);
 
     // So owner 1 cannot propose a block in this round. And the next round hasn't started yet.
-    let proposal = make_child_block(&value0).into_proposal_with_round(&key_pairs[1], RoundId::Fast);
+    let proposal = make_child_block(&value0).into_proposal_with_round(&key_pairs[1], Round::Fast);
     let result = worker.handle_block_proposal(proposal).await;
     assert!(matches!(result, Err(WorkerError::InvalidOwner)));
     let proposal =
-        make_child_block(&value0).into_proposal_with_round(&key_pairs[1], RoundId::MultiLeader(0));
+        make_child_block(&value0).into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
     let result = worker.handle_block_proposal(proposal).await;
     assert!(matches!(result, Err(WorkerError::ChainError(ref error))
-        if matches!(**error, ChainError::WrongRound(RoundId::Fast))
+        if matches!(**error, ChainError::WrongRound(Round::Fast))
     ));
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
@@ -3628,10 +3611,10 @@ where
         .handle_certificate(certificate_timeout, vec![], None)
         .await
         .unwrap();
-    assert_eq!(response.info.manager.current_round, RoundId::MultiLeader(0));
+    assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
     assert_eq!(
         response.info.manager.next_round(),
-        Some(RoundId::MultiLeader(0))
+        Some(Round::MultiLeader(0))
     );
     assert_eq!(response.info.manager.leader, None);
 
@@ -3639,13 +3622,13 @@ where
     let block1 = make_child_block(&value0);
     let proposal1 = block1
         .clone()
-        .into_proposal_with_round(&key_pairs[1], RoundId::MultiLeader(1));
+        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(1));
     let _ = worker.handle_block_proposal(proposal1).await.unwrap();
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let (response, _) = worker.handle_chain_info_query(query_values).await.unwrap();
-    assert_eq!(response.info.manager.current_round, RoundId::MultiLeader(1));
+    assert_eq!(response.info.manager.current_round, Round::MultiLeader(1));
     assert_eq!(
         response.info.manager.next_round(),
-        Some(RoundId::SingleLeader(0))
+        Some(Round::SingleLeader(0))
     );
 }

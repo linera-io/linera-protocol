@@ -450,7 +450,7 @@ pub mod tests {
     use super::*;
     use linera_base::{
         crypto::{BcsSignable, CryptoHash, KeyPair},
-        data_types::{Amount, RoundId, Timestamp},
+        data_types::{Amount, Round, Timestamp},
     };
     use linera_chain::{
         data_types::{Block, BlockAndRound, ExecutedBlock, HashedValue},
@@ -587,7 +587,7 @@ pub mod tests {
                 value_hash: CryptoHash::new(&Foo("value".into())),
                 chain_id: ChainId::root(0),
             },
-            round: RoundId::MultiLeader(2),
+            round: Round::MultiLeader(2),
             signatures: Cow::Owned(vec![(
                 ValidatorName::from(key_pair.public()),
                 Signature::new(&Foo("test".into()), &key_pair),
@@ -611,7 +611,7 @@ pub mod tests {
                 message_counts: vec![],
                 state_hash: CryptoHash::new(&Foo("test".into())),
             }),
-            RoundId::MultiLeader(3),
+            Round::MultiLeader(3),
             vec![(
                 ValidatorName::from(key_pair.public()),
                 Signature::new(&Foo("test".into()), &key_pair),
@@ -662,7 +662,7 @@ pub mod tests {
         let block_proposal = BlockProposal {
             content: BlockAndRound {
                 block: get_block(),
-                round: RoundId::SingleLeader(4),
+                round: Round::SingleLeader(4),
             },
             owner: Owner::from(KeyPair::generate().public()),
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
@@ -679,7 +679,7 @@ pub mod tests {
                     message_counts: vec![],
                     state_hash: CryptoHash::new(&Foo("validated".into())),
                 }),
-                RoundId::SingleLeader(2),
+                Round::SingleLeader(2),
                 vec![(
                     ValidatorName::from(key_pair.public()),
                     Signature::new(&Foo("signed".into()), &key_pair),

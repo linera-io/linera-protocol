@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{crypto::PublicKey, data_types::RoundId, identifiers::Owner};
+use linera_base::{crypto::PublicKey, data_types::Round, identifiers::Owner};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, iter};
 
@@ -51,13 +51,13 @@ impl ChainOwnership {
         }
     }
 
-    pub fn first_round(&self) -> RoundId {
+    pub fn first_round(&self) -> Round {
         if !self.super_owners.is_empty() {
-            RoundId::Fast
+            Round::Fast
         } else if self.multi_leader_rounds > 0 {
-            RoundId::MultiLeader(0)
+            Round::MultiLeader(0)
         } else {
-            RoundId::SingleLeader(0)
+            Round::SingleLeader(0)
         }
     }
 
@@ -65,39 +65,39 @@ impl ChainOwnership {
         self.super_owners.keys().chain(self.owners.keys())
     }
 
-    pub fn next_round(&self, round: RoundId) -> Option<RoundId> {
+    pub fn next_round(&self, round: Round) -> Option<Round> {
         Some(match round {
-            RoundId::Fast if self.multi_leader_rounds == 0 => RoundId::SingleLeader(0),
-            RoundId::Fast => RoundId::MultiLeader(0),
-            RoundId::MultiLeader(r) if r >= self.multi_leader_rounds.saturating_sub(1) => {
-                RoundId::SingleLeader(0)
+            Round::Fast if self.multi_leader_rounds == 0 => Round::SingleLeader(0),
+            Round::Fast => Round::MultiLeader(0),
+            Round::MultiLeader(r) if r >= self.multi_leader_rounds.saturating_sub(1) => {
+                Round::SingleLeader(0)
             }
-            RoundId::MultiLeader(r) => RoundId::MultiLeader(r.checked_add(1)?),
-            RoundId::SingleLeader(r) => RoundId::SingleLeader(r.checked_add(1)?),
+            Round::MultiLeader(r) => Round::MultiLeader(r.checked_add(1)?),
+            Round::SingleLeader(r) => Round::SingleLeader(r.checked_add(1)?),
         })
     }
 
-    pub fn previous_round(&self, round: RoundId) -> Option<RoundId> {
+    pub fn previous_round(&self, round: Round) -> Option<Round> {
         Some(match round {
-            RoundId::Fast => return None,
-            RoundId::MultiLeader(r) => {
+            Round::Fast => return None,
+            Round::MultiLeader(r) => {
                 if let Some(prev_r) = r.checked_sub(1) {
-                    RoundId::MultiLeader(prev_r)
+                    Round::MultiLeader(prev_r)
                 } else if self.super_owners.is_empty() {
                     return None;
                 } else {
-                    RoundId::Fast
+                    Round::Fast
                 }
             }
-            RoundId::SingleLeader(r) => {
+            Round::SingleLeader(r) => {
                 if let Some(prev_r) = r.checked_sub(1) {
-                    RoundId::SingleLeader(prev_r)
+                    Round::SingleLeader(prev_r)
                 } else if let Some(last_multi_r) = self.multi_leader_rounds.checked_sub(1) {
-                    RoundId::MultiLeader(last_multi_r)
+                    Round::MultiLeader(last_multi_r)
                 } else if self.super_owners.is_empty() {
                     return None;
                 } else {
-                    RoundId::Fast
+                    Round::Fast
                 }
             }
         })

@@ -58,7 +58,7 @@ pub struct BlockHeight(pub u64);
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
-pub enum RoundId {
+pub enum Round {
     #[default]
     Fast,
     MultiLeader(u32),
@@ -350,37 +350,37 @@ impl std::str::FromStr for BlockHeight {
     }
 }
 
-impl fmt::Display for RoundId {
+impl fmt::Display for Round {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            RoundId::Fast => write!(f, "fast round"),
-            RoundId::MultiLeader(r) => write!(f, "multi-leader round {}", r),
-            RoundId::SingleLeader(r) => write!(f, "single-leader round {}", r),
+            Round::Fast => write!(f, "fast round"),
+            Round::MultiLeader(r) => write!(f, "multi-leader round {}", r),
+            Round::SingleLeader(r) => write!(f, "single-leader round {}", r),
         }
     }
 }
 
-impl RoundId {
+impl Round {
     pub fn is_multi_leader(&self) -> bool {
-        matches!(self, RoundId::MultiLeader(_))
+        matches!(self, Round::MultiLeader(_))
     }
 
     pub fn is_fast(&self) -> bool {
-        matches!(self, RoundId::Fast)
+        matches!(self, Round::Fast)
     }
 
     pub fn number(&self) -> u32 {
         match self {
-            RoundId::Fast => 0,
-            RoundId::MultiLeader(r) | RoundId::SingleLeader(r) => *r,
+            Round::Fast => 0,
+            Round::MultiLeader(r) | Round::SingleLeader(r) => *r,
         }
     }
 
     pub fn type_name(&self) -> &'static str {
         match self {
-            RoundId::Fast => "fast",
-            RoundId::MultiLeader(_) => "multi",
-            RoundId::SingleLeader(_) => "single",
+            Round::Fast => "fast",
+            Round::MultiLeader(_) => "multi",
+            Round::SingleLeader(_) => "single",
         }
     }
 }
@@ -433,7 +433,7 @@ doc_scalar!(
     "A timestamp, in microseconds since the Unix epoch"
 );
 doc_scalar!(
-    RoundId,
+    Round,
     "A number to identify successive attempts to decide a value in a consensus protocol."
 );
 

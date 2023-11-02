@@ -3,7 +3,7 @@
 
 use crate::worker::{Notification, Reason};
 use linera_base::{
-    data_types::{BlockHeight, RoundId},
+    data_types::{BlockHeight, Round},
     identifiers::ChainId,
 };
 use linera_chain::data_types::Origin;
@@ -14,7 +14,7 @@ use std::collections::HashMap;
 pub struct NotificationTracker {
     new_block: HashMap<ChainId, BlockHeight>,
     new_message: HashMap<(ChainId, Origin), BlockHeight>,
-    new_round: HashMap<ChainId, (BlockHeight, RoundId)>,
+    new_round: HashMap<ChainId, (BlockHeight, Round)>,
 }
 
 impl NotificationTracker {
@@ -93,7 +93,7 @@ impl NotificationTracker {
         }
     }
 
-    fn insert_new_round(&mut self, chain_id: ChainId, height: BlockHeight, round: RoundId) -> bool {
+    fn insert_new_round(&mut self, chain_id: ChainId, height: BlockHeight, round: Round) -> bool {
         if let Some(previous) = self.new_round.get(&chain_id) {
             if *previous >= (height, round) {
                 return false;

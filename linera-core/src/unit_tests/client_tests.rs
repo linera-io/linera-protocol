@@ -1476,13 +1476,13 @@ where
             epoch: Epoch::ZERO
         }
     );
-    assert_eq!(certificate.round, RoundId::SingleLeader(0));
+    assert_eq!(certificate.round, Round::SingleLeader(0));
 
     builder
         .check_that_validators_are_in_round(
             chain_id,
             BlockHeight::from(1),
-            RoundId::SingleLeader(1),
+            Round::SingleLeader(1),
             3,
         )
         .await;

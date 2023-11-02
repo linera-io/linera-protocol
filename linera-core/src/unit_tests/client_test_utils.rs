@@ -566,7 +566,7 @@ where
         &self,
         chain_id: ChainId,
         block_height: BlockHeight,
-        round: RoundId,
+        round: Round,
         target_count: usize,
     ) {
         let query = ChainInfoQuery::new(chain_id);

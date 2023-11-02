@@ -55,7 +55,7 @@ BlockAndRound:
     - block:
         TYPENAME: Block
     - round:
-        TYPENAME: RoundId
+        TYPENAME: Round
 BlockHeight:
   NEWTYPESTRUCT: U64
 BlockHeightRange:
@@ -95,7 +95,7 @@ Certificate:
     - value:
         TYPENAME: CertificateValue
     - round:
-        TYPENAME: RoundId
+        TYPENAME: Round
     - signatures:
         SEQ:
           TUPLE:
@@ -233,7 +233,7 @@ ChainManagerInfo:
         OPTION:
           TYPENAME: CertificateValue
     - current_round:
-        TYPENAME: RoundId
+        TYPENAME: Round
     - leader:
         OPTION:
           TYPENAME: Owner
@@ -385,7 +385,7 @@ LiteCertificate:
     - value:
         TYPENAME: LiteValue
     - round:
-        TYPENAME: RoundId
+        TYPENAME: Round
     - signatures:
         SEQ:
           TUPLE:
@@ -402,7 +402,7 @@ LiteVote:
     - value:
         TYPENAME: LiteValue
     - round:
-        TYPENAME: RoundId
+        TYPENAME: Round
     - validator:
         TYPENAME: ValidatorName
     - signature:
@@ -586,7 +586,7 @@ ResourceControlPolicy:
     - maximum_bytes_written_per_block: U64
     - messages:
         TYPENAME: Amount
-RoundId:
+Round:
   ENUM:
     0:
       Fast: UNIT

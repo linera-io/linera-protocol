@@ -6,7 +6,7 @@ use crate::ChainError;
 use async_graphql::{Object, SimpleObject};
 use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
-    data_types::{BlockHeight, RoundId, Timestamp},
+    data_types::{BlockHeight, Round, Timestamp},
     doc_scalar, ensure,
     identifiers::{ChainId, ChannelName, Destination, MessageId, Owner},
 };
@@ -84,7 +84,7 @@ pub struct ChainAndHeight {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct BlockAndRound {
     pub block: Block,
-    pub round: RoundId,
+    pub round: Round,
 }
 
 /// A message received from a block of another chain.
@@ -263,20 +263,20 @@ pub struct LiteValue {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-struct ValueHashAndRound(CryptoHash, RoundId);
+struct ValueHashAndRound(CryptoHash, Round);
 
 /// A vote on a statement from a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Vote {
     pub value: HashedValue,
-    pub round: RoundId,
+    pub round: Round,
     pub validator: ValidatorName,
     pub signature: Signature,
 }
 
 impl Vote {
     /// Use signing key to create a signed object.
-    pub fn new(value: HashedValue, round: RoundId, key_pair: &KeyPair) -> Self {
+    pub fn new(value: HashedValue, round: Round, key_pair: &KeyPair) -> Self {
         let hash_and_round = ValueHashAndRound(value.hash, round);
         let signature = Signature::new(&hash_and_round, key_pair);
         Self {
@@ -308,7 +308,7 @@ impl Vote {
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct LiteVote {
     pub value: LiteValue,
-    pub round: RoundId,
+    pub round: Round,
     pub validator: ValidatorName,
     pub signature: Signature,
 }
@@ -335,7 +335,7 @@ pub struct LiteCertificate<'a> {
     /// Hash and chain ID of the certified value (used as key for storage).
     pub value: LiteValue,
     /// The round in which the value was certified.
-    pub round: RoundId,
+    pub round: Round,
     /// Signatures on the value.
     pub signatures: Cow<'a, [(ValidatorName, Signature)]>,
 }
@@ -343,7 +343,7 @@ pub struct LiteCertificate<'a> {
 impl<'a> LiteCertificate<'a> {
     pub fn new(
         value: LiteValue,
-        round: RoundId,
+        round: Round,
         mut signatures: Vec<(ValidatorName, Signature)>,
     ) -> Self {
         if !is_strictly_ordered(&signatures) {
@@ -416,7 +416,7 @@ pub struct Certificate {
     /// The certified value.
     pub value: HashedValue,
     /// The round in which the value was certified.
-    pub round: RoundId,
+    pub round: Round,
     /// Signatures on the value.
     signatures: Vec<(ValidatorName, Signature)>,
 }
@@ -693,7 +693,7 @@ impl BlockProposal {
 
 impl LiteVote {
     /// Uses the signing key to create a signed object.
-    pub fn new(value: LiteValue, round: RoundId, key_pair: &KeyPair) -> Self {
+    pub fn new(value: LiteValue, round: Round, key_pair: &KeyPair) -> Self {
         let hash_and_round = ValueHashAndRound(value.value_hash, round);
         let signature = Signature::new(&hash_and_round, key_pair);
         Self {
@@ -720,7 +720,7 @@ pub struct SignatureAggregator<'a> {
 
 impl<'a> SignatureAggregator<'a> {
     /// Starts aggregating signatures for the given value into a certificate.
-    pub fn new(value: HashedValue, round: RoundId, committee: &'a Committee) -> Self {
+    pub fn new(value: HashedValue, round: Round, committee: &'a Committee) -> Self {
         Self {
             committee,
             weight: 0,
@@ -780,7 +780,7 @@ impl<'de> Deserialize<'de> for Certificate {
         #[serde(rename = "Certificate")]
         struct CertificateHelper {
             value: HashedValue,
-            round: RoundId,
+            round: Round,
             signatures: Vec<(ValidatorName, Signature)>,
         }
 
@@ -800,7 +800,7 @@ impl<'de> Deserialize<'de> for Certificate {
 impl Certificate {
     pub fn new(
         value: HashedValue,
-        round: RoundId,
+        round: Round,
         mut signatures: Vec<(ValidatorName, Signature)>,
     ) -> Self {
         if !is_strictly_ordered(&signatures) {
@@ -878,7 +878,7 @@ impl Certificate {
 /// Verifies certificate signatures.
 fn check_signatures(
     value: &LiteValue,
-    round: RoundId,
+    round: Round,
     signatures: &[(ValidatorName, Signature)],
     committee: &Committee,
 ) -> Result<(), ChainError> {

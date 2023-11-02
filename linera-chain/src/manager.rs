@@ -72,7 +72,7 @@ use crate::{
 };
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{ArithmeticError, BlockHeight, RoundId, Timestamp},
+    data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
     doc_scalar, ensure,
     identifiers::{ChainId, Owner},
 };
@@ -168,13 +168,13 @@ impl ChainManager {
     /// Having a leader timeout certificate in any given round causes the next one to become
     /// current. Seeing a validated block certificate or a valid proposal in any round causes that
     /// round to become current, unless a higher one already is.
-    pub fn current_round(&self) -> RoundId {
+    pub fn current_round(&self) -> Round {
         self.leader_timeout
             .iter()
             .map(|certificate| {
                 self.ownership
                     .next_round(certificate.round)
-                    .unwrap_or(RoundId::SingleLeader(u32::MAX))
+                    .unwrap_or(Round::SingleLeader(u32::MAX))
             })
             .chain(self.locked.iter().map(|certificate| certificate.round))
             .chain(self.proposed.iter().map(|proposal| proposal.content.round))
@@ -217,7 +217,7 @@ impl ChainManager {
         // In leader rotation mode, the round must equal the expected one exactly.
         // Only the first single-leader round can be entered at any time.
         if self.is_super(owner)
-            || (new_round <= RoundId::SingleLeader(0) && !expected_round.is_fast())
+            || (new_round <= Round::SingleLeader(0) && !expected_round.is_fast())
         {
             ensure!(
                 expected_round <= new_round,
@@ -380,9 +380,9 @@ impl ChainManager {
     }
 
     /// Resets the timer if `round` has just ended.
-    fn update_timeout(&mut self, round: RoundId, now: Timestamp) {
+    fn update_timeout(&mut self, round: Round, now: Timestamp) {
         if self.current_round() <= round {
-            let factor = if let RoundId::SingleLeader(r) = round {
+            let factor = if let Round::SingleLeader(r) = round {
                 r.saturating_add(2)
             } else {
                 1
@@ -417,17 +417,17 @@ impl ChainManager {
             return Some(*public_key);
         }
         match proposal.content.round {
-            RoundId::Fast => {
+            Round::Fast => {
                 None // Only super owners can propose in round 0.
             }
-            RoundId::MultiLeader(_) => {
+            Round::MultiLeader(_) => {
                 // Not in leader rotation mode; any owner is allowed to propose.
                 self.ownership
                     .owners
                     .get(&proposal.owner)
                     .map(|(public_key, _)| *public_key)
             }
-            RoundId::SingleLeader(r) => {
+            Round::SingleLeader(r) => {
                 let index = self.round_leader_index(r)?;
                 let (leader, (public_key, _)) = self.ownership.owners.iter().nth(index)?;
                 (*leader == proposal.owner).then_some(*public_key)
@@ -437,8 +437,8 @@ impl ChainManager {
 
     /// Returns the leader who is allowed to propose a block in the given round, or `None` if every
     /// owner is allowed to propose. Exception: In round 0, only super owners can propose.
-    fn round_leader(&self, round: RoundId) -> Option<&Owner> {
-        if let RoundId::SingleLeader(r) = round {
+    fn round_leader(&self, round: Round) -> Option<&Owner> {
+        if let Round::SingleLeader(r) = round {
             let index = self.round_leader_index(r)?;
             self.ownership.owners.keys().nth(index)
         } else {
@@ -479,7 +479,7 @@ pub struct ChainManagerInfo {
     /// The value we voted for, if requested.
     pub requested_pending_value: Option<HashedValue>,
     /// The current round, i.e. the lowest round where we can still vote to validate a block.
-    pub current_round: RoundId,
+    pub current_round: Round,
     /// The current leader, who is allowed to propose the next block.
     /// `None` if everyone is allowed to propose.
     pub leader: Option<Owner>,
@@ -523,7 +523,7 @@ impl ChainManagerInfo {
             .max_by_key(|cert| cert.round)
     }
 
-    pub fn next_round(&self) -> Option<RoundId> {
+    pub fn next_round(&self) -> Option<Round> {
         let proposal_round = self
             .requested_proposed
             .as_ref()

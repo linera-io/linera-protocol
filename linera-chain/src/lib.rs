@@ -15,7 +15,7 @@ pub use chain::ChainStateView;
 use data_types::{Event, Origin};
 use linera_base::{
     crypto::CryptoError,
-    data_types::{ArithmeticError, BlockHeight, RoundId, Timestamp},
+    data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
     identifiers::ChainId,
 };
 use linera_execution::{policy::PricingError, ExecutionError};
@@ -105,11 +105,11 @@ pub enum ChainError {
     #[error("Invalid block proposal")]
     InvalidBlockProposal,
     #[error("Round number should be at least {0:?}")]
-    InsufficientRound(RoundId),
+    InsufficientRound(Round),
     #[error("Round number should be {0:?}")]
-    WrongRound(RoundId),
+    WrongRound(Round),
     #[error("A different block for height {0:?} was already locked at round number {1:?}")]
-    HasLockedBlock(BlockHeight, RoundId),
+    HasLockedBlock(BlockHeight, Round),
     #[error("Cannot confirm a block before its predecessors: {current_block_height:?}")]
     MissingEarlierBlocks { current_block_height: BlockHeight },
     #[error("Signatures in a certificate must be from different validators")]

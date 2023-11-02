@@ -326,7 +326,7 @@ impl ClientContext {
             let proposal = BlockProposal::new(
                 BlockAndRound {
                     block: block.clone(),
-                    round: linera_base::data_types::RoundId::Fast,
+                    round: linera_base::data_types::Round::Fast,
                 },
                 key_pair,
                 vec![],
@@ -362,7 +362,7 @@ impl ClientContext {
             let aggregator = aggregators.entry(chain_id).or_insert_with(|| {
                 SignatureAggregator::new(
                     vote.value,
-                    linera_base::data_types::RoundId::Fast,
+                    linera_base::data_types::Round::Fast,
                     &committee,
                 )
             });
