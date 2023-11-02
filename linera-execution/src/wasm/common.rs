@@ -210,7 +210,7 @@ where
     pub(crate) store: A::Store,
 
     /// Guard type to clean up any host state after the call to the Wasm application finishes.
-    #[allow(dead_code)]
+    #[cfg_attr(all(not(feature = "wasmer"), feature = "wasmtime"), allow(dead_code))]
     pub(crate) extra: A::Extra,
 }
 
