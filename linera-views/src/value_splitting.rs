@@ -52,7 +52,6 @@ where
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     fn max_key_size(&self) -> usize {
-        // We decrease by 4 because of the constraint
         self.client.max_key_size() - 4
     }
 

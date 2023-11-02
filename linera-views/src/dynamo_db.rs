@@ -143,29 +143,29 @@ const VALUE_ATTRIBUTE: &str = "item_value";
 /// The attribute for obtaining the primary key (used as a sort key) with the stored value.
 const KEY_VALUE_ATTRIBUTE: &str = "item_key, item_value";
 
-/// TODO(#1084): The scheme below with the MAX_VALUE_BYTES has to be checked
+/// TODO(#1084): The scheme below with the MAX_VALUE_SIZE has to be checked
 /// This is the maximum size of a raw value in DynamoDb.
-const RAW_MAX_VALUE_BYTES: usize = 409600;
+const RAW_MAX_VALUE_SIZE: usize = 409600;
 
 /// Fundamental constants in DynamoDB: The maximum size of a value is 400KB
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ServiceQuotas.html
 /// However, the value being written can also be the serialization of a SimpleUnorderedBatch
-/// Therefore the actual MAX_VALUE_BYTES might be lower.
+/// Therefore the actual MAX_VALUE_SIZE might be lower.
 /// At the maximum the key_size is 1024 bytes (see below) and we pack just one entry.
 /// So if the key has 1024 bytes this gets us the inequality
 /// 1 + 1 + serialized_size(1024)? + serialized_size(x)? <= 400*1024
 /// and so this simplifies to 1 + 1 + (2 + 1024) + (3 + x) <= 400 * 1024
 /// (we write 3 because get_uleb128_size(400*1024) = 3)
 /// and so to a maximal value of 408569;
-const VISIBLE_MAX_VALUE_BYTES: usize = 408569;
+const VISIBLE_MAX_VALUE_SIZE: usize = 408569;
 
 /// Fundamental constant in DynamoDB: The maximum size of a key is 1024 bytes
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html
-const MAX_KEY_BYTES: usize = 1024;
+const MAX_KEY_SIZE: usize = 1024;
 
 /// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 4M.
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html
-const MAX_TRANSACT_WRITE_ITEM_BYTES: usize = 4194304;
+const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = 4194304;
 
 /// The DynamoDb database is potentially handling an infinite number of connections.
 /// However, for testing or some other purpose we really need to decrease the number of
@@ -402,7 +402,7 @@ impl DynamoDbBatch {
         for deletion in &self.0.deletions {
             total_size += deletion.len();
         }
-        total_size <= MAX_TRANSACT_WRITE_ITEM_BYTES
+        total_size <= MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE
     }
 
     fn add_journal_header_operations(
@@ -462,12 +462,12 @@ impl DynamoDbBatch {
                     + get_uleb128_size(deletions.len() + 1)
                     + get_uleb128_size(insertions.len() + 1);
                 let next_transact_size = transact_size + next_value_size;
-                let value_flush = if next_transact_size > MAX_TRANSACT_WRITE_ITEM_BYTES {
+                let value_flush = if next_transact_size > MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE {
                     true
                 } else {
-                    next_value_size > RAW_MAX_VALUE_BYTES
+                    next_value_size > RAW_MAX_VALUE_SIZE
                 };
-                let transact_flush = next_transact_size > MAX_TRANSACT_WRITE_ITEM_BYTES;
+                let transact_flush = next_transact_size > MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
                 (value_flush, transact_flush)
             };
             if value_flush {
@@ -570,7 +570,7 @@ impl DynamoDbClientInternal {
         if key.is_empty() {
             return Err(DynamoDbContextError::ZeroLengthKey);
         }
-        if key.len() > MAX_KEY_BYTES {
+        if key.len() > MAX_KEY_SIZE {
             return Err(DynamoDbContextError::KeyTooLong);
         }
         let request = Delete::builder()
@@ -588,10 +588,10 @@ impl DynamoDbClientInternal {
         if key.is_empty() {
             return Err(DynamoDbContextError::ZeroLengthKey);
         }
-        if key.len() > MAX_KEY_BYTES {
+        if key.len() > MAX_KEY_SIZE {
             return Err(DynamoDbContextError::KeyTooLong);
         }
-        if value.len() > RAW_MAX_VALUE_BYTES {
+        if value.len() > RAW_MAX_VALUE_SIZE {
             return Err(DynamoDbContextError::ValueLengthTooLarge);
         }
         let request = Put::builder()
@@ -1084,7 +1084,7 @@ impl DynamoDbClientInternal {
         if key_prefix.is_empty() {
             return Err(DynamoDbContextError::ZeroLengthKeyPrefix);
         }
-        if key_prefix.len() > MAX_KEY_BYTES {
+        if key_prefix.len() > MAX_KEY_SIZE {
             return Err(DynamoDbContextError::KeyPrefixTooLong);
         }
         let mut responses = Vec::new();
@@ -1113,13 +1113,13 @@ impl DynamoDbClientInternal {
 
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClientInternal {
-    const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_BYTES;
+    const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
 
     fn max_key_size(&self) -> usize {
-        MAX_KEY_BYTES
+        MAX_KEY_SIZE
     }
 
     fn max_stream_queries(&self) -> usize {
@@ -1127,7 +1127,7 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
     }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
-        if key.len() > MAX_KEY_BYTES {
+        if key.len() > MAX_KEY_SIZE {
             return Err(DynamoDbContextError::KeyTooLong);
         }
         let key_db = build_key(key.to_vec());
@@ -1140,7 +1140,7 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
     ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbContextError> {
         let mut handles = Vec::new();
         for key in keys {
-            if key.len() > MAX_KEY_BYTES {
+            if key.len() > MAX_KEY_SIZE {
                 return Err(DynamoDbContextError::KeyTooLong);
             }
             let key_db = build_key(key);
@@ -1203,7 +1203,7 @@ impl KeyValueStoreClient for DynamoDbClient {
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     fn max_key_size(&self) -> usize {
-        MAX_KEY_BYTES - 4
+        MAX_KEY_SIZE - 4
     }
 
     fn max_stream_queries(&self) -> usize {
@@ -1624,7 +1624,7 @@ mod tests {
     use crate::{
         batch::SimpleUnorderedBatch,
         dynamo_db::{
-            get_uleb128_size, MAX_KEY_BYTES, RAW_MAX_VALUE_BYTES, VISIBLE_MAX_VALUE_BYTES,
+            get_uleb128_size, MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE,
         },
     };
     use bcs::serialized_size;
@@ -1641,9 +1641,9 @@ mod tests {
 
     #[test]
     fn test_raw_visible_sizes() {
-        let mut vis_computed = RAW_MAX_VALUE_BYTES - MAX_KEY_BYTES;
+        let mut vis_computed = RAW_MAX_VALUE_SIZE - MAX_KEY_SIZE;
         vis_computed -= serialized_size(&SimpleUnorderedBatch::default()).unwrap();
-        vis_computed -= get_uleb128_size(RAW_MAX_VALUE_BYTES) + get_uleb128_size(MAX_KEY_BYTES);
-        assert_eq!(vis_computed, VISIBLE_MAX_VALUE_BYTES);
+        vis_computed -= get_uleb128_size(RAW_MAX_VALUE_SIZE) + get_uleb128_size(MAX_KEY_SIZE);
+        assert_eq!(vis_computed, VISIBLE_MAX_VALUE_SIZE);
     }
 }
