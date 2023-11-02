@@ -4,6 +4,7 @@
 use crate::{
     cli_wrappers::Network,
     config::WalletState,
+    faucet::ClaimOutcome,
     util,
     util::{ChildExt, CommandExt},
 };
@@ -750,8 +751,12 @@ impl Faucet {
         self.child.ensure_is_running()
     }
 
-    pub async fn claim(&self, public_key: &PublicKey) -> Result<(MessageId, ChainId)> {
-        let query = format!("mutation {{ claim(publicKey: \"{public_key}\") }}");
+    pub async fn claim(&self, public_key: &PublicKey) -> Result<ClaimOutcome> {
+        let query = format!(
+            "mutation {{ claim(publicKey: \"{public_key}\") {{ \
+                messageId chainId openChainCertificateHash transferCertificateHash \
+            }} }}"
+        );
         let url = format!("http://localhost:{}/", self.port);
         let client = reqwest::Client::new();
         let response = client
@@ -773,13 +778,34 @@ impl Faucet {
         if let Some(errors) = value.get("errors") {
             bail!("Query \"{}\" failed: {}", query, errors);
         }
-        let message_id_str = value["data"]["claim"]
+        let data = &value["data"]["claim"];
+        let message_id = data["messageId"]
             .as_str()
-            .context("message ID not found")?;
-        let message_id = message_id_str
+            .context("message ID not found")?
             .parse()
             .context("could not parse message ID")?;
-        Ok((message_id, ChainId::child(message_id)))
+        let chain_id = data["chainId"]
+            .as_str()
+            .context("chain ID not found")?
+            .parse()
+            .context("could not parse chain ID")?;
+        let open_chain_certificate_hash = data["openChainCertificateHash"]
+            .as_str()
+            .context("OpenChain certificate hash not found")?
+            .parse()
+            .context("could not parse OpenChain certificate hash")?;
+        let transfer_certificate_hash = data["transferCertificateHash"]
+            .as_str()
+            .context("Transfer certificate hash not found")?
+            .parse()
+            .context("could not parse Transfer certificate hash")?;
+        let outcome = ClaimOutcome {
+            message_id,
+            chain_id,
+            open_chain_certificate_hash,
+            transfer_certificate_hash,
+        };
+        Ok(outcome)
     }
 }
 

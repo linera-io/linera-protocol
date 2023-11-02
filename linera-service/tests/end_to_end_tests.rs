@@ -677,7 +677,9 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
         .run_faucet(None, chain1, Amount::from_tokens(2))
         .await
         .unwrap();
-    let (message_id, chain2) = faucet.claim(&client2_key).await.unwrap();
+    let outcome = faucet.claim(&client2_key).await.unwrap();
+    let chain2 = outcome.chain_id;
+    let message_id = outcome.message_id;
 
     // Assign chain2 to client2_key.
     assert_eq!(
