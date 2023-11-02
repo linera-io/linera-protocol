@@ -81,14 +81,6 @@ pub trait SendRequestExt<Request> {
     ) -> oneshot::Receiver<Response>
     where
         Response: Send;
-
-    /// Sends a synchronous request built by `builder`, blocking until the `Response` is received.
-    fn sync_request<Response>(
-        &self,
-        builder: impl FnOnce(oneshot::Sender<Response>) -> Request,
-    ) -> Result<Response, oneshot::RecvError>
-    where
-        Response: Send;
 }
 
 impl<Request> SendRequestExt<Request> for mpsc::UnboundedSender<Request>
@@ -110,16 +102,5 @@ where
         });
 
         response_receiver
-    }
-
-    fn sync_request<Response>(
-        &self,
-        builder: impl FnOnce(oneshot::Sender<Response>) -> Request,
-    ) -> Result<Response, oneshot::RecvError>
-    where
-        Response: Send,
-    {
-        let response_receiver = self.send_request(builder);
-        tokio::task::block_in_place(|| response_receiver.recv())
     }
 }

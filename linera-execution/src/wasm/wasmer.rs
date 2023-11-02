@@ -85,7 +85,8 @@ impl ApplicationRuntimeContext for Contract {
         let remaining_points = context
             .extra
             .runtime
-            .sync_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
+            .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
+            .recv()
             .unwrap_or(0);
 
         metering::set_remaining_points(
@@ -102,12 +103,14 @@ impl ApplicationRuntimeContext for Contract {
                 MeteringPoints::Remaining(fuel) => fuel,
             };
 
-        let _ = context.extra.runtime.sync_request(|response_sender| {
-            ContractRequest::SetRemainingFuel {
+        let _ = context
+            .extra
+            .runtime
+            .send_request(|response_sender| ContractRequest::SetRemainingFuel {
                 remaining_fuel,
                 response_sender,
-            }
-        });
+            })
+            .recv();
     }
 }
 

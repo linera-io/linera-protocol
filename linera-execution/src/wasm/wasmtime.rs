@@ -92,7 +92,8 @@ impl ApplicationRuntimeContext for Contract {
     fn initialize(context: &mut WasmRuntimeContext<Self>) {
         let runtime = &context.store.data().system_api.runtime;
         let fuel = runtime
-            .sync_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
+            .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
+            .recv()
             .unwrap_or(0);
 
         context
@@ -104,15 +105,18 @@ impl ApplicationRuntimeContext for Contract {
     fn finalize(context: &mut WasmRuntimeContext<Self>) {
         let runtime = &context.store.data().system_api.runtime;
         let initial_fuel = runtime
-            .sync_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
+            .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
+            .recv()
             .unwrap_or(0);
         let consumed_fuel = context.store.fuel_consumed().unwrap_or(0);
         let remaining_fuel = initial_fuel.saturating_sub(consumed_fuel);
 
-        let _ = runtime.sync_request(|response_sender| ContractRequest::SetRemainingFuel {
-            remaining_fuel,
-            response_sender,
-        });
+        let _ = runtime
+            .send_request(|response_sender| ContractRequest::SetRemainingFuel {
+                remaining_fuel,
+                response_sender,
+            })
+            .recv();
     }
 }
 

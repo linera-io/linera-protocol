@@ -17,9 +17,10 @@ macro_rules! impl_contract_system_api {
 
             fn chain_id(&mut self) -> Result<contract_system_api::ChainId, Self::Error> {
                 self.runtime
-                    .sync_request(|response_sender| {
+                    .send_request(|response_sender| {
                         ContractRequest::Base(BaseRequest::ChainId { response_sender })
                     })
+                    .recv()
                     .map(|chain_id| chain_id.into())
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
@@ -28,28 +29,31 @@ macro_rules! impl_contract_system_api {
                 &mut self,
             ) -> Result<contract_system_api::ApplicationId, Self::Error> {
                 self.runtime
-                    .sync_request(|response_sender| {
+                    .send_request(|response_sender| {
                         ContractRequest::Base(BaseRequest::ApplicationId { response_sender })
                     })
+                    .recv()
                     .map(|application_id| application_id.into())
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn application_parameters(&mut self) -> Result<Vec<u8>, Self::Error> {
                 self.runtime
-                    .sync_request(|response_sender| {
+                    .send_request(|response_sender| {
                         ContractRequest::Base(BaseRequest::ApplicationParameters {
                             response_sender,
                         })
                     })
+                    .recv()
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn read_system_balance(&mut self) -> Result<contract_system_api::Amount, Self::Error> {
                 self.runtime
-                    .sync_request(|response_sender| {
+                    .send_request(|response_sender| {
                         ContractRequest::Base(BaseRequest::ReadSystemBalance { response_sender })
                     })
+                    .recv()
                     .map(|balance| balance.into())
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
@@ -58,35 +62,39 @@ macro_rules! impl_contract_system_api {
                 &mut self,
             ) -> Result<contract_system_api::Timestamp, Self::Error> {
                 self.runtime
-                    .sync_request(|response_sender| {
+                    .send_request(|response_sender| {
                         ContractRequest::Base(BaseRequest::ReadSystemTimestamp { response_sender })
                     })
+                    .recv()
                     .map(|timestamp| timestamp.micros())
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn load(&mut self) -> Result<Vec<u8>, Self::Error> {
                 self.runtime
-                    .sync_request(|response_sender| {
+                    .send_request(|response_sender| {
                         ContractRequest::Base(BaseRequest::TryReadMyState { response_sender })
                     })
+                    .recv()
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn load_and_lock(&mut self) -> Result<Option<Vec<u8>>, Self::Error> {
                 self.runtime
-                    .sync_request(|response_sender| ContractRequest::TryReadAndLockMyState {
+                    .send_request(|response_sender| ContractRequest::TryReadAndLockMyState {
                         response_sender,
                     })
+                    .recv()
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn store_and_unlock(&mut self, state: &[u8]) -> Result<bool, Self::Error> {
                 self.runtime
-                    .sync_request(|response_sender| ContractRequest::SaveAndUnlockMyState {
+                    .send_request(|response_sender| ContractRequest::SaveAndUnlockMyState {
                         state: state.to_owned(),
                         response_sender,
                     })
+                    .recv()
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
@@ -139,13 +147,14 @@ macro_rules! impl_contract_system_api {
                     .collect();
 
                 self.runtime
-                    .sync_request(|response_sender| ContractRequest::TryCallApplication {
+                    .send_request(|response_sender| ContractRequest::TryCallApplication {
                         authenticated,
                         callee_id: application.into(),
                         argument: argument.to_owned(),
                         forwarded_sessions,
                         response_sender,
                     })
+                    .recv()
                     .map(|call_result| call_result.into())
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
@@ -164,13 +173,14 @@ macro_rules! impl_contract_system_api {
                     .collect();
 
                 self.runtime
-                    .sync_request(|response_sender| ContractRequest::TryCallSession {
+                    .send_request(|response_sender| ContractRequest::TryCallSession {
                         authenticated,
                         session_id: session.into(),
                         argument: argument.to_owned(),
                         forwarded_sessions,
                         response_sender,
                     })
+                    .recv()
                     .map(|call_result| call_result.into())
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
@@ -212,35 +222,39 @@ macro_rules! impl_service_system_api {
 
             fn chain_id(&mut self) -> Result<service_system_api::ChainId, Self::Error> {
                 self.runtime
-                    .sync_request(|response_sender| {
+                    .send_request(|response_sender| {
                         ServiceRequest::Base(BaseRequest::ChainId { response_sender })
                     })
+                    .recv()
                     .map(|chain_id| chain_id.into())
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn application_id(&mut self) -> Result<service_system_api::ApplicationId, Self::Error> {
                 self.runtime
-                    .sync_request(|response_sender| {
+                    .send_request(|response_sender| {
                         ServiceRequest::Base(BaseRequest::ApplicationId { response_sender })
                     })
+                    .recv()
                     .map(|application_id| application_id.into())
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn application_parameters(&mut self) -> Result<Vec<u8>, Self::Error> {
                 self.runtime
-                    .sync_request(|response_sender| {
+                    .send_request(|response_sender| {
                         ServiceRequest::Base(BaseRequest::ApplicationParameters { response_sender })
                     })
+                    .recv()
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn read_system_balance(&mut self) -> Result<service_system_api::Amount, Self::Error> {
                 self.runtime
-                    .sync_request(|response_sender| {
+                    .send_request(|response_sender| {
                         ServiceRequest::Base(BaseRequest::ReadSystemBalance { response_sender })
                     })
+                    .recv()
                     .map(|balance| balance.into())
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
@@ -249,9 +263,10 @@ macro_rules! impl_service_system_api {
                 &mut self,
             ) -> Result<service_system_api::Timestamp, Self::Error> {
                 self.runtime
-                    .sync_request(|response_sender| {
+                    .send_request(|response_sender| {
                         ServiceRequest::Base(BaseRequest::ReadSystemTimestamp { response_sender })
                     })
+                    .recv()
                     .map(|timestamp| timestamp.micros())
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
