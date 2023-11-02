@@ -411,7 +411,7 @@ pub trait BaseRuntime: Send + Sync {
     async fn unlock_view_user_state(&self) -> Result<(), ExecutionError>;
 
     /// Reads the key from the KV store
-    async fn read_key_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError>;
+    async fn read_value_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError>;
 
     /// Reads the data from the keys having a specific prefix.
     async fn find_keys_by_prefix(

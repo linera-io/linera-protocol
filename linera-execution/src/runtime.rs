@@ -419,7 +419,7 @@ where
         }
     }
 
-    async fn read_key_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError> {
+    async fn read_value_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError> {
         let state = self.active_view_user_states_mut().await;
         let view = state
             .get(&self.application_id())

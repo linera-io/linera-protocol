@@ -55,7 +55,7 @@ pub enum BaseRequest {
     },
 
     /// Requests to read an entry from the key-value store.
-    ReadKeyBytes {
+    ReadValueBytes {
         key: Vec<u8>,
         response_sender: oneshot::Sender<Option<Vec<u8>>>,
     },
@@ -100,8 +100,8 @@ impl Debug for BaseRequest {
             BaseRequest::UnlockViewUserState { .. } => formatter
                 .debug_struct("BaseRequest::UnlockViewUserState")
                 .finish_non_exhaustive(),
-            BaseRequest::ReadKeyBytes { key, .. } => formatter
-                .debug_struct("BaseRequest::ReadKeyBytes")
+            BaseRequest::ReadValueBytes { key, .. } => formatter
+                .debug_struct("BaseRequest::ReadValueBytes")
                 .field("key", key)
                 .finish_non_exhaustive(),
             BaseRequest::FindKeysByPrefix { key_prefix, .. } => formatter

@@ -64,7 +64,7 @@ impl KeyValueStoreClient for RocksDbClientInternal {
         self.max_stream_queries
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
         if key.len() > MAX_KEY_SIZE {
             return Err(RocksDbContextError::KeyTooLong);
         }
@@ -73,7 +73,7 @@ impl KeyValueStoreClient for RocksDbClientInternal {
         Ok(tokio::task::spawn_blocking(move || client.db.get(&key)).await??)
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbContextError> {
@@ -366,15 +366,15 @@ impl KeyValueStoreClient for RocksDbClient {
         self.client.max_stream_queries()
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
-        self.client.read_key_bytes(key).await
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
+        self.client.read_value_bytes(key).await
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbContextError> {
-        self.client.read_multi_key_bytes(keys).await
+        self.client.read_multi_values_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(

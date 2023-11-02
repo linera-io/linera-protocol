@@ -45,7 +45,7 @@ where
         let key1 = context.base_tag(KeyTag::Value as u8);
         let key2 = context.base_tag(KeyTag::Hash as u8);
         let keys = vec![key1, key2];
-        let values_bytes = context.read_multi_key_bytes(keys).await?;
+        let values_bytes = context.read_multi_values_bytes(keys).await?;
         let stored_value = Box::new(from_bytes_opt(&values_bytes[0])?.unwrap_or_default());
         let hash = from_bytes_opt(&values_bytes[1])?;
         Ok(Self {

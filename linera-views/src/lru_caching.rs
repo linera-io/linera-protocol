@@ -24,7 +24,7 @@ use {
     async_lock::MutexGuardArc,
 };
 
-/// The `LruPrefixCache` stores the data for simple `read_keys` queries
+/// The `LruPrefixCache` stores the data for simple `read_values` queries
 /// It is inspired by the crate `lru-cache`.
 ///
 /// We cannot apply this crate directly because the batch operation
@@ -89,7 +89,7 @@ impl<'a> LruPrefixCache {
 pub struct LruCachingKeyValueClient<K> {
     /// The inner client that is called by the LRU cache one
     pub client: K,
-    lru_read_keys: Option<Arc<Mutex<LruPrefixCache>>>,
+    lru_read_values: Option<Arc<Mutex<LruPrefixCache>>>,
 }
 
 #[async_trait]
@@ -111,41 +111,41 @@ where
         self.client.max_stream_queries()
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        match &self.lru_read_keys {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        match &self.lru_read_values {
             None => {
-                return self.client.read_key_bytes(key).await;
+                return self.client.read_value_bytes(key).await;
             }
-            Some(lru_read_keys) => {
-                // First inquiring in the read_key_bytes LRU
-                let lru_read_keys_container = lru_read_keys.lock().await;
-                if let Some(value) = lru_read_keys_container.query(key) {
+            Some(lru_read_values) => {
+                // First inquiring in the read_value_bytes LRU
+                let lru_read_values_container = lru_read_values.lock().await;
+                if let Some(value) = lru_read_values_container.query(key) {
                     return Ok(value.clone());
                 }
-                drop(lru_read_keys_container);
-                let value = self.client.read_key_bytes(key).await?;
-                let mut lru_read_keys = lru_read_keys.lock().await;
-                lru_read_keys.insert(key.to_vec(), value.clone());
+                drop(lru_read_values_container);
+                let value = self.client.read_value_bytes(key).await?;
+                let mut lru_read_values = lru_read_values.lock().await;
+                lru_read_values.insert(key.to_vec(), value.clone());
                 Ok(value)
             }
         }
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        match &self.lru_read_keys {
+        match &self.lru_read_values {
             None => {
-                return self.client.read_multi_key_bytes(keys).await;
+                return self.client.read_multi_values_bytes(keys).await;
             }
-            Some(lru_read_keys) => {
+            Some(lru_read_values) => {
                 let mut result = Vec::with_capacity(keys.len());
                 let mut cache_miss_indices = Vec::new();
                 let mut miss_keys = Vec::new();
-                let lru_read_keys_container = lru_read_keys.lock().await;
+                let lru_read_values_container = lru_read_values.lock().await;
                 for (i, key) in keys.into_iter().enumerate() {
-                    if let Some(value) = lru_read_keys_container.query(&key) {
+                    if let Some(value) = lru_read_values_container.query(&key) {
                         result.push(value.clone());
                     } else {
                         result.push(None);
@@ -153,14 +153,17 @@ where
                         miss_keys.push(key);
                     }
                 }
-                drop(lru_read_keys_container);
-                let values = self.client.read_multi_key_bytes(miss_keys.clone()).await?;
-                let mut lru_read_keys = lru_read_keys.lock().await;
+                drop(lru_read_values_container);
+                let values = self
+                    .client
+                    .read_multi_values_bytes(miss_keys.clone())
+                    .await?;
+                let mut lru_read_values = lru_read_values.lock().await;
                 for (i, (key, value)) in cache_miss_indices
                     .into_iter()
                     .zip(miss_keys.into_iter().zip(values))
                 {
-                    lru_read_keys.insert(key, value.clone());
+                    lru_read_values.insert(key, value.clone());
                     result[i] = value;
                 }
                 Ok(result)
@@ -180,26 +183,26 @@ where
     }
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
-        match &self.lru_read_keys {
+        match &self.lru_read_values {
             None => {
                 return self.client.write_batch(batch, base_key).await;
             }
-            Some(lru_read_keys) => {
-                let mut lru_read_keys = lru_read_keys.lock().await;
+            Some(lru_read_values) => {
+                let mut lru_read_values = lru_read_values.lock().await;
                 for operation in &batch.operations {
                     match operation {
                         WriteOperation::Put { key, value } => {
-                            lru_read_keys.insert(key.to_vec(), Some(value.to_vec()));
+                            lru_read_values.insert(key.to_vec(), Some(value.to_vec()));
                         }
                         WriteOperation::Delete { key } => {
-                            lru_read_keys.insert(key.to_vec(), None);
+                            lru_read_values.insert(key.to_vec(), None);
                         }
                         WriteOperation::DeletePrefix { key_prefix } => {
-                            lru_read_keys.delete_prefix(key_prefix);
+                            lru_read_values.delete_prefix(key_prefix);
                         }
                     }
                 }
-                drop(lru_read_keys);
+                drop(lru_read_values);
                 self.client.write_batch(batch, base_key).await
             }
         }
@@ -219,13 +222,13 @@ where
         if max_size == 0 {
             Self {
                 client,
-                lru_read_keys: None,
+                lru_read_values: None,
             }
         } else {
-            let lru_read_keys = Some(Arc::new(Mutex::new(LruPrefixCache::new(max_size))));
+            let lru_read_values = Some(Arc::new(Mutex::new(LruPrefixCache::new(max_size))));
             Self {
                 client,
-                lru_read_keys,
+                lru_read_values,
             }
         }
     }

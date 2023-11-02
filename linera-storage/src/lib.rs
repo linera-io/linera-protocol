@@ -379,7 +379,8 @@ where
 
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
-        let maybe_value: Option<CertificateValue> = self.client.client.read_key(&value_key).await?;
+        let maybe_value: Option<CertificateValue> =
+            self.client.client.read_value(&value_key).await?;
         let id = match &maybe_value {
             Some(value) => value.chain_id().to_string(),
             None => "not found".to_string(),
@@ -428,8 +429,10 @@ where
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let (cert_result, value_result) = tokio::join!(
-            self.client.client.read_key::<LiteCertificate>(&cert_key),
-            self.client.client.read_key::<CertificateValue>(&value_key)
+            self.client.client.read_value::<LiteCertificate>(&cert_key),
+            self.client
+                .client
+                .read_value::<CertificateValue>(&value_key)
         );
         if let Ok(maybe_value) = &value_result {
             let id = match maybe_value {

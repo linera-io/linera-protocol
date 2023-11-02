@@ -126,13 +126,13 @@ impl KeyValueStoreClient for ScyllaDbClientInternal {
         self.max_stream_queries
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let client = self.client.deref();
         let _guard = self.acquire().await;
-        Self::read_key_internal(client, key.to_vec()).await
+        Self::read_value_internal(client, key.to_vec()).await
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
@@ -140,7 +140,7 @@ impl KeyValueStoreClient for ScyllaDbClientInternal {
         let _guard = self.acquire().await;
         let handles = keys
             .into_iter()
-            .map(|key| Self::read_key_internal(client, key));
+            .map(|key| Self::read_value_internal(client, key));
         let result = join_all(handles).await;
         Ok(result.into_iter().collect::<Result<_, _>>()?)
     }
@@ -188,7 +188,7 @@ impl ScyllaDbClientInternal {
         }
     }
 
-    async fn read_key_internal(
+    async fn read_value_internal(
         client: &ScyllaDbClientPair,
         key: Vec<u8>,
     ) -> Result<Option<Vec<u8>>, ScyllaDbContextError> {
@@ -645,15 +645,15 @@ impl KeyValueStoreClient for ScyllaDbClient {
         self.client.max_stream_queries()
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.client.read_key_bytes(key).await
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        self.client.read_value_bytes(key).await
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        self.client.read_multi_key_bytes(keys).await
+        self.client.read_multi_values_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {

@@ -360,7 +360,7 @@ impl JournalHeader {
                 break;
             }
             let key = get_journaling_key(base_key, KeyTag::Entry as u8, self.block_count - 1)?;
-            let value = db.read_key::<DynamoDbBatch>(&key).await?;
+            let value = db.read_value::<DynamoDbBatch>(&key).await?;
             if let Some(value) = value {
                 let mut tb = TransactionBuilder::default();
                 tb.insert_delete_request(key, db)?; // Delete the preceding journal entry
@@ -817,7 +817,7 @@ impl DynamoDbClientInternal {
         Ok(response)
     }
 
-    async fn read_key_bytes_general(
+    async fn read_value_bytes_general(
         &self,
         key_db: HashMap<String, AttributeValue>,
     ) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
@@ -1126,15 +1126,15 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
         self.max_stream_queries
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
         if key.len() > MAX_KEY_SIZE {
             return Err(DynamoDbContextError::KeyTooLong);
         }
         let key_db = build_key(key.to_vec());
-        self.read_key_bytes_general(key_db).await
+        self.read_value_bytes_general(key_db).await
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbContextError> {
@@ -1144,7 +1144,7 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
                 return Err(DynamoDbContextError::KeyTooLong);
             }
             let key_db = build_key(key);
-            let handle = self.read_key_bytes_general(key_db);
+            let handle = self.read_value_bytes_general(key_db);
             handles.push(handle);
         }
         let result = join_all(handles).await;
@@ -1181,7 +1181,7 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
         let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
-        let value = self.read_key::<JournalHeader>(&key).await?;
+        let value = self.read_value::<JournalHeader>(&key).await?;
         if let Some(header) = value {
             header.coherently_resolve_journal(self, base_key).await?;
         }
@@ -1210,15 +1210,15 @@ impl KeyValueStoreClient for DynamoDbClient {
         self.client.max_stream_queries()
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
-        self.client.read_key_bytes(key).await
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
+        self.client.read_value_bytes(key).await
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         key: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbContextError> {
-        self.client.read_multi_key_bytes(key).await
+        self.client.read_multi_values_bytes(key).await
     }
 
     async fn find_keys_by_prefix(
@@ -1623,9 +1623,7 @@ pub async fn clear_tables(client: &aws_sdk_dynamodb::Client) -> Result<(), Dynam
 mod tests {
     use crate::{
         batch::SimpleUnorderedBatch,
-        dynamo_db::{
-            get_uleb128_size, MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE,
-        },
+        dynamo_db::{get_uleb128_size, MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE},
     };
     use bcs::serialized_size;
 

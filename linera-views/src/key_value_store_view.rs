@@ -84,7 +84,7 @@ where
 
     async fn load(context: C) -> Result<Self, ViewError> {
         let key = context.base_tag(KeyTag::Hash as u8);
-        let hash = context.read_key(&key).await?;
+        let hash = context.read_value(&key).await?;
         Ok(Self {
             context,
             was_cleared: false,
@@ -408,7 +408,7 @@ where
             return Ok(None);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, index);
-        Ok(self.context.read_key_bytes(&key).await?)
+        Ok(self.context.read_value_bytes(&key).await?)
     }
 
     /// Obtains the values of a range of indices
@@ -449,7 +449,7 @@ where
             }
         }
         if !self.was_cleared {
-            let values = self.context.read_multi_key_bytes(vector_query).await?;
+            let values = self.context.read_multi_values_bytes(vector_query).await?;
             for (i, value) in missed_indices.into_iter().zip(values) {
                 result[i] = value;
             }
@@ -788,12 +788,12 @@ where
         1
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         let view = self.view.read().await;
         view.get(key).await
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {

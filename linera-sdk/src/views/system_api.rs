@@ -55,16 +55,16 @@ impl KeyValueStoreClient for KeyValueStore {
         1
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         if key.len() > MAX_KEY_SIZE {
             return Err(ViewError::KeyTooLong);
         }
-        let promise = wit::ReadKeyBytes::new(key);
+        let promise = wit::ReadValueBytes::new(key);
         yield_once().await;
         Ok(promise.wait())
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
@@ -73,7 +73,7 @@ impl KeyValueStoreClient for KeyValueStore {
             if key.len() > MAX_KEY_SIZE {
                 return Err(ViewError::KeyTooLong);
             }
-            let value = self.read_key_bytes(&key).await?;
+            let value = self.read_value_bytes(&key).await?;
             results.push(value);
         }
         Ok(results)
