@@ -21,26 +21,41 @@
 
 # Stage 1 - Generate recipe file for dependencies
 FROM lukemathwalker/cargo-chef:latest-rust-slim AS chef
-
 ARG environment=k8s-local
 # Modern Docker provides TARGETPLATFORM and friends, but these do not
 # provide enough information to reconstruct the whole Rust target and
 # switching on them to map to a subset of targets seems unwise
 ARG target=x86_64-unknown-linux-gnu
 
-RUN mkdir -p /opt/linera/build
-WORKDIR /opt/linera/build
-
 FROM chef as planner
 
-COPY . .
+COPY examples examples
+COPY linera-base linera-base
+COPY linera-chain linera-chain
+COPY linera-core linera-core
+COPY linera-execution linera-execution
+COPY linera-explorer linera-explorer
+COPY linera-indexer linera-indexer
+COPY linera-rpc linera-rpc
+COPY linera-sdk linera-sdk
+COPY linera-sdk-derive linera-sdk-derive
+COPY linera-service linera-service
+COPY linera-service-graphql-client linera-service-graphql-client
+COPY linera-storage linera-storage
+COPY linera-views linera-views
+COPY linera-views-derive linera-views-derive
+COPY linera-witty linera-witty
+COPY linera-witty-macros linera-witty-macros
+COPY scripts scripts
+COPY rust-toolchain* Cargo.* ./
+
 RUN cargo chef prepare --recipe-path recipe.json
 
 # Stage 2 - Build dependencies
 FROM chef AS cacher
+ARG target
 
-COPY . .
-COPY --from=planner /opt/linera/build/recipe.json recipe.json
+COPY --from=planner . .
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -52,10 +67,9 @@ RUN cargo chef cook --release --recipe-path recipe.json --target "$target"
 
 # Stage 3 - Do actual build
 FROM chef as builder
-ARG environment
 ARG target
 
-COPY . .
+COPY --from=planner . .
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -63,7 +77,7 @@ RUN apt-get update && apt-get install -y \
     protobuf-compiler \
     clang
 
-COPY --from=cacher /opt/linera/build/target target
+COPY --from=cacher target target
 COPY --from=cacher /usr/local/cargo /usr/local/cargo
 
 RUN cargo build --release \
@@ -73,39 +87,32 @@ RUN cargo build --release \
     --bin linera-server \
     --bin linera-db \
     --features scylladb \
-    && strip target/"$target"/release/linera \
-    && strip target/"$target"/release/linera-proxy \
-    && strip target/"$target"/release/linera-server \
-    && strip target/"$target"/release/linera-db
+
+RUN strip \
+    target/"$target"/release/linera \
+    target/"$target"/release/linera-proxy \
+    target/"$target"/release/linera-server \
+    target/"$target"/release/linera-db
 
 # Stage 4 - Setup running environment for container
 FROM debian:latest
-
 ARG environment
 ARG target
 
-WORKDIR /opt/linera
-
 RUN apt-get update && apt-get install -y libssl-dev
 
-ENV BUILD_PATH=/opt/linera/build
+COPY --from=builder \
+     target/"$target"/release/linera \
+     target/"$target"/release/linera-server \
+     target/"$target"/release/linera-proxy \
+     target/"$target"/release/linera-db \
+     ./
 
-# Copying binaries
-COPY --from=builder $BUILD_PATH/target/$target/release/linera ./
-COPY --from=builder $BUILD_PATH/target/$target/release/linera-server ./
-COPY --from=builder $BUILD_PATH/target/$target/release/linera-proxy ./
-COPY --from=builder $BUILD_PATH/target/$target/release/linera-db ./
-
-# Copying configuration files
-COPY --from=builder $BUILD_PATH/configuration/$environment/validator_1.toml ./
-
-# Copy entrypoint
-COPY docker/server-entrypoint.sh .
-RUN chmod +x server-entrypoint.sh
-
-# Copy init
-COPY docker/server-init.sh .
-RUN chmod +x server-init.sh
+COPY --chmod 755 \
+    docker/server-entrypoint.sh \
+    docker/server-init.sh \
+    configuration/"$environment"/validator_1.toml \
+    ./
 
 # Create configuration files for the validator according to the validator's config file.
 # * Private server states are stored in `server*.json`.
