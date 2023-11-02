@@ -14,10 +14,12 @@ edition = "2021"
 default = ["wasmer"]
 test = ["tokio/macros"]
 wasmer = [
-    "bytes", "dep:wasmer", "wasm-encoder", "wasmer-middlewares", "wasmparser",
+    "bytes", "dep:wasmer", "oneshot", "wasm-encoder", "wasmer-middlewares", "wasmparser",
     "wit-bindgen-host-wasmer-rust",
 ]
-wasmtime = ["dep:wasmtime", "wasm-encoder", "wasmparser", "wit-bindgen-host-wasmtime-rust"]
+wasmtime = [
+    "dep:wasmtime", "oneshot", "wasm-encoder", "wasmparser", "wit-bindgen-host-wasmtime-rust",
+]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -35,6 +37,7 @@ linera-views = { workspace = true, features = ["metrics"] }
 linera-views-derive = { workspace = true }
 lru = { workspace = true }
 once_cell = { workspace = true }
+oneshot = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
 serde_json = { workspace = true }

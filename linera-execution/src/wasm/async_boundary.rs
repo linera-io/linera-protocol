@@ -5,155 +5,260 @@
 //! modules.
 
 use super::{
+    async_determinism::HostFutureQueue,
     common::{ApplicationRuntimeContext, WasmRuntimeContext},
-    ExecutionError,
+    ExecutionError, WasmExecutionError,
 };
-use futures::{future::BoxFuture, ready, stream::StreamExt};
+use futures::{channel::oneshot, ready, stream::StreamExt, FutureExt};
 use std::{
-    any::type_name,
-    fmt::{self, Debug, Formatter},
     future::Future,
     marker::PhantomData,
     pin::Pin,
-    sync::Arc,
-    task::{Context, Poll, Waker},
+    task::{Context, Poll},
+    thread,
 };
-use tokio::sync::Mutex;
 
-/// A host future that can be called by a Wasm guest module.
-pub struct HostFuture<'future, Output> {
-    future: Mutex<BoxFuture<'future, Output>>,
-}
-
-impl<Output> Debug for HostFuture<'_, Output> {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        write!(
-            formatter,
-            "HostFuture<'_, {}> {{ .. }}",
-            type_name::<Output>()
-        )
-    }
-}
-
-impl<'future, Output> HostFuture<'future, Output> {
-    /// Wraps a given `future` so that it can be called from guest Wasm modules.
-    pub fn new(future: impl Future<Output = Output> + Send + 'future) -> Self {
-        HostFuture {
-            future: Mutex::new(Box::pin(future)),
-        }
-    }
-
-    /// Polls a future from a Wasm module.
-    ///
-    /// Requires the task [`Waker`] to have been saved in the provided `waker`. If it hasn't, or if
-    /// the waker for a task other than the task used to call the Wasm module code is provided, the
-    /// call may panic or the future may not be scheduled to resume afterwards, leading the module
-    /// to hang.
-    ///
-    /// # Panics
-    ///
-    /// If the `context` does not contain a valid exclusive task [`Waker`] reference, or if this
-    /// future is polled concurrently in different tasks.
-    pub fn poll(&self, waker: &mut WakerForwarder) -> Poll<Output> {
-        let waker_reference = waker
-            .0
-            .try_lock()
-            .expect("Unexpected concurrent application call");
-
-        let mut context = Context::from_waker(
-            waker_reference
-                .as_ref()
-                .expect("Application called without an async task context"),
-        );
-
-        let mut future = self
-            .future
-            .try_lock()
-            .expect("Application can't call the future concurrently because it's single threaded");
-
-        future.as_mut().poll(&mut context)
-    }
-}
-
-/// A future implemented in a Wasm module.
-pub enum GuestFuture<'context, Future, Application>
+/// An actor that runs a future implemented in a Wasm module.
+///
+/// The actor should run in its own separate thread, where it will block until it receives poll
+/// requests from a [`PollSender`].
+pub struct GuestFutureActor<Future, Application>
 where
     Application: ApplicationRuntimeContext,
+    Future: GuestFutureInterface<Application>,
 {
-    /// The Wasm module failed to create an instance of the future.
-    ///
-    /// The error will be returned when this [`GuestFuture`] is polled.
-    FailedToCreate(Option<Application::Error>),
-
-    /// The Wasm future type and the runtime context to poll it.
-    Active {
-        /// A WIT resource type implementing a [`GuestFutureInterface`] so that it can be polled.
-        future: Future,
-
-        /// Types necessary to call the guest Wasm module in order to poll the future.
-        context: WasmRuntimeContext<'context, Application>,
-    },
+    context: WasmRuntimeContext<Application>,
+    poll_request_receiver: std::sync::mpsc::Receiver<PollRequest<Future::Output>>,
+    _future_type: PhantomData<Future>,
 }
 
-impl<'context, Future, Application> GuestFuture<'context, Future, Application>
+impl<Future, Application> GuestFutureActor<Future, Application>
 where
-    Application: ApplicationRuntimeContext,
+    Application: ApplicationRuntimeContext + Send + 'static,
+    Future: GuestFutureInterface<Application> + Send + 'static,
+    Future::Output: Send,
 {
-    /// Creates a [`GuestFuture`] instance with `creation_result` of a future resource type.
+    /// Spawns a new thread and runs the `future` in a [`GuestFutureActor`].
     ///
-    /// If the guest resource type could not be created by the Wasm module, the error is stored so
-    /// that it can be returned when the [`GuestFuture`] is polled.
+    /// Returns the [`PollSender`] which can be used in an asynchronous context to `await` the
+    /// result.
+    pub fn spawn(
+        parameters: Future::Parameters,
+        mut context: WasmRuntimeContext<Application>,
+    ) -> PollSender<Future::Output> {
+        let (poll_request_sender, poll_request_receiver) = std::sync::mpsc::channel();
+        let poll_sender = PollSender::new(context.future_queue.take(), poll_request_sender);
+        let actor = Self::new(context, poll_request_receiver);
+
+        // TODO(#1193): Use one thread per transaction instead of one per future
+        thread::spawn(|| actor.run(parameters));
+
+        poll_sender
+    }
+
+    /// Creates a new [`GuestFutureActor`] to run `future` using a Wasm runtime `context`.
     pub fn new(
-        creation_result: Result<Future, Application::Error>,
-        context: WasmRuntimeContext<'context, Application>,
+        context: WasmRuntimeContext<Application>,
+        poll_request_receiver: std::sync::mpsc::Receiver<PollRequest<Future::Output>>,
     ) -> Self {
-        match creation_result {
-            Ok(future) => GuestFuture::Active { future, context },
-            Err(error) => GuestFuture::FailedToCreate(Some(error)),
+        GuestFutureActor {
+            context,
+            poll_request_receiver,
+            _future_type: PhantomData,
+        }
+    }
+
+    /// Creates and executes the `Future` instance, polling it as requested by the [`PollSender`]
+    /// until it completes.
+    pub fn run(mut self, parameters: Future::Parameters) {
+        Application::configure_initial_fuel(&mut self.context);
+
+        match Future::new(
+            parameters,
+            &self.context.application,
+            &mut self.context.store,
+        ) {
+            Ok(future) => self.run_poll_loop(future),
+            Err(error) => self.notify_creation_error(error),
+        }
+    }
+
+    /// Executes the `future`, polling it as requested by the [`PollSender`] until it completes.
+    fn run_poll_loop(mut self, future: Future) {
+        while let Ok(request) = self.poll_request_receiver.recv() {
+            let response = future.poll(&self.context.application, &mut self.context.store);
+            let mut finished = response.is_ready();
+
+            if request
+                .response_sender
+                .send(PollResponse(response))
+                .is_err()
+            {
+                tracing::debug!("Wasm guest future cancelled");
+                finished = true;
+            }
+
+            if finished {
+                break;
+            }
+        }
+    }
+
+    /// Waits for the first poll request sent by the [`PollSender`], and immediately responds with
+    /// the error obtained when attempting to create the `Future` instance.
+    fn notify_creation_error(self, error: ExecutionError) {
+        if let Ok(request) = self.poll_request_receiver.recv() {
+            if request
+                .response_sender
+                .send(PollResponse(Poll::Ready(Err(error))))
+                .is_err()
+            {
+                tracing::debug!(
+                    "Wasm guest future cancelled before constructor error was reported"
+                );
+            }
         }
     }
 }
 
-impl<InnerFuture, Application> Future for GuestFuture<'_, InnerFuture, Application>
-where
-    InnerFuture: GuestFutureInterface<Application> + Unpin,
-    Application: ApplicationRuntimeContext + Unpin,
-    Application::Store: Unpin,
-    Application::Error: Unpin,
-    Application::Extra: Unpin,
-{
-    type Output = Result<InnerFuture::Output, ExecutionError>;
+/// A message type sent to request the actor to poll the guest Wasm future.
+pub struct PollRequest<Output> {
+    response_sender: oneshot::Sender<PollResponse<Output>>,
+}
 
-    /// Polls the guest future after the [`HostFutureQueue`] in the [`WasmRuntimeContext`] indicates
-    /// that it's safe to do so without breaking determinism.
+/// A wrapper type representing the response sent from a future actor to a poll request sent from a
+/// [`PollSender`].
+///
+/// This helps to simplify some types used, avoiding some Clippy lints.
+struct PollResponse<Output>(Poll<Result<Output, ExecutionError>>);
+
+/// An abstraction over a [`Future`] running as an actor on a separate thread.
+///
+/// This type implements [`Future`] and sends poll requests to the actor implementation. When the
+/// actor finishes, it sends back the result to this type, which then returns it.
+///
+/// Poll requests may not be sent to the implementation if it would cause non-deterministic
+/// execution (as controlled by the [`HostFutureQueue`]).
+pub struct PollSender<Output> {
+    host_future_queue: Option<HostFutureQueue>,
+    poll_request_sender: std::sync::mpsc::Sender<PollRequest<Output>>,
+    state: PollSenderState<Output>,
+}
+
+/// The internal state of the [`PollSender`] type.
+#[derive(Debug)]
+enum PollSenderState<Output> {
+    /// Waiting to be polled.
+    Queued,
+
+    /// Waiting for response to the previous poll request.
+    Polling(oneshot::Receiver<PollResponse<Output>>),
+
+    /// Result received and returned.
+    Finished,
+}
+
+impl<Output> PollSender<Output> {
+    /// Creates a new [`PollSender`] using the provided [`HostFutureQueue`] to ensure deterministic
+    /// polling.
     ///
-    /// Uses the runtime context to call the Wasm future's `poll` method, as implemented in the
-    /// [`GuestFutureInterface`]. The `task_context` is stored in the runtime context's
-    /// [`WakerForwarder`], so that any host futures the guest calls can use the correct task
-    /// context.
-    fn poll(self: Pin<&mut Self>, task_context: &mut Context) -> Poll<Self::Output> {
-        match self.get_mut() {
-            GuestFuture::FailedToCreate(runtime_error) => {
-                let error = runtime_error.take().expect("Unexpected poll after error");
-                Poll::Ready(Err(error.into()))
-            }
-            GuestFuture::Active { future, context } => {
-                ready!(context.future_queue.poll_next_unpin(task_context));
+    /// Returns the new [`PollSender`] together with the receiver endpoint of the poll requests.
+    fn new(
+        host_future_queue: Option<HostFutureQueue>,
+        poll_request_sender: std::sync::mpsc::Sender<PollRequest<Output>>,
+    ) -> Self {
+        PollSender {
+            host_future_queue,
+            poll_request_sender,
+            state: PollSenderState::Queued,
+        }
+    }
 
-                let _context_guard = context.waker_forwarder.forward(task_context);
-                future.poll(&context.application, &mut context.store)
+    /// Sends a poll request if allowed by the [`HostFutureQueue`].
+    fn poll_start(&mut self, context: &mut Context) -> Poll<()> {
+        if let Some(future_queue) = self.host_future_queue.as_mut() {
+            ready!(future_queue.poll_next_unpin(context));
+        }
+
+        let (response_sender, response_receiver) = oneshot::channel();
+        let _ = self
+            .poll_request_sender
+            .send(PollRequest { response_sender });
+        // If sending fails, `poll_response` will handle the `Err(oneshot::Canceled)` when it
+        // attempts to receive the response
+        self.state = PollSenderState::Polling(response_receiver);
+
+        Poll::Ready(())
+    }
+
+    /// Checks if a response to the last previous request has been received.
+    ///
+    /// If a response has been received, the state is updated based on if the response is that the
+    /// result is ready or that it's still pending.
+    fn poll_response(
+        &mut self,
+        context: &mut Context,
+    ) -> Option<Poll<Result<Output, ExecutionError>>> {
+        let PollSenderState::Polling(receiver) = &mut self.state else {
+            panic!("`poll_response` called without being in a `PollSenderState::Polling` state");
+        };
+
+        match receiver.poll_unpin(context) {
+            Poll::Ready(Ok(PollResponse(Poll::Ready(response)))) => {
+                self.state = PollSenderState::Finished;
+                Some(Poll::Ready(response))
+            }
+            Poll::Ready(Ok(PollResponse(Poll::Pending))) => {
+                self.state = PollSenderState::Queued;
+                None
+            }
+            Poll::Ready(Err(oneshot::Canceled)) => {
+                tracing::debug!("Wasm guest is no longer reachable");
+                self.state = PollSenderState::Finished;
+                Some(Poll::Ready(Err(WasmExecutionError::Aborted.into())))
+            }
+            Poll::Pending => Some(Poll::Pending),
+        }
+    }
+}
+
+impl<Output> Future for PollSender<Output> {
+    type Output = Result<Output, ExecutionError>;
+
+    fn poll(mut self: Pin<&mut Self>, context: &mut Context) -> Poll<Self::Output> {
+        let mut this = self.as_mut();
+
+        loop {
+            match this.state {
+                PollSenderState::Queued => ready!(this.poll_start(context)),
+                PollSenderState::Polling(_) => {
+                    if let Some(return_value) = this.poll_response(context) {
+                        break return_value;
+                    }
+                }
+                PollSenderState::Finished => panic!("Future polled after it has finished"),
             }
         }
     }
 }
 
 /// Interface to poll a future implemented in a Wasm module.
-pub trait GuestFutureInterface<Application>
+pub trait GuestFutureInterface<Application>: Sized
 where
     Application: ApplicationRuntimeContext,
 {
+    /// The parameters necessary to initialize the future.
+    type Parameters: Send;
+
     /// The output of the guest future.
     type Output;
+
+    /// Creates the guest future using the provided `parameters`.
+    fn new(
+        parameters: Self::Parameters,
+        application: &Application,
+        store: &mut Application::Store,
+    ) -> Result<Self, ExecutionError>;
 
     /// Polls the guest future to attempt to progress it.
     ///
@@ -163,64 +268,4 @@ where
         application: &Application,
         store: &mut Application::Store,
     ) -> Poll<Result<Self::Output, ExecutionError>>;
-}
-
-/// A type to keep track of a [`Waker`] so that it can be forwarded to any async code called from
-/// the guest Wasm module.
-///
-/// When a [`Future`] is polled, a [`Waker`] is used so that the task can be scheduled to be
-/// woken up and polled again if it's still awaiting something.
-///
-/// The problem is that calling a Wasm module from an async task can lead to that guest code
-/// calling back some host async code. A [`Context`] for the new host code must be created with the
-/// same [`Waker`] to ensure that the wake events are forwarded back correctly to the host code
-/// that called the guest.
-///
-/// Because the context has a lifetime and that forwarding lifetimes through the runtime calls is
-/// not possible, this type erases the lifetime of the context and stores it in an `Arc<Mutex<_>>`
-/// so that the context can be obtained again later. To ensure that this is safe, an
-/// [`ActiveContextGuard`] instance is used to remove the context from memory before the lifetime
-/// ends.
-#[derive(Clone, Default)]
-pub struct WakerForwarder(Arc<Mutex<Option<Waker>>>);
-
-impl WakerForwarder {
-    /// Forwards the waker from the task `context` into shared memory so that it can be obtained
-    /// later.
-    pub fn forward<'context>(&mut self, context: &mut Context) -> ActiveContextGuard<'context> {
-        let mut waker_reference = self
-            .0
-            .try_lock()
-            .expect("Unexpected concurrent task context access");
-
-        assert!(
-            waker_reference.is_none(),
-            "`WakerForwarder` accessed by concurrent tasks"
-        );
-
-        *waker_reference = Some(context.waker().clone());
-
-        ActiveContextGuard {
-            waker: self.0.clone(),
-            lifetime: PhantomData,
-        }
-    }
-}
-
-/// A guard type responsible for ensuring the [`Waker`] stored in shared memory does not outlive
-/// the task [`Context`] it was obtained from.
-pub struct ActiveContextGuard<'context> {
-    waker: Arc<Mutex<Option<Waker>>>,
-    lifetime: PhantomData<&'context mut ()>,
-}
-
-impl Drop for ActiveContextGuard<'_> {
-    fn drop(&mut self) {
-        let mut waker_reference = self
-            .waker
-            .try_lock()
-            .expect("Unexpected concurrent task context access");
-
-        *waker_reference = None;
-    }
 }

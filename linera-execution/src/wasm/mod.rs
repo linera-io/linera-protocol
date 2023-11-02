@@ -14,6 +14,7 @@ mod async_boundary;
 mod async_determinism;
 mod common;
 mod module_cache;
+mod runtime_actor;
 mod sanitizer;
 #[macro_use]
 mod system_api;
@@ -24,13 +25,14 @@ mod wasmer;
 #[path = "wasmtime.rs"]
 mod wasmtime;
 
-use self::sanitizer::sanitize;
+use self::{runtime_actor::RuntimeActor, sanitizer::sanitize};
 use crate::{
     ApplicationCallResult, Bytecode, CalleeContext, ContractRuntime, ExecutionError,
     MessageContext, OperationContext, QueryContext, RawExecutionResult, ServiceRuntime,
     SessionCallResult, SessionId, UserApplication, WasmRuntime,
 };
 use async_trait::async_trait;
+use futures::future;
 use std::{path::Path, sync::Arc};
 use thiserror::Error;
 
@@ -114,6 +116,10 @@ pub enum WasmExecutionError {
     ExecuteModuleInWasmtime(#[from] ::wasmtime::Trap),
     #[error("Attempt to use a system API to write to read-only storage")]
     WriteAttemptToReadOnlyStorage,
+    #[error("Runtime failed to respond to application")]
+    MissingRuntimeResponse,
+    #[error("Execution of guest future was aborted")]
+    Aborted,
 }
 
 #[async_trait]
@@ -124,21 +130,26 @@ impl UserApplication for WasmApplication {
         runtime: &dyn ContractRuntime,
         argument: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        let result = match self {
+        let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
+
+        let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { contract, .. } => {
-                Self::prepare_contract_runtime_with_wasmtime(contract, runtime)?
+                Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?
                     .initialize(context, argument)
-                    .await?
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { contract, .. } => {
-                Self::prepare_contract_runtime_with_wasmer(contract, runtime)?
+                Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?
                     .initialize(context, argument)
-                    .await?
             }
         };
-        Ok(result)
+
+        let (runtime_result, wasm_result) =
+            future::join(runtime_actor.run(), wasm_result_receiver).await;
+
+        runtime_result?;
+        wasm_result
     }
 
     async fn execute_operation(
@@ -147,21 +158,26 @@ impl UserApplication for WasmApplication {
         runtime: &dyn ContractRuntime,
         operation: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        let result = match self {
+        let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
+
+        let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { contract, .. } => {
-                Self::prepare_contract_runtime_with_wasmtime(contract, runtime)?
+                Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?
                     .execute_operation(context, operation)
-                    .await?
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { contract, .. } => {
-                Self::prepare_contract_runtime_with_wasmer(contract, runtime)?
+                Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?
                     .execute_operation(context, operation)
-                    .await?
             }
         };
-        Ok(result)
+
+        let (runtime_result, wasm_result) =
+            future::join(runtime_actor.run(), wasm_result_receiver).await;
+
+        runtime_result?;
+        wasm_result
     }
 
     async fn execute_message(
@@ -170,21 +186,26 @@ impl UserApplication for WasmApplication {
         runtime: &dyn ContractRuntime,
         message: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        let result = match self {
+        let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
+
+        let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { contract, .. } => {
-                Self::prepare_contract_runtime_with_wasmtime(contract, runtime)?
+                Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?
                     .execute_message(context, message)
-                    .await?
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { contract, .. } => {
-                Self::prepare_contract_runtime_with_wasmer(contract, runtime)?
+                Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?
                     .execute_message(context, message)
-                    .await?
             }
         };
-        Ok(result)
+
+        let (runtime_result, wasm_result) =
+            future::join(runtime_actor.run(), wasm_result_receiver).await;
+
+        runtime_result?;
+        wasm_result
     }
 
     async fn handle_application_call(
@@ -194,21 +215,26 @@ impl UserApplication for WasmApplication {
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError> {
-        let result = match self {
+        let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
+
+        let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { contract, .. } => {
-                Self::prepare_contract_runtime_with_wasmtime(contract, runtime)?
+                Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?
                     .handle_application_call(context, argument, forwarded_sessions)
-                    .await?
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { contract, .. } => {
-                Self::prepare_contract_runtime_with_wasmer(contract, runtime)?
+                Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?
                     .handle_application_call(context, argument, forwarded_sessions)
-                    .await?
             }
         };
-        Ok(result)
+
+        let (runtime_result, wasm_result) =
+            future::join(runtime_actor.run(), wasm_result_receiver).await;
+
+        runtime_result?;
+        wasm_result
     }
 
     async fn handle_session_call(
@@ -219,20 +245,28 @@ impl UserApplication for WasmApplication {
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, ExecutionError> {
-        let result = match self {
+        let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
+
+        let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { contract, .. } => {
-                Self::prepare_contract_runtime_with_wasmtime(contract, runtime)?
-                    .handle_session_call(context, session_state, argument, forwarded_sessions)
-                    .await?
+                Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?
+                    .handle_session_call(context, &*session_state, argument, forwarded_sessions)
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { contract, .. } => {
-                Self::prepare_contract_runtime_with_wasmer(contract, runtime)?
-                    .handle_session_call(context, session_state, argument, forwarded_sessions)
-                    .await?
+                Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?
+                    .handle_session_call(context, &*session_state, argument, forwarded_sessions)
             }
         };
+
+        let (runtime_result, wasm_result) =
+            future::join(runtime_actor.run(), wasm_result_receiver).await;
+
+        runtime_result?;
+
+        let (result, updated_session_state) = wasm_result?;
+        *session_state = updated_session_state;
         Ok(result)
     }
 
@@ -242,21 +276,26 @@ impl UserApplication for WasmApplication {
         runtime: &dyn ServiceRuntime,
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
-        let result = match self {
+        let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
+
+        let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { service, .. } => {
-                Self::prepare_service_runtime_with_wasmtime(service, runtime)?
+                Self::prepare_service_runtime_with_wasmtime(service, runtime_requests)?
                     .handle_query(context, argument)
-                    .await?
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { service, .. } => {
-                Self::prepare_service_runtime_with_wasmer(service, runtime)?
+                Self::prepare_service_runtime_with_wasmer(service, runtime_requests)?
                     .handle_query(context, argument)
-                    .await?
             }
         };
-        Ok(result)
+
+        let (runtime_result, wasm_result) =
+            future::join(runtime_actor.run(), wasm_result_receiver).await;
+
+        runtime_result?;
+        wasm_result
     }
 }
 

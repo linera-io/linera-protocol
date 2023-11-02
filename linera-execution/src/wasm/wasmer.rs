@@ -10,7 +10,10 @@ wit_bindgen_host_wasmer_rust::export!({
 });
 
 // Export the system interface used by a user service.
-wit_bindgen_host_wasmer_rust::export!("service_system_api.wit");
+wit_bindgen_host_wasmer_rust::export!({
+    custom_error: true,
+    paths: ["service_system_api.wit"],
+});
 
 // Export the system interface used by views.
 wit_bindgen_host_wasmer_rust::export!({
@@ -32,18 +35,23 @@ mod conversions_to_wit;
 mod guest_futures;
 
 use super::{
-    async_boundary::{HostFuture, WakerForwarder},
     async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     module_cache::ModuleCache,
+    runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
     WasmApplication, WasmExecutionError,
 };
-use crate::{Bytecode, ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
+use crate::{
+    Bytecode, CalleeContext, ContractRuntime, ExecutionError, MessageContext, OperationContext,
+    QueryContext, ServiceRuntime,
+};
 use bytes::Bytes;
+use futures::{channel::mpsc, TryFutureExt};
+use linera_base::identifiers::SessionId;
 use linera_views::{batch::Batch, views::ViewError};
 use once_cell::sync::Lazy;
-use std::{future::Future, marker::PhantomData, mem, sync::Arc, task::Poll};
-use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
+use std::{marker::PhantomData, mem, sync::Arc};
+use tokio::sync::Mutex;
 use wasmer::{
     imports, wasmparser::Operator, CompilerConfig, Engine, EngineBuilder, Instance, Module,
     RuntimeError, Singlepass, Store,
@@ -64,50 +72,67 @@ static CONTRACT_CACHE: Lazy<Mutex<ModuleCache<CachedContractModule>>> = Lazy::ne
 static SERVICE_CACHE: Lazy<Mutex<ModuleCache<Module>>> = Lazy::new(Mutex::default);
 
 /// Type representing the [Wasmer](https://wasmer.io/) contract runtime.
-///
-/// The runtime has a lifetime so that it does not outlive the trait object used to export the
-/// system API.
-pub struct Contract<'runtime> {
+pub struct Contract {
     contract: contract::Contract,
-    _lifetime: PhantomData<&'runtime ()>,
 }
 
-impl<'runtime> ApplicationRuntimeContext for Contract<'runtime> {
+impl ApplicationRuntimeContext for Contract {
     type Store = Store;
     type Error = RuntimeError;
-    type Extra = WasmerContractExtra<'runtime>;
+    type Extra = WasmerContractExtra;
 
-    fn finalize(context: &mut WasmRuntimeContext<Self>) {
-        let runtime_guard = context
+    fn configure_initial_fuel(context: &mut WasmRuntimeContext<Self>) {
+        let remaining_points = context
             .extra
-            .runtime_guard
             .runtime
-            .try_lock()
-            .expect("Unexpected concurrent access to ContractRuntime");
-        let runtime = runtime_guard
-            .as_ref()
-            .expect("Runtime guard dropped prematurely");
+            .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
+            .recv()
+            .unwrap_or_else(|oneshot::RecvError| {
+                tracing::debug!("Failed to read initial fuel for transaction");
+                0
+            });
 
+        metering::set_remaining_points(
+            &mut context.store,
+            &context.extra.instance,
+            remaining_points,
+        );
+    }
+
+    fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), ()> {
         let remaining_fuel =
             match metering::get_remaining_points(&mut context.store, &context.extra.instance) {
                 MeteringPoints::Exhausted => 0,
                 MeteringPoints::Remaining(fuel) => fuel,
             };
 
-        runtime.set_remaining_fuel(remaining_fuel);
+        context
+            .extra
+            .runtime
+            .send_request(|response_sender| ContractRequest::SetRemainingFuel {
+                remaining_fuel,
+                response_sender,
+            })
+            .recv()
+            .map_err(|_| ())
     }
 }
 
 /// Type representing the [Wasmer](https://wasmer.io/) service runtime.
-pub struct Service<'runtime> {
+pub struct Service {
     service: service::Service,
-    _lifetime: PhantomData<&'runtime ()>,
 }
 
-impl<'runtime> ApplicationRuntimeContext for Service<'runtime> {
+impl ApplicationRuntimeContext for Service {
     type Store = Store;
     type Error = RuntimeError;
-    type Extra = RuntimeGuard<'runtime, &'static dyn ServiceRuntime>;
+    type Extra = ();
+
+    fn configure_initial_fuel(_context: &mut WasmRuntimeContext<Self>) {}
+
+    fn persist_remaining_fuel(_context: &mut WasmRuntimeContext<Self>) -> Result<(), ()> {
+        Ok(())
+    }
 }
 
 impl WasmApplication {
@@ -135,20 +160,16 @@ impl WasmApplication {
     }
 
     /// Prepares a runtime instance to call into the Wasm contract.
-    pub fn prepare_contract_runtime_with_wasmer<'runtime>(
+    pub fn prepare_contract_runtime_with_wasmer(
         (contract_engine, contract_module): &(Engine, Module),
-        runtime: &'runtime dyn ContractRuntime,
-    ) -> Result<WasmRuntimeContext<'static, Contract<'runtime>>, WasmExecutionError> {
+        runtime: mpsc::UnboundedSender<ContractRequest>,
+    ) -> Result<WasmRuntimeContext<Contract>, WasmExecutionError> {
         let mut store = Store::new(contract_engine);
         let mut imports = imports! {};
-        let waker_forwarder = WakerForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
-        let (system_api, runtime_guard): (SystemApi<&'static dyn ContractRuntime>, _) =
-            SystemApi::new(waker_forwarder.clone(), runtime);
-        let system_api = Arc::new(Mutex::new(system_api));
         let contract_system_api =
-            ContractSystemApi::new(system_api.clone(), queued_future_factory.clone());
-        let view_system_api = ViewSystemApi::new(system_api, queued_future_factory);
+            ContractSystemApi::new(runtime.clone(), queued_future_factory.clone());
+        let view_system_api = ContractViewSystemApi::new(runtime.clone(), queued_future_factory);
         let system_api_setup =
             contract_system_api::add_to_imports(&mut store, &mut imports, contract_system_api);
         let views_api_setup =
@@ -156,41 +177,28 @@ impl WasmApplication {
         let (contract, instance) =
             contract::Contract::instantiate(&mut store, contract_module, &mut imports)
                 .map_err(WasmExecutionError::LoadContractModule)?;
-        let application = Contract {
-            contract,
-            _lifetime: PhantomData,
-        };
-
-        metering::set_remaining_points(&mut store, &instance, runtime.remaining_fuel());
+        let application = Contract { contract };
 
         system_api_setup(&instance, &store).map_err(WasmExecutionError::LoadContractModule)?;
         views_api_setup(&instance, &store).map_err(WasmExecutionError::LoadContractModule)?;
 
         Ok(WasmRuntimeContext {
-            waker_forwarder,
             application,
-            future_queue,
+            future_queue: Some(future_queue),
             store,
-            extra: WasmerContractExtra {
-                instance,
-                runtime_guard,
-            },
+            extra: WasmerContractExtra { runtime, instance },
         })
     }
 
     /// Prepares a runtime instance to call into the Wasm service.
-    pub fn prepare_service_runtime_with_wasmer<'runtime>(
+    pub fn prepare_service_runtime_with_wasmer(
         service_module: &Module,
-        runtime: &'runtime dyn ServiceRuntime,
-    ) -> Result<WasmRuntimeContext<'static, Service<'runtime>>, WasmExecutionError> {
+        runtime: mpsc::UnboundedSender<ServiceRequest>,
+    ) -> Result<WasmRuntimeContext<Service>, WasmExecutionError> {
         let mut store = Store::new(&*SERVICE_ENGINE);
         let mut imports = imports! {};
-        let waker_forwarder = WakerForwarder::default();
-        let (future_queue, _queued_future_factory) = HostFutureQueue::new();
-        let (system_api, runtime_guard) = SystemApi::new(waker_forwarder.clone(), runtime);
-        let system_api = Arc::new(Mutex::new(system_api));
-        let service_system_api = ServiceSystemApi::new(system_api.clone());
-        let view_system_api = ViewSystemApi::new(system_api, ());
+        let service_system_api = ServiceSystemApi::new(runtime.clone());
+        let view_system_api = ServiceViewSystemApi::new(runtime);
         let system_api_setup =
             service_system_api::add_to_imports(&mut store, &mut imports, service_system_api);
         let views_api_setup =
@@ -198,20 +206,16 @@ impl WasmApplication {
         let (service, instance) =
             service::Service::instantiate(&mut store, service_module, &mut imports)
                 .map_err(WasmExecutionError::LoadServiceModule)?;
-        let application = Service {
-            service,
-            _lifetime: PhantomData,
-        };
+        let application = Service { service };
 
         system_api_setup(&instance, &store).map_err(WasmExecutionError::LoadServiceModule)?;
         views_api_setup(&instance, &store).map_err(WasmExecutionError::LoadServiceModule)?;
 
         Ok(WasmRuntimeContext {
-            waker_forwarder,
             application,
-            future_queue,
+            future_queue: None,
             store,
-            extra: runtime_guard,
+            extra: (),
         })
     }
 
@@ -233,16 +237,12 @@ impl WasmApplication {
     }
 }
 
-impl<'runtime> common::Contract for Contract<'runtime> {
+impl common::Contract for Contract {
     type Initialize = contract::Initialize;
     type ExecuteOperation = contract::ExecuteOperation;
     type ExecuteMessage = contract::ExecuteMessage;
     type HandleApplicationCall = contract::HandleApplicationCall;
     type HandleSessionCall = contract::HandleSessionCall;
-    type OperationContext = contract::OperationContext;
-    type MessageContext = contract::MessageContext;
-    type CalleeContext = contract::CalleeContext;
-    type SessionId = contract::SessionId;
     type PollExecutionResult = contract::PollExecutionResult;
     type PollApplicationCallResult = contract::PollApplicationCallResult;
     type PollSessionCallResult = contract::PollSessionCallResult;
@@ -250,10 +250,10 @@ impl<'runtime> common::Contract for Contract<'runtime> {
     fn initialize_new(
         &self,
         store: &mut Store,
-        context: contract::OperationContext,
-        argument: &[u8],
+        context: OperationContext,
+        argument: Vec<u8>,
     ) -> Result<contract::Initialize, RuntimeError> {
-        contract::Contract::initialize_new(&self.contract, store, context, argument)
+        contract::Contract::initialize_new(&self.contract, store, context.into(), &argument)
     }
 
     fn initialize_poll(
@@ -267,10 +267,10 @@ impl<'runtime> common::Contract for Contract<'runtime> {
     fn execute_operation_new(
         &self,
         store: &mut Store,
-        context: contract::OperationContext,
-        operation: &[u8],
+        context: OperationContext,
+        operation: Vec<u8>,
     ) -> Result<contract::ExecuteOperation, RuntimeError> {
-        contract::Contract::execute_operation_new(&self.contract, store, context, operation)
+        contract::Contract::execute_operation_new(&self.contract, store, context.into(), &operation)
     }
 
     fn execute_operation_poll(
@@ -284,10 +284,10 @@ impl<'runtime> common::Contract for Contract<'runtime> {
     fn execute_message_new(
         &self,
         store: &mut Store,
-        context: contract::MessageContext,
-        message: &[u8],
+        context: MessageContext,
+        message: Vec<u8>,
     ) -> Result<contract::ExecuteMessage, RuntimeError> {
-        contract::Contract::execute_message_new(&self.contract, store, context, message)
+        contract::Contract::execute_message_new(&self.contract, store, context.into(), &message)
     }
 
     fn execute_message_poll(
@@ -301,16 +301,21 @@ impl<'runtime> common::Contract for Contract<'runtime> {
     fn handle_application_call_new(
         &self,
         store: &mut Store,
-        context: contract::CalleeContext,
-        argument: &[u8],
-        forwarded_sessions: &[contract::SessionId],
+        context: CalleeContext,
+        argument: Vec<u8>,
+        forwarded_sessions: Vec<SessionId>,
     ) -> Result<contract::HandleApplicationCall, RuntimeError> {
+        let forwarded_sessions: Vec<_> = forwarded_sessions
+            .into_iter()
+            .map(contract::SessionId::from)
+            .collect();
+
         contract::Contract::handle_application_call_new(
             &self.contract,
             store,
-            context,
-            argument,
-            forwarded_sessions,
+            context.into(),
+            &argument,
+            &forwarded_sessions,
         )
     }
 
@@ -325,18 +330,23 @@ impl<'runtime> common::Contract for Contract<'runtime> {
     fn handle_session_call_new(
         &self,
         store: &mut Store,
-        context: contract::CalleeContext,
-        session: &[u8],
-        argument: &[u8],
-        forwarded_sessions: &[contract::SessionId],
+        context: CalleeContext,
+        session: Vec<u8>,
+        argument: Vec<u8>,
+        forwarded_sessions: Vec<SessionId>,
     ) -> Result<contract::HandleSessionCall, RuntimeError> {
+        let forwarded_sessions: Vec<_> = forwarded_sessions
+            .into_iter()
+            .map(contract::SessionId::from)
+            .collect();
+
         contract::Contract::handle_session_call_new(
             &self.contract,
             store,
-            context,
-            session,
-            argument,
-            forwarded_sessions,
+            context.into(),
+            &session,
+            &argument,
+            &forwarded_sessions,
         )
     }
 
@@ -349,18 +359,17 @@ impl<'runtime> common::Contract for Contract<'runtime> {
     }
 }
 
-impl<'runtime> common::Service for Service<'runtime> {
+impl common::Service for Service {
     type HandleQuery = service::HandleQuery;
-    type QueryContext = service::QueryContext;
     type PollApplicationQueryResult = service::PollApplicationQueryResult;
 
     fn handle_query_new(
         &self,
         store: &mut Store,
-        context: service::QueryContext,
-        argument: &[u8],
+        context: QueryContext,
+        argument: Vec<u8>,
     ) -> Result<service::HandleQuery, RuntimeError> {
-        service::Service::handle_query_new(&self.service, store, context, argument)
+        service::Service::handle_query_new(&self.service, store, context.into(), &argument)
     }
 
     fn handle_query_poll(
@@ -369,41 +378,6 @@ impl<'runtime> common::Service for Service<'runtime> {
         future: &service::HandleQuery,
     ) -> Result<service::PollApplicationQueryResult, RuntimeError> {
         service::Service::handle_query_poll(&self.service, store, future)
-    }
-}
-
-/// Helper type with common functionality across the contract and service system API
-/// implementations.
-pub struct SystemApi<S> {
-    waker: WakerForwarder,
-    runtime: Arc<Mutex<Option<S>>>,
-}
-
-impl<Runtime> SystemApi<Runtime> {
-    /// Creates a new [`SystemApi`] instance, ensuring that the lifetime of the borrowed `runtime`
-    /// reference is respected.
-    ///
-    /// # Safety
-    ///
-    /// This method uses a [`mem::transmute`] call to erase the lifetime of the `runtime` reference.
-    /// However, this is safe because the lifetime is transfered to the returned [`RuntimeGuard`],
-    /// which removes the unsafe reference from memory when it is dropped, ensuring the lifetime is
-    /// respected.
-    ///
-    /// The [`RuntimeGuard`] instance must be kept alive while the `runtime` reference is still
-    /// expected to be alive and usable by the Wasm application.
-    pub fn new<'runtime>(
-        waker: WakerForwarder,
-        runtime: impl RemoveLifetime<WithoutLifetime = Runtime> + 'runtime,
-    ) -> (Self, RuntimeGuard<'runtime, Runtime>) {
-        let runtime = Arc::new(Mutex::new(Some(unsafe { runtime.remove_lifetime() })));
-
-        let guard = RuntimeGuard {
-            runtime: runtime.clone(),
-            _lifetime: PhantomData,
-        };
-
-        (SystemApi { waker, runtime }, guard)
     }
 }
 
@@ -444,225 +418,79 @@ unsafe impl<'runtime> RemoveLifetime for &'runtime dyn ServiceRuntime {
 /// Implementation to forward contract system calls from the guest Wasm module to the host
 /// implementation.
 pub struct ContractSystemApi {
-    shared: Arc<Mutex<SystemApi<&'static dyn ContractRuntime>>>,
-    queued_future_factory: QueuedHostFutureFactory<'static>,
+    runtime: mpsc::UnboundedSender<ContractRequest>,
+    queued_future_factory: QueuedHostFutureFactory,
 }
 
 impl ContractSystemApi {
     /// Creates a new [`ContractSystemApi`] instance.
     pub fn new(
-        shared: Arc<Mutex<SystemApi<&'static dyn ContractRuntime>>>,
-        queued_future_factory: QueuedHostFutureFactory<'static>,
+        runtime: mpsc::UnboundedSender<ContractRequest>,
+        queued_future_factory: QueuedHostFutureFactory,
     ) -> Self {
         ContractSystemApi {
-            shared,
+            runtime,
             queued_future_factory,
         }
     }
-
-    /// Safely obtains the [`ContractRuntime`] trait object instance to handle a system call.
-    ///
-    /// # Panics
-    ///
-    /// If there is a concurrent call from the Wasm application (which is impossible as long as it
-    /// is executed in a single thread) or if the trait object is no longer alive (or more
-    /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
-    /// no longer alive).
-    fn runtime(&self) -> &'static dyn ContractRuntime {
-        *self
-            .shared
-            .try_lock()
-            .expect("Unexpected concurrent system API access by application")
-            .runtime
-            .try_lock()
-            .expect("Unexpected concurrent runtime access by application")
-            .as_ref()
-            .expect("Application called runtime after it should have stopped")
-    }
-
-    /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
-    fn waker(&mut self) -> MappedMutexGuard<'_, WakerForwarder> {
-        MutexGuard::map(
-            self.shared
-                .try_lock()
-                .expect("Unexpected concurrent system API access by application"),
-            |system_api| &mut system_api.waker,
-        )
-    }
 }
 
-impl_contract_system_api!(ContractSystemApi);
+impl_contract_system_api!(ContractSystemApi, wasmer::RuntimeError);
 
 /// Implementation to forward service system calls from the guest Wasm module to the host
 /// implementation.
 pub struct ServiceSystemApi {
-    shared: Arc<Mutex<SystemApi<&'static dyn ServiceRuntime>>>,
+    runtime: mpsc::UnboundedSender<ServiceRequest>,
 }
 
 impl ServiceSystemApi {
     /// Creates a new [`ServiceSystemApi`] instance.
-    pub fn new(shared: Arc<Mutex<SystemApi<&'static dyn ServiceRuntime>>>) -> Self {
-        ServiceSystemApi { shared }
-    }
-
-    /// Safely obtains the [`ServiceRuntime`] trait object instance to handle a system call.
-    ///
-    /// # Panics
-    ///
-    /// If there is a concurrent call from the Wasm application (which is impossible as long as it
-    /// is executed in a single thread) or if the trait object is no longer alive (or more
-    /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
-    /// no longer alive).
-    fn runtime(&self) -> &'static dyn ServiceRuntime {
-        *self
-            .shared
-            .try_lock()
-            .expect("Unexpected concurrent system API access by application")
-            .runtime
-            .try_lock()
-            .expect("Unexpected concurrent runtime access by application")
-            .as_ref()
-            .expect("Application called runtime after it should have stopped")
-    }
-
-    /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
-    fn waker(&mut self) -> MappedMutexGuard<'_, WakerForwarder> {
-        MutexGuard::map(
-            self.shared
-                .try_lock()
-                .expect("Unexpected concurrent system API access by application"),
-            |system_api| &mut system_api.waker,
-        )
+    pub fn new(runtime: mpsc::UnboundedSender<ServiceRequest>) -> Self {
+        ServiceSystemApi { runtime }
     }
 }
 
-impl_service_system_api!(ServiceSystemApi);
+impl_service_system_api!(ServiceSystemApi, wasmer::RuntimeError);
 
-/// Implementation to forward view system calls from the guest Wasm module to the host
+/// Implementation to forward view system calls from the contract guest Wasm module to the host
 /// implementation.
-pub struct ViewSystemApi<Runtime, MaybeQueuedFutureFactory> {
-    shared: Arc<Mutex<SystemApi<Runtime>>>,
-    queued_future_factory: MaybeQueuedFutureFactory,
+pub struct ContractViewSystemApi {
+    runtime: mpsc::UnboundedSender<ContractRequest>,
+    queued_future_factory: QueuedHostFutureFactory,
 }
 
-impl<Runtime, MaybeQueuedFutureFactory> ViewSystemApi<Runtime, MaybeQueuedFutureFactory> {
-    /// Creates a new [`ViewSystemApi`] instance.
+impl ContractViewSystemApi {
+    /// Creates a new [`ContractViewSystemApi`] instance.
     pub fn new(
-        shared: Arc<Mutex<SystemApi<Runtime>>>,
-        queued_future_factory: MaybeQueuedFutureFactory,
+        runtime: mpsc::UnboundedSender<ContractRequest>,
+        queued_future_factory: QueuedHostFutureFactory,
     ) -> Self {
-        ViewSystemApi {
-            shared,
+        ContractViewSystemApi {
+            runtime,
             queued_future_factory,
         }
     }
 }
 
-impl ViewSystemApi<&'static dyn ContractRuntime, QueuedHostFutureFactory<'static>> {
-    /// Safely obtains the [`ContractRuntime`] trait object instance to handle a system call.
-    ///
-    /// # Panics
-    ///
-    /// If there is a concurrent call from the Wasm application (which is impossible as long as it
-    /// is executed in a single thread) or if the trait object is no longer alive (or more
-    /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
-    /// no longer alive).
-    fn runtime(&self) -> &'static dyn ContractRuntime {
-        *self
-            .shared
-            .try_lock()
-            .expect("Unexpected concurrent system API access by application")
-            .runtime
-            .try_lock()
-            .expect("Unexpected concurrent runtime access by application")
-            .as_ref()
-            .expect("Application called runtime after it should have stopped")
-    }
+/// Implementation to forward view system calls from the guest WASM module to the host
+/// implementation.
+pub struct ServiceViewSystemApi {
+    runtime: mpsc::UnboundedSender<ServiceRequest>,
+}
 
-    /// Same as [`Self::runtime`].
-    fn runtime_with_writable_storage(
-        &self,
-    ) -> Result<&'static dyn ContractRuntime, ExecutionError> {
-        Ok(self.runtime())
-    }
-
-    /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
-    fn waker(&mut self) -> MappedMutexGuard<'_, WakerForwarder> {
-        MutexGuard::map(
-            self.shared
-                .try_lock()
-                .expect("Unexpected concurrent system API access by application"),
-            |system_api| &mut system_api.waker,
-        )
-    }
-
-    /// Creates a new [`HostFuture`] instance with the provided `future`.
-    fn new_host_future<Output>(
-        &mut self,
-        future: impl Future<Output = Output> + Send + 'static,
-    ) -> HostFuture<'static, Output>
-    where
-        Output: Send + 'static,
-    {
-        self.queued_future_factory.enqueue(future)
+impl ServiceViewSystemApi {
+    /// Creates a new [`ServiceViewSystemApi`] instance.
+    pub fn new(runtime: mpsc::UnboundedSender<ServiceRequest>) -> Self {
+        ServiceViewSystemApi { runtime }
     }
 }
 
-impl ViewSystemApi<&'static dyn ServiceRuntime, ()> {
-    /// Safely obtains the [`ServiceRuntime`] trait object instance to handle a system call.
-    ///
-    /// # Panics
-    ///
-    /// If there is a concurrent call from the Wasm application (which is impossible as long as it
-    /// is executed in a single thread) or if the trait object is no longer alive (or more
-    /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
-    /// no longer alive).
-    fn runtime(&self) -> &'static dyn ServiceRuntime {
-        *self
-            .shared
-            .try_lock()
-            .expect("Unexpected concurrent system API access by application")
-            .runtime
-            .try_lock()
-            .expect("Unexpected concurrent runtime access by application")
-            .as_ref()
-            .expect("Application called runtime after it should have stopped")
-    }
-
-    /// Returns an error due to an attempt to write to storage from a service.
-    fn runtime_with_writable_storage(
-        &self,
-    ) -> Result<&'static dyn ContractRuntime, ExecutionError> {
-        Err(WasmExecutionError::WriteAttemptToReadOnlyStorage.into())
-    }
-
-    /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
-    fn waker(&mut self) -> MappedMutexGuard<'_, WakerForwarder> {
-        MutexGuard::map(
-            self.shared
-                .try_lock()
-                .expect("Unexpected concurrent system API access by application"),
-            |system_api| &mut system_api.waker,
-        )
-    }
-
-    /// Enqueues a `future` to be executed deterministically.
-    fn new_host_future<Output>(
-        &mut self,
-        future: impl Future<Output = Output> + Send + 'static,
-    ) -> HostFuture<'static, Output> {
-        HostFuture::new(future)
-    }
-}
-
-impl_view_system_api!(
-    ViewSystemApi<&'static dyn ContractRuntime, QueuedHostFutureFactory<'static>>
-);
-impl_view_system_api!(ViewSystemApi<&'static dyn ServiceRuntime, ()>);
+impl_view_system_api_for_contract!(ContractViewSystemApi, wasmer::RuntimeError);
+impl_view_system_api_for_service!(ServiceViewSystemApi, wasmer::RuntimeError);
 
 /// Extra parameters necessary when cleaning up after contract execution.
-pub struct WasmerContractExtra<'runtime> {
-    runtime_guard: RuntimeGuard<'runtime, &'static dyn ContractRuntime>,
+pub struct WasmerContractExtra {
+    runtime: mpsc::UnboundedSender<ContractRequest>,
     instance: Instance,
 }
 
