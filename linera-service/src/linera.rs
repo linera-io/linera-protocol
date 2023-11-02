@@ -36,6 +36,7 @@ use linera_service::{
         LineraNet, LineraNetConfig, Network,
     },
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
+    faucet::FaucetService,
     node_service::NodeService,
     project::{self, Project},
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfig},
@@ -934,6 +935,21 @@ enum ClientCommand {
         port: NonZeroU16,
     },
 
+    /// Run a GraphQL service that exposes a faucet where users can claim tokens.
+    /// This gives away the chain's tokens, and is mainly intended for testing.
+    Faucet {
+        /// The chain that gives away its tokens.
+        chain_id: Option<ChainId>,
+
+        /// The port on which to run the server
+        #[structopt(long = "port", default_value = "8080")]
+        port: NonZeroU16,
+
+        /// The number of tokens to send to each new chain.
+        #[structopt(long = "amount")]
+        amount: Amount,
+    },
+
     /// Publish bytecode.
     PublishBytecode {
         /// Path to the Wasm file for the application "contract" bytecode.
@@ -1584,6 +1600,15 @@ impl Runnable for Job {
                 let default_chain = context.wallet_state.default_chain();
                 let service = NodeService::new(config, port, default_chain, storage);
                 service.run(context).await?;
+            }
+
+            Faucet {
+                chain_id,
+                port,
+                amount,
+            } => {
+                let chain_client = context.make_chain_client(storage, chain_id);
+                FaucetService::new(port, chain_client, amount).run().await?;
             }
 
             PublishBytecode {

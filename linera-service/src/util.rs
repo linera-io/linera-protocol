@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{bail, ensure, Context as _, Result};
+use async_graphql::http::GraphiQLSource;
 use async_trait::async_trait;
+use axum::response::{self, IntoResponse};
+use http::Uri;
 use std::{
     path::{Path, PathBuf},
     process::Stdio,
@@ -223,4 +226,13 @@ impl QuotedBashScript {
 
         Ok(result)
     }
+}
+
+/// Returns an HTML response constructing the GraphiQL web page for the given URI.
+pub(crate) async fn graphiql(uri: Uri) -> impl IntoResponse {
+    let source = GraphiQLSource::build()
+        .endpoint(uri.path())
+        .subscription_endpoint("/ws")
+        .finish();
+    response::Html(source)
 }
