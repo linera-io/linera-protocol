@@ -85,13 +85,14 @@ if [ -n "$cloud_mode" ]; then
 else
     docker_image="linera-test:latest"
     if [ -n "$do_build" ]; then
+        arch="$(uname -m)"
         docker build \
             -f ../../docker/Dockerfile \
-            ${copy+--build-arg binaries=target/release} \
+            ${copy:+--build-arg binaries=target/release} \
             --build-arg environment=k8s-local \
-            --build-arg target="$(uname -m)-unknown-linux-gnu" \
+            --build-arg target="${arch/#arm/aarch}"-unknown-linux-gnu \
             ../../ \
-            -t "$docker_image"
+            -t "$docker_image" || exit 1
     fi
 fi
 
