@@ -94,7 +94,10 @@ impl ApplicationRuntimeContext for Contract {
         let fuel = runtime
             .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
             .recv()
-            .unwrap_or(0);
+            .unwrap_or_else(|oneshot::RecvError| {
+                tracing::debug!("Failed to read initial fuel for transaction");
+                0
+            });
 
         context
             .store
