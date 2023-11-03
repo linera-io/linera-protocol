@@ -56,7 +56,6 @@ fi
 # cluster running
 kind create cluster
 
-opt_list=""
 # Perform the desired actions based on the provided flags and arguments
 if [ -n "$cloud_mode" ]; then
     if [ -n "$do_build" ]; then
@@ -72,7 +71,6 @@ if [ -n "$cloud_mode" ]; then
     fi
 
     docker_image="us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-test-local:latest"
-    opt_list+=" --cloud"
 
     docker pull "$docker_image" || exit 1
 else
@@ -89,10 +87,6 @@ else
 fi
 
 kind load docker-image "$docker_image" || exit 1
-
-if [ -n "$port_forward" ]; then
-    opt_list+=" --port-forward"
-fi
 
 helm uninstall linera-core --wait;
 
