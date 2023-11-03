@@ -2,15 +2,15 @@
 # Helper script for re-installing helm charts locally.
 
 # Default variable values
-cloud_mode=false
-port_forward=false
-do_build=true
-clean=false
-copy=false
+cloud_mode=
+port_forward=
+do_build=1
+clean=
+copy=
 
 # Guard clause check if required binaries are installed
-which kind > /dev/null || { echo "Error: kind not installed." ; exit 1 ; }
-which helm > /dev/null || { echo "Error: helm not installed." ; exit 1 ; }
+type -P kind > /dev/null || { echo "Error: kind not installed." ; exit 1 ; }
+type -P helm > /dev/null || { echo "Error: helm not installed." ; exit 1 ; }
 
 # Function to display script usage
 usage() {
@@ -28,28 +28,15 @@ usage() {
 handle_options() {
     while [ $# -gt 0 ]; do
         case $1 in
-        -h | --help)
-            usage
-            exit 0
-            ;;
-        --cloud)
-            cloud_mode=true
-            ;;
-        --port-forward)
-            port_forward=true
-            ;;
-        --no-build)
-            do_build=false
-            ;;
-        --clean)
-            clean=true
-            ;;
-        --copy)
-            copy=true
-            ;;
+        -h | --help) usage; exit 0;;
+        --cloud) cloud_mode=1;;
+        --port-forward) port_forward=1;;
+        --no-build) do_build=;;
+        --clean) clean=1;;
+        --copy) copy=1;;
         *)
             echo "Invalid option: $1" >&2
-            usage
+            usage >&2
             exit 1
             ;;
         esac
@@ -60,7 +47,7 @@ handle_options() {
 # Main script execution
 handle_options "$@"
 
-if [ "$clean" = true ]; then
+if [ -n "$clean" ]; then
     rm -rf /tmp/linera.db
     kind delete cluster
 fi
@@ -71,8 +58,8 @@ kind create cluster
 
 opt_list=""
 # Perform the desired actions based on the provided flags and arguments
-if [ "$cloud_mode" = true ]; then
-    if [ "$do_build" = true ]; then
+if [ -n "$cloud_mode" ]; then
+    if [ -n "$do_build" ]; then
         current_dir=$(pwd)
         github_root=$(git rev-parse --show-toplevel 2>/dev/null)
 
@@ -87,36 +74,29 @@ if [ "$cloud_mode" = true ]; then
     docker_image="us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-test-local:latest"
     opt_list+=" --cloud"
 
-    docker pull $docker_image || exit 1
+    docker pull "$docker_image" || exit 1
 else
     docker_image="linera-test:latest"
-    if [ "$do_build" = true ]; then
-        if [[ "${copy-}" ]]; then
-            docker build \
-                -f ../../docker/Dockerfile.copy \
-                --build-arg environment=k8s-local \
-                ../../ \
-                -t "$docker_image"
-        else
-            docker build \
-                -f ../../docker/Dockerfile \
-                ../../ \
-                --build-arg environment=k8s-local \
-                --build-arg target="$(uname -m)-unknown-linux-gnu" \
-                -t "$docker_image"
-        fi
+    if [ -n "$do_build" ]; then
+        docker build \
+            -f ../../docker/Dockerfile \
+            ${copy+--build-arg binaries=target/release} \
+            --build-arg environment=k8s-local \
+            --build-arg target="$(uname -m)-unknown-linux-gnu" \
+            ../../ \
+            -t "$docker_image"
     fi
 fi
 
-kind load docker-image $docker_image || exit 1
+kind load docker-image "$docker_image" || exit 1
 
-if [ "$port_forward" = true ]; then
+if [ -n "$port_forward" ]; then
     opt_list+=" --port-forward"
 fi
 
 helm uninstall linera-core --wait;
 
-if [ "$cloud_mode" = true ]; then
+if [ -n "$cloud_mode" ]; then
     helm install linera-core . --values values-local-with-cloud-build.yaml --wait --set installCRDs=true || exit 1;
 else
     helm install linera-core . --values values-local.yaml --wait --set installCRDs=true || exit 1;
@@ -128,7 +108,7 @@ echo -e "\nServices:";
 kubectl get svc;
 
 docker rm linera-test-local;
-docker run -d --name linera-test-local $docker_image \
+docker run -d --name linera-test-local "$docker_image" \
     && docker cp linera-test-local:wallet.json /tmp/ \
     && docker cp linera-test-local:linera.db /tmp/
 
@@ -151,6 +131,6 @@ validator_pod_name=$(kubectl get pods | grep validator | awk '{ print $1 }')
 echo -e "\nTo port forward yourself, run:"
 echo -e "kubectl port-forward $validator_pod_name 19100:19100\n"
 
-if [ "$port_forward" = true ]; then
+if [ -n "$port_forward" ]; then
     kubectl port-forward $validator_pod_name 19100:19100
 fi
