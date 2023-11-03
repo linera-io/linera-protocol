@@ -47,7 +47,11 @@ export PATH=$PWD/target/debug:$PATH
 
 Using the helper function defined by `linera net helper`, set up a local network with two
 wallets, and define variables holding their wallet paths (`$LINERA_WALLET_0`,
-`$LINERA_WALLET_1`) and storage paths (`$LINERA_STORAGE_0`, `$LINERA_STORAGE_1`).
+`$LINERA_WALLET_1`) and storage paths (`$LINERA_STORAGE_0`, `$LINERA_STORAGE_1`).  These
+variables are named according to a convention that we can access using `--with-wallet $n`
+to use the variable `LINERA_WALLET_$n` and `LINERA_STORAGE_$n`; e.g.
+`linera --with-wallet 0` is equivalent to
+`linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0"`.
 
 ```bash
 eval "$(linera net helper)"
@@ -71,8 +75,8 @@ Alternatively, the command below can be used to list the chains created for the 
 known by each wallet:
 
 ```bash
-linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0" wallet show
-linera --wallet "$LINERA_WALLET_1" --storage "$LINERA_STORAGE_1" wallet show
+linera --with-wallet 0 wallet show
+linera --with-wallet 1 wallet show
 ```
 
 A table will be shown with the chains registered in the wallet and their meta-data:
@@ -108,8 +112,7 @@ Create a fungible token application where two accounts start with the minted tok
 with 100 of them and another with 200 of them:
 
 ```bash
-APP_ID_0=$(linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0" \
-           project publish-and-create \
+APP_ID_0=$(linera --with-wallet 0 project publish-and-create \
            examples/fungible \
            --json-argument '{ "accounts": { "User:'$OWNER_0'": "100", "User:'$OWNER_1'": "200" } }')
 
@@ -126,7 +129,7 @@ Similarly, we're going to create a crowd-funding campaign on the default chain. 
 to specify our fungible application as a dependency and a parameter:
 
 ```bash
-APP_ID_1=$(linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0" \
+APP_ID_1=$(linera --with-wallet 0 \
            project publish-and-create \
            examples/crowd-funding \
            crowd_funding \
@@ -143,12 +146,12 @@ sleep 5
 First, a node service has to be started for each wallet, using two different ports:
 
 ```bash
-linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0" service --port 8080 &
+linera --with-wallet 0 service --port 8080 &
 
 # Wait for it to fully complete
 sleep 2
 
-linera --wallet "$LINERA_WALLET_1" --storage "$LINERA_STORAGE_1" service --port 8081 &
+linera --with-wallet 1 service --port 8081 &
 
 # Wait for it to fully complete
 sleep 2
