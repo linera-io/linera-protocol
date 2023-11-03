@@ -114,7 +114,7 @@ impl ApplicationRuntimeContext for Contract {
                 tracing::debug!("Failed to read initial fuel for transaction");
                 0
             });
-        let consumed_fuel = context.store.fuel_consumed().unwrap_or(0);
+        let consumed_fuel = context.store.fuel_consumed().ok_or(())?;
         let remaining_fuel = initial_fuel.saturating_sub(consumed_fuel);
 
         runtime
