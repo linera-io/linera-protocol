@@ -3,6 +3,7 @@
 lineraImage: linera-test:latest
 lineraImagePullPolicy: Never
 logLevel: "debug"
+proxyPort: 19100
 
 loki-stack:
   loki:
@@ -16,4 +17,3 @@ loki-stack:
     config:
       clients:
         - url: http://linera-core-loki:3100/loki/api/v1/push
-

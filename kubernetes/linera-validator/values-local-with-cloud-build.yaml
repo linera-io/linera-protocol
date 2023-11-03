@@ -3,6 +3,7 @@
 lineraImage: us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-test-local:latest
 lineraImagePullPolicy: Never
 logLevel: "debug"
+proxyPort: 19100
 
 loki-stack:
   loki:

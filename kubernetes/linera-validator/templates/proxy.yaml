@@ -1,16 +1,35 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    cloud.google.com/app-protocols: '{"linera-port":"HTTP2"}'
+  name: proxy
+  labels:
+    app: proxy
+spec:
+  ports:
+    - port: {{ .Values.proxyPort }}
+      name: linera-port
+      targetPort: {{ .Values.proxyPort }}
+  selector:
+    app: proxy
+  type: NodePort
+
+---
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: validator-1
+  name: proxy
 spec:
   selector:
     matchLabels:
-      app: validator-1
+      app: proxy
   replicas: 1
   template:
     metadata:
       labels:
-        app: validator-1
+        app: proxy
     spec:
       serviceAccountName: linera-admin
       terminationGracePeriodSeconds: 10
@@ -19,8 +38,8 @@ spec:
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
           image: {{ .Values.lineraImage }}
           ports:
-            - name: linera-port
-              containerPort: 19100
+            - containerPort: {{ .Values.proxyPort }}
+              name: linera-port
           command: ["./linera-proxy"]
           args: ["server_1.json"]
           env:
