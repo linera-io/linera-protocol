@@ -48,7 +48,7 @@ source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 ```
 
 You may also use `cargo install linera-service` and append the output of
-`linera net helper` to your `~.bash_profile`.
+`linera net helper` to your `~/.bash_profile`.
 
 Now, we are ready to set up a local network with an initial wallet owning several initial
 chains. In a new BASH shell, enter:
@@ -57,8 +57,8 @@ chains. In a new BASH shell, enter:
 linera_spawn_and_read_wallet_variables linera net up --testing-prng-seed 37
 ```
 
-A new test network is now running and the environment variables LINERA_WALLET and
-LINERA_STORAGE are now be defined for the duration of the shell session. We used the
+A new test network is now running and the environment variables `LINERA_WALLET` and
+`LINERA_STORAGE` are now be defined for the duration of the shell session. We used the
 test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
 presentation.
 
