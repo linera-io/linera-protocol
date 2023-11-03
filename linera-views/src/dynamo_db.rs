@@ -7,7 +7,6 @@ use crate::{
         CommonStoreConfig, ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient,
         TableStatus, MIN_VIEW_TAG,
     },
-    localstack,
     lru_caching::LruCachingKeyValueClient,
     value_splitting::{DatabaseConsistencyError, ValueSplittingKeyValueStoreClient},
 };
@@ -29,20 +28,119 @@ use serde::{Deserialize, Serialize};
 use static_assertions as sa;
 use std::{collections::HashMap, mem, str::FromStr, sync::Arc};
 use thiserror::Error;
+use std::env;
+use aws_sdk_s3::Endpoint;
 
 #[cfg(any(test, feature = "test"))]
 use {
     crate::lru_caching::TEST_CACHE_SIZE,
     crate::test_utils::get_table_name,
     anyhow::{Context, Error},
-    aws_sdk_s3::Endpoint,
     aws_types::SdkConfig,
-    std::env,
     tokio::sync::{Mutex, MutexGuard},
 };
+use http::uri::InvalidUri;
+
+/// Name of the environment variable with the address to a LocalStack instance.
+pub const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
+
+/// Gets the [`Endpoint`] to connect to a LocalStack instance.
+///
+/// The endpoint must be configured through a [`LOCALSTACK_ENDPOINT`] environment variable.
+pub fn get_endpoint() -> Result<Endpoint, EndpointError> {
+    let endpoint_address = env::var(LOCALSTACK_ENDPOINT)?.parse()?;
+    Ok(Endpoint::immutable(endpoint_address))
+}
+
+/// Failure to get the LocalStack endpoint.
+#[derive(Debug, Error)]
+pub enum EndpointError {
+    /// The endpoint was missing for the {LOCALSTACK_ENDPOINT:?} environment variable.
+    #[error("Missing LocalStack endpoint address in {LOCALSTACK_ENDPOINT:?} environment variable")]
+    MissingEndpoint(#[from] env::VarError),
+
+    /// LocalStack endpoint address is not a valid URI
+    #[error("LocalStack endpoint address is not a valid URI")]
+    InvalidUri(#[from] InvalidUri),
+}
+
+
 
 /// The configuration to connect to DynamoDB.
 pub type Config = aws_sdk_dynamodb::Config;
+
+
+/// Gets the AWS configuration from the environment
+pub async fn get_base_config() -> Result<Config, DynamoDbContextError> {
+    let base_config = aws_config::load_from_env().await;
+    Ok((&base_config).into())
+}
+
+/// Gets the localstack config
+pub async fn get_localstack_config() -> Result<Config, DynamoDbContextError> {
+    let base_config = aws_config::load_from_env().await;
+    Ok(aws_sdk_dynamodb::config::Builder::from(&base_config)
+        .endpoint_resolver(get_endpoint()?)
+        .build())
+}
+
+/// Getting a configuration for the system
+pub async fn get_config(use_localstack: bool) -> Result<Config, DynamoDbContextError> {
+    if use_localstack {
+        get_localstack_config().await
+    } else {
+        get_base_config().await
+    }
+}
+
+#[cfg(any(test, feature = "test"))]
+impl LocalStackTestContext {
+    /// Creates an instance of [`LocalStackTestContext`], loading the necessary LocalStack
+    /// configuration.
+    ///
+    /// An address to the LocalStack instance must be specified using a `LOCALSTACK_ENDPOINT`
+    /// environment variable.
+    ///
+    /// This also locks the `LOCALSTACK_GUARD` to enforce that only one test has access to the
+    /// LocalStack instance.
+    pub async fn new() -> Result<LocalStackTestContext, Error> {
+        let base_config = aws_config::load_from_env().await;
+        let endpoint = Self::load_endpoint()?;
+        let _guard = LOCALSTACK_GUARD.lock().await;
+
+        let context = LocalStackTestContext {
+            base_config,
+            endpoint,
+            _guard,
+        };
+
+        Ok(context)
+    }
+
+    /// Creates an [`Endpoint`] using the configuration in the [`LOCALSTACK_ENDPOINT`] environment
+    /// variable.
+    fn load_endpoint() -> Result<Endpoint, Error> {
+        let endpoint_address = env::var(LOCALSTACK_ENDPOINT)
+            .with_context(|| {
+                format!(
+                    "Missing LocalStack endpoint address in {LOCALSTACK_ENDPOINT:?} \
+                    environment variable"
+                )
+            })?
+            .parse()
+            .context("LocalStack endpoint address is not a valid URI")?;
+
+        Ok(Endpoint::immutable(endpoint_address))
+    }
+
+    /// Creates a new [`aws_sdk_dynamodb::Config`] for tests, using a LocalStack instance.
+    pub fn dynamo_db_config(&self) -> aws_sdk_dynamodb::Config {
+        aws_sdk_dynamodb::config::Builder::from(&self.base_config)
+            .endpoint_resolver(self.endpoint.clone())
+            .build()
+    }
+}
+
 
 #[cfg(test)]
 #[path = "unit_tests/dynamo_db_context_tests.rs"]
@@ -1219,29 +1317,6 @@ impl DynamoDbClient {
     }
 }
 
-/// Gets the AWS configuration from the environment
-pub async fn get_base_config() -> Result<Config, DynamoDbContextError> {
-    let base_config = aws_config::load_from_env().await;
-    Ok((&base_config).into())
-}
-
-/// Gets the localstack config
-pub async fn get_localstack_config() -> Result<Config, DynamoDbContextError> {
-    let base_config = aws_config::load_from_env().await;
-    Ok(aws_sdk_dynamodb::config::Builder::from(&base_config)
-        .endpoint_resolver(localstack::get_endpoint()?)
-        .build())
-}
-
-/// Getting a configuration for the system
-pub async fn get_config(use_localstack: bool) -> Result<Config, DynamoDbContextError> {
-    if use_localstack {
-        get_localstack_config().await
-    } else {
-        get_base_config().await
-    }
-}
-
 /// An implementation of [`Context`][trait1] based on [`DynamoDbClient`].
 ///
 /// [trait1]: crate::common::Context
@@ -1424,7 +1499,7 @@ pub enum DynamoDbContextError {
 
     /// An Endpoint error occurred.
     #[error(transparent)]
-    Endpoint(#[from] localstack::EndpointError),
+    Endpoint(#[from] EndpointError),
 
     /// An error occurred while creating the table.
     #[error(transparent)]
@@ -1512,64 +1587,12 @@ impl IsResourceInUseException for SdkError<aws_sdk_dynamodb::error::CreateTableE
 #[cfg(any(test, feature = "test"))]
 static LOCALSTACK_GUARD: Mutex<()> = Mutex::const_new(());
 
-/// Name of the environment variable with the address to a LocalStack instance.
-#[cfg(any(test, feature = "test"))]
-const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
-
 /// A type to help tests that need a LocalStack instance.
 #[cfg(any(test, feature = "test"))]
 pub struct LocalStackTestContext {
     base_config: SdkConfig,
     endpoint: Endpoint,
     _guard: MutexGuard<'static, ()>,
-}
-
-#[cfg(any(test, feature = "test"))]
-impl LocalStackTestContext {
-    /// Creates an instance of [`LocalStackTestContext`], loading the necessary LocalStack
-    /// configuration.
-    ///
-    /// An address to the LocalStack instance must be specified using a `LOCALSTACK_ENDPOINT`
-    /// environment variable.
-    ///
-    /// This also locks the `LOCALSTACK_GUARD` to enforce that only one test has access to the
-    /// LocalStack instance.
-    pub async fn new() -> Result<LocalStackTestContext, Error> {
-        let base_config = aws_config::load_from_env().await;
-        let endpoint = Self::load_endpoint()?;
-        let _guard = LOCALSTACK_GUARD.lock().await;
-
-        let context = LocalStackTestContext {
-            base_config,
-            endpoint,
-            _guard,
-        };
-
-        Ok(context)
-    }
-
-    /// Creates an [`Endpoint`] using the configuration in the [`LOCALSTACK_ENDPOINT`] environment
-    /// variable.
-    fn load_endpoint() -> Result<Endpoint, Error> {
-        let endpoint_address = env::var(LOCALSTACK_ENDPOINT)
-            .with_context(|| {
-                format!(
-                    "Missing LocalStack endpoint address in {LOCALSTACK_ENDPOINT:?} \
-                    environment variable"
-                )
-            })?
-            .parse()
-            .context("LocalStack endpoint address is not a valid URI")?;
-
-        Ok(Endpoint::immutable(endpoint_address))
-    }
-
-    /// Creates a new [`aws_sdk_dynamodb::Config`] for tests, using a LocalStack instance.
-    pub fn dynamo_db_config(&self) -> aws_sdk_dynamodb::Config {
-        aws_sdk_dynamodb::config::Builder::from(&self.base_config)
-            .endpoint_resolver(self.endpoint.clone())
-            .build()
-    }
 }
 
 /// Creates the common initialization for RocksDB
