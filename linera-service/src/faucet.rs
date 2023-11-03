@@ -1,12 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{connection::EmptyFields, EmptySubscription, Error, Object, Schema};
+use async_graphql::{
+    connection::EmptyFields, EmptySubscription, Error, Object, Schema, SimpleObject,
+};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{http::StatusCode, response, response::IntoResponse, Extension, Router, Server};
 use futures::lock::Mutex;
 use linera_base::{
-    crypto::PublicKey,
+    crypto::{CryptoHash, PublicKey},
     data_types::Amount,
     identifiers::{ChainId, MessageId},
 };
@@ -46,6 +48,19 @@ impl IntoResponse for FaucetError {
     }
 }
 
+/// The result of a successful `claim` mutation.
+#[derive(SimpleObject)]
+pub struct ClaimOutcome {
+    /// The ID of the message that created the new chain.
+    pub message_id: MessageId,
+    /// The ID of the new chain.
+    pub chain_id: ChainId,
+    /// The hash of the parent chain's certificate containing the `OpenChain` operation.
+    pub open_chain_certificate_hash: CryptoHash,
+    /// The hash of the parent chain's certificate containing the `Transfer` operation.
+    pub transfer_certificate_hash: CryptoHash,
+}
+
 #[Object]
 impl<P, S> MutationRoot<P, S>
 where
@@ -54,16 +69,21 @@ where
     ViewError: From<S::ContextError>,
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
-    async fn claim(&self, public_key: PublicKey) -> Result<MessageId, Error> {
+    async fn claim(&self, public_key: PublicKey) -> Result<ClaimOutcome, Error> {
         let ownership = ChainOwnership::single(public_key);
         let mut client = self.client.lock().await;
-        let (message_id, _) = client.open_chain(ownership).await?;
+        let (message_id, open_chain_certificate) = client.open_chain(ownership).await?;
         let chain_id = ChainId::child(message_id);
         let recipient = Recipient::chain(chain_id);
-        let _certificate = client
+        let transfer_certificate = client
             .transfer(None, self.amount, recipient, UserData::default())
             .await?;
-        Ok(message_id)
+        Ok(ClaimOutcome {
+            message_id,
+            chain_id,
+            open_chain_certificate_hash: open_chain_certificate.hash(),
+            transfer_certificate_hash: transfer_certificate.hash(),
+        })
     }
 }
 
