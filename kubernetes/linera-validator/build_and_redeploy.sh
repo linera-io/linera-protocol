@@ -9,8 +9,14 @@ clean=
 copy=
 
 # Guard clause check if required binaries are installed
-type -P kind > /dev/null || { echo "Error: kind not installed." ; exit 1 ; }
-type -P helm > /dev/null || { echo "Error: helm not installed." ; exit 1 ; }
+type -P kind >/dev/null || {
+    echo "Error: kind not installed."
+    exit 1
+}
+type -P helm >/dev/null || {
+    echo "Error: helm not installed."
+    exit 1
+}
 
 # Function to display script usage
 usage() {
@@ -28,12 +34,15 @@ usage() {
 handle_options() {
     while [ $# -gt 0 ]; do
         case $1 in
-        -h | --help) usage; exit 0;;
+        -h | --help)
+            usage
+            exit 0
+            ;;
         --cloud) cloud_mode=1;;
-        --port-forward) port_forward=1;;
-        --no-build) do_build=;;
-        --clean) clean=1;;
-        --copy) copy=1;;
+        --port-forward) port_forward=1 ;;
+        --no-build) do_build= ;;
+        --clean) clean=1 ;;
+        --copy) copy=1 ;;
         *)
             echo "Invalid option: $1" >&2
             usage >&2
@@ -96,15 +105,15 @@ else
     helm install linera-core . --values values-local.yaml --wait --set installCRDs=true || exit 1;
 fi
 
-echo "Pods:";
-kubectl get pods;
-echo -e "\nServices:";
-kubectl get svc;
+echo "Pods:"
+kubectl get pods
+echo -e "\nServices:"
+kubectl get svc
 
-docker rm linera-test-local;
-docker run -d --name linera-test-local "$docker_image" \
-    && docker cp linera-test-local:wallet.json /tmp/ \
-    && docker cp linera-test-local:linera.db /tmp/
+docker rm linera-test-local
+docker run -d --name linera-test-local "$docker_image" &&
+    docker cp linera-test-local:wallet.json /tmp/ &&
+    docker cp linera-test-local:linera.db /tmp/
 
 echo -e "\nMake sure the terminal you'll run the linera client from has these exports:"
 echo 'export LINERA_WALLET=/tmp/wallet.json'
@@ -115,7 +124,10 @@ export LINERA_STORAGE="rocksdb:/tmp/linera.db"
 
 # Get the Grafana pod name
 grafana_pod_name=$(kubectl get pods | grep grafana | awk '{ print $1 }')
-grafana_pass=$( kubectl get secret linera-core-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo)
+grafana_pass=$(
+    kubectl get secret linera-core-grafana -o jsonpath="{.data.admin-password}" | base64 --decode
+    echo
+)
 echo -e "\nTo access Grafana, you need to port forward yourself, that won't be done here. Run:"
 echo -e "kubectl port-forward $grafana_pod_name 3000"
 echo -e "Grafana Username: admin"
