@@ -8,7 +8,7 @@ mod requests;
 
 use self::handlers::RequestHandler;
 pub use self::requests::{BaseRequest, ContractRequest, ServiceRequest};
-use crate::ExecutionError;
+use crate::{ExecutionError, WasmExecutionError};
 use futures::{
     channel::mpsc,
     select,
@@ -78,7 +78,7 @@ pub trait SendRequestExt<Request> {
     fn send_request<Response>(
         &self,
         builder: impl FnOnce(oneshot::Sender<Response>) -> Request,
-    ) -> oneshot::Receiver<Response>
+    ) -> Result<oneshot::Receiver<Response>, WasmExecutionError>
     where
         Response: Send;
 }
@@ -90,17 +90,21 @@ where
     fn send_request<Response>(
         &self,
         builder: impl FnOnce(oneshot::Sender<Response>) -> Request,
-    ) -> oneshot::Receiver<Response>
+    ) -> Result<oneshot::Receiver<Response>, WasmExecutionError>
     where
         Response: Send,
     {
         let (response_sender, response_receiver) = oneshot::channel();
         let request = builder(response_sender);
 
-        self.unbounded_send(request).unwrap_or_else(|error| {
-            panic!("Failed to send request because receiver has stopped listening: {error}")
-        });
+        self.unbounded_send(request).map_err(|send_error| {
+            assert!(
+                send_error.is_disconnected(),
+                "`send_request` should only be used with unbounded senders"
+            );
+            WasmExecutionError::MissingRuntimeResponse
+        })?;
 
-        response_receiver
+        Ok(response_receiver)
     }
 }

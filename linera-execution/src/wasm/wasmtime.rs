@@ -93,8 +93,12 @@ impl ApplicationRuntimeContext for Contract {
         let runtime = &context.store.data().system_api.runtime;
         let fuel = runtime
             .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
-            .recv()
-            .unwrap_or_else(|oneshot::RecvError| {
+            .and_then(|response_receiver| {
+                response_receiver
+                    .recv()
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse)
+            })
+            .unwrap_or_else(|_| {
                 tracing::debug!("Failed to read initial fuel for transaction");
                 0
             });
@@ -109,7 +113,11 @@ impl ApplicationRuntimeContext for Contract {
         let runtime = &context.store.data().system_api.runtime;
         let initial_fuel = runtime
             .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
-            .recv()
+            .and_then(|response_receiver| {
+                response_receiver
+                    .recv()
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse)
+            })
             .map_err(|_| ())?;
         let consumed_fuel = context.store.fuel_consumed().ok_or(())?;
         let remaining_fuel = initial_fuel.saturating_sub(consumed_fuel);
@@ -119,6 +127,7 @@ impl ApplicationRuntimeContext for Contract {
                 remaining_fuel,
                 response_sender,
             })
+            .map_err(|_| ())?
             .recv()
             .map_err(|_| ())
     }
