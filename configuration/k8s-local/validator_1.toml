@@ -5,8 +5,10 @@ metrics_host = "validator-1"
 metrics_port = 21100
 internal_host = "validator-1"
 internal_port = 20100
-external_protocol = "Grpc"
-internal_protocol = "Grpc"
+[external_protocol]
+Grpc = "ClearText"
+[internal_protocol]
+Grpc = "ClearText"
 
 [[shards]]
 host = "shards-0.shards.default.svc.cluster.local"

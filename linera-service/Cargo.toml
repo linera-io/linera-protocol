@@ -48,6 +48,7 @@ once_cell = { workspace = true }
 parse_duration = { workspace = true }
 prometheus = { workspace = true }
 rand07 = { workspace = true }
+rcgen = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

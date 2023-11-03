@@ -19,6 +19,7 @@ use linera_service::{
 };
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use structopt::StructOpt;
+
 use tracing::{error, info, instrument};
 
 /// Options for running the proxy.
@@ -63,14 +64,16 @@ impl Proxy {
 
         let internal_protocol = config.internal_network.protocol;
         let external_protocol = config.validator.network.protocol;
-
         let proxy = match (internal_protocol, external_protocol) {
-            (NetworkProtocol::Grpc, NetworkProtocol::Grpc) => Self::Grpc(GrpcProxy::new(
-                config.validator.network,
-                config.internal_network,
-                Duration::from_micros(options.send_timeout_us),
-                Duration::from_micros(options.recv_timeout_us),
-            )),
+            (NetworkProtocol::Grpc { .. }, NetworkProtocol::Grpc(tls)) => {
+                Self::Grpc(GrpcProxy::new(
+                    config.validator.network,
+                    config.internal_network,
+                    Duration::from_micros(options.send_timeout_us),
+                    Duration::from_micros(options.recv_timeout_us),
+                    tls,
+                ))
+            }
             (
                 NetworkProtocol::Simple(internal_transport),
                 NetworkProtocol::Simple(public_transport),

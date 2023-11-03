@@ -199,7 +199,8 @@ impl Runnable for ServerContext {
             NetworkProtocol::Simple(protocol) => {
                 self.spawn_simple(&listen_address, states, protocol).await?
             }
-            NetworkProtocol::Grpc => self.spawn_grpc(&listen_address, states).await?,
+            // We don't support TLS between the proxy and shards.
+            NetworkProtocol::Grpc { .. } => self.spawn_grpc(&listen_address, states).await?,
         };
 
         Ok(())

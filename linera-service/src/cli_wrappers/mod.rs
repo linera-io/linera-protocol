@@ -42,14 +42,14 @@ pub enum Network {
 impl Network {
     fn internal(&self) -> &'static str {
         match self {
-            Network::Grpc => "\"Grpc\"",
+            Network::Grpc => "{ Grpc = \"ClearText\" }",
             Network::Simple => "{ Simple = \"Tcp\" }",
         }
     }
 
     fn external(&self) -> &'static str {
         match self {
-            Network::Grpc => "\"Grpc\"",
+            Network::Grpc => "{ Grpc = \"ClearText\" }",
             Network::Simple => "{ Simple = \"Tcp\" }",
         }
     }

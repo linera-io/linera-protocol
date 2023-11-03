@@ -65,14 +65,23 @@ impl ShardConfig {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum NetworkProtocol {
     Simple(TransportProtocol),
-    Grpc,
+    Grpc(TlsConfig),
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TlsConfig {
+    ClearText,
+    Tls,
 }
 
 impl NetworkProtocol {
     fn scheme(&self) -> &'static str {
         match self {
             NetworkProtocol::Simple(transport) => transport.scheme(),
-            NetworkProtocol::Grpc => "http",
+            NetworkProtocol::Grpc(tls) => match tls {
+                TlsConfig::ClearText => "http",
+                TlsConfig::Tls => "https",
+            },
         }
     }
 }
@@ -120,6 +129,12 @@ impl ValidatorInternalNetworkConfig {
     }
 }
 
+impl ValidatorPublicNetworkConfig {
+    pub fn http_address(&self) -> String {
+        format!("{}://{}:{}", self.protocol.scheme(), self.host, self.port)
+    }
+}
+
 /// The public network configuration for a validator.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidatorPublicNetworkPreConfig<P> {
@@ -139,10 +154,6 @@ impl<P> ValidatorPublicNetworkPreConfig<P> {
             port: self.port,
         }
     }
-
-    pub fn http_address(&self) -> String {
-        format!("http://{}:{}", self.host, self.port)
-    }
 }
 
 impl<P> std::fmt::Display for ValidatorPublicNetworkPreConfig<P>
@@ -158,7 +169,10 @@ impl std::fmt::Display for NetworkProtocol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             NetworkProtocol::Simple(protocol) => write!(f, "{}", protocol),
-            NetworkProtocol::Grpc => write!(f, "grpc"),
+            NetworkProtocol::Grpc(tls) => match tls {
+                TlsConfig::ClearText => write!(f, "grpc"),
+                TlsConfig::Tls => write!(f, "grpcs"),
+            },
         }
     }
 }
@@ -174,7 +188,7 @@ where
         let parts: Vec<&str> = s.split(':').collect();
         anyhow::ensure!(
             parts.len() == 3,
-            "Expecting format `(tcp|udp|grpc):host:port`"
+            "Expecting format `(tcp|udp|grpc(s)):host:port`"
         );
         let protocol = parts[0].parse().map_err(|s| anyhow::anyhow!("{}", s))?;
         let host = parts[1].to_owned();
@@ -192,7 +206,8 @@ impl std::str::FromStr for NetworkProtocol {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let protocol = match s {
-            "grpc" => Self::Grpc,
+            "grpc" => Self::Grpc(TlsConfig::ClearText),
+            "grpcs" => Self::Grpc(TlsConfig::Tls),
             _ => Self::Simple(TransportProtocol::from_str(s)?),
         };
         Ok(protocol)

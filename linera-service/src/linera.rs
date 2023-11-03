@@ -229,7 +229,7 @@ impl ClientContext {
                         max_in_flight,
                     ))
                 }
-                NetworkProtocol::Grpc => Box::new(
+                NetworkProtocol::Grpc { .. } => Box::new(
                     GrpcClient::new(config.network.clone(), self.make_node_options()).unwrap(),
                 ),
             };
