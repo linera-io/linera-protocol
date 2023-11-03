@@ -86,8 +86,12 @@ impl ApplicationRuntimeContext for Contract {
             .extra
             .runtime
             .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
-            .recv()
-            .unwrap_or_else(|oneshot::RecvError| {
+            .and_then(|response_receiver| {
+                response_receiver
+                    .recv()
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse)
+            })
+            .unwrap_or_else(|_| {
                 tracing::debug!("Failed to read initial fuel for transaction");
                 0
             });
@@ -113,6 +117,7 @@ impl ApplicationRuntimeContext for Contract {
                 remaining_fuel,
                 response_sender,
             })
+            .map_err(|_| ())?
             .recv()
             .map_err(|_| ())
     }
