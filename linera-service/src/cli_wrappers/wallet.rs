@@ -754,7 +754,7 @@ impl Faucet {
     pub async fn claim(&self, public_key: &PublicKey) -> Result<ClaimOutcome> {
         let query = format!(
             "mutation {{ claim(publicKey: \"{public_key}\") {{ \
-                messageId chainId openChainCertificateHash transferCertificateHash \
+                messageId chainId certificateHash \
             }} }}"
         );
         let url = format!("http://localhost:{}/", self.port);
@@ -789,21 +789,15 @@ impl Faucet {
             .context("chain ID not found")?
             .parse()
             .context("could not parse chain ID")?;
-        let open_chain_certificate_hash = data["openChainCertificateHash"]
+        let certificate_hash = data["certificateHash"]
             .as_str()
-            .context("OpenChain certificate hash not found")?
+            .context("Certificate hash not found")?
             .parse()
-            .context("could not parse OpenChain certificate hash")?;
-        let transfer_certificate_hash = data["transferCertificateHash"]
-            .as_str()
-            .context("Transfer certificate hash not found")?
-            .parse()
-            .context("could not parse Transfer certificate hash")?;
+            .context("could not parse certificate hash")?;
         let outcome = ClaimOutcome {
             message_id,
             chain_id,
-            open_chain_certificate_hash,
-            transfer_certificate_hash,
+            certificate_hash,
         };
         Ok(outcome)
     }

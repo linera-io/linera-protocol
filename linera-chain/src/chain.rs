@@ -401,6 +401,7 @@ where
             epoch,
             committees,
             admin_id,
+            balance,
         }) = message
         {
             // Initialize ourself.
@@ -411,6 +412,7 @@ where
                 committees.clone(),
                 *admin_id,
                 timestamp,
+                *balance,
             );
             // Recompute the state hash.
             let hash = self.execution_state.crypto_hash().await?;

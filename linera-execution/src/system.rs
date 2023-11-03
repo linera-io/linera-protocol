@@ -116,6 +116,7 @@ pub enum SystemOperation {
         admin_id: ChainId,
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
+        balance: Amount,
     },
     /// Closes the chain.
     CloseChain,
@@ -196,6 +197,7 @@ pub enum SystemMessage {
         admin_id: ChainId,
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
+        balance: Amount,
     },
     /// Sets the current epoch and the recognized committees.
     SetCommittees {
@@ -488,6 +490,7 @@ where
                 committees,
                 admin_id,
                 epoch,
+                balance: new_balance,
             } => {
                 let child_id = ChainId::child(context.next_message_id());
                 ensure!(
@@ -505,6 +508,14 @@ where
                         epoch: *epoch
                     }
                 );
+                if *new_balance > Amount::ZERO {
+                    let balance = self.balance.get_mut();
+                    balance.try_sub_assign(*new_balance).map_err(|_| {
+                        SystemExecutionError::InsufficientFunding {
+                            current_balance: *balance,
+                        }
+                    })?;
+                }
                 let e1 = RawOutgoingMessage {
                     destination: Destination::Recipient(child_id),
                     authenticated: false,
@@ -514,6 +525,7 @@ where
                         committees: committees.clone(),
                         admin_id: *admin_id,
                         epoch: *epoch,
+                        balance: *new_balance,
                     },
                 };
                 let subscription = ChannelSubscription {
@@ -960,6 +972,7 @@ where
         committees: BTreeMap<Epoch, Committee>,
         admin_id: ChainId,
         timestamp: Timestamp,
+        balance: Amount,
     ) {
         // Guaranteed under BFT assumptions.
         assert!(self.description.get().is_none());
@@ -978,6 +991,7 @@ where
             .expect("serialization failed");
         self.ownership.set(ownership);
         self.timestamp.set(timestamp);
+        self.balance.set(balance);
     }
 
     pub async fn handle_query(
@@ -1110,6 +1124,7 @@ mod tests {
             committees: committees.clone(),
             epoch,
             admin_id,
+            balance: Amount::ZERO,
         };
         let (result, new_application) = view
             .system
@@ -1123,7 +1138,8 @@ mod tests {
                 ownership,
                 committees,
                 admin_id,
-                epoch
+                epoch,
+                balance: Amount::ZERO,
             }
         );
     }

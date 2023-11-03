@@ -2359,6 +2359,7 @@ where
                 epoch: Epoch::ZERO,
                 committees: committees.clone(),
                 admin_id,
+                balance: Amount::ZERO,
             }),
             messages: vec![
                 direct_outgoing_message(
@@ -2368,6 +2369,7 @@ where
                         epoch: Epoch::ZERO,
                         committees: committees.clone(),
                         admin_id,
+                        balance: Amount::ZERO,
                     },
                 ),
                 direct_outgoing_message(
@@ -2612,6 +2614,7 @@ where
                             epoch: Epoch::from(0),
                             committees: committees.clone(),
                             admin_id,
+                            balance: Amount::ZERO,
                         }),
                     },
                 })

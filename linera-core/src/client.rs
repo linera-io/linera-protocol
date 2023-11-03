@@ -1532,6 +1532,7 @@ where
     pub async fn open_chain(
         &mut self,
         ownership: ChainOwnership,
+        balance: Amount,
     ) -> Result<(MessageId, Certificate), ChainClientError> {
         self.prepare_chain().await?;
         let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
@@ -1545,6 +1546,7 @@ where
                     committees,
                     admin_id: self.admin_id,
                     epoch,
+                    balance,
                 })],
             )
             .await?;
