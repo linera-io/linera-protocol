@@ -47,18 +47,31 @@ where
     pub async fn run(mut self) -> Result<(), ExecutionError> {
         let mut active_requests = FuturesUnordered::new();
 
+        // Run active request handlers concurrently with the incoming stream of `requests`
         loop {
             select! {
-                maybe_result = active_requests.next() => if let Some(result) = maybe_result {
-                    result?;
-                },
+                maybe_result = active_requests.next() => {
+                    if let Some(result) = maybe_result {
+                        // A handler for a request just finished; check the result and return an
+                        // error if there is one
+                        result?;
+                    }
+                }
                 maybe_request = self.requests.next() => match maybe_request {
-                    Some(request) => active_requests.push(self.runtime.handle_request(request)),
-                    None => break,
+                    Some(request) => {
+                        // New request received, start handling it and add it to `active_requests`
+                        active_requests.push(self.runtime.handle_request(request));
+                    }
+                    None => {
+                        // All request sender endpoints have been dropped; leave the loop
+                        break;
+                    }
                 },
             }
         }
 
+        // Wait for all remaining active requests being handled, returning any errors as soon as
+        // they appear
         active_requests.try_collect::<()>().await?;
 
         Ok(())
