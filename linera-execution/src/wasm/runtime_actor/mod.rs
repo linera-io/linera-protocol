@@ -12,7 +12,7 @@ use crate::{ExecutionError, WasmExecutionError};
 use futures::{
     channel::mpsc,
     select,
-    stream::{FuturesUnordered, StreamExt},
+    stream::{FuturesUnordered, StreamExt, TryStreamExt},
 };
 
 /// A handler of application system APIs that runs as a separate actor.
@@ -59,11 +59,7 @@ where
             }
         }
 
-        while !active_requests.is_empty() {
-            if let Some(result) = active_requests.next().await {
-                result?;
-            }
-        }
+        active_requests.try_collect::<()>().await?;
 
         Ok(())
     }
