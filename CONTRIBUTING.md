@@ -7,7 +7,7 @@ We use GitHub issues to track planned improvements, feature requests, and bug re
 * If you plan to contribute a new feature, please discuss the feature in an issue beforehand to
 ensure that your contributions will be accepted.
 
-* If your send a bug report, please ensure that your description is clear and has sufficient
+* If you send a bug report, please ensure that your description is clear and has sufficient
 instructions to be able to reproduce the issue.
 
 
@@ -115,7 +115,7 @@ cargo check-all-features --all-targets
 
 Getting an error with the test in [`linera-rpc/tests/format.rs`](linera-rpc/tests/format.rs) ?
 Probably the file [`linera-rpc/tests/staged/formats.yaml`](linera-rpc/tests/staged/formats.yaml) (recording message formats) is
-outdated. In the most case (but not always sadly), this can be fixed by running
+outdated. In most cases (but not always sadly), this can be fixed by running
 [`linera-rpc/generate-format.sh`](linera-rpc/generate-format.sh).
 
 See https://github.com/zefchain/serde-reflection for more context.
@@ -168,7 +168,7 @@ command added just before the line declaring the test
 ```
 #[ntest::timeout(600000)]
 ```
-If the test lasts longer than the fixed time then it fails. The unit of time is milisecond, so the `600000` corresponds
+If the test lasts longer than the fixed time then it fails. The unit of time is millisecond, so the `600000` corresponds
 to `600` seconds and so to `10` minutes.
 
 ### Tracking simultaneous threads in `tokio`
