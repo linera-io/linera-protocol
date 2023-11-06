@@ -74,8 +74,7 @@ pub static WASM_FUEL_USED_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
 pub static WASM_NUM_READS_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "wasm_num_reads_per_block",
-        "Wasm num reads per block",
-        // Can add labels here
+        "Wasm number of reads per block",
         &[]
     )
     .expect("Counter can be created")
@@ -84,8 +83,7 @@ pub static WASM_NUM_READS_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
 pub static WASM_BYTES_READ_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "wasm_bytes_read_per_block",
-        "Wasm bytes read per block",
-        // Can add labels here
+        "Wasm number of bytes read per block",
         &[]
     )
     .expect("Counter can be created")
@@ -94,8 +92,7 @@ pub static WASM_BYTES_READ_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
 pub static WASM_BYTES_WRITTEN_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "wasm_bytes_written_per_block",
-        "Wasm bytes written per block",
-        // Can add labels here
+        "Wasm number of bytes written per block",
         &[]
     )
     .expect("Counter can be created")
