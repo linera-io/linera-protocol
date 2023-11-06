@@ -63,7 +63,7 @@ jobs:
           ./build_and_redeploy.sh --copy
       - name: Port Forward
         run: |
-          kubectl get pods | grep validator | awk '{ print $1 }' | xargs -I % kubectl port-forward % 19100:19100 &
+          kubectl get pods | grep proxy | awk '{ print $1 }' | xargs -I % kubectl port-forward % 19100:19100 &
       - name: Send sync-balance request
         run: |
           cd target/release
@@ -73,10 +73,10 @@ jobs:
         if: always()
         run: |
           kubectl logs --tail 500 -l app=linera
-      - name: Print validator test logs
+      - name: Print proxy test logs
         if: always()
         run: |
-          kubectl logs --tail 500 -l app=validator
+          kubectl logs --tail 500 -l app=proxy
       - name: Print shards test logs
         if: always()
         run: |
@@ -84,7 +84,7 @@ jobs:
       - name: Stop port forwarding
         if: always()
         run: |
-          ps aux | grep port-forward | grep validator | awk '{ print $2 }' | xargs kill -9
+          ps aux | grep port-forward | grep proxy | awk '{ print $2 }' | xargs kill -9
       - name: Delete cluster
         if: always()
         run: |
