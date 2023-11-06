@@ -47,7 +47,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
     let (mut net, client) = config.instantiate().await.unwrap();
 
     let client_2 = net.make_client();
-    client_2.wallet_init(&[]).await.unwrap();
+    client_2.wallet_init(&[], None).await.unwrap();
     let chain_1 = client.get_wallet().unwrap().default_chain().unwrap();
 
     let (node_service_2, chain_2) = match network {
@@ -283,7 +283,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetTestingConfig
     let client2 = net.make_client();
     let chain = ChainId::root(0);
     let mut height = 0;
-    client2.wallet_init(&[chain]).await.unwrap();
+    client2.wallet_init(&[chain], None).await.unwrap();
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
     let mut node_service2 = client2.run_node_service(8081).await.unwrap();
@@ -342,7 +342,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
     let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client();
-    client2.wallet_init(&[]).await.unwrap();
+    client2.wallet_init(&[], None).await.unwrap();
 
     // Get some chain owned by Client 1.
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
@@ -575,7 +575,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client();
-    client2.wallet_init(&[]).await.unwrap();
+    client2.wallet_init(&[], None).await.unwrap();
 
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
 
@@ -666,7 +666,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client();
-    client2.wallet_init(&[]).await.unwrap();
+    client2.wallet_init(&[], None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
 
@@ -681,14 +681,23 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     let chain2 = outcome.chain_id;
     let message_id = outcome.message_id;
 
+    // Use the faucet directly to initialize client 3.
+    let client3 = net.make_client();
+    let outcome = client3.wallet_init(&[], Some(&faucet.url())).await.unwrap();
+    let chain3 = outcome.unwrap().chain_id;
+    assert_eq!(
+        chain3,
+        client3.get_wallet().unwrap().default_chain().unwrap()
+    );
+
     faucet.ensure_is_running().unwrap();
     faucet.terminate().await.unwrap();
 
-    // Chain 1 should have paid two tokens.
+    // Chain 1 should have paid four tokens.
     client1.synchronize_balance(chain1).await.unwrap();
     assert_eq!(
         client1.query_balance(chain1).await.unwrap(),
-        Amount::from_tokens(8)
+        Amount::from_tokens(6)
     );
 
     // Assign chain2 to client2_key.
@@ -697,7 +706,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
         client2.assign(client2_key, message_id).await.unwrap()
     );
 
-    // Client 2 should have the tokens, and own the chain.
+    // Clients 2 and 3 should have the tokens, and own the chain.
     client2.synchronize_balance(chain2).await.unwrap();
     assert_eq!(
         client2.query_balance(chain2).await.unwrap(),
@@ -711,6 +720,17 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
         client2.query_balance(chain2).await.unwrap(),
         Amount::from_tokens(1)
     );
+
+    client3.synchronize_balance(chain3).await.unwrap();
+    assert_eq!(
+        client3.query_balance(chain3).await.unwrap(),
+        Amount::from_tokens(2)
+    );
+    client3
+        .transfer(Amount::from_tokens(2), chain3, chain1)
+        .await
+        .unwrap();
+    assert_eq!(client3.query_balance(chain3).await.unwrap(), Amount::ZERO);
     net.ensure_is_running().unwrap();
     net.terminate().await.unwrap();
 }
