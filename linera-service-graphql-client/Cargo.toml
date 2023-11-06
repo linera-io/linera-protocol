@@ -16,7 +16,7 @@ aws = ["linera-service/aws"]
 scylladb = ["linera-service/scylladb"]
 
 [dependencies]
-graphql_client = { version = "0.13", features = [ "reqwest" ] }
+graphql_client = { version = "0.13", features = [ "reqwest-rustls" ] }
 linera-base = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }

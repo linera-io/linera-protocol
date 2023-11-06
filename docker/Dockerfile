@@ -63,7 +63,6 @@ ARG target
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
-    libssl-dev \
     protobuf-compiler \
     clang
 
@@ -77,7 +76,6 @@ ARG target
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
-    libssl-dev \
     protobuf-compiler \
     clang
 
@@ -120,8 +118,6 @@ FROM builder$copy as binaries
 FROM debian:latest
 ARG environment
 ARG target
-
-RUN apt-get update && apt-get install -y libssl-dev
 
 COPY --from=binaries \
     linera \

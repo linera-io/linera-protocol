@@ -78,7 +78,7 @@ rand = "0.8.5"
 rand07 = { package = "rand", version = "0.7.3" }
 rand_chacha = "0.3.1"
 rand_distr = "0.4.3"
-reqwest = "0.11.22"
+reqwest = { version = "0.11.14", default-features = false, features = ["rustls-tls"] }
 rocksdb = "0.21.0"
 serde = { version = "1.0.190", features = ["derive"] }
 serde_bytes = "0.11.12"
