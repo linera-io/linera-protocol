@@ -118,6 +118,8 @@ pub enum WasmExecutionError {
     WriteAttemptToReadOnlyStorage,
     #[error("Runtime failed to respond to application")]
     MissingRuntimeResponse,
+    #[error("Host future was polled after it had finished")]
+    PolledTwice,
     #[error("Execution of guest future was aborted")]
     Aborted,
 }

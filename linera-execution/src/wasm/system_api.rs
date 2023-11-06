@@ -9,7 +9,7 @@ macro_rules! impl_contract_system_api {
         impl contract_system_api::ContractSystemApi for $contract_system_api {
             type Error = ExecutionError;
 
-            type Lock = Mutex<oneshot::Receiver<Result<(), ExecutionError>>>;
+            type Lock = Mutex<Option<oneshot::Receiver<Result<(), ExecutionError>>>>;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -99,7 +99,7 @@ macro_rules! impl_contract_system_api {
             }
 
             fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
-                Ok(Mutex::new(
+                Ok(Mutex::new(Some(
                     self.queued_future_factory.enqueue(
                         self.runtime
                             .send_request(|response_sender| {
@@ -109,7 +109,7 @@ macro_rules! impl_contract_system_api {
                             })?
                             .map_err(|_| WasmExecutionError::MissingRuntimeResponse.into()),
                     ),
-                ))
+                )))
             }
 
             fn lock_poll(
@@ -119,15 +119,16 @@ macro_rules! impl_contract_system_api {
                 use contract_system_api::PollLock;
                 let receiver = future
                     .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
-                match receiver.try_recv() {
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+                    .take()
+                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
+                match receiver.recv() {
                     Ok(Ok(())) => Ok(PollLock::ReadyLocked),
                     Ok(Err(ExecutionError::ViewError(ViewError::TryLockError(_)))) => {
                         Ok(PollLock::ReadyNotLocked)
                     }
                     Ok(Err(error)) => Err(error),
-                    Err(oneshot::TryRecvError::Empty) => Ok(PollLock::Pending),
-                    Err(oneshot::TryRecvError::Disconnected) => {
+                    Err(oneshot::RecvError) => {
                         Err(WasmExecutionError::MissingRuntimeResponse.into())
                     }
                 }
@@ -211,10 +212,10 @@ macro_rules! impl_service_system_api {
         impl service_system_api::ServiceSystemApi for $service_system_api {
             type Error = ExecutionError;
 
-            type Load = Mutex<oneshot::Receiver<Vec<u8>>>;
-            type Lock = Mutex<oneshot::Receiver<()>>;
-            type Unlock = Mutex<oneshot::Receiver<()>>;
-            type TryQueryApplication = Mutex<oneshot::Receiver<Vec<u8>>>;
+            type Load = Mutex<Option<oneshot::Receiver<Vec<u8>>>>;
+            type Lock = Mutex<Option<oneshot::Receiver<()>>>;
+            type Unlock = Mutex<Option<oneshot::Receiver<()>>>;
+            type TryQueryApplication = Mutex<Option<oneshot::Receiver<Vec<u8>>>>;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -272,11 +273,11 @@ macro_rules! impl_service_system_api {
             }
 
             fn load_new(&mut self) -> Result<Self::Load, Self::Error> {
-                Ok(Mutex::new(self.runtime.send_request(
+                Ok(Mutex::new(Some(self.runtime.send_request(
                     |response_sender| {
                         ServiceRequest::Base(BaseRequest::TryReadMyState { response_sender })
                     },
-                )?))
+                )?)))
             }
 
             fn load_poll(
@@ -286,22 +287,23 @@ macro_rules! impl_service_system_api {
                 use service_system_api::PollLoad;
                 let receiver = future
                     .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
-                match receiver.try_recv() {
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+                    .take()
+                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
+                match receiver.recv() {
                     Ok(bytes) => Ok(PollLoad::Ready(Ok(bytes))),
-                    Err(oneshot::TryRecvError::Empty) => Ok(PollLoad::Pending),
-                    Err(oneshot::TryRecvError::Disconnected) => {
+                    Err(oneshot::RecvError) => {
                         Err(WasmExecutionError::MissingRuntimeResponse.into())
                     }
                 }
             }
 
             fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
-                Ok(Mutex::new(self.runtime.send_request(
+                Ok(Mutex::new(Some(self.runtime.send_request(
                     |response_sender| {
                         ServiceRequest::Base(BaseRequest::LockViewUserState { response_sender })
                     },
-                )?))
+                )?)))
             }
 
             fn lock_poll(
@@ -311,22 +313,23 @@ macro_rules! impl_service_system_api {
                 use service_system_api::PollLock;
                 let receiver = future
                     .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
-                match receiver.try_recv() {
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+                    .take()
+                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
+                match receiver.recv() {
                     Ok(()) => Ok(PollLock::Ready(Ok(()))),
-                    Err(oneshot::TryRecvError::Empty) => Ok(PollLock::Pending),
-                    Err(oneshot::TryRecvError::Disconnected) => {
+                    Err(oneshot::RecvError) => {
                         Err(WasmExecutionError::MissingRuntimeResponse.into())
                     }
                 }
             }
 
             fn unlock_new(&mut self) -> Result<Self::Unlock, Self::Error> {
-                Ok(Mutex::new(self.runtime.send_request(
+                Ok(Mutex::new(Some(self.runtime.send_request(
                     |response_sender| {
                         ServiceRequest::Base(BaseRequest::UnlockViewUserState { response_sender })
                     },
-                )?))
+                )?)))
             }
 
             fn unlock_poll(
@@ -336,11 +339,12 @@ macro_rules! impl_service_system_api {
                 use service_system_api::PollUnlock;
                 let receiver = future
                     .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
-                match receiver.try_recv() {
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+                    .take()
+                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
+                match receiver.recv() {
                     Ok(()) => Ok(PollUnlock::Ready(Ok(()))),
-                    Err(oneshot::TryRecvError::Empty) => Ok(PollUnlock::Pending),
-                    Err(oneshot::TryRecvError::Disconnected) => {
+                    Err(oneshot::RecvError) => {
                         Err(WasmExecutionError::MissingRuntimeResponse.into())
                     }
                 }
@@ -353,13 +357,13 @@ macro_rules! impl_service_system_api {
             ) -> Result<Self::TryQueryApplication, Self::Error> {
                 let argument = Vec::from(argument);
 
-                Ok(Mutex::new(self.runtime.send_request(
+                Ok(Mutex::new(Some(self.runtime.send_request(
                     |response_sender| ServiceRequest::TryQueryApplication {
                         queried_id: application.into(),
                         argument: argument.to_owned(),
                         response_sender,
                     },
-                )?))
+                )?)))
             }
 
             fn try_query_application_poll(
@@ -369,11 +373,12 @@ macro_rules! impl_service_system_api {
                 use service_system_api::PollLoad;
                 let receiver = future
                     .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
-                match receiver.try_recv() {
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+                    .take()
+                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
+                match receiver.recv() {
                     Ok(result) => Ok(PollLoad::Ready(Ok(result))),
-                    Err(oneshot::TryRecvError::Empty) => Ok(PollLoad::Pending),
-                    Err(oneshot::TryRecvError::Disconnected) => {
+                    Err(oneshot::RecvError) => {
                         Err(WasmExecutionError::MissingRuntimeResponse.into())
                     }
                 }
@@ -407,9 +412,9 @@ macro_rules! impl_view_system_api_for_service {
         impl view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
-            type ReadKeyBytes = Mutex<oneshot::Receiver<Option<Vec<u8>>>>;
-            type FindKeys = Mutex<oneshot::Receiver<Vec<Vec<u8>>>>;
-            type FindKeyValues = Mutex<oneshot::Receiver<Vec<(Vec<u8>, Vec<u8>)>>>;
+            type ReadKeyBytes = Mutex<Option<oneshot::Receiver<Option<Vec<u8>>>>>;
+            type FindKeys = Mutex<Option<oneshot::Receiver<Vec<Vec<u8>>>>>;
+            type FindKeyValues = Mutex<Option<oneshot::Receiver<Vec<(Vec<u8>, Vec<u8>)>>>>;
             type WriteBatch = ();
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
@@ -420,14 +425,14 @@ macro_rules! impl_view_system_api_for_service {
                 &mut self,
                 key: &[u8],
             ) -> Result<Self::ReadKeyBytes, Self::Error> {
-                Ok(Mutex::new(self.runtime.send_request(
+                Ok(Mutex::new(Some(self.runtime.send_request(
                     |response_sender| {
                         ServiceRequest::Base(BaseRequest::ReadKeyBytes {
                             key: key.to_owned(),
                             response_sender,
                         })
                     },
-                )?))
+                )?)))
             }
 
             fn read_key_bytes_poll(
@@ -437,25 +442,26 @@ macro_rules! impl_view_system_api_for_service {
                 use view_system_api::PollReadKeyBytes;
                 let receiver = future
                     .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
-                match receiver.try_recv() {
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+                    .take()
+                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
+                match receiver.recv() {
                     Ok(opt_list) => Ok(PollReadKeyBytes::Ready(opt_list)),
-                    Err(oneshot::TryRecvError::Empty) => Ok(PollReadKeyBytes::Pending),
-                    Err(oneshot::TryRecvError::Disconnected) => {
+                    Err(oneshot::RecvError) => {
                         Err(WasmExecutionError::MissingRuntimeResponse.into())
                     }
                 }
             }
 
             fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {
-                Ok(Mutex::new(self.runtime.send_request(
+                Ok(Mutex::new(Some(self.runtime.send_request(
                     |response_sender| {
                         ServiceRequest::Base(BaseRequest::FindKeysByPrefix {
                             key_prefix: key_prefix.to_owned(),
                             response_sender,
                         })
                     },
-                )?))
+                )?)))
             }
 
             fn find_keys_poll(
@@ -465,11 +471,12 @@ macro_rules! impl_view_system_api_for_service {
                 use view_system_api::PollFindKeys;
                 let receiver = future
                     .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
-                match receiver.try_recv() {
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+                    .take()
+                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
+                match receiver.recv() {
                     Ok(keys) => Ok(PollFindKeys::Ready(keys)),
-                    Err(oneshot::TryRecvError::Empty) => Ok(PollFindKeys::Pending),
-                    Err(oneshot::TryRecvError::Disconnected) => {
+                    Err(oneshot::RecvError) => {
                         Err(WasmExecutionError::MissingRuntimeResponse.into())
                     }
                 }
@@ -479,14 +486,14 @@ macro_rules! impl_view_system_api_for_service {
                 &mut self,
                 key_prefix: &[u8],
             ) -> Result<Self::FindKeyValues, Self::Error> {
-                Ok(Mutex::new(self.runtime.send_request(
+                Ok(Mutex::new(Some(self.runtime.send_request(
                     |response_sender| {
                         ServiceRequest::Base(BaseRequest::FindKeyValuesByPrefix {
                             key_prefix: key_prefix.to_owned(),
                             response_sender,
                         })
                     },
-                )?))
+                )?)))
             }
 
             fn find_key_values_poll(
@@ -496,11 +503,12 @@ macro_rules! impl_view_system_api_for_service {
                 use view_system_api::PollFindKeyValues;
                 let receiver = future
                     .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
-                match receiver.try_recv() {
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+                    .take()
+                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
+                match receiver.recv() {
                     Ok(key_values) => Ok(PollFindKeyValues::Ready(key_values)),
-                    Err(oneshot::TryRecvError::Empty) => Ok(PollFindKeyValues::Pending),
-                    Err(oneshot::TryRecvError::Disconnected) => {
+                    Err(oneshot::RecvError) => {
                         Err(WasmExecutionError::MissingRuntimeResponse.into())
                     }
                 }
@@ -532,11 +540,12 @@ macro_rules! impl_view_system_api_for_contract {
         impl view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
-            type ReadKeyBytes = Mutex<oneshot::Receiver<Result<Option<Vec<u8>>, ExecutionError>>>;
-            type FindKeys = Mutex<oneshot::Receiver<Result<Vec<Vec<u8>>, ExecutionError>>>;
+            type ReadKeyBytes =
+                Mutex<Option<oneshot::Receiver<Result<Option<Vec<u8>>, ExecutionError>>>>;
+            type FindKeys = Mutex<Option<oneshot::Receiver<Result<Vec<Vec<u8>>, ExecutionError>>>>;
             type FindKeyValues =
-                Mutex<oneshot::Receiver<Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>>;
-            type WriteBatch = Mutex<oneshot::Receiver<Result<(), ExecutionError>>>;
+                Mutex<Option<oneshot::Receiver<Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>>>;
+            type WriteBatch = Mutex<Option<oneshot::Receiver<Result<(), ExecutionError>>>>;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -546,7 +555,7 @@ macro_rules! impl_view_system_api_for_contract {
                 &mut self,
                 key: &[u8],
             ) -> Result<Self::ReadKeyBytes, Self::Error> {
-                Ok(Mutex::new(
+                Ok(Mutex::new(Some(
                     self.queued_future_factory.enqueue(
                         self.runtime
                             .send_request(|response_sender| {
@@ -557,7 +566,7 @@ macro_rules! impl_view_system_api_for_contract {
                             })?
                             .map_err(|_| WasmExecutionError::MissingRuntimeResponse.into()),
                     ),
-                ))
+                )))
             }
 
             fn read_key_bytes_poll(
@@ -567,19 +576,20 @@ macro_rules! impl_view_system_api_for_contract {
                 use view_system_api::PollReadKeyBytes;
                 let receiver = future
                     .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
-                match receiver.try_recv() {
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+                    .take()
+                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
+                match receiver.recv() {
                     Ok(Ok(opt_list)) => Ok(PollReadKeyBytes::Ready(opt_list)),
                     Ok(Err(error)) => Err(error),
-                    Err(oneshot::TryRecvError::Empty) => Ok(PollReadKeyBytes::Pending),
-                    Err(oneshot::TryRecvError::Disconnected) => {
+                    Err(oneshot::RecvError) => {
                         Err(WasmExecutionError::MissingRuntimeResponse.into())
                     }
                 }
             }
 
             fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {
-                Ok(Mutex::new(
+                Ok(Mutex::new(Some(
                     self.queued_future_factory.enqueue(
                         self.runtime
                             .send_request(|response_sender| {
@@ -590,7 +600,7 @@ macro_rules! impl_view_system_api_for_contract {
                             })?
                             .map_err(|_| WasmExecutionError::MissingRuntimeResponse.into()),
                     ),
-                ))
+                )))
             }
 
             fn find_keys_poll(
@@ -600,12 +610,13 @@ macro_rules! impl_view_system_api_for_contract {
                 use view_system_api::PollFindKeys;
                 let receiver = future
                     .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
-                match receiver.try_recv() {
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+                    .take()
+                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
+                match receiver.recv() {
                     Ok(Ok(keys)) => Ok(PollFindKeys::Ready(keys)),
                     Ok(Err(error)) => Err(error),
-                    Err(oneshot::TryRecvError::Empty) => Ok(PollFindKeys::Pending),
-                    Err(oneshot::TryRecvError::Disconnected) => {
+                    Err(oneshot::RecvError) => {
                         Err(WasmExecutionError::MissingRuntimeResponse.into())
                     }
                 }
@@ -615,7 +626,7 @@ macro_rules! impl_view_system_api_for_contract {
                 &mut self,
                 key_prefix: &[u8],
             ) -> Result<Self::FindKeyValues, Self::Error> {
-                Ok(Mutex::new(
+                Ok(Mutex::new(Some(
                     self.queued_future_factory.enqueue(
                         self.runtime
                             .send_request(|response_sender| {
@@ -626,7 +637,7 @@ macro_rules! impl_view_system_api_for_contract {
                             })?
                             .map_err(|_| WasmExecutionError::MissingRuntimeResponse.into()),
                     ),
-                ))
+                )))
             }
 
             fn find_key_values_poll(
@@ -636,12 +647,13 @@ macro_rules! impl_view_system_api_for_contract {
                 use view_system_api::PollFindKeyValues;
                 let receiver = future
                     .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
-                match receiver.try_recv() {
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+                    .take()
+                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
+                match receiver.recv() {
                     Ok(Ok(key_values)) => Ok(PollFindKeyValues::Ready(key_values)),
                     Ok(Err(error)) => Err(error),
-                    Err(oneshot::TryRecvError::Empty) => Ok(PollFindKeyValues::Pending),
-                    Err(oneshot::TryRecvError::Disconnected) => {
+                    Err(oneshot::RecvError) => {
                         Err(WasmExecutionError::MissingRuntimeResponse.into())
                     }
                 }
@@ -665,7 +677,7 @@ macro_rules! impl_view_system_api_for_contract {
                         }
                     }
                 }
-                Ok(Mutex::new(
+                Ok(Mutex::new(Some(
                     self.queued_future_factory.enqueue(
                         self.runtime
                             .send_request(|response_sender| ContractRequest::WriteBatchAndUnlock {
@@ -674,7 +686,7 @@ macro_rules! impl_view_system_api_for_contract {
                             })?
                             .map_err(|_| WasmExecutionError::MissingRuntimeResponse.into()),
                     ),
-                ))
+                )))
             }
 
             fn write_batch_poll(
@@ -684,12 +696,13 @@ macro_rules! impl_view_system_api_for_contract {
                 use view_system_api::PollUnit;
                 let receiver = future
                     .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
-                match receiver.try_recv() {
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+                    .take()
+                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
+                match receiver.recv() {
                     Ok(Ok(())) => Ok(PollUnit::Ready),
                     Ok(Err(error)) => Err(error),
-                    Err(oneshot::TryRecvError::Empty) => Ok(PollUnit::Pending),
-                    Err(oneshot::TryRecvError::Disconnected) => {
+                    Err(oneshot::RecvError) => {
                         Err(WasmExecutionError::MissingRuntimeResponse.into())
                     }
                 }
