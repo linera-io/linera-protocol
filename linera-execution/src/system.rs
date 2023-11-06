@@ -508,14 +508,12 @@ where
                         epoch: *epoch
                     }
                 );
-                if *new_balance > Amount::ZERO {
-                    let balance = self.balance.get_mut();
-                    balance.try_sub_assign(*new_balance).map_err(|_| {
-                        SystemExecutionError::InsufficientFunding {
-                            current_balance: *balance,
-                        }
-                    })?;
-                }
+                let balance = self.balance.get_mut();
+                balance.try_sub_assign(*new_balance).map_err(|_| {
+                    SystemExecutionError::InsufficientFunding {
+                        current_balance: *balance,
+                    }
+                })?;
                 let e1 = RawOutgoingMessage {
                     destination: Destination::Recipient(child_id),
                     authenticated: false,
