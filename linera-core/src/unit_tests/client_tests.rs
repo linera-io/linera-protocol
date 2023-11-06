@@ -574,7 +574,7 @@ where
     let new_key_pair = KeyPair::generate();
     // Open the new chain.
     let (message_id, certificate) = sender
-        .open_chain(ChainOwnership::single(new_key_pair.public()))
+        .open_chain(ChainOwnership::single(new_key_pair.public()), Amount::ZERO)
         .await
         .unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
@@ -650,7 +650,7 @@ where
         .unwrap();
     // Open the new chain.
     let (open_chain_message_id, certificate) = sender
-        .open_chain(ChainOwnership::single(new_key_pair.public()))
+        .open_chain(ChainOwnership::single(new_key_pair.public()), Amount::ZERO)
         .await
         .unwrap();
     let new_id2 = ChainId::child(open_chain_message_id);
@@ -734,7 +734,7 @@ where
     let new_key_pair = KeyPair::generate();
     // Open the new chain.
     let (message_id, creation_certificate) = sender
-        .open_chain(ChainOwnership::single(new_key_pair.public()))
+        .open_chain(ChainOwnership::single(new_key_pair.public()), Amount::ZERO)
         .await
         .unwrap();
     let new_id = ChainId::child(message_id);

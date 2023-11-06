@@ -737,6 +737,11 @@ enum ClientCommand {
         /// Public key of the new owner (otherwise create a key pair and remember it)
         #[structopt(long = "to-public-key")]
         public_key: Option<PublicKey>,
+
+        /// The initial balance of the new chain. This is subtracted from the parent chain's
+        /// balance.
+        #[structopt(long = "initial-balance", default_value = "0")]
+        balance: Amount,
     },
 
     /// Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one.
@@ -757,6 +762,11 @@ enum ClientCommand {
         /// number in which only a single designated leader is allowed to propose blocks.
         #[structopt(long = "multi-leader-rounds")]
         multi_leader_rounds: Option<u32>,
+
+        /// The initial balance of the new chain. This is subtracted from the parent chain's
+        /// balance.
+        #[structopt(long = "initial-balance", default_value = "0")]
+        balance: Amount,
     },
 
     /// Close (i.e. deactivate) an existing chain.
@@ -1231,6 +1241,7 @@ impl Runnable for Job {
             OpenChain {
                 chain_id,
                 public_key,
+                balance,
             } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 let (new_public_key, key_pair) = match public_key {
@@ -1243,7 +1254,8 @@ impl Runnable for Job {
                 info!("Starting operation to open a new chain");
                 let time_start = Instant::now();
                 let ownership = ChainOwnership::single(new_public_key);
-                let (message_id, certificate) = chain_client.open_chain(ownership).await.unwrap();
+                let (message_id, certificate) =
+                    chain_client.open_chain(ownership, balance).await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
                 debug!("{:?}", certificate);
@@ -1268,6 +1280,7 @@ impl Runnable for Job {
                 public_keys,
                 weights,
                 multi_leader_rounds,
+                balance,
             } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting operation to open a new chain");
@@ -1285,7 +1298,8 @@ impl Runnable for Job {
                 };
                 let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
                 let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
-                let (message_id, certificate) = chain_client.open_chain(ownership).await.unwrap();
+                let (message_id, certificate) =
+                    chain_client.open_chain(ownership, balance).await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
                 debug!("{:?}", certificate);

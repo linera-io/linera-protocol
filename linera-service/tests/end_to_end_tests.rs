@@ -681,6 +681,16 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     let chain2 = outcome.chain_id;
     let message_id = outcome.message_id;
 
+    faucet.ensure_is_running().unwrap();
+    faucet.terminate().await.unwrap();
+
+    // Chain 1 should have paid two tokens.
+    client1.synchronize_balance(chain1).await.unwrap();
+    assert_eq!(
+        client1.query_balance(chain1).await.unwrap(),
+        Amount::from_tokens(8)
+    );
+
     // Assign chain2 to client2_key.
     assert_eq!(
         chain2,
@@ -701,8 +711,6 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
         client2.query_balance(chain2).await.unwrap(),
         Amount::from_tokens(1)
     );
-
-    faucet.ensure_is_running().unwrap();
     net.ensure_is_running().unwrap();
     net.terminate().await.unwrap();
 }

@@ -676,6 +676,8 @@ SystemMessage:
                   TYPENAME: Epoch
                 VALUE:
                   TYPENAME: Committee
+          - balance:
+              TYPENAME: Amount
     3:
       SetCommittees:
         STRUCT:
@@ -772,6 +774,8 @@ SystemOperation:
                   TYPENAME: Epoch
                 VALUE:
                   TYPENAME: Committee
+          - balance:
+              TYPENAME: Amount
     3:
       CloseChain: UNIT
     4:

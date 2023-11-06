@@ -16,10 +16,7 @@ use linera_core::{
     client::{ChainClient, ChainClientError},
     node::ValidatorNodeProvider,
 };
-use linera_execution::{
-    system::{Recipient, UserData},
-    ChainOwnership,
-};
+use linera_execution::ChainOwnership;
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use serde_json::json;
@@ -56,9 +53,7 @@ pub struct ClaimOutcome {
     /// The ID of the new chain.
     pub chain_id: ChainId,
     /// The hash of the parent chain's certificate containing the `OpenChain` operation.
-    pub open_chain_certificate_hash: CryptoHash,
-    /// The hash of the parent chain's certificate containing the `Transfer` operation.
-    pub transfer_certificate_hash: CryptoHash,
+    pub certificate_hash: CryptoHash,
 }
 
 #[Object]
@@ -72,17 +67,12 @@ where
     async fn claim(&self, public_key: PublicKey) -> Result<ClaimOutcome, Error> {
         let ownership = ChainOwnership::single(public_key);
         let mut client = self.client.lock().await;
-        let (message_id, open_chain_certificate) = client.open_chain(ownership).await?;
+        let (message_id, certificate) = client.open_chain(ownership, self.amount).await?;
         let chain_id = ChainId::child(message_id);
-        let recipient = Recipient::chain(chain_id);
-        let transfer_certificate = client
-            .transfer(None, self.amount, recipient, UserData::default())
-            .await?;
         Ok(ClaimOutcome {
             message_id,
             chain_id,
-            open_chain_certificate_hash: open_chain_certificate.hash(),
-            transfer_certificate_hash: transfer_certificate.hash(),
+            certificate_hash: certificate.hash(),
         })
     }
 }

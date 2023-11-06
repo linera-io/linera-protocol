@@ -318,12 +318,12 @@ type MutationRoot {
 	Creates (or activates) a new chain by installing the given authentication key.
 	This will automatically subscribe to the future committees created by `admin_id`.
 	"""
-	openChain(chainId: ChainId!, publicKey: PublicKey!): ChainId!
+	openChain(chainId: ChainId!, publicKey: PublicKey!, balance: Amount): ChainId!
 	"""
 	Creates (or activates) a new chain by installing the given authentication keys.
 	This will automatically subscribe to the future committees created by `admin_id`.
 	"""
-	openMultiOwnerChain(chainId: ChainId!, publicKeys: [PublicKey!]!, weights: [Int!], multiLeaderRounds: Int): ChainId!
+	openMultiOwnerChain(chainId: ChainId!, publicKeys: [PublicKey!]!, weights: [Int!], multiLeaderRounds: Int, balance: Amount): ChainId!
 	"""
 	Closes the chain.
 	"""

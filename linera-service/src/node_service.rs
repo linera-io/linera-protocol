@@ -280,10 +280,16 @@ where
 
     /// Creates (or activates) a new chain by installing the given authentication key.
     /// This will automatically subscribe to the future committees created by `admin_id`.
-    async fn open_chain(&self, chain_id: ChainId, public_key: PublicKey) -> Result<ChainId, Error> {
+    async fn open_chain(
+        &self,
+        chain_id: ChainId,
+        public_key: PublicKey,
+        balance: Option<Amount>,
+    ) -> Result<ChainId, Error> {
         let mut client = self.clients.try_client_lock(&chain_id).await?;
         let ownership = ChainOwnership::single(public_key);
-        let (message_id, _) = client.open_chain(ownership).await?;
+        let balance = balance.unwrap_or(Amount::ZERO);
+        let (message_id, _) = client.open_chain(ownership, balance).await?;
         Ok(ChainId::child(message_id))
     }
 
@@ -295,6 +301,7 @@ where
         public_keys: Vec<PublicKey>,
         weights: Option<Vec<u64>>,
         multi_leader_rounds: Option<u32>,
+        balance: Option<Amount>,
     ) -> Result<ChainId, Error> {
         let owners: Vec<_> = if let Some(weights) = weights {
             if weights.len() != public_keys.len() {
@@ -311,7 +318,8 @@ where
         let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
         let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
         let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let (message_id, _) = client.open_chain(ownership).await?;
+        let balance = balance.unwrap_or(Amount::ZERO);
+        let (message_id, _) = client.open_chain(ownership, balance).await?;
         Ok(ChainId::child(message_id))
     }
 
