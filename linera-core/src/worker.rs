@@ -57,30 +57,23 @@ pub static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "num_rounds_in_certificate",
         "Number of rounds in certificate",
-        // Can add labels here
         &["certificate_value", "round_type"]
     )
-    .expect("Counter can be created")
+    .expect("Counter creation should not fail")
 });
 
 pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "num_rounds_in_block_proposal",
         "Number of rounds in block proposal",
-        // Can add labels here
         &["round_type"]
     )
-    .expect("Counter can be created")
+    .expect("Counter creation should not fail")
 });
 
 pub static TRANSACTION_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!(
-        "transaction_count",
-        "Transaction count",
-        // Can add labels here
-        &[]
-    )
-    .expect("Counter can be created")
+    register_int_counter_vec!("transaction_count", "Transaction count", &[])
+        .expect("Counter creation should not fail")
 });
 
 /// Interface provided by each physical shard (aka "worker") of a validator or a local node.

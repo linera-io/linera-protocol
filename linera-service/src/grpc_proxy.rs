@@ -40,43 +40,31 @@ use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument};
 
 pub static PROXY_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
-        "proxy_request_latency",
-        "Proxy request latency",
-        // Can add labels here
-        &[]
-    )
-    .expect("Counter can be created")
+    register_histogram_vec!("proxy_request_latency", "Proxy request latency", &[])
+        .expect("Counter creation should not fail")
 });
 
 pub static PROXY_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!(
-        "proxy_request_count",
-        "Proxy request count",
-        // Can add labels here
-        &[]
-    )
-    .expect("Counter can be created")
+    register_int_counter_vec!("proxy_request_count", "Proxy request count", &[])
+        .expect("Counter creation should not fail")
 });
 
 pub static PROXY_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
         "proxy_request_success",
         "Proxy request success",
-        // Can add labels here
         &["method_name"]
     )
-    .expect("Counter can be created")
+    .expect("Counter creation should not fail")
 });
 
 pub static PROXY_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
         "proxy_request_error",
         "Proxy request error",
-        // Can add labels here
         &["method_name"]
     )
-    .expect("Counter can be created")
+    .expect("Counter creation should not fail")
 });
 
 #[derive(Clone)]
