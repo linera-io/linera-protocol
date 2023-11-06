@@ -564,6 +564,8 @@ ResourceControlPolicy:
         TYPENAME: Amount
     - storage_bytes_written:
         TYPENAME: Amount
+    - storage_bytes_stored:
+        TYPENAME: Amount
     - maximum_bytes_read_per_block: U64
     - maximum_bytes_written_per_block: U64
     - messages:

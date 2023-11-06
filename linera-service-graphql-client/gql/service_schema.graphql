@@ -505,6 +505,10 @@ input ResourceControlPolicy {
 	"""
 	storageBytesWritten: Amount!
 	"""
+	The cost of the total storage used
+	"""
+	storageBytesStored: Amount!
+	"""
 	The maximum data to read per block
 	"""
 	maximumBytesReadPerBlock: Int!

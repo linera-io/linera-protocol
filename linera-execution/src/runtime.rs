@@ -27,7 +27,7 @@ use std::{
     collections::{btree_map, BTreeMap},
     ops::DerefMut,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicI64, AtomicU64, Ordering},
         Arc,
     },
 };
@@ -104,6 +104,7 @@ where
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         chain_id: ChainId,
         applications: &'a mut Vec<ApplicationStatus>,
@@ -127,6 +128,7 @@ where
             bytes_read: AtomicU64::new(0),
             bytes_written: AtomicU64::new(0),
             runtime_limits,
+            change_stored_size,
             chain_id,
         }
     }
@@ -535,11 +537,13 @@ where
         let num_reads = self.num_reads.load(Ordering::Acquire);
         let bytes_read = self.bytes_read.load(Ordering::Acquire);
         let bytes_written = self.bytes_written.load(Ordering::Acquire);
+        let change_stored_size = self.change_stored_size.load(Ordering::Acquire);
         RuntimeCounts {
             remaining_fuel,
             num_reads,
             bytes_read,
             bytes_written,
+            change_stored_size,
         }
     }
 
@@ -581,6 +585,7 @@ where
     }
 
     async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {
+        // Update the write costs
         let size = batch.size() as u64;
         self.increment_bytes_written(size)?;
         // Write the batch and make the view available again.
@@ -589,7 +594,15 @@ where
             .await
             .remove(&self.application_id())
         {
-            Some(mut view) => Ok(view.write_batch(batch).await?),
+            Some(mut view) => {
+                let stored_size = view.stored_size() as i64;
+                view.write_batch(batch).await?;
+                let new_stored_size = view.stored_size() as i64;
+                let increment = new_stored_size - stored_size;
+                self.change_stored_size
+                    .fetch_add(increment, Ordering::Relaxed);
+                Ok(())
+            }
             None => Err(ExecutionError::ApplicationStateNotLocked),
         }
     }

@@ -154,6 +154,9 @@ where
                 }
             }
         } else {
+            if self.deleted_prefixes.is_empty() && self.updates.is_empty() {
+                return Ok(());
+            }
             for index in mem::take(&mut self.deleted_prefixes) {
                 let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                 batch.delete_key_prefix(key);
@@ -699,6 +702,7 @@ where
     }
 
     /// Deletes a key_prefix.
+<<<<<<< HEAD
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_memory_context;
@@ -715,6 +719,29 @@ where
         let mut batch = Batch::new();
         batch.delete_key_prefix(key_prefix);
         self.write_batch(batch).await
+=======
+    fn delete_prefix(&mut self, key_prefix: Vec<u8>) {
+        *self.hash.get_mut() = None;
+        let key_list: Vec<Vec<u8>> = self
+            .updates
+            .range(get_interval(key_prefix.clone()))
+            .map(|x| x.0.to_vec())
+            .collect();
+        for key in key_list {
+            self.updates.remove(&key);
+        }
+        if !self.was_cleared {
+            let key_prefix_list = self
+                .deleted_prefixes
+                .range(get_interval(key_prefix.clone()))
+                .map(|x| x.to_vec())
+                .collect::<Vec<_>>();
+            for key in key_prefix_list {
+                self.deleted_prefixes.remove(&key);
+            }
+            self.deleted_prefixes.insert(key_prefix);
+        }
+>>>>>>> 5d5eaa91 (Implement the scheme for making the total size stored being paid for.)
     }
 
     /// Iterates over all the keys matching the given prefix. The prefix is not included in the returned keys.
@@ -860,6 +887,49 @@ where
         Ok(key_values)
     }
 
+<<<<<<< HEAD
+=======
+    /// Applies the given batch of `crate::common::WriteOperation`.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::batch::Batch;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
+    ///   view.insert(vec![0,1], vec![34]);
+    ///   view.insert(vec![3,4], vec![42]);
+    ///   let mut batch = Batch::new();
+    ///   batch.delete_key_prefix(vec![0]);
+    ///   view.write_batch(batch).await.unwrap();
+    ///   let key_values = view.find_key_values_by_prefix(&[0]).await.unwrap();
+    ///   assert_eq!(key_values, vec![]);
+    /// # })
+    /// ```
+    pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
+        *self.hash.get_mut() = None;
+        for operation in batch.operations {
+            match operation {
+                WriteOperation::Delete { key } => {
+                    if self.was_cleared {
+                        self.updates.remove(&key);
+                    } else {
+                        self.updates.insert(key, Update::Removed);
+                    }
+                }
+                WriteOperation::Put { key, value } => {
+                    self.updates.insert(key, Update::Set(value));
+                }
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    self.delete_prefix(key_prefix);
+                }
+            }
+        }
+        Ok(())
+    }
+
+>>>>>>> 5d5eaa91 (Implement the scheme for making the total size stored being paid for.)
     async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0;

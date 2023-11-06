@@ -843,6 +843,10 @@ enum ClientCommand {
         #[structopt(long)]
         storage_bytes_written: Option<Amount>,
 
+        /// Set the price per byte stored
+        #[structopt(long)]
+        storage_bytes_stored: Option<Amount>,
+
         /// Set the maximum quantity of data to read per block
         #[structopt(long)]
         maximum_bytes_read_per_block: Option<u64>,
@@ -914,6 +918,10 @@ enum ClientCommand {
         /// Set the price per byte to write data
         #[structopt(long, default_value = "0")]
         storage_bytes_written_price: Amount,
+
+        /// Set the price per byte stored
+        #[structopt(long, default_value = "0")]
+        storage_bytes_stored_price: Amount,
 
         /// Set the maximum read data per block
         #[structopt(long)]
@@ -1462,6 +1470,7 @@ impl Runnable for Job {
                         storage_num_reads,
                         storage_bytes_read,
                         storage_bytes_written,
+                        storage_bytes_stored,
                         maximum_bytes_read_per_block,
                         maximum_bytes_written_per_block,
                         messages,
@@ -1480,6 +1489,9 @@ impl Runnable for Job {
                         }
                         if let Some(storage_bytes_written) = storage_bytes_written {
                             policy.storage_bytes_written = storage_bytes_written;
+                        }
+                        if let Some(storage_bytes_stored) = storage_bytes_stored {
+                            policy.storage_bytes_stored = storage_bytes_stored;
                         }
                         if let Some(maximum_bytes_read_per_block) = maximum_bytes_read_per_block {
                             policy.maximum_bytes_read_per_block = maximum_bytes_read_per_block;
@@ -1500,6 +1512,7 @@ impl Runnable for Job {
                             {:.2} cost per byte operation\n\
                             {:.2} cost per bytes read\n\
                             {:.2} cost per bytes written\n\
+                            {:.2} cost per bytes stored\n\
                             {:.2} per byte of outgoing messages\n\
                             {:.2} maximum number bytes read per block\n\
                             {:.2} maximum number bytes written per block",
@@ -1508,6 +1521,7 @@ impl Runnable for Job {
                             policy.storage_num_reads,
                             policy.storage_bytes_read,
                             policy.storage_bytes_written,
+                            policy.storage_bytes_stored,
                             policy.messages,
                             policy.maximum_bytes_read_per_block,
                             policy.maximum_bytes_written_per_block
@@ -1517,6 +1531,7 @@ impl Runnable for Job {
                             && storage_num_reads.is_none()
                             && storage_bytes_read.is_none()
                             && storage_bytes_written.is_none()
+                            && storage_bytes_stored.is_none()
                             && maximum_bytes_read_per_block.is_none()
                             && maximum_bytes_written_per_block.is_none()
                             && messages.is_none()
@@ -2180,6 +2195,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
             storage_num_reads_price,
             storage_bytes_read_price,
             storage_bytes_written_price,
+            storage_bytes_stored_price,
             maximum_bytes_read_per_block,
             maximum_bytes_written_per_block,
             messages_price,
@@ -2202,6 +2218,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 storage_num_reads: *storage_num_reads_price,
                 storage_bytes_read: *storage_bytes_read_price,
                 storage_bytes_written: *storage_bytes_written_price,
+                storage_bytes_stored: *storage_bytes_stored_price,
                 maximum_bytes_read_per_block,
                 maximum_bytes_written_per_block,
                 messages: *messages_price,
