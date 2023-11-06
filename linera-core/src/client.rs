@@ -228,14 +228,11 @@ pub enum ChainClientError {
     #[error("Protocol error within chain client: {0}")]
     ProtocolError(&'static str),
 
-    #[error("No key available to interact with single-owner chain {0}")]
-    CannotFindKeyForSingleOwnerChain(ChainId),
+    #[error("No key available to interact with chain {0}")]
+    CannotFindKeyForChain(ChainId),
 
-    #[error("No key available to interact with multi-owner chain {0}")]
-    CannotFindKeyForMultiOwnerChain(ChainId),
-
-    #[error("Found several possible identities to interact with multi-owner chain {0}")]
-    FoundMultipleKeysForMultiOwnerChain(ChainId),
+    #[error("Found several possible identities to interact with chain {0}")]
+    FoundMultipleKeysForChain(ChainId),
 
     #[error("Leader timeout certificate does not match the expected one.")]
     UnexpectedLeaderTimeout,
@@ -426,13 +423,11 @@ where
             .chain(manager.ownership.super_owners.keys())
             .filter(|owner| self.known_key_pairs.contains_key(owner));
         let Some(identity) = identities.next() else {
-            return Err(ChainClientError::CannotFindKeyForMultiOwnerChain(
-                self.chain_id,
-            ));
+            return Err(ChainClientError::CannotFindKeyForChain(self.chain_id));
         };
         ensure!(
             identities.next().is_none(),
-            ChainClientError::FoundMultipleKeysForMultiOwnerChain(self.chain_id)
+            ChainClientError::FoundMultipleKeysForChain(self.chain_id)
         );
         Ok(*identity)
     }
@@ -1491,7 +1486,7 @@ where
         new_public_key: PublicKey,
     ) -> Result<Certificate, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
-            super_owners: iter::once(new_public_key).collect(),
+            super_owners: vec![new_public_key],
             owners: Vec::new(),
             multi_leader_rounds: 2,
         }))

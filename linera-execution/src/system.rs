@@ -121,7 +121,7 @@ pub enum SystemOperation {
     CloseChain,
     /// Changes the ownership of the chain.
     ChangeOwnership {
-        /// Super owners can propose fast blocks in round 0, and regular blocks in any round.
+        /// Super owners can propose fast blocks in the first round, and regular blocks in any round.
         super_owners: Vec<PublicKey>,
         /// The regular owners, with their weights that determine how often they are round leader.
         owners: Vec<(PublicKey, u64)>,

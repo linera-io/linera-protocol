@@ -12,14 +12,15 @@
 //!
 //! There are three kinds of rounds:
 //!
-//! * In round 0, only super owners can propose blocks, and validators vote to confirm a block
-//!   immediately. Super owners must be careful to make only one block proposal, or else they can
-//!   permanently block the microchain. If there are no super owners, round 0 is skipped.
-//! * In cooperative mode (multi-owner rounds), all chain owners can propose blocks at any time.
+//! * In `Round::Fast`, only super owners can propose blocks, and validators vote to confirm a
+//!   block immediately. Super owners must be careful to make only one block proposal, or else they
+//!   can permanently block the microchain. If there are no super owners, `Round::Fast` is skipped.
+//! * In cooperative mode (`Round::MultiLeader`), all chain owners can propose blocks at any time.
 //!   The protocol is guaranteed to eventually confirm a block as long as no chain owner
 //!   continuously actively prevents progress.
-//! * In leader rotation mode, chain owners take turns at proposing blocks. It can make progress
-//!   as long as at least one owner is honest, even if other owners try to prevent it.
+//! * In leader rotation mode (`Round::SingleLeader`), chain owners take turns at proposing blocks.
+//!   It can make progress as long as at least one owner is honest, even if other owners try to
+//!   prevent it.
 //!
 //! ## Safety, i.e. at most one block will be confirmed
 //!
@@ -42,9 +43,10 @@
 //!
 //! ## Liveness, i.e. some block will eventually be confirmed
 //!
-//! In round 0, liveness depends on the super owners coordinating, and proposing at most one block.
+//! In `Round::Fast`, liveness depends on the super owners coordinating, and proposing at most one
+//! block.
 //!
-//! If they propose none, and there are other owners, round 0 will eventually time out.
+//! If they propose none, and there are other owners, `Round::Fast` will eventually time out.
 //!
 //! In cooperative mode, if there is contention, the owners need to agree on a single owner as the
 //! next proposer. That owner should then download all highest-round certificates and block
@@ -234,7 +236,7 @@ impl ChainManager {
                 return Ok(Outcome::Skip); // We already voted for this proposal; nothing to do.
             }
             if new_round <= old_proposal.content.round {
-                // We already accepted a proposal in this or a higher round.
+                // We already accepted a proposal in this round or in a higher round.
                 return Err(ChainError::InsufficientRound(old_proposal.content.round));
             }
         }
@@ -418,7 +420,7 @@ impl ChainManager {
         }
         match proposal.content.round {
             Round::Fast => {
-                None // Only super owners can propose in round 0.
+                None // Only super owners can propose in the first round.
             }
             Round::MultiLeader(_) => {
                 // Not in leader rotation mode; any owner is allowed to propose.
@@ -436,7 +438,7 @@ impl ChainManager {
     }
 
     /// Returns the leader who is allowed to propose a block in the given round, or `None` if every
-    /// owner is allowed to propose. Exception: In round 0, only super owners can propose.
+    /// owner is allowed to propose. Exception: In `Round::Fast`, only super owners can propose.
     fn round_leader(&self, round: Round) -> Option<&Owner> {
         if let Round::SingleLeader(r) = round {
             let index = self.round_leader_index(r)?;

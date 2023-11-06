@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, iter};
 /// Represents the owner(s) of a chain.
 #[derive(PartialEq, Eq, Clone, Hash, Debug, Default, Serialize, Deserialize)]
 pub struct ChainOwnership {
-    /// Super owners can propose fast blocks in round 0, and regular blocks in any round.
+    /// Super owners can propose fast blocks in the first round, and regular blocks in any round.
     pub super_owners: BTreeMap<Owner, PublicKey>,
     /// The regular owners, with their weights that determine how often they are round leader.
     pub owners: BTreeMap<Owner, (PublicKey, u64)>,
@@ -66,7 +66,7 @@ impl ChainOwnership {
     }
 
     pub fn next_round(&self, round: Round) -> Option<Round> {
-        Some(match round {
+        let next_round = match round {
             Round::Fast if self.multi_leader_rounds == 0 => Round::SingleLeader(0),
             Round::Fast => Round::MultiLeader(0),
             Round::MultiLeader(r) if r >= self.multi_leader_rounds.saturating_sub(1) => {
@@ -74,11 +74,12 @@ impl ChainOwnership {
             }
             Round::MultiLeader(r) => Round::MultiLeader(r.checked_add(1)?),
             Round::SingleLeader(r) => Round::SingleLeader(r.checked_add(1)?),
-        })
+        };
+        Some(next_round)
     }
 
     pub fn previous_round(&self, round: Round) -> Option<Round> {
-        Some(match round {
+        let previous_round = match round {
             Round::Fast => return None,
             Round::MultiLeader(r) => {
                 if let Some(prev_r) = r.checked_sub(1) {
@@ -100,6 +101,7 @@ impl ChainOwnership {
                     Round::Fast
                 }
             }
-        })
+        };
+        Some(previous_round)
     }
 }

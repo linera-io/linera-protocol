@@ -330,7 +330,7 @@ where
     assert!(sender.pending_block.is_none());
     assert!(matches!(
         sender.key_pair().await,
-        Err(ChainClientError::CannotFindKeyForMultiOwnerChain(_))
+        Err(ChainClientError::CannotFindKeyForChain(_))
     ));
     assert_eq!(
         builder
@@ -358,7 +358,7 @@ where
                 UserData::default()
             )
             .await,
-        Err(ChainClientError::CannotFindKeyForMultiOwnerChain(_))
+        Err(ChainClientError::CannotFindKeyForChain(_))
     ));
     Ok(())
 }
