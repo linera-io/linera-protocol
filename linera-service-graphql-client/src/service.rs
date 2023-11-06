@@ -11,7 +11,7 @@ use linera_base::{
 #[cfg(target_arch = "wasm32")]
 mod types {
     use super::{BlockHeight, ChainId, CryptoHash};
-    use linera_base::data_types::RoundNumber;
+    use linera_base::data_types::Round;
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
 
@@ -41,7 +41,7 @@ mod types {
         },
         NewRound {
             height: BlockHeight,
-            round: RoundNumber,
+            round: Round,
         },
     }
 }

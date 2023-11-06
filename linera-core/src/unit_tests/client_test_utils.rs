@@ -566,14 +566,14 @@ where
         &self,
         chain_id: ChainId,
         block_height: BlockHeight,
-        round: RoundNumber,
+        round: Round,
         target_count: usize,
     ) {
         let query = ChainInfoQuery::new(chain_id);
         let mut count = 0;
         for mut validator in self.validator_clients.clone() {
             if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
-                if response.info.manager.current_round() == round
+                if response.info.manager.current_round == round
                     && response.info.next_block_height == block_height
                     && response.check(validator.name).is_ok()
                 {

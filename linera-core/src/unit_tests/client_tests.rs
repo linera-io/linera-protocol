@@ -23,7 +23,6 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{CertificateValue, ExecutedBlock},
-    test::multi_manager,
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
@@ -331,7 +330,7 @@ where
     assert!(sender.pending_block.is_none());
     assert!(matches!(
         sender.key_pair().await,
-        Err(ChainClientError::CannotFindKeyForSingleOwnerChain(_))
+        Err(ChainClientError::CannotFindKeyForChain(_))
     ));
     assert_eq!(
         builder
@@ -359,7 +358,7 @@ where
                 UserData::default()
             )
             .await,
-        Err(ChainClientError::CannotFindKeyForSingleOwnerChain(_))
+        Err(ChainClientError::CannotFindKeyForChain(_))
     ));
     Ok(())
 }
@@ -458,19 +457,24 @@ where
 
     // We need at least three validators for making a transfer.
     builder.set_fault_type(..2, FaultType::Offline).await;
-    assert!(matches!(
-        client
-            .transfer_to_account(
-                None,
-                Amount::ONE,
-                Account::chain(ChainId::root(3)),
-                UserData::default(),
-            )
-            .await,
-        Err(ChainClientError::CommunicationError(
-            CommunicationError::Trusted(ClientIoError { .. })
-        ))
-    ));
+    let result = client
+        .transfer_to_account(
+            None,
+            Amount::ONE,
+            Account::chain(ChainId::root(3)),
+            UserData::default(),
+        )
+        .await;
+    assert!(
+        matches!(
+            result,
+            Err(ChainClientError::CommunicationError(
+                CommunicationError::Trusted(ClientIoError { .. }),
+            ))
+        ),
+        "Unexpected result: {:?}",
+        result
+    );
     builder.set_fault_type(..2, FaultType::Honest).await;
     builder.set_fault_type(2.., FaultType::Offline).await;
     assert!(matches!(
@@ -1443,9 +1447,10 @@ where
     let pub_key0 = client.public_key().await.unwrap();
     let pub_key1 = KeyPair::generate().public();
 
-    let owner_change_op = SystemOperation::ChangeMultipleOwners {
-        new_public_keys: vec![(pub_key0, 100), (pub_key1, 100)],
-        multi_leader_rounds: RoundNumber::ZERO,
+    let owner_change_op = SystemOperation::ChangeOwnership {
+        super_owners: Vec::new(),
+        owners: vec![(pub_key0, 100), (pub_key1, 100)],
+        multi_leader_rounds: 0,
     }
     .into();
     client.execute_operation(owner_change_op).await.unwrap();
@@ -1459,7 +1464,7 @@ where
         ))
     ));
 
-    clock.set(multi_manager(&manager).round_timeout);
+    clock.set(manager.round_timeout);
 
     // After the timeout they will.
     let certificate = client.request_leader_timeout().await.unwrap();
@@ -1471,10 +1476,15 @@ where
             epoch: Epoch::ZERO
         }
     );
-    assert_eq!(certificate.round, RoundNumber::ZERO);
+    assert_eq!(certificate.round, Round::SingleLeader(0));
 
     builder
-        .check_that_validators_are_in_round(chain_id, BlockHeight::from(1), RoundNumber::from(1), 3)
+        .check_that_validators_are_in_round(
+            chain_id,
+            BlockHeight::from(1),
+            Round::SingleLeader(1),
+            3,
+        )
         .await;
 
     Ok(())

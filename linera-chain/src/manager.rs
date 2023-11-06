@@ -1,23 +1,30 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! # Manager for Multi-Owner Chains
+//! # Chain manager
 //!
-//! This module contains the consensus mechanism for multi-owner chains. Whenever a block is
+//! This module contains the consensus mechanism for all microchains. Whenever a block is
 //! confirmed, a new chain manager is created for the next block height. It manages the consensus
 //! state until a new block is confirmed. As long as less than a third of the validators are faulty,
 //! it guarantees that at most one `ConfirmedBlock` certificate will be created for this height.
-//! There are two modes of operation:
 //!
-//! * In cooperative mode (multi-owner rounds), all chain owners can propose blocks at any time.
+//! The protocol proceeds in rounds, until it reaches a round where a block gets confirmed.
+//!
+//! There are three kinds of rounds:
+//!
+//! * In `Round::Fast`, only super owners can propose blocks, and validators vote to confirm a
+//!   block immediately. Super owners must be careful to make only one block proposal, or else they
+//!   can permanently block the microchain. If there are no super owners, `Round::Fast` is skipped.
+//! * In cooperative mode (`Round::MultiLeader`), all chain owners can propose blocks at any time.
 //!   The protocol is guaranteed to eventually confirm a block as long as no chain owner
 //!   continuously actively prevents progress.
-//! * In leader rotation mode, chain owners take turns at proposing blocks. It can make progress
-//!   as long as at least one owner is honest, even if other owners try to prevent it.
+//! * In leader rotation mode (`Round::SingleLeader`), chain owners take turns at proposing blocks.
+//!   It can make progress as long as at least one owner is honest, even if other owners try to
+//!   prevent it.
 //!
 //! ## Safety, i.e. at most one block will be confirmed
 //!
-//! In both modes this is guaranteed as follows:
+//! In all modes this is guaranteed as follows:
 //!
 //! * Validators (honest ones) never cast a vote if they have already cast any vote in a later
 //!   round.
@@ -36,12 +43,20 @@
 //!
 //! ## Liveness, i.e. some block will eventually be confirmed
 //!
+//! In `Round::Fast`, liveness depends on the super owners coordinating, and proposing at most one
+//! block.
+//!
+//! If they propose none, and there are other owners, `Round::Fast` will eventually time out.
+//!
 //! In cooperative mode, if there is contention, the owners need to agree on a single owner as the
 //! next proposer. That owner should then download all highest-round certificates and block
 //! proposals known to the honest validators. They can then make a proposal in a round higher than
 //! all previous proposals. If there is any `ValidatedBlock` certificate they must include the
 //! highest one in their proposal, and propose that block. Otherwise they can propose a new block.
 //! Now all honest validators are allowed to vote for that proposal, and eventually confirm it.
+//!
+//! If the owners fail to cooperate, any honest owner can initiate the last multi-leader round by
+//! making a proposal there, then wait for it to time out, which starts the leader-based mode:
 //!
 //! In leader-based mode, an honest owner should subscribe to notifications from all validators,
 //! and follow the chain. Whenever another leader's round takes too long, they should request
@@ -50,7 +65,6 @@
 //! round. Then they download the highest `ValidatedBlock` certificate known to any honest validator
 //! and include that in their block proposal, just like in the cooperative case.
 
-use super::Outcome;
 use crate::{
     data_types::{
         BlockAndRound, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
@@ -60,34 +74,35 @@ use crate::{
 };
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{BlockHeight, RoundNumber, Timestamp},
-    ensure,
+    data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
+    doc_scalar, ensure,
     identifiers::{ChainId, Owner},
 };
-use linera_execution::committee::Epoch;
+use linera_execution::{committee::Epoch, ChainOwnership};
 use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 use rand_distr::{Distribution, WeightedAliasIndex};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, HashMap},
-    time::Duration,
-};
+use std::time::Duration;
 use tracing::error;
 
 const TIMEOUT: Duration = Duration::from_secs(10);
 
-/// The consensus state of a chain with multiple owners some of which are potentially faulty.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MultiOwnerManager {
-    /// The public keys of the chain's co-owners, with their weights.
-    pub public_keys: BTreeMap<Owner, (PublicKey, u64)>,
-    /// The number of initial rounds in which all owners are allowed to propose blocks,
-    /// i.e. the first round with only a single leader.
-    pub multi_leader_rounds: RoundNumber,
+/// The result of verifying a (valid) query.
+#[derive(Eq, PartialEq)]
+pub enum Outcome {
+    Accept,
+    Skip,
+}
+
+/// The state of the certification process for a chain's next block.
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+pub struct ChainManager {
+    /// The public keys, weights and types of the chain's owners.
+    pub ownership: ChainOwnership,
     /// The seed for the pseudo-random number generator that determines the round leaders.
     pub seed: u64,
     /// The probability distribution for choosing a round leader.
-    pub distribution: WeightedAliasIndex<u64>,
+    pub distribution: Option<WeightedAliasIndex<u64>>,
     /// Latest authenticated block that we have received and checked.
     pub proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
@@ -103,21 +118,41 @@ pub struct MultiOwnerManager {
     pub round_timeout: Timestamp,
 }
 
-impl MultiOwnerManager {
-    pub fn new(
-        public_keys: impl IntoIterator<Item = (Owner, (PublicKey, u64))>,
-        multi_leader_rounds: RoundNumber,
-        seed: u64,
+doc_scalar!(
+    ChainManager,
+    "The state of the certification process for a chain's next block"
+);
+
+impl ChainManager {
+    pub fn reset(
+        &mut self,
+        ownership: &ChainOwnership,
+        height: BlockHeight,
         now: Timestamp,
-    ) -> Result<Self, ChainError> {
-        let public_keys: BTreeMap<Owner, (PublicKey, u64)> = public_keys.into_iter().collect();
-        let weights = public_keys.values().map(|(_, weight)| *weight).collect();
-        let distribution = WeightedAliasIndex::new(weights)?;
+    ) -> Result<(), ChainError> {
+        *self = ChainManager::new(ownership.clone(), height.0, now)?;
+        Ok(())
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.ownership.is_active()
+    }
+
+    fn new(ownership: ChainOwnership, seed: u64, now: Timestamp) -> Result<Self, ChainError> {
+        let distribution = if !ownership.owners.is_empty() {
+            let weights = ownership
+                .owners
+                .values()
+                .map(|(_, weight)| *weight)
+                .collect();
+            Some(WeightedAliasIndex::new(weights)?)
+        } else {
+            None
+        };
         let round_timeout = now.saturating_add(TIMEOUT);
 
-        Ok(MultiOwnerManager {
-            public_keys,
-            multi_leader_rounds,
+        Ok(ChainManager {
+            ownership,
             seed,
             distribution,
             proposed: None,
@@ -135,14 +170,19 @@ impl MultiOwnerManager {
     /// Having a leader timeout certificate in any given round causes the next one to become
     /// current. Seeing a validated block certificate or a valid proposal in any round causes that
     /// round to become current, unless a higher one already is.
-    pub fn current_round(&self) -> RoundNumber {
+    pub fn current_round(&self) -> Round {
         self.leader_timeout
             .iter()
-            .map(|certificate| certificate.round.try_add_one().unwrap_or(RoundNumber::MAX))
+            .map(|certificate| {
+                self.ownership
+                    .next_round(certificate.round)
+                    .unwrap_or(Round::SingleLeader(u32::MAX))
+            })
             .chain(self.locked.iter().map(|certificate| certificate.round))
             .chain(self.proposed.iter().map(|proposal| proposal.content.round))
             .max()
             .unwrap_or_default()
+            .max(self.ownership.first_round())
     }
 
     /// Returns the most recent vote we cast.
@@ -154,7 +194,14 @@ impl MultiOwnerManager {
     pub fn check_proposed_block(&self, proposal: &BlockProposal) -> Result<Outcome, ChainError> {
         let new_round = proposal.content.round;
         let new_block = &proposal.content.block;
+        let owner = &proposal.owner;
         let validated = proposal.validated.as_ref();
+
+        // When a block is certified, incrementing its height must succeed.
+        ensure!(
+            new_block.height < BlockHeight::MAX,
+            ChainError::InvalidBlockHeight
+        );
         if let Some(validated) = validated {
             ensure!(
                 validated.value().is_validated(),
@@ -163,19 +210,25 @@ impl MultiOwnerManager {
         }
         let expected_round = match validated {
             None => self.current_round(),
-            Some(cert) => cert.round.try_add_one()?.max(self.current_round()),
+            Some(cert) => self
+                .ownership
+                .next_round(cert.round)
+                .ok_or_else(|| ChainError::ArithmeticError(ArithmeticError::Overflow))?
+                .max(self.current_round()),
         };
         // In leader rotation mode, the round must equal the expected one exactly.
         // Only the first single-leader round can be entered at any time.
-        if new_round > self.multi_leader_rounds {
-            ensure!(
-                expected_round == new_round,
-                ChainError::WrongRound(expected_round)
-            );
-        } else {
+        if self.is_super(owner)
+            || (new_round <= Round::SingleLeader(0) && !expected_round.is_fast())
+        {
             ensure!(
                 expected_round <= new_round,
                 ChainError::InsufficientRound(expected_round)
+            );
+        } else {
+            ensure!(
+                expected_round == new_round,
+                ChainError::WrongRound(expected_round)
             );
         }
         if let Some(old_proposal) = &self.proposed {
@@ -183,7 +236,7 @@ impl MultiOwnerManager {
                 return Ok(Outcome::Skip); // We already voted for this proposal; nothing to do.
             }
             if new_round <= old_proposal.content.round {
-                // We already accepted a proposal in this or a higher round.
+                // We already accepted a proposal in this round or in a higher round.
                 return Err(ChainError::InsufficientRound(old_proposal.content.round));
             }
         }
@@ -219,8 +272,8 @@ impl MultiOwnerManager {
         let Some(key_pair) = key_pair else {
             return false; // We are not a validator.
         };
-        if now < self.round_timeout {
-            return false; // Round has not timed out yet.
+        if now < self.round_timeout || self.ownership.owners.is_empty() {
+            return false; // Round has not timed out yet, or there are no regular owners.
         }
         let current_round = self.current_round();
         if let Some(vote) = &self.timeout_vote {
@@ -272,7 +325,7 @@ impl MultiOwnerManager {
         key_pair: Option<&KeyPair>,
         now: Timestamp,
     ) {
-        if let Ok(round) = proposal.content.round.try_sub_one() {
+        if let Some(round) = self.ownership.previous_round(proposal.content.round) {
             self.update_timeout(round, now);
         }
         // Record the proposed block, so it can be supplied to clients that request it.
@@ -288,11 +341,15 @@ impl MultiOwnerManager {
             }
         }
         if let Some(key_pair) = key_pair {
-            // Vote to validate.
             let BlockAndRound { block, round } = proposal.content;
             let executed_block = outcome.with(block);
-            let vote = Vote::new(HashedValue::new_validated(executed_block), round, key_pair);
-            self.pending = Some(vote);
+            // If this is a fast block, vote to confirm. Otherwise vote to validate.
+            let value = if round.is_fast() {
+                HashedValue::new_confirmed(executed_block)
+            } else {
+                HashedValue::new_validated(executed_block)
+            };
+            self.pending = Some(Vote::new(value, round, key_pair));
         }
     }
 
@@ -325,9 +382,13 @@ impl MultiOwnerManager {
     }
 
     /// Resets the timer if `round` has just ended.
-    fn update_timeout(&mut self, round: RoundNumber, now: Timestamp) {
+    fn update_timeout(&mut self, round: Round, now: Timestamp) {
         if self.current_round() <= round {
-            let factor = round.0.saturating_add(2);
+            let factor = if let Round::SingleLeader(r) = round {
+                r.saturating_add(2)
+            } else {
+                1
+            };
             let timeout = TIMEOUT.saturating_mul(factor);
             self.round_timeout = now.saturating_add(timeout);
         }
@@ -354,44 +415,58 @@ impl MultiOwnerManager {
     /// Returns the public key of the block proposal's signer, if they are a valid owner and allowed
     /// to propose a block in the proposal's round.
     pub fn verify_owner(&self, proposal: &BlockProposal) -> Option<PublicKey> {
-        if proposal.content.round < self.multi_leader_rounds {
-            let (key, _) = self.public_keys.get(&proposal.owner)?;
-            return Some(*key); // Not in leader rotation mode; any owner is allowed to propose.
-        };
-        let index = self.round_leader_index(proposal.content.round)?;
-        let (leader, (key, _)) = self.public_keys.iter().nth(index)?;
-        (*leader == proposal.owner).then_some(*key)
+        if let Some(public_key) = self.ownership.super_owners.get(&proposal.owner) {
+            return Some(*public_key);
+        }
+        match proposal.content.round {
+            Round::Fast => {
+                None // Only super owners can propose in the first round.
+            }
+            Round::MultiLeader(_) => {
+                // Not in leader rotation mode; any owner is allowed to propose.
+                self.ownership
+                    .owners
+                    .get(&proposal.owner)
+                    .map(|(public_key, _)| *public_key)
+            }
+            Round::SingleLeader(r) => {
+                let index = self.round_leader_index(r)?;
+                let (leader, (public_key, _)) = self.ownership.owners.iter().nth(index)?;
+                (*leader == proposal.owner).then_some(*public_key)
+            }
+        }
     }
 
     /// Returns the leader who is allowed to propose a block in the given round, or `None` if every
-    /// owner is allowed to propose.
-    fn round_leader(&self, round: RoundNumber) -> Option<&Owner> {
-        if round < self.multi_leader_rounds {
-            return None;
-        };
-        let index = self.round_leader_index(round)?;
-        self.public_keys.keys().nth(index)
+    /// owner is allowed to propose. Exception: In `Round::Fast`, only super owners can propose.
+    fn round_leader(&self, round: Round) -> Option<&Owner> {
+        if let Round::SingleLeader(r) = round {
+            let index = self.round_leader_index(r)?;
+            self.ownership.owners.keys().nth(index)
+        } else {
+            None
+        }
     }
 
-    /// Returns the index of the leader who is allowed to propose a block in the given round, or
-    /// `None` if every owner is allowed to propose.
-    fn round_leader_index(&self, round: RoundNumber) -> Option<usize> {
-        let seed = u64::from(round.0).rotate_left(32).wrapping_add(self.seed);
+    /// Returns the index of the leader who is allowed to propose a block in the given round.
+    fn round_leader_index(&self, round: u32) -> Option<usize> {
+        let seed = u64::from(round).rotate_left(32).wrapping_add(self.seed);
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
-        Some(self.distribution.sample(&mut rng))
+        Some(self.distribution.as_ref()?.sample(&mut rng))
+    }
+
+    /// Returns whether the owner is a super owner.
+    fn is_super(&self, owner: &Owner) -> bool {
+        self.ownership.super_owners.contains_key(owner)
     }
 }
 
-/// Chain manager information that is included in `ChainInfo` sent to clients, about chains
-/// with multiple owners.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// Chain manager information that is included in `ChainInfo` sent to clients.
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct MultiOwnerManagerInfo {
-    /// The public keys of the chain's co-owners.
-    pub public_keys: HashMap<Owner, (PublicKey, u64)>,
-    /// The number of initial rounds in which all owners are allowed to propose blocks,
-    /// i.e. the first round with only a single leader.
-    pub multi_leader_rounds: RoundNumber,
+pub struct ChainManagerInfo {
+    /// The configuration of the chain's owners.
+    pub ownership: ChainOwnership,
     /// Latest authenticated block that we have received, if requested.
     pub requested_proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
@@ -406,7 +481,7 @@ pub struct MultiOwnerManagerInfo {
     /// The value we voted for, if requested.
     pub requested_pending_value: Option<HashedValue>,
     /// The current round, i.e. the lowest round where we can still vote to validate a block.
-    pub current_round: RoundNumber,
+    pub current_round: Round,
     /// The current leader, who is allowed to propose the next block.
     /// `None` if everyone is allowed to propose.
     pub leader: Option<Owner>,
@@ -414,12 +489,11 @@ pub struct MultiOwnerManagerInfo {
     pub round_timeout: Timestamp,
 }
 
-impl From<&MultiOwnerManager> for MultiOwnerManagerInfo {
-    fn from(manager: &MultiOwnerManager) -> Self {
+impl From<&ChainManager> for ChainManagerInfo {
+    fn from(manager: &ChainManager) -> Self {
         let current_round = manager.current_round();
-        MultiOwnerManagerInfo {
-            public_keys: manager.public_keys.clone().into_iter().collect(),
-            multi_leader_rounds: manager.multi_leader_rounds,
+        ChainManagerInfo {
+            ownership: manager.ownership.clone(),
             requested_proposed: None,
             requested_locked: None,
             leader_timeout: manager.leader_timeout.clone(),
@@ -433,8 +507,8 @@ impl From<&MultiOwnerManager> for MultiOwnerManagerInfo {
     }
 }
 
-impl MultiOwnerManagerInfo {
-    pub fn add_values(&mut self, manager: &MultiOwnerManager) {
+impl ChainManagerInfo {
+    pub fn add_values(&mut self, manager: &ChainManager) {
         self.requested_proposed = manager.proposed.clone();
         self.requested_locked = manager.locked.clone();
         self.requested_pending_value = manager.pending.as_ref().map(|vote| vote.value.clone());
@@ -451,7 +525,7 @@ impl MultiOwnerManagerInfo {
             .max_by_key(|cert| cert.round)
     }
 
-    pub fn next_round(&self) -> Option<RoundNumber> {
+    pub fn next_round(&self) -> Option<Round> {
         let proposal_round = self
             .requested_proposed
             .as_ref()
@@ -463,9 +537,9 @@ impl MultiOwnerManagerInfo {
         if proposal_round != Some(self.current_round) && locked_round != Some(self.current_round) {
             // There's no proposal or locked block yet in the current round.
             Some(self.current_round)
-        } else if self.current_round < self.multi_leader_rounds {
+        } else if self.current_round.is_multi_leader() {
             // We're still in multi-leader mode, so we can propose in the next round at any time.
-            self.current_round.try_add_one().ok()
+            self.ownership.next_round(self.current_round)
         } else {
             // We're in single-leader mode, so the next proposal can only be made after the timeout.
             None

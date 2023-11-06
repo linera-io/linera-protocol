@@ -18,7 +18,7 @@ use axum::{
 use futures::lock::{Mutex, MutexGuard, OwnedMutexGuard};
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
-    data_types::{Amount, RoundNumber},
+    data_types::Amount,
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner},
     BcsHexParseError,
 };
@@ -294,7 +294,7 @@ where
         chain_id: ChainId,
         public_keys: Vec<PublicKey>,
         weights: Option<Vec<u64>>,
-        multi_leader_rounds: Option<RoundNumber>,
+        multi_leader_rounds: Option<u32>,
     ) -> Result<ChainId, Error> {
         let owners: Vec<_> = if let Some(weights) = weights {
             if weights.len() != public_keys.len() {
@@ -308,7 +308,7 @@ where
         } else {
             public_keys.into_iter().zip(iter::repeat(100)).collect()
         };
-        let multi_leader_rounds = multi_leader_rounds.unwrap_or(RoundNumber::MAX);
+        let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
         let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
         let mut client = self.clients.try_client_lock(&chain_id).await?;
         let (message_id, _) = client.open_chain(ownership).await?;
@@ -328,7 +328,11 @@ where
         chain_id: ChainId,
         new_public_key: PublicKey,
     ) -> Result<CryptoHash, Error> {
-        let operation = SystemOperation::ChangeOwner { new_public_key };
+        let operation = SystemOperation::ChangeOwnership {
+            super_owners: vec![new_public_key],
+            owners: Vec::new(),
+            multi_leader_rounds: 2,
+        };
         self.execute_system_operation(operation, chain_id).await
     }
 
@@ -338,10 +342,11 @@ where
         chain_id: ChainId,
         new_public_keys: Vec<PublicKey>,
         new_weights: Vec<u64>,
-        multi_leader_rounds: RoundNumber,
+        multi_leader_rounds: u32,
     ) -> Result<CryptoHash, Error> {
-        let operation = SystemOperation::ChangeMultipleOwners {
-            new_public_keys: new_public_keys.into_iter().zip(new_weights).collect(),
+        let operation = SystemOperation::ChangeOwnership {
+            super_owners: Vec::new(),
+            owners: new_public_keys.into_iter().zip(new_weights).collect(),
             multi_leader_rounds,
         };
         self.execute_system_operation(operation, chain_id).await

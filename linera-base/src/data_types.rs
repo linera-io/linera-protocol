@@ -54,11 +54,16 @@ impl<'de> Deserialize<'de> for Amount {
 #[cfg_attr(any(test, feature = "test"), derive(test_strategy::Arbitrary))]
 pub struct BlockHeight(pub u64);
 
-/// A number to identify successive attempts to decide a value in a consensus protocol.
+/// An identifier for successive attempts to decide a value in a consensus protocol.
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
-pub struct RoundNumber(pub u32);
+pub enum Round {
+    #[default]
+    Fast,
+    MultiLeader(u32),
+    SingleLeader(u32),
+}
 
 /// A timestamp, in microseconds since the Unix epoch.
 #[derive(
@@ -252,7 +257,6 @@ impl From<u64> for BlockHeight {
 
 impl_wrapped_number!(Amount, u128);
 impl_wrapped_number!(BlockHeight, u64);
-impl_wrapped_number!(RoundNumber, u32);
 
 impl fmt::Display for Amount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -346,17 +350,38 @@ impl std::str::FromStr for BlockHeight {
     }
 }
 
-impl fmt::Display for RoundNumber {
+impl fmt::Display for Round {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        match self {
+            Round::Fast => write!(f, "fast round"),
+            Round::MultiLeader(r) => write!(f, "multi-leader round {}", r),
+            Round::SingleLeader(r) => write!(f, "single-leader round {}", r),
+        }
     }
 }
 
-impl std::str::FromStr for RoundNumber {
-    type Err = std::num::ParseIntError;
+impl Round {
+    pub fn is_multi_leader(&self) -> bool {
+        matches!(self, Round::MultiLeader(_))
+    }
 
-    fn from_str(src: &str) -> Result<Self, Self::Err> {
-        Ok(Self(u32::from_str(src)?))
+    pub fn is_fast(&self) -> bool {
+        matches!(self, Round::Fast)
+    }
+
+    pub fn number(&self) -> u32 {
+        match self {
+            Round::Fast => 0,
+            Round::MultiLeader(r) | Round::SingleLeader(r) => *r,
+        }
+    }
+
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Round::Fast => "fast",
+            Round::MultiLeader(_) => "multi",
+            Round::SingleLeader(_) => "single",
+        }
     }
 }
 
@@ -408,7 +433,7 @@ doc_scalar!(
     "A timestamp, in microseconds since the Unix epoch"
 );
 doc_scalar!(
-    RoundNumber,
+    Round,
     "A number to identify successive attempts to decide a value in a consensus protocol."
 );
 

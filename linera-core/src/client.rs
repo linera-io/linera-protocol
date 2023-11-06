@@ -21,7 +21,7 @@ use futures::{
 use linera_base::{
     abi::{Abi, ContractAbi},
     crypto::{CryptoHash, KeyPair, PublicKey},
-    data_types::{Amount, ArithmeticError, BlockHeight, RoundNumber, Timestamp},
+    data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     ensure,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
@@ -30,7 +30,7 @@ use linera_chain::{
         Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, HashedValue,
         IncomingMessage, LiteCertificate, LiteVote,
     },
-    ChainError, ChainManagerInfo, ChainStateView,
+    ChainError, ChainStateView,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
@@ -228,14 +228,11 @@ pub enum ChainClientError {
     #[error("Protocol error within chain client: {0}")]
     ProtocolError(&'static str),
 
-    #[error("No key available to interact with single-owner chain {0}")]
-    CannotFindKeyForSingleOwnerChain(ChainId),
+    #[error("No key available to interact with chain {0}")]
+    CannotFindKeyForChain(ChainId),
 
-    #[error("No key available to interact with multi-owner chain {0}")]
-    CannotFindKeyForMultiOwnerChain(ChainId),
-
-    #[error("Found several possible identities to interact with multi-owner chain {0}")]
-    FoundMultipleKeysForMultiOwnerChain(ChainId),
+    #[error("Found several possible identities to interact with chain {0}")]
+    FoundMultipleKeysForChain(ChainId),
 
     #[error("Leader timeout certificate does not match the expected one.")]
     UnexpectedLeaderTimeout,
@@ -415,33 +412,24 @@ where
     /// Obtains the identity of the current owner of the chain. HACK: In the case of a
     /// multi-owner chain, we pick one identity for which we know the private key.
     pub async fn identity(&mut self) -> Result<Owner, ChainClientError> {
-        match self.chain_info().await?.manager {
-            ChainManagerInfo::Single(manager) => {
-                if !self.known_key_pairs.contains_key(&manager.owner) {
-                    return Err(ChainClientError::CannotFindKeyForSingleOwnerChain(
-                        self.chain_id,
-                    ));
-                }
-                Ok(manager.owner)
-            }
-            ChainManagerInfo::Multi(manager) => {
-                let mut identities = manager
-                    .public_keys
-                    .keys()
-                    .filter(|owner| self.known_key_pairs.contains_key(owner));
-                let Some(identity) = identities.next() else {
-                    return Err(ChainClientError::CannotFindKeyForMultiOwnerChain(
-                        self.chain_id,
-                    ));
-                };
-                ensure!(
-                    identities.next().is_none(),
-                    ChainClientError::FoundMultipleKeysForMultiOwnerChain(self.chain_id)
-                );
-                Ok(*identity)
-            }
-            ChainManagerInfo::None => Err(LocalNodeError::InactiveChain(self.chain_id).into()),
+        let manager = self.chain_info().await?.manager;
+        if !manager.ownership.is_active() {
+            return Err(LocalNodeError::InactiveChain(self.chain_id).into());
         }
+        let mut identities = manager
+            .ownership
+            .owners
+            .keys()
+            .chain(manager.ownership.super_owners.keys())
+            .filter(|owner| self.known_key_pairs.contains_key(owner));
+        let Some(identity) = identities.next() else {
+            return Err(ChainClientError::CannotFindKeyForChain(self.chain_id));
+        };
+        ensure!(
+            identities.next().is_none(),
+            ChainClientError::FoundMultipleKeysForChain(self.chain_id)
+        );
+        Ok(*identity)
     }
 
     /// Obtains the key pair associated to the current identity.
@@ -563,7 +551,7 @@ where
                 if let Some(info) =
                     Self::local_chain_info(this.clone(), chain_id, &mut local_node).await
                 {
-                    if (info.next_block_height, info.manager.current_round()) >= (height, round) {
+                    if (info.next_block_height, info.manager.current_round) >= (height, round) {
                         debug!("Accepting redundant notification for new round");
                         return true;
                     }
@@ -581,7 +569,7 @@ where
                     error!("Fail to read local chain info for {chain_id}");
                     return false;
                 };
-                if (info.next_block_height, info.manager.current_round()) < (height, round) {
+                if (info.next_block_height, info.manager.current_round) < (height, round) {
                     error!("Fail to synchronize new block after notification");
                     return false;
                 }
@@ -682,13 +670,14 @@ where
                 ChainClientError::InternalError("Invalid chain of blocks in local node")
             );
         }
-        if !matches!(
-            &info.manager,
-            ChainManagerInfo::Single(single) if self.known_key_pairs.contains_key(&single.owner))
+        let ownership = &info.manager.ownership;
+        if ownership
+            .all_owners()
+            .any(|owner| !self.known_key_pairs.contains_key(owner))
         {
-            // For multi-owner chains, or for single-owner chains that are owned by someone else, we
-            // could be missing recent certificates created by other owners. Further synchronize
-            // blocks from the network. This is a best-effort that depends on network conditions.
+            // For chains with any owner other than ourselves, we could be missing recent
+            // certificates created by other owners. Further synchronize blocks from the network.
+            // This is a best-effort that depends on network conditions.
             let nodes = self.validator_nodes().await?;
             info = self
                 .node_client
@@ -733,18 +722,15 @@ where
         )
         .await;
         let (value, round) = match action {
-            CommunicateAction::SubmitBlockForConfirmation(proposal) => {
-                let block = proposal.content.block;
-                let (executed_block, _) = self.node_client.stage_block_execution(block).await?;
-                (
-                    HashedValue::from(CertificateValue::ConfirmedBlock { executed_block }),
-                    proposal.content.round,
-                )
-            }
-            CommunicateAction::SubmitBlockForValidation(proposal) => {
+            CommunicateAction::SubmitBlock(proposal) => {
                 let BlockAndRound { block, round } = proposal.content;
                 let (executed_block, _) = self.node_client.stage_block_execution(block).await?;
-                (HashedValue::new_validated(executed_block), round)
+                let value = if round.is_fast() {
+                    HashedValue::new_confirmed(executed_block)
+                } else {
+                    HashedValue::new_validated(executed_block)
+                };
+                (value, round)
             }
             CommunicateAction::FinalizeBlock(validity_certificate) => {
                 let round = validity_certificate.round;
@@ -1132,7 +1118,7 @@ where
             .remove(&epoch)
             .ok_or(LocalNodeError::InactiveChain(chain_id))?;
         let height = info.next_block_height;
-        let round = info.manager.current_round();
+        let round = info.manager.current_round;
         let action = CommunicateAction::RequestLeaderTimeout {
             height,
             round,
@@ -1220,41 +1206,25 @@ where
         // Remember what we are trying to do, before sending the proposal to the validators.
         self.pending_block = Some(block);
         // Send the query to validators.
-        let final_certificate = match manager {
-            ChainManagerInfo::Multi(_) => {
-                // Need two round-trips.
-                let certificate = self
-                    .communicate_chain_updates(
-                        &committee,
-                        self.chain_id,
-                        CommunicateAction::SubmitBlockForValidation(proposal.clone()),
-                    )
-                    .await?
-                    .expect("a certificate");
-                assert!(matches!(
-                    certificate.value(),
-                    CertificateValue::ValidatedBlock { executed_block, .. }
-                        if executed_block.block == proposal.content.block
-                ));
-                self.communicate_chain_updates(
-                    &committee,
-                    self.chain_id,
-                    CommunicateAction::FinalizeBlock(certificate),
-                )
+        let submit_action = CommunicateAction::SubmitBlock(proposal.clone());
+        let certificate = self
+            .communicate_chain_updates(&committee, self.chain_id, submit_action)
+            .await?
+            .expect("a certificate");
+        let final_certificate = if proposal.content.round.is_fast() {
+            // Only one round-trip is needed
+            certificate
+        } else {
+            // Need two round-trips.
+            assert!(matches!(
+                certificate.value(),
+                CertificateValue::ValidatedBlock { executed_block, .. }
+                    if executed_block.block == proposal.content.block
+            ));
+            let finalize_action = CommunicateAction::FinalizeBlock(certificate);
+            self.communicate_chain_updates(&committee, self.chain_id, finalize_action)
                 .await?
                 .expect("a certificate")
-            }
-            ChainManagerInfo::Single(_) => {
-                // Only one round-trip is needed
-                self.communicate_chain_updates(
-                    &committee,
-                    self.chain_id,
-                    CommunicateAction::SubmitBlockForConfirmation(proposal.clone()),
-                )
-                .await?
-                .expect("a certificate")
-            }
-            ChainManagerInfo::None => unreachable!("chain is active"),
         };
         // By now the block should be final.
         ensure!(
@@ -1515,8 +1485,10 @@ where
         &mut self,
         new_public_key: PublicKey,
     ) -> Result<Certificate, ChainClientError> {
-        self.execute_operation(Operation::System(SystemOperation::ChangeOwner {
-            new_public_key,
+        self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
+            super_owners: vec![new_public_key],
+            owners: Vec::new(),
+            multi_leader_rounds: 2,
         }))
         .await
     }
@@ -1530,29 +1502,27 @@ where
         new_public_key: PublicKey,
         new_weight: u64,
     ) -> Result<Certificate, ChainClientError> {
-        let info = self.prepare_chain().await?;
+        let ownership = self.prepare_chain().await?.manager.ownership;
+        ensure!(
+            ownership.is_active(),
+            ChainError::InactiveChain(self.chain_id)
+        );
         let messages = self.pending_messages().await?;
-        let (new_public_keys, multi_leader_rounds) = match info.manager {
-            ChainManagerInfo::None => return Err(ChainError::InactiveChain(self.chain_id).into()),
-            ChainManagerInfo::Single(manager) => (
-                vec![(manager.public_key, 100), (new_public_key, new_weight)],
-                RoundNumber(2),
-            ),
-            ChainManagerInfo::Multi(manager) => (
-                manager
-                    .public_keys
-                    .values()
-                    .cloned()
-                    .chain(iter::once((new_public_key, new_weight)))
-                    .collect(),
-                manager.multi_leader_rounds,
-            ),
-        };
+        let mut owners: Vec<_> = ownership.owners.values().copied().collect();
+        owners.extend(
+            ownership
+                .super_owners
+                .values()
+                .copied()
+                .zip(iter::repeat(100)),
+        );
+        owners.push((new_public_key, new_weight));
         self.execute_block(
             messages,
-            vec![Operation::System(SystemOperation::ChangeMultipleOwners {
-                new_public_keys,
-                multi_leader_rounds,
+            vec![Operation::System(SystemOperation::ChangeOwnership {
+                super_owners: Vec::new(),
+                owners,
+                multi_leader_rounds: ownership.multi_leader_rounds,
             })],
         )
         .await

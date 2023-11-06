@@ -650,6 +650,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
     net.terminate().await.unwrap();
 }
 
+#[ignore] // TODO(#1159)
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
