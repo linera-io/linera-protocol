@@ -29,7 +29,7 @@
 //! for always polling the [`HostFutureQueue`] before polling the guest Wasm module.
 
 use futures::{
-    channel::{mpsc, oneshot},
+    channel::mpsc,
     future::{self, BoxFuture, FutureExt},
     stream::{FuturesOrdered, Stream, StreamExt},
 };
@@ -204,9 +204,7 @@ impl QueuedHostFutureFactory {
 #[cfg(test)]
 mod tests {
     use super::HostFutureQueue;
-    use futures::{
-        channel::oneshot, future, stream::FuturesUnordered, task::noop_waker, FutureExt, StreamExt,
-    };
+    use futures::{future, stream::FuturesUnordered, task::noop_waker, FutureExt, StreamExt};
     use std::{
         collections::VecDeque,
         mem,
