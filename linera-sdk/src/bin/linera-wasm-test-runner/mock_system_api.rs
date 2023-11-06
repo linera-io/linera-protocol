@@ -426,9 +426,8 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     linker.func_wrap1_async(
         "contract_system_api",
         "lock::poll: func(self: handle<lock>) -> variant { \
-            pending(unit), \
-            ready-locked(unit), \
-            ready-not-locked(unit) \
+            locked(unit), \
+            not-locked(unit) \
         }",
         move |mut caller: Caller<'_, Resources>, _handle: i32| {
             Box::new(async move {
@@ -448,8 +447,8 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     );
 
                 match locked {
-                    0 => 2,
-                    _ => 1,
+                    0 => 1,
+                    _ => 0,
                 }
             })
         },

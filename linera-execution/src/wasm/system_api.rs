@@ -115,17 +115,17 @@ macro_rules! impl_contract_system_api {
             fn lock_poll(
                 &mut self,
                 future: &Self::Lock,
-            ) -> Result<contract_system_api::PollLock, Self::Error> {
-                use contract_system_api::PollLock;
+            ) -> Result<contract_system_api::LockResult, Self::Error> {
+                use contract_system_api::LockResult;
                 let receiver = future
                     .try_lock()
                     .expect("Unexpected reentrant locking of `oneshot::Receiver`")
                     .take()
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
                 match receiver.recv() {
-                    Ok(Ok(())) => Ok(PollLock::ReadyLocked),
+                    Ok(Ok(())) => Ok(LockResult::Locked),
                     Ok(Err(ExecutionError::ViewError(ViewError::TryLockError(_)))) => {
-                        Ok(PollLock::ReadyNotLocked)
+                        Ok(LockResult::NotLocked)
                     }
                     Ok(Err(error)) => Err(error),
                     Err(oneshot::RecvError) => {
