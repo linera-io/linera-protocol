@@ -747,6 +747,13 @@ impl Faucet {
         Self { port, child }
     }
 
+    pub async fn terminate(mut self) -> Result<()> {
+        self.child
+            .kill()
+            .await
+            .context("terminating faucet service")
+    }
+
     pub fn ensure_is_running(&mut self) -> Result<()> {
         self.child.ensure_is_running()
     }
