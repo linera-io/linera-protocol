@@ -12,6 +12,7 @@ use crate::{
 };
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
+use aws_smithy_types::error::operation::BuildError;
 use aws_sdk_dynamodb::{
     error::SdkError,
     operation::{
@@ -37,7 +38,6 @@ use static_assertions as sa;
 use std::{collections::HashMap, env, mem, str::FromStr, sync::Arc};
 use thiserror::Error;
 
-use http::uri::InvalidUri;
 #[cfg(any(test, feature = "test"))]
 use {
     crate::lru_caching::TEST_CACHE_SIZE,
@@ -48,18 +48,6 @@ use {
 
 /// Name of the environment variable with the address to a LocalStack instance.
 pub const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
-
-/// Failure to get the LocalStack endpoint.
-#[derive(Debug, Error)]
-pub enum EndpointError {
-    /// The endpoint was missing for the {LOCALSTACK_ENDPOINT:?} environment variable.
-    #[error("Missing LocalStack endpoint address in {LOCALSTACK_ENDPOINT:?} environment variable")]
-    MissingEndpoint(#[from] env::VarError),
-
-    /// LocalStack endpoint address is not a valid URI
-    #[error("LocalStack endpoint address is not a valid URI")]
-    InvalidUri(#[from] InvalidUri),
-}
 
 /// The configuration to connect to DynamoDB.
 pub type Config = aws_sdk_dynamodb::Config;
@@ -586,7 +574,7 @@ impl DynamoDbClientInternal {
         let request = Delete::builder()
             .table_name(&self.table.0)
             .set_key(Some(build_key(key)))
-            .build();
+            .build()?;
         Ok(TransactWriteItem::builder().delete(request).build())
     }
 
@@ -607,7 +595,7 @@ impl DynamoDbClientInternal {
         let request = Put::builder()
             .table_name(&self.table.0)
             .set_item(Some(build_key_value(key, value)))
-            .build();
+            .build()?;
         Ok(TransactWriteItem::builder().put(request).build())
     }
 
@@ -655,24 +643,19 @@ impl DynamoDbClientInternal {
         let test = match &error {
             SdkError::ServiceError(error) => match error.err() {
                 GetItemError::ResourceNotFoundException(error) => {
-                    println!("2 : error={:?}", error);
                     if error.message
                         == Some("Cannot do operations on a non-existent table".to_string())
                     {
-                        println!("Exit case 1");
                         true
                     } else {
-                        println!("Exit case 2");
                         false
                     }
                 }
                 _ => {
-                    println!("Exit case 3");
                     false
                 }
             },
             _ => {
-                println!("Exit case 4");
                 false
             }
         };
@@ -888,31 +871,31 @@ impl DynamoDbClientInternal {
                 AttributeDefinition::builder()
                     .attribute_name(PARTITION_ATTRIBUTE)
                     .attribute_type(ScalarAttributeType::B)
-                    .build(),
+                    .build()?,
             )
             .attribute_definitions(
                 AttributeDefinition::builder()
                     .attribute_name(KEY_ATTRIBUTE)
                     .attribute_type(ScalarAttributeType::B)
-                    .build(),
+                    .build()?,
             )
             .key_schema(
                 KeySchemaElement::builder()
                     .attribute_name(PARTITION_ATTRIBUTE)
                     .key_type(KeyType::Hash)
-                    .build(),
+                    .build()?,
             )
             .key_schema(
                 KeySchemaElement::builder()
                     .attribute_name(KEY_ATTRIBUTE)
                     .key_type(KeyType::Range)
-                    .build(),
+                    .build()?,
             )
             .provisioned_throughput(
                 ProvisionedThroughput::builder()
                     .read_capacity_units(10)
                     .write_capacity_units(10)
-                    .build(),
+                    .build()?,
             )
             .send()
             .await;
@@ -1504,13 +1487,13 @@ pub enum DynamoDbContextError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
-    /// An Endpoint error occurred.
-    #[error(transparent)]
-    Endpoint(#[from] EndpointError),
-
     /// An error occurred while creating the table.
     #[error(transparent)]
     CreateTable(#[from] SdkError<CreateTableError>),
+
+    /// An error occurred while building an object
+    #[error(transparent)]
+    Build(#[from] Box<BuildError>),
 }
 
 impl<InnerError> From<SdkError<InnerError>> for DynamoDbContextError
@@ -1521,6 +1504,13 @@ where
         Box::new(error).into()
     }
 }
+
+impl From<BuildError> for DynamoDbContextError {
+    fn from(error: BuildError) -> Self {
+        Box::new(error).into()
+    }
+}
+
 
 impl DynamoDbContextError {
     /// Creates a [`DynamoDbContextError::WrongKeyType`] instance based on the returned value type.
