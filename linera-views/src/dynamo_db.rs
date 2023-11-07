@@ -12,7 +12,6 @@ use crate::{
 };
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
-use aws_smithy_types::error::operation::BuildError;
 use aws_sdk_dynamodb::{
     error::SdkError,
     operation::{
@@ -31,6 +30,7 @@ use aws_sdk_dynamodb::{
     },
     Client,
 };
+use aws_smithy_types::error::operation::BuildError;
 use bcs::serialized_size;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
@@ -47,7 +47,7 @@ use {
 };
 
 /// Name of the environment variable with the address to a LocalStack instance.
-pub const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
+const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
 
 /// The configuration to connect to DynamoDB.
 pub type Config = aws_sdk_dynamodb::Config;
@@ -643,21 +643,12 @@ impl DynamoDbClientInternal {
         let test = match &error {
             SdkError::ServiceError(error) => match error.err() {
                 GetItemError::ResourceNotFoundException(error) => {
-                    if error.message
+                    error.message
                         == Some("Cannot do operations on a non-existent table".to_string())
-                    {
-                        true
-                    } else {
-                        false
-                    }
                 }
-                _ => {
-                    false
-                }
+                _ => false,
             },
-            _ => {
-                false
-            }
+            _ => false,
         };
         if test {
             Ok(false)
@@ -1510,7 +1501,6 @@ impl From<BuildError> for DynamoDbContextError {
         Box::new(error).into()
     }
 }
-
 
 impl DynamoDbContextError {
     /// Creates a [`DynamoDbContextError::WrongKeyType`] instance based on the returned value type.
