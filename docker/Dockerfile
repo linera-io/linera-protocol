@@ -101,16 +101,16 @@ RUN mv \
 
 RUN strip linera linera-proxy linera-server linera-db
 
-# Stage 3.5 - Optionally copy binaries instead of using the build
-# images above
-FROM scratch as builder_copy
-ARG binaries
-COPY \
-    "$binaries"/linera \
-    "$binaries"/linera-server \
-    "$binaries"/linera-proxy \
-    "$binaries"/linera-db \
-    ./
+# # Stage 3.5 - Optionally copy binaries instead of using the build
+# # images above
+# FROM scratch as builder_copy
+# ARG binaries
+# COPY \
+#     "$binaries"/linera \
+#     "$binaries"/linera-server \
+#     "$binaries"/linera-proxy \
+#     "$binaries"/linera-db \
+#     ./
 
 FROM builder$copy as binaries
 
@@ -126,11 +126,17 @@ COPY --from=binaries \
     linera-db \
     ./
 
-COPY --chmod=755 \
-    docker/server-entrypoint.sh \
+# COPY --chmod=755 \
+#     docker/server-entrypoint.sh \
+#     docker/server-init.sh \
+#     configuration/"$environment"/validator_1.toml \
+#     ./
+COPY docker/server-entrypoint.sh \
     docker/server-init.sh \
     configuration/"$environment"/validator_1.toml \
     ./
+
+RUN chmod 755 server-entrypoint.sh server-init.sh
 
 # Create configuration files for the validator according to the validator's config file.
 # * Private server states are stored in `server*.json`.
