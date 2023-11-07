@@ -16,7 +16,7 @@ enum log-level {
 
 resource load {
     static new: func() -> load
-    poll: func() -> poll-load
+    wait: func() -> result<list<u8>, string>
 }
 
 variant poll-load {

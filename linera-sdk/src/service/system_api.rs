@@ -12,23 +12,15 @@ use linera_base::{
 };
 use linera_views::views::View;
 use serde::de::DeserializeOwned;
-use std::{fmt, future::Future};
+use std::fmt;
 
 /// Loads the application state, without locking it for writes.
 pub(crate) async fn load<State>() -> State
 where
     State: Default + DeserializeOwned,
 {
-    let future = wit::Load::new();
-    load_using(future::poll_fn(|_context| future.poll().into())).await
-}
-
-/// Helper function to load the application state or create a new one if it doesn't exist.
-async fn load_using<State>(future: impl Future<Output = Result<Vec<u8>, String>>) -> State
-where
-    State: Default + DeserializeOwned,
-{
-    let bytes = future.await.expect("Failed to load application state");
+    let promise = wit::Load::new();
+    let bytes = promise.wait().expect("Failed to load application state");
     if bytes.is_empty() {
         State::default()
     } else {

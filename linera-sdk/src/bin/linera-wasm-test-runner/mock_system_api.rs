@@ -671,8 +671,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     )?;
     linker.func_wrap2_async(
         "service_system_api",
-        "load::poll: \
-            func(self: handle<load>) -> variant { pending(unit), ready(result<list<u8>, string>) }",
+        "load::wait: func(self: handle<load>) -> result<list<u8>, string>",
         move |mut caller: Caller<'_, Resources>, _handle: i32, return_offset: i32| {
             Box::new(async move {
                 let function = get_function(&mut caller, "mocked-load: func() -> list<u8>").expect(
@@ -690,9 +689,8 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                         Please ensure `linera_sdk::test::mock_application_state` was called",
                     );
 
-                store_in_memory(&mut caller, return_offset, 1_i32);
-                store_in_memory(&mut caller, return_offset + 4, 0_i32);
-                copy_memory_slices(&mut caller, result_offset, return_offset + 8, 8);
+                store_in_memory(&mut caller, return_offset, 0_i32);
+                copy_memory_slices(&mut caller, result_offset, return_offset + 4, 8);
             })
         },
     )?;
