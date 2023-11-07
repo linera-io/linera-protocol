@@ -56,6 +56,33 @@ pub static WASM_FUEL_USED_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
         .expect("Counter creation should not fail")
 });
 
+pub static WASM_NUM_READS_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "wasm_num_reads_per_block",
+        "Wasm number of reads per block",
+        &[]
+    )
+    .expect("Counter can be created")
+});
+
+pub static WASM_BYTES_READ_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "wasm_bytes_read_per_block",
+        "Wasm number of bytes read per block",
+        &[]
+    )
+    .expect("Counter can be created")
+});
+
+pub static WASM_BYTES_WRITTEN_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "wasm_bytes_written_per_block",
+        "Wasm number of bytes written per block",
+        &[]
+    )
+    .expect("Counter can be created")
+});
+
 /// A view accessing the state of a chain.
 #[derive(Debug, RootView, GraphQLView)]
 pub struct ChainStateView<C> {
@@ -575,6 +602,15 @@ where
         WASM_FUEL_USED_PER_BLOCK
             .with_label_values(&[])
             .observe(tracker.used_fuel as f64);
+        WASM_NUM_READS_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.num_reads as f64);
+        WASM_BYTES_READ_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.bytes_read as f64);
+        WASM_BYTES_WRITTEN_PER_BLOCK
+            .with_label_values(&[])
+            .observe(tracker.bytes_written as f64);
         Ok(BlockExecutionOutcome {
             messages,
             message_counts,
