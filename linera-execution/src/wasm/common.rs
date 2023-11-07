@@ -6,12 +6,17 @@
 use super::{
     async_boundary::{GuestFutureActor, GuestFutureInterface, PollSender},
     async_determinism::HostFutureQueue,
-    ExecutionError,
+    ExecutionError, WasmExecutionError,
 };
 use crate::{
     ApplicationCallResult, CalleeContext, MessageContext, OperationContext, QueryContext,
     RawExecutionResult, SessionCallResult, SessionId,
 };
+use futures::{
+    future::{FutureExt, Map, MapErr, TryFutureExt},
+    stream::StreamExt,
+};
+use std::{convert, thread};
 
 /// Types that are specific to the context of an application ready to be executedy by a WebAssembly
 /// runtime.
@@ -34,15 +39,6 @@ pub trait ApplicationRuntimeContext: Sized {
 
 /// Common interface to calling a user contract in a WebAssembly module.
 pub trait Contract: ApplicationRuntimeContext {
-    /// The WIT type for the resource representing the guest future
-    /// [`initialize`][crate::Contract::initialize] method.
-    type Initialize: GuestFutureInterface<
-            Self,
-            Output = RawExecutionResult<Vec<u8>>,
-            Parameters = (OperationContext, Vec<u8>),
-        > + Send
-        + Unpin;
-
     /// The WIT type for the resource representing the guest future
     /// [`execute_operation`][crate::Contract::execute_operation] method.
     type ExecuteOperation: GuestFutureInterface<
@@ -88,20 +84,13 @@ pub trait Contract: ApplicationRuntimeContext {
     /// The WIT type eqivalent for [`Poll<Result<SessionCallResult, String>>`].
     type PollSessionCallResult;
 
-    /// Creates a new future for the user application to initialize itself on the owner chain.
-    fn initialize_new(
+    /// Initializes the user application on the owner chain.
+    fn initialize(
         &self,
         store: &mut Self::Store,
         context: OperationContext,
         argument: Vec<u8>,
-    ) -> Result<Self::Initialize, Self::Error>;
-
-    /// Polls a user contract future that's initializing the application.
-    fn initialize_poll(
-        &self,
-        store: &mut Self::Store,
-        future: &Self::Initialize,
-    ) -> Result<Self::PollExecutionResult, Self::Error>;
+    ) -> Result<Result<RawExecutionResult<Vec<u8>>, String>, Self::Error>;
 
     /// Creates a new future for the user application to execute an operation.
     fn execute_operation_new(
@@ -214,6 +203,11 @@ where
     pub(crate) extra: A::Extra,
 }
 
+type WasmResultFuture<T> = Map<
+    MapErr<oneshot::Receiver<Result<T, ExecutionError>>, fn(oneshot::RecvError) -> ExecutionError>,
+    fn(Result<Result<T, ExecutionError>, ExecutionError>) -> Result<T, ExecutionError>,
+>;
+
 impl<A> WasmRuntimeContext<A>
 where
     A: Contract + Send + Unpin + 'static,
@@ -234,8 +228,13 @@ where
         self,
         context: &OperationContext,
         argument: &[u8],
-    ) -> PollSender<RawExecutionResult<Vec<u8>>> {
-        GuestFutureActor::<A::Initialize, A>::spawn((*context, argument.to_owned()), self)
+    ) -> WasmResultFuture<RawExecutionResult<Vec<u8>>> {
+        let context = *context;
+        let argument = argument.to_owned();
+
+        self.run_wasm_guest(move |application, store| {
+            application.initialize(store, context, argument)
+        })
     }
 
     /// Calls the guest Wasm module's implementation of
@@ -354,6 +353,47 @@ where
     /// ```
     pub fn handle_query(self, context: &QueryContext, argument: &[u8]) -> PollSender<Vec<u8>> {
         GuestFutureActor::<A::HandleQuery, A>::spawn((*context, argument.to_owned()), self)
+    }
+}
+
+impl<A> WasmRuntimeContext<A>
+where
+    A: ApplicationRuntimeContext + Send + Unpin + 'static,
+{
+    /// Spawns a thread to execute a Wasm guest.
+    fn run_wasm_guest<T>(
+        mut self,
+        guest_operation: impl FnOnce(&A, &mut A::Store) -> Result<Result<T, String>, A::Error>
+            + Send
+            + 'static,
+    ) -> WasmResultFuture<T>
+    where
+        T: Send + 'static,
+    {
+        let (result_sender, result_receiver) = oneshot::channel();
+
+        if let Some(future_queue) = self.future_queue.take() {
+            tokio::spawn(future_queue.collect::<()>());
+        }
+
+        thread::spawn(move || {
+            A::configure_initial_fuel(&mut self);
+
+            let result = guest_operation(&self.application, &mut self.store)
+                .map_err(|error| error.into())
+                .and_then(|result| result.map_err(ExecutionError::UserError));
+
+            if result_sender.send(result).is_err() {
+                tracing::debug!("Wasm guest operation canceled");
+            }
+        });
+
+        result_receiver
+            .map_err(
+                (|oneshot::RecvError| WasmExecutionError::Aborted.into())
+                    as fn(oneshot::RecvError) -> ExecutionError,
+            )
+            .map(|result| result.and_then(convert::identity))
     }
 }
 

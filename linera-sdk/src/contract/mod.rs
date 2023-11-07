@@ -9,6 +9,10 @@ pub mod exported_futures;
 pub mod system_api;
 pub mod wit_types;
 
+use super::log::ContractLogger;
+use crate::{contract::exported_futures::ContractStateStorage, util::BlockingWait, Contract};
+use std::future::Future;
+
 // Import the system interface.
 wit_bindgen_guest_rust::import!("contract_system_api.wit");
 
@@ -25,18 +29,26 @@ macro_rules! contract {
 
         /// Mark the contract type to be exported.
         impl $crate::contract::wit_types::Contract for $application {
-            type Initialize = Initialize;
             type ExecuteOperation = ExecuteOperation;
             type ExecuteMessage = ExecuteMessage;
             type HandleApplicationCall = HandleApplicationCall;
             type HandleSessionCall = HandleSessionCall;
-        }
 
-        $crate::instance_exported_future! {
-            contract::Initialize<$application>(
+            fn initialize(
                 context: $crate::contract::wit_types::OperationContext,
                 argument: Vec<u8>,
-            ) -> PollExecutionResult
+            ) -> Result<$crate::contract::wit_types::ExecutionResult, String> {
+                $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
+                    move |mut application| async move {
+                        let argument = serde_json::from_slice(&argument)?;
+
+                        application
+                            .initialize(&context.into(), argument)
+                            .await
+                            .map(|result| (application, result))
+                    },
+                )
+            }
         }
 
         $crate::instance_exported_future! {
@@ -75,4 +87,23 @@ macro_rules! contract {
         #[cfg(not(target_arch = "wasm32"))]
         fn main() {}
     };
+}
+
+/// Runs an asynchronous entrypoint in a blocking manner, by repeatedly polling the entrypoint
+/// future.
+pub fn run_async_entrypoint<Application, Entrypoint, Output, Error, RawOutput>(
+    entrypoint: impl FnOnce(Application) -> Entrypoint + Send,
+) -> Result<RawOutput, String>
+where
+    Application: Contract,
+    Entrypoint: Future<Output = Result<(Application, Output), Error>> + Send,
+    Output: Into<RawOutput> + Send + 'static,
+    Error: ToString + 'static,
+{
+    ContractLogger::install();
+
+    <Application as Contract>::Storage::execute_with_state(entrypoint)
+        .blocking_wait()
+        .map(|output| output.into())
+        .map_err(|error| error.to_string())
 }

@@ -13,7 +13,7 @@ use super::{
         ExecutionError,
     },
     contract::{
-        ExecuteMessage, ExecuteOperation, HandleApplicationCall, HandleSessionCall, Initialize,
+        ExecuteMessage, ExecuteOperation, HandleApplicationCall, HandleSessionCall,
         PollApplicationCallResult, PollExecutionResult, PollSessionCallResult,
     },
     service::{HandleQuery, PollApplicationQueryResult},
@@ -81,14 +81,6 @@ macro_rules! impl_guest_future_interface {
 }
 
 impl_guest_future_interface! {
-    Initialize: {
-        application_trait = Contract,
-        new_function = initialize_new(context: OperationContext, argument: Vec<u8>),
-        poll_function = initialize_poll,
-        poll_type = PollExecutionResult,
-        output_type = RawExecutionResult<Vec<u8>>,
-    },
-
     ExecuteOperation: {
         application_trait = Contract,
         new_function = execute_operation_new(context: OperationContext, operation: Vec<u8>),

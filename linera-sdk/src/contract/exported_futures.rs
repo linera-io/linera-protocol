@@ -124,46 +124,6 @@ where
 }
 
 /// Future implementation exported from the guest to allow the host to call
-/// [`Contract::initialize`].
-///
-/// Loads the `Application` state and calls its [`initialize`][Contract::initialize] method.
-pub struct Initialize<Application: Contract> {
-    future: ExportedFuture<Result<ExecutionResult<Application::Message>, String>>,
-    _application: PhantomData<Application>,
-}
-
-impl<Application> Initialize<Application>
-where
-    Application: Contract + 'static,
-{
-    /// Creates the exported future that the host can poll.
-    ///
-    /// This is called from the host.
-    pub fn new(context: wit_types::OperationContext, bytes: Vec<u8>) -> Self {
-        ContractLogger::install();
-        Initialize {
-            future: ExportedFuture::new(Application::Storage::execute_with_state(
-                move |mut application| async move {
-                    let argument = serde_json::from_slice(&bytes)?;
-                    application
-                        .initialize(&context.into(), argument)
-                        .await
-                        .map(|result| (application, result))
-                },
-            )),
-            _application: PhantomData,
-        }
-    }
-
-    /// Polls the future export from the guest.
-    ///
-    /// This is called from the host.
-    pub fn poll(&self) -> wit_types::PollExecutionResult {
-        self.future.poll()
-    }
-}
-
-/// Future implementation exported from the guest to allow the host to call
 /// [`Contract::execute_operation`].
 ///
 /// Loads the `Application` state and calls its

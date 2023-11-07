@@ -1,11 +1,4 @@
-resource initialize {
-    static new: func(
-        context: operation-context,
-        argument: list<u8>,
-    ) -> initialize
-
-    poll: func() -> poll-execution-result
-}
+initialize: func(context: operation-context, argument: list<u8>) -> result<execution-result, string>
 
 resource execute-operation {
     static new: func(

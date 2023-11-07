@@ -43,7 +43,7 @@ use super::{
 };
 use crate::{
     Bytecode, CalleeContext, ContractRuntime, ExecutionError, MessageContext, OperationContext,
-    QueryContext, ServiceRuntime,
+    QueryContext, RawExecutionResult, ServiceRuntime,
 };
 use bytes::Bytes;
 use futures::{channel::mpsc, TryFutureExt};
@@ -243,7 +243,6 @@ impl WasmApplication {
 }
 
 impl common::Contract for Contract {
-    type Initialize = contract::Initialize;
     type ExecuteOperation = contract::ExecuteOperation;
     type ExecuteMessage = contract::ExecuteMessage;
     type HandleApplicationCall = contract::HandleApplicationCall;
@@ -252,21 +251,14 @@ impl common::Contract for Contract {
     type PollApplicationCallResult = contract::PollApplicationCallResult;
     type PollSessionCallResult = contract::PollSessionCallResult;
 
-    fn initialize_new(
+    fn initialize(
         &self,
         store: &mut Store,
         context: OperationContext,
         argument: Vec<u8>,
-    ) -> Result<contract::Initialize, RuntimeError> {
-        contract::Contract::initialize_new(&self.contract, store, context.into(), &argument)
-    }
-
-    fn initialize_poll(
-        &self,
-        store: &mut Store,
-        future: &contract::Initialize,
-    ) -> Result<contract::PollExecutionResult, RuntimeError> {
-        contract::Contract::initialize_poll(&self.contract, store, future)
+    ) -> Result<Result<RawExecutionResult<Vec<u8>>, String>, RuntimeError> {
+        contract::Contract::initialize(&self.contract, store, context.into(), &argument)
+            .map(|inner| inner.map(RawExecutionResult::from))
     }
 
     fn execute_operation_new(

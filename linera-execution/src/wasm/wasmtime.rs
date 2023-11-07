@@ -47,7 +47,7 @@ use super::{
 };
 use crate::{
     Bytecode, CalleeContext, ExecutionError, MessageContext, OperationContext, QueryContext,
-    SessionId,
+    RawExecutionResult, SessionId,
 };
 use futures::{channel::mpsc, TryFutureExt};
 use linera_views::{batch::Batch, views::ViewError};
@@ -335,7 +335,6 @@ impl ServiceState {
 }
 
 impl common::Contract for Contract {
-    type Initialize = contract::Initialize;
     type ExecuteOperation = contract::ExecuteOperation;
     type ExecuteMessage = contract::ExecuteMessage;
     type HandleApplicationCall = contract::HandleApplicationCall;
@@ -344,21 +343,14 @@ impl common::Contract for Contract {
     type PollApplicationCallResult = contract::PollApplicationCallResult;
     type PollSessionCallResult = contract::PollSessionCallResult;
 
-    fn initialize_new(
+    fn initialize(
         &self,
         store: &mut Store<ContractState>,
         context: OperationContext,
         argument: Vec<u8>,
-    ) -> Result<contract::Initialize, Trap> {
-        contract::Contract::initialize_new(&self.contract, store, context.into(), &argument)
-    }
-
-    fn initialize_poll(
-        &self,
-        store: &mut Store<ContractState>,
-        future: &contract::Initialize,
-    ) -> Result<contract::PollExecutionResult, Trap> {
-        contract::Contract::initialize_poll(&self.contract, store, future)
+    ) -> Result<Result<RawExecutionResult<Vec<u8>>, String>, Trap> {
+        contract::Contract::initialize(&self.contract, store, context.into(), &argument)
+            .map(|inner| inner.map(RawExecutionResult::from))
     }
 
     fn execute_operation_new(
