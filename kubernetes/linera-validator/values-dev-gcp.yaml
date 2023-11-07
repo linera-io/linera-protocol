@@ -1,11 +1,12 @@
 # Values for charts linera-validator for the dev validator on GCP.
 
+# Linera
 lineraImage: us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-test-local:latest
 lineraImagePullPolicy: Always
 logLevel: "debug"
-staticIpGcpName: "dev-validator-1"
 proxyPort: 443
 
+# Loki
 loki-stack:
   loki:
     enabled: true
@@ -23,3 +24,8 @@ loki-stack:
       clients:
         - url: http://linera-core-loki:3100/loki/api/v1/push
 
+# Environment
+environment: "GCP"
+
+# GCP
+staticIpGcpName: "dev-validator-1"

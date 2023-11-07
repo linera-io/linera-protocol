@@ -1,3 +1,4 @@
+{{- if eq .Values.environment "GCP" }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -22,3 +23,4 @@ metadata:
 spec:
   domains:
     - validator-1.devnet.linera.net
+{{- end }}

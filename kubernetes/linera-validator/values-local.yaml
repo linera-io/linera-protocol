@@ -1,10 +1,12 @@
 # Values for charts linera-validator for local validators.
 
+# Linera
 lineraImage: linera-test:latest
 lineraImagePullPolicy: Never
 logLevel: "debug"
 proxyPort: 19100
 
+# Loki
 loki-stack:
   loki:
     enabled: true
@@ -17,3 +19,6 @@ loki-stack:
     config:
       clients:
         - url: http://linera-core-loki:3100/loki/api/v1/push
+
+# Environment
+environment: "kind"
