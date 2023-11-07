@@ -5,7 +5,6 @@
 
 use super::service_system_api as wit;
 use crate::views::ViewStorageContext;
-use futures::future;
 use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::{ApplicationId, ChainId},
@@ -79,9 +78,8 @@ pub(crate) async fn query_application(
     application: ApplicationId,
     argument: &[u8],
 ) -> Result<Vec<u8>, String> {
-    let future = wit::TryQueryApplication::new(application.into(), argument);
-
-    future::poll_fn(|_context| future.poll().into()).await
+    let promise = wit::TryQueryApplication::new(application.into(), argument);
+    promise.wait()
 }
 
 /// Requests the host to log a message.

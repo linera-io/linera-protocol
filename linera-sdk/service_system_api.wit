@@ -19,11 +19,6 @@ resource load {
     wait: func() -> result<list<u8>, string>
 }
 
-variant poll-load {
-    pending,
-    ready(result<list<u8>, string>),
-}
-
 resource lock {
     static new: func() -> lock
     wait: func() -> result<unit, string>
@@ -40,7 +35,7 @@ resource try-query-application {
         query: list<u8>,
     ) -> try-query-application
 
-    poll: func() -> poll-load
+    wait: func() -> result<list<u8>, string>
 }
 
 record application-id {
