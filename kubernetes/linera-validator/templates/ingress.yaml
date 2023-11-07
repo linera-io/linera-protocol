@@ -22,5 +22,5 @@ metadata:
   name: managed-cert
 spec:
   domains:
-    - validator-1.devnet.linera.net
+    - {{ .Values.validatorDomainName }}
 {{- end }}
