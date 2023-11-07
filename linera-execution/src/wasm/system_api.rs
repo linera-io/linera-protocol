@@ -476,22 +476,18 @@ macro_rules! impl_view_system_api_for_service {
                 )?)))
             }
 
-            fn find_key_values_poll(
+            fn find_key_values_wait(
                 &mut self,
-                future: &Self::FindKeyValues,
-            ) -> Result<view_system_api::PollFindKeyValues, Self::Error> {
-                use view_system_api::PollFindKeyValues;
-                let receiver = future
+                promise: &Self::FindKeyValues,
+            ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
+                let receiver = promise
                     .try_lock()
                     .expect("Unexpected reentrant locking of `oneshot::Receiver`")
                     .take()
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                match receiver.recv() {
-                    Ok(key_values) => Ok(PollFindKeyValues::Ready(key_values)),
-                    Err(oneshot::RecvError) => {
-                        Err(WasmExecutionError::MissingRuntimeResponse.into())
-                    }
-                }
+                receiver
+                    .recv()
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn write_batch_new(
@@ -610,23 +606,18 @@ macro_rules! impl_view_system_api_for_contract {
                 )))
             }
 
-            fn find_key_values_poll(
+            fn find_key_values_wait(
                 &mut self,
-                future: &Self::FindKeyValues,
-            ) -> Result<view_system_api::PollFindKeyValues, Self::Error> {
-                use view_system_api::PollFindKeyValues;
-                let receiver = future
+                promise: &Self::FindKeyValues,
+            ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
+                let receiver = promise
                     .try_lock()
                     .expect("Unexpected reentrant locking of `oneshot::Receiver`")
                     .take()
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                match receiver.recv() {
-                    Ok(Ok(key_values)) => Ok(PollFindKeyValues::Ready(key_values)),
-                    Ok(Err(error)) => Err(error),
-                    Err(oneshot::RecvError) => {
-                        Err(WasmExecutionError::MissingRuntimeResponse.into())
-                    }
-                }
+                receiver
+                    .recv()
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse)?
             }
 
             fn write_batch_new(

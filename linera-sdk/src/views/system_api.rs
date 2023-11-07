@@ -23,8 +23,8 @@ impl KeyValueStore {
     }
 
     async fn find_key_values_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
-        let future = wit::FindKeyValues::new(key_prefix);
-        future::poll_fn(|_context| future.poll().into()).await
+        let promise = wit::FindKeyValues::new(key_prefix);
+        promise.wait()
     }
 }
 

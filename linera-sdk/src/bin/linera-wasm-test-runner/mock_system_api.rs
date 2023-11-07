@@ -1033,10 +1033,8 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     )?;
     linker.func_wrap2_async(
         "view_system_api",
-        "find-key-values::poll: func(self: handle<find-key-values>) -> variant { \
-            pending(unit), \
-            ready(list<tuple<list<u8>, list<u8>>>) \
-        }",
+        "find-key-values::wait: func(self: handle<find-key-values>) -> \
+            list<tuple<list<u8>, list<u8>>>",
         move |mut caller: Caller<'_, Resources>, handle: i32, return_offset: i32| {
             Box::new(async move {
                 let function = get_function(
@@ -1066,8 +1064,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                         Please ensure `linera_sdk::test::mock_key_value_store` was called",
                     );
 
-                store_in_memory(&mut caller, return_offset, 1_i32);
-                copy_memory_slices(&mut caller, result_offset, return_offset + 4, 12);
+                copy_memory_slices(&mut caller, result_offset, return_offset, 12);
             })
         },
     )?;

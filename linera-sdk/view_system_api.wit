@@ -10,12 +10,7 @@ resource find-keys {
 
 resource find-key-values {
     static new: func(prefix: list<u8>) -> find-key-values
-    poll: func() -> poll-find-key-values
-}
-
-variant poll-find-key-values {
-    pending,
-    ready(list<tuple<list<u8>,list<u8>>>),
+    wait: func() -> list<tuple<list<u8>,list<u8>>>
 }
 
 variant write-operation {
