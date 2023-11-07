@@ -497,10 +497,7 @@ macro_rules! impl_view_system_api_for_service {
                 Err(WasmExecutionError::WriteAttemptToReadOnlyStorage.into())
             }
 
-            fn write_batch_poll(
-                &mut self,
-                _future: &Self::WriteBatch,
-            ) -> Result<view_system_api::PollUnit, Self::Error> {
+            fn write_batch_wait(&mut self, _promise: &Self::WriteBatch) -> Result<(), Self::Error> {
                 Err(WasmExecutionError::WriteAttemptToReadOnlyStorage.into())
             }
         }
@@ -650,23 +647,15 @@ macro_rules! impl_view_system_api_for_contract {
                 )))
             }
 
-            fn write_batch_poll(
-                &mut self,
-                future: &Self::WriteBatch,
-            ) -> Result<view_system_api::PollUnit, Self::Error> {
-                use view_system_api::PollUnit;
-                let receiver = future
+            fn write_batch_wait(&mut self, promise: &Self::WriteBatch) -> Result<(), Self::Error> {
+                let receiver = promise
                     .try_lock()
                     .expect("Unexpected reentrant locking of `oneshot::Receiver`")
                     .take()
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                match receiver.recv() {
-                    Ok(Ok(())) => Ok(PollUnit::Ready),
-                    Ok(Err(error)) => Err(error),
-                    Err(oneshot::RecvError) => {
-                        Err(WasmExecutionError::MissingRuntimeResponse.into())
-                    }
-                }
+                receiver
+                    .recv()
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse)?
             }
         }
     };

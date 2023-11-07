@@ -3,7 +3,6 @@
 
 //! Helper types for using [`linera_views`] to store application state.
 
-mod conversions_from_wit;
 mod system_api;
 
 pub use self::system_api::ViewStorageContext;

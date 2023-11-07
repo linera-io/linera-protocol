@@ -1127,10 +1127,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     )?;
     linker.func_wrap1_async(
         "view_system_api",
-        "write-batch::poll: func(self: handle<write-batch>) -> variant { \
-            pending(unit), \
-            ready(unit) \
-        }",
+        "write-batch::wait: func(self: handle<write-batch>) -> unit",
         move |mut caller: Caller<'_, Resources>, handle: i32| {
             Box::new(async move {
                 let function = get_function(
@@ -1216,8 +1213,6 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                         "Failed to call `mocked-write-batch` function. \
                         Please ensure `linera_sdk::test::mock_key_value_store` was called",
                     );
-
-                1
             })
         },
     )?;

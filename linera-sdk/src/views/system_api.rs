@@ -5,7 +5,6 @@
 
 use super::view_system_api as wit;
 use async_trait::async_trait;
-use futures::future;
 use linera_views::{
     batch::{Batch, WriteOperation},
     common::{ContextFromDb, KeyValueStoreClient},
@@ -86,8 +85,8 @@ impl KeyValueStoreClient for KeyValueStore {
                 }
             }
         }
-        let future = wit::WriteBatch::new(&list_oper);
-        let () = future::poll_fn(|_context| future.poll().into()).await;
+        let promise = wit::WriteBatch::new(&list_oper);
+        promise.wait();
         Ok(())
     }
 
