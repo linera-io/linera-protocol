@@ -1,11 +1,6 @@
 resource read-key-bytes {
     static new: func(key: list<u8>) -> read-key-bytes
-    poll: func() -> poll-read-key-bytes
-}
-
-variant poll-read-key-bytes {
-    pending,
-    ready(option<list<u8>>),
+    wait: func() -> option<list<u8>>
 }
 
 resource find-keys {

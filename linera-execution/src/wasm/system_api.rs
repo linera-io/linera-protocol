@@ -423,22 +423,18 @@ macro_rules! impl_view_system_api_for_service {
                 )?)))
             }
 
-            fn read_key_bytes_poll(
+            fn read_key_bytes_wait(
                 &mut self,
-                future: &Self::ReadKeyBytes,
-            ) -> Result<view_system_api::PollReadKeyBytes, Self::Error> {
-                use view_system_api::PollReadKeyBytes;
-                let receiver = future
+                promise: &Self::ReadKeyBytes,
+            ) -> Result<Option<Vec<u8>>, Self::Error> {
+                let receiver = promise
                     .try_lock()
                     .expect("Unexpected reentrant locking of `oneshot::Receiver`")
                     .take()
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                match receiver.recv() {
-                    Ok(opt_list) => Ok(PollReadKeyBytes::Ready(opt_list)),
-                    Err(oneshot::RecvError) => {
-                        Err(WasmExecutionError::MissingRuntimeResponse.into())
-                    }
-                }
+                receiver
+                    .recv()
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {
@@ -557,23 +553,18 @@ macro_rules! impl_view_system_api_for_contract {
                 )))
             }
 
-            fn read_key_bytes_poll(
+            fn read_key_bytes_wait(
                 &mut self,
-                future: &Self::ReadKeyBytes,
-            ) -> Result<view_system_api::PollReadKeyBytes, Self::Error> {
-                use view_system_api::PollReadKeyBytes;
-                let receiver = future
+                promise: &Self::ReadKeyBytes,
+            ) -> Result<Option<Vec<u8>>, Self::Error> {
+                let receiver = promise
                     .try_lock()
                     .expect("Unexpected reentrant locking of `oneshot::Receiver`")
                     .take()
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                match receiver.recv() {
-                    Ok(Ok(opt_list)) => Ok(PollReadKeyBytes::Ready(opt_list)),
-                    Ok(Err(error)) => Err(error),
-                    Err(oneshot::RecvError) => {
-                        Err(WasmExecutionError::MissingRuntimeResponse.into())
-                    }
-                }
+                receiver
+                    .recv()
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse)?
             }
 
             fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {

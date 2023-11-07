@@ -42,8 +42,8 @@ impl KeyValueStoreClient for KeyValueStore {
     }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        let future = wit::ReadKeyBytes::new(key);
-        Ok(future::poll_fn(|_context| future.poll().into()).await)
+        let promise = wit::ReadKeyBytes::new(key);
+        Ok(promise.wait())
     }
 
     async fn read_multi_key_bytes(

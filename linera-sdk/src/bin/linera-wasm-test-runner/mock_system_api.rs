@@ -939,10 +939,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     )?;
     linker.func_wrap2_async(
         "view_system_api",
-        "read-key-bytes::poll: func(self: handle<read-key-bytes>) -> variant { \
-            pending(unit), \
-            ready(option<list<u8>>) \
-        }",
+        "read-key-bytes::wait: func(self: handle<read-key-bytes>) -> option<list<u8>>",
         move |mut caller: Caller<'_, Resources>, handle: i32, return_offset: i32| {
             Box::new(async move {
                 let function = get_function(
@@ -971,8 +968,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                         Please ensure `linera_sdk::test::mock_key_value_store` was called",
                     );
 
-                store_in_memory(&mut caller, return_offset, 1_i32);
-                copy_memory_slices(&mut caller, result_offset, return_offset + 4, 12);
+                copy_memory_slices(&mut caller, result_offset, return_offset, 12);
             })
         },
     )?;
