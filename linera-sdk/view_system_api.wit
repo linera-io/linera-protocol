@@ -5,12 +5,7 @@ resource read-key-bytes {
 
 resource find-keys {
     static new: func(prefix: list<u8>) -> find-keys
-    poll: func() -> poll-find-keys
-}
-
-variant poll-find-keys {
-    pending,
-    ready(list<list<u8>>),
+    wait: func() -> list<list<u8>>
 }
 
 resource find-key-values {

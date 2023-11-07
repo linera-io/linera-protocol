@@ -18,8 +18,8 @@ pub struct KeyValueStore;
 
 impl KeyValueStore {
     async fn find_keys_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
-        let future = wit::FindKeys::new(key_prefix);
-        future::poll_fn(|_context| future.poll().into()).await
+        let promise = wit::FindKeys::new(key_prefix);
+        promise.wait()
     }
 
     async fn find_key_values_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {

@@ -448,22 +448,18 @@ macro_rules! impl_view_system_api_for_service {
                 )?)))
             }
 
-            fn find_keys_poll(
+            fn find_keys_wait(
                 &mut self,
-                future: &Self::FindKeys,
-            ) -> Result<view_system_api::PollFindKeys, Self::Error> {
-                use view_system_api::PollFindKeys;
-                let receiver = future
+                promise: &Self::FindKeys,
+            ) -> Result<Vec<Vec<u8>>, Self::Error> {
+                let receiver = promise
                     .try_lock()
                     .expect("Unexpected reentrant locking of `oneshot::Receiver`")
                     .take()
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                match receiver.recv() {
-                    Ok(keys) => Ok(PollFindKeys::Ready(keys)),
-                    Err(oneshot::RecvError) => {
-                        Err(WasmExecutionError::MissingRuntimeResponse.into())
-                    }
-                }
+                receiver
+                    .recv()
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn find_key_values_new(
@@ -582,23 +578,18 @@ macro_rules! impl_view_system_api_for_contract {
                 )))
             }
 
-            fn find_keys_poll(
+            fn find_keys_wait(
                 &mut self,
-                future: &Self::FindKeys,
-            ) -> Result<view_system_api::PollFindKeys, Self::Error> {
-                use view_system_api::PollFindKeys;
-                let receiver = future
+                promise: &Self::FindKeys,
+            ) -> Result<Vec<Vec<u8>>, Self::Error> {
+                let receiver = promise
                     .try_lock()
                     .expect("Unexpected reentrant locking of `oneshot::Receiver`")
                     .take()
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                match receiver.recv() {
-                    Ok(Ok(keys)) => Ok(PollFindKeys::Ready(keys)),
-                    Ok(Err(error)) => Err(error),
-                    Err(oneshot::RecvError) => {
-                        Err(WasmExecutionError::MissingRuntimeResponse.into())
-                    }
-                }
+                receiver
+                    .recv()
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse)?
             }
 
             fn find_key_values_new(
