@@ -693,7 +693,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     faucet.ensure_is_running().unwrap();
     faucet.terminate().await.unwrap();
 
-    // Chain 1 should have paid four tokens.
+    // Chain 1 should have transferred four tokens, two to each child. So it should have six left.
     client1.synchronize_balance(chain1).await.unwrap();
     assert_eq!(
         client1.query_balance(chain1).await.unwrap(),

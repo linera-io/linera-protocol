@@ -1749,44 +1749,9 @@ impl Runnable for Job {
             }
 
             Assign { key, message_id } => {
-                let state = WorkerState::new("Local node".to_string(), None, storage)
-                    .with_allow_inactive_chains(true)
-                    .with_allow_messages_from_deprecated_epochs(true);
-                let mut node_client = LocalNodeClient::new(state, Notifier::default());
-
-                // Take the latest committee we know of.
-                let admin_chain_id = context.wallet_state.genesis_admin_chain();
-                let query = ChainInfoQuery::new(admin_chain_id).with_committees();
-                let info = node_client.handle_chain_info_query(query).await?;
-                let committee = info
-                    .latest_committee()
-                    .context("Invalid chain info response; missing latest committee")?;
-                let nodes = context.make_node_provider().make_nodes(committee)?;
-
-                // Download the parent chain.
-                let target_height = message_id.height.try_add_one()?;
-                node_client
-                    .download_certificates(nodes, message_id.chain_id, target_height)
-                    .await
-                    .context("failed to download parent chain")?;
-
-                // The initial timestamp for the new chain is taken from the block with the message.
-                let certificate = node_client
-                    .certificate_for(&message_id)
-                    .await
-                    .context("could not find OpenChain message")?;
-                let timestamp = match certificate.value() {
-                    CertificateValue::ConfirmedBlock {
-                        executed_block: ExecutedBlock { block, .. },
-                        ..
-                    } => block.timestamp,
-                    _ => panic!("Unexpected certificate."),
-                };
                 let chain_id = ChainId::child(message_id);
-                context
-                    .wallet_state
-                    .assign_new_chain_to_key(key, chain_id, timestamp)
-                    .context("could not assign the new chain")?;
+                Self::assign_new_chain_to_key(chain_id, message_id, storage, key, &mut context)
+                    .await?;
                 println!("{}", chain_id);
                 context.save_wallet();
             }
@@ -1853,50 +1818,76 @@ impl Runnable for Job {
                 println!("{}", outcome.chain_id);
                 println!("{}", outcome.message_id);
                 println!("{}", outcome.certificate_hash);
-
-                let state = WorkerState::new("Local node".to_string(), None, storage)
-                    .with_allow_inactive_chains(true)
-                    .with_allow_messages_from_deprecated_epochs(true);
-                let mut node_client = LocalNodeClient::new(state, Notifier::default());
-
-                let admin_chain_id = context.wallet_state.genesis_admin_chain();
-                let query = ChainInfoQuery::new(admin_chain_id).with_committees();
-                let info = node_client.handle_chain_info_query(query).await?;
-                let committee = info
-                    .latest_committee()
-                    .context("Invalid chain info response; missing latest committee")?;
-                let nodes = context.make_node_provider().make_nodes(committee)?;
-
-                // Download the parent chain.
-                let target_height = outcome.message_id.height.try_add_one()?;
-                let parent_chain_id = outcome.message_id.chain_id;
-                node_client
-                    .download_certificates(nodes, parent_chain_id, target_height)
-                    .await
-                    .context("failed to download parent chain")?;
-
-                // The initial timestamp for the new chain is taken from the block with the message.
-                let certificate = node_client
-                    .certificate_for(&outcome.message_id)
-                    .await
-                    .context("could not find OpenChain message")?;
-                let timestamp = match certificate.value() {
-                    CertificateValue::ConfirmedBlock {
-                        executed_block: ExecutedBlock { block, .. },
-                        ..
-                    } => block.timestamp,
-                    _ => bail!("Unexpected certificate."),
-                };
-                context
-                    .wallet_state
-                    .assign_new_chain_to_key(public_key, outcome.chain_id, timestamp)
-                    .context("could not assign the new chain")?;
+                Self::assign_new_chain_to_key(
+                    outcome.chain_id,
+                    outcome.message_id,
+                    storage,
+                    public_key,
+                    &mut context,
+                )
+                .await?;
                 context.wallet_state.set_default_chain(outcome.chain_id)?;
                 context.save_wallet();
             }
 
             CreateGenesisConfig { .. } | Keygen | Net(_) | Wallet(_) => unreachable!(),
         }
+        Ok(())
+    }
+}
+
+impl Job {
+    async fn assign_new_chain_to_key<S>(
+        chain_id: ChainId,
+        message_id: MessageId,
+        storage: S,
+        public_key: PublicKey,
+        context: &mut ClientContext,
+    ) -> anyhow::Result<()>
+    where
+        S: Store + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        let state = WorkerState::new("Local node".to_string(), None, storage)
+            .with_allow_inactive_chains(true)
+            .with_allow_messages_from_deprecated_epochs(true);
+        let mut node_client = LocalNodeClient::new(state, Notifier::default());
+
+        // Take the latest committee we know of.
+        let admin_chain_id = context.wallet_state.genesis_admin_chain();
+        let query = ChainInfoQuery::new(admin_chain_id).with_committees();
+        let info = node_client.handle_chain_info_query(query).await?;
+        let committee = info
+            .latest_committee()
+            .context("Invalid chain info response; missing latest committee")?;
+        let nodes = context.make_node_provider().make_nodes(committee)?;
+
+        // Download the parent chain.
+        let target_height = message_id.height.try_add_one()?;
+        node_client
+            .download_certificates(nodes, message_id.chain_id, target_height)
+            .await
+            .context("failed to download parent chain")?;
+
+        // The initial timestamp for the new chain is taken from the block with the message.
+        let certificate = node_client
+            .certificate_for(&message_id)
+            .await
+            .context("could not find OpenChain message")?;
+        let timestamp = match certificate.value() {
+            CertificateValue::ConfirmedBlock {
+                executed_block: ExecutedBlock { block, .. },
+                ..
+            } => block.timestamp,
+            _ => bail!(
+                "Unexpected certificate. Please make sure you are connecting to the right \
+                network and are using a current software version."
+            ),
+        };
+        context
+            .wallet_state
+            .assign_new_chain_to_key(public_key, chain_id, timestamp)
+            .context("could not assign the new chain")?;
         Ok(())
     }
 }
