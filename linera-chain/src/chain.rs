@@ -42,33 +42,18 @@ use std::{
 };
 
 pub static NUM_BLOCKS_EXECUTED: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!(
-        "num_blocks_executed",
-        "Number of blocks executed",
-        // Can add labels here
-        &[]
-    )
-    .expect("Counter creation should not fail")
+    register_int_counter_vec!("num_blocks_executed", "Number of blocks executed", &[])
+        .expect("Counter creation should not fail")
 });
 
 pub static BLOCK_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
-        "block_execution_latency",
-        "Block execution latency",
-        // Can add labels here
-        &[]
-    )
-    .expect("Counter creation should not fail")
+    register_histogram_vec!("block_execution_latency", "Block execution latency", &[])
+        .expect("Counter creation should not fail")
 });
 
 pub static WASM_FUEL_USED_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
-        "wasm_fuel_used_per_block",
-        "Wasm fuel used per block",
-        // Can add labels here
-        &[]
-    )
-    .expect("Counter can be created")
+    register_histogram_vec!("wasm_fuel_used_per_block", "Wasm fuel used per block", &[])
+        .expect("Counter creation should not fail")
 });
 
 /// A view accessing the state of a chain.

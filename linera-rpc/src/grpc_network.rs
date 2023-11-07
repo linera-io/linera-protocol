@@ -70,53 +70,40 @@ type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest
 type NotificationSender = mpsc::Sender<Notification>;
 
 pub static SERVER_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
-        "server_request_latency",
-        "Server request latency",
-        // Can add labels here
-        &[]
-    )
-    .expect("Counter can be created")
+    register_histogram_vec!("server_request_latency", "Server request latency", &[])
+        .expect("Counter creation should not fail")
 });
 
 pub static SERVER_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!(
-        "server_request_count",
-        "Server request count",
-        // Can add labels here
-        &[]
-    )
-    .expect("Counter can be created")
+    register_int_counter_vec!("server_request_count", "Server request count", &[])
+        .expect("Counter creation should not fail")
 });
 
 pub static SERVER_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
         "server_request_success",
         "Server request success",
-        // Can add labels here
         &["method_name"]
     )
-    .expect("Counter can be created")
+    .expect("Counter creation should not fail")
 });
 
 pub static SERVER_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
         "server_request_error",
         "Server request error",
-        // Can add labels here
         &["method_name"]
     )
-    .expect("Counter can be created")
+    .expect("Counter creation should not fail")
 });
 
 pub static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "server_request_latency_per_request_type",
         "Server request latency per request type",
-        // Can add labels here
         &["method_name"]
     )
-    .expect("Counter can be created")
+    .expect("Counter creation should not fail")
 });
 
 #[derive(Clone)]
