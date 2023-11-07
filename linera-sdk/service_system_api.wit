@@ -31,12 +31,7 @@ resource lock {
 
 resource unlock {
     static new: func() -> unlock
-    poll: func() -> poll-unlock
-}
-
-variant poll-unlock {
-    pending,
-    ready(result<unit, string>),
+    wait: func() -> result<unit, string>
 }
 
 resource try-query-application {

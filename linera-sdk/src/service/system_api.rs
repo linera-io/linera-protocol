@@ -45,8 +45,8 @@ pub(crate) async fn lock_and_load_view<State: View<ViewStorageContext>>() -> Sta
 
 /// Unlocks the service state previously loaded.
 pub(crate) async fn unlock_view() {
-    let future = wit::Unlock::new();
-    future::poll_fn(|_context| future.poll().into()).await;
+    let promise = wit::Unlock::new();
+    promise.wait().expect("Failed to unlock application state");
 }
 
 /// Helper function to load the service state or create a new one if it doesn't exist.
