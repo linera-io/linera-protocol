@@ -10,7 +10,7 @@ documentation = "https://docs.rs/linera-indexer-graphql-client/latest/linera_ind
 license = "Apache-2.0"
 
 [dependencies]
-graphql_client = { version = "0.13", features = [ "reqwest" ] }
+graphql_client = { version = "0.13", features = [ "reqwest-rustls" ] }
 linera-base = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }

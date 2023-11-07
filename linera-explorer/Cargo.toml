@@ -16,7 +16,7 @@ crate-type = ["cdylib"]
 anyhow = { workspace = true }
 console_error_panic_hook = "0.1"
 futures = { workspace = true }
-graphql_client = { version = "0.13", features = [ "reqwest" ] }
+graphql_client = { version = "0.13", features = [ "reqwest-rustls" ] }
 hex = { workspace = true }
 js-sys = "0.3"
 linera-base = { workspace = true }
