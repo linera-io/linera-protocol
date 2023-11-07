@@ -10,9 +10,9 @@ use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::{ApplicationId, ChainId},
 };
-use linera_views::views::{View, ViewError};
+use linera_views::views::View;
 use serde::de::DeserializeOwned;
-use std::{fmt, future::Future, task::Poll};
+use std::{fmt, future::Future};
 
 /// Loads the application state, without locking it for writes.
 pub(crate) async fn load<State>() -> State
@@ -38,10 +38,8 @@ where
 
 /// Loads the application state (and locks it for writes).
 pub(crate) async fn lock_and_load_view<State: View<ViewStorageContext>>() -> State {
-    let future = wit::Lock::new();
-    future::poll_fn(|_context| -> Poll<Result<(), ViewError>> { future.poll().into() })
-        .await
-        .expect("Failed to lock application state");
+    let promise = wit::Lock::new();
+    promise.wait().expect("Failed to lock application state");
     load_view_using::<State>().await
 }
 

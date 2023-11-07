@@ -306,22 +306,19 @@ macro_rules! impl_service_system_api {
                 )?)))
             }
 
-            fn lock_poll(
+            fn lock_wait(
                 &mut self,
-                future: &Self::Lock,
-            ) -> Result<service_system_api::PollLock, Self::Error> {
-                use service_system_api::PollLock;
-                let receiver = future
+                promise: &Self::Lock,
+            ) -> Result<Result<(), String>, Self::Error> {
+                let receiver = promise
                     .try_lock()
                     .expect("Unexpected reentrant locking of `oneshot::Receiver`")
                     .take()
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                match receiver.recv() {
-                    Ok(()) => Ok(PollLock::Ready(Ok(()))),
-                    Err(oneshot::RecvError) => {
-                        Err(WasmExecutionError::MissingRuntimeResponse.into())
-                    }
-                }
+                receiver
+                    .recv()
+                    .map(Ok)
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn unlock_new(&mut self) -> Result<Self::Unlock, Self::Error> {

@@ -26,12 +26,7 @@ variant poll-load {
 
 resource lock {
     static new: func() -> lock
-    poll: func() -> poll-lock
-}
-
-variant poll-lock {
-    pending,
-    ready(result<unit, string>),
+    wait: func() -> result<unit, string>
 }
 
 resource unlock {
