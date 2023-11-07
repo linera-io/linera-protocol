@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # Helper script for re-installing helm charts locally.
 
 # Default variable values
@@ -38,7 +39,7 @@ handle_options() {
             usage
             exit 0
             ;;
-        --cloud) cloud_mode=1;;
+        --cloud) cloud_mode=1 ;;
         --port-forward) port_forward=1 ;;
         --no-build) do_build= ;;
         --clean) clean=1 ;;
@@ -73,7 +74,7 @@ if [ -n "$cloud_mode" ]; then
 
         # Got to repo root to run GCloud build
         cd "$github_root"
-        gcloud builds submit --config test-cloudbuild-local.yaml --timeout="3h" --machine-type=e2-highcpu-32 || exit 1
+        gcloud builds submit --config test-cloudbuild-local.yaml --timeout="3h" --machine-type=e2-highcpu-32
 
         # Back to current dir to run redeploy
         cd "$current_dir"
@@ -81,7 +82,7 @@ if [ -n "$cloud_mode" ]; then
 
     docker_image="us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-test-local:latest"
 
-    docker pull "$docker_image" || exit 1
+    docker pull "$docker_image"
 else
     docker_image="linera-test:latest"
     if [ -n "$do_build" ]; then
@@ -92,18 +93,18 @@ else
             --build-arg environment=k8s-local \
             --build-arg target="${arch/#arm/aarch}"-unknown-linux-gnu \
             ../../ \
-            -t "$docker_image" || exit 1
+            -t "$docker_image"
     fi
 fi
 
-kind load docker-image "$docker_image" || exit 1
+kind load docker-image "$docker_image"
 
-helm uninstall linera-core --wait;
+helm uninstall linera-core --wait || true
 
 if [ -n "$cloud_mode" ]; then
-    helm install linera-core . --values values-local-with-cloud-build.yaml --wait --set installCRDs=true || exit 1;
+    helm install linera-core . --values values-local-with-cloud-build.yaml --wait --set installCRDs=true
 else
-    helm install linera-core . --values values-local.yaml --wait --set installCRDs=true || exit 1;
+    helm install linera-core . --values values-local.yaml --wait --set installCRDs=true
 fi
 
 echo "Pods:"
@@ -111,10 +112,10 @@ kubectl get pods
 echo -e "\nServices:"
 kubectl get svc
 
-docker rm linera-test-local
-docker run -d --name linera-test-local "$docker_image" &&
-    docker cp linera-test-local:wallet.json /tmp/ &&
-    docker cp linera-test-local:linera.db /tmp/
+docker rm linera-test-local || true
+docker run -d --name linera-test-local "$docker_image"
+docker cp linera-test-local:wallet.json /tmp/
+docker cp linera-test-local:linera.db /tmp/
 
 echo -e "\nMake sure the terminal you'll run the linera client from has these exports:"
 echo 'export LINERA_WALLET=/tmp/wallet.json'
