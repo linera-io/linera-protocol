@@ -425,7 +425,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     )?;
     linker.func_wrap1_async(
         "contract_system_api",
-        "lock::poll: func(self: handle<lock>) -> variant { \
+        "lock::wait: func(self: handle<lock>) -> variant { \
             locked(unit), \
             not-locked(unit) \
         }",

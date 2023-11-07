@@ -112,25 +112,25 @@ macro_rules! impl_contract_system_api {
                 )))
             }
 
-            fn lock_poll(
+            fn lock_wait(
                 &mut self,
-                future: &Self::Lock,
+                promise: &Self::Lock,
             ) -> Result<contract_system_api::LockResult, Self::Error> {
                 use contract_system_api::LockResult;
-                let receiver = future
+                let receiver = promise
                     .try_lock()
                     .expect("Unexpected reentrant locking of `oneshot::Receiver`")
                     .take()
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                match receiver.recv() {
-                    Ok(Ok(())) => Ok(LockResult::Locked),
-                    Ok(Err(ExecutionError::ViewError(ViewError::TryLockError(_)))) => {
+                match receiver
+                    .recv()
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse)?
+                {
+                    Ok(()) => Ok(LockResult::Locked),
+                    Err(ExecutionError::ViewError(ViewError::TryLockError(_))) => {
                         Ok(LockResult::NotLocked)
                     }
-                    Ok(Err(error)) => Err(error),
-                    Err(oneshot::RecvError) => {
-                        Err(WasmExecutionError::MissingRuntimeResponse.into())
-                    }
+                    Err(error) => Err(error),
                 }
             }
 

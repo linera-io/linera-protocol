@@ -12,7 +12,6 @@ use linera_base::{
     data_types::{Amount, BlockHeight},
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner, SessionId},
 };
-use std::task::Poll;
 
 use crate::{CalleeContext, MessageContext, OperationContext};
 
@@ -129,15 +128,6 @@ impl From<wit_system_api::Amount> for Amount {
     fn from(balance: wit_system_api::Amount) -> Self {
         let value = ((balance.upper_half as u128) << 64) | (balance.lower_half as u128);
         Amount::from_atto(value)
-    }
-}
-
-impl From<wit_system_api::LockResult> for Poll<bool> {
-    fn from(lock_result: wit_system_api::LockResult) -> Poll<bool> {
-        match lock_result {
-            wit_system_api::LockResult::Locked => Poll::Ready(true),
-            wit_system_api::LockResult::NotLocked => Poll::Ready(false),
-        }
     }
 }
 
