@@ -21,4 +21,4 @@ loki-stack:
         - url: http://linera-core-loki:3100/loki/api/v1/push
 
 # Environment
-isGcp: "local"
+environment: "kind"
