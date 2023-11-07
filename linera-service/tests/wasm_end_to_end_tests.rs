@@ -252,7 +252,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client();
-    client2.wallet_init(&[]).await.unwrap();
+    client2.wallet_init(&[], None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await.unwrap();
@@ -339,7 +339,7 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
     let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client();
-    client2.wallet_init(&[]).await.unwrap();
+    client2.wallet_init(&[], None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await.unwrap();
@@ -537,7 +537,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
     let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client();
-    client2.wallet_init(&[]).await.unwrap();
+    client2.wallet_init(&[], None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await.unwrap();
@@ -666,8 +666,8 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     let client_a = net.make_client();
     let client_b = net.make_client();
 
-    client_a.wallet_init(&[]).await.unwrap();
-    client_b.wallet_init(&[]).await.unwrap();
+    client_a.wallet_init(&[], None).await.unwrap();
+    client_b.wallet_init(&[], None).await.unwrap();
 
     // Create initial server and client config.
     let (contract_fungible_a, service_fungible_a) =
@@ -928,8 +928,8 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
 
     let client0 = net.make_client();
     let client1 = net.make_client();
-    client0.wallet_init(&[]).await.unwrap();
-    client1.wallet_init(&[]).await.unwrap();
+    client0.wallet_init(&[], None).await.unwrap();
+    client1.wallet_init(&[], None).await.unwrap();
 
     let (contract_fungible, service_fungible) =
         client_admin.build_example("fungible").await.unwrap();

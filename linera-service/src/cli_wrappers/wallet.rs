@@ -153,11 +153,18 @@ impl ClientWrapper {
     }
 
     /// Runs `linera wallet init`.
-    pub async fn wallet_init(&self, chain_ids: &[ChainId]) -> Result<()> {
+    pub async fn wallet_init(
+        &self,
+        chain_ids: &[ChainId],
+        faucet: Option<&str>,
+    ) -> Result<Option<ClaimOutcome>> {
         let mut command = self.command().await?;
         command
             .args(["wallet", "init"])
             .args(["--genesis", "genesis.json"]);
+        if let Some(faucet_url) = faucet {
+            command.args(["--faucet", faucet_url]);
+        }
         if let Some(seed) = self.testing_prng_seed {
             command.arg("--testing-prng-seed").arg(seed.to_string());
         }
@@ -165,8 +172,23 @@ impl ClientWrapper {
             let ids = chain_ids.iter().map(ChainId::to_string);
             command.arg("--with-other-chains").args(ids);
         }
-        command.spawn_and_wait_for_stdout().await?;
-        Ok(())
+        let stdout = command.spawn_and_wait_for_stdout().await?;
+        if faucet.is_some() {
+            let mut lines = stdout.split_whitespace();
+            let chain_id_str = lines.next().context("missing chain ID")?;
+            let message_id_str = lines.next().context("missing message ID")?;
+            let certificate_hash_str = lines.next().context("missing certificate hash")?;
+            let outcome = ClaimOutcome {
+                chain_id: chain_id_str.parse().context("invalid chain ID")?,
+                message_id: message_id_str.parse().context("invalid message ID")?,
+                certificate_hash: certificate_hash_str
+                    .parse()
+                    .context("invalid certificate hash")?,
+            };
+            Ok(Some(outcome))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Runs `linera wallet publish-and-create`.
@@ -758,13 +780,20 @@ impl Faucet {
         self.child.ensure_is_running()
     }
 
+    pub fn url(&self) -> String {
+        format!("http://localhost:{}/", self.port)
+    }
+
     pub async fn claim(&self, public_key: &PublicKey) -> Result<ClaimOutcome> {
+        Self::claim_url(public_key, &self.url()).await
+    }
+
+    pub async fn claim_url(public_key: &PublicKey, url: &str) -> Result<ClaimOutcome> {
         let query = format!(
             "mutation {{ claim(publicKey: \"{public_key}\") {{ \
                 messageId chainId certificateHash \
             }} }}"
         );
-        let url = format!("http://localhost:{}/", self.port);
         let client = reqwest::Client::new();
         let response = client
             .post(url)

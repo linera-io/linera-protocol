@@ -9,7 +9,7 @@ pub mod local_net;
 /// How to run a linera wallet and its GraphQL service.
 mod wallet;
 
-pub use wallet::{ApplicationWrapper, ClientWrapper, NodeService};
+pub use wallet::{ApplicationWrapper, ClientWrapper, Faucet, NodeService};
 
 use anyhow::Result;
 use async_trait::async_trait;
