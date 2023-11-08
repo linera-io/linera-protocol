@@ -446,7 +446,7 @@ pub struct GenesisConfig {
     pub committee: CommitteeConfig,
     pub admin_id: ChainId,
     pub timestamp: Timestamp,
-    pub chains: Vec<(u32, PublicKey, Amount)>,
+    pub chains: Vec<(PublicKey, Amount)>,
     pub policy: ResourceControlPolicy,
 }
 
@@ -474,12 +474,12 @@ impl GenesisConfig {
         S: Store + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
-        for (chain_number, public_key, balance) in &self.chains {
+        for (chain_number, (public_key, balance)) in (0..).zip(&self.chains) {
             store
                 .create_chain(
                     self.create_committee(),
                     self.admin_id,
-                    ChainDescription::Root(*chain_number),
+                    ChainDescription::Root(chain_number),
                     *public_key,
                     *balance,
                     self.timestamp,

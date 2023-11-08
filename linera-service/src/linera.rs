@@ -1959,7 +1959,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 let chain = UserChain::make_initial(&mut rng, description, timestamp);
                 // Public "genesis" state.
                 let key = chain.key_pair.as_ref().unwrap().public();
-                genesis_config.chains.push((i, key, *initial_funding));
+                genesis_config.chains.push((key, *initial_funding));
                 // Private keys.
                 chains.push(chain);
             }
@@ -2147,11 +2147,9 @@ async fn main() -> Result<(), anyhow::Error> {
                 let chains = with_other_chains
                     .iter()
                     .filter_map(|chain_id| {
-                        let (i, _, _) = genesis_config
-                            .chains
-                            .iter()
-                            .find(|(i, _, _)| ChainId::root(*i) == *chain_id)?;
-                        let description = ChainDescription::Root(*i);
+                        let i = (0..(genesis_config.chains.len() as u32))
+                            .find(|i| ChainId::root(*i) == *chain_id)?;
+                        let description = ChainDescription::Root(i);
                         Some(UserChain::make_other(description, timestamp))
                     })
                     .collect();
