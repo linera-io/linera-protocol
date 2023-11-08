@@ -583,6 +583,7 @@ where
         }
         let balance = self.execution_state.system.balance.get_mut();
         sub_assign_fees(balance, credit)?;
+        sub_assign_fees(balance, policy.messages_price(&messages)?)?;
 
         // Recompute the state hash.
         let state_hash = self.execution_state.crypto_hash().await?;
