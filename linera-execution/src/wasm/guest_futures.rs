@@ -13,15 +13,11 @@ use super::{
         ExecutionError,
     },
     contract::{
-        ExecuteMessage, HandleApplicationCall, HandleSessionCall, PollApplicationCallResult,
-        PollExecutionResult, PollSessionCallResult,
+        HandleApplicationCall, HandleSessionCall, PollApplicationCallResult, PollSessionCallResult,
     },
     service::{HandleQuery, PollApplicationQueryResult},
 };
-use crate::{
-    ApplicationCallResult, CalleeContext, MessageContext, QueryContext, RawExecutionResult,
-    SessionCallResult,
-};
+use crate::{ApplicationCallResult, CalleeContext, QueryContext, SessionCallResult};
 use linera_base::identifiers::SessionId;
 use std::task::Poll;
 
@@ -81,14 +77,6 @@ macro_rules! impl_guest_future_interface {
 }
 
 impl_guest_future_interface! {
-    ExecuteMessage: {
-        application_trait = Contract,
-        new_function = execute_message_new(context: MessageContext, message: Vec<u8>),
-        poll_function = execute_message_poll,
-        poll_type = PollExecutionResult,
-        output_type = RawExecutionResult<Vec<u8>>,
-    },
-
     HandleApplicationCall: {
         application_trait = Contract,
         new_function = handle_application_call_new(

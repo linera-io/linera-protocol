@@ -5,14 +5,10 @@ execute-operation: func(
     operation: list<u8>,
 ) -> result<execution-result, string>
 
-resource execute-message {
-    static new: func(
-        context: message-context,
-        message: list<u8>,
-    ) -> execute-message
-
-    poll: func() -> poll-execution-result
-}
+execute-message: func(
+    context: message-context,
+    message: list<u8>,
+) -> result<execution-result, string>
 
 resource handle-application-call {
     static new: func(
@@ -70,11 +66,6 @@ type chain-id = crypto-hash
 type owner = crypto-hash
 type block-height = u64
 type bytecode-id = message-id
-
-variant poll-execution-result {
-    pending,
-    ready(result<execution-result, string>),
-}
 
 variant poll-application-call-result {
     pending,

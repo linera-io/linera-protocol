@@ -194,21 +194,6 @@ impl From<ChannelName> for wit_types::ChannelName {
     }
 }
 
-impl<Message> From<Poll<Result<ExecutionResult<Message>, String>>>
-    for wit_types::PollExecutionResult
-where
-    Message: DeserializeOwned + Serialize + Debug,
-{
-    fn from(poll: Poll<Result<ExecutionResult<Message>, String>>) -> Self {
-        use wit_types::PollExecutionResult;
-        match poll {
-            Poll::Pending => PollExecutionResult::Pending,
-            Poll::Ready(Ok(result)) => PollExecutionResult::Ready(Ok(result.into())),
-            Poll::Ready(Err(message)) => PollExecutionResult::Ready(Err(message)),
-        }
-    }
-}
-
 impl<Message, Value, SessionState>
     From<Poll<Result<ApplicationCallResult<Message, Value, SessionState>, String>>>
     for wit_types::PollApplicationCallResult

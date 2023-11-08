@@ -40,15 +40,6 @@ pub trait ApplicationRuntimeContext: Sized {
 /// Common interface to calling a user contract in a WebAssembly module.
 pub trait Contract: ApplicationRuntimeContext {
     /// The WIT type for the resource representing the guest future
-    /// [`execute_message`][crate::Contract::execute_message] method.
-    type ExecuteMessage: GuestFutureInterface<
-            Self,
-            Output = RawExecutionResult<Vec<u8>>,
-            Parameters = (MessageContext, Vec<u8>),
-        > + Send
-        + Unpin;
-
-    /// The WIT type for the resource representing the guest future
     /// [`handle_application_call`][crate::Contract::handle_application_call] method.
     type HandleApplicationCall: GuestFutureInterface<
             Self,
@@ -65,9 +56,6 @@ pub trait Contract: ApplicationRuntimeContext {
             Parameters = (CalleeContext, Vec<u8>, Vec<u8>, Vec<SessionId>),
         > + Send
         + Unpin;
-
-    /// The WIT type eqivalent for [`Poll<Result<RawExecutionResult<Vec<u8>>, String>>`].
-    type PollExecutionResult;
 
     /// The WIT type eqivalent for [`Poll<Result<ApplicationCallResult, String>>`].
     type PollApplicationCallResult;
@@ -91,20 +79,13 @@ pub trait Contract: ApplicationRuntimeContext {
         operation: Vec<u8>,
     ) -> Result<Result<RawExecutionResult<Vec<u8>>, String>, Self::Error>;
 
-    /// Creates a new future for the user contract to execute a message.
-    fn execute_message_new(
+    /// Executes a cross-chain message.
+    fn execute_message(
         &self,
         store: &mut Self::Store,
         context: MessageContext,
         message: Vec<u8>,
-    ) -> Result<Self::ExecuteMessage, Self::Error>;
-
-    /// Polls a user contract future that's executing a message.
-    fn execute_message_poll(
-        &self,
-        store: &mut Self::Store,
-        future: &Self::ExecuteMessage,
-    ) -> Result<Self::PollExecutionResult, Self::Error>;
+    ) -> Result<Result<RawExecutionResult<Vec<u8>>, String>, Self::Error>;
 
     /// Creates a new future for the user contract to handle a call from another contract.
     fn handle_application_call_new(
@@ -262,8 +243,13 @@ where
         self,
         context: &MessageContext,
         message: &[u8],
-    ) -> PollSender<RawExecutionResult<Vec<u8>>> {
-        GuestFutureActor::<A::ExecuteMessage, A>::spawn((*context, message.to_owned()), self)
+    ) -> WasmResultFuture<RawExecutionResult<Vec<u8>>> {
+        let context = *context;
+        let message = message.to_owned();
+
+        self.run_wasm_guest(move |application, store| {
+            application.execute_message(store, context, message)
+        })
     }
 
     /// Calls the guest Wasm module's implementation of

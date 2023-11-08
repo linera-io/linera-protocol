@@ -335,10 +335,8 @@ impl ServiceState {
 }
 
 impl common::Contract for Contract {
-    type ExecuteMessage = contract::ExecuteMessage;
     type HandleApplicationCall = contract::HandleApplicationCall;
     type HandleSessionCall = contract::HandleSessionCall;
-    type PollExecutionResult = contract::PollExecutionResult;
     type PollApplicationCallResult = contract::PollApplicationCallResult;
     type PollSessionCallResult = contract::PollSessionCallResult;
 
@@ -362,21 +360,14 @@ impl common::Contract for Contract {
             .map(|inner| inner.map(RawExecutionResult::from))
     }
 
-    fn execute_message_new(
+    fn execute_message(
         &self,
         store: &mut Store<ContractState>,
         context: MessageContext,
         message: Vec<u8>,
-    ) -> Result<contract::ExecuteMessage, Trap> {
-        contract::Contract::execute_message_new(&self.contract, store, context.into(), &message)
-    }
-
-    fn execute_message_poll(
-        &self,
-        store: &mut Store<ContractState>,
-        future: &contract::ExecuteMessage,
-    ) -> Result<contract::PollExecutionResult, Trap> {
-        contract::Contract::execute_message_poll(&self.contract, store, future)
+    ) -> Result<Result<RawExecutionResult<Vec<u8>>, String>, Trap> {
+        contract::Contract::execute_message(&self.contract, store, context.into(), &message)
+            .map(|inner| inner.map(RawExecutionResult::from))
     }
 
     fn handle_application_call_new(

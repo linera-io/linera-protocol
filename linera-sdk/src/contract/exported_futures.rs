@@ -10,8 +10,8 @@
 use crate::{
     contract::{system_api, wit_types},
     views::ViewStorageContext,
-    ApplicationCallResult, Contract, ContractLogger, ExecutionResult, ExportedFuture,
-    SessionCallResult, SessionId, SimpleStateStorage, ViewStateStorage,
+    ApplicationCallResult, Contract, ContractLogger, ExportedFuture, SessionCallResult, SessionId,
+    SimpleStateStorage, ViewStateStorage,
 };
 use async_trait::async_trait;
 use futures::TryFutureExt;
@@ -120,47 +120,6 @@ where
         let result = operation().await;
         *state = Self::load_and_lock().await;
         result
-    }
-}
-
-/// Future implementation exported from the guest to allow the host to call
-/// [`Contract::execute_message`].
-///
-/// Loads the `Application` state and calls its [`execute_message`][Contract::execute_message]
-/// method.
-pub struct ExecuteMessage<Application: Contract> {
-    future: ExportedFuture<Result<ExecutionResult<Application::Message>, String>>,
-    _application: PhantomData<Application>,
-}
-
-impl<Application> ExecuteMessage<Application>
-where
-    Application: Contract + 'static,
-{
-    /// Creates the exported future that the host can poll.
-    ///
-    /// This is called from the host.
-    pub fn new(context: wit_types::MessageContext, message: Vec<u8>) -> Self {
-        ContractLogger::install();
-        ExecuteMessage {
-            future: ExportedFuture::new(Application::Storage::execute_with_state(
-                move |mut application| async move {
-                    let message: Application::Message = bcs::from_bytes(&message)?;
-                    application
-                        .execute_message(&context.into(), message)
-                        .await
-                        .map(|result| (application, result))
-                },
-            )),
-            _application: PhantomData,
-        }
-    }
-
-    /// Polls the future export from the guest.
-    ///
-    /// This is called from the host.
-    pub fn poll(&self) -> wit_types::PollExecutionResult {
-        self.future.poll()
     }
 }
 
