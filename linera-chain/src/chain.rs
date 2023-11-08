@@ -19,9 +19,8 @@ use linera_base::{
     identifiers::{ChainId, Destination, MessageId},
 };
 use linera_execution::{
-    sub_assign_fees,
-    system::{Account, SystemMessage},
-    ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, GenericApplicationId, Message,
+    system::{SystemExecutionError, SystemMessage},
+    ExecutionError, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, GenericApplicationId, Message,
     MessageContext, OperationContext, Query, QueryContext, RawExecutionResult, RawOutgoingMessage,
     ResourceTracker, Response, UserApplicationDescription, UserApplicationId,
 };
@@ -162,6 +161,16 @@ pub struct ChannelStateView<C> {
     /// The latest block height, if any, to be sent to future subscribers.
     pub block_height: RegisterView<C, Option<BlockHeight>>,
 }
+
+/// Substracts an amount from a balance and reports an error if that is impossible
+pub fn sub_assign_fees(balance: &mut Amount, fees: Amount, chain_execution_context: ChainExecutionContext) -> Result<(), ChainError> {
+    let current_balance = balance.clone();
+    let error = SystemExecutionError::InsufficientFunding { current_balance };
+    let error = ExecutionError::SystemError(error);
+    let error = ChainError::ExecutionError(error, chain_execution_context);
+    Ok(balance.try_sub_assign(fees).map_err(|_| error)?)
+}
+
 
 impl<C> ChainStateView<C>
 where
@@ -509,6 +518,7 @@ where
         };
         for (index, message) in block.incoming_messages.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
+            let chain_execution_context = ChainExecutionContext::IncomingMessage(index);
             // Execute the received message.
             let context = MessageContext {
                 chain_id,
@@ -526,13 +536,13 @@ where
                 .execute_message(&context, &message.event.message, &policy, &mut tracker)
                 .await
                 .map_err(|err| {
-                    ChainError::ExecutionError(err, ChainExecutionContext::IncomingMessage(index))
+                    ChainError::ExecutionError(err, chain_execution_context)
                 })?;
             let mut messages_out = self.process_execution_results(context.height, results)
                 .await?;
             let balance = self.execution_state.system.balance.get_mut();
-            sub_assign_fees(balance, policy.storage_bytes_written_price_raw(&message)?)?;
-            sub_assign_fees(balance, policy.messages_price(&messages_out)?)?;
+            sub_assign_fees(balance, policy.storage_bytes_written_price_raw(&message)?, chain_execution_context)?;
+            sub_assign_fees(balance, policy.messages_price(&messages_out)?, chain_execution_context)?;
             messages.append(&mut messages_out);
             message_counts
                 .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
@@ -540,6 +550,7 @@ where
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
+            let chain_execution_context = ChainExecutionContext::Operation(index);
             let next_message_index =
                 u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?;
             let context = OperationContext {
@@ -554,19 +565,19 @@ where
                 .execute_operation(&context, operation, &policy, &mut tracker)
                 .await
                 .map_err(|err| {
-                    ChainError::ExecutionError(err, ChainExecutionContext::Operation(index))
+                    ChainError::ExecutionError(err, chain_execution_context)
                 })?;
             let mut messages_out = self.process_execution_results(context.height, results)
                 .await?;
             let balance = self.execution_state.system.balance.get_mut();
-            sub_assign_fees(balance, policy.storage_bytes_written_price_raw(&operation)?)?;
-            sub_assign_fees(balance, policy.messages_price(&messages_out)?)?;
+            sub_assign_fees(balance, policy.storage_bytes_written_price_raw(&operation)?, chain_execution_context)?;
+            sub_assign_fees(balance, policy.messages_price(&messages_out)?, chain_execution_context)?;
             messages.append(&mut messages_out);
             message_counts
                 .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
         }
         let balance = self.execution_state.system.balance.get_mut();
-        sub_assign_fees(balance, policy.certificate_price())?;
+        sub_assign_fees(balance, policy.certificate_price(), ChainExecutionContext::Certificate)?;
 
         // Recompute the state hash.
         let state_hash = self.execution_state.crypto_hash().await?;

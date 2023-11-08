@@ -126,10 +126,11 @@ pub enum ChainError {
     OwnerWeightError(#[from] WeightedError),
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum ChainExecutionContext {
     Query,
     DescribeApplication,
     IncomingMessage(u32),
     Operation(u32),
+    Certificate,
 }
