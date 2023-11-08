@@ -335,7 +335,6 @@ impl ServiceState {
 }
 
 impl common::Contract for Contract {
-    type ExecuteOperation = contract::ExecuteOperation;
     type ExecuteMessage = contract::ExecuteMessage;
     type HandleApplicationCall = contract::HandleApplicationCall;
     type HandleSessionCall = contract::HandleSessionCall;
@@ -353,21 +352,14 @@ impl common::Contract for Contract {
             .map(|inner| inner.map(RawExecutionResult::from))
     }
 
-    fn execute_operation_new(
+    fn execute_operation(
         &self,
         store: &mut Store<ContractState>,
         context: OperationContext,
         operation: Vec<u8>,
-    ) -> Result<contract::ExecuteOperation, Trap> {
-        contract::Contract::execute_operation_new(&self.contract, store, context.into(), &operation)
-    }
-
-    fn execute_operation_poll(
-        &self,
-        store: &mut Store<ContractState>,
-        future: &contract::ExecuteOperation,
-    ) -> Result<contract::PollExecutionResult, Trap> {
-        contract::Contract::execute_operation_poll(&self.contract, store, future)
+    ) -> Result<Result<RawExecutionResult<Vec<u8>>, String>, Trap> {
+        contract::Contract::execute_operation(&self.contract, store, context.into(), &operation)
+            .map(|inner| inner.map(RawExecutionResult::from))
     }
 
     fn execute_message_new(

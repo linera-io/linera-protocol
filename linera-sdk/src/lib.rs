@@ -69,7 +69,7 @@ pub use self::{
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
 };
-pub use linera_base::ensure;
+pub use linera_base::{abi, ensure};
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
 

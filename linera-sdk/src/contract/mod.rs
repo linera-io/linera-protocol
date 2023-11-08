@@ -29,7 +29,6 @@ macro_rules! contract {
 
         /// Mark the contract type to be exported.
         impl $crate::contract::wit_types::Contract for $application {
-            type ExecuteOperation = ExecuteOperation;
             type ExecuteMessage = ExecuteMessage;
             type HandleApplicationCall = HandleApplicationCall;
             type HandleSessionCall = HandleSessionCall;
@@ -49,13 +48,23 @@ macro_rules! contract {
                     },
                 )
             }
-        }
 
-        $crate::instance_exported_future! {
-            contract::ExecuteOperation<$application>(
+            fn execute_operation(
                 context: $crate::contract::wit_types::OperationContext,
                 operation: Vec<u8>,
-            ) -> PollExecutionResult
+            ) -> Result<$crate::contract::wit_types::ExecutionResult, String> {
+                $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
+                    move |mut application| async move {
+                        let operation: <$application as $crate::abi::ContractAbi>::Operation =
+                            bcs::from_bytes(&operation)?;
+
+                        application
+                            .execute_operation(&context.into(), operation)
+                            .await
+                            .map(|result| (application, result))
+                    },
+                )
+            }
         }
 
         $crate::instance_exported_future! {

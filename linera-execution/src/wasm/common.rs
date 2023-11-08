@@ -40,15 +40,6 @@ pub trait ApplicationRuntimeContext: Sized {
 /// Common interface to calling a user contract in a WebAssembly module.
 pub trait Contract: ApplicationRuntimeContext {
     /// The WIT type for the resource representing the guest future
-    /// [`execute_operation`][crate::Contract::execute_operation] method.
-    type ExecuteOperation: GuestFutureInterface<
-            Self,
-            Output = RawExecutionResult<Vec<u8>>,
-            Parameters = (OperationContext, Vec<u8>),
-        > + Send
-        + Unpin;
-
-    /// The WIT type for the resource representing the guest future
     /// [`execute_message`][crate::Contract::execute_message] method.
     type ExecuteMessage: GuestFutureInterface<
             Self,
@@ -92,20 +83,13 @@ pub trait Contract: ApplicationRuntimeContext {
         argument: Vec<u8>,
     ) -> Result<Result<RawExecutionResult<Vec<u8>>, String>, Self::Error>;
 
-    /// Creates a new future for the user application to execute an operation.
-    fn execute_operation_new(
+    /// Executes an application's operation.
+    fn execute_operation(
         &self,
         store: &mut Self::Store,
         context: OperationContext,
         operation: Vec<u8>,
-    ) -> Result<Self::ExecuteOperation, Self::Error>;
-
-    /// Polls a user contract future that's executing an operation.
-    fn execute_operation_poll(
-        &self,
-        store: &mut Self::Store,
-        future: &Self::ExecuteOperation,
-    ) -> Result<Self::PollExecutionResult, Self::Error>;
+    ) -> Result<Result<RawExecutionResult<Vec<u8>>, String>, Self::Error>;
 
     /// Creates a new future for the user contract to execute a message.
     fn execute_message_new(
@@ -253,8 +237,13 @@ where
         self,
         context: &OperationContext,
         operation: &[u8],
-    ) -> PollSender<RawExecutionResult<Vec<u8>>> {
-        GuestFutureActor::<A::ExecuteOperation, A>::spawn((*context, operation.to_owned()), self)
+    ) -> WasmResultFuture<RawExecutionResult<Vec<u8>>> {
+        let context = *context;
+        let operation = operation.to_owned();
+
+        self.run_wasm_guest(move |application, store| {
+            application.execute_operation(store, context, operation)
+        })
     }
 
     /// Calls the guest Wasm module's implementation of

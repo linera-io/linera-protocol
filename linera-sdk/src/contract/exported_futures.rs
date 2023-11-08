@@ -124,47 +124,6 @@ where
 }
 
 /// Future implementation exported from the guest to allow the host to call
-/// [`Contract::execute_operation`].
-///
-/// Loads the `Application` state and calls its
-/// [`execute_operation`][Contract::execute_operation] method.
-pub struct ExecuteOperation<Application: Contract> {
-    future: ExportedFuture<Result<ExecutionResult<Application::Message>, String>>,
-    _application: PhantomData<Application>,
-}
-
-impl<Application> ExecuteOperation<Application>
-where
-    Application: Contract + 'static,
-{
-    /// Creates the exported future that the host can poll.
-    ///
-    /// This is called from the host.
-    pub fn new(context: wit_types::OperationContext, operation: Vec<u8>) -> Self {
-        ContractLogger::install();
-        ExecuteOperation {
-            future: ExportedFuture::new(Application::Storage::execute_with_state(
-                move |mut application| async move {
-                    let operation: Application::Operation = bcs::from_bytes(&operation)?;
-                    application
-                        .execute_operation(&context.into(), operation)
-                        .await
-                        .map(|result| (application, result))
-                },
-            )),
-            _application: PhantomData,
-        }
-    }
-
-    /// Polls the future export from the guest.
-    ///
-    /// This is called from the host.
-    pub fn poll(&self) -> wit_types::PollExecutionResult {
-        self.future.poll()
-    }
-}
-
-/// Future implementation exported from the guest to allow the host to call
 /// [`Contract::execute_message`].
 ///
 /// Loads the `Application` state and calls its [`execute_message`][Contract::execute_message]

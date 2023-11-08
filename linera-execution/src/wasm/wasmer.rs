@@ -243,7 +243,6 @@ impl WasmApplication {
 }
 
 impl common::Contract for Contract {
-    type ExecuteOperation = contract::ExecuteOperation;
     type ExecuteMessage = contract::ExecuteMessage;
     type HandleApplicationCall = contract::HandleApplicationCall;
     type HandleSessionCall = contract::HandleSessionCall;
@@ -261,21 +260,14 @@ impl common::Contract for Contract {
             .map(|inner| inner.map(RawExecutionResult::from))
     }
 
-    fn execute_operation_new(
+    fn execute_operation(
         &self,
         store: &mut Store,
         context: OperationContext,
         operation: Vec<u8>,
-    ) -> Result<contract::ExecuteOperation, RuntimeError> {
-        contract::Contract::execute_operation_new(&self.contract, store, context.into(), &operation)
-    }
-
-    fn execute_operation_poll(
-        &self,
-        store: &mut Store,
-        future: &contract::ExecuteOperation,
-    ) -> Result<contract::PollExecutionResult, RuntimeError> {
-        contract::Contract::execute_operation_poll(&self.contract, store, future)
+    ) -> Result<Result<RawExecutionResult<Vec<u8>>, String>, RuntimeError> {
+        contract::Contract::execute_operation(&self.contract, store, context.into(), &operation)
+            .map(|inner| inner.map(RawExecutionResult::from))
     }
 
     fn execute_message_new(
