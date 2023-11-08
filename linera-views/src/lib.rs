@@ -115,11 +115,6 @@ pub mod rocks_db;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod dynamo_db;
 
-/// Helper types for interfacing with a LocalStack instance.
-#[cfg(feature = "aws")]
-#[cfg(not(target_arch = "wasm32"))]
-pub mod localstack;
-
 /// Helper types for tests.
 #[cfg(any(test, feature = "test"))]
 #[cfg(not(target_arch = "wasm32"))]

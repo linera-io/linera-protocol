@@ -7,42 +7,115 @@ use crate::{
         CommonStoreConfig, ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient,
         TableStatus, MIN_VIEW_TAG,
     },
-    localstack,
     lru_caching::LruCachingKeyValueClient,
     value_splitting::{DatabaseConsistencyError, ValueSplittingKeyValueStoreClient},
 };
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
-    error::GetItemErrorKind,
-    model::{
+    error::SdkError,
+    operation::{
+        batch_write_item::BatchWriteItemError,
+        create_table::CreateTableError,
+        delete_table::DeleteTableError,
+        get_item::GetItemError,
+        list_tables::ListTablesError,
+        query::{QueryError, QueryOutput},
+        transact_write_items::TransactWriteItemsError,
+    },
+    primitives::Blob,
+    types::{
         AttributeDefinition, AttributeValue, Delete, KeySchemaElement, KeyType,
         ProvisionedThroughput, Put, ScalarAttributeType, TransactWriteItem,
     },
-    output::QueryOutput,
-    types::{Blob, SdkError},
     Client,
 };
+use aws_smithy_types::error::operation::BuildError;
 use bcs::serialized_size;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use static_assertions as sa;
-use std::{collections::HashMap, mem, str::FromStr, sync::Arc};
+use std::{collections::HashMap, env, mem, str::FromStr, sync::Arc};
 use thiserror::Error;
 
 #[cfg(any(test, feature = "test"))]
 use {
     crate::lru_caching::TEST_CACHE_SIZE,
     crate::test_utils::get_table_name,
-    anyhow::{Context, Error},
-    aws_sdk_s3::Endpoint,
-    aws_types::SdkConfig,
-    std::env,
+    anyhow::Error,
     tokio::sync::{Mutex, MutexGuard},
 };
 
+/// Name of the environment variable with the address to a LocalStack instance.
+const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
+
 /// The configuration to connect to DynamoDB.
 pub type Config = aws_sdk_dynamodb::Config;
+
+/// Gets the AWS configuration from the environment
+pub async fn get_base_config() -> Result<Config, DynamoDbContextError> {
+    let base_config = aws_config::load_from_env().await;
+    Ok((&base_config).into())
+}
+
+fn get_endpoint_address() -> Option<String> {
+    let endpoint_address = env::var(LOCALSTACK_ENDPOINT);
+    match endpoint_address {
+        Err(_) => None,
+        Ok(address) => Some(address),
+    }
+}
+
+/// Gets the localstack config
+pub async fn get_localstack_config() -> Result<Config, DynamoDbContextError> {
+    let base_config = aws_config::load_from_env().await;
+    let endpoint_address = get_endpoint_address().unwrap();
+    let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
+        .endpoint_url(endpoint_address)
+        .build();
+    Ok(config)
+}
+
+/// Getting a configuration for the system
+pub async fn get_config(use_localstack: bool) -> Result<Config, DynamoDbContextError> {
+    if use_localstack {
+        get_localstack_config().await
+    } else {
+        get_base_config().await
+    }
+}
+
+/// A type to help tests that need a LocalStack instance.
+#[cfg(any(test, feature = "test"))]
+pub struct LocalStackTestContext {
+    config: Config,
+    _guard: MutexGuard<'static, ()>,
+}
+
+#[cfg(any(test, feature = "test"))]
+impl LocalStackTestContext {
+    /// Creates an instance of [`LocalStackTestContext`], loading the necessary LocalStack
+    /// configuration.
+    ///
+    /// An address to the LocalStack instance must be specified using a `LOCALSTACK_ENDPOINT`
+    /// environment variable.
+    ///
+    /// This also locks the `LOCALSTACK_GUARD` to enforce that only one test has access to the
+    /// LocalStack instance.
+    pub async fn new() -> Result<LocalStackTestContext, Error> {
+        let config = get_localstack_config().await?;
+        let _guard = LOCALSTACK_GUARD.lock().await;
+
+        let context = LocalStackTestContext { config, _guard };
+
+        Ok(context)
+    }
+
+    /// Creates a new [`aws_sdk_dynamodb::Config`] for tests, using a LocalStack instance.
+    pub fn dynamo_db_config(&self) -> aws_sdk_dynamodb::Config {
+        self.config.clone()
+    }
+}
 
 #[cfg(test)]
 #[path = "unit_tests/dynamo_db_context_tests.rs"]
@@ -501,7 +574,7 @@ impl DynamoDbClientInternal {
         let request = Delete::builder()
             .table_name(&self.table.0)
             .set_key(Some(build_key(key)))
-            .build();
+            .build()?;
         Ok(TransactWriteItem::builder().delete(request).build())
     }
 
@@ -522,7 +595,7 @@ impl DynamoDbClientInternal {
         let request = Put::builder()
             .table_name(&self.table.0)
             .set_item(Some(build_key_value(key, value)))
-            .build();
+            .build()?;
         Ok(TransactWriteItem::builder().put(request).build())
     }
 
@@ -568,9 +641,9 @@ impl DynamoDbClientInternal {
             return Ok(true);
         };
         let test = match &error {
-            SdkError::ServiceError { err, raw: _ } => match &err.kind {
-                GetItemErrorKind::ResourceNotFoundException(inner_error) => {
-                    inner_error.message
+            SdkError::ServiceError(error) => match error.err() {
+                GetItemError::ResourceNotFoundException(error) => {
+                    error.message
                         == Some("Cannot do operations on a non-existent table".to_string())
                 }
                 _ => false,
@@ -789,31 +862,31 @@ impl DynamoDbClientInternal {
                 AttributeDefinition::builder()
                     .attribute_name(PARTITION_ATTRIBUTE)
                     .attribute_type(ScalarAttributeType::B)
-                    .build(),
+                    .build()?,
             )
             .attribute_definitions(
                 AttributeDefinition::builder()
                     .attribute_name(KEY_ATTRIBUTE)
                     .attribute_type(ScalarAttributeType::B)
-                    .build(),
+                    .build()?,
             )
             .key_schema(
                 KeySchemaElement::builder()
                     .attribute_name(PARTITION_ATTRIBUTE)
                     .key_type(KeyType::Hash)
-                    .build(),
+                    .build()?,
             )
             .key_schema(
                 KeySchemaElement::builder()
                     .attribute_name(KEY_ATTRIBUTE)
                     .key_type(KeyType::Range)
-                    .build(),
+                    .build()?,
             )
             .provisioned_throughput(
                 ProvisionedThroughput::builder()
                     .read_capacity_units(10)
                     .write_capacity_units(10)
-                    .build(),
+                    .build()?,
             )
             .send()
             .await;
@@ -823,7 +896,13 @@ impl DynamoDbClientInternal {
         if stop_if_table_exists {
             return Err(error.into());
         }
-        if error.is_resource_in_use_exception() {
+        let test = match &error {
+            SdkError::ServiceError(error) => {
+                matches!(error.err(), CreateTableError::ResourceInUseException(_))
+            }
+            _ => false,
+        };
+        if test {
             Ok(true)
         } else {
             Err(error.into())
@@ -1219,29 +1298,6 @@ impl DynamoDbClient {
     }
 }
 
-/// Gets the AWS configuration from the environment
-pub async fn get_base_config() -> Result<Config, DynamoDbContextError> {
-    let base_config = aws_config::load_from_env().await;
-    Ok((&base_config).into())
-}
-
-/// Gets the localstack config
-pub async fn get_localstack_config() -> Result<Config, DynamoDbContextError> {
-    let base_config = aws_config::load_from_env().await;
-    Ok(aws_sdk_dynamodb::config::Builder::from(&base_config)
-        .endpoint_resolver(localstack::get_endpoint()?)
-        .build())
-}
-
-/// Getting a configuration for the system
-pub async fn get_config(use_localstack: bool) -> Result<Config, DynamoDbContextError> {
-    if use_localstack {
-        get_localstack_config().await
-    } else {
-        get_base_config().await
-    }
-}
-
 /// An implementation of [`Context`][trait1] based on [`DynamoDbClient`].
 ///
 /// [trait1]: crate::common::Context
@@ -1340,27 +1396,27 @@ pub enum InvalidTableName {
 pub enum DynamoDbContextError {
     /// An error occurred while getting the item.
     #[error(transparent)]
-    Get(#[from] Box<SdkError<aws_sdk_dynamodb::error::GetItemError>>),
+    Get(#[from] Box<SdkError<GetItemError>>),
 
     /// An error occurred while writing a batch of items.
     #[error(transparent)]
-    BatchWriteItem(#[from] Box<SdkError<aws_sdk_dynamodb::error::BatchWriteItemError>>),
+    BatchWriteItem(#[from] Box<SdkError<BatchWriteItemError>>),
 
     /// An error occurred while writing a transaction of items.
     #[error(transparent)]
-    TransactWriteItem(#[from] Box<SdkError<aws_sdk_dynamodb::error::TransactWriteItemsError>>),
+    TransactWriteItem(#[from] Box<SdkError<TransactWriteItemsError>>),
 
     /// An error occurred while doing a Query.
     #[error(transparent)]
-    Query(#[from] Box<SdkError<aws_sdk_dynamodb::error::QueryError>>),
+    Query(#[from] Box<SdkError<QueryError>>),
 
     /// An error occurred while deleting a table
     #[error(transparent)]
-    DeleteTable(#[from] Box<SdkError<aws_sdk_dynamodb::error::DeleteTableError>>),
+    DeleteTable(#[from] Box<SdkError<DeleteTableError>>),
 
     /// An error occurred while listing tables
     #[error(transparent)]
-    ListTables(#[from] Box<SdkError<aws_sdk_dynamodb::error::ListTablesError>>),
+    ListTables(#[from] Box<SdkError<ListTablesError>>),
 
     /// The transact maximum size is MAX_TRANSACT_WRITE_ITEM_SIZE.
     #[error("The transact must have length at most MAX_TRANSACT_WRITE_ITEM_SIZE")]
@@ -1422,13 +1478,13 @@ pub enum DynamoDbContextError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
-    /// An Endpoint error occurred.
-    #[error(transparent)]
-    Endpoint(#[from] localstack::EndpointError),
-
     /// An error occurred while creating the table.
     #[error(transparent)]
-    CreateTable(#[from] SdkError<aws_sdk_dynamodb::error::CreateTableError>),
+    CreateTable(#[from] SdkError<CreateTableError>),
+
+    /// An error occurred while building an object
+    #[error(transparent)]
+    Build(#[from] Box<BuildError>),
 }
 
 impl<InnerError> From<SdkError<InnerError>> for DynamoDbContextError
@@ -1436,6 +1492,12 @@ where
     DynamoDbContextError: From<Box<SdkError<InnerError>>>,
 {
     fn from(error: SdkError<InnerError>) -> Self {
+        Box::new(error).into()
+    }
+}
+
+impl From<BuildError> for DynamoDbContextError {
+    fn from(error: BuildError) -> Self {
         Box::new(error).into()
     }
 }
@@ -1486,91 +1548,10 @@ impl From<DynamoDbContextError> for crate::views::ViewError {
     }
 }
 
-/// A helper trait to add a `SdkError<CreateTableError>::is_resource_in_use_exception()` method.
-trait IsResourceInUseException {
-    /// Checks if the error is a resource is in use exception.
-    fn is_resource_in_use_exception(&self) -> bool;
-}
-
-impl IsResourceInUseException for SdkError<aws_sdk_dynamodb::error::CreateTableError> {
-    fn is_resource_in_use_exception(&self) -> bool {
-        matches!(
-            self,
-            SdkError::ServiceError {
-                err: aws_sdk_dynamodb::error::CreateTableError {
-                    kind: aws_sdk_dynamodb::error::CreateTableErrorKind::ResourceInUseException(_),
-                    ..
-                },
-                ..
-            }
-        )
-    }
-}
-
 /// A static lock to prevent multiple tests from using the same LocalStack instance at the same
 /// time.
 #[cfg(any(test, feature = "test"))]
 static LOCALSTACK_GUARD: Mutex<()> = Mutex::const_new(());
-
-/// Name of the environment variable with the address to a LocalStack instance.
-#[cfg(any(test, feature = "test"))]
-const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
-
-/// A type to help tests that need a LocalStack instance.
-#[cfg(any(test, feature = "test"))]
-pub struct LocalStackTestContext {
-    base_config: SdkConfig,
-    endpoint: Endpoint,
-    _guard: MutexGuard<'static, ()>,
-}
-
-#[cfg(any(test, feature = "test"))]
-impl LocalStackTestContext {
-    /// Creates an instance of [`LocalStackTestContext`], loading the necessary LocalStack
-    /// configuration.
-    ///
-    /// An address to the LocalStack instance must be specified using a `LOCALSTACK_ENDPOINT`
-    /// environment variable.
-    ///
-    /// This also locks the `LOCALSTACK_GUARD` to enforce that only one test has access to the
-    /// LocalStack instance.
-    pub async fn new() -> Result<LocalStackTestContext, Error> {
-        let base_config = aws_config::load_from_env().await;
-        let endpoint = Self::load_endpoint()?;
-        let _guard = LOCALSTACK_GUARD.lock().await;
-
-        let context = LocalStackTestContext {
-            base_config,
-            endpoint,
-            _guard,
-        };
-
-        Ok(context)
-    }
-
-    /// Creates an [`Endpoint`] using the configuration in the [`LOCALSTACK_ENDPOINT`] environment
-    /// variable.
-    fn load_endpoint() -> Result<Endpoint, Error> {
-        let endpoint_address = env::var(LOCALSTACK_ENDPOINT)
-            .with_context(|| {
-                format!(
-                    "Missing LocalStack endpoint address in {LOCALSTACK_ENDPOINT:?} \
-                    environment variable"
-                )
-            })?
-            .parse()
-            .context("LocalStack endpoint address is not a valid URI")?;
-
-        Ok(Endpoint::immutable(endpoint_address))
-    }
-
-    /// Creates a new [`aws_sdk_dynamodb::Config`] for tests, using a LocalStack instance.
-    pub fn dynamo_db_config(&self) -> aws_sdk_dynamodb::Config {
-        aws_sdk_dynamodb::config::Builder::from(&self.base_config)
-            .endpoint_resolver(self.endpoint.clone())
-            .build()
-    }
-}
 
 /// Creates the common initialization for RocksDB
 #[cfg(any(test, feature = "test"))]
