@@ -308,7 +308,17 @@ where
         let mut requested_pending_messages = response.info.requested_pending_messages;
         let mut pending_messages = vec![];
         // If this is the first block, the first message must be `OpenChain`.
-        if self.next_block_height == BlockHeight::ZERO {
+        if self.next_block_height == BlockHeight::ZERO
+            && self
+                .chain_state_view()
+                .await?
+                .execution_state
+                .system
+                .description
+                .get()
+                .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id))?
+                .is_child()
+        {
             let Some(i) = requested_pending_messages.iter().position(|message| {
                 matches!(
                     message.event.message,

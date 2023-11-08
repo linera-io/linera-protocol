@@ -28,6 +28,11 @@ pub enum ChainDescription {
     /// The chain was created by a message from another chain.
     Child(MessageId),
 }
+impl ChainDescription {
+    pub fn is_child(&self) -> bool {
+        matches!(self, ChainDescription::Child(_))
+    }
+}
 
 /// The unique identifier (UID) of a chain. This is currently computed as the hash value
 /// of a [`ChainDescription`].
