@@ -16,7 +16,7 @@ use linera_chain::{
         Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
         HashedValue, IncomingMessage, LiteCertificate, Medium, Origin, Target,
     },
-    ChainError, ChainManagerOutcome, ChainStateView,
+    ChainManagerOutcome, ChainStateView,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -550,18 +550,17 @@ where
         if tip.next_block_height == BlockHeight::ZERO
             && chain.execution_state.system.description.get().is_none()
         {
-            let first_message = block
-                .incoming_messages
-                .first()
-                .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?;
-            chain
-                .execute_immediate_message(
-                    first_message.id(),
-                    &first_message.event.message,
-                    first_message.event.timestamp,
-                    Timestamp::now(),
-                )
-                .await?;
+            let now = Timestamp::now();
+            for message in &block.incoming_messages {
+                chain
+                    .execute_immediate_message(
+                        message.id(),
+                        &message.event.message,
+                        message.event.timestamp,
+                        now,
+                    )
+                    .await?;
+            }
         }
         chain.ensure_is_active()?;
         // Verify the certificate.
