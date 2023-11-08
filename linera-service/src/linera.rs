@@ -1941,8 +1941,6 @@ async fn main() -> Result<(), anyhow::Error> {
                 maximum_bytes_written_per_block,
                 messages: *messages_price,
             };
-            let mut genesis_config =
-                GenesisConfig::new(committee_config, ChainId::root(*admin_root), policy);
             let timestamp = start_timestamp
                 .map(|st| {
                     Timestamp::from(
@@ -1950,6 +1948,9 @@ async fn main() -> Result<(), anyhow::Error> {
                     )
                 })
                 .unwrap_or_else(Timestamp::now);
+            let admin_id = ChainId::root(*admin_root);
+            let mut genesis_config =
+                GenesisConfig::new(committee_config, admin_id, timestamp, policy);
             let mut rng = Box::<dyn CryptoRng>::from(*testing_prng_seed);
             let mut chains = vec![];
             for i in 0..*num {
@@ -1957,12 +1958,8 @@ async fn main() -> Result<(), anyhow::Error> {
                 // Create keys.
                 let chain = UserChain::make_initial(&mut rng, description, timestamp);
                 // Public "genesis" state.
-                genesis_config.chains.push((
-                    description,
-                    chain.key_pair.as_ref().unwrap().public(),
-                    *initial_funding,
-                    timestamp,
-                ));
+                let key = chain.key_pair.as_ref().unwrap().public();
+                genesis_config.chains.push((i, key, *initial_funding));
                 // Private keys.
                 chains.push(chain);
             }
@@ -2146,14 +2143,16 @@ async fn main() -> Result<(), anyhow::Error> {
                 testing_prng_seed,
             } => {
                 let genesis_config = GenesisConfig::read(genesis_config_path)?;
+                let timestamp = genesis_config.timestamp;
                 let chains = with_other_chains
                     .iter()
                     .filter_map(|chain_id| {
-                        let (description, _, _, timestamp) = genesis_config
+                        let (i, _, _) = genesis_config
                             .chains
                             .iter()
-                            .find(|(desc, _, _, _)| ChainId::from(*desc) == *chain_id)?;
-                        Some(UserChain::make_other(*description, *timestamp))
+                            .find(|(i, _, _)| ChainId::root(*i) == *chain_id)?;
+                        let description = ChainDescription::Root(*i);
+                        Some(UserChain::make_other(description, timestamp))
                     })
                     .collect();
                 let mut context =

@@ -445,7 +445,8 @@ Next Block Height:  {}"#,
 pub struct GenesisConfig {
     pub committee: CommitteeConfig,
     pub admin_id: ChainId,
-    pub chains: Vec<(ChainDescription, PublicKey, Amount, Timestamp)>,
+    pub timestamp: Timestamp,
+    pub chains: Vec<(u32, PublicKey, Amount)>,
     pub policy: ResourceControlPolicy,
 }
 
@@ -456,11 +457,13 @@ impl GenesisConfig {
     pub fn new(
         committee: CommitteeConfig,
         admin_id: ChainId,
+        timestamp: Timestamp,
         policy: ResourceControlPolicy,
     ) -> Self {
         Self {
             committee,
             admin_id,
+            timestamp,
             chains: Vec::new(),
             policy,
         }
@@ -471,15 +474,15 @@ impl GenesisConfig {
         S: Store + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
-        for (description, public_key, balance, timestamp) in &self.chains {
+        for (chain_number, public_key, balance) in &self.chains {
             store
                 .create_chain(
                     self.create_committee(),
                     self.admin_id,
-                    *description,
+                    ChainDescription::Root(*chain_number),
                     *public_key,
                     *balance,
-                    *timestamp,
+                    self.timestamp,
                 )
                 .await?;
         }
