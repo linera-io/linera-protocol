@@ -376,14 +376,14 @@ impl ClientWrapper {
     pub async fn open_chain(
         &self,
         from: ChainId,
-        to_public_key: Option<PublicKey>,
+        to_public_key: impl Into<Option<PublicKey>>,
     ) -> Result<(MessageId, ChainId)> {
         let mut command = self.command().await?;
         command
             .arg("open-chain")
             .args(["--from", &from.to_string()]);
 
-        if let Some(public_key) = to_public_key {
+        if let Some(public_key) = to_public_key.into() {
             command.args(["--to-public-key", &public_key.to_string()]);
         }
 

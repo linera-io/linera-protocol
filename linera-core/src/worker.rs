@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::{future, FutureExt};
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{ArithmeticError, BlockHeight, Round},
+    data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
     doc_scalar, ensure,
     identifiers::{ChainId, Owner},
 };
@@ -16,7 +16,7 @@ use linera_chain::{
         Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
         HashedValue, IncomingMessage, LiteCertificate, Medium, Origin, Target,
     },
-    ChainManagerOutcome, ChainStateView,
+    ChainError, ChainManagerOutcome, ChainStateView,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -526,9 +526,9 @@ where
             message_counts,
             state_hash,
         } = executed_block;
-        let mut chain = self.storage.load_active_chain(block.chain_id).await?;
+        let mut chain = self.storage.load_chain(block.chain_id).await?;
         // Check that the chain is active and ready for this confirmation.
-        let tip = chain.tip_state.get();
+        let tip = chain.tip_state.get().clone();
         if tip.next_block_height < block.height {
             return Err(WorkerError::MissingEarlierBlocks {
                 current_block_height: tip.next_block_height,
@@ -547,6 +547,23 @@ where
             .await;
             return Ok((info, actions));
         }
+        if tip.next_block_height == BlockHeight::ZERO
+            && chain.execution_state.system.description.get().is_none()
+        {
+            let first_message = block
+                .incoming_messages
+                .first()
+                .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?;
+            chain
+                .execute_immediate_message(
+                    first_message.id(),
+                    &first_message.event.message,
+                    first_message.event.timestamp,
+                    Timestamp::now(),
+                )
+                .await?;
+        }
+        chain.ensure_is_active()?;
         // Verify the certificate.
         let (epoch, committee) = chain
             .execution_state

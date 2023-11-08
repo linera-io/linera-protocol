@@ -1260,8 +1260,7 @@ impl Runnable for Job {
                 info!("Starting operation to open a new chain");
                 let time_start = Instant::now();
                 let ownership = ChainOwnership::single(new_public_key);
-                let (message_id, certificate) =
-                    chain_client.open_chain(ownership, balance).await.unwrap();
+                let (message_id, certificate) = chain_client.open_chain(ownership, balance).await?;
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
                 debug!("{:?}", certificate);

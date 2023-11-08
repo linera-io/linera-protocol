@@ -97,6 +97,17 @@ pub struct IncomingMessage {
     pub event: Event,
 }
 
+impl IncomingMessage {
+    /// Returns the ID identifying this message.
+    pub fn id(&self) -> MessageId {
+        MessageId {
+            chain_id: self.origin.sender,
+            height: self.event.height,
+            index: self.event.index,
+        }
+    }
+}
+
 /// A message together with non replayable information to ensure uniqueness in a
 /// particular inbox.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]

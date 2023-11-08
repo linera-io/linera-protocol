@@ -353,14 +353,16 @@ where
                 }
             }
             if let Message::System(_) = message {
-                // Handle special messages to be executed immediately.
-                let message_id = MessageId {
-                    chain_id: origin.sender,
-                    height,
-                    index,
-                };
-                self.execute_immediate_message(message_id, &message, timestamp, now)
-                    .await?;
+                if self.execution_state.system.description.get().is_none() {
+                    // Handle special messages to be executed immediately.
+                    let message_id = MessageId {
+                        chain_id: origin.sender,
+                        height,
+                        index,
+                    };
+                    self.execute_immediate_message(message_id, &message, timestamp, now)
+                        .await?;
+                }
             }
             // Record the inbox event to process it below.
             events.push(Event {
@@ -401,7 +403,7 @@ where
         Ok(())
     }
 
-    async fn execute_immediate_message(
+    pub async fn execute_immediate_message(
         &mut self,
         message_id: MessageId,
         message: &Message,
