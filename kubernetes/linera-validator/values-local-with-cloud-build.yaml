@@ -7,14 +7,10 @@ logLevel: "debug"
 loki-stack:
   loki:
     enabled: true
+    isDefault: false
     persistence:
       enabled: true
       size: 1Gi
-  grafana:
-    enabled: true
-    sidecar:
-      datasources:
-        enabled: true
   promtail:
     enabled: true
     config:
