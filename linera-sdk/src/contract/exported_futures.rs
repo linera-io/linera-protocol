@@ -14,7 +14,7 @@ use crate::{
     SessionCallResult, SessionId, SimpleStateStorage, ViewStateStorage,
 };
 use async_trait::async_trait;
-use futures::FutureExt;
+use futures::{FutureExt, TryFutureExt};
 use linera_views::views::RootView;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{future::Future, marker::PhantomData, mem, pin::Pin};
@@ -36,26 +36,25 @@ pub trait ContractStateStorage<Application> {
         operation: Operation,
     ) -> Result<Success, String>
     where
-        Operation: for<'app> FnOnce(
-            &'app mut Application,
+        Operation: FnOnce(
+            Application,
         ) -> Pin<
-            Box<dyn Future<Output = Result<Success, Error>> + Send + 'app>,
+            Box<dyn Future<Output = Result<(Application, Success), Error>> + Send>,
         >,
         Application: Send,
         Operation: Send,
         Success: Send + 'static,
         Error: ToString + 'static,
     {
-        let mut application = Self::load_and_lock().await;
+        let application = Self::load_and_lock().await;
 
-        let result = operation(&mut application)
+        operation(application)
+            .and_then(|(application, result)| async move {
+                Self::store_and_unlock(application).await;
+                Ok(result)
+            })
             .await
-            .map_err(|error| error.to_string());
-
-        if result.is_ok() {
-            Self::store_and_unlock(application).await;
-        }
-        result
+            .map_err(|error| error.to_string())
     }
 
     /// Executes an `operation`, persisting the `Application` `state` before execution and reloading
@@ -138,7 +137,7 @@ pub struct Initialize<Application: Contract> {
 
 impl<Application> Initialize<Application>
 where
-    Application: Contract,
+    Application: Contract + 'static,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -147,10 +146,13 @@ where
         ContractLogger::install();
         Initialize {
             future: ExportedFuture::new(Application::Storage::execute_with_state(
-                move |application| {
+                move |mut application| {
                     async move {
                         let argument = serde_json::from_slice(&bytes)?;
-                        application.initialize(&context.into(), argument).await
+                        application
+                            .initialize(&context.into(), argument)
+                            .await
+                            .map(|result| (application, result))
                     }
                     .boxed()
                 },
@@ -179,7 +181,7 @@ pub struct ExecuteOperation<Application: Contract> {
 
 impl<Application> ExecuteOperation<Application>
 where
-    Application: Contract,
+    Application: Contract + 'static,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -188,12 +190,13 @@ where
         ContractLogger::install();
         ExecuteOperation {
             future: ExportedFuture::new(Application::Storage::execute_with_state(
-                move |application| {
+                move |mut application| {
                     async move {
                         let operation: Application::Operation = bcs::from_bytes(&operation)?;
                         application
                             .execute_operation(&context.into(), operation)
                             .await
+                            .map(|result| (application, result))
                     }
                     .boxed()
                 },
@@ -222,7 +225,7 @@ pub struct ExecuteMessage<Application: Contract> {
 
 impl<Application> ExecuteMessage<Application>
 where
-    Application: Contract,
+    Application: Contract + 'static,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -231,10 +234,13 @@ where
         ContractLogger::install();
         ExecuteMessage {
             future: ExportedFuture::new(Application::Storage::execute_with_state(
-                move |application| {
+                move |mut application| {
                     async move {
                         let message: Application::Message = bcs::from_bytes(&message)?;
-                        application.execute_message(&context.into(), message).await
+                        application
+                            .execute_message(&context.into(), message)
+                            .await
+                            .map(|result| (application, result))
                     }
                     .boxed()
                 },
@@ -273,7 +279,7 @@ pub struct HandleApplicationCall<Application: Contract> {
 
 impl<Application> HandleApplicationCall<Application>
 where
-    Application: Contract,
+    Application: Contract + 'static,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -286,7 +292,7 @@ where
         ContractLogger::install();
         HandleApplicationCall {
             future: ExportedFuture::new(Application::Storage::execute_with_state(
-                move |application| {
+                move |mut application| {
                     async move {
                         let argument: Application::ApplicationCall = bcs::from_bytes(&argument)?;
                         let forwarded_sessions = forwarded_sessions
@@ -297,6 +303,7 @@ where
                         application
                             .handle_application_call(&context.into(), argument, forwarded_sessions)
                             .await
+                            .map(|result| (application, result))
                     }
                     .boxed()
                 },
@@ -335,7 +342,7 @@ pub struct HandleSessionCall<Application: Contract> {
 
 impl<Application> HandleSessionCall<Application>
 where
-    Application: Contract,
+    Application: Contract + 'static,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -349,7 +356,7 @@ where
         ContractLogger::install();
         HandleSessionCall {
             future: ExportedFuture::new(Application::Storage::execute_with_state(
-                move |application| {
+                move |mut application| {
                     async move {
                         let session: Application::SessionState = bcs::from_bytes(&session)?;
                         let argument: Application::SessionCall = bcs::from_bytes(&argument)?;
@@ -366,6 +373,7 @@ where
                                 forwarded_sessions,
                             )
                             .await
+                            .map(|result| (application, result))
                     }
                     .boxed()
                 },
