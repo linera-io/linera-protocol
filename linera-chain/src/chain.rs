@@ -552,8 +552,11 @@ where
                 .map_err(|err| {
                     ChainError::ExecutionError(err, ChainExecutionContext::IncomingMessage(index))
                 })?;
-            self.process_execution_results(&mut messages, context.height, results)
+            let mut messages_out = self.process_execution_results(context.height, results)
                 .await?;
+            let balance = self.execution_state.system.balance.get_mut();
+            sub_assign_fees(balance, policy.messages_price(&messages_out)?)?;
+            messages.append(&mut messages_out);
             message_counts
                 .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
         }
@@ -576,14 +579,16 @@ where
                 .map_err(|err| {
                     ChainError::ExecutionError(err, ChainExecutionContext::Operation(index))
                 })?;
-            self.process_execution_results(&mut messages, context.height, results)
+            let mut messages_out = self.process_execution_results(context.height, results)
                 .await?;
+            let balance = self.execution_state.system.balance.get_mut();
+            sub_assign_fees(balance, policy.messages_price(&messages_out)?)?;
+            messages.append(&mut messages_out);
             message_counts
                 .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
         }
         let balance = self.execution_state.system.balance.get_mut();
         sub_assign_fees(balance, credit)?;
-        sub_assign_fees(balance, policy.messages_price(&messages)?)?;
 
         // Recompute the state hash.
         let state_hash = self.execution_state.crypto_hash().await?;
@@ -621,17 +626,17 @@ where
 
     async fn process_execution_results(
         &mut self,
-        messages: &mut Vec<OutgoingMessage>,
         height: BlockHeight,
         results: Vec<ExecutionResult>,
-    ) -> Result<(), ChainError> {
+    ) -> Result<Vec<OutgoingMessage>, ChainError> {
+        let mut messages = Vec::new();
         for result in results {
             match result {
                 ExecutionResult::System(result) => {
                     self.process_raw_execution_result(
                         GenericApplicationId::System,
                         Message::System,
-                        messages,
+                        &mut messages,
                         height,
                         result,
                     )
@@ -644,7 +649,7 @@ where
                             application_id,
                             bytes,
                         },
-                        messages,
+                        &mut messages,
                         height,
                         result,
                     )
@@ -652,7 +657,7 @@ where
                 }
             }
         }
-        Ok(())
+        Ok(messages)
     }
 
     async fn process_raw_execution_result<E, F>(
