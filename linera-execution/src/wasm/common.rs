@@ -40,15 +40,6 @@ pub trait ApplicationRuntimeContext: Sized {
 /// Common interface to calling a user contract in a WebAssembly module.
 pub trait Contract: ApplicationRuntimeContext {
     /// The WIT type for the resource representing the guest future
-    /// [`handle_application_call`][crate::Contract::handle_application_call] method.
-    type HandleApplicationCall: GuestFutureInterface<
-            Self,
-            Output = ApplicationCallResult,
-            Parameters = (CalleeContext, Vec<u8>, Vec<SessionId>),
-        > + Send
-        + Unpin;
-
-    /// The WIT type for the resource representing the guest future
     /// [`handle_session_call`][crate::Contract::handle_session_call] method.
     type HandleSessionCall: GuestFutureInterface<
             Self,
@@ -56,9 +47,6 @@ pub trait Contract: ApplicationRuntimeContext {
             Parameters = (CalleeContext, Vec<u8>, Vec<u8>, Vec<SessionId>),
         > + Send
         + Unpin;
-
-    /// The WIT type eqivalent for [`Poll<Result<ApplicationCallResult, String>>`].
-    type PollApplicationCallResult;
 
     /// The WIT type eqivalent for [`Poll<Result<SessionCallResult, String>>`].
     type PollSessionCallResult;
@@ -87,21 +75,14 @@ pub trait Contract: ApplicationRuntimeContext {
         message: Vec<u8>,
     ) -> Result<Result<RawExecutionResult<Vec<u8>>, String>, Self::Error>;
 
-    /// Creates a new future for the user contract to handle a call from another contract.
-    fn handle_application_call_new(
+    /// Handles a call from another contract.
+    fn handle_application_call(
         &self,
         store: &mut Self::Store,
         context: CalleeContext,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<Self::HandleApplicationCall, Self::Error>;
-
-    /// Polls a user contract future that's handling a call from another contract.
-    fn handle_application_call_poll(
-        &self,
-        store: &mut Self::Store,
-        future: &Self::HandleApplicationCall,
-    ) -> Result<Self::PollApplicationCallResult, Self::Error>;
+    ) -> Result<Result<ApplicationCallResult, String>, Self::Error>;
 
     /// Creates a new future for the user contract to handle a session call from another
     /// contract.
@@ -270,11 +251,13 @@ where
         context: &CalleeContext,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> PollSender<ApplicationCallResult> {
-        GuestFutureActor::<A::HandleApplicationCall, A>::spawn(
-            (*context, argument.to_owned(), forwarded_sessions),
-            self,
-        )
+    ) -> WasmResultFuture<ApplicationCallResult> {
+        let context = *context;
+        let argument = argument.to_owned();
+
+        self.run_wasm_guest(move |application, store| {
+            application.handle_application_call(store, context, argument, forwarded_sessions)
+        })
     }
 
     /// Calls the guest Wasm module's implementation of

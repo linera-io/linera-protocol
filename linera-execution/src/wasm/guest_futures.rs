@@ -12,12 +12,10 @@ use super::{
         common::{Contract, Service},
         ExecutionError,
     },
-    contract::{
-        HandleApplicationCall, HandleSessionCall, PollApplicationCallResult, PollSessionCallResult,
-    },
+    contract::{HandleSessionCall, PollSessionCallResult},
     service::{HandleQuery, PollApplicationQueryResult},
 };
-use crate::{ApplicationCallResult, CalleeContext, QueryContext, SessionCallResult};
+use crate::{CalleeContext, QueryContext, SessionCallResult};
 use linera_base::identifiers::SessionId;
 use std::task::Poll;
 
@@ -77,18 +75,6 @@ macro_rules! impl_guest_future_interface {
 }
 
 impl_guest_future_interface! {
-    HandleApplicationCall: {
-        application_trait = Contract,
-        new_function = handle_application_call_new(
-            context: CalleeContext,
-            argument: Vec<u8>,
-            forwarded_sessions: Vec<SessionId>,
-        ),
-        poll_function = handle_application_call_poll,
-        poll_type = PollApplicationCallResult,
-        output_type = ApplicationCallResult,
-    },
-
     HandleSessionCall: {
         application_trait = Contract,
         new_function = handle_session_call_new(

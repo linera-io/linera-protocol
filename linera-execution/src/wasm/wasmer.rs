@@ -39,7 +39,7 @@ use super::{
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     module_cache::ModuleCache,
     runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
-    WasmApplication, WasmExecutionError,
+    ApplicationCallResult, WasmApplication, WasmExecutionError,
 };
 use crate::{
     Bytecode, CalleeContext, ContractRuntime, ExecutionError, MessageContext, OperationContext,
@@ -243,9 +243,7 @@ impl WasmApplication {
 }
 
 impl common::Contract for Contract {
-    type HandleApplicationCall = contract::HandleApplicationCall;
     type HandleSessionCall = contract::HandleSessionCall;
-    type PollApplicationCallResult = contract::PollApplicationCallResult;
     type PollSessionCallResult = contract::PollSessionCallResult;
 
     fn initialize(
@@ -278,33 +276,26 @@ impl common::Contract for Contract {
             .map(|inner| inner.map(RawExecutionResult::from))
     }
 
-    fn handle_application_call_new(
+    fn handle_application_call(
         &self,
         store: &mut Store,
         context: CalleeContext,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<contract::HandleApplicationCall, RuntimeError> {
+    ) -> Result<Result<ApplicationCallResult, String>, RuntimeError> {
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()
             .map(contract::SessionId::from)
             .collect();
 
-        contract::Contract::handle_application_call_new(
+        contract::Contract::handle_application_call(
             &self.contract,
             store,
             context.into(),
             &argument,
             &forwarded_sessions,
         )
-    }
-
-    fn handle_application_call_poll(
-        &self,
-        store: &mut Store,
-        future: &contract::HandleApplicationCall,
-    ) -> Result<contract::PollApplicationCallResult, RuntimeError> {
-        contract::Contract::handle_application_call_poll(&self.contract, store, future)
+        .map(|inner| inner.map(ApplicationCallResult::from))
     }
 
     fn handle_session_call_new(

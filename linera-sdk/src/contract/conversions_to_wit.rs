@@ -195,26 +195,6 @@ impl From<ChannelName> for wit_types::ChannelName {
 }
 
 impl<Message, Value, SessionState>
-    From<Poll<Result<ApplicationCallResult<Message, Value, SessionState>, String>>>
-    for wit_types::PollApplicationCallResult
-where
-    Message: Serialize + DeserializeOwned + Debug,
-    Value: Serialize,
-    SessionState: Serialize,
-{
-    fn from(
-        poll: Poll<Result<ApplicationCallResult<Message, Value, SessionState>, String>>,
-    ) -> Self {
-        use wit_types::PollApplicationCallResult;
-        match poll {
-            Poll::Pending => PollApplicationCallResult::Pending,
-            Poll::Ready(Ok(result)) => PollApplicationCallResult::Ready(Ok(result.into())),
-            Poll::Ready(Err(message)) => PollApplicationCallResult::Ready(Err(message)),
-        }
-    }
-}
-
-impl<Message, Value, SessionState>
     From<Poll<Result<SessionCallResult<Message, Value, SessionState>, String>>>
     for wit_types::PollSessionCallResult
 where

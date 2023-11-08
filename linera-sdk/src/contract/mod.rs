@@ -29,7 +29,6 @@ macro_rules! contract {
 
         /// Mark the contract type to be exported.
         impl $crate::contract::wit_types::Contract for $application {
-            type HandleApplicationCall = HandleApplicationCall;
             type HandleSessionCall = HandleSessionCall;
 
             fn initialize(
@@ -81,14 +80,28 @@ macro_rules! contract {
                     },
                 )
             }
-        }
 
-        $crate::instance_exported_future! {
-            contract::HandleApplicationCall<$application>(
+            fn handle_application_call(
                 context: $crate::contract::wit_types::CalleeContext,
                 argument: Vec<u8>,
                 forwarded_sessions: Vec<$crate::contract::wit_types::SessionId>,
-            ) -> PollApplicationCallResult
+            ) -> Result<$crate::contract::wit_types::ApplicationCallResult, String> {
+                $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
+                    move |mut application| async move {
+                        let argument: <$application as $crate::abi::ContractAbi>::ApplicationCall =
+                            bcs::from_bytes(&argument)?;
+                        let forwarded_sessions = forwarded_sessions
+                            .into_iter()
+                            .map(SessionId::from)
+                            .collect();
+
+                        application
+                            .handle_application_call(&context.into(), argument, forwarded_sessions)
+                            .await
+                            .map(|result| (application, result))
+                    },
+                )
+            }
         }
 
         $crate::instance_exported_future! {

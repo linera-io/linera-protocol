@@ -10,15 +10,11 @@ execute-message: func(
     message: list<u8>,
 ) -> result<execution-result, string>
 
-resource handle-application-call {
-    static new: func(
-        context: callee-context,
-        argument: list<u8>,
-        forwarded-sessions: list<session-id>,
-    ) -> handle-application-call
-
-    poll: func() -> poll-application-call-result
-}
+handle-application-call: func(
+    context: callee-context,
+    argument: list<u8>,
+    forwarded-sessions: list<session-id>,
+) -> result<application-call-result, string>
 
 resource handle-session-call {
     static new: func(
@@ -66,11 +62,6 @@ type chain-id = crypto-hash
 type owner = crypto-hash
 type block-height = u64
 type bytecode-id = message-id
-
-variant poll-application-call-result {
-    pending,
-    ready(result<application-call-result, string>),
-}
 
 variant poll-session-call-result {
     pending,
