@@ -509,7 +509,6 @@ where
         let balance = self.execution_state.system.balance.get_mut();
 
         balance.try_add_assign(credit)?;
-        sub_assign_fees(balance, policy.certificate_price())?;
 
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
@@ -582,6 +581,7 @@ where
                 .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
         }
         let balance = self.execution_state.system.balance.get_mut();
+        sub_assign_fees(balance, policy.certificate_price())?;
         sub_assign_fees(balance, credit)?;
 
         // Recompute the state hash.
