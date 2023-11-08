@@ -7,16 +7,10 @@
 #![allow(clippy::duplicate_mod)]
 
 use super::{
-    super::{
-        async_boundary::GuestFutureInterface,
-        common::{Contract, Service},
-        ExecutionError,
-    },
-    contract::{HandleSessionCall, PollSessionCallResult},
+    super::{async_boundary::GuestFutureInterface, common::Service, ExecutionError},
     service::{HandleQuery, PollApplicationQueryResult},
 };
-use crate::{CalleeContext, QueryContext, SessionCallResult};
-use linera_base::identifiers::SessionId;
+use crate::QueryContext;
 use std::task::Poll;
 
 /// Implements [`GuestFutureInterface`] for a `future` type implemented by a guest Wasm module.
@@ -75,19 +69,6 @@ macro_rules! impl_guest_future_interface {
 }
 
 impl_guest_future_interface! {
-    HandleSessionCall: {
-        application_trait = Contract,
-        new_function = handle_session_call_new(
-            context: CalleeContext,
-            session_state: Vec<u8>,
-            argument: Vec<u8>,
-            forwarded_sessions: Vec<SessionId>,
-        ),
-        poll_function = handle_session_call_poll,
-        poll_type = PollSessionCallResult,
-        output_type = (SessionCallResult, Vec<u8>),
-    },
-
     HandleQuery: {
         application_trait = Service,
         new_function = handle_query_new(context: QueryContext, query: Vec<u8>),

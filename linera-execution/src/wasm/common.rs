@@ -39,18 +39,6 @@ pub trait ApplicationRuntimeContext: Sized {
 
 /// Common interface to calling a user contract in a WebAssembly module.
 pub trait Contract: ApplicationRuntimeContext {
-    /// The WIT type for the resource representing the guest future
-    /// [`handle_session_call`][crate::Contract::handle_session_call] method.
-    type HandleSessionCall: GuestFutureInterface<
-            Self,
-            Output = (SessionCallResult, Vec<u8>),
-            Parameters = (CalleeContext, Vec<u8>, Vec<u8>, Vec<SessionId>),
-        > + Send
-        + Unpin;
-
-    /// The WIT type eqivalent for [`Poll<Result<SessionCallResult, String>>`].
-    type PollSessionCallResult;
-
     /// Initializes the user application on the owner chain.
     fn initialize(
         &self,
@@ -84,23 +72,16 @@ pub trait Contract: ApplicationRuntimeContext {
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<Result<ApplicationCallResult, String>, Self::Error>;
 
-    /// Creates a new future for the user contract to handle a session call from another
-    /// contract.
-    fn handle_session_call_new(
+    /// Handles a session call from another contract.
+    #[allow(clippy::type_complexity)]
+    fn handle_session_call(
         &self,
         store: &mut Self::Store,
         context: CalleeContext,
         session_state: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<Self::HandleSessionCall, Self::Error>;
-
-    /// Polls a user contract future that's handling a session call from another contract.
-    fn handle_session_call_poll(
-        &self,
-        store: &mut Self::Store,
-        future: &Self::HandleSessionCall,
-    ) -> Result<Self::PollSessionCallResult, Self::Error>;
+    ) -> Result<Result<(SessionCallResult, Vec<u8>), String>, Self::Error>;
 }
 
 /// Common interface to calling a user service in a WebAssembly module.
@@ -280,16 +261,20 @@ where
         session_state: &[u8],
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> PollSender<(SessionCallResult, Vec<u8>)> {
-        GuestFutureActor::<A::HandleSessionCall, A>::spawn(
-            (
-                *context,
-                session_state.to_owned(),
-                argument.to_owned(),
+    ) -> WasmResultFuture<(SessionCallResult, Vec<u8>)> {
+        let context = *context;
+        let session_state = session_state.to_owned();
+        let argument = argument.to_owned();
+
+        self.run_wasm_guest(move |application, store| {
+            application.handle_session_call(
+                store,
+                context,
+                session_state,
+                argument,
                 forwarded_sessions,
-            ),
-            self,
-        )
+            )
+        })
     }
 }
 

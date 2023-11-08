@@ -29,8 +29,6 @@ macro_rules! contract {
 
         /// Mark the contract type to be exported.
         impl $crate::contract::wit_types::Contract for $application {
-            type HandleSessionCall = HandleSessionCall;
-
             fn initialize(
                 context: $crate::contract::wit_types::OperationContext,
                 argument: Vec<u8>,
@@ -102,15 +100,36 @@ macro_rules! contract {
                     },
                 )
             }
-        }
 
-        $crate::instance_exported_future! {
-            contract::HandleSessionCall<$application>(
+            fn handle_session_call(
                 context: $crate::contract::wit_types::CalleeContext,
-                session: Vec<u8>,
+                session_state: Vec<u8>,
                 argument: Vec<u8>,
                 forwarded_sessions: Vec<$crate::contract::wit_types::SessionId>,
-            ) -> PollSessionCallResult
+            ) -> Result<$crate::contract::wit_types::SessionCallResult, String> {
+                $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
+                    move |mut application| async move {
+                        let session_state: <$application as $crate::abi::ContractAbi>::SessionState =
+                            bcs::from_bytes(&session_state)?;
+                        let argument: <$application as $crate::abi::ContractAbi>::SessionCall =
+                            bcs::from_bytes(&argument)?;
+                        let forwarded_sessions = forwarded_sessions
+                            .into_iter()
+                            .map(SessionId::from)
+                            .collect();
+
+                        application
+                            .handle_session_call(
+                                &context.into(),
+                                session_state,
+                                argument,
+                                forwarded_sessions,
+                            )
+                            .await
+                            .map(|result| (application, result))
+                    },
+                )
+            }
         }
 
         /// Stub of a `main` entrypoint so that the binary doesn't fail to compile on targets other

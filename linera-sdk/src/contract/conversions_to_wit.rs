@@ -11,7 +11,7 @@ use linera_base::{
     identifiers::{ApplicationId, ChannelName, Destination, MessageId, SessionId},
 };
 use serde::{de::DeserializeOwned, Serialize};
-use std::{fmt::Debug, task::Poll};
+use std::fmt::Debug;
 
 impl From<CryptoHash> for wit_system_api::CryptoHash {
     fn from(hash_value: CryptoHash) -> Self {
@@ -116,10 +116,11 @@ where
     SessionState: Serialize,
 {
     fn from(result: SessionCallResult<Message, Value, SessionState>) -> Self {
-        let new_state = result.new_state.as_ref().map(|state| {
-            // TODO(#743): Do we need explicit error handling?
-            bcs::to_bytes(state).expect("session type serialization failed")
+        // TODO(#743): Do we need explicit error handling?
+        let new_state = result.new_state.map(|state| {
+            bcs::to_bytes(&state).expect("failed to serialize Value for SessionCallResult")
         });
+
         wit_types::SessionCallResult {
             inner: result.inner.into(),
             new_state,
@@ -190,24 +191,6 @@ impl From<ChannelName> for wit_types::ChannelName {
     fn from(name: ChannelName) -> Self {
         wit_types::ChannelName {
             name: name.into_bytes(),
-        }
-    }
-}
-
-impl<Message, Value, SessionState>
-    From<Poll<Result<SessionCallResult<Message, Value, SessionState>, String>>>
-    for wit_types::PollSessionCallResult
-where
-    Message: Serialize + DeserializeOwned + Debug,
-    Value: Serialize,
-    SessionState: Serialize,
-{
-    fn from(poll: Poll<Result<SessionCallResult<Message, Value, SessionState>, String>>) -> Self {
-        use wit_types::PollSessionCallResult;
-        match poll {
-            Poll::Pending => PollSessionCallResult::Pending,
-            Poll::Ready(Ok(result)) => PollSessionCallResult::Ready(Ok(result.into())),
-            Poll::Ready(Err(message)) => PollSessionCallResult::Ready(Err(message)),
         }
     }
 }

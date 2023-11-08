@@ -16,16 +16,12 @@ handle-application-call: func(
     forwarded-sessions: list<session-id>,
 ) -> result<application-call-result, string>
 
-resource handle-session-call {
-    static new: func(
-        context: callee-context,
-        state: session-state,
-        argument: list<u8>,
-        forwarded-sessions: list<session-id>,
-    ) -> handle-session-call
-
-    poll: func() -> poll-session-call-result
-}
+handle-session-call: func(
+    context: callee-context,
+    state: session-state,
+    argument: list<u8>,
+    forwarded-sessions: list<session-id>,
+) -> result<session-call-result, string>
 
 record operation-context {
     chain-id: chain-id,
@@ -62,11 +58,6 @@ type chain-id = crypto-hash
 type owner = crypto-hash
 type block-height = u64
 type bytecode-id = message-id
-
-variant poll-session-call-result {
-    pending,
-    ready(result<session-call-result, string>),
-}
 
 record application-call-result {
     value: list<u8>,

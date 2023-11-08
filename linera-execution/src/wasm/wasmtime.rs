@@ -47,7 +47,7 @@ use super::{
 };
 use crate::{
     ApplicationCallResult, Bytecode, CalleeContext, ExecutionError, MessageContext,
-    OperationContext, QueryContext, RawExecutionResult, SessionId,
+    OperationContext, QueryContext, RawExecutionResult, SessionCallResult, SessionId,
 };
 use futures::{channel::mpsc, TryFutureExt};
 use linera_views::{batch::Batch, views::ViewError};
@@ -335,9 +335,6 @@ impl ServiceState {
 }
 
 impl common::Contract for Contract {
-    type HandleSessionCall = contract::HandleSessionCall;
-    type PollSessionCallResult = contract::PollSessionCallResult;
-
     fn initialize(
         &self,
         store: &mut Store<ContractState>,
@@ -390,20 +387,20 @@ impl common::Contract for Contract {
         .map(|inner| inner.map(ApplicationCallResult::from))
     }
 
-    fn handle_session_call_new(
+    fn handle_session_call(
         &self,
         store: &mut Store<ContractState>,
         context: CalleeContext,
         session: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<contract::HandleSessionCall, Trap> {
+    ) -> Result<Result<(SessionCallResult, Vec<u8>), String>, Trap> {
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()
             .map(contract::SessionId::from)
             .collect();
 
-        contract::Contract::handle_session_call_new(
+        contract::Contract::handle_session_call(
             &self.contract,
             store,
             context.into(),
@@ -411,14 +408,7 @@ impl common::Contract for Contract {
             &argument,
             &forwarded_sessions,
         )
-    }
-
-    fn handle_session_call_poll(
-        &self,
-        store: &mut Store<ContractState>,
-        future: &contract::HandleSessionCall,
-    ) -> Result<contract::PollSessionCallResult, Trap> {
-        contract::Contract::handle_session_call_poll(&self.contract, store, future)
+        .map(|inner| inner.map(<(SessionCallResult, Vec<u8>)>::from))
     }
 }
 

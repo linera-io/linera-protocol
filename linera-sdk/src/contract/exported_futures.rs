@@ -8,16 +8,13 @@
 //! contract type that implements [`Contract`].
 
 use crate::{
-    contract::{system_api, wit_types},
-    views::ViewStorageContext,
-    Contract, ContractLogger, ExportedFuture, SessionCallResult, SessionId, SimpleStateStorage,
-    ViewStateStorage,
+    contract::system_api, views::ViewStorageContext, Contract, SimpleStateStorage, ViewStateStorage,
 };
 use async_trait::async_trait;
 use futures::TryFutureExt;
 use linera_views::views::RootView;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{future::Future, marker::PhantomData, mem};
+use std::{future::Future, mem};
 
 /// The storage APIs used by a contract.
 #[async_trait]
@@ -120,67 +117,5 @@ where
         let result = operation().await;
         *state = Self::load_and_lock().await;
         result
-    }
-}
-
-/// Future implementation exported from the guest to allow the host to call
-/// [`Contract::handle_session_call`].
-///
-/// Loads the `Application` state and calls its
-/// [`handle_session_call`][Contract::handle_session_call] method.
-#[allow(clippy::type_complexity)]
-pub struct HandleSessionCall<Application: Contract> {
-    future: ExportedFuture<
-        Result<
-            SessionCallResult<
-                Application::Message,
-                Application::Response,
-                Application::SessionState,
-            >,
-            String,
-        >,
-    >,
-    _application: PhantomData<Application>,
-}
-
-impl<Application> HandleSessionCall<Application>
-where
-    Application: Contract + 'static,
-{
-    /// Creates the exported future that the host can poll.
-    ///
-    /// This is called from the host.
-    pub fn new(
-        context: wit_types::CalleeContext,
-        session: Vec<u8>,
-        argument: Vec<u8>,
-        forwarded_sessions: Vec<wit_types::SessionId>,
-    ) -> Self {
-        ContractLogger::install();
-        HandleSessionCall {
-            future: ExportedFuture::new(Application::Storage::execute_with_state(
-                move |mut application| async move {
-                    let session: Application::SessionState = bcs::from_bytes(&session)?;
-                    let argument: Application::SessionCall = bcs::from_bytes(&argument)?;
-                    let forwarded_sessions = forwarded_sessions
-                        .into_iter()
-                        .map(SessionId::from)
-                        .collect();
-
-                    application
-                        .handle_session_call(&context.into(), session, argument, forwarded_sessions)
-                        .await
-                        .map(|result| (application, result))
-                },
-            )),
-            _application: PhantomData,
-        }
-    }
-
-    /// Polls the future export from the guest.
-    ///
-    /// This is called from the host.
-    pub fn poll(&self) -> wit_types::PollSessionCallResult {
-        self.future.poll()
     }
 }

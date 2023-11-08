@@ -39,7 +39,7 @@ use super::{
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     module_cache::ModuleCache,
     runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
-    ApplicationCallResult, WasmApplication, WasmExecutionError,
+    ApplicationCallResult, SessionCallResult, WasmApplication, WasmExecutionError,
 };
 use crate::{
     Bytecode, CalleeContext, ContractRuntime, ExecutionError, MessageContext, OperationContext,
@@ -243,9 +243,6 @@ impl WasmApplication {
 }
 
 impl common::Contract for Contract {
-    type HandleSessionCall = contract::HandleSessionCall;
-    type PollSessionCallResult = contract::PollSessionCallResult;
-
     fn initialize(
         &self,
         store: &mut Store,
@@ -298,20 +295,20 @@ impl common::Contract for Contract {
         .map(|inner| inner.map(ApplicationCallResult::from))
     }
 
-    fn handle_session_call_new(
+    fn handle_session_call(
         &self,
         store: &mut Store,
         context: CalleeContext,
         session: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<contract::HandleSessionCall, RuntimeError> {
+    ) -> Result<Result<(SessionCallResult, Vec<u8>), String>, RuntimeError> {
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()
             .map(contract::SessionId::from)
             .collect();
 
-        contract::Contract::handle_session_call_new(
+        contract::Contract::handle_session_call(
             &self.contract,
             store,
             context.into(),
@@ -319,14 +316,7 @@ impl common::Contract for Contract {
             &argument,
             &forwarded_sessions,
         )
-    }
-
-    fn handle_session_call_poll(
-        &self,
-        store: &mut Store,
-        future: &contract::HandleSessionCall,
-    ) -> Result<contract::PollSessionCallResult, RuntimeError> {
-        contract::Contract::handle_session_call_poll(&self.contract, store, future)
+        .map(|inner| inner.map(<(SessionCallResult, Vec<u8>)>::from))
     }
 }
 
