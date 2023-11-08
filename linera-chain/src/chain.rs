@@ -494,21 +494,6 @@ where
         };
 
         let policy = committee.policy().clone();
-        let credit: Amount = block
-            .incoming_messages
-            .iter()
-            .filter_map(|msg| match &msg.event.message {
-                Message::System(SystemMessage::Credit { account, amount })
-                    if *account == Account::chain(chain_id) =>
-                {
-                    Some(amount)
-                }
-                _ => None,
-            })
-            .sum();
-        let balance = self.execution_state.system.balance.get_mut();
-
-        balance.try_add_assign(credit)?;
 
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
@@ -582,7 +567,6 @@ where
         }
         let balance = self.execution_state.system.balance.get_mut();
         sub_assign_fees(balance, policy.certificate_price())?;
-        sub_assign_fees(balance, credit)?;
 
         // Recompute the state hash.
         let state_hash = self.execution_state.crypto_hash().await?;
