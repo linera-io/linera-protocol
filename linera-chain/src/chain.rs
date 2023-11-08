@@ -512,10 +512,6 @@ where
         sub_assign_fees(balance, policy.certificate_price())?;
         sub_assign_fees(
             balance,
-            policy.storage_bytes_written_price_raw(&block.incoming_messages)?,
-        )?;
-        sub_assign_fees(
-            balance,
             policy.storage_bytes_written_price_raw(&block.operations)?,
         )?;
 
@@ -555,6 +551,7 @@ where
             let mut messages_out = self.process_execution_results(context.height, results)
                 .await?;
             let balance = self.execution_state.system.balance.get_mut();
+            sub_assign_fees(balance, policy.storage_bytes_written_price_raw(&message)?)?;
             sub_assign_fees(balance, policy.messages_price(&messages_out)?)?;
             messages.append(&mut messages_out);
             message_counts
