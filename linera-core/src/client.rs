@@ -307,7 +307,9 @@ where
         let response = self.node_client.handle_chain_info_query(query).await?;
         let mut requested_pending_messages = response.info.requested_pending_messages;
         let mut pending_messages = vec![];
-        // If this is the first block, it must contain `OpenChain`.
+        // If this is the first block, it must contain `OpenChain`. To avoid skipping messages,
+        // we first take all messages sent from the parent chain, in order. This should include
+        // `OpenChain`.
         if self.next_block_height == BlockHeight::ZERO
             && self
                 .chain_state_view()
@@ -326,7 +328,7 @@ where
                 )
                 .then(|| message.origin.clone())
             }) else {
-                return Err(LocalNodeError::MissingOpenChainMessage);
+                return Err(LocalNodeError::InactiveChain(self.chain_id));
             };
             let (parent_messages, other_messages) = requested_pending_messages
                 .drain(..)
@@ -1297,7 +1299,8 @@ where
         operations: Vec<Operation>,
     ) -> Result<Certificate, ChainClientError> {
         self.prepare_chain().await?;
-        self.execute_block(operations).await
+        let messages = self.pending_messages().await?;
+        self.execute_block(messages, operations).await
     }
 
     /// Executes an operation.
@@ -1313,9 +1316,9 @@ where
     /// This must be preceded by a call to `prepare_chain()`.
     async fn execute_block(
         &mut self,
+        incoming_messages: Vec<IncomingMessage>,
         operations: Vec<Operation>,
     ) -> Result<Certificate, ChainClientError> {
-        let incoming_messages = self.pending_messages().await?;
         let timestamp = self.next_timestamp(&incoming_messages).await;
         let block = Block {
             epoch: self.epoch().await?,
@@ -1534,6 +1537,7 @@ where
             ownership.is_active(),
             ChainError::InactiveChain(self.chain_id)
         );
+        let messages = self.pending_messages().await?;
         let mut owners: Vec<_> = ownership.owners.values().copied().collect();
         owners.extend(
             ownership
@@ -1543,11 +1547,14 @@ where
                 .zip(iter::repeat(100)),
         );
         owners.push((new_public_key, new_weight));
-        self.execute_block(vec![Operation::System(SystemOperation::ChangeOwnership {
-            super_owners: Vec::new(),
-            owners,
-            multi_leader_rounds: ownership.multi_leader_rounds,
-        })])
+        self.execute_block(
+            messages,
+            vec![Operation::System(SystemOperation::ChangeOwnership {
+                super_owners: Vec::new(),
+                owners,
+                multi_leader_rounds: ownership.multi_leader_rounds,
+            })],
+        )
         .await
     }
 
@@ -1560,14 +1567,18 @@ where
         self.prepare_chain().await?;
         let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         let epoch = epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
+        let messages = self.pending_messages().await?;
         let certificate = self
-            .execute_block(vec![Operation::System(SystemOperation::OpenChain {
-                ownership,
-                committees,
-                admin_id: self.admin_id,
-                epoch,
-                balance,
-            })])
+            .execute_block(
+                messages,
+                vec![Operation::System(SystemOperation::OpenChain {
+                    ownership,
+                    committees,
+                    admin_id: self.admin_id,
+                    epoch,
+                    balance,
+                })],
+            )
             .await?;
         // The first message of the only operation created the new chain.
         let message_id = certificate
@@ -1668,12 +1679,16 @@ where
     ) -> Result<Certificate, ChainClientError> {
         self.prepare_chain().await?;
         let epoch = self.epoch().await?;
-        self.execute_block(vec![Operation::System(SystemOperation::Admin(
-            AdminOperation::CreateCommittee {
-                epoch: epoch.try_add_one()?,
-                committee,
-            },
-        ))])
+        let messages = self.pending_messages().await?;
+        self.execute_block(
+            messages,
+            vec![Operation::System(SystemOperation::Admin(
+                AdminOperation::CreateCommittee {
+                    epoch: epoch.try_add_one()?,
+                    committee,
+                },
+            ))],
+        )
         .await
     }
 
@@ -1681,8 +1696,12 @@ where
     pub async fn process_inbox(&mut self) -> Result<Vec<Certificate>, ChainClientError> {
         self.prepare_chain().await?;
         let mut certificates = Vec::new();
-        while !self.pending_messages().await?.is_empty() {
-            let certificate = self.execute_block(vec![]).await?;
+        loop {
+            let incoming_messages = self.pending_messages().await?;
+            if incoming_messages.is_empty() {
+                break;
+            }
+            let certificate = self.execute_block(incoming_messages, vec![]).await?;
             certificates.push(certificate);
         }
         Ok(certificates)
@@ -1754,7 +1773,8 @@ where
                 }
             })
             .collect();
-        self.execute_block(operations).await
+        let messages = self.pending_messages().await?;
+        self.execute_block(messages, operations).await
     }
 
     /// Sends money to a chain.

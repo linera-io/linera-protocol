@@ -351,7 +351,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
     let client2_key = client2.keygen().await.unwrap();
 
     // Open chain on behalf of Client 2.
-    let (message_id, chain2) = client1.open_chain(chain1, client2_key).await.unwrap();
+    let (message_id, chain2) = client1.open_chain(chain1, Some(client2_key)).await.unwrap();
 
     // Assign chain2 to client2_key.
     assert_eq!(
@@ -676,7 +676,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     // Open a great-grandchild chain on behalf of client 2.
     let (_, grandparent) = client1.open_chain(chain1, None).await.unwrap();
     let (_, parent) = client1.open_chain(grandparent, None).await.unwrap();
-    let (message_id, chain2) = client1.open_chain(parent, client2_key).await.unwrap();
+    let (message_id, chain2) = client1.open_chain(parent, Some(client2_key)).await.unwrap();
     client2.assign(client2_key, message_id).await.unwrap();
 
     // Transfer 6 units from Chain 1 to Chain 2.

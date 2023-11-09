@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::{future, FutureExt};
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
+    data_types::{ArithmeticError, BlockHeight, Round},
     doc_scalar, ensure,
     identifiers::{ChainId, Owner},
 };
@@ -550,7 +550,7 @@ where
         if tip.next_block_height == BlockHeight::ZERO
             && chain.execution_state.system.description.get().is_none()
         {
-            let now = Timestamp::now();
+            let now = self.storage.current_time();
             for message in &block.incoming_messages {
                 chain
                     .execute_immediate_message(

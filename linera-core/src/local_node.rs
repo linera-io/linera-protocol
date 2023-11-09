@@ -65,9 +65,6 @@ pub enum LocalNodeError {
 
     #[error("The chain info response received from the local node is invalid")]
     InvalidChainInfoResponse,
-
-    #[error("Cannot create the first block without the OpenChain message.")]
-    MissingOpenChainMessage,
 }
 
 impl<S> LocalNodeClient<S>
