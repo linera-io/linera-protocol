@@ -41,7 +41,7 @@ spec:
             - containerPort: {{ .Values.proxyPort }}
               name: linera-port
           command: ["./linera-proxy"]
-          args: ["server_1.json"]
+          args: ["/config/server.json"]
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
@@ -57,3 +57,14 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+          volumeMounts:
+            - name: config
+              mountPath: "/config"
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: validator-config
+            items:
+              - key: serverConfig
+                path: server.json

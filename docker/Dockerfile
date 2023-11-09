@@ -129,21 +129,4 @@ COPY --from=binaries \
 COPY --chmod=755 \
     docker/server-entrypoint.sh \
     docker/server-init.sh \
-    configuration/"$environment"/validator_1.toml \
     ./
-
-# Create configuration files for the validator according to the validator's config file.
-# * Private server states are stored in `server*.json`.
-# * `committee.json` is the public description of the Linera committee.
-RUN ./linera-server generate --validators validator_1.toml --committee committee.json
-
-# Create configuration files for 1000 user chains.
-# * Private chain states are stored in one local wallet `wallet.json`.
-# * `genesis.json` will contain the initial balances of chains as well as the initial committee.
-RUN ./linera \
-    --wallet wallet.json \
-    --storage rocksdb:linera.db \
-    create-genesis-config 1000 \
-    --genesis genesis.json \
-    --initial-funding 100 \
-    --committee committee.json
