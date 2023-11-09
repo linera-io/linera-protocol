@@ -304,6 +304,7 @@ where
     {
         let (result_sender, result_receiver) = oneshot::channel();
 
+        // TODO(#925): Replace the host future queue with a read-write-lock.
         if let Some(future_queue) = self.future_queue.take() {
             tokio::spawn(future_queue.collect::<()>());
         }
