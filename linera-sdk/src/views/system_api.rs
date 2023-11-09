@@ -15,7 +15,7 @@ use linera_views::{
 /// We need to have a maximum key size that handles all possible underlying
 /// sizes. The constraint so far is DynamoDb which has a key length of 1024.
 /// That key length is decreased by 4 due to the use of a value splitting.
-/// Then the KeyValueStorClient needs to handle some base_key and so we
+/// Then the KeyValueStoreClient needs to handle some base_key and so we
 /// reduce to 900. Depending on the size, the error can occur in system_api
 /// or in the KeyValueStoreView.
 const MAX_KEY_SIZE: usize = 900;
@@ -99,30 +99,30 @@ impl KeyValueStoreClient for KeyValueStore {
     }
 
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ViewError> {
-        let mut list_oper = Vec::new();
-        for op in &batch.operations {
-            match op {
+        let mut operations = Vec::new();
+        for operation in &batch.operations {
+            match operation {
                 WriteOperation::Delete { key } => {
                     if key.len() > MAX_KEY_SIZE {
                         return Err(ViewError::KeyTooLong);
                     }
-                    list_oper.push(wit::WriteOperation::Delete(key));
+                    operations.push(wit::WriteOperation::Delete(key));
                 }
                 WriteOperation::Put { key, value } => {
                     if key.len() > MAX_KEY_SIZE {
                         return Err(ViewError::KeyTooLong);
                     }
-                    list_oper.push(wit::WriteOperation::Put((key, value)))
+                    operations.push(wit::WriteOperation::Put((key, value)))
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
                     if key_prefix.len() > MAX_KEY_SIZE {
                         return Err(ViewError::KeyTooLong);
                     }
-                    list_oper.push(wit::WriteOperation::Deleteprefix(key_prefix))
+                    operations.push(wit::WriteOperation::Deleteprefix(key_prefix))
                 }
             }
         }
-        wit::write_batch(&list_oper);
+        wit::write_batch(&operations);
         Ok(())
     }
 
