@@ -53,9 +53,9 @@ use thiserror::Error;
 
 /// Substracts an amount from a balance and reports an error if that is impossible
 pub fn sub_assign_fees_internal(balance: &mut Amount, fees: Amount) -> Result<(), SystemExecutionError> {
-    let current_balance = balance.clone();
+    let current_balance = *balance;
     let error = SystemExecutionError::InsufficientFunding { current_balance };
-    Ok(balance.try_sub_assign(fees).map_err(|_| error)?)
+    balance.try_sub_assign(fees).map_err(|_| error)
 }
 
 /// The entries of the runtime related to storage

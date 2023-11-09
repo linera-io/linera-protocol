@@ -164,11 +164,11 @@ pub struct ChannelStateView<C> {
 
 /// Substracts an amount from a balance and reports an error if that is impossible
 pub fn sub_assign_fees(balance: &mut Amount, fees: Amount, chain_execution_context: ChainExecutionContext) -> Result<(), ChainError> {
-    let current_balance = balance.clone();
+    let current_balance = *balance;
     let error = SystemExecutionError::InsufficientFunding { current_balance };
     let error = ExecutionError::SystemError(error);
     let error = ChainError::ExecutionError(error, chain_execution_context);
-    Ok(balance.try_sub_assign(fees).map_err(|_| error)?)
+    balance.try_sub_assign(fees).map_err(|_| error)
 }
 
 
