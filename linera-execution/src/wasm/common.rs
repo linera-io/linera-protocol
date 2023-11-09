@@ -3,11 +3,7 @@
 
 //! Runtime independent code for interfacing with user applications in WebAssembly modules.
 
-use super::{
-    async_boundary::{GuestFutureActor, GuestFutureInterface, PollSender},
-    async_determinism::HostFutureQueue,
-    ExecutionError, WasmExecutionError,
-};
+use super::{async_determinism::HostFutureQueue, ExecutionError, WasmExecutionError};
 use crate::{
     ApplicationCallResult, CalleeContext, MessageContext, OperationContext, QueryContext,
     RawExecutionResult, SessionCallResult, SessionId,
@@ -86,29 +82,13 @@ pub trait Contract: ApplicationRuntimeContext {
 
 /// Common interface to calling a user service in a WebAssembly module.
 pub trait Service: ApplicationRuntimeContext {
-    /// The WIT type for the resource representing the guest future
-    /// [`handle_query`][crate::Service::handle_query] method.
-    type HandleQuery: GuestFutureInterface<Self, Output = Vec<u8>, Parameters = (QueryContext, Vec<u8>)>
-        + Send
-        + Unpin;
-
-    /// The WIT type eqivalent for [`Poll<Result<Vec<u8>, String>>`].
-    type PollApplicationQueryResult;
-
-    /// Creates a new future for the user application to handle a query.
-    fn handle_query_new(
+    /// Handles a query to the user application.
+    fn handle_query(
         &self,
         store: &mut Self::Store,
         context: QueryContext,
         argument: Vec<u8>,
-    ) -> Result<Self::HandleQuery, Self::Error>;
-
-    /// Polls a user service future that's handling a query.
-    fn handle_query_poll(
-        &self,
-        store: &mut Self::Store,
-        future: &Self::HandleQuery,
-    ) -> Result<Self::PollApplicationQueryResult, Self::Error>;
+    ) -> Result<Result<Vec<u8>, String>, Self::Error>;
 }
 
 /// Wrapper around all types necessary to call an asynchronous method of a Wasm application.
@@ -294,8 +274,17 @@ where
     ///     argument: &[u8],
     /// ) -> Result<Vec<u8>, ExecutionError>
     /// ```
-    pub fn handle_query(self, context: &QueryContext, argument: &[u8]) -> PollSender<Vec<u8>> {
-        GuestFutureActor::<A::HandleQuery, A>::spawn((*context, argument.to_owned()), self)
+    pub fn handle_query(
+        self,
+        context: &QueryContext,
+        argument: &[u8],
+    ) -> WasmResultFuture<Vec<u8>> {
+        let context = *context;
+        let argument = argument.to_owned();
+
+        self.run_wasm_guest(move |application, store| {
+            application.handle_query(store, context, argument)
+        })
     }
 }
 

@@ -31,8 +31,6 @@ wit_bindgen_host_wasmtime_rust::import!("service.wit");
 mod conversions_from_wit;
 #[path = "conversions_to_wit.rs"]
 mod conversions_to_wit;
-#[path = "guest_futures.rs"]
-mod guest_futures;
 
 use self::{
     contract::ContractData, contract_system_api::ContractSystemApiTables, service::ServiceData,
@@ -413,24 +411,13 @@ impl common::Contract for Contract {
 }
 
 impl common::Service for Service {
-    type HandleQuery = service::HandleQuery;
-    type PollApplicationQueryResult = service::PollApplicationQueryResult;
-
-    fn handle_query_new(
+    fn handle_query(
         &self,
         store: &mut Store<ServiceState>,
         context: QueryContext,
         argument: Vec<u8>,
-    ) -> Result<service::HandleQuery, Trap> {
-        service::Service::handle_query_new(&self.service, store, context.into(), &argument)
-    }
-
-    fn handle_query_poll(
-        &self,
-        store: &mut Store<ServiceState>,
-        future: &service::HandleQuery,
-    ) -> Result<service::PollApplicationQueryResult, Trap> {
-        service::Service::handle_query_poll(&self.service, store, future)
+    ) -> Result<Result<Vec<u8>, String>, Trap> {
+        service::Service::handle_query(&self.service, store, context.into(), &argument)
     }
 }
 
