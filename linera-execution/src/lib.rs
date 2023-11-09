@@ -51,13 +51,6 @@ use serde::{Deserialize, Serialize};
 use std::{io, path::Path, str::FromStr, sync::Arc};
 use thiserror::Error;
 
-/// Substracts an amount from a balance and reports an error if that is impossible
-pub fn sub_assign_fees_internal(balance: &mut Amount, fees: Amount) -> Result<(), SystemExecutionError> {
-    let current_balance = *balance;
-    let error = SystemExecutionError::InsufficientFunding { current_balance };
-    balance.try_sub_assign(fees).map_err(|_| error)
-}
-
 /// The entries of the runtime related to storage
 #[derive(Copy, Debug, Clone)]
 pub struct RuntimeLimits {
@@ -117,6 +110,13 @@ impl Default for RuntimeLimits {
 }
 
 impl ResourceTracker {
+    /// Subtracts an amount from a balance and reports an error if that is impossible
+    fn sub_assign_fees(balance: &mut Amount, fees: Amount) -> Result<(), SystemExecutionError> {
+        let current_balance = *balance;
+        let error = SystemExecutionError::InsufficientFunding { current_balance };
+        balance.try_sub_assign(fees).map_err(|_| error)
+    }
+
     /// Updates the limits for the maximum and updates the balance.
     pub fn update_limits(
         &mut self,
@@ -128,9 +128,9 @@ impl ResourceTracker {
         let initial_fuel = policy.remaining_fuel(*balance);
         let used_fuel = initial_fuel.saturating_sub(runtime_counts.remaining_fuel);
         self.used_fuel += used_fuel;
-        sub_assign_fees_internal(balance, policy.fuel_price(used_fuel)?)?;
+        Self::sub_assign_fees(balance, policy.fuel_price(used_fuel)?)?;
         // The number of reads
-        sub_assign_fees_internal(
+        Self::sub_assign_fees(
             balance,
             policy.storage_num_reads_price(&runtime_counts.num_reads)?,
         )?;
@@ -139,12 +139,12 @@ impl ResourceTracker {
         let bytes_read = runtime_counts.bytes_read;
         self.maximum_bytes_left_to_read -= bytes_read;
         self.bytes_read += runtime_counts.bytes_read;
-        sub_assign_fees_internal(balance, policy.storage_bytes_read_price(&bytes_read)?)?;
+        Self::sub_assign_fees(balance, policy.storage_bytes_read_price(&bytes_read)?)?;
         // The number of bytes written
         let bytes_written = runtime_counts.bytes_written;
         self.maximum_bytes_left_to_write -= bytes_written;
         self.bytes_written += bytes_written;
-        sub_assign_fees_internal(balance, policy.storage_bytes_written_price(&bytes_written)?)?;
+        Self::sub_assign_fees(balance, policy.storage_bytes_written_price(&bytes_written)?)?;
         Ok(())
     }
 
