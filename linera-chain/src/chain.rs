@@ -533,6 +533,30 @@ where
             maximum_bytes_left_to_read,
             maximum_bytes_left_to_write,
         };
+        // The first incoming message of any child chain must be `OpenChain`. A root chain must
+        // already be initialized
+        if block.height == BlockHeight::ZERO
+            && self
+                .execution_state
+                .system
+                .description
+                .get()
+                .map_or(true, |description| description.is_child())
+        {
+            ensure!(
+                matches!(
+                    block.incoming_messages.first(),
+                    Some(IncomingMessage {
+                        event: Event {
+                            message: Message::System(SystemMessage::OpenChain { .. }),
+                            ..
+                        },
+                        ..
+                    })
+                ),
+                ChainError::InactiveChain(self.chain_id())
+            );
+        }
         for (index, message) in block.incoming_messages.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             // Execute the received message.

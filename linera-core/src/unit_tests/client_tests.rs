@@ -22,14 +22,15 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_chain::{
-    data_types::{CertificateValue, ExecutedBlock},
+    data_types::{CertificateValue, Event, ExecutedBlock},
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
     policy::ResourceControlPolicy,
     system::{Account, Recipient, SystemOperation, UserData},
-    ChainOwnership, ExecutionError, Operation, SystemExecutionError, SystemQuery, SystemResponse,
+    ChainOwnership, ExecutionError, Message, Operation, SystemExecutionError, SystemMessage,
+    SystemQuery, SystemResponse,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -682,15 +683,22 @@ where
         client.local_balance().await.unwrap(),
         Amount::from_tokens(3)
     );
-    client
+    let result = client
         .transfer_to_account(
             None,
             Amount::from_tokens(3),
             Account::chain(ChainId::root(3)),
             UserData::default(),
         )
-        .await
-        .unwrap();
+        .await;
+    assert!(matches!(
+        result,
+        Err(ChainClientError::LocalNodeError(
+            LocalNodeError::WorkerError(WorkerError::ChainError(error))
+        )) if matches!(*error, ChainError::UnskippableMessage {
+            event: Event { message: Message::System(SystemMessage::Credit { .. }), .. }, ..
+        })
+    ));
     Ok(())
 }
 

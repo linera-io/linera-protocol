@@ -307,9 +307,8 @@ where
         let response = self.node_client.handle_chain_info_query(query).await?;
         let mut requested_pending_messages = response.info.requested_pending_messages;
         let mut pending_messages = vec![];
-        // If this is the first block, it must contain `OpenChain`. To avoid skipping messages,
-        // we first take all messages sent from the parent chain, in order. This should include
-        // `OpenChain`.
+        // The first incoming message of any child chain must be `OpenChain`. We must have it in
+        // our inbox, and include it before all other messages.
         if self.next_block_height == BlockHeight::ZERO
             && self
                 .chain_state_view()
@@ -321,20 +320,16 @@ where
                 .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id))?
                 .is_child()
         {
-            let Some(origin) = requested_pending_messages.iter().find_map(|message| {
+            let Some(index) = requested_pending_messages.iter().position(|message| {
                 matches!(
                     message.event.message,
                     Message::System(SystemMessage::OpenChain { .. })
                 )
-                .then(|| message.origin.clone())
             }) else {
                 return Err(LocalNodeError::InactiveChain(self.chain_id));
             };
-            let (parent_messages, other_messages) = requested_pending_messages
-                .drain(..)
-                .partition(|message| message.origin == origin);
-            requested_pending_messages = other_messages;
-            pending_messages.extend(parent_messages.into_iter().take(self.max_pending_messages));
+            let open_chain_message = requested_pending_messages.remove(index);
+            pending_messages.push(open_chain_message);
         }
         for message in requested_pending_messages {
             if pending_messages.len() >= self.max_pending_messages {

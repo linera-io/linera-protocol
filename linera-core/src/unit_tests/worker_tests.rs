@@ -2683,21 +2683,6 @@ where
         HashedValue::new_confirmed(ExecutedBlock {
             block: make_first_block(user_id)
                 .with_incoming_message(IncomingMessage {
-                    origin: admin_channel_origin.clone(),
-                    event: Event {
-                        certificate_hash: certificate1.value.hash(),
-                        height: BlockHeight::from(1),
-                        index: 0,
-                        authenticated_signer: None,
-                        is_skippable: false,
-                        timestamp: Timestamp::from(0),
-                        message: Message::System(SystemMessage::SetCommittees {
-                            epoch: Epoch::from(1),
-                            committees: committees2.clone(),
-                        }),
-                    },
-                })
-                .with_incoming_message(IncomingMessage {
                     origin: Origin::chain(admin_id),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -2712,6 +2697,21 @@ where
                             committees: committees.clone(),
                             admin_id,
                             balance: Amount::ZERO,
+                        }),
+                    },
+                })
+                .with_incoming_message(IncomingMessage {
+                    origin: admin_channel_origin.clone(),
+                    event: Event {
+                        certificate_hash: certificate1.value.hash(),
+                        height: BlockHeight::from(1),
+                        index: 0,
+                        authenticated_signer: None,
+                        is_skippable: false,
+                        timestamp: Timestamp::from(0),
+                        message: Message::System(SystemMessage::SetCommittees {
+                            epoch: Epoch::from(1),
+                            committees: committees2.clone(),
                         }),
                     },
                 })
