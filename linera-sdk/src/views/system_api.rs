@@ -6,6 +6,11 @@
 use super::view_system_api as wit;
 use crate::util::yield_once;
 use async_trait::async_trait;
+
+=======
+use futures::future;
+use linera_base::ensure;
+>>>>>>> 072d8df8 (Systematic use of ensure! for the tests.)
 use linera_views::{
     batch::{Batch, WriteOperation},
     common::{ContextFromDb, KeyValueStoreClient},
@@ -56,9 +61,7 @@ impl KeyValueStoreClient for KeyValueStore {
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        if key.len() > MAX_KEY_SIZE {
-            return Err(ViewError::KeyTooLong);
-        }
+        ensure!(key.len() <= MAX_KEY_SIZE, ViewError::KeyTooLong);
         let promise = wit::ReadValueBytes::new(key);
         yield_once().await;
         Ok(promise.wait())
@@ -70,9 +73,7 @@ impl KeyValueStoreClient for KeyValueStore {
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         let mut results = Vec::new();
         for key in keys {
-            if key.len() > MAX_KEY_SIZE {
-                return Err(ViewError::KeyTooLong);
-            }
+            ensure!(key.len() <= MAX_KEY_SIZE, ViewError::KeyTooLong);
             let value = self.read_value_bytes(&key).await?;
             results.push(value);
         }
@@ -80,9 +81,7 @@ impl KeyValueStoreClient for KeyValueStore {
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, ViewError> {
-        if key_prefix.len() > MAX_KEY_SIZE {
-            return Err(ViewError::KeyTooLong);
-        }
+        ensure!(key_prefix.len() <= MAX_KEY_SIZE, ViewError::KeyTooLong);
         let keys = self.find_keys_by_prefix_load(key_prefix).await;
         Ok(keys)
     }
@@ -91,9 +90,7 @@ impl KeyValueStoreClient for KeyValueStore {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, ViewError> {
-        if key_prefix.len() > MAX_KEY_SIZE {
-            return Err(ViewError::KeyTooLong);
-        }
+        ensure!(key_prefix.len() <= MAX_KEY_SIZE, ViewError::KeyTooLong);
         let key_values = self.find_key_values_by_prefix_load(key_prefix).await;
         Ok(key_values)
     }
@@ -103,21 +100,15 @@ impl KeyValueStoreClient for KeyValueStore {
         for operation in &batch.operations {
             match operation {
                 WriteOperation::Delete { key } => {
-                    if key.len() > MAX_KEY_SIZE {
-                        return Err(ViewError::KeyTooLong);
-                    }
+                    ensure!(key.len() <= MAX_KEY_SIZE, ViewError::KeyTooLong);
                     operations.push(wit::WriteOperation::Delete(key));
                 }
                 WriteOperation::Put { key, value } => {
-                    if key.len() > MAX_KEY_SIZE {
-                        return Err(ViewError::KeyTooLong);
-                    }
+                    ensure!(key.len() <= MAX_KEY_SIZE, ViewError::KeyTooLong);
                     operations.push(wit::WriteOperation::Put((key, value)))
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    if key_prefix.len() > MAX_KEY_SIZE {
-                        return Err(ViewError::KeyTooLong);
-                    }
+                    ensure!(key_prefix.len() <= MAX_KEY_SIZE, ViewError::KeyTooLong);
                     operations.push(wit::WriteOperation::Deleteprefix(key_prefix))
                 }
             }

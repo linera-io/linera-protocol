@@ -8,6 +8,7 @@ use crate::{
     value_splitting::{DatabaseConsistencyError, ValueSplittingKeyValueStoreClient},
 };
 use async_trait::async_trait;
+use linera_base::ensure;
 use std::{
     fs,
     ops::{Bound, Bound::Excluded},
@@ -65,9 +66,7 @@ impl KeyValueStoreClient for RocksDbClientInternal {
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
-        if key.len() > MAX_KEY_SIZE {
-            return Err(RocksDbContextError::KeyTooLong);
-        }
+        ensure!(key.len() <= MAX_KEY_SIZE, RocksDbContextError::KeyTooLong);
         let client = self.clone();
         let key = key.to_vec();
         Ok(tokio::task::spawn_blocking(move || client.db.get(&key)).await??)
@@ -78,9 +77,7 @@ impl KeyValueStoreClient for RocksDbClientInternal {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbContextError> {
         for key in &keys {
-            if key.len() > MAX_KEY_SIZE {
-                return Err(RocksDbContextError::KeyTooLong);
-            }
+            ensure!(key.len() <= MAX_KEY_SIZE, RocksDbContextError::KeyTooLong);
         }
         let client = self.clone();
         let entries = tokio::task::spawn_blocking(move || client.db.multi_get(&keys)).await?;
@@ -91,9 +88,10 @@ impl KeyValueStoreClient for RocksDbClientInternal {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::Keys, RocksDbContextError> {
-        if key_prefix.len() > MAX_KEY_SIZE {
-            return Err(RocksDbContextError::KeyTooLong);
-        }
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            RocksDbContextError::KeyTooLong
+        );
         let client = self.clone();
         let prefix = key_prefix.to_vec();
         let len = prefix.len();
@@ -120,9 +118,10 @@ impl KeyValueStoreClient for RocksDbClientInternal {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, RocksDbContextError> {
-        if key_prefix.len() > MAX_KEY_SIZE {
-            return Err(RocksDbContextError::KeyTooLong);
-        }
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            RocksDbContextError::KeyTooLong
+        );
         let client = self.clone();
         let prefix = key_prefix.to_vec();
         let len = prefix.len();
@@ -179,21 +178,18 @@ impl KeyValueStoreClient for RocksDbClientInternal {
             for operation in batch.operations {
                 match operation {
                     WriteOperation::Delete { key } => {
-                        if key.len() > MAX_KEY_SIZE {
-                            return Err(RocksDbContextError::KeyTooLong);
-                        }
+                        ensure!(key.len() <= MAX_KEY_SIZE, RocksDbContextError::KeyTooLong);
                         inner_batch.delete(&key)
                     }
                     WriteOperation::Put { key, value } => {
-                        if key.len() > MAX_KEY_SIZE {
-                            return Err(RocksDbContextError::KeyTooLong);
-                        }
+                        ensure!(key.len() <= MAX_KEY_SIZE, RocksDbContextError::KeyTooLong);
                         inner_batch.put(&key, value)
                     }
                     WriteOperation::DeletePrefix { key_prefix } => {
-                        if key_prefix.len() > MAX_KEY_SIZE {
-                            return Err(RocksDbContextError::KeyTooLong);
-                        }
+                        ensure!(
+                            key_prefix.len() <= MAX_KEY_SIZE,
+                            RocksDbContextError::KeyTooLong
+                        );
                         if let Excluded(upper_bound) = get_upper_bound(&key_prefix) {
                             inner_batch.delete_range(key_prefix, upper_bound);
                         }

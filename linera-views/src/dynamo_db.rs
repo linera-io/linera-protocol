@@ -33,6 +33,7 @@ use aws_sdk_dynamodb::{
 use aws_smithy_types::error::operation::BuildError;
 use bcs::serialized_size;
 use futures::future::join_all;
+use linera_base::ensure;
 use serde::{Deserialize, Serialize};
 use static_assertions as sa;
 use std::{collections::HashMap, env, mem, str::FromStr, sync::Arc};
@@ -567,12 +568,8 @@ impl DynamoDbClientInternal {
         &self,
         key: Vec<u8>,
     ) -> Result<TransactWriteItem, DynamoDbContextError> {
-        if key.is_empty() {
-            return Err(DynamoDbContextError::ZeroLengthKey);
-        }
-        if key.len() > MAX_KEY_SIZE {
-            return Err(DynamoDbContextError::KeyTooLong);
-        }
+        ensure!(!key.is_empty(), DynamoDbContextError::ZeroLengthKey);
+        ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbContextError::KeyTooLong);
         let request = Delete::builder()
             .table_name(&self.table.0)
             .set_key(Some(build_key(key)))
@@ -585,15 +582,12 @@ impl DynamoDbClientInternal {
         key: Vec<u8>,
         value: Vec<u8>,
     ) -> Result<TransactWriteItem, DynamoDbContextError> {
-        if key.is_empty() {
-            return Err(DynamoDbContextError::ZeroLengthKey);
-        }
-        if key.len() > MAX_KEY_SIZE {
-            return Err(DynamoDbContextError::KeyTooLong);
-        }
-        if value.len() > RAW_MAX_VALUE_SIZE {
-            return Err(DynamoDbContextError::ValueLengthTooLarge);
-        }
+        ensure!(!key.is_empty(), DynamoDbContextError::ZeroLengthKey);
+        ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbContextError::KeyTooLong);
+        ensure!(
+            value.len() <= RAW_MAX_VALUE_SIZE,
+            DynamoDbContextError::ValueLengthTooLarge
+        );
         let request = Put::builder()
             .table_name(&self.table.0)
             .set_item(Some(build_key_value(key, value)))
@@ -1081,12 +1075,14 @@ impl DynamoDbClientInternal {
         attribute: &str,
         key_prefix: &[u8],
     ) -> Result<QueryResults, DynamoDbContextError> {
-        if key_prefix.is_empty() {
-            return Err(DynamoDbContextError::ZeroLengthKeyPrefix);
-        }
-        if key_prefix.len() > MAX_KEY_SIZE {
-            return Err(DynamoDbContextError::KeyPrefixTooLong);
-        }
+        ensure!(
+            !key_prefix.is_empty(),
+            DynamoDbContextError::ZeroLengthKeyPrefix
+        );
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            DynamoDbContextError::KeyPrefixTooLong
+        );
         let mut responses = Vec::new();
         let mut start_key = None;
         loop {
@@ -1127,9 +1123,7 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
-        if key.len() > MAX_KEY_SIZE {
-            return Err(DynamoDbContextError::KeyTooLong);
-        }
+        ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbContextError::KeyTooLong);
         let key_db = build_key(key.to_vec());
         self.read_value_bytes_general(key_db).await
     }
@@ -1140,9 +1134,7 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
     ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbContextError> {
         let mut handles = Vec::new();
         for key in keys {
-            if key.len() > MAX_KEY_SIZE {
-                return Err(DynamoDbContextError::KeyTooLong);
-            }
+            ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbContextError::KeyTooLong);
             let key_db = build_key(key);
             let handle = self.read_value_bytes_general(key_db);
             handles.push(handle);

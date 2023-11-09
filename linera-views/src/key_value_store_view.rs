@@ -11,6 +11,7 @@ use crate::{
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
+use linera_base::ensure;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
@@ -535,9 +536,10 @@ where
     /// # })
     /// ```
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
-        if key_prefix.len() > self.max_key_size() {
-            return Err(ViewError::KeyTooLong);
-        }
+        ensure!(
+            key_prefix.len() <= self.max_key_size(),
+            ViewError::KeyTooLong
+        );
         let len = key_prefix.len();
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut keys = Vec::new();
@@ -607,9 +609,10 @@ where
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
-        if key_prefix.len() > self.max_key_size() {
-            return Err(ViewError::KeyTooLong);
-        }
+        ensure!(
+            key_prefix.len() <= self.max_key_size(),
+            ViewError::KeyTooLong
+        );
         let len = key_prefix.len();
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut key_values = Vec::new();
@@ -685,9 +688,7 @@ where
         for op in batch.operations {
             match op {
                 WriteOperation::Delete { key } => {
-                    if key.len() > max_key_size {
-                        return Err(ViewError::KeyTooLong);
-                    }
+                    ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     if self.was_cleared {
                         self.updates.remove(&key);
                     } else {
@@ -695,15 +696,11 @@ where
                     }
                 }
                 WriteOperation::Put { key, value } => {
-                    if key.len() > max_key_size {
-                        return Err(ViewError::KeyTooLong);
-                    }
+                    ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     self.updates.insert(key, Update::Set(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    if key_prefix.len() > max_key_size {
-                        return Err(ViewError::KeyTooLong);
-                    }
+                    ensure!(key_prefix.len() <= max_key_size, ViewError::KeyTooLong);
                     self.delete_prefix(key_prefix);
                 }
             }

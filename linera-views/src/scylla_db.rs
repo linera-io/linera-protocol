@@ -29,6 +29,7 @@ use crate::{
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use futures::future::join_all;
+use linera_base::ensure;
 use scylla::{
     frame::request::batch::BatchType,
     query::Query,
@@ -192,9 +193,7 @@ impl ScyllaDbClientInternal {
         client: &ScyllaDbClientPair,
         key: Vec<u8>,
     ) -> Result<Option<Vec<u8>>, ScyllaDbContextError> {
-        if key.len() > MAX_KEY_SIZE {
-            return Err(ScyllaDbContextError::KeyTooLong);
-        }
+        ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
         let session = &client.0;
         let table_name = &client.1;
         // Read the value of a key
@@ -235,9 +234,10 @@ impl ScyllaDbClientInternal {
             table_name
         );
         for key_prefix in unordered_batch.key_prefix_deletions {
-            if key_prefix.len() > MAX_KEY_SIZE {
-                return Err(ScyllaDbContextError::KeyTooLong);
-            }
+            ensure!(
+                key_prefix.len() <= MAX_KEY_SIZE,
+                ScyllaDbContextError::KeyTooLong
+            );
             match get_upper_bound_option(&key_prefix) {
                 None => {
                     let values = vec![key_prefix];
@@ -262,9 +262,7 @@ impl ScyllaDbClientInternal {
             table_name
         );
         for (key, value) in unordered_batch.simple_unordered_batch.insertions {
-            if key.len() > MAX_KEY_SIZE {
-                return Err(ScyllaDbContextError::KeyTooLong);
-            }
+            ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
             let values = vec![key, value];
             batch_values.push(values);
             batch_query.append_statement(Query::new(query4.clone()));
@@ -277,9 +275,10 @@ impl ScyllaDbClientInternal {
         client: &ScyllaDbClientPair,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, ScyllaDbContextError> {
-        if key_prefix.len() > MAX_KEY_SIZE {
-            return Err(ScyllaDbContextError::KeyTooLong);
-        }
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            ScyllaDbContextError::KeyTooLong
+        );
         let session = &client.0;
         let table_name = &client.1;
         // Read the value of a key
@@ -317,9 +316,10 @@ impl ScyllaDbClientInternal {
         client: &ScyllaDbClientPair,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ScyllaDbContextError> {
-        if key_prefix.len() > MAX_KEY_SIZE {
-            return Err(ScyllaDbContextError::KeyTooLong);
-        }
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            ScyllaDbContextError::KeyTooLong
+        );
         let session = &client.0;
         let table_name = &client.1;
         // Read the value of a key
