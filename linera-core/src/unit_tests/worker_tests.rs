@@ -42,7 +42,10 @@ use linera_views::{
     views::{CryptoHashView, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, iter};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    iter,
+};
 use test_log::test;
 
 #[cfg(feature = "rocksdb")]
@@ -1342,6 +1345,100 @@ where
         .fully_handle_certificate(certificate, vec![])
         .await,
         Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InactiveChain {..})));
+}
+
+#[test(tokio::test)]
+async fn test_memory_handle_certificate_with_open_chain() {
+    let store = MemoryStoreClient::make_test_store(None).await;
+    run_test_handle_certificate_with_open_chain(store).await;
+}
+
+#[cfg(feature = "rocksdb")]
+#[test(tokio::test)]
+async fn test_rocks_db_handle_certificate_with_open_chain() {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let store = RocksDbStore::make_test_store(None).await;
+    run_test_handle_certificate_with_open_chain(store).await;
+}
+
+#[cfg(feature = "aws")]
+#[test(tokio::test)]
+async fn test_dynamo_db_handle_certificate_with_open_chain() {
+    let store = DynamoDbStore::make_test_store(None).await;
+    run_test_handle_certificate_with_open_chain(store).await;
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_certificate_with_open_chain() {
+    let store = ScyllaDbStore::make_test_store(None).await;
+    run_test_handle_certificate_with_open_chain(store).await;
+}
+
+async fn run_test_handle_certificate_with_open_chain<S>(store: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
+    let sender_key_pair = KeyPair::generate();
+    let (committee, mut worker) = init_worker_with_chains(
+        store,
+        vec![(ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO)],
+    )
+    .await;
+    let admin_id = ChainId::root(0);
+    let epoch = Epoch::ZERO;
+    let description = ChainDescription::Child(MessageId {
+        chain_id: ChainId::root(3),
+        height: BlockHeight::ZERO,
+        index: 0,
+    });
+    let chain_id = ChainId::from(description);
+    let ownership = ChainOwnership::single(sender_key_pair.public());
+    let committees = BTreeMap::from_iter([(epoch, committee.clone())]);
+    let subscriptions = BTreeSet::from_iter([ChannelSubscription {
+        chain_id: admin_id,
+        name: SystemChannel::Admin.name(),
+    }]);
+    let balance = Amount::from_tokens(42);
+    let state = SystemExecutionState {
+        committees: committees.clone(),
+        ownership: ownership.clone(),
+        balance,
+        subscriptions,
+        ..make_state(epoch, description, admin_id)
+    };
+    let open_chain_message = IncomingMessage {
+        origin: Origin::chain(ChainId::root(3)),
+        event: Event {
+            certificate_hash: CryptoHash::new(&Dummy),
+            height: BlockHeight::ZERO,
+            index: 0,
+            authenticated_signer: None,
+            is_skippable: false,
+            timestamp: Timestamp::from(0),
+            message: Message::System(SystemMessage::OpenChain {
+                ownership,
+                admin_id,
+                epoch,
+                committees,
+                balance,
+            }),
+        },
+    };
+    let value = HashedValue::new_confirmed(ExecutedBlock {
+        block: make_first_block(chain_id).with_incoming_message(open_chain_message),
+        messages: vec![],
+        message_counts: vec![0],
+        state_hash: make_state_hash(state).await,
+    });
+    let certificate = make_certificate(&committee, &worker, value);
+    let info = worker
+        .fully_handle_certificate(certificate, vec![])
+        .await
+        .unwrap()
+        .info;
+    assert_eq!(info.next_block_height, BlockHeight::from(1));
 }
 
 #[test(tokio::test)]
