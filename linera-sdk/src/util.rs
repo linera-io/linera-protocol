@@ -74,9 +74,9 @@ where
 /// Unit tests for the helpers defined in the `util` module.
 #[cfg(test)]
 mod tests {
-    use super::yield_once;
-    use futures::{task::noop_waker, FutureExt};
-    use std::task::Context;
+    use super::{yield_once, BlockingWait};
+    use futures::{future::poll_fn, task::noop_waker, FutureExt};
+    use std::task::{Context, Poll};
 
     /// Tests the behavior of the [`YieldOnce`] future.
     ///
@@ -95,5 +95,24 @@ mod tests {
         assert_eq!(future.yielded, true);
         assert!(future.poll_unpin(&mut context).is_ready());
         assert_eq!(future.yielded, true);
+    }
+
+    /// Tests the behavior of the [`BlockingWait`] extension.
+    #[test]
+    fn blocking_wait_blocks_until_future_is_ready() {
+        let mut remaining_polls = 100;
+
+        let future = poll_fn(|_context| {
+            if remaining_polls == 0 {
+                Poll::Ready(())
+            } else {
+                remaining_polls -= 1;
+                Poll::Pending
+            }
+        });
+
+        future.blocking_wait();
+
+        assert_eq!(remaining_polls, 0);
     }
 }
