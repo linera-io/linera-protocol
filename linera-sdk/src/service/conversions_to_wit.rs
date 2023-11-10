@@ -8,7 +8,6 @@ use linera_base::{
     crypto::CryptoHash,
     identifiers::{ApplicationId, MessageId},
 };
-use std::task::Poll;
 
 impl From<log::Level> for wit_system_api::LogLevel {
     fn from(level: log::Level) -> Self {
@@ -44,17 +43,6 @@ impl From<CryptoHash> for wit_types::CryptoHash {
             part2: parts[1],
             part3: parts[2],
             part4: parts[3],
-        }
-    }
-}
-
-impl From<Poll<Result<Vec<u8>, String>>> for wit_types::PollApplicationQueryResult {
-    fn from(poll: Poll<Result<Vec<u8>, String>>) -> Self {
-        use wit_types::PollApplicationQueryResult;
-        match poll {
-            Poll::Pending => PollApplicationQueryResult::Pending,
-            Poll::Ready(Ok(response)) => PollApplicationQueryResult::Ready(Ok(response)),
-            Poll::Ready(Err(message)) => PollApplicationQueryResult::Ready(Err(message)),
         }
     }
 }

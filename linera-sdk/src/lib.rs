@@ -39,7 +39,6 @@
 
 pub mod base;
 pub mod contract;
-mod exported_future;
 mod extensions;
 pub mod graphql;
 mod log;
@@ -48,12 +47,10 @@ pub mod service;
 #[cfg_attr(not(target_arch = "wasm32"), path = "./test/integration/mod.rs")]
 #[cfg_attr(target_arch = "wasm32", path = "./test/unit/mod.rs")]
 pub mod test;
+pub mod util;
 pub mod views;
 
-use crate::{
-    contract::exported_futures::ContractStateStorage,
-    service::exported_futures::ServiceStateStorage,
-};
+use self::contract::ContractStateStorage;
 use async_trait::async_trait;
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
@@ -64,11 +61,11 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{error::Error, fmt::Debug, sync::Arc};
 
 pub use self::{
-    exported_future::ExportedFuture,
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
+    service::ServiceStateStorage,
 };
-pub use linera_base::ensure;
+pub use linera_base::{abi, ensure};
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
 

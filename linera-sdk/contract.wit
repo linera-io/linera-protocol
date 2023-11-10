@@ -1,50 +1,27 @@
-resource initialize {
-    static new: func(
-        context: operation-context,
-        argument: list<u8>,
-    ) -> initialize
+initialize: func(context: operation-context, argument: list<u8>) -> result<execution-result, string>
 
-    poll: func() -> poll-execution-result
-}
+execute-operation: func(
+    context: operation-context,
+    operation: list<u8>,
+) -> result<execution-result, string>
 
-resource execute-operation {
-    static new: func(
-        context: operation-context,
-        operation: list<u8>,
-    ) -> execute-operation
+execute-message: func(
+    context: message-context,
+    message: list<u8>,
+) -> result<execution-result, string>
 
-    poll: func() -> poll-execution-result
-}
+handle-application-call: func(
+    context: callee-context,
+    argument: list<u8>,
+    forwarded-sessions: list<session-id>,
+) -> result<application-call-result, string>
 
-resource execute-message {
-    static new: func(
-        context: message-context,
-        message: list<u8>,
-    ) -> execute-message
-
-    poll: func() -> poll-execution-result
-}
-
-resource handle-application-call {
-    static new: func(
-        context: callee-context,
-        argument: list<u8>,
-        forwarded-sessions: list<session-id>,
-    ) -> handle-application-call
-
-    poll: func() -> poll-application-call-result
-}
-
-resource handle-session-call {
-    static new: func(
-        context: callee-context,
-        state: session-state,
-        argument: list<u8>,
-        forwarded-sessions: list<session-id>,
-    ) -> handle-session-call
-
-    poll: func() -> poll-session-call-result
-}
+handle-session-call: func(
+    context: callee-context,
+    state: session-state,
+    argument: list<u8>,
+    forwarded-sessions: list<session-id>,
+) -> result<session-call-result, string>
 
 record operation-context {
     chain-id: chain-id,
@@ -81,21 +58,6 @@ type chain-id = crypto-hash
 type owner = crypto-hash
 type block-height = u64
 type bytecode-id = message-id
-
-variant poll-execution-result {
-    pending,
-    ready(result<execution-result, string>),
-}
-
-variant poll-application-call-result {
-    pending,
-    ready(result<application-call-result, string>),
-}
-
-variant poll-session-call-result {
-    pending,
-    ready(result<session-call-result, string>),
-}
 
 record application-call-result {
     value: list<u8>,

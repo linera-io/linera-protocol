@@ -4,31 +4,23 @@
 //! Functions and types to interface with the system API available to application services.
 
 use super::service_system_api as wit;
-use crate::views::ViewStorageContext;
-use futures::future;
+use crate::{util::yield_once, views::ViewStorageContext};
 use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::{ApplicationId, ChainId},
 };
-use linera_views::views::{View, ViewError};
+use linera_views::views::View;
 use serde::de::DeserializeOwned;
-use std::{fmt, future::Future, task::Poll};
+use std::fmt;
 
 /// Loads the application state, without locking it for writes.
 pub(crate) async fn load<State>() -> State
 where
     State: Default + DeserializeOwned,
 {
-    let future = wit::Load::new();
-    load_using(future::poll_fn(|_context| future.poll().into())).await
-}
-
-/// Helper function to load the application state or create a new one if it doesn't exist.
-async fn load_using<State>(future: impl Future<Output = Result<Vec<u8>, String>>) -> State
-where
-    State: Default + DeserializeOwned,
-{
-    let bytes = future.await.expect("Failed to load application state");
+    let promise = wit::Load::new();
+    yield_once().await;
+    let bytes = promise.wait().expect("Failed to load application state");
     if bytes.is_empty() {
         State::default()
     } else {
@@ -38,17 +30,17 @@ where
 
 /// Loads the application state (and locks it for writes).
 pub(crate) async fn lock_and_load_view<State: View<ViewStorageContext>>() -> State {
-    let future = wit::Lock::new();
-    future::poll_fn(|_context| -> Poll<Result<(), ViewError>> { future.poll().into() })
-        .await
-        .expect("Failed to lock application state");
+    let promise = wit::Lock::new();
+    yield_once().await;
+    promise.wait().expect("Failed to lock application state");
     load_view_using::<State>().await
 }
 
 /// Unlocks the service state previously loaded.
 pub(crate) async fn unlock_view() {
-    let future = wit::Unlock::new();
-    future::poll_fn(|_context| future.poll().into()).await;
+    let promise = wit::Unlock::new();
+    yield_once().await;
+    promise.wait().expect("Failed to unlock application state");
 }
 
 /// Helper function to load the service state or create a new one if it doesn't exist.
@@ -89,9 +81,9 @@ pub(crate) async fn query_application(
     application: ApplicationId,
     argument: &[u8],
 ) -> Result<Vec<u8>, String> {
-    let future = wit::TryQueryApplication::new(application.into(), argument);
-
-    future::poll_fn(|_context| future.poll().into()).await
+    let promise = wit::TryQueryApplication::new(application.into(), argument);
+    yield_once().await;
+    promise.wait()
 }
 
 /// Requests the host to log a message.

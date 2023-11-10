@@ -31,19 +31,17 @@ wit_bindgen_host_wasmer_rust::import!("service.wit");
 mod conversions_from_wit;
 #[path = "conversions_to_wit.rs"]
 mod conversions_to_wit;
-#[path = "guest_futures.rs"]
-mod guest_futures;
 
 use super::{
     async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     module_cache::ModuleCache,
     runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
-    WasmApplication, WasmExecutionError,
+    ApplicationCallResult, SessionCallResult, WasmApplication, WasmExecutionError,
 };
 use crate::{
     Bytecode, CalleeContext, ContractRuntime, ExecutionError, MessageContext, OperationContext,
-    QueryContext, ServiceRuntime,
+    QueryContext, RawExecutionResult, ServiceRuntime,
 };
 use bytes::Bytes;
 use futures::{channel::mpsc, TryFutureExt};
@@ -243,109 +241,72 @@ impl WasmApplication {
 }
 
 impl common::Contract for Contract {
-    type Initialize = contract::Initialize;
-    type ExecuteOperation = contract::ExecuteOperation;
-    type ExecuteMessage = contract::ExecuteMessage;
-    type HandleApplicationCall = contract::HandleApplicationCall;
-    type HandleSessionCall = contract::HandleSessionCall;
-    type PollExecutionResult = contract::PollExecutionResult;
-    type PollApplicationCallResult = contract::PollApplicationCallResult;
-    type PollSessionCallResult = contract::PollSessionCallResult;
-
-    fn initialize_new(
+    fn initialize(
         &self,
         store: &mut Store,
         context: OperationContext,
         argument: Vec<u8>,
-    ) -> Result<contract::Initialize, RuntimeError> {
-        contract::Contract::initialize_new(&self.contract, store, context.into(), &argument)
+    ) -> Result<Result<RawExecutionResult<Vec<u8>>, String>, RuntimeError> {
+        contract::Contract::initialize(&self.contract, store, context.into(), &argument)
+            .map(|inner| inner.map(RawExecutionResult::from))
     }
 
-    fn initialize_poll(
-        &self,
-        store: &mut Store,
-        future: &contract::Initialize,
-    ) -> Result<contract::PollExecutionResult, RuntimeError> {
-        contract::Contract::initialize_poll(&self.contract, store, future)
-    }
-
-    fn execute_operation_new(
+    fn execute_operation(
         &self,
         store: &mut Store,
         context: OperationContext,
         operation: Vec<u8>,
-    ) -> Result<contract::ExecuteOperation, RuntimeError> {
-        contract::Contract::execute_operation_new(&self.contract, store, context.into(), &operation)
+    ) -> Result<Result<RawExecutionResult<Vec<u8>>, String>, RuntimeError> {
+        contract::Contract::execute_operation(&self.contract, store, context.into(), &operation)
+            .map(|inner| inner.map(RawExecutionResult::from))
     }
 
-    fn execute_operation_poll(
-        &self,
-        store: &mut Store,
-        future: &contract::ExecuteOperation,
-    ) -> Result<contract::PollExecutionResult, RuntimeError> {
-        contract::Contract::execute_operation_poll(&self.contract, store, future)
-    }
-
-    fn execute_message_new(
+    fn execute_message(
         &self,
         store: &mut Store,
         context: MessageContext,
         message: Vec<u8>,
-    ) -> Result<contract::ExecuteMessage, RuntimeError> {
-        contract::Contract::execute_message_new(&self.contract, store, context.into(), &message)
+    ) -> Result<Result<RawExecutionResult<Vec<u8>>, String>, RuntimeError> {
+        contract::Contract::execute_message(&self.contract, store, context.into(), &message)
+            .map(|inner| inner.map(RawExecutionResult::from))
     }
 
-    fn execute_message_poll(
-        &self,
-        store: &mut Store,
-        future: &contract::ExecuteMessage,
-    ) -> Result<contract::PollExecutionResult, RuntimeError> {
-        contract::Contract::execute_message_poll(&self.contract, store, future)
-    }
-
-    fn handle_application_call_new(
+    fn handle_application_call(
         &self,
         store: &mut Store,
         context: CalleeContext,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<contract::HandleApplicationCall, RuntimeError> {
+    ) -> Result<Result<ApplicationCallResult, String>, RuntimeError> {
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()
             .map(contract::SessionId::from)
             .collect();
 
-        contract::Contract::handle_application_call_new(
+        contract::Contract::handle_application_call(
             &self.contract,
             store,
             context.into(),
             &argument,
             &forwarded_sessions,
         )
+        .map(|inner| inner.map(ApplicationCallResult::from))
     }
 
-    fn handle_application_call_poll(
-        &self,
-        store: &mut Store,
-        future: &contract::HandleApplicationCall,
-    ) -> Result<contract::PollApplicationCallResult, RuntimeError> {
-        contract::Contract::handle_application_call_poll(&self.contract, store, future)
-    }
-
-    fn handle_session_call_new(
+    fn handle_session_call(
         &self,
         store: &mut Store,
         context: CalleeContext,
         session: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<contract::HandleSessionCall, RuntimeError> {
+    ) -> Result<Result<(SessionCallResult, Vec<u8>), String>, RuntimeError> {
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()
             .map(contract::SessionId::from)
             .collect();
 
-        contract::Contract::handle_session_call_new(
+        contract::Contract::handle_session_call(
             &self.contract,
             store,
             context.into(),
@@ -353,36 +314,18 @@ impl common::Contract for Contract {
             &argument,
             &forwarded_sessions,
         )
-    }
-
-    fn handle_session_call_poll(
-        &self,
-        store: &mut Store,
-        future: &contract::HandleSessionCall,
-    ) -> Result<contract::PollSessionCallResult, RuntimeError> {
-        contract::Contract::handle_session_call_poll(&self.contract, store, future)
+        .map(|inner| inner.map(<(SessionCallResult, Vec<u8>)>::from))
     }
 }
 
 impl common::Service for Service {
-    type HandleQuery = service::HandleQuery;
-    type PollApplicationQueryResult = service::PollApplicationQueryResult;
-
-    fn handle_query_new(
+    fn handle_query(
         &self,
         store: &mut Store,
         context: QueryContext,
         argument: Vec<u8>,
-    ) -> Result<service::HandleQuery, RuntimeError> {
-        service::Service::handle_query_new(&self.service, store, context.into(), &argument)
-    }
-
-    fn handle_query_poll(
-        &self,
-        store: &mut Store,
-        future: &service::HandleQuery,
-    ) -> Result<service::PollApplicationQueryResult, RuntimeError> {
-        service::Service::handle_query_poll(&self.service, store, future)
+    ) -> Result<Result<Vec<u8>, String>, RuntimeError> {
+        service::Service::handle_query(&self.service, store, context.into(), &argument)
     }
 }
 

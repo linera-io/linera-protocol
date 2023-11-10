@@ -4,8 +4,8 @@
 //! Functions and types to interface with the system API available to application views.
 
 use super::view_system_api as wit;
+use crate::util::yield_once;
 use async_trait::async_trait;
-use futures::future;
 use linera_views::{
     batch::{Batch, WriteOperation},
     common::{ContextFromDb, KeyValueStoreClient},
@@ -18,13 +18,15 @@ pub struct KeyValueStore;
 
 impl KeyValueStore {
     async fn find_keys_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
-        let future = wit::FindKeys::new(key_prefix);
-        future::poll_fn(|_context| future.poll().into()).await
+        let promise = wit::FindKeys::new(key_prefix);
+        yield_once().await;
+        promise.wait()
     }
 
     async fn find_key_values_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
-        let future = wit::FindKeyValues::new(key_prefix);
-        future::poll_fn(|_context| future.poll().into()).await
+        let promise = wit::FindKeyValues::new(key_prefix);
+        yield_once().await;
+        promise.wait()
     }
 }
 
@@ -42,8 +44,9 @@ impl KeyValueStoreClient for KeyValueStore {
     }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        let future = wit::ReadKeyBytes::new(key);
-        Ok(future::poll_fn(|_context| future.poll().into()).await)
+        let promise = wit::ReadKeyBytes::new(key);
+        yield_once().await;
+        Ok(promise.wait())
     }
 
     async fn read_multi_key_bytes(
@@ -86,8 +89,9 @@ impl KeyValueStoreClient for KeyValueStore {
                 }
             }
         }
-        let future = wit::WriteBatch::new(&list_oper);
-        let () = future::poll_fn(|_context| future.poll().into()).await;
+        let promise = wit::WriteBatch::new(&list_oper);
+        yield_once().await;
+        promise.wait();
         Ok(())
     }
 

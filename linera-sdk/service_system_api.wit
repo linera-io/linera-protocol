@@ -16,32 +16,17 @@ enum log-level {
 
 resource load {
     static new: func() -> load
-    poll: func() -> poll-load
-}
-
-variant poll-load {
-    pending,
-    ready(result<list<u8>, string>),
+    wait: func() -> result<list<u8>, string>
 }
 
 resource lock {
     static new: func() -> lock
-    poll: func() -> poll-lock
-}
-
-variant poll-lock {
-    pending,
-    ready(result<unit, string>),
+    wait: func() -> result<unit, string>
 }
 
 resource unlock {
     static new: func() -> unlock
-    poll: func() -> poll-unlock
-}
-
-variant poll-unlock {
-    pending,
-    ready(result<unit, string>),
+    wait: func() -> result<unit, string>
 }
 
 resource try-query-application {
@@ -50,7 +35,7 @@ resource try-query-application {
         query: list<u8>,
     ) -> try-query-application
 
-    poll: func() -> poll-load
+    wait: func() -> result<list<u8>, string>
 }
 
 record application-id {

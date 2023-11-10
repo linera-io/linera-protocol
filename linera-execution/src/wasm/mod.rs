@@ -10,7 +10,6 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-mod async_boundary;
 mod async_determinism;
 mod common;
 mod module_cache;
@@ -118,6 +117,8 @@ pub enum WasmExecutionError {
     WriteAttemptToReadOnlyStorage,
     #[error("Runtime failed to respond to application")]
     MissingRuntimeResponse,
+    #[error("Host future was polled after it had finished")]
+    PolledTwice,
     #[error("Execution of guest future was aborted")]
     Aborted,
 }
