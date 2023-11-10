@@ -152,6 +152,11 @@ impl ChainTipState {
         );
         Ok(self.next_block_height > height)
     }
+
+    /// Returns `true` if the next block will be the first, i.e. the chain doesn't have any blocks.
+    pub fn is_first_block(&self) -> bool {
+        self.next_block_height == BlockHeight::ZERO
+    }
 }
 
 /// The state of a channel followed by subscribers.

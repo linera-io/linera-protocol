@@ -28,6 +28,7 @@ pub enum ChainDescription {
     /// The chain was created by a message from another chain.
     Child(MessageId),
 }
+
 impl ChainDescription {
     pub fn is_child(&self) -> bool {
         matches!(self, ChainDescription::Child(_))

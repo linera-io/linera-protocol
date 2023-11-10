@@ -547,9 +547,7 @@ where
             .await;
             return Ok((info, actions));
         }
-        if tip.next_block_height == BlockHeight::ZERO
-            && chain.execution_state.system.description.get().is_none()
-        {
+        if tip.is_first_block() && !chain.is_active() {
             let now = self.storage.current_time();
             for message in &block.incoming_messages {
                 chain
