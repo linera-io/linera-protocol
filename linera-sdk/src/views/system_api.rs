@@ -4,6 +4,7 @@
 //! Functions and types to interface with the system API available to application views.
 
 use super::view_system_api as wit;
+use crate::util::yield_once;
 use async_trait::async_trait;
 use linera_views::{
     batch::{Batch, WriteOperation},
@@ -18,11 +19,13 @@ pub struct KeyValueStore;
 impl KeyValueStore {
     async fn find_keys_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
         let promise = wit::FindKeys::new(key_prefix);
+        yield_once().await;
         promise.wait()
     }
 
     async fn find_key_values_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
         let promise = wit::FindKeyValues::new(key_prefix);
+        yield_once().await;
         promise.wait()
     }
 }
@@ -42,6 +45,7 @@ impl KeyValueStoreClient for KeyValueStore {
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let promise = wit::ReadKeyBytes::new(key);
+        yield_once().await;
         Ok(promise.wait())
     }
 
@@ -86,6 +90,7 @@ impl KeyValueStoreClient for KeyValueStore {
             }
         }
         let promise = wit::WriteBatch::new(&list_oper);
+        yield_once().await;
         promise.wait();
         Ok(())
     }

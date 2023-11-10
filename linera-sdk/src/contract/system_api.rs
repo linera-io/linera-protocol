@@ -4,7 +4,7 @@
 //! Functions and types to interface with the system API available to application contracts.
 
 use super::contract_system_api as wit;
-use crate::views::ViewStorageContext;
+use crate::{util::yield_once, views::ViewStorageContext};
 use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::{ApplicationId, ChainId, SessionId},
@@ -45,6 +45,7 @@ where
 /// Loads the application state and locks it for writes.
 pub(crate) async fn load_and_lock_view<State: View<ViewStorageContext>>() -> Option<State> {
     let promise = wit::Lock::new();
+    yield_once().await;
     if matches!(promise.wait(), wit::LockResult::Locked) {
         Some(load_view_using::<State>().await)
     } else {

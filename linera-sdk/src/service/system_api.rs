@@ -4,7 +4,7 @@
 //! Functions and types to interface with the system API available to application services.
 
 use super::service_system_api as wit;
-use crate::views::ViewStorageContext;
+use crate::{util::yield_once, views::ViewStorageContext};
 use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::{ApplicationId, ChainId},
@@ -19,6 +19,7 @@ where
     State: Default + DeserializeOwned,
 {
     let promise = wit::Load::new();
+    yield_once().await;
     let bytes = promise.wait().expect("Failed to load application state");
     if bytes.is_empty() {
         State::default()
@@ -30,6 +31,7 @@ where
 /// Loads the application state (and locks it for writes).
 pub(crate) async fn lock_and_load_view<State: View<ViewStorageContext>>() -> State {
     let promise = wit::Lock::new();
+    yield_once().await;
     promise.wait().expect("Failed to lock application state");
     load_view_using::<State>().await
 }
@@ -37,6 +39,7 @@ pub(crate) async fn lock_and_load_view<State: View<ViewStorageContext>>() -> Sta
 /// Unlocks the service state previously loaded.
 pub(crate) async fn unlock_view() {
     let promise = wit::Unlock::new();
+    yield_once().await;
     promise.wait().expect("Failed to unlock application state");
 }
 
@@ -79,6 +82,7 @@ pub(crate) async fn query_application(
     argument: &[u8],
 ) -> Result<Vec<u8>, String> {
     let promise = wit::TryQueryApplication::new(application.into(), argument);
+    yield_once().await;
     promise.wait()
 }
 
