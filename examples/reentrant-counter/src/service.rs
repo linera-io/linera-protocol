@@ -45,7 +45,9 @@ pub enum Error {
 mod tests {
     use crate::ReentrantCounter;
     use futures::FutureExt;
-    use linera_sdk::{base::ChainId, test, views::ViewStorageContext, QueryContext, Service};
+    use linera_sdk::{
+        base::ChainId, test, util::BlockingWait, views::ViewStorageContext, QueryContext, Service,
+    };
     use linera_views::views::View;
     use std::sync::Arc;
     use webassembly_test::webassembly_test;
@@ -55,8 +57,7 @@ mod tests {
         test::mock_key_value_store();
         let value = 61_098_721_u64;
         let mut counter = ReentrantCounter::load(ViewStorageContext::default())
-            .now_or_never()
-            .unwrap()
+            .blocking_wait()
             .expect("Failed to load Counter");
         counter.value.set(value);
         let counter = Arc::new(counter);
