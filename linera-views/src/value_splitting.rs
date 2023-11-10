@@ -47,13 +47,10 @@ where
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
     const MAX_VALUE_SIZE: usize = usize::MAX;
+    const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE - 4;
     type Error = K::Error;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
-
-    fn max_key_size(&self) -> usize {
-        self.client.max_key_size() - 4
-    }
 
     fn max_stream_queries(&self) -> usize {
         self.client.max_stream_queries()
@@ -290,13 +287,10 @@ impl KeyValueStoreClient for TestMemoryClientInternal {
     // We set up the MAX_VALUE_SIZE to the artificially low value of 100
     // purely for testing purposes.
     const MAX_VALUE_SIZE: usize = 100;
+    const MAX_KEY_SIZE: usize = usize::MAX;
     type Error = MemoryContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
-
-    fn max_key_size(&self) -> usize {
-        usize::MAX
-    }
 
     fn max_stream_queries(&self) -> usize {
         TEST_MEMORY_MAX_STREAM_QUERIES
@@ -357,13 +351,10 @@ pub struct TestMemoryClient {
 #[async_trait]
 impl KeyValueStoreClient for TestMemoryClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
+    const MAX_KEY_SIZE: usize = usize::MAX;
     type Error = MemoryContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
-
-    fn max_key_size(&self) -> usize {
-        usize::MAX
-    }
 
     fn max_stream_queries(&self) -> usize {
         self.client.max_stream_queries()

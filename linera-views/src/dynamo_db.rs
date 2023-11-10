@@ -1110,13 +1110,10 @@ impl DynamoDbClientInternal {
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClientInternal {
     const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
-
-    fn max_key_size(&self) -> usize {
-        MAX_KEY_SIZE
-    }
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -1190,13 +1187,10 @@ pub struct DynamoDbClient {
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClient {
     const MAX_VALUE_SIZE: usize = DynamoDbClientInternal::MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = MAX_KEY_SIZE - 4;
     type Error = DynamoDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
-
-    fn max_key_size(&self) -> usize {
-        MAX_KEY_SIZE - 4
-    }
 
     fn max_stream_queries(&self) -> usize {
         self.client.max_stream_queries()

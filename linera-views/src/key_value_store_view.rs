@@ -5,7 +5,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::{
         get_interval, get_upper_bound, Context, HasherOutput, KeyIterable, KeyValueIterable,
-        Update, MIN_VIEW_TAG,
+        Update, COMMON_MAX_KEY_SIZE, MIN_VIEW_TAG,
     },
     views::{HashableView, Hasher, View, ViewError},
 };
@@ -155,10 +155,6 @@ where
     C: Send + Context,
     ViewError: From<C::Error>,
 {
-    fn max_key_size(&self) -> usize {
-        let prefix_len = self.context.base_key().len();
-        self.context.max_key_size() - 1 - prefix_len
-    }
     /// Applies the function f over all indices. If the function f returns
     /// false, then the loop ends prematurely.
     /// ```rust
@@ -395,7 +391,7 @@ where
     /// # })
     /// ```
     pub async fn get(&self, index: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
-        if index.len() > self.max_key_size() {
+        if index.len() > COMMON_MAX_KEY_SIZE {
             return Err(ViewError::KeyTooLong);
         }
         if let Some(update) = self.updates.get(index) {
@@ -431,9 +427,8 @@ where
         let mut result = Vec::with_capacity(indices.len());
         let mut missed_indices = Vec::new();
         let mut vector_query = Vec::new();
-        let max_key_size = self.max_key_size();
         for (i, index) in indices.into_iter().enumerate() {
-            if index.len() > max_key_size {
+            if index.len() > COMMON_MAX_KEY_SIZE {
                 return Err(ViewError::KeyTooLong);
             }
             if let Some(update) = self.updates.get(&index) {
@@ -537,7 +532,7 @@ where
     /// ```
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
         ensure!(
-            key_prefix.len() <= self.max_key_size(),
+            key_prefix.len() <= COMMON_MAX_KEY_SIZE,
             ViewError::KeyTooLong
         );
         let len = key_prefix.len();
@@ -610,7 +605,7 @@ where
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
         ensure!(
-            key_prefix.len() <= self.max_key_size(),
+            key_prefix.len() <= COMMON_MAX_KEY_SIZE,
             ViewError::KeyTooLong
         );
         let len = key_prefix.len();
@@ -684,11 +679,10 @@ where
     /// ```
     pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
         *self.hash.get_mut() = None;
-        let max_key_size = self.max_key_size();
         for op in batch.operations {
             match op {
                 WriteOperation::Delete { key } => {
-                    ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
+                    ensure!(key.len() <= COMMON_MAX_KEY_SIZE, ViewError::KeyTooLong);
                     if self.was_cleared {
                         self.updates.remove(&key);
                     } else {
@@ -696,11 +690,14 @@ where
                     }
                 }
                 WriteOperation::Put { key, value } => {
-                    ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
+                    ensure!(key.len() <= COMMON_MAX_KEY_SIZE, ViewError::KeyTooLong);
                     self.updates.insert(key, Update::Set(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    ensure!(key_prefix.len() <= max_key_size, ViewError::KeyTooLong);
+                    ensure!(
+                        key_prefix.len() <= COMMON_MAX_KEY_SIZE,
+                        ViewError::KeyTooLong
+                    );
                     self.delete_prefix(key_prefix);
                 }
             }
@@ -762,7 +759,6 @@ where
 #[derive(Debug, Clone)]
 pub struct ViewContainer<C> {
     view: Arc<RwLock<KeyValueStoreView<C>>>,
-    max_key_size: usize,
 }
 
 #[cfg(any(test, feature = "test"))]
@@ -773,13 +769,10 @@ where
     ViewError: From<C::Error>,
 {
     const MAX_VALUE_SIZE: usize = C::MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = C::MAX_KEY_SIZE;
     type Error = ViewError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
-
-    fn max_key_size(&self) -> usize {
-        self.max_key_size
-    }
 
     fn max_stream_queries(&self) -> usize {
         1
@@ -909,9 +902,8 @@ where
     /// Creates a [`ViewContainer`].
     pub async fn new(context: C) -> Result<Self, ViewError> {
         let view = KeyValueStoreView::load(context).await?;
-        let max_key_size = view.max_key_size();
         let view = Arc::new(RwLock::new(view));
-        Ok(Self { view, max_key_size })
+        Ok(Self { view })
     }
 }
 

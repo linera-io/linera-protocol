@@ -53,13 +53,10 @@ pub struct RocksDbKvStoreConfig {
 #[async_trait]
 impl KeyValueStoreClient for RocksDbClientInternal {
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Error = RocksDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
-
-    fn max_key_size(&self) -> usize {
-        MAX_KEY_SIZE
-    }
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -350,13 +347,10 @@ pub type RocksDbContext<E> = ContextFromDb<E, RocksDbClient>;
 #[async_trait]
 impl KeyValueStoreClient for RocksDbClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
+    const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Error = RocksDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
-
-    fn max_key_size(&self) -> usize {
-        self.client.max_key_size()
-    }
 
     fn max_stream_queries(&self) -> usize {
         self.client.max_stream_queries()

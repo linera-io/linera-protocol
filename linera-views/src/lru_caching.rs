@@ -99,13 +99,10 @@ where
 {
     // The LRU cache does not change the underlying client's size limits.
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
     type Error = K::Error;
     type Keys = K::Keys;
     type KeyValues = K::KeyValues;
-
-    fn max_key_size(&self) -> usize {
-        self.client.max_key_size()
-    }
 
     fn max_stream_queries(&self) -> usize {
         self.client.max_stream_queries()

@@ -36,13 +36,10 @@ pub struct MemoryClient {
 #[async_trait]
 impl KeyValueStoreClient for MemoryClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
+    const MAX_KEY_SIZE: usize = usize::MAX;
     type Error = MemoryContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
-
-    fn max_key_size(&self) -> usize {
-        usize::MAX
-    }
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries

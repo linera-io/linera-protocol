@@ -38,6 +38,14 @@ pub(crate) enum Update<T> {
     Set(T),
 }
 
+/// We need to have a maximum key size that handles all possible underlying
+/// sizes. The constraint so far is DynamoDb which has a key length of 1024.
+/// That key length is decreased by 4 due to the use of a value splitting.
+/// Then the KeyValueStoreClient needs to handle some base_key and so we
+/// reduce to 900. Depending on the size, the error can occur in system_api
+/// or in the KeyValueStoreView.
+pub const COMMON_MAX_KEY_SIZE: usize = 900;
+
 /// Status of a table at the creation time of a [`KeyValueStoreClient`] instance.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TableStatus {
@@ -156,6 +164,9 @@ pub trait KeyValueStoreClient {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 
+    /// The maximal size of keys that can be stored.
+    const MAX_KEY_SIZE: usize;
+
     /// The error type.
     type Error: Debug;
 
@@ -164,9 +175,6 @@ pub trait KeyValueStoreClient {
 
     /// Returns type for key-value search operations.
     type KeyValues: KeyValueIterable<Self::Error>;
-
-    /// The maximal size of keys that can be stored.
-    fn max_key_size(&self) -> usize;
 
     /// Retrieve the number of stream queries.
     fn max_stream_queries(&self) -> usize;
@@ -305,6 +313,9 @@ pub trait Context {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 
+    /// The maximal size of keys that can be stored.
+    const MAX_KEY_SIZE: usize;
+
     /// User-provided data to be carried along.
     type Extra: Clone + Send + Sync;
 
@@ -317,9 +328,6 @@ pub trait Context {
 
     /// Returns type for key-value search operations.
     type KeyValues: KeyValueIterable<Self::Error>;
-
-    /// The maximal size of keys that can be stored.
-    fn max_key_size(&self) -> usize;
 
     /// Retrieve the number of stream queries.
     fn max_stream_queries(&self) -> usize;
@@ -497,14 +505,11 @@ where
     ViewError: From<DB::Error>,
 {
     const MAX_VALUE_SIZE: usize = DB::MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = DB::MAX_KEY_SIZE;
     type Extra = E;
     type Error = DB::Error;
     type Keys = DB::Keys;
     type KeyValues = DB::KeyValues;
-
-    fn max_key_size(&self) -> usize {
-        self.db.max_key_size()
-    }
 
     fn max_stream_queries(&self) -> usize {
         self.db.max_stream_queries()

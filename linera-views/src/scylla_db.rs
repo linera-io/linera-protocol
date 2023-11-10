@@ -115,13 +115,10 @@ impl From<ScyllaDbContextError> for crate::views::ViewError {
 #[async_trait]
 impl KeyValueStoreClient for ScyllaDbClientInternal {
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Error = ScyllaDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
-
-    fn max_key_size(&self) -> usize {
-        MAX_KEY_SIZE
-    }
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -633,13 +630,10 @@ pub struct ScyllaDbKvStoreConfig {
 #[async_trait]
 impl KeyValueStoreClient for ScyllaDbClient {
     const MAX_VALUE_SIZE: usize = ScyllaDbClientInternal::MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = ScyllaDbClientInternal::MAX_KEY_SIZE;
     type Error = <ScyllaDbClientInternal as KeyValueStoreClient>::Error;
     type Keys = <ScyllaDbClientInternal as KeyValueStoreClient>::Keys;
     type KeyValues = <ScyllaDbClientInternal as KeyValueStoreClient>::KeyValues;
-
-    fn max_key_size(&self) -> usize {
-        self.client.max_key_size()
-    }
 
     fn max_stream_queries(&self) -> usize {
         self.client.max_stream_queries()
