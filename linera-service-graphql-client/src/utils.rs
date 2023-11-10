@@ -15,7 +15,7 @@ pub enum Error {
 
 impl From<Option<Vec<graphql_client::Error>>> for Error {
     fn from(val: Option<Vec<graphql_client::Error>>) -> Self {
-        Self::GraphQLError(val.unwrap_or(Vec::new()))
+        Self::GraphQLError(val.unwrap_or_default())
     }
 }
 

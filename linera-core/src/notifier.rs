@@ -130,14 +130,12 @@ pub mod tests {
 
         let a_notifier = notifier.clone();
         let handle_a = std::thread::spawn(move || {
-            let chain_a = chain_a;
             for _ in 0..NOTIFICATIONS_A {
                 a_notifier.notify(&chain_a, &());
             }
         });
 
         let handle_b = std::thread::spawn(move || {
-            let chain_b = chain_b;
             for _ in 0..NOTIFICATIONS_B {
                 notifier.notify(&chain_b, &());
             }
