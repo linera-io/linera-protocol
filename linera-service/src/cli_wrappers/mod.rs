@@ -4,8 +4,26 @@
 //! Helper module to call the binaries of `linera-service` with appropriate command-line
 //! arguments.
 
+#[cfg(feature = "kubernetes")]
+/// How to run docker operations
+mod docker;
+#[cfg(feature = "kubernetes")]
+/// How to run helm operations
+mod helm;
+#[cfg(feature = "kubernetes")]
+/// How to run kind operations
+mod kind;
+#[cfg(feature = "kubernetes")]
+/// How to run kubectl operations
+mod kubectl;
+#[cfg(feature = "kubernetes")]
+/// How to run Linera validators locally as a Kubernetes deployment.
+pub mod local_kubernetes_net;
 /// How to run Linera validators locally as native processes.
 pub mod local_net;
+#[cfg(feature = "kubernetes")]
+/// Util functions for the wrappers
+mod util;
 /// How to run a linera wallet and its GraphQL service.
 mod wallet;
 
@@ -25,7 +43,7 @@ pub trait LineraNetConfig {
 /// A running Linera net.
 #[async_trait]
 pub trait LineraNet {
-    fn ensure_is_running(&mut self) -> Result<()>;
+    async fn ensure_is_running(&mut self) -> Result<()>;
 
     fn make_client(&mut self) -> ClientWrapper;
 

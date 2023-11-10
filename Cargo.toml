@@ -81,6 +81,9 @@ rand = "0.8.5"
 rand07 = { package = "rand", version = "0.7.3" }
 rand_chacha = "0.3.1"
 rand_distr = "0.4.3"
+k8s-openapi = { version = "0.20.0", features = ["v1_28"] }
+pathdiff = "0.2.1"
+kube = "0.87.1"
 rcgen = "0.11.1"
 reqwest = { version = "0.11.14", default-features = false, features = ["rustls-tls"] }
 rocksdb = "0.21.0"

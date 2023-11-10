@@ -182,7 +182,7 @@ impl LineraNetConfig for LocalNetTestingConfig {
 
 #[async_trait]
 impl LineraNet for LocalNet {
-    fn ensure_is_running(&mut self) -> Result<()> {
+    async fn ensure_is_running(&mut self) -> Result<()> {
         for validator in self.running_validators.values_mut() {
             validator.ensure_is_running().context("in local network")?
         }
