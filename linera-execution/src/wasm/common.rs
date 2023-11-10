@@ -309,6 +309,7 @@ where
             tokio::spawn(future_queue.collect::<()>());
         }
 
+        // TODO(#1193): Run all guest Wasm applications of a transaction in the same thread.
         thread::spawn(move || {
             A::configure_initial_fuel(&mut self);
 
