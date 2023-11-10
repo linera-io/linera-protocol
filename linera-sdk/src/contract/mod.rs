@@ -5,12 +5,13 @@
 
 mod conversions_from_wit;
 mod conversions_to_wit;
-pub mod exported_futures;
+mod storage;
 pub mod system_api;
 pub mod wit_types;
 
+pub use self::storage::ContractStateStorage;
 use super::log::ContractLogger;
-use crate::{contract::exported_futures::ContractStateStorage, util::BlockingWait, Contract};
+use crate::{util::BlockingWait, Contract};
 use std::future::Future;
 
 // Import the system interface.
