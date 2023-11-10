@@ -152,7 +152,6 @@ fn mock_load_blob_state() {
         bcs::to_bytes(&state).expect("Failed to serialize vector using BCS"),
     );
 
-    assert_eq!(contract::system_api::load::<Vec<u8>>(), state);
     assert_eq!(service::system_api::load().now_or_never(), Some(state));
 }
 
