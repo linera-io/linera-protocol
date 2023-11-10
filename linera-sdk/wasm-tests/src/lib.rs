@@ -36,7 +36,7 @@ fn mock_chain_id() {
 #[webassembly_test]
 fn mock_application_id() {
     let application_id = ApplicationId {
-        bytecode_id: BytecodeId(MessageId {
+        bytecode_id: BytecodeId::new(MessageId {
             chain_id: ChainId([0, 1, 2, 3].into()),
             height: BlockHeight::from(4),
             index: 5,
@@ -427,7 +427,7 @@ fn mock_query() {
     });
 
     let application_id = ApplicationId {
-        bytecode_id: BytecodeId(MessageId {
+        bytecode_id: BytecodeId::new(MessageId {
             chain_id: ChainId([0, 1, 2, 3].into()),
             height: BlockHeight::from(4),
             index: 5,
