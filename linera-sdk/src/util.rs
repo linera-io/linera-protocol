@@ -3,9 +3,10 @@
 
 //! Module with helper types and functions used by the SDK.
 
+use futures::task;
 use std::{
     future::Future,
-    pin::Pin,
+    pin::{pin, Pin},
     task::{Context, Poll},
 };
 
@@ -35,6 +36,37 @@ impl Future for YieldOnce {
             this.yielded = true;
             context.waker().wake_by_ref();
             Poll::Pending
+        }
+    }
+}
+
+/// An extension trait to block on a [`Future`] until it completes.
+pub trait BlockingWait {
+    /// The type returned by the [`Future`].
+    type Output;
+
+    /// Waits for the [`Future`] to complete in a blocking manner.
+    ///
+    /// Effectively polls the [`Future`] repeatedly until it returns [`Poll::Ready`].
+    fn blocking_wait(self) -> Self::Output;
+}
+
+impl<AnyFuture> BlockingWait for AnyFuture
+where
+    AnyFuture: Future,
+{
+    type Output = AnyFuture::Output;
+
+    fn blocking_wait(mut self) -> Self::Output {
+        let waker = task::noop_waker();
+        let mut task_context = Context::from_waker(&waker);
+        let mut future = pin!(self);
+
+        loop {
+            match future.as_mut().poll(&mut task_context) {
+                Poll::Pending => continue,
+                Poll::Ready(output) => return output,
+            }
         }
     }
 }
