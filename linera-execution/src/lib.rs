@@ -112,9 +112,11 @@ impl Default for RuntimeLimits {
 impl ResourceTracker {
     /// Subtracts an amount from a balance and reports an error if that is impossible
     fn sub_assign_fees(balance: &mut Amount, fees: Amount) -> Result<(), SystemExecutionError> {
-        let current_balance = *balance;
-        let error = SystemExecutionError::InsufficientFunding { current_balance };
-        balance.try_sub_assign(fees).map_err(|_| error)
+        balance
+            .try_sub_assign(fees)
+            .map_err(|_| SystemExecutionError::InsufficientFunding {
+                current_balance: *balance,
+            })
     }
 
     /// Updates the limits for the maximum and updates the balance.

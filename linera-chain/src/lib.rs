@@ -132,5 +132,5 @@ pub enum ChainExecutionContext {
     DescribeApplication,
     IncomingMessage(u32),
     Operation(u32),
-    Certificate,
+    Block,
 }

@@ -175,11 +175,14 @@ where
         fees: Amount,
         chain_execution_context: ChainExecutionContext,
     ) -> Result<(), ChainError> {
-        let current_balance = *balance;
-        let error = SystemExecutionError::InsufficientFunding { current_balance };
-        let error = ExecutionError::SystemError(error);
-        let error = ChainError::ExecutionError(error, chain_execution_context);
-        balance.try_sub_assign(fees).map_err(|_| error)
+        balance.try_sub_assign(fees).map_err(|_| {
+            ChainError::ExecutionError(
+                ExecutionError::SystemError(SystemExecutionError::InsufficientFunding {
+                    current_balance: *balance,
+                }),
+                chain_execution_context,
+            )
+        })
     }
 
     pub fn chain_id(&self) -> ChainId {
@@ -598,7 +601,7 @@ where
         Self::sub_assign_fees(
             balance,
             policy.certificate_price(),
-            ChainExecutionContext::Certificate,
+            ChainExecutionContext::Block,
         )?;
 
         // Recompute the state hash.
