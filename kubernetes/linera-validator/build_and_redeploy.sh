@@ -101,9 +101,19 @@ kind load docker-image "$docker_image"
 helm uninstall linera-core --wait || true
 
 if [ -n "$cloud_mode" ]; then
-    helm install linera-core . --values values-local-with-cloud-build.yaml --wait --set installCRDs=true
+    helm install linera-core . \
+      --values values-local-with-cloud-build.yaml \
+      --wait \
+      --set installCRDs=true \
+      --set validator.serverConfig=working/server_1.json \
+      --set validator.genesisConfig=working/genesis.json
 else
-    helm install linera-core . --values values-local.yaml --wait --set installCRDs=true
+    helm install linera-core . \
+      --values values-local.yaml \
+      --wait \
+      --set installCRDs=true \
+      --set validator.serverConfig=working/server_1.json \
+      --set validator.genesisConfig=working/genesis.json
 fi
 
 echo "Pods:"
