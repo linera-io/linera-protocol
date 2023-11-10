@@ -39,7 +39,6 @@
 
 pub mod base;
 pub mod contract;
-mod exported_future;
 mod extensions;
 pub mod graphql;
 mod log;
@@ -65,7 +64,6 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{error::Error, fmt::Debug, sync::Arc};
 
 pub use self::{
-    exported_future::ExportedFuture,
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
 };
