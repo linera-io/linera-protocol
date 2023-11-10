@@ -14,7 +14,6 @@ use linera_sdk::{
     contract, service, test, ContractLogger, ServiceLogger,
 };
 use linera_views::{
-    common::Context,
     map_view::MapView,
     register_view::RegisterView,
     views::{HashableView, RootView, View},
