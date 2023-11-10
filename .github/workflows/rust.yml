@@ -68,6 +68,11 @@ jobs:
       # use debug mode to avoid building wasmtime in release mode
       run: |
         cargo build --locked --bin linera-wasm-test-runner
+    - name: Run Linera SDK Wasm tests
+      env:
+        CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "target/debug/linera-wasm-test-runner"
+      run: |
+        cargo test --locked -p linera-sdk-wasm-tests --target wasm32-unknown-unknown
     - name: Run Wasm application tests
       run: |
         cd examples
