@@ -68,11 +68,11 @@ fn mock_application_parameters() {
     test::mock_application_parameters(parameters.clone());
 
     assert_eq!(
-        contract::system_api::current_application_parameters(),
+        contract::system_api::private::current_application_parameters(),
         parameters
     );
     assert_eq!(
-        service::system_api::current_application_parameters(),
+        service::system_api::private::current_application_parameters(),
         parameters
     );
 }
@@ -152,7 +152,10 @@ fn mock_load_blob_state() {
         bcs::to_bytes(&state).expect("Failed to serialize vector using BCS"),
     );
 
-    assert_eq!(service::system_api::load().now_or_never(), Some(state));
+    assert_eq!(
+        service::system_api::private::load().now_or_never(),
+        Some(state)
+    );
 }
 
 /// Test loading and locking a mocked application state.
@@ -165,7 +168,7 @@ fn mock_load_and_lock_blob_state() {
     );
 
     assert_eq!(
-        contract::system_api::load_and_lock::<Vec<u8>>(),
+        contract::system_api::private::load_and_lock::<Vec<u8>>(),
         Some(state)
     );
 }
@@ -197,7 +200,7 @@ fn mock_load_view() {
         .expect("Persisting a view to memory should be instantaneous")
         .expect("Failed to persist view state");
 
-    let contract_view = contract::system_api::load_and_lock_view::<DummyView<_>>()
+    let contract_view = contract::system_api::private::load_and_lock_view::<DummyView<_>>()
         .now_or_never()
         .expect("Memory key value store should always resolve immediately")
         .expect("Failed to lock view");
@@ -206,7 +209,7 @@ fn mock_load_view() {
     assert_eq!(initial_view.two.get(), contract_view.two.get());
     assert_eq!(initial_view.three.get(), contract_view.three.get());
 
-    let service_view = service::system_api::lock_and_load_view::<DummyView<_>>()
+    let service_view = service::system_api::private::lock_and_load_view::<DummyView<_>>()
         .now_or_never()
         .expect("Memory key value store should always resolve immediately");
 
@@ -239,7 +242,7 @@ fn mock_find_keys() {
         .expect("Persisting a view to memory should be instantaneous")
         .expect("Failed to persist view state");
 
-    let contract_view = contract::system_api::load_and_lock_view::<DummyView<_>>()
+    let contract_view = contract::system_api::private::load_and_lock_view::<DummyView<_>>()
         .now_or_never()
         .expect("Memory key value store should always resolve immediately")
         .expect("Failed to lock view");
@@ -253,7 +256,7 @@ fn mock_find_keys() {
 
     assert_eq!(contract_keys, keys);
 
-    let service_view = service::system_api::lock_and_load_view::<DummyView<_>>()
+    let service_view = service::system_api::private::lock_and_load_view::<DummyView<_>>()
         .now_or_never()
         .expect("Memory key value store should always resolve immediately");
 
@@ -296,7 +299,7 @@ fn mock_find_key_value_pairs() {
         .expect("Persisting a view to memory should be instantaneous")
         .expect("Failed to persist view state");
 
-    let contract_view = contract::system_api::load_and_lock_view::<DummyView<_>>()
+    let contract_view = contract::system_api::private::load_and_lock_view::<DummyView<_>>()
         .now_or_never()
         .expect("Memory key value store should always resolve immediately")
         .expect("Failed to lock view");
@@ -315,7 +318,7 @@ fn mock_find_key_value_pairs() {
 
     assert_eq!(contract_pairs, expected_pairs);
 
-    let service_view = service::system_api::lock_and_load_view::<DummyView<_>>()
+    let service_view = service::system_api::private::lock_and_load_view::<DummyView<_>>()
         .now_or_never()
         .expect("Memory key value store should always resolve immediately");
 
@@ -372,7 +375,7 @@ fn mock_write_batch() {
         .expect("Persisting a view to memory should be instantaneous")
         .expect("Failed to persist view state");
 
-    let mut altered_view = contract::system_api::load_and_lock_view::<DummyView<_>>()
+    let mut altered_view = contract::system_api::private::load_and_lock_view::<DummyView<_>>()
         .now_or_never()
         .expect("Memory key value store should always resolve immediately")
         .expect("Failed to lock view");
@@ -437,7 +440,7 @@ fn mock_query() {
     };
     let query = vec![17, 23, 31, 37];
 
-    let response = service::system_api::query_application(application_id, &query)
+    let response = service::system_api::private::query_application(application_id, &query)
         .now_or_never()
         .expect("Mock session call should return immediately");
 
