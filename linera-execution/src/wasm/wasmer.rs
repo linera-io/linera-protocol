@@ -46,7 +46,7 @@ use crate::{
 use bytes::Bytes;
 use futures::{channel::mpsc, TryFutureExt};
 use linera_base::identifiers::SessionId;
-use linera_views::{batch::Batch, views::ViewError};
+use linera_views::batch::Batch;
 use once_cell::sync::Lazy;
 use std::{marker::PhantomData, mem, sync::Arc};
 use tokio::sync::Mutex;

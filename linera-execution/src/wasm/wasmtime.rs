@@ -48,7 +48,7 @@ use crate::{
     OperationContext, QueryContext, RawExecutionResult, SessionCallResult, SessionId,
 };
 use futures::{channel::mpsc, TryFutureExt};
-use linera_views::{batch::Batch, views::ViewError};
+use linera_views::batch::Batch;
 use once_cell::sync::Lazy;
 use std::error::Error;
 use tokio::sync::Mutex;

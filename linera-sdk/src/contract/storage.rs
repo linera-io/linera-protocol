@@ -96,9 +96,7 @@ where
     Application: Contract + RootView<ViewStorageContext> + Send + 'static,
 {
     async fn load_and_lock() -> Application {
-        system_api::load_and_lock_view()
-            .await
-            .expect("Failed to lock contract view")
+        system_api::load_and_lock_view().await
     }
 
     async fn store_and_unlock(state: Application) {

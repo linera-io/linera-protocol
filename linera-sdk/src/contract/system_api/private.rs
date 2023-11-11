@@ -45,14 +45,11 @@ where
 }
 
 /// Loads the application state and locks it for writes.
-pub async fn load_and_lock_view<State: View<ViewStorageContext>>() -> Option<State> {
+pub async fn load_and_lock_view<State: View<ViewStorageContext>>() -> State {
     let promise = wit::Lock::new();
     yield_once().await;
-    if matches!(promise.wait(), wit::LockResult::Locked) {
-        Some(load_view_using::<State>().await)
-    } else {
-        None
-    }
+    promise.wait();
+    load_view_using::<State>().await
 }
 
 /// Helper function to load the application state or create a new one if it doesn't exist.
