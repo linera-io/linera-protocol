@@ -195,7 +195,6 @@ impl WasmApplication {
 
         Ok(WasmRuntimeContext {
             application,
-            future_queue: None,
             store,
             extra: (),
         })
@@ -226,7 +225,6 @@ impl WasmApplication {
 
         Ok(WasmRuntimeContext {
             application,
-            future_queue: None,
             store,
             extra: (),
         })

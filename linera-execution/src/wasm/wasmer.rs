@@ -184,7 +184,6 @@ impl WasmApplication {
 
         Ok(WasmRuntimeContext {
             application,
-            future_queue: None,
             store,
             extra: WasmerContractExtra { runtime, instance },
         })
@@ -213,7 +212,6 @@ impl WasmApplication {
 
         Ok(WasmRuntimeContext {
             application,
-            future_queue: None,
             store,
             extra: (),
         })

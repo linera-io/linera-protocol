@@ -3,15 +3,12 @@
 
 //! Runtime independent code for interfacing with user applications in WebAssembly modules.
 
-use super::{async_determinism::HostFutureQueue, ExecutionError, WasmExecutionError};
+use super::{ExecutionError, WasmExecutionError};
 use crate::{
     ApplicationCallResult, CalleeContext, MessageContext, OperationContext, QueryContext,
     RawExecutionResult, SessionCallResult, SessionId,
 };
-use futures::{
-    future::{FutureExt, Map, MapErr, TryFutureExt},
-    stream::StreamExt,
-};
+use futures::future::{FutureExt, Map, MapErr, TryFutureExt};
 use std::{convert, thread};
 
 /// Types that are specific to the context of an application ready to be executedy by a WebAssembly
@@ -98,9 +95,6 @@ where
 {
     /// The application type.
     pub(crate) application: A,
-
-    /// A queue of host futures called by the guest that must complete deterministically.
-    pub(crate) future_queue: Option<HostFutureQueue>,
 
     /// The application's memory state.
     pub(crate) store: A::Store,
@@ -303,11 +297,6 @@ where
         T: Send + 'static,
     {
         let (result_sender, result_receiver) = oneshot::channel();
-
-        // TODO(#925): Replace the host future queue with a read-write-lock.
-        if let Some(future_queue) = self.future_queue.take() {
-            tokio::spawn(future_queue.collect::<()>());
-        }
 
         // TODO(#1193): Run all guest Wasm applications of a transaction in the same thread.
         thread::spawn(move || {
