@@ -11,8 +11,7 @@ pub use self::requests::{BaseRequest, ContractRequest, ServiceRequest};
 use crate::{ExecutionError, WasmExecutionError};
 use futures::{
     channel::mpsc,
-    select,
-    stream::{FuturesUnordered, StreamExt, TryStreamExt},
+    stream::{StreamExt, TryStreamExt},
 };
 
 /// A handler of application system APIs that runs as a separate actor.
@@ -44,37 +43,13 @@ where
     }
 
     /// Runs the [`RuntimeActor`], handling `Request`s until all the sender endpoints are closed.
-    pub async fn run(mut self) -> Result<(), ExecutionError> {
-        let mut active_requests = FuturesUnordered::new();
+    pub async fn run(self) -> Result<(), ExecutionError> {
+        let runtime = self.runtime;
 
-        // Run active request handlers concurrently with the incoming stream of `requests`
-        loop {
-            select! {
-                maybe_result = active_requests.next() => {
-                    if let Some(result) = maybe_result {
-                        // A handler for a request just finished; check the result and return an
-                        // error if there is one
-                        result?;
-                    }
-                }
-                maybe_request = self.requests.next() => match maybe_request {
-                    Some(request) => {
-                        // New request received, start handling it and add it to `active_requests`
-                        active_requests.push(self.runtime.handle_request(request));
-                    }
-                    None => {
-                        // All request sender endpoints have been dropped; leave the loop
-                        break;
-                    }
-                },
-            }
-        }
-
-        // Wait for all remaining active requests being handled, returning any errors as soon as
-        // they appear
-        active_requests.try_collect::<()>().await?;
-
-        Ok(())
+        self.requests
+            .map(Ok)
+            .try_for_each_concurrent(None, |request| runtime.handle_request(request))
+            .await
     }
 }
 
