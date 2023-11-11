@@ -5,6 +5,7 @@
 
 use super::requests::{BaseRequest, ContractRequest, ServiceRequest};
 use crate::{BaseRuntime, ContractRuntime, ExecutionError, ServiceRuntime};
+use async_lock::RwLock;
 use async_trait::async_trait;
 use linera_views::views::ViewError;
 
@@ -66,7 +67,7 @@ where
 }
 
 #[async_trait]
-impl<Runtime> RequestHandler<ContractRequest> for &Runtime
+impl<Runtime> RequestHandler<ContractRequest> for RwLock<&Runtime>
 where
     Runtime: ContractRuntime + ?Sized,
 {
@@ -75,32 +76,36 @@ where
         // value of the called function changes.
         #[allow(clippy::unit_arg)]
         match request {
-            ContractRequest::Base(base_request) => self.handle_request(base_request).await?,
+            ContractRequest::Base(base_request) => {
+                self.read().await.handle_request(base_request).await?
+            }
             ContractRequest::RemainingFuel { response_sender } => {
-                response_sender.respond(self.remaining_fuel())
+                response_sender.respond(self.read().await.remaining_fuel())
             }
             ContractRequest::SetRemainingFuel {
                 remaining_fuel,
                 response_sender,
-            } => response_sender.respond(self.set_remaining_fuel(remaining_fuel)),
-            ContractRequest::TryReadAndLockMyState { response_sender } => {
-                response_sender.respond(match self.try_read_and_lock_my_state().await {
+            } => response_sender.respond(self.write().await.set_remaining_fuel(remaining_fuel)),
+            ContractRequest::TryReadAndLockMyState { response_sender } => response_sender.respond(
+                match self.write().await.try_read_and_lock_my_state().await {
                     Ok(bytes) => Some(bytes),
                     Err(ExecutionError::ViewError(ViewError::NotFound(_))) => None,
                     Err(error) => return Err(error),
-                })
-            }
+                },
+            ),
             ContractRequest::SaveAndUnlockMyState {
                 state,
                 response_sender,
-            } => response_sender.respond(self.save_and_unlock_my_state(state).is_ok()),
+            } => {
+                response_sender.respond(self.write().await.save_and_unlock_my_state(state).is_ok())
+            }
             ContractRequest::UnlockMyState { response_sender } => {
-                response_sender.respond(self.unlock_my_state())
+                response_sender.respond(self.write().await.unlock_my_state())
             }
             ContractRequest::WriteBatchAndUnlock {
                 batch,
                 response_sender,
-            } => response_sender.respond(self.write_batch_and_unlock(batch).await?),
+            } => response_sender.respond(self.write().await.write_batch_and_unlock(batch).await?),
             ContractRequest::TryCallApplication {
                 authenticated,
                 callee_id,
@@ -108,7 +113,9 @@ where
                 forwarded_sessions,
                 response_sender,
             } => response_sender.respond(
-                self.try_call_application(authenticated, callee_id, &argument, forwarded_sessions)
+                self.write()
+                    .await
+                    .try_call_application(authenticated, callee_id, &argument, forwarded_sessions)
                     .await?,
             ),
             ContractRequest::TryCallSession {
@@ -118,7 +125,9 @@ where
                 forwarded_sessions,
                 response_sender,
             } => response_sender.respond(
-                self.try_call_session(authenticated, session_id, &argument, forwarded_sessions)
+                self.write()
+                    .await
+                    .try_call_session(authenticated, session_id, &argument, forwarded_sessions)
                     .await?,
             ),
         }
