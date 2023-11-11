@@ -41,7 +41,7 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build client binary
         run: |
-          cargo build --release --locked --bin linera --bin linera-proxy --bin linera-server --bin linera-db --features scylladb
+          cargo build --release --locked --bin linera --bin linera-proxy --bin linera-server --bin linera-db --features scylladb,rocksdb
           strip target/release/linera
           strip target/release/linera-proxy
           strip target/release/linera-server
@@ -60,8 +60,8 @@ jobs:
       - name: Build Docker and deploy locally with Kind
         run: |
           cd kubernetes/linera-validator/working
-          linera-server generate --validators ../../configuration/k8s-local/validator_1.toml --committee committee.json
-          linera --wallet /tmp/wallet.json --storage /tmp/rocksdb:linera.db create-genesis-config 10 --genesis genesis.json --initial-funding 100 --committee committee.json
+          ../../../target/release/linera-server generate --validators ../../../configuration/k8s-local/validator_1.toml --committee committee.json
+          ../../../target/release/linera --wallet /tmp/wallet.json --storage rocksdb:/tmp/linera.db create-genesis-config 10 --genesis genesis.json --initial-funding 100 --committee committee.json
           cd ..
           ./build_and_redeploy.sh --copy
       - name: Port Forward
