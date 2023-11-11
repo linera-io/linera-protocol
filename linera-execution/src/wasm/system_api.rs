@@ -9,7 +9,7 @@ macro_rules! impl_contract_system_api {
         impl contract_system_api::ContractSystemApi for $contract_system_api {
             type Error = ExecutionError;
 
-            type Lock = Mutex<Option<oneshot::Receiver<Result<(), ExecutionError>>>>;
+            type Lock = Mutex<Option<oneshot::Receiver<()>>>;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -99,39 +99,22 @@ macro_rules! impl_contract_system_api {
             }
 
             fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
-                Ok(Mutex::new(Some(
-                    self.queued_future_factory.enqueue(
-                        self.runtime
-                            .send_request(|response_sender| {
-                                ContractRequest::Base(BaseRequest::LockViewUserState {
-                                    response_sender,
-                                })
-                            })?
-                            .map_err(|_| WasmExecutionError::MissingRuntimeResponse.into()),
-                    ),
-                )))
+                Ok(Mutex::new(Some(self.runtime.send_request(
+                    |response_sender| {
+                        ContractRequest::Base(BaseRequest::LockViewUserState { response_sender })
+                    },
+                )?)))
             }
 
-            fn lock_wait(
-                &mut self,
-                promise: &Self::Lock,
-            ) -> Result<contract_system_api::LockResult, Self::Error> {
-                use contract_system_api::LockResult;
+            fn lock_wait(&mut self, promise: &Self::Lock) -> Result<(), Self::Error> {
                 let receiver = promise
                     .try_lock()
                     .expect("Unexpected reentrant locking of `oneshot::Receiver`")
                     .take()
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                match receiver
+                receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse)?
-                {
-                    Ok(()) => Ok(LockResult::Locked),
-                    Err(ExecutionError::ViewError(ViewError::TryLockError(_))) => {
-                        Ok(LockResult::NotLocked)
-                    }
-                    Err(error) => Err(error),
-                }
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn try_call_application(
@@ -513,12 +496,10 @@ macro_rules! impl_view_system_api_for_contract {
         impl view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
-            type ReadKeyBytes =
-                Mutex<Option<oneshot::Receiver<Result<Option<Vec<u8>>, ExecutionError>>>>;
-            type FindKeys = Mutex<Option<oneshot::Receiver<Result<Vec<Vec<u8>>, ExecutionError>>>>;
-            type FindKeyValues =
-                Mutex<Option<oneshot::Receiver<Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>>>;
-            type WriteBatch = Mutex<Option<oneshot::Receiver<Result<(), ExecutionError>>>>;
+            type ReadKeyBytes = Mutex<Option<oneshot::Receiver<Option<Vec<u8>>>>>;
+            type FindKeys = Mutex<Option<oneshot::Receiver<Vec<Vec<u8>>>>>;
+            type FindKeyValues = Mutex<Option<oneshot::Receiver<Vec<(Vec<u8>, Vec<u8>)>>>>;
+            type WriteBatch = Mutex<Option<oneshot::Receiver<()>>>;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -528,18 +509,14 @@ macro_rules! impl_view_system_api_for_contract {
                 &mut self,
                 key: &[u8],
             ) -> Result<Self::ReadKeyBytes, Self::Error> {
-                Ok(Mutex::new(Some(
-                    self.queued_future_factory.enqueue(
-                        self.runtime
-                            .send_request(|response_sender| {
-                                ContractRequest::Base(BaseRequest::ReadKeyBytes {
-                                    key: key.to_owned(),
-                                    response_sender,
-                                })
-                            })?
-                            .map_err(|_| WasmExecutionError::MissingRuntimeResponse.into()),
-                    ),
-                )))
+                Ok(Mutex::new(Some(self.runtime.send_request(
+                    |response_sender| {
+                        ContractRequest::Base(BaseRequest::ReadKeyBytes {
+                            key: key.to_owned(),
+                            response_sender,
+                        })
+                    },
+                )?)))
             }
 
             fn read_key_bytes_wait(
@@ -553,22 +530,18 @@ macro_rules! impl_view_system_api_for_contract {
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
                 receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse)?
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {
-                Ok(Mutex::new(Some(
-                    self.queued_future_factory.enqueue(
-                        self.runtime
-                            .send_request(|response_sender| {
-                                ContractRequest::Base(BaseRequest::FindKeysByPrefix {
-                                    key_prefix: key_prefix.to_owned(),
-                                    response_sender,
-                                })
-                            })?
-                            .map_err(|_| WasmExecutionError::MissingRuntimeResponse.into()),
-                    ),
-                )))
+                Ok(Mutex::new(Some(self.runtime.send_request(
+                    |response_sender| {
+                        ContractRequest::Base(BaseRequest::FindKeysByPrefix {
+                            key_prefix: key_prefix.to_owned(),
+                            response_sender,
+                        })
+                    },
+                )?)))
             }
 
             fn find_keys_wait(
@@ -582,25 +555,21 @@ macro_rules! impl_view_system_api_for_contract {
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
                 receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse)?
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn find_key_values_new(
                 &mut self,
                 key_prefix: &[u8],
             ) -> Result<Self::FindKeyValues, Self::Error> {
-                Ok(Mutex::new(Some(
-                    self.queued_future_factory.enqueue(
-                        self.runtime
-                            .send_request(|response_sender| {
-                                ContractRequest::Base(BaseRequest::FindKeyValuesByPrefix {
-                                    key_prefix: key_prefix.to_owned(),
-                                    response_sender,
-                                })
-                            })?
-                            .map_err(|_| WasmExecutionError::MissingRuntimeResponse.into()),
-                    ),
-                )))
+                Ok(Mutex::new(Some(self.runtime.send_request(
+                    |response_sender| {
+                        ContractRequest::Base(BaseRequest::FindKeyValuesByPrefix {
+                            key_prefix: key_prefix.to_owned(),
+                            response_sender,
+                        })
+                    },
+                )?)))
             }
 
             fn find_key_values_wait(
@@ -614,7 +583,7 @@ macro_rules! impl_view_system_api_for_contract {
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
                 receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse)?
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn write_batch_new(
@@ -635,16 +604,12 @@ macro_rules! impl_view_system_api_for_contract {
                         }
                     }
                 }
-                Ok(Mutex::new(Some(
-                    self.queued_future_factory.enqueue(
-                        self.runtime
-                            .send_request(|response_sender| ContractRequest::WriteBatchAndUnlock {
-                                batch,
-                                response_sender,
-                            })?
-                            .map_err(|_| WasmExecutionError::MissingRuntimeResponse.into()),
-                    ),
-                )))
+                Ok(Mutex::new(Some(self.runtime.send_request(
+                    |response_sender| ContractRequest::WriteBatchAndUnlock {
+                        batch,
+                        response_sender,
+                    },
+                )?)))
             }
 
             fn write_batch_wait(&mut self, promise: &Self::WriteBatch) -> Result<(), Self::Error> {
@@ -655,7 +620,7 @@ macro_rules! impl_view_system_api_for_contract {
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
                 receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse)?
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
         }
     };
