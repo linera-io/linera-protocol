@@ -33,7 +33,6 @@ mod conversions_from_wit;
 mod conversions_to_wit;
 
 use super::{
-    async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     module_cache::ModuleCache,
     runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
@@ -169,10 +168,8 @@ impl WasmApplication {
     ) -> Result<WasmRuntimeContext<Contract>, WasmExecutionError> {
         let mut store = Store::new(contract_engine);
         let mut imports = imports! {};
-        let (future_queue, queued_future_factory) = HostFutureQueue::new();
-        let contract_system_api =
-            ContractSystemApi::new(runtime.clone(), queued_future_factory.clone());
-        let view_system_api = ContractViewSystemApi::new(runtime.clone(), queued_future_factory);
+        let contract_system_api = ContractSystemApi::new(runtime.clone());
+        let view_system_api = ContractViewSystemApi::new(runtime.clone());
         let system_api_setup =
             contract_system_api::add_to_imports(&mut store, &mut imports, contract_system_api);
         let views_api_setup =
@@ -187,7 +184,7 @@ impl WasmApplication {
 
         Ok(WasmRuntimeContext {
             application,
-            future_queue: Some(future_queue),
+            future_queue: None,
             store,
             extra: WasmerContractExtra { runtime, instance },
         })
@@ -367,19 +364,12 @@ unsafe impl<'runtime> RemoveLifetime for &'runtime dyn ServiceRuntime {
 /// implementation.
 pub struct ContractSystemApi {
     runtime: mpsc::UnboundedSender<ContractRequest>,
-    queued_future_factory: QueuedHostFutureFactory,
 }
 
 impl ContractSystemApi {
     /// Creates a new [`ContractSystemApi`] instance.
-    pub fn new(
-        runtime: mpsc::UnboundedSender<ContractRequest>,
-        queued_future_factory: QueuedHostFutureFactory,
-    ) -> Self {
-        ContractSystemApi {
-            runtime,
-            queued_future_factory,
-        }
+    pub fn new(runtime: mpsc::UnboundedSender<ContractRequest>) -> Self {
+        ContractSystemApi { runtime }
     }
 }
 
@@ -404,19 +394,12 @@ impl_service_system_api!(ServiceSystemApi, wasmer::RuntimeError);
 /// implementation.
 pub struct ContractViewSystemApi {
     runtime: mpsc::UnboundedSender<ContractRequest>,
-    queued_future_factory: QueuedHostFutureFactory,
 }
 
 impl ContractViewSystemApi {
     /// Creates a new [`ContractViewSystemApi`] instance.
-    pub fn new(
-        runtime: mpsc::UnboundedSender<ContractRequest>,
-        queued_future_factory: QueuedHostFutureFactory,
-    ) -> Self {
-        ContractViewSystemApi {
-            runtime,
-            queued_future_factory,
-        }
+    pub fn new(runtime: mpsc::UnboundedSender<ContractRequest>) -> Self {
+        ContractViewSystemApi { runtime }
     }
 }
 

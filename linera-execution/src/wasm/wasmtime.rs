@@ -37,7 +37,6 @@ use self::{
     service_system_api::ServiceSystemApiTables, view_system_api::ViewSystemApiTables,
 };
 use super::{
-    async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     module_cache::ModuleCache,
     runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
@@ -183,8 +182,7 @@ impl WasmApplication {
         view_system_api::add_to_linker(&mut linker, ContractState::views_api)
             .map_err(WasmExecutionError::LoadContractModule)?;
 
-        let (future_queue, queued_future_factory) = HostFutureQueue::new();
-        let state = ContractState::new(runtime, queued_future_factory);
+        let state = ContractState::new(runtime);
         let mut store = Store::new(&CONTRACT_ENGINE, state);
         let (contract, _instance) = contract::Contract::instantiate(
             &mut store,
@@ -197,7 +195,7 @@ impl WasmApplication {
 
         Ok(WasmRuntimeContext {
             application,
-            future_queue: Some(future_queue),
+            future_queue: None,
             store,
             extra: (),
         })
@@ -255,13 +253,10 @@ impl ContractState {
     /// Creates a new instance of [`ContractState`].
     ///
     /// Uses `runtime` to export the system API.
-    pub fn new(
-        runtime: mpsc::UnboundedSender<ContractRequest>,
-        queued_future_factory: QueuedHostFutureFactory,
-    ) -> Self {
+    pub fn new(runtime: mpsc::UnboundedSender<ContractRequest>) -> Self {
         Self {
             data: ContractData::default(),
-            system_api: ContractSystemApi::new(runtime, queued_future_factory),
+            system_api: ContractSystemApi::new(runtime),
             system_tables: ContractSystemApiTables::default(),
             views_tables: ViewSystemApiTables::default(),
         }
@@ -425,19 +420,12 @@ impl common::Service for Service {
 /// implementation.
 pub struct ContractSystemApi {
     runtime: mpsc::UnboundedSender<ContractRequest>,
-    queued_future_factory: QueuedHostFutureFactory,
 }
 
 impl ContractSystemApi {
     /// Creates a new [`ContractSystemApi`] instance exporting the API from `runtime`.
-    pub fn new(
-        runtime: mpsc::UnboundedSender<ContractRequest>,
-        queued_future_factory: QueuedHostFutureFactory,
-    ) -> Self {
-        ContractSystemApi {
-            runtime,
-            queued_future_factory,
-        }
+    pub fn new(runtime: mpsc::UnboundedSender<ContractRequest>) -> Self {
+        ContractSystemApi { runtime }
     }
 }
 
