@@ -10,7 +10,6 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-mod async_determinism;
 mod common;
 mod module_cache;
 mod runtime_actor;
