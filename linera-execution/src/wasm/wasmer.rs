@@ -44,7 +44,7 @@ use crate::{
     QueryContext, RawExecutionResult, ServiceRuntime,
 };
 use bytes::Bytes;
-use futures::{channel::mpsc, TryFutureExt};
+use futures::channel::mpsc;
 use linera_base::identifiers::SessionId;
 use linera_views::batch::Batch;
 use once_cell::sync::Lazy;
