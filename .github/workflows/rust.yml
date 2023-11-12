@@ -139,8 +139,12 @@ jobs:
       run: |
         cargo clippy --all-targets --all-features --tests --locked
     - name: Run cargo doc
+      env:
+        # We allow redundant explicit links because `cargo rdme` doesn't know how to resolve implicit intra-crate links.
+        RUSTDOCFLAGS: -A rustdoc::redundant_explicit_links
+        RUSTFLAGS: -D warnings
       run: |
-        RUSTDOCFLAGS='-D warnings' cargo doc --locked --all-features
+        cargo doc --locked --all-features
     - name: Run cargo check-all-features
       run: |
         cargo check-all-features --all-targets
