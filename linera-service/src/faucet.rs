@@ -122,7 +122,7 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        Server::bind(&SocketAddr::from(([127, 0, 0, 1], port)))
+        Server::bind(&SocketAddr::from(([0, 0, 0, 0], port)))
             .serve(app.into_make_service())
             .await?;
 
