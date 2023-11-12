@@ -2,6 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::bail;
 use async_trait::async_trait;
 use futures::future::join_all;
 use linera_base::crypto::{CryptoRng, KeyPair};
@@ -9,7 +10,7 @@ use linera_core::worker::WorkerState;
 use linera_execution::{committee::ValidatorName, WasmRuntime, WithWasmDefault};
 use linera_rpc::{
     config::{
-        CrossChainConfig, NetworkProtocol, NotificationConfig, ShardConfig, ShardId,
+        CrossChainConfig, NetworkProtocol, NotificationConfig, ShardConfig, ShardId, TlsConfig,
         ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
     },
     grpc_network::GrpcServer,
@@ -199,8 +200,10 @@ impl Runnable for ServerContext {
             NetworkProtocol::Simple(protocol) => {
                 self.spawn_simple(&listen_address, states, protocol).await?
             }
-            // We don't support TLS between the proxy and shards.
-            NetworkProtocol::Grpc { .. } => self.spawn_grpc(&listen_address, states).await?,
+            NetworkProtocol::Grpc(tls_config) => match tls_config {
+                TlsConfig::ClearText => self.spawn_grpc(&listen_address, states).await?,
+                TlsConfig::Tls => bail!("TLS not supported between proxy and shards."),
+            },
         };
 
         Ok(())

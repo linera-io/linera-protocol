@@ -19,7 +19,6 @@ use linera_service::{
 };
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use structopt::StructOpt;
-
 use tracing::{error, info, instrument};
 
 /// Options for running the proxy.

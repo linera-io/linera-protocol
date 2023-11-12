@@ -188,7 +188,7 @@ where
         let parts: Vec<&str> = s.split(':').collect();
         anyhow::ensure!(
             parts.len() == 3,
-            "Expecting format `(tcp|udp|grpc(s)):host:port`"
+            "Expecting format `(tcp|udp|grpc|grpcs):host:port`"
         );
         let protocol = parts[0].parse().map_err(|s| anyhow::anyhow!("{}", s))?;
         let host = parts[1].to_owned();

@@ -16,7 +16,7 @@ The directory is split into a few key parts:
   parameterise the validators.
 - `working`: A directory which is in `.gitignore` (but not by Helm, i.e. it is
   *not* in the .helmignore) used to store intermediate artifacts for
-  bootstrapping networks. For example gensis configuration, server
+  bootstrapping networks. For example genesis configuration, server
   configuration, etc.
 - `values-*.yaml`: Files which are substituted into the validators' Kubernetes
   manifests.
