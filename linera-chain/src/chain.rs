@@ -19,11 +19,11 @@ use linera_base::{
     identifiers::{ChainId, Destination, MessageId},
 };
 use linera_execution::{
-    sub_assign_fees,
-    system::{Account, SystemMessage},
-    ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, GenericApplicationId, Message,
-    MessageContext, OperationContext, Query, QueryContext, RawExecutionResult, RawOutgoingMessage,
-    ResourceTracker, Response, UserApplicationDescription, UserApplicationId,
+    system::{SystemExecutionError, SystemMessage},
+    ExecutionError, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView,
+    GenericApplicationId, Message, MessageContext, OperationContext, Query, QueryContext,
+    RawExecutionResult, RawOutgoingMessage, ResourceTracker, Response, UserApplicationDescription,
+    UserApplicationId,
 };
 use linera_views::{
     common::Context,
@@ -174,6 +174,22 @@ where
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
+    /// Substracts an amount from a balance and reports an error if that is impossible
+    fn sub_assign_fees(
+        balance: &mut Amount,
+        fees: Amount,
+        chain_execution_context: ChainExecutionContext,
+    ) -> Result<(), ChainError> {
+        balance.try_sub_assign(fees).map_err(|_| {
+            ChainError::ExecutionError(
+                ExecutionError::SystemError(SystemExecutionError::InsufficientFunding {
+                    current_balance: *balance,
+                }),
+                chain_execution_context,
+            )
+        })
+    }
+
     pub fn chain_id(&self) -> ChainId {
         self.context().extra().chain_id()
     }
@@ -501,30 +517,6 @@ where
         };
 
         let policy = committee.policy().clone();
-        let credit: Amount = block
-            .incoming_messages
-            .iter()
-            .filter_map(|msg| match &msg.event.message {
-                Message::System(SystemMessage::Credit { account, amount })
-                    if *account == Account::chain(chain_id) =>
-                {
-                    Some(amount)
-                }
-                _ => None,
-            })
-            .sum();
-        let balance = self.execution_state.system.balance.get_mut();
-
-        balance.try_add_assign(credit)?;
-        sub_assign_fees(balance, policy.certificate_price())?;
-        sub_assign_fees(
-            balance,
-            policy.storage_bytes_written_price_raw(&block.incoming_messages)?,
-        )?;
-        sub_assign_fees(
-            balance,
-            policy.storage_bytes_written_price_raw(&block.operations)?,
-        )?;
 
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
@@ -564,6 +556,7 @@ where
         }
         for (index, message) in block.incoming_messages.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
+            let chain_execution_context = ChainExecutionContext::IncomingMessage(index);
             // Execute the received message.
             let context = MessageContext {
                 chain_id,
@@ -580,17 +573,29 @@ where
                 .execution_state
                 .execute_message(&context, &message.event.message, &policy, &mut tracker)
                 .await
-                .map_err(|err| {
-                    ChainError::ExecutionError(err, ChainExecutionContext::IncomingMessage(index))
-                })?;
-            self.process_execution_results(&mut messages, context.height, results)
+                .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
+            let mut messages_out = self
+                .process_execution_results(context.height, results)
                 .await?;
+            let balance = self.execution_state.system.balance.get_mut();
+            Self::sub_assign_fees(
+                balance,
+                policy.storage_bytes_written_price_raw(&message)?,
+                chain_execution_context,
+            )?;
+            Self::sub_assign_fees(
+                balance,
+                policy.messages_price(&messages_out)?,
+                chain_execution_context,
+            )?;
+            messages.append(&mut messages_out);
             message_counts
                 .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
+            let chain_execution_context = ChainExecutionContext::Operation(index);
             let next_message_index =
                 u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?;
             let context = OperationContext {
@@ -604,16 +609,31 @@ where
                 .execution_state
                 .execute_operation(&context, operation, &policy, &mut tracker)
                 .await
-                .map_err(|err| {
-                    ChainError::ExecutionError(err, ChainExecutionContext::Operation(index))
-                })?;
-            self.process_execution_results(&mut messages, context.height, results)
+                .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
+            let mut messages_out = self
+                .process_execution_results(context.height, results)
                 .await?;
+            let balance = self.execution_state.system.balance.get_mut();
+            Self::sub_assign_fees(
+                balance,
+                policy.storage_bytes_written_price_raw(&operation)?,
+                chain_execution_context,
+            )?;
+            Self::sub_assign_fees(
+                balance,
+                policy.messages_price(&messages_out)?,
+                chain_execution_context,
+            )?;
+            messages.append(&mut messages_out);
             message_counts
                 .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
         }
         let balance = self.execution_state.system.balance.get_mut();
-        sub_assign_fees(balance, credit)?;
+        Self::sub_assign_fees(
+            balance,
+            policy.certificate_price(),
+            ChainExecutionContext::Block,
+        )?;
 
         // Recompute the state hash.
         let state_hash = self.execution_state.crypto_hash().await?;
@@ -651,17 +671,17 @@ where
 
     async fn process_execution_results(
         &mut self,
-        messages: &mut Vec<OutgoingMessage>,
         height: BlockHeight,
         results: Vec<ExecutionResult>,
-    ) -> Result<(), ChainError> {
+    ) -> Result<Vec<OutgoingMessage>, ChainError> {
+        let mut messages = Vec::new();
         for result in results {
             match result {
                 ExecutionResult::System(result) => {
                     self.process_raw_execution_result(
                         GenericApplicationId::System,
                         Message::System,
-                        messages,
+                        &mut messages,
                         height,
                         result,
                     )
@@ -674,7 +694,7 @@ where
                             application_id,
                             bytes,
                         },
-                        messages,
+                        &mut messages,
                         height,
                         result,
                     )
@@ -682,7 +702,7 @@ where
                 }
             }
         }
-        Ok(())
+        Ok(messages)
     }
 
     async fn process_raw_execution_result<E, F>(

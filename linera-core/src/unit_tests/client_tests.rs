@@ -1518,15 +1518,16 @@ where
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
         .await?;
-    assert!(matches!(sender
+    let obtained_error = sender
         .transfer_to_account(
             None,
             Amount::from_tokens(3),
             Account::chain(ChainId::root(2)),
             UserData(Some(*b"I'm giving away all of my money!")),
         )
-        .await,
-        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }), ChainExecutionContext::Operation(_)))
+        .await;
+    assert!(matches!(obtained_error,
+                     Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }), ChainExecutionContext::Block))
     ));
     Ok(())
 }
