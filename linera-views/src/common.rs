@@ -108,14 +108,14 @@ pub fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
 }
 
 pub(crate) fn from_bytes_opt<V: DeserializeOwned, E>(
-    key_opt: Option<Vec<u8>>,
+    key_opt: &Option<Vec<u8>>,
 ) -> Result<Option<V>, E>
 where
     E: From<bcs::Error>,
 {
     match key_opt {
         Some(bytes) => {
-            let value = bcs::from_bytes(&bytes)?;
+            let value = bcs::from_bytes(bytes)?;
             Ok(Some(value))
         }
         None => Ok(None),
@@ -198,7 +198,7 @@ pub trait KeyValueStoreClient {
     where
         Self::Error: From<bcs::Error>,
     {
-        from_bytes_opt(self.read_key_bytes(key).await?)
+        from_bytes_opt(&self.read_key_bytes(key).await?)
     }
 
     /// Reads multiple `keys` and deserializes the results if present.
@@ -211,7 +211,7 @@ pub trait KeyValueStoreClient {
     {
         let mut values = Vec::with_capacity(keys.len());
         for entry in self.read_multi_key_bytes(keys).await? {
-            values.push(from_bytes_opt(entry)?);
+            values.push(from_bytes_opt(&entry)?);
         }
         Ok(values)
     }
@@ -404,7 +404,7 @@ pub trait Context {
     where
         Item: DeserializeOwned,
     {
-        from_bytes_opt(self.read_key_bytes(key).await?)
+        from_bytes_opt(&self.read_key_bytes(key).await?)
     }
 
     /// Reads multiple `keys` and deserializes the results if present.
@@ -417,7 +417,7 @@ pub trait Context {
     {
         let mut values = Vec::with_capacity(keys.len());
         for entry in self.read_multi_key_bytes(keys).await? {
-            values.push(from_bytes_opt(entry)?);
+            values.push(from_bytes_opt(&entry)?);
         }
         Ok(values)
     }
