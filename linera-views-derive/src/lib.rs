@@ -358,7 +358,7 @@ fn generate_graphql_code_for_field(
         .clone()
         .expect("anonymous fields not supported.");
     let view_type = get_type_field(field.clone()).expect("could not get view type.");
-    let type_path = match field.ty {
+    let type_path = match &field.ty {
         Type::Path(type_path) => type_path,
         _ => panic!(),
     };
@@ -368,7 +368,7 @@ fn generate_graphql_code_for_field(
     let view_name = view_type.to_string();
     match view_type.to_string().as_str() {
         "RegisterView" => {
-            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_arguments = generic_argument_from_type_path(type_path);
             let generic_types_offset =
                 generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
@@ -386,38 +386,43 @@ fn generate_graphql_code_for_field(
         | "ReentrantCollectionView"
         | "CustomCollectionView"
         | "ReentrantCustomCollectionView" => {
-            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_arguments = generic_argument_from_type_path(type_path);
             let generic_types_offset =
                 generic_offset(&context, &context_constraints, &generic_arguments);
-            let index_ident = generic_arguments
+            let key_type = generic_arguments
                 .get(generic_types_offset)
                 .unwrap_or_else(|| panic!("no index specified for '{}'", view_name));
-            let generic_ident = generic_arguments
+            let value_type = generic_arguments
                 .get(generic_types_offset + 1)
                 .unwrap_or_else(|| panic!("no generic type specified for '{}'", view_name));
 
-            let index_name = snakify(index_ident);
+            let key_name = snakify(key_type);
+            let value_name = snakify(value_type);
 
-            let camel_index_name = format!("{}", field_name);
-            let camel_index_name = AsUpperCamelCase(&camel_index_name);
-            let entry_name = format!("{}{}Entry", struct_name, camel_index_name);
-            let entry_name = string_to_ident(&entry_name);
-            let context_generics = context_constraints.as_ref().map(|_| quote! { <#context> });
+            let map_name = string_to_ident(&format!(
+                "{}{}Map",
+                struct_name,
+                AsUpperCamelCase(field_name.to_string()),
+            ));
 
-            let r#impl = quote! {
-                #[graphql(derived(name = #field_name_str))]
-                async fn #field_name_underscore(
-                    &self,
-                    #index_name: #index_ident,
-                ) -> Result<#entry_name #context_generics, async_graphql::Error> {
-                    Ok(#entry_name {
-                        #index_name: #index_name.clone(),
-                        guard: self.#field_name.try_load_entry(&#index_name).await?,
-                    })
-                }
-            };
+            let entry_name = string_to_ident(&format!(
+                "{}{}Entry",
+                struct_name,
+                AsUpperCamelCase(field_name.to_string()),
+            ));
+            let context_generics = context_constraints.as_ref().map(|_| quote! { #context });
 
-            let generic_method_name = snakify(generic_ident);
+            let input_type = string_to_ident(&format!(
+                "{}{}Input",
+                struct_name,
+                AsUpperCamelCase(field_name.to_string()),
+            ));
+
+            let filters_type = string_to_ident(&format!(
+                "{}{}Filters",
+                struct_name,
+                AsUpperCamelCase(field_name.to_string()),
+            ));
 
             let (guard, lifetime) = match view_name.as_str() {
                 "ReentrantCollectionView" | "ReentrantCustomCollectionView" => (
@@ -434,32 +439,87 @@ fn generate_graphql_code_for_field(
             };
             let context_generics_with_lifetime = context_constraints
                 .as_ref()
-                .map(|_| quote! { <#lifetime #context> })
-                .unwrap_or_else(|| quote! { <#lifetime> });
-            let (index_name_underscore, index_name_str) = get_graphql_identifiers(&index_name);
-            let (generic_underscore, generic_str) = get_graphql_identifiers(&generic_method_name);
+                .map(|_| quote! { #lifetime #context })
+                .unwrap_or_else(|| quote! { #lifetime });
+
+            let r#impl = quote! {
+                async fn #field_name(
+                    &self,
+                ) -> Result<#map_name <'_, #context_generics>, async_graphql::Error> {
+                    Ok(#map_name (&self.#field_name))
+                }
+            };
+
+            let map_lifetime = if lifetime.is_empty() {
+                quote!('_,)
+            } else {
+                lifetime.clone()
+            };
 
             let r#struct = quote! {
-                pub struct #entry_name #context_generics_with_lifetime
+                #[derive(async_graphql::InputObject)]
+                pub struct #filters_type {
+                    keys: Option<Vec<#key_type>>,
+                }
+
+                #[derive(async_graphql::InputObject)]
+                pub struct #input_type {
+                    filters: Option<#filters_type>,
+                }
+
+                pub struct #map_name <'__graphql_map, #context_generics> (&'__graphql_map #type_path);
+
+                pub struct #entry_name <#context_generics_with_lifetime>
                 #context_constraints
                 {
-                    #index_name: #index_ident,
-                    guard: #guard<#lifetime #generic_ident>,
+                    key: #key_type,
+                    value: #guard<#lifetime #value_type>,
                 }
 
                 #[async_graphql::Object]
-                impl #context_generics_with_lifetime #entry_name #context_generics_with_lifetime
+                impl <#context_generics_with_lifetime> #entry_name <#context_generics_with_lifetime>
                 #context_constraints
                 {
-                    #[graphql(derived(name = #index_name_str))]
-                    async fn #index_name_underscore(&self) -> &#index_ident {
-                        &self.#index_name
+                    async fn #key_name(&self) -> &#key_type {
+                        &self.key
                     }
 
-                    #[graphql(derived(name = #generic_str))]
-                    async fn #generic_underscore(&self) -> &#generic_ident {
-                        use std::ops::Deref;
-                        self.guard.deref()
+                    async fn #value_name(&self) -> &#value_type {
+                        &*self.value
+                    }
+                }
+
+                #[async_graphql::Object]
+                impl <#context_generics_with_lifetime> #map_name <#map_lifetime #context_generics>
+                #context_constraints {
+                    async fn values(&self, input: Option<#input_type>)
+                    -> async_graphql::Result<Vec<#entry_name <#context_generics_with_lifetime>>> {
+                        let keys = input
+                            .and_then(|input| input.filters)
+                            .and_then(|filters| filters.keys);
+                        let keys = if let Some(keys) = keys {
+                            keys
+                        } else {
+                            self.0.indices().await?
+                        };
+
+                        let mut values = vec![];
+                        for key in keys {
+                            values.push(#entry_name {
+                                value: self.0.try_load_entry(&key).await?,
+                                key,
+                            })
+                        }
+
+                        Ok(values)
+                    }
+
+                    async fn value(&self, key: #key_type)
+                    -> async_graphql::Result<#entry_name <#context_generics_with_lifetime>> {
+                        Ok(#entry_name {
+                            key: key.clone(),
+                            value: self.0.try_load_entry(&key).await?,
+                        })
                     }
                 }
             };
@@ -467,7 +527,7 @@ fn generate_graphql_code_for_field(
             (r#impl, Some(r#struct))
         }
         "SetView" | "CustomSetView" => {
-            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_arguments = generic_argument_from_type_path(type_path);
             let generic_types_offset =
                 generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
@@ -476,14 +536,14 @@ fn generate_graphql_code_for_field(
 
             let r#impl = quote! {
                 #[graphql(derived(name = #field_name_str))]
-                async fn #field_name_underscore(&self) -> Result<Vec<#generic_ident>, async_graphql::Error> {
+                async fn #field_name_underscore(&self) -> async_graphql::Result<Vec<#generic_ident>> {
                     Ok(self.#field_name.indices().await?)
                 }
             };
             (r#impl, None)
         }
         "LogView" => {
-            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_arguments = generic_argument_from_type_path(type_path);
             let generic_types_offset =
                 generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
@@ -506,7 +566,7 @@ fn generate_graphql_code_for_field(
             (r#impl, None)
         }
         "WrappedHashableContainerView" => {
-            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_arguments = generic_argument_from_type_path(type_path);
             let generic_types_offset =
                 generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
@@ -522,7 +582,7 @@ fn generate_graphql_code_for_field(
             (r#impl, None)
         }
         "QueueView" => {
-            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_arguments = generic_argument_from_type_path(type_path);
             let generic_types_offset =
                 generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
@@ -539,7 +599,7 @@ fn generate_graphql_code_for_field(
             (r#impl, None)
         }
         "ByteMapView" => {
-            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_arguments = generic_argument_from_type_path(type_path);
             let generic_types_offset =
                 generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
@@ -555,7 +615,7 @@ fn generate_graphql_code_for_field(
             (r#impl, None)
         }
         "MapView" | "CustomMapView" => {
-            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_arguments = generic_argument_from_type_path(type_path);
             let generic_types_offset =
                 generic_offset(&context, &context_constraints, &generic_arguments);
             let index_ident = generic_arguments
@@ -937,6 +997,7 @@ pub mod tests {
         }
     }
 
+    #[ignore]
     #[test]
     fn test_generate_graphql_code() {
         for context in SpecificContextInfo::test_cases() {

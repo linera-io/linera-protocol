@@ -119,10 +119,10 @@ type ChainStateExtendedView {
 	manager: ChainManager!
 	confirmedLog(start: Int, end: Int): [CryptoHash!]!
 	receivedLog(start: Int, end: Int): [ChainAndHeight!]!
-	inboxes(origin: Origin!): ChainStateViewInboxesEntry!
-	outboxes(target: Target!): ChainStateViewOutboxesEntry!
+	inboxes: ChainStateViewInboxesMap!
+	outboxes: ChainStateViewOutboxesMap!
 	outboxCounters: JSONObject!
-	channels(channelFullName: ChannelFullName!): ChainStateViewChannelsEntry!
+	channels: ChainStateViewChannelsMap!
 }
 
 type ChainStateViewChannelsEntry {
@@ -130,14 +130,53 @@ type ChainStateViewChannelsEntry {
 	channelStateView: ChannelStateView!
 }
 
+input ChainStateViewChannelsFilters {
+	keys: [ChannelFullName!]
+}
+
+input ChainStateViewChannelsInput {
+	filters: ChainStateViewChannelsFilters
+}
+
+type ChainStateViewChannelsMap {
+	values(input: ChainStateViewChannelsInput): [ChainStateViewChannelsEntry!]!
+	value(key: ChannelFullName!): ChainStateViewChannelsEntry!
+}
+
 type ChainStateViewInboxesEntry {
 	origin: Origin!
 	inboxStateView: InboxStateView!
 }
 
+input ChainStateViewInboxesFilters {
+	keys: [Origin!]
+}
+
+input ChainStateViewInboxesInput {
+	filters: ChainStateViewInboxesFilters
+}
+
+type ChainStateViewInboxesMap {
+	values(input: ChainStateViewInboxesInput): [ChainStateViewInboxesEntry!]!
+	value(key: Origin!): ChainStateViewInboxesEntry!
+}
+
 type ChainStateViewOutboxesEntry {
 	target: Target!
 	outboxStateView: OutboxStateView!
+}
+
+input ChainStateViewOutboxesFilters {
+	keys: [Target!]
+}
+
+input ChainStateViewOutboxesInput {
+	filters: ChainStateViewOutboxesFilters
+}
+
+type ChainStateViewOutboxesMap {
+	values(input: ChainStateViewOutboxesInput): [ChainStateViewOutboxesEntry!]!
+	value(key: Target!): ChainStateViewOutboxesEntry!
 }
 
 """
