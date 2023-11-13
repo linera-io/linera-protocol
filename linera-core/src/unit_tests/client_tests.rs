@@ -22,14 +22,15 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_chain::{
-    data_types::{CertificateValue, ExecutedBlock},
+    data_types::{CertificateValue, Event, ExecutedBlock},
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
     policy::ResourceControlPolicy,
     system::{Account, Recipient, SystemOperation, UserData},
-    ChainOwnership, ExecutionError, Operation, SystemExecutionError, SystemQuery, SystemResponse,
+    ChainOwnership, ExecutionError, Message, Operation, SystemExecutionError, SystemMessage,
+    SystemQuery, SystemResponse,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -632,6 +633,121 @@ where
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
+    let mut parent = builder
+        .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
+        .await?;
+    let new_key_pair = KeyPair::generate();
+    let new_id = ChainId::child(MessageId {
+        chain_id: ChainId::root(2),
+        height: BlockHeight::ZERO,
+        index: 0,
+    });
+    // Transfer before creating the chain. The validators will ignore the cross-chain messages.
+    sender
+        .transfer_to_account(
+            None,
+            Amount::from_tokens(2),
+            Account::chain(new_id),
+            UserData::default(),
+        )
+        .await
+        .unwrap();
+    // Open the new chain.
+    let (open_chain_message_id, certificate) = parent
+        .open_chain(ChainOwnership::single(new_key_pair.public()), Amount::ZERO)
+        .await
+        .unwrap();
+    let new_id2 = ChainId::child(open_chain_message_id);
+    assert_eq!(new_id, new_id2);
+    assert_eq!(sender.next_block_height, BlockHeight::from(1));
+    assert_eq!(parent.next_block_height, BlockHeight::from(1));
+    assert!(sender.pending_block.is_none());
+    assert!(sender.key_pair().await.is_ok());
+    assert_eq!(
+        builder
+            .check_that_validators_have_certificate(parent.chain_id, BlockHeight::from(0), 3)
+            .await
+            .unwrap()
+            .value,
+        certificate.value
+    );
+    assert!(matches!(
+        &certificate.value(),
+        CertificateValue::ConfirmedBlock { executed_block, .. } if matches!(
+            executed_block.block.operations[open_chain_message_id.index as usize],
+            Operation::System(SystemOperation::OpenChain { .. }),
+        ),
+    ));
+    // Make a client to try the new chain.
+    let mut client = builder
+        .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
+        .await?;
+    client.receive_certificate(certificate).await.unwrap();
+    // Make another block on top of the one that sent the two tokens, so that the validators
+    // process the cross-chain messages.
+    let certificate2 = sender
+        .transfer_to_account(
+            None,
+            Amount::from_tokens(1),
+            Account::chain(new_id),
+            UserData::default(),
+        )
+        .await
+        .unwrap();
+    client.receive_certificate(certificate2).await.unwrap();
+    assert_eq!(
+        client.local_balance().await.unwrap(),
+        Amount::from_tokens(3)
+    );
+    client
+        .transfer_to_account(
+            None,
+            Amount::from_tokens(3),
+            Account::chain(ChainId::root(3)),
+            UserData::default(),
+        )
+        .await
+        .unwrap();
+    Ok(())
+}
+
+#[test(tokio::test)]
+async fn test_memory_open_chain_must_be_first() -> Result<(), anyhow::Error> {
+    run_test_open_chain_must_be_first(MakeMemoryStoreClient::default()).await
+}
+
+#[cfg(feature = "rocksdb")]
+#[test(tokio::test)]
+async fn test_rocks_db_open_chain_must_be_first() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_open_chain_must_be_first(MakeRocksDbStore::default()).await
+}
+
+#[cfg(feature = "aws")]
+#[test(tokio::test)]
+async fn test_dynamo_db_open_chain_must_be_first() -> Result<(), anyhow::Error> {
+    run_test_open_chain_must_be_first(MakeDynamoDbStore::default()).await
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_open_chain_must_be_first() -> Result<(), anyhow::Error> {
+    run_test_open_chain_must_be_first(MakeScyllaDbStore::default()).await
+}
+
+async fn run_test_open_chain_must_be_first<B>(store_builder: B) -> Result<(), anyhow::Error>
+where
+    B: StoreBuilder,
+    ViewError: From<<B::Store as Store>::ContextError>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    // New chains use the admin chain to verify their creation certificate.
+    builder
+        .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
+        .await?;
+    let mut sender = builder
+        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
+        .await?;
     let new_key_pair = KeyPair::generate();
     let new_id = ChainId::child(MessageId {
         chain_id: ChainId::root(1),
@@ -682,15 +798,22 @@ where
         client.local_balance().await.unwrap(),
         Amount::from_tokens(3)
     );
-    client
+    let result = client
         .transfer_to_account(
             None,
             Amount::from_tokens(3),
             Account::chain(ChainId::root(3)),
             UserData::default(),
         )
-        .await
-        .unwrap();
+        .await;
+    assert!(matches!(
+        result,
+        Err(ChainClientError::LocalNodeError(
+            LocalNodeError::WorkerError(WorkerError::ChainError(error))
+        )) if matches!(*error, ChainError::UnskippableMessage {
+            event: Event { message: Message::System(SystemMessage::Credit { .. }), .. }, ..
+        })
+    ));
     Ok(())
 }
 

@@ -659,6 +659,61 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
 #[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
+async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConfig) {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    // Create runner and two clients.
+    let (mut net, client1) = config.instantiate().await.unwrap();
+
+    let client2 = net.make_client();
+    client2.wallet_init(&[], None).await.unwrap();
+
+    let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
+
+    // Generate keys for client 2.
+    let client2_key = client2.keygen().await.unwrap();
+
+    // Open a great-grandchild chain on behalf of client 2.
+    let (_, grandparent) = client1.open_chain(chain1, None).await.unwrap();
+    let (_, parent) = client1.open_chain(grandparent, None).await.unwrap();
+    let (message_id, chain2) = client1.open_chain(parent, Some(client2_key)).await.unwrap();
+    client2.assign(client2_key, message_id).await.unwrap();
+
+    // Transfer 6 units from Chain 1 to Chain 2.
+    client1
+        .transfer(Amount::from_tokens(6), chain1, chain2)
+        .await
+        .unwrap();
+    client2.synchronize_balance(chain2).await.unwrap();
+    assert_eq!(
+        client2.query_balance(chain2).await.unwrap(),
+        Amount::from_tokens(6)
+    );
+
+    // Transfer 2 units from Chain 2 to Chain 1.
+    client2
+        .transfer(Amount::from_tokens(2), chain2, chain1)
+        .await
+        .unwrap();
+    client1.synchronize_balance(chain1).await.unwrap();
+    client2.synchronize_balance(chain2).await.unwrap();
+    assert_eq!(
+        client1.query_balance(chain1).await.unwrap(),
+        Amount::from_tokens(6)
+    );
+    assert_eq!(
+        client2.query_balance(chain2).await.unwrap(),
+        Amount::from_tokens(4)
+    );
+
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
+}
+
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[test_log::test(tokio::test)]
 async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 

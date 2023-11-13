@@ -305,8 +305,33 @@ where
     async fn pending_messages(&mut self) -> Result<Vec<IncomingMessage>, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
         let response = self.node_client.handle_chain_info_query(query).await?;
+        let mut requested_pending_messages = response.info.requested_pending_messages;
         let mut pending_messages = vec![];
-        for message in response.info.requested_pending_messages {
+        // The first incoming message of any child chain must be `OpenChain`. We must have it in
+        // our inbox, and include it before all other messages.
+        if self.next_block_height == BlockHeight::ZERO
+            && self
+                .chain_state_view()
+                .await?
+                .execution_state
+                .system
+                .description
+                .get()
+                .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id))?
+                .is_child()
+        {
+            let Some(index) = requested_pending_messages.iter().position(|message| {
+                matches!(
+                    message.event.message,
+                    Message::System(SystemMessage::OpenChain { .. })
+                )
+            }) else {
+                return Err(LocalNodeError::InactiveChain(self.chain_id));
+            };
+            let open_chain_message = requested_pending_messages.remove(index);
+            pending_messages.push(open_chain_message);
+        }
+        for message in requested_pending_messages {
             if pending_messages.len() >= self.max_pending_messages {
                 tracing::warn!(
                     "Limiting block from {} to {} incoming messages",

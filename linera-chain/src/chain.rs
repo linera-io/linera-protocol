@@ -152,6 +152,11 @@ impl ChainTipState {
         );
         Ok(self.next_block_height > height)
     }
+
+    /// Returns `true` if the next block will be the first, i.e. the chain doesn't have any blocks.
+    pub fn is_first_block(&self) -> bool {
+        self.next_block_height == BlockHeight::ZERO
+    }
 }
 
 /// The state of a channel followed by subscribers.
@@ -353,14 +358,16 @@ where
                 }
             }
             if let Message::System(_) = message {
-                // Handle special messages to be executed immediately.
-                let message_id = MessageId {
-                    chain_id: origin.sender,
-                    height,
-                    index,
-                };
-                self.execute_immediate_message(message_id, &message, timestamp, now)
-                    .await?;
+                if self.execution_state.system.description.get().is_none() {
+                    // Handle special messages to be executed immediately.
+                    let message_id = MessageId {
+                        chain_id: origin.sender,
+                        height,
+                        index,
+                    };
+                    self.execute_immediate_message(message_id, &message, timestamp, now)
+                        .await?;
+                }
             }
             // Record the inbox event to process it below.
             events.push(Event {
@@ -401,7 +408,7 @@ where
         Ok(())
     }
 
-    async fn execute_immediate_message(
+    pub async fn execute_immediate_message(
         &mut self,
         message_id: MessageId,
         message: &Message,
@@ -531,6 +538,30 @@ where
             maximum_bytes_left_to_read,
             maximum_bytes_left_to_write,
         };
+        // The first incoming message of any child chain must be `OpenChain`. A root chain must
+        // already be initialized
+        if block.height == BlockHeight::ZERO
+            && self
+                .execution_state
+                .system
+                .description
+                .get()
+                .map_or(true, |description| description.is_child())
+        {
+            ensure!(
+                matches!(
+                    block.incoming_messages.first(),
+                    Some(IncomingMessage {
+                        event: Event {
+                            message: Message::System(SystemMessage::OpenChain { .. }),
+                            ..
+                        },
+                        ..
+                    })
+                ),
+                ChainError::InactiveChain(self.chain_id())
+            );
+        }
         for (index, message) in block.incoming_messages.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             // Execute the received message.

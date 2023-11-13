@@ -526,9 +526,9 @@ where
             message_counts,
             state_hash,
         } = executed_block;
-        let mut chain = self.storage.load_active_chain(block.chain_id).await?;
+        let mut chain = self.storage.load_chain(block.chain_id).await?;
         // Check that the chain is active and ready for this confirmation.
-        let tip = chain.tip_state.get();
+        let tip = chain.tip_state.get().clone();
         if tip.next_block_height < block.height {
             return Err(WorkerError::MissingEarlierBlocks {
                 current_block_height: tip.next_block_height,
@@ -547,6 +547,20 @@ where
             .await;
             return Ok((info, actions));
         }
+        if tip.is_first_block() && !chain.is_active() {
+            let now = self.storage.current_time();
+            for message in &block.incoming_messages {
+                chain
+                    .execute_immediate_message(
+                        message.id(),
+                        &message.event.message,
+                        message.event.timestamp,
+                        now,
+                    )
+                    .await?;
+            }
+        }
+        chain.ensure_is_active()?;
         // Verify the certificate.
         let (epoch, committee) = chain
             .execution_state
