@@ -644,7 +644,7 @@ async fn route_aux(
 #[wasm_bindgen]
 pub async fn route(app: JsValue, path: JsValue, args: JsValue) {
     let path = path.as_string();
-    let args = from_value::<Vec<(String, String)>>(args).unwrap_or(Vec::new());
+    let args = from_value::<Vec<(String, String)>>(args).unwrap_or_default();
     let msg = format!("route: {} {:?}", path.as_deref().unwrap_or("none"), args);
     log_str(&msg);
     let data = from_value::<Data>(app.clone()).expect("cannot parse Vue data");

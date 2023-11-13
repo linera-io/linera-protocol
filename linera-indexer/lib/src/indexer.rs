@@ -193,7 +193,7 @@ where
 
     /// Registers the handler to an Axum router
     pub fn route(&self, app: Option<Router>) -> Router {
-        let app = app.unwrap_or_else(Router::new);
+        let app = app.unwrap_or_default();
         app.route("/", get(graphiql).post(Self::handler))
             .layer(Extension(self.state.clone().schema()))
             .layer(CorsLayer::permissive())

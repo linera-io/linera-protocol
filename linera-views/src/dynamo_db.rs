@@ -1616,8 +1616,7 @@ mod tests {
     #[test]
     fn test_serialization_len() {
         for n in [0, 10, 127, 128, 129, 16383, 16384, 20000] {
-            let mut vec = Vec::new();
-            vec.resize(n, 0_u8);
+            let vec = vec![0u8; n];
             let est_size = get_uleb128_size(n) + n;
             let serial_size = serialized_size(&vec).unwrap();
             assert_eq!(est_size, serial_size);
