@@ -278,7 +278,6 @@ where
         &self,
     ) -> Result<Arc<ChainStateView<S::Context>>, LocalNodeError> {
         let chain_state_view = self
-            .node_client
             .storage_client()
             .await
             .load_chain(self.chain_id)
@@ -289,6 +288,11 @@ where
     /// Subscribes to notifications from this client's chain.
     pub async fn subscribe(&mut self) -> Result<NotificationStream, LocalNodeError> {
         self.node_client.subscribe(vec![self.chain_id]).await
+    }
+
+    /// Returns the storage client used by this client's local node.
+    pub async fn storage_client(&self) -> S {
+        self.node_client.storage_client().await
     }
 
     /// Obtains the basic `ChainInfo` data for the local chain.
@@ -721,7 +725,7 @@ where
         chain_id: ChainId,
         action: CommunicateAction,
     ) -> Result<Option<Certificate>, ChainClientError> {
-        let storage_client = self.node_client.storage_client().await;
+        let storage_client = self.storage_client().await;
         let cross_chain_delay = self.cross_chain_delay;
         let cross_chain_retries = self.cross_chain_retries;
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(committee)?;
@@ -1334,7 +1338,7 @@ where
     /// This will usually be the current time according to the local clock, but may be slightly
     /// ahead to make sure it's not earlier than the incoming messages or the previous block.
     async fn next_timestamp(&self, incoming_messages: &[IncomingMessage]) -> Timestamp {
-        let now = self.node_client.storage_client().await.current_time();
+        let now = self.storage_client().await.current_time();
         incoming_messages
             .iter()
             .map(|msg| msg.event.timestamp)
@@ -1792,11 +1796,7 @@ where
     }
 
     pub async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
-        self.node_client
-            .storage_client()
-            .await
-            .read_value(hash)
-            .await
+        self.storage_client().await.read_value(hash).await
     }
 
     pub async fn read_values_downward(
@@ -1804,8 +1804,7 @@ where
         from: CryptoHash,
         limit: u32,
     ) -> Result<Vec<HashedValue>, ViewError> {
-        self.node_client
-            .storage_client()
+        self.storage_client()
             .await
             .read_values_downward(from, limit)
             .await

@@ -963,6 +963,11 @@ enum ClientCommand {
         /// The number of tokens to send to each new chain.
         #[structopt(long = "amount")]
         amount: Amount,
+
+        /// The end timestamp: The faucet will rate-limit the token supply so it runs out of money
+        /// no earlier than this.
+        #[structopt(long)]
+        end_timestamp: Option<DateTime<Utc>>,
     },
 
     /// Publish bytecode.
@@ -1629,9 +1634,18 @@ impl Runnable for Job {
                 chain_id,
                 port,
                 amount,
+                end_timestamp,
             } => {
                 let chain_client = context.make_chain_client(storage, chain_id);
-                FaucetService::new(port, chain_client, amount).run().await?;
+                let end_timestamp = end_timestamp
+                    .map(|et| {
+                        let micros = u64::try_from(et.timestamp_micros())
+                            .expect("End timestamp before 1970");
+                        Timestamp::from(micros)
+                    })
+                    .unwrap_or_else(Timestamp::now);
+                let faucet = FaucetService::new(port, chain_client, amount, end_timestamp).await?;
+                faucet.run().await?;
             }
 
             PublishBytecode {
@@ -1942,9 +1956,9 @@ async fn main() -> Result<(), anyhow::Error> {
             };
             let timestamp = start_timestamp
                 .map(|st| {
-                    Timestamp::from(
-                        u64::try_from(st.timestamp()).expect("Start timestamp before 1970"),
-                    )
+                    let micros =
+                        u64::try_from(st.timestamp_micros()).expect("Start timestamp before 1970");
+                    Timestamp::from(micros)
                 })
                 .unwrap_or_else(Timestamp::now);
             let admin_id = ChainId::root(*admin_root);
