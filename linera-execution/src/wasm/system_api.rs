@@ -509,9 +509,9 @@ macro_rules! impl_view_system_api_for_contract {
                 )?)))
             }
 
-            fn read_key_bytes_wait(
+            fn read_value_bytes_wait(
                 &mut self,
-                promise: &Self::ReadKeyBytes,
+                promise: &Self::ReadValueBytes,
             ) -> Result<Option<Vec<u8>>, Self::Error> {
                 let receiver = promise
                     .try_lock()

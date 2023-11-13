@@ -942,7 +942,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     )?;
     linker.func_wrap2_async(
         "view_system_api",
-        "read-value-bytes::wait: func(self: handle<read-key-bytes>) -> option<list<u8>>",
+        "read-value-bytes::wait: func(self: handle<read-value-bytes>) -> option<list<u8>>",
         move |mut caller: Caller<'_, Resources>, handle: i32, return_offset: i32| {
             Box::new(async move {
                 let function = get_function(

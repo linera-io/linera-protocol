@@ -1,5 +1,5 @@
 resource read-value-bytes {
-    static new: func(key: list<u8>) -> read-key-bytes
+    static new: func(key: list<u8>) -> read-value-bytes
     wait: func() -> option<list<u8>>
 }
 
