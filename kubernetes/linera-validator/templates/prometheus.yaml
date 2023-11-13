@@ -22,16 +22,16 @@ kind: ServiceMonitor
 metadata:
   labels:
     release: linera-core
-  name: validator-1
+  name: proxy
 spec:
   endpoints:
   - port: metrics
     path: /metrics
     scheme: http
-  jobLabel: validator-1
+  jobLabel: proxy
   namespaceSelector:
     matchNames:
     - default
   selector:
     matchLabels:
-      app: validator-1
+      app: proxy

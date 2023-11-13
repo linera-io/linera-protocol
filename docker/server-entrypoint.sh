@@ -5,6 +5,6 @@ ORDINAL="${HOSTNAME##*-}"
 
 exec ./linera-server run \
   --storage scylladb:tcp:scylladb.default.svc.cluster.local:9042 \
-  --server server_1.json \
+  --server /config/server.json \
   --shard $ORDINAL \
-  --genesis genesis.json
+  --genesis /config/genesis.json

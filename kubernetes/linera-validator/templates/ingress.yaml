@@ -1,21 +1,26 @@
-apiVersion: v1
-kind: Service
+{{- if eq .Values.environment "GCP" }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
 metadata:
-  name: validator-1
-  labels:
-    app: validator-1
+  name: validator-ingress
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: {{ .Values.staticIpGcpName }}
+    networking.gke.io/managed-certificates: managed-cert
+    kubernetes.io/ingress.class: "gce"
 spec:
-  # NodePort here is temporary. LoadBalancer will keep trying to set an external IP,
-  # leaving it in a permanent pending state. Since we port forward anyways, we don't
-  # need that for now, so just using NodePort
-  type: NodePort
-  selector:
-    app: validator-1
-  ports:
-    - name: linera
-      protocol: TCP
-      port: 19100
-      targetPort: linera-port
-    - name: metrics
-      protocol: TCP
-      port: 21100
+  defaultBackend:
+    service:
+      name: proxy
+      port:
+        number: 443
+
+---
+
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: managed-cert
+spec:
+  domains:
+    - {{ .Values.validatorDomainName }}
+{{- end }}

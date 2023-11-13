@@ -41,7 +41,7 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build client binary
         run: |
-          cargo build --release --locked --bin linera --bin linera-proxy --bin linera-server --bin linera-db --features scylladb
+          cargo build --release --locked --bin linera --bin linera-proxy --bin linera-server --bin linera-db --features scylladb,rocksdb
           strip target/release/linera
           strip target/release/linera-proxy
           strip target/release/linera-server
@@ -59,11 +59,14 @@ jobs:
         # Build the docker image copying the already built binaries
       - name: Build Docker and deploy locally with Kind
         run: |
-          cd kubernetes/linera-validator
+          cd kubernetes/linera-validator/working
+          ../../../target/release/linera-server generate --validators ../../../configuration/k8s-local/validator_1.toml --committee committee.json
+          ../../../target/release/linera --wallet /tmp/wallet.json --storage rocksdb:/tmp/linera.db create-genesis-config 10 --genesis genesis.json --initial-funding 100 --committee committee.json
+          cd ..
           ./build_and_redeploy.sh --copy
       - name: Port Forward
         run: |
-          kubectl get pods | grep validator | awk '{ print $1 }' | xargs -I % kubectl port-forward % 19100:19100 &
+          kubectl get pods | grep proxy | awk '{ print $1 }' | xargs -I % kubectl port-forward % 19100:19100 &
       - name: Send sync-balance request
         run: |
           cd target/release
@@ -73,10 +76,10 @@ jobs:
         if: always()
         run: |
           kubectl logs --tail 500 -l app=linera
-      - name: Print validator test logs
+      - name: Print proxy test logs
         if: always()
         run: |
-          kubectl logs --tail 500 -l app=validator
+          kubectl logs --tail 500 -l app=proxy
       - name: Print shards test logs
         if: always()
         run: |
@@ -84,7 +87,7 @@ jobs:
       - name: Stop port forwarding
         if: always()
         run: |
-          ps aux | grep port-forward | grep validator | awk '{ print $2 }' | xargs kill -9
+          ps aux | grep port-forward | grep proxy | awk '{ print $2 }' | xargs kill -9
       - name: Delete cluster
         if: always()
         run: |

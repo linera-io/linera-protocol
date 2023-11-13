@@ -8,7 +8,7 @@ if [ $status -eq 0 ]; then
 elif [ $status -eq 1 ]; then
   ./linera-server initialize \
     --storage scylladb:tcp:scylladb.default.svc.cluster.local:9042 \
-    --genesis genesis.json || exit 1;
+    --genesis /config/genesis.json || exit 1;
 else
   exit $status
 fi

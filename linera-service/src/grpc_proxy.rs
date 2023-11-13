@@ -8,7 +8,9 @@ use futures::{future::BoxFuture, FutureExt};
 use linera_base::identifiers::ChainId;
 use linera_core::notifier::Notifier;
 use linera_rpc::{
-    config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
+    config::{
+        ShardConfig, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
+    },
     grpc_network::{
         grpc::{
             notifier_service_server::{NotifierService, NotifierServiceServer},
@@ -23,6 +25,7 @@ use linera_rpc::{
 };
 use once_cell::sync::Lazy;
 use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
+use rcgen::generate_simple_self_signed;
 use std::{
     fmt::Debug,
     net::SocketAddr,
@@ -33,7 +36,7 @@ use std::{
 use tokio::select;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{
-    transport::{Body, Channel, Server},
+    transport::{Body, Channel, Identity, Server, ServerTlsConfig},
     Request, Response, Status,
 };
 use tower::{builder::ServiceBuilder, Layer, Service};
@@ -119,6 +122,7 @@ struct GrpcProxyInner {
     internal_config: ValidatorInternalNetworkConfig,
     worker_connection_pool: ConnectionPool,
     notifier: Notifier<Result<Notification, Status>>,
+    tls: TlsConfig,
 }
 
 impl GrpcProxy {
@@ -127,6 +131,7 @@ impl GrpcProxy {
         internal_config: ValidatorInternalNetworkConfig,
         connect_timeout: Duration,
         timeout: Duration,
+        tls: TlsConfig,
     ) -> Self {
         Self(Arc::new(GrpcProxyInner {
             public_config,
@@ -135,6 +140,7 @@ impl GrpcProxy {
                 .with_connect_timeout(connect_timeout)
                 .with_timeout(timeout),
             notifier: Notifier::default(),
+            tls,
         }))
     }
 
@@ -192,7 +198,8 @@ impl GrpcProxy {
         let internal_server = Server::builder()
             .add_service(self.as_notifier_service())
             .serve(self.internal_address());
-        let public_server = Server::builder()
+        let public_server = self
+            .public_server()?
             .layer(
                 ServiceBuilder::new()
                     .layer(PrometheusMetricsMiddlewareLayer)
@@ -207,6 +214,21 @@ impl GrpcProxy {
             public_res = public_server => public_res?,
         }
         Ok(())
+    }
+
+    /// Pre-configures the public server with no services attached.
+    /// If a certificate and key are defined, creates a TLS server.
+    fn public_server(&self) -> Result<Server> {
+        match self.0.tls {
+            TlsConfig::Tls => {
+                let cert = generate_simple_self_signed(vec![self.0.public_config.host.clone()])?;
+                let identity =
+                    Identity::from_pem(cert.serialize_pem()?, cert.serialize_private_key_pem());
+                let tls_config = ServerTlsConfig::new().identity(identity);
+                Ok(Server::builder().tls_config(tls_config)?)
+            }
+            TlsConfig::ClearText => Ok(Server::builder()),
+        }
     }
 
     async fn client_for_proxy_worker<R>(

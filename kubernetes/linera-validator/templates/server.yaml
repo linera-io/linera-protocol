@@ -51,6 +51,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+          volumeMounts:
+            - name: config
+              mountPath: "/config"
+              readOnly: true
       initContainers:
         - name: linera-server-initializer
           image: {{ .Values.lineraImage }}
@@ -61,3 +65,16 @@ spec:
               value: {{ .Values.logLevel }}
             - name: RUST_BACKTRACE
               value: "1"
+          volumeMounts:
+            - name: config
+              mountPath: "/config"
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: validator-config
+            items:
+              - key: serverConfig
+                path: server.json
+              - key: genesisConfig
+                path: genesis.json

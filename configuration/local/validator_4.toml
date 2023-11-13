@@ -5,8 +5,10 @@ internal_host = "127.0.0.1"
 internal_port = 10400
 metrics_host = "127.0.0.1"
 metrics_port = 11400
-external_protocol = "Grpc"
-internal_protocol = "Grpc"
+[external_protocol]
+Grpc = "ClearText"
+[internal_protocol]
+Grpc = "ClearText"
 
 [[shards]]
 host = "127.0.0.1"

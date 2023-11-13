@@ -101,9 +101,19 @@ kind load docker-image "$docker_image"
 helm uninstall linera-core --wait || true
 
 if [ -n "$cloud_mode" ]; then
-    helm install linera-core . --values values-local-with-cloud-build.yaml --wait --set installCRDs=true
+    helm install linera-core . \
+      --values values-local-with-cloud-build.yaml \
+      --wait \
+      --set installCRDs=true \
+      --set validator.serverConfig=working/server_1.json \
+      --set validator.genesisConfig=working/genesis.json
 else
-    helm install linera-core . --values values-local.yaml --wait --set installCRDs=true
+    helm install linera-core . \
+      --values values-local.yaml \
+      --wait \
+      --set installCRDs=true \
+      --set validator.serverConfig=working/server_1.json \
+      --set validator.genesisConfig=working/genesis.json
 fi
 
 echo "Pods:"
@@ -113,15 +123,6 @@ kubectl get svc
 
 docker rm linera-test-local || true
 docker run -d --name linera-test-local "$docker_image"
-docker cp linera-test-local:wallet.json /tmp/
-docker cp linera-test-local:linera.db /tmp/
-
-echo -e "\nMake sure the terminal you'll run the linera client from has these exports:"
-echo 'export LINERA_WALLET=/tmp/wallet.json'
-echo 'export LINERA_STORAGE="rocksdb:/tmp/linera.db"'
-
-export LINERA_WALLET=/tmp/wallet.json
-export LINERA_STORAGE="rocksdb:/tmp/linera.db"
 
 # Get the Grafana pod name
 grafana_pod_name=$(kubectl get pods | grep grafana | awk '{ print $1 }')
@@ -132,12 +133,12 @@ grafana_pass=$(
 echo -e "\nTo access Grafana, you need to port forward yourself, that won't be done here. Run:"
 echo -e "kubectl port-forward $grafana_pod_name 3000"
 echo -e "Grafana Username: admin"
-echo -e "Granfa Password: $grafana_pass"
-# Get the Validator pod name
-validator_pod_name=$(kubectl get pods | grep validator | awk '{ print $1 }')
+echo -e "Grafana Password: $grafana_pass"
+# Get the Proxy pod name
+proxy_pod_name=$(kubectl get pods | grep proxy | awk '{ print $1 }')
 echo -e "\nTo port forward yourself, run:"
-echo -e "kubectl port-forward $validator_pod_name 19100:19100\n"
+echo -e "kubectl port-forward $proxy_pod_name 19100:19100\n"
 
 if [ -n "$port_forward" ]; then
-    kubectl port-forward $validator_pod_name 19100:19100
+    kubectl port-forward $proxy_pod_name 19100:19100
 fi

@@ -1,9 +1,12 @@
 # Values for charts linera-validator for local validators.
 
+# Linera
 lineraImage: us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-test-local:latest
 lineraImagePullPolicy: Never
 logLevel: "debug"
+proxyPort: 19100
 
+# Loki
 loki-stack:
   loki:
     enabled: true
@@ -16,3 +19,11 @@ loki-stack:
     config:
       clients:
         - url: http://linera-core-loki:3100/loki/api/v1/push
+
+# Environment
+environment: "kind"
+
+# Validator
+validator:
+  serverConfig: "" # Needs to be set by the CLI `--set validator.serverConfig=server_1.json`
+  genesisConfig: "" # Needs to be set by the CLI `--set validator.genesisConfig=genesis.json`
