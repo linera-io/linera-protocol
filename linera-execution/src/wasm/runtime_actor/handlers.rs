@@ -3,7 +3,10 @@
 
 //! Implementations of how requests should be handled inside a [`RuntimeActor`].
 
-use super::requests::{BaseRequest, ContractRequest, ServiceRequest};
+use super::{
+    requests::{BaseRequest, ContractRequest, ServiceRequest},
+    sync_response::SyncSender,
+};
 use crate::{BaseRuntime, ContractRuntime, ExecutionError, ServiceRuntime};
 use async_lock::RwLock;
 use async_trait::async_trait;
@@ -164,6 +167,16 @@ trait RespondExt {
 }
 
 impl<Response> RespondExt for oneshot::Sender<Response> {
+    type Response = Response;
+
+    fn respond(self, response: Self::Response) {
+        if self.send(response).is_err() {
+            tracing::debug!("Request sent to `RuntimeActor` was canceled");
+        }
+    }
+}
+
+impl<Response> RespondExt for SyncSender<Response> {
     type Response = Response;
 
     fn respond(self, response: Self::Response) {
