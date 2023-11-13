@@ -74,7 +74,7 @@ if [ -n "$cloud_mode" ]; then
 
         # Got to repo root to run GCloud build
         cd "$github_root"
-        gcloud builds submit --config test-cloudbuild-local.yaml --timeout="3h" --machine-type=e2-highcpu-32
+        gcloud builds submit --config build-image.yaml --timeout="3h" --machine-type=e2-highcpu-32
 
         # Back to current dir to run redeploy
         cd "$current_dir"
