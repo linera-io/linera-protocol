@@ -69,6 +69,14 @@ pub trait SendRequestExt<Request> {
     ) -> Result<oneshot::Receiver<Response>, WasmExecutionError>
     where
         Response: Send;
+
+    /// Sends a synchronous request built by `builder`, blocking until the `Response` is received.
+    fn send_sync_request<Response>(
+        &self,
+        builder: impl FnOnce(SyncSender<Response>) -> Request,
+    ) -> Result<Response, WasmExecutionError>
+    where
+        Response: Send;
 }
 
 impl<Request> SendRequestExt<Request> for mpsc::UnboundedSender<Request>
@@ -94,6 +102,29 @@ where
         })?;
 
         Ok(response_receiver)
+    }
+
+    fn send_sync_request<Response>(
+        &self,
+        builder: impl FnOnce(SyncSender<Response>) -> Request,
+    ) -> Result<Response, WasmExecutionError>
+    where
+        Response: Send,
+    {
+        let (response_sender, response_receiver) = sync_response::channel();
+        let request = builder(response_sender);
+
+        self.unbounded_send(request).map_err(|send_error| {
+            assert!(
+                send_error.is_disconnected(),
+                "`send_request` should only be used with unbounded senders"
+            );
+            WasmExecutionError::MissingRuntimeResponse
+        })?;
+
+        response_receiver
+            .recv()
+            .map_err(|_| WasmExecutionError::MissingRuntimeResponse)
     }
 }
 
