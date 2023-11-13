@@ -5,9 +5,13 @@
 
 mod handlers;
 mod requests;
+mod sync_response;
 
 use self::handlers::RequestHandler;
-pub use self::requests::{BaseRequest, ContractRequest, ServiceRequest};
+pub use self::{
+    requests::{BaseRequest, ContractRequest, ServiceRequest},
+    sync_response::{SyncReceiver, SyncSender},
+};
 use crate::{ExecutionError, WasmExecutionError};
 use futures::{
     channel::mpsc,
