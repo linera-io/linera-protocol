@@ -8,6 +8,7 @@ port_forward=
 do_build=1
 clean=
 copy=
+linera_bins_dir=../../target/debug
 
 # Guard clause check if required binaries are installed
 type -P kind >/dev/null || {
@@ -23,12 +24,13 @@ type -P helm >/dev/null || {
 usage() {
     echo "Usage: $0 [OPTIONS]"
     echo "Options:"
-    echo " -h, --help       Display this help message"
-    echo " --cloud          Use the Docker Image from Cloud build"
-    echo " --port-forward   Start port forwarding at the end of the script, so that the validator is accessible. Don't use this if you plan to use this terminal for something else after running this script"
-    echo " --no-build       Don't actually build another version of the Docker image, just use the existing one for the current mode (cloud or not)"
-    echo " --clean          Clean up DB state and delete kind cluster before starting a new one. This will guarantee that the Validator state will be clean for the new run"
-    echo " --copy           Have the Dockerfile copy over the already built binaries in the target/release directory. Binaries need to be built beforehand. Works only when --cloud is NOT set"
+    echo " -h, --help           Display this help message"
+    echo " --cloud              Use the Docker Image from Cloud build"
+    echo " --port-forward       Start port forwarding at the end of the script, so that the validator is accessible. Don't use this if you plan to use this terminal for something else after running this script"
+    echo " --no-build           Don't actually build another version of the Docker image, just use the existing one for the current mode (cloud or not)"
+    echo " --clean              Clean up DB state and delete kind cluster before starting a new one. This will guarantee that the Validator state will be clean for the new run"
+    echo " --copy               Have the Dockerfile copy over the already built binaries in the target/release directory. Binaries need to be built beforehand. Works only when --cloud is NOT set"
+    echo " --linera-bins-dir    The directory that contains the linera-server/linera binaries to generate configs. Defaults to ../../target/debug"
 }
 
 # Function to handle options and arguments
@@ -44,6 +46,10 @@ handle_options() {
         --no-build) do_build= ;;
         --clean) clean=1 ;;
         --copy) copy=1 ;;
+        --linera-bins-dir)
+            linera_bins_dir=$2
+            shift
+            ;;
         *)
             echo "Invalid option: $1" >&2
             usage >&2
@@ -58,9 +64,23 @@ handle_options() {
 handle_options "$@"
 
 if [ -n "$clean" ]; then
-    rm -rf /tmp/linera.db
+    rm -rf /tmp/linera.db /tmp/wallet.json working/committee.json working/server_1.json working/genesis.json
     kind delete cluster
 fi
+
+cd working
+if [ -f "committee.json" ] && [ -f "server_1.json" ]; then
+    echo "committee.json and server_1.json already exists, skipping running linera-server generate"
+else
+    ../$linera_bins_dir/linera-server generate --validators ../../../configuration/k8s-local/validator_1.toml --committee committee.json
+fi
+
+if [ -f "/tmp/wallet.json" ] && [ -f "/tmp/linera.db" ] && [ -f "genesis.json" ]; then
+    echo "/tmp/wallet.json, /tmp/linera.db, genesis.json already exists, skipping running linera create-genesis-config"
+else
+    ../$linera_bins_dir/linera --wallet /tmp/wallet.json --storage rocksdb:/tmp/linera.db create-genesis-config 10 --genesis genesis.json --initial-funding 100 --committee committee.json
+fi
+cd ..
 
 # If there's already a kind cluster running, this will fail, and that's fine. We just want to make sure there's a kind
 # cluster running
@@ -102,18 +122,18 @@ helm uninstall linera-core --wait || true
 
 if [ -n "$cloud_mode" ]; then
     helm install linera-core . \
-      --values values-local-with-cloud-build.yaml \
-      --wait \
-      --set installCRDs=true \
-      --set validator.serverConfig=working/server_1.json \
-      --set validator.genesisConfig=working/genesis.json
+        --values values-local-with-cloud-build.yaml \
+        --wait \
+        --set installCRDs=true \
+        --set validator.serverConfig=working/server_1.json \
+        --set validator.genesisConfig=working/genesis.json
 else
     helm install linera-core . \
-      --values values-local.yaml \
-      --wait \
-      --set installCRDs=true \
-      --set validator.serverConfig=working/server_1.json \
-      --set validator.genesisConfig=working/genesis.json
+        --values values-local.yaml \
+        --wait \
+        --set installCRDs=true \
+        --set validator.serverConfig=working/server_1.json \
+        --set validator.genesisConfig=working/genesis.json
 fi
 
 echo "Pods:"
