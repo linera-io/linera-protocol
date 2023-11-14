@@ -120,23 +120,23 @@ wit-bindgen-guest-rust = { version = "0.2.0", package = "linera-wit-bindgen-gues
 wit-bindgen-host-wasmer-rust = { version = "0.2.0", package = "linera-wit-bindgen-host-wasmer-rust" }
 wit-bindgen-host-wasmtime-rust = { version = "0.2.0", package = "linera-wit-bindgen-host-wasmtime-rust" }
 
-linera-base = { version = "0.5.0", path = "./linera-base" }
-linera-chain = { version = "0.5.0", path = "./linera-chain" }
-linera-core = { version = "0.5.0", path = "./linera-core", default-features = false }
-linera-execution = { version = "0.5.0", path = "./linera-execution", default-features = false }
+linera-base = { version = "0.6.0", path = "./linera-base" }
+linera-chain = { version = "0.6.0", path = "./linera-chain" }
+linera-core = { version = "0.6.0", path = "./linera-core", default-features = false }
+linera-execution = { version = "0.6.0", path = "./linera-execution", default-features = false }
 linera-indexer = { path = "./linera-indexer/lib" }
 linera-indexer-example = { path = "./linera-indexer/example" }
 linera-indexer-graphql-client = { path = "./linera-indexer/graphql-client" }
 linera-indexer-plugins = { path = "./linera-indexer/plugins" }
-linera-rpc = { version = "0.5.0", path = "./linera-rpc" }
-linera-storage = { version = "0.5.0", path = "./linera-storage", default-features = false }
-linera-views = { version = "0.5.0", path = "./linera-views", default-features = false }
-linera-views-derive = { version = "0.5.0", path = "./linera-views-derive" }
-linera-witty = { version = "0.5.0", path = "./linera-witty" }
-linera-witty-macros = { version = "0.5.0", path = "./linera-witty-macros" }
-linera-sdk-derive = { version = "0.5.0", path = "./linera-sdk-derive" }
-linera-service = { version = "0.5.0", path = "./linera-service" }
-linera-service-graphql-client = { version = "0.5.0", path = "./linera-service-graphql-client" }
+linera-rpc = { version = "0.6.0", path = "./linera-rpc" }
+linera-storage = { version = "0.6.0", path = "./linera-storage", default-features = false }
+linera-views = { version = "0.6.0", path = "./linera-views", default-features = false }
+linera-views-derive = { version = "0.6.0", path = "./linera-views-derive" }
+linera-witty = { version = "0.6.0", path = "./linera-witty" }
+linera-witty-macros = { version = "0.6.0", path = "./linera-witty-macros" }
+linera-sdk-derive = { version = "0.6.0", path = "./linera-sdk-derive" }
+linera-service = { version = "0.6.0", path = "./linera-service" }
+linera-service-graphql-client = { version = "0.6.0", path = "./linera-service-graphql-client" }
 
 counter = { path = "./examples/counter" }
 meta-counter = { path = "./examples/meta-counter" }
