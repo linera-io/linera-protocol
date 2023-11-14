@@ -24,17 +24,17 @@ fn forge_arg_type(arg: &Value, non_null: bool) -> Option<String> {
         }
         Some("NON_NULL") => forge_arg_type(&arg["ofType"], true),
         Some("LIST") => {
-            let args: Vec<String> = arg["_input"]
+            let args = arg["_input"]
                 .as_array()
                 .unwrap()
                 .iter()
                 .filter_map(|x| forge_arg_type(x, false))
-                .collect();
+                .collect::<Vec<_>>();
             Some(format!("[{}]", args.join(", ")))
         }
         Some("ENUM") => arg["_input"].as_str().map(|x| x.to_string()),
         Some("INPUT_OBJECT") => {
-            let args: Vec<String> = arg["inputFields"]
+            let args = arg["inputFields"]
                 .as_array()
                 .unwrap()
                 .iter()
@@ -42,7 +42,7 @@ fn forge_arg_type(arg: &Value, non_null: bool) -> Option<String> {
                     let name = x["name"].as_str().unwrap();
                     forge_arg_type(&x["type"], false).map(|arg| format!("{}: {}", name, arg))
                 })
-                .collect();
+                .collect::<Vec<_>>();
             Some(format!("{{{}}}", args.join(", ")))
         }
         _ => None,
@@ -62,7 +62,7 @@ fn forge_arg(arg: &Value) -> Option<String> {
 
 /// Forges query arguments.
 fn forge_args(args: Vec<Value>) -> String {
-    let args: Vec<String> = args.iter().filter_map(forge_arg).collect();
+    let args = args.iter().filter_map(forge_arg).collect::<Vec<_>>();
     if !args.is_empty() {
         format!("({})", args.join(","))
     } else {
@@ -85,14 +85,14 @@ fn forge_response_type(output: &Value, name: Option<&str>, root: bool) -> Option
         ),
         "NON_NULL" | "LIST" => forge_response_type(&output["ofType"], name, root),
         "OBJECT" => {
-            let fields: Vec<String> = output["fields"]
+            let fields = output["fields"]
                 .as_array()
                 .unwrap()
                 .iter()
                 .filter_map(|elt: &Value| {
                     forge_response_type(&elt["type"], elt["name"].as_str(), false)
                 })
-                .collect();
+                .collect::<Vec<_>>();
             if root {
                 Some(format!("{{ {} }}", fields.join(" ")))
             } else {

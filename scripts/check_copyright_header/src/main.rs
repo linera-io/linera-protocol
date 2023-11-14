@@ -62,7 +62,7 @@ fn check_file_header(
 }
 
 fn main() -> Result<(), CheckFileHeaderError> {
-    let args: Vec<String> = env::args().collect();
+    let args = env::args().collect::<Vec<_>>();
     let file_path = args.get(1).expect("Usage: FILE");
 
     let file = File::open(file_path).expect("Failed to open file");

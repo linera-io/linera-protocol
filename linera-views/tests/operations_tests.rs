@@ -56,7 +56,10 @@ async fn run_reads<C: KeyValueStoreClient + Sync>(
             .find_keys_by_prefix(key_prefix)
             .await
             .unwrap();
-        let keys_request: Vec<_> = keys_by_prefix.iterator().map(Result::unwrap).collect();
+        let keys_request = keys_by_prefix
+            .iterator()
+            .map(Result::unwrap)
+            .collect::<Vec<_>>();
         let mut set_key_value1 = HashSet::new();
         let mut keys_request_deriv = Vec::new();
         let key_values_by_prefix = key_value_store

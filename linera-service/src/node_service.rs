@@ -303,7 +303,7 @@ where
         multi_leader_rounds: Option<u32>,
         balance: Option<Amount>,
     ) -> Result<ChainId, Error> {
-        let owners: Vec<_> = if let Some(weights) = weights {
+        let owners = if let Some(weights) = weights {
             if weights.len() != public_keys.len() {
                 return Err(Error::new(format!(
                     "There are {} public keys but {} weights.",
@@ -311,9 +311,12 @@ where
                     weights.len()
                 )));
             }
-            public_keys.into_iter().zip(weights).collect()
+            public_keys.into_iter().zip(weights).collect::<Vec<_>>()
         } else {
-            public_keys.into_iter().zip(iter::repeat(100)).collect()
+            public_keys
+                .into_iter()
+                .zip(iter::repeat(100))
+                .collect::<Vec<_>>()
         };
         let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
         let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);

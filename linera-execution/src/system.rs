@@ -368,7 +368,7 @@ impl FromStr for Account {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts: Vec<&str> = s.split(':').collect();
+        let parts = s.split(':').collect::<Vec<_>>();
         anyhow::ensure!(
             parts.len() <= 2,
             "Expecting format `chain-id:address` or `chain-id`"

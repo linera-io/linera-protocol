@@ -99,10 +99,10 @@ impl KeyValueStoreClient for MemoryClient {
                     map.remove(&key);
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    let key_list: Vec<Vec<u8>> = map
+                    let key_list = map
                         .range(get_interval(key_prefix))
                         .map(|x| x.0.to_vec())
-                        .collect();
+                        .collect::<Vec<_>>();
                     for key in key_list {
                         map.remove(&key);
                     }

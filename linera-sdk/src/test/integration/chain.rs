@@ -186,12 +186,12 @@ impl ActiveChain {
         let cargo_manifest =
             Manifest::from_path(manifest_path).expect("Failed to load Cargo.toml manifest");
 
-        let binaries: Vec<_> = cargo_manifest
+        let binaries = cargo_manifest
             .bin
             .into_iter()
             .filter_map(|binary| binary.name)
             .filter(|name| name.ends_with("service") || name.ends_with("contract"))
-            .collect();
+            .collect::<Vec<_>>();
 
         assert_eq!(
             binaries.len(),

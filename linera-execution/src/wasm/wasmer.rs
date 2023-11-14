@@ -273,10 +273,10 @@ impl common::Contract for Contract {
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<Result<ApplicationCallResult, String>, RuntimeError> {
-        let forwarded_sessions: Vec<_> = forwarded_sessions
+        let forwarded_sessions = forwarded_sessions
             .into_iter()
             .map(contract::SessionId::from)
-            .collect();
+            .collect::<Vec<_>>();
 
         contract::Contract::handle_application_call(
             &self.contract,
@@ -296,10 +296,10 @@ impl common::Contract for Contract {
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<Result<(SessionCallResult, Vec<u8>), String>, RuntimeError> {
-        let forwarded_sessions: Vec<_> = forwarded_sessions
+        let forwarded_sessions = forwarded_sessions
             .into_iter()
             .map(contract::SessionId::from)
-            .collect();
+            .collect::<Vec<_>>();
 
         contract::Contract::handle_session_call(
             &self.contract,

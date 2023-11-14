@@ -659,7 +659,7 @@ where
         }
         let blob_hashes: HashSet<_> = blobs.iter().map(|blob| blob.hash()).collect();
         let recent_values = self.recent_values.lock().await;
-        let tasks: Vec<_> = required_locations
+        let tasks = required_locations
             .into_keys()
             .filter(|location| {
                 !recent_values.contains(&location.certificate_hash)
@@ -671,7 +671,7 @@ where
                     .read_value(location.certificate_hash)
                     .map(move |result| (location, result))
             })
-            .collect();
+            .collect::<Vec<_>>();
         let mut locations = vec![];
         for (location, result) in future::join_all(tasks).await {
             match result {

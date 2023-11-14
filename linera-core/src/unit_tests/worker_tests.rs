@@ -268,7 +268,9 @@ fn direct_credit_message(recipient: ChainId, amount: Amount) -> OutgoingMessage 
 
 /// Creates `count` key pairs and returns them, sorted by the `Owner` created from their public key.
 fn generate_key_pairs(count: usize) -> Vec<KeyPair> {
-    let mut key_pairs: Vec<_> = iter::repeat_with(KeyPair::generate).take(count).collect();
+    let mut key_pairs = iter::repeat_with(KeyPair::generate)
+        .take(count)
+        .collect::<Vec<_>>();
     key_pairs.sort_by_key(|key_pair| Owner::from(key_pair.public()));
     key_pairs
 }

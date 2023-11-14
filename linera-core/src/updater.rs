@@ -203,7 +203,7 @@ where
                         return Err(NodeError::InvalidChainInfoResponse);
                     }
                 }
-                let unique_locations: HashSet<_> = locations.iter().cloned().collect();
+                let unique_locations = locations.iter().cloned().collect::<HashSet<_>>();
                 if locations.len() > unique_locations.len() {
                     warn!("locations requested by validator contain duplicates");
                     return Err(NodeError::InvalidChainInfoResponse);

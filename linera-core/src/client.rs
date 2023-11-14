@@ -852,13 +852,13 @@ where
                 locations,
             )) = &err
             {
-                let blobs: Vec<HashedValue> = future::join_all(locations.iter().map(|location| {
+                let blobs = future::join_all(locations.iter().map(|location| {
                     LocalNodeClient::<S>::download_blob(nodes.clone(), block.chain_id, *location)
                 }))
                 .await
                 .into_iter()
                 .flatten()
-                .collect();
+                .collect::<Vec<_>>();
                 if !blobs.is_empty() {
                     self.process_certificate(certificate.clone(), blobs).await?;
                 }
@@ -1533,7 +1533,7 @@ where
             ChainError::InactiveChain(self.chain_id)
         );
         let messages = self.pending_messages().await?;
-        let mut owners: Vec<_> = ownership.owners.values().copied().collect();
+        let mut owners = ownership.owners.values().copied().collect::<Vec<_>>();
         owners.extend(
             ownership
                 .super_owners
