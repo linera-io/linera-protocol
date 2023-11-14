@@ -1183,7 +1183,10 @@ where
     async fn propose_block(&mut self, block: Block) -> Result<Certificate, ChainClientError> {
         ensure!(
             self.pending_block.is_none() || self.pending_block.as_ref() == Some(&block),
-            ChainClientError::BlockProposalError("Client state has a different pending block")
+            ChainClientError::BlockProposalError(
+                "Client state has a different pending block; \
+                use the retry-pending-block command to commit that first"
+            )
         );
         ensure!(
             block.height == self.next_block_height,
