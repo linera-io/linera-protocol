@@ -54,8 +54,8 @@ where
         let key2 = context.base_tag(KeyTag::Hash as u8);
         let keys = vec![key1, key2];
         let values_bytes = context.read_multi_key_bytes(keys).await?;
-        let stored_indices = from_bytes_opt(values_bytes[0].clone())?.unwrap_or_default();
-        let hash = from_bytes_opt(values_bytes[1].clone())?;
+        let stored_indices = from_bytes_opt(&values_bytes[0])?.unwrap_or_default();
+        let hash = from_bytes_opt(&values_bytes[1])?;
         Ok(Self {
             context,
             stored_indices,
