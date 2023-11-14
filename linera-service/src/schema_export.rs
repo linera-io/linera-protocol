@@ -2,16 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use linera_base::identifiers::ChainId;
+use linera_base::{crypto::KeyPair, data_types::Timestamp, identifiers::ChainId};
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
+    client::ChainClient,
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{NodeError, NotificationStream, ValidatorNode, ValidatorNodeProvider},
 };
 use linera_execution::committee::Committee;
-use linera_service::{chain_listener::ChainListenerConfig, node_service::NodeService};
-use linera_storage::{MemoryStoreClient, WallClock};
-use linera_views::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
+use linera_service::{
+    chain_listener::{ChainListenerConfig, ClientContext},
+    config::WalletState,
+    node_service::NodeService,
+};
+use linera_storage::{MemoryStoreClient, Store, WallClock};
+use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
 use structopt::StructOpt;
 
 #[derive(Clone)]
@@ -74,6 +79,34 @@ impl ValidatorNodeProvider for DummyValidatorNodeProvider {
 )]
 struct Options {}
 
+struct DummyContext;
+
+#[async_trait]
+impl ClientContext<DummyValidatorNodeProvider> for DummyContext {
+    fn wallet_state(&self) -> &WalletState {
+        unimplemented!()
+    }
+
+    fn make_chain_client<S>(
+        &self,
+        _: S,
+        _: impl Into<Option<ChainId>>,
+    ) -> ChainClient<DummyValidatorNodeProvider, S> {
+        unimplemented!()
+    }
+
+    fn update_wallet_for_new_chain(&mut self, _: ChainId, _: Option<KeyPair>, _: Timestamp) {}
+
+    async fn update_wallet<'a, S>(
+        &'a mut self,
+        _: &'a mut ChainClient<DummyValidatorNodeProvider, S>,
+    ) where
+        S: Store + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+    }
+}
+
 fn main() -> std::io::Result<()> {
     let _options = Options::from_args();
 
@@ -82,11 +115,13 @@ fn main() -> std::io::Result<()> {
         delay_before_ms: 0,
         delay_after_ms: 0,
     };
-    let service = NodeService::<DummyValidatorNodeProvider, _>::new(
+    let context = DummyContext;
+    let service = NodeService::<DummyValidatorNodeProvider, _, _>::new(
         config,
         std::num::NonZeroU16::new(8080).unwrap(),
         None,
         store,
+        context,
     );
     let schema = service.schema().sdl();
     print!("{}", schema);

@@ -1646,8 +1646,8 @@ impl Runnable for Job {
 
             Service { config, port } => {
                 let default_chain = context.wallet_state.default_chain();
-                let service = NodeService::new(config, port, default_chain, storage);
-                service.run(context).await?;
+                let service = NodeService::new(config, port, default_chain, storage, context);
+                service.run().await?;
             }
 
             Faucet {

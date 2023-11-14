@@ -103,8 +103,9 @@ pub struct SubscriptionRoot<P, S> {
 }
 
 /// Our root GraphQL mutation type.
-pub struct MutationRoot<P, S> {
+pub struct MutationRoot<P, S, C> {
     clients: ChainClients<P, S>,
+    context: Arc<Mutex<C>>,
 }
 
 #[derive(Debug, ThisError)]
@@ -201,10 +202,11 @@ where
     }
 }
 
-impl<P, S> MutationRoot<P, S>
+impl<P, S, C> MutationRoot<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Store + Clone + Send + Sync + 'static,
+    C: ClientContext<P> + Send + 'static,
     ViewError: From<S::ContextError>,
 {
     async fn execute_system_operation(
@@ -214,22 +216,27 @@ where
     ) -> Result<CryptoHash, Error> {
         let mut client = self.clients.try_client_lock(&chain_id).await?;
         let operation = Operation::System(system_operation);
-        Ok(client.execute_operation(operation).await?.value.hash())
+        let result = client.execute_operation(operation).await;
+        self.context.lock().await.update_wallet(&mut *client).await;
+        Ok(result?.hash())
     }
 }
 
 #[Object]
-impl<P, S> MutationRoot<P, S>
+impl<P, S, C> MutationRoot<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Store + Clone + Send + Sync + 'static,
+    C: ClientContext<P> + Send + 'static,
     ViewError: From<S::ContextError>,
 {
     /// Processes the inbox and returns the lists of certificate hashes that were created, if any.
     async fn process_inbox(&self, chain_id: ChainId) -> Result<Vec<CryptoHash>, Error> {
         let mut client = self.clients.try_client_lock(&chain_id).await?;
         client.synchronize_from_validators().await?;
-        let certificates = client.process_inbox().await?;
+        let result = client.process_inbox().await;
+        self.context.lock().await.update_wallet(&mut *client).await;
+        let certificates = result?;
         drop(client);
         let hashes = certificates.into_iter().map(|cert| cert.hash()).collect();
         Ok(hashes)
@@ -246,10 +253,11 @@ where
         user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
         let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let certificate = client
+        let result = client
             .transfer(owner, amount, recipient, user_data.unwrap_or_default())
-            .await?;
-        Ok(certificate.hash())
+            .await;
+        self.context.lock().await.update_wallet(&mut *client).await;
+        Ok(result?.hash())
     }
 
     /// Claims `amount` units of value from the given owner's account in
@@ -266,7 +274,7 @@ where
         user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
         let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let certificate = client
+        let result = client
             .claim(
                 owner,
                 target,
@@ -274,8 +282,9 @@ where
                 amount,
                 user_data.unwrap_or_default(),
             )
-            .await?;
-        Ok(certificate.hash())
+            .await;
+        self.context.lock().await.update_wallet(&mut *client).await;
+        Ok(result?.hash())
     }
 
     /// Creates (or activates) a new chain by installing the given authentication key.
@@ -289,8 +298,9 @@ where
         let mut client = self.clients.try_client_lock(&chain_id).await?;
         let ownership = ChainOwnership::single(public_key);
         let balance = balance.unwrap_or(Amount::ZERO);
-        let (message_id, _) = client.open_chain(ownership, balance).await?;
-        Ok(ChainId::child(message_id))
+        let result = client.open_chain(ownership, balance).await;
+        self.context.lock().await.update_wallet(&mut *client).await;
+        Ok(ChainId::child(result?.0))
     }
 
     /// Creates (or activates) a new chain by installing the given authentication keys.
@@ -319,15 +329,17 @@ where
         let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
         let mut client = self.clients.try_client_lock(&chain_id).await?;
         let balance = balance.unwrap_or(Amount::ZERO);
-        let (message_id, _) = client.open_chain(ownership, balance).await?;
-        Ok(ChainId::child(message_id))
+        let result = client.open_chain(ownership, balance).await;
+        self.context.lock().await.update_wallet(&mut *client).await;
+        Ok(ChainId::child(result?.0))
     }
 
     /// Closes the chain.
     async fn close_chain(&self, chain_id: ChainId) -> Result<CryptoHash, Error> {
         let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let certificate = client.close_chain().await?;
-        Ok(certificate.hash())
+        let result = client.close_chain().await;
+        self.context.lock().await.update_wallet(&mut *client).await;
+        Ok(result?.hash())
     }
 
     /// Changes the authentication key of the chain.
@@ -420,8 +432,9 @@ where
         service: Bytecode,
     ) -> Result<BytecodeId, Error> {
         let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let (bytecode_id, _) = client.publish_bytecode(contract, service).await?;
-        Ok(bytecode_id)
+        let result = client.publish_bytecode(contract, service).await;
+        self.context.lock().await.update_wallet(&mut *client).await;
+        Ok(result?.0)
     }
 
     /// Creates a new application.
@@ -434,15 +447,16 @@ where
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ApplicationId, Error> {
         let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let (application_id, _) = client
+        let result = client
             .create_application_untyped(
                 bytecode_id,
                 parameters.as_bytes().to_vec(),
                 initialization_argument.as_bytes().to_vec(),
                 required_application_ids,
             )
-            .await?;
-        Ok(application_id)
+            .await;
+        self.context.lock().await.update_wallet(&mut *client).await;
+        Ok(result?.0)
     }
 
     /// Requests a `RegisterApplications` message from another chain so the application can be used
@@ -454,10 +468,11 @@ where
         target_chain_id: Option<ChainId>,
     ) -> Result<CryptoHash, Error> {
         let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let certificate = client
+        let result = client
             .request_application(application_id, target_chain_id)
-            .await?;
-        Ok(certificate.hash())
+            .await;
+        self.context.lock().await.update_wallet(&mut *client).await;
+        Ok(result?.hash())
     }
 }
 
@@ -652,15 +667,16 @@ fn bytes_from_list(list: &[async_graphql::Value]) -> Option<Vec<u8>> {
 
 /// The `NodeService` is a server that exposes a web-server to the client.
 /// The node service is primarily used to explore the state of a chain in GraphQL.
-pub struct NodeService<P, S> {
+pub struct NodeService<P, S, C> {
     clients: ChainClients<P, S>,
     config: ChainListenerConfig,
     port: NonZeroU16,
     default_chain: Option<ChainId>,
     storage: S,
+    context: Arc<Mutex<C>>,
 }
 
-impl<P, S: Clone> Clone for NodeService<P, S> {
+impl<P, S: Clone, C> Clone for NodeService<P, S, C> {
     fn clone(&self) -> Self {
         Self {
             clients: self.clients.clone(),
@@ -668,14 +684,16 @@ impl<P, S: Clone> Clone for NodeService<P, S> {
             port: self.port,
             default_chain: self.default_chain,
             storage: self.storage.clone(),
+            context: self.context.clone(),
         }
     }
 }
 
-impl<P, S> NodeService<P, S>
+impl<P, S, C> NodeService<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Store + Clone + Send + Sync + 'static,
+    C: ClientContext<P> + Send + 'static,
     ViewError: From<S::ContextError>,
 {
     /// Creates a new instance of the node service given a client chain and a port.
@@ -684,6 +702,7 @@ where
         port: NonZeroU16,
         default_chain: Option<ChainId>,
         storage: S,
+        context: C,
     ) -> Self {
         Self {
             clients: ChainClients::default(),
@@ -691,10 +710,12 @@ where
             port,
             default_chain,
             storage,
+            context: Arc::new(Mutex::new(context)),
         }
     }
 
-    pub fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S>, SubscriptionRoot<P, S>> {
+    #[allow(clippy::type_complexity)]
+    pub fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S, C>, SubscriptionRoot<P, S>> {
         Schema::build(
             QueryRoot {
                 clients: self.clients.clone(),
@@ -703,6 +724,7 @@ where
             },
             MutationRoot {
                 clients: self.clients.clone(),
+                context: self.context.clone(),
             },
             SubscriptionRoot {
                 clients: self.clients.clone(),
@@ -712,10 +734,7 @@ where
     }
 
     /// Runs the node service.
-    pub async fn run<C>(self, context: C) -> Result<(), anyhow::Error>
-    where
-        C: ClientContext<P> + Send + 'static,
-    {
+    pub async fn run(self) -> Result<(), anyhow::Error> {
         let port = self.port.get();
         let index_handler = axum::routing::get(util::graphiql).post(Self::index_handler);
         let application_handler =
@@ -735,7 +754,9 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        ChainListener::new(self.config, self.clients.clone()).run(context, self.storage.clone());
+        ChainListener::new(self.config, self.clients.clone())
+            .run(self.context.clone(), self.storage.clone())
+            .await;
         let serve_fut =
             Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
         serve_fut.await?;
