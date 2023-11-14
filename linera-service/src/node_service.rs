@@ -242,6 +242,14 @@ where
         Ok(hashes)
     }
 
+    /// Retries the pending block that was unsuccessfully proposed earlier.
+    async fn retry_pending_block(&self, chain_id: ChainId) -> Result<Option<CryptoHash>, Error> {
+        let mut client = self.clients.try_client_lock(&chain_id).await?;
+        let maybe_certificate = client.retry_pending_block().await?;
+        self.context.lock().await.update_wallet(&mut *client).await;
+        Ok(maybe_certificate.map(|cert| cert.hash()))
+    }
+
     /// Transfers `amount` units of value from the given owner's account to the recipient.
     /// If no owner is given, try to take the units out of the unattributed account.
     async fn transfer(
