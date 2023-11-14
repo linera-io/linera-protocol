@@ -12,7 +12,7 @@ use anyhow::{bail, Context, Result};
 use async_graphql::InputType;
 use linera_base::{
     abi::ContractAbi,
-    crypto::PublicKey,
+    crypto::{CryptoHash, PublicKey},
     data_types::Amount,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
@@ -430,6 +430,24 @@ impl ClientWrapper {
         let chain_id = ChainId::from_str(split.next().context("no chain ID in output")?)?;
 
         Ok((message_id, chain_id))
+    }
+
+    pub async fn retry_pending_block(
+        &self,
+        chain_id: Option<ChainId>,
+    ) -> Result<Option<CryptoHash>> {
+        let mut command = self.command().await?;
+        command.arg("retry-pending-block");
+        if let Some(chain_id) = chain_id {
+            command.arg(chain_id.to_string());
+        }
+        let stdout = command.spawn_and_wait_for_stdout().await?;
+        let stdout = stdout.trim();
+        if stdout.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(CryptoHash::from_str(stdout)?))
+        }
     }
 
     pub fn get_wallet(&self) -> Result<WalletState> {

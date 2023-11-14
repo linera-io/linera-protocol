@@ -519,6 +519,7 @@ where
             block_hash,
             Timestamp::from(0),
             block_height,
+            None,
         ))
     }
 

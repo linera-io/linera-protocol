@@ -114,6 +114,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
+        pending_block: Option<Block>,
     ) -> ChainClient<ValidatorNodeProvider, StorageClient> {
         let known_key_pairs = known_key_pairs
             .into_iter()
@@ -138,7 +139,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
             block_hash,
             timestamp,
             next_block_height,
-            pending_block: None,
+            pending_block,
             cross_chain_delay: self.cross_chain_delay,
             cross_chain_retries: self.cross_chain_retries,
             node_client,
@@ -1203,7 +1204,11 @@ where
         let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
         let response = self.node_client.handle_chain_info_query(query).await?;
         let manager = response.info.manager;
-        let Some(next_round) = manager.next_round() else {
+        let next_round = if let Some(next_round) = manager.next_round() {
+            next_round
+        } else if self.pending_block.is_some() {
+            manager.current_round
+        } else {
             return Err(ChainClientError::BlockProposalError(
                 "Cannot propose a block; there is already a proposal in the current round",
             ));

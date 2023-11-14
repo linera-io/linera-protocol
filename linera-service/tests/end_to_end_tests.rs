@@ -789,3 +789,45 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     net.ensure_is_running().unwrap();
     net.terminate().await.unwrap();
 }
+
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_retry_pending_block(config: LocalNetTestingConfig) {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    // Create runner and client.
+    let (mut net, client) = config.instantiate().await.unwrap();
+    let chain_id = client.get_wallet().unwrap().default_chain().unwrap();
+    assert_eq!(
+        client.query_balance(chain_id).await.unwrap(),
+        Amount::from_tokens(10)
+    );
+    // Stop validators.
+    for i in 0..4 {
+        net.remove_validator(i).unwrap();
+    }
+    let result = client
+        .transfer(Amount::from_tokens(2), chain_id, ChainId::root(5))
+        .await;
+    assert!(result.is_err());
+    assert_eq!(
+        client.query_balance(chain_id).await.unwrap(),
+        Amount::from_tokens(10)
+    );
+    // Restart validators.
+    for i in 0..4 {
+        net.start_validator(i).await.unwrap();
+    }
+    let result = client.retry_pending_block(Some(chain_id)).await;
+    assert!(result.unwrap().is_some());
+    assert_eq!(
+        client.synchronize_balance(chain_id).await.unwrap(),
+        Amount::from_tokens(8)
+    );
+    let result = client.retry_pending_block(Some(chain_id)).await;
+    assert!(result.unwrap().is_none());
+
+    net.ensure_is_running().unwrap();
+    net.terminate().await.unwrap();
+}
