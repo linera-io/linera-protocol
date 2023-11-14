@@ -967,7 +967,7 @@ enum ClientCommand {
         /// The end timestamp: The faucet will rate-limit the token supply so it runs out of money
         /// no earlier than this.
         #[structopt(long)]
-        end_timestamp: Option<DateTime<Utc>>,
+        limit_rate_until: Option<DateTime<Utc>>,
     },
 
     /// Publish bytecode.
@@ -1634,10 +1634,10 @@ impl Runnable for Job {
                 chain_id,
                 port,
                 amount,
-                end_timestamp,
+                limit_rate_until,
             } => {
                 let chain_client = context.make_chain_client(storage, chain_id);
-                let end_timestamp = end_timestamp
+                let end_timestamp = limit_rate_until
                     .map(|et| {
                         let micros = u64::try_from(et.timestamp_micros())
                             .expect("End timestamp before 1970");
