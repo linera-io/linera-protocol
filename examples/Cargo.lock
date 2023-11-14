@@ -1628,7 +1628,7 @@ checksum = "348108ab3fba42ec82ff6e9564fc4ca0247bdccdc68dd8af9764bbc79c3c8ffb"
 
 [[package]]
 name = "linera-base"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-graphql",
  "bcs",
@@ -1648,7 +1648,7 @@ dependencies = [
 
 [[package]]
 name = "linera-chain"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-graphql",
  "async-lock",
@@ -1669,7 +1669,7 @@ dependencies = [
 
 [[package]]
 name = "linera-core"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -1700,7 +1700,7 @@ dependencies = [
 
 [[package]]
 name = "linera-execution"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -1733,7 +1733,7 @@ dependencies = [
 
 [[package]]
 name = "linera-sdk"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -1761,7 +1761,7 @@ dependencies = [
 
 [[package]]
 name = "linera-sdk-derive"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2",
@@ -1770,7 +1770,7 @@ dependencies = [
 
 [[package]]
 name = "linera-storage"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -1790,7 +1790,7 @@ dependencies = [
 
 [[package]]
 name = "linera-views"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -1818,7 +1818,7 @@ dependencies = [
 
 [[package]]
 name = "linera-views-derive"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "convert_case 0.6.0",
  "heck 0.4.1",
