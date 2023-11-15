@@ -185,7 +185,7 @@ where
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts: Vec<&str> = s.split(':').collect();
+        let parts = s.split(':').collect::<Vec<_>>();
         anyhow::ensure!(
             parts.len() == 3,
             "Expecting format `(tcp|udp|grpc|grpcs):host:port`"

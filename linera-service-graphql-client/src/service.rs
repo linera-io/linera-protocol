@@ -170,8 +170,10 @@ mod from {
                 message_counts,
                 state_hash,
             } = val;
-            let messages: Vec<OutgoingMessage> =
-                messages.into_iter().map(OutgoingMessage::from).collect();
+            let messages = messages
+                .into_iter()
+                .map(OutgoingMessage::from)
+                .collect::<Vec<_>>();
             ExecutedBlock {
                 block: block.into(),
                 messages,

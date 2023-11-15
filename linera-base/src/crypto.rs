@@ -463,11 +463,11 @@ impl Signature {
     {
         let mut msg = Vec::new();
         value.write(&mut msg);
-        let mut messages: Vec<&[u8]> = Vec::new();
-        let mut signatures: Vec<dalek::Signature> = Vec::new();
-        let mut public_keys: Vec<dalek::PublicKey> = Vec::new();
+        let mut messages = Vec::new();
+        let mut signatures = Vec::new();
+        let mut public_keys = Vec::new();
         for (addr, sig) in votes.into_iter() {
-            messages.push(&msg);
+            messages.push(msg.as_slice());
             signatures.push(sig.0);
             public_keys.push(dalek::PublicKey::from_bytes(&addr.0)?);
         }

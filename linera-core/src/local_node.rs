@@ -422,7 +422,7 @@ where
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
-        let futures: Vec<_> = validators
+        let futures = validators
             .into_iter()
             .map(|(name, node)| {
                 let mut client = self.clone();
@@ -432,7 +432,7 @@ where
                         .await
                 }
             })
-            .collect();
+            .collect::<Vec<_>>();
         futures::future::join_all(futures).await;
         let info = self.local_chain_info(chain_id).await?;
         Ok(info)

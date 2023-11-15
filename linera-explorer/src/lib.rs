@@ -343,12 +343,12 @@ fn fill_type(element: &Value, types: &Vec<Value>) -> Value {
                     match types.iter().find(|elt: &&Value| elt["name"] == name) {
                         None => (),
                         Some(element_definition) => {
-                            let fields: Vec<Value> = element_definition["fields"]
+                            let fields = element_definition["fields"]
                                 .as_array()
                                 .unwrap()
                                 .iter()
                                 .map(|elt| fill_type(elt, types))
-                                .collect();
+                                .collect::<Vec<_>>();
                             object.insert("fields".to_string(), Value::Array(fields));
                         }
                     }
@@ -357,12 +357,12 @@ fn fill_type(element: &Value, types: &Vec<Value>) -> Value {
                     match types.iter().find(|elt: &&Value| elt["name"] == name) {
                         None => (),
                         Some(element_definition) => {
-                            let fields: Vec<Value> = element_definition["inputFields"]
+                            let fields = element_definition["inputFields"]
                                 .as_array()
                                 .unwrap()
                                 .iter()
                                 .map(|elt| fill_type(elt, types))
-                                .collect();
+                                .collect::<Vec<_>>();
                             object.insert("inputFields".to_string(), Value::Array(fields));
                         }
                     }
@@ -371,12 +371,12 @@ fn fill_type(element: &Value, types: &Vec<Value>) -> Value {
                     match types.iter().find(|elt: &&Value| elt["name"] == name) {
                         None => (),
                         Some(element_definition) => {
-                            let values: Vec<Value> = element_definition["enumValues"]
+                            let values = element_definition["enumValues"]
                                 .as_array()
                                 .unwrap()
                                 .iter()
                                 .map(|elt| fill_type(elt, types))
-                                .collect();
+                                .collect::<Vec<_>>();
                             object.insert("enumValues".to_string(), Value::Array(values));
                         }
                     }
@@ -759,7 +759,7 @@ pub async fn start(app: JsValue) {
                 .unwrap();
             let uri = Url::parse(&uri).expect("failed to parse url");
             let pathname = uri.path();
-            let mut args: Vec<(String, String)> = uri.query_pairs().into_owned().collect();
+            let mut args = uri.query_pairs().into_owned().collect::<Vec<_>>();
             args.push(("chain".to_string(), default_chain.to_string()));
             let path = match pathname {
                 "/blocks" => Some("blocks".to_string()),

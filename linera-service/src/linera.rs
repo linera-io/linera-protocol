@@ -1295,8 +1295,11 @@ impl Runnable for Job {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting operation to open a new chain");
                 let time_start = Instant::now();
-                let owners: Vec<_> = if weights.is_empty() {
-                    public_keys.into_iter().zip(iter::repeat(100)).collect()
+                let owners = if weights.is_empty() {
+                    public_keys
+                        .into_iter()
+                        .zip(iter::repeat(100))
+                        .collect::<Vec<_>>()
                 } else if weights.len() != public_keys.len() {
                     bail!(
                         "There are {} public keys but {} weights.",
@@ -1304,7 +1307,7 @@ impl Runnable for Job {
                         weights.len()
                     );
                 } else {
-                    public_keys.into_iter().zip(weights).collect()
+                    public_keys.into_iter().zip(weights).collect::<Vec<_>>()
                 };
                 let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
                 let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
@@ -1551,7 +1554,7 @@ impl Runnable for Job {
                 let responses = context
                     .mass_broadcast("block proposals", max_in_flight, proposals)
                     .await;
-                let votes: Vec<_> = responses
+                let votes = responses
                     .into_iter()
                     .filter_map(|message| {
                         deserialize_response(message).and_then(|response| {
@@ -1561,7 +1564,7 @@ impl Runnable for Job {
                             })
                         })
                     })
-                    .collect();
+                    .collect::<Vec<_>>();
                 info!("Received {} valid votes.", votes.len());
 
                 info!("Starting benchmark phase 2 (certified blocks)");

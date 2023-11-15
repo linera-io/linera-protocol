@@ -61,7 +61,10 @@ async fn main() -> Result<ExitCode> {
     let engine = Engine::new(&engine_config)?;
     let mut linker = Linker::new(&engine);
     let test_module = load_test_module(&options.module_path, &engine)?;
-    let tests: Vec<_> = test_module.exports().filter_map(Test::new).collect();
+    let tests = test_module
+        .exports()
+        .filter_map(Test::new)
+        .collect::<Vec<_>>();
 
     mock_system_api::add_to_linker(&mut linker)?;
 

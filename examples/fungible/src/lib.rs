@@ -303,7 +303,7 @@ impl<'de> Deserialize<'de> for AccountOwner {
             where
                 E: serde::de::Error,
             {
-                let parts: Vec<&str> = value.splitn(2, ':').collect();
+                let parts = value.splitn(2, ':').collect::<Vec<_>>();
                 if parts.len() != 2 {
                     return Err(Error::custom("string does not contain colon"));
                 }

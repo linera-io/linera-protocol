@@ -74,10 +74,10 @@ pub fn call_application_without_persisting_state(
     argument: &[u8],
     forwarded_sessions: Vec<SessionId>,
 ) -> (Vec<u8>, Vec<SessionId>) {
-    let forwarded_sessions: Vec<_> = forwarded_sessions
+    let forwarded_sessions = forwarded_sessions
         .into_iter()
         .map(wit::SessionId::from)
-        .collect();
+        .collect::<Vec<_>>();
 
     wit::try_call_application(
         authenticated,
@@ -98,10 +98,10 @@ pub fn call_session_without_persisting_state(
     argument: &[u8],
     forwarded_sessions: Vec<SessionId>,
 ) -> (Vec<u8>, Vec<SessionId>) {
-    let forwarded_sessions: Vec<_> = forwarded_sessions
+    let forwarded_sessions = forwarded_sessions
         .into_iter()
         .map(wit::SessionId::from)
-        .collect();
+        .collect::<Vec<_>>();
 
     wit::try_call_session(authenticated, session.into(), argument, &forwarded_sessions).into()
 }

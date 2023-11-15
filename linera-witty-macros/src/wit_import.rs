@@ -45,11 +45,11 @@ struct FunctionInformation<'input> {
 impl<'input> WitImportGenerator<'input> {
     /// Collects the pieces necessary for code generation from the inputs.
     fn new(trait_definition: &'input ItemTrait, namespace: &'input LitStr) -> Self {
-        let functions: Vec<_> = trait_definition
+        let functions = trait_definition
             .items
             .iter()
             .map(FunctionInformation::from)
-            .collect();
+            .collect::<Vec<_>>();
 
         WitImportGenerator {
             trait_name: &trait_definition.ident,
