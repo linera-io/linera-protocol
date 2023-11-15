@@ -1287,9 +1287,6 @@ impl Runnable for Job {
                 let result = chain_client.open_chain(ownership, balance).await;
                 context.update_and_save_wallet(&mut chain_client).await;
                 let (message_id, certificate) = result.context("failed to open chain")?;
-                let time_total = time_start.elapsed().as_micros();
-                info!("Operation confirmed after {} us", time_total);
-                debug!("{:?}", certificate);
                 let id = ChainId::child(message_id);
                 let timestamp = match certificate.value() {
                     CertificateValue::ConfirmedBlock {
@@ -1299,10 +1296,13 @@ impl Runnable for Job {
                     _ => panic!("Unexpected certificate."),
                 };
                 context.update_wallet_for_new_chain(id, key_pair, timestamp);
+                context.save_wallet();
+                let time_total = time_start.elapsed().as_micros();
+                info!("Operation confirmed after {} us", time_total);
+                debug!("{:?}", certificate);
                 // Print the new chain ID and message ID on stdout for scripting purposes.
                 println!("{}", message_id);
                 println!("{}", ChainId::child(message_id));
-                context.save_wallet();
             }
 
             OpenMultiOwnerChain {
@@ -1331,9 +1331,6 @@ impl Runnable for Job {
                 let result = chain_client.open_chain(ownership, balance).await;
                 context.update_and_save_wallet(&mut chain_client).await;
                 let (message_id, certificate) = result.context("failed to open chain")?;
-                let time_total = time_start.elapsed().as_micros();
-                info!("Operation confirmed after {} us", time_total);
-                debug!("{:?}", certificate);
                 // No key pair. This chain can be assigned explicitly using the assign command.
                 let key_pair = None;
                 let id = ChainId::child(message_id);
@@ -1345,10 +1342,13 @@ impl Runnable for Job {
                     _ => panic!("Unexpected certificate."),
                 };
                 context.update_wallet_for_new_chain(id, key_pair, timestamp);
+                context.save_wallet();
+                let time_total = time_start.elapsed().as_micros();
+                info!("Operation confirmed after {} us", time_total);
+                debug!("{:?}", certificate);
                 // Print the new chain ID and message ID on stdout for scripting purposes.
                 println!("{}", message_id);
                 println!("{}", ChainId::child(message_id));
-                context.save_wallet();
             }
 
             CloseChain { chain_id } => {
@@ -1367,36 +1367,36 @@ impl Runnable for Job {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting query for the local balance");
                 let time_start = Instant::now();
-                let balance = chain_client
-                    .local_balance()
-                    .await
-                    .context("Use sync_balance instead")?;
+                let result = chain_client.local_balance().await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let balance = result.context("Use sync_balance instead")?;
                 let time_total = time_start.elapsed().as_micros();
                 info!("Local balance obtained after {} us", time_total);
                 println!("{}", balance);
-                context.update_and_save_wallet(&mut chain_client).await;
             }
 
             SyncBalance { chain_id } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Synchronize chain information");
                 let time_start = Instant::now();
-                let balance = chain_client.synchronize_from_validators().await.unwrap();
+                let result = chain_client.synchronize_from_validators().await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let balance = result.context("Failed to synchronize from validators")?;
                 let time_total = time_start.elapsed().as_micros();
                 info!("Chain balance synchronized after {} us", time_total);
                 println!("{}", balance);
-                context.update_and_save_wallet(&mut chain_client).await;
             }
 
             QueryValidators { chain_id } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting operation to query validators");
                 let time_start = Instant::now();
-                let committee = chain_client.local_committee().await.unwrap();
+                let result = chain_client.local_committee().await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let committee = result.context("Failed to get local committee")?;
                 let time_total = time_start.elapsed().as_micros();
                 info!("Validators obtained after {} us", time_total);
                 info!("{:?}", committee.validators());
-                context.update_and_save_wallet(&mut chain_client).await;
             }
 
             command @ (SetValidator { .. }
@@ -1526,13 +1526,12 @@ impl Runnable for Job {
                 let result = chain_client.finalize_committee().await;
                 context.update_and_save_wallet(&mut chain_client).await;
                 let certificate = result.context("failed to finalize committee")?;
-                context.update_wallet_from_client(&mut chain_client).await;
                 info!("Finalizing committee:\n{:?}", certificate);
                 context.push_to_all_chains(&storage, &certificate).await;
+                context.save_wallet();
 
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operations confirmed after {} us", time_total);
-                context.save_wallet();
             }
 
             #[cfg(feature = "benchmark")]
@@ -1718,7 +1717,6 @@ impl Runnable for Job {
                 info!("{}", "Application created successfully!".green().bold());
                 println!("{}", application_id);
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs());
-                context.update_and_save_wallet(&mut chain_client).await;
             }
 
             PublishAndCreate {
