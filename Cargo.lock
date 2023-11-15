@@ -2716,6 +2716,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "insta"
+version = "1.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d64600be34b2fcfc267740a243fa7744441bb4947a619ac4e5bb6507f35fbfc"
+dependencies = [
+ "console",
+ "lazy_static",
+ "linked-hash-map",
+ "similar",
+ "yaml-rust",
+]
+
+[[package]]
 name = "io-lifetimes"
 version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3355,6 +3368,8 @@ version = "0.6.0"
 dependencies = [
  "convert_case 0.6.0",
  "heck 0.4.1",
+ "insta",
+ "prettyplease 0.2.15",
  "proc-macro2",
  "quote",
  "syn 2.0.39",
