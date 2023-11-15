@@ -5,7 +5,7 @@
   "scripts": {
     "clean": "rm -rf pkg dist package-lock.json gql",
     "wipe": "npm run clean && rm -rf node_modules",
-    "rust": "wasm-pack build -t web",
+    "rust": "wasm-pack build --debug -t web",
     "ts": "vue-tsc",
     "vite": "vite build",
     "build": "npm run ts && npm run vite",
