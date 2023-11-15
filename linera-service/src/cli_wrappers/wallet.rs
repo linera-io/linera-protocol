@@ -3,7 +3,7 @@
 
 use crate::{
     cli_wrappers::Network,
-    config::WalletState,
+    config::{GenesisConfig, WalletState},
     faucet::ClaimOutcome,
     util,
     util::{ChildExt, CommandExt},
@@ -159,11 +159,11 @@ impl ClientWrapper {
         faucet: Option<&str>,
     ) -> Result<Option<ClaimOutcome>> {
         let mut command = self.command().await?;
-        command
-            .args(["wallet", "init"])
-            .args(["--genesis", "genesis.json"]);
+        command.args(["wallet", "init"]);
         if let Some(faucet_url) = faucet {
             command.args(["--faucet", faucet_url]);
+        } else {
+            command.args(["--genesis", "genesis.json"]);
         }
         if let Some(seed) = self.testing_prng_seed {
             command.arg("--testing-prng-seed").arg(seed.to_string());
@@ -804,6 +804,32 @@ impl Faucet {
 
     pub async fn claim(&self, public_key: &PublicKey) -> Result<ClaimOutcome> {
         Self::claim_url(public_key, &self.url()).await
+    }
+
+    pub async fn request_genesis_config(url: &str) -> Result<GenesisConfig> {
+        let query = "query { genesisConfig }";
+        let client = reqwest::Client::new();
+        let response = client
+            .post(url)
+            .json(&json!({ "query": query }))
+            .send()
+            .await
+            .context("failed to post query")?;
+        anyhow::ensure!(
+            response.status().is_success(),
+            "Query \"{}\" failed: {}",
+            query,
+            response
+                .text()
+                .await
+                .unwrap_or_else(|error| format!("Could not get response text: {error}"))
+        );
+        let mut value: Value = response.json().await.context("invalid JSON")?;
+        if let Some(errors) = value.get("errors") {
+            bail!("Query \"{}\" failed: {}", query, errors);
+        }
+        serde_json::from_value(value["data"]["genesisConfig"].take())
+            .context("could not parse genesis config")
     }
 
     pub async fn claim_url(public_key: &PublicKey, url: &str) -> Result<ClaimOutcome> {

@@ -1,9 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{
-    connection::EmptyFields, EmptySubscription, Error, Object, Schema, SimpleObject,
-};
+use async_graphql::{EmptySubscription, Error, Object, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{http::StatusCode, response, response::IntoResponse, Extension, Router, Server};
 use futures::lock::Mutex;
@@ -25,11 +23,16 @@ use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info};
 
-use crate::util;
+use crate::{config::GenesisConfig, util};
 
 #[cfg(test)]
 #[path = "unit_tests/faucet.rs"]
 mod tests;
+
+/// The root GraphQL query type.
+pub struct QueryRoot {
+    genesis_config: Arc<GenesisConfig>,
+}
 
 /// The root GraphQL mutation type.
 pub struct MutationRoot<P, S> {
@@ -61,6 +64,14 @@ pub struct ClaimOutcome {
     pub chain_id: ChainId,
     /// The hash of the parent chain's certificate containing the `OpenChain` operation.
     pub certificate_hash: CryptoHash,
+}
+
+#[Object]
+impl QueryRoot {
+    /// Returns the genesis config.
+    async fn genesis_config(&self) -> Result<serde_json::Value, Error> {
+        Ok(serde_json::to_value(&*self.genesis_config)?)
+    }
 }
 
 #[Object]
@@ -135,6 +146,7 @@ impl<P, S> MutationRoot<P, S> {
 #[derive(Clone)]
 pub struct FaucetService<P, S> {
     client: Arc<Mutex<ChainClient<P, S>>>,
+    genesis_config: Arc<GenesisConfig>,
     port: NonZeroU16,
     amount: Amount,
     end_timestamp: Timestamp,
@@ -154,11 +166,13 @@ where
         mut client: ChainClient<P, S>,
         amount: Amount,
         end_timestamp: Timestamp,
+        genesis_config: Arc<GenesisConfig>,
     ) -> anyhow::Result<Self> {
         let start_timestamp = client.storage_client().await.current_time();
         let start_balance = client.local_balance().await?;
         Ok(Self {
             client: Arc::new(Mutex::new(client)),
+            genesis_config,
             port,
             amount,
             end_timestamp,
@@ -167,7 +181,7 @@ where
         })
     }
 
-    pub fn schema(&self) -> Schema<EmptyFields, MutationRoot<P, S>, EmptySubscription> {
+    pub fn schema(&self) -> Schema<QueryRoot, MutationRoot<P, S>, EmptySubscription> {
         let mutation_root = MutationRoot {
             client: self.client.clone(),
             amount: self.amount,
@@ -175,7 +189,10 @@ where
             start_timestamp: self.start_timestamp,
             start_balance: self.start_balance,
         };
-        Schema::build(EmptyFields, mutation_root, EmptySubscription).finish()
+        let query_root = QueryRoot {
+            genesis_config: self.genesis_config.clone(),
+        };
+        Schema::build(query_root, mutation_root, EmptySubscription).finish()
     }
 
     /// Runs the faucet.
