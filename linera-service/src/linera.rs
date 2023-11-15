@@ -10,7 +10,7 @@ use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::{CryptoRng, KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{BytecodeId, ChainDescription, ChainId, MessageId},
+    identifiers::{BytecodeId, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_chain::data_types::{Certificate, CertificateValue, ExecutedBlock};
 use linera_core::{
@@ -26,7 +26,8 @@ use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
     policy::ResourceControlPolicy,
     system::{Account, UserData},
-    Bytecode, ChainOwnership, UserApplicationId, WasmRuntime, WithWasmDefault,
+    Bytecode, ChainOwnership, Message, SystemMessage, UserApplicationId, WasmRuntime,
+    WithWasmDefault,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
@@ -1915,19 +1916,29 @@ impl Job {
             .certificate_for(&message_id)
             .await
             .context("could not find OpenChain message")?;
-        let timestamp = match certificate.value() {
-            CertificateValue::ConfirmedBlock {
-                executed_block: ExecutedBlock { block, .. },
-                ..
-            } => block.timestamp,
-            _ => bail!(
+        let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
+            bail!(
                 "Unexpected certificate. Please make sure you are connecting to the right \
                 network and are using a current software version."
-            ),
+            );
         };
+        let Some(Message::System(SystemMessage::OpenChain { ownership, .. })) = executed_block
+            .message_by_id(&message_id)
+            .map(|msg| &msg.message)
+        else {
+            bail!(
+                "The message with the ID returned by the faucet is not OpenChain. \
+                Please make sure you are connecting to a genuine faucet."
+            );
+        };
+        anyhow::ensure!(
+            ownership.verify_owner(&Owner::from(public_key)) == Some(public_key),
+            "The chain with the ID returned by the faucet is not owned by you. \
+            Please make sure you are connecting to a genuine faucet."
+        );
         context
             .wallet_state
-            .assign_new_chain_to_key(public_key, chain_id, timestamp)
+            .assign_new_chain_to_key(public_key, chain_id, executed_block.block.timestamp)
             .context("could not assign the new chain")?;
         Ok(())
     }
