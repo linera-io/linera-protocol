@@ -75,7 +75,7 @@ where
         // value of the called function changes.
         #[allow(clippy::unit_arg)]
         match request {
-            ContractRequest::Base(base_request) => (*self).handle_request(base_request).await?,
+            ContractRequest::Base(base_request) => self.handle_request(base_request).await?,
             ContractRequest::RemainingFuel { response_sender } => {
                 response_sender.respond(self.remaining_fuel())
             }
@@ -134,7 +134,7 @@ where
 {
     async fn handle_request(&self, request: ServiceRequest) -> Result<(), ExecutionError> {
         match request {
-            ServiceRequest::Base(base_request) => (*self).handle_request(base_request).await?,
+            ServiceRequest::Base(base_request) => self.handle_request(base_request).await?,
             ServiceRequest::TryQueryApplication {
                 queried_id,
                 argument,
