@@ -115,8 +115,7 @@ impl chain_listener::ClientContext<NodeProvider> for ClientContext {
         S: Store + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
-        self.update_wallet_from_client(client).await;
-        self.save_wallet()
+        self.update_and_save_wallet(client).await;
     }
 }
 
@@ -267,6 +266,7 @@ impl ClientContext {
             chain.block_hash,
             chain.timestamp,
             chain.next_block_height,
+            chain.pending_block.clone(),
         )
     }
 
@@ -441,6 +441,16 @@ impl ClientContext {
         self.wallet_state.update_from_state(state).await
     }
 
+    async fn update_and_save_wallet<P, S>(&mut self, state: &mut ChainClient<P, S>)
+    where
+        P: ValidatorNodeProvider + Sync + 'static,
+        S: Store + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        self.update_wallet_from_client(state).await;
+        self.save_wallet()
+    }
+
     /// Remembers the new private key (if any) in the wallet.
     fn update_wallet_for_new_chain(
         &mut self,
@@ -455,6 +465,7 @@ impl ClientContext {
                 block_hash: None,
                 timestamp,
                 next_block_height: BlockHeight::ZERO,
+                pending_block: None,
             });
         }
     }
@@ -1076,6 +1087,15 @@ enum ClientCommand {
         message_id: MessageId,
     },
 
+    /// Retry a block we unsuccessfully tried to propose earlier.
+    ///
+    /// As long as a block is pending most other commands will fail, since it is unsafe to propose
+    /// multiple blocks at the same height.
+    RetryPendingBlock {
+        /// The chain with the pending block. If not specified, the wallet's default chain is used.
+        chain_id: Option<ChainId>,
+    },
+
     /// Show the contents of the wallet.
     Wallet(WalletCommand),
 
@@ -1238,15 +1258,14 @@ impl Runnable for Job {
                 let mut chain_client = context.make_chain_client(storage, sender.chain_id);
                 info!("Starting transfer");
                 let time_start = Instant::now();
-                let certificate = chain_client
+                let result = chain_client
                     .transfer_to_account(sender.owner, amount, recipient, UserData::default())
-                    .await
-                    .unwrap();
+                    .await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let certificate = result.context("failed to make transfer")?;
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
                 debug!("{:?}", certificate);
-                context.update_wallet_from_client(&mut chain_client).await;
-                context.save_wallet();
             }
 
             OpenChain {
@@ -1265,11 +1284,9 @@ impl Runnable for Job {
                 info!("Starting operation to open a new chain");
                 let time_start = Instant::now();
                 let ownership = ChainOwnership::single(new_public_key);
-                let (message_id, certificate) = chain_client.open_chain(ownership, balance).await?;
-                let time_total = time_start.elapsed().as_micros();
-                info!("Operation confirmed after {} us", time_total);
-                debug!("{:?}", certificate);
-                context.update_wallet_from_client(&mut chain_client).await;
+                let result = chain_client.open_chain(ownership, balance).await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let (message_id, certificate) = result.context("failed to open chain")?;
                 let id = ChainId::child(message_id);
                 let timestamp = match certificate.value() {
                     CertificateValue::ConfirmedBlock {
@@ -1279,10 +1296,13 @@ impl Runnable for Job {
                     _ => panic!("Unexpected certificate."),
                 };
                 context.update_wallet_for_new_chain(id, key_pair, timestamp);
+                context.save_wallet();
+                let time_total = time_start.elapsed().as_micros();
+                info!("Operation confirmed after {} us", time_total);
+                debug!("{:?}", certificate);
                 // Print the new chain ID and message ID on stdout for scripting purposes.
                 println!("{}", message_id);
                 println!("{}", ChainId::child(message_id));
-                context.save_wallet();
             }
 
             OpenMultiOwnerChain {
@@ -1311,12 +1331,9 @@ impl Runnable for Job {
                 };
                 let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
                 let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
-                let (message_id, certificate) =
-                    chain_client.open_chain(ownership, balance).await.unwrap();
-                let time_total = time_start.elapsed().as_micros();
-                info!("Operation confirmed after {} us", time_total);
-                debug!("{:?}", certificate);
-                context.update_wallet_from_client(&mut chain_client).await;
+                let result = chain_client.open_chain(ownership, balance).await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let (message_id, certificate) = result.context("failed to open chain")?;
                 // No key pair. This chain can be assigned explicitly using the assign command.
                 let key_pair = None;
                 let id = ChainId::child(message_id);
@@ -1328,61 +1345,61 @@ impl Runnable for Job {
                     _ => panic!("Unexpected certificate."),
                 };
                 context.update_wallet_for_new_chain(id, key_pair, timestamp);
+                context.save_wallet();
+                let time_total = time_start.elapsed().as_micros();
+                info!("Operation confirmed after {} us", time_total);
+                debug!("{:?}", certificate);
                 // Print the new chain ID and message ID on stdout for scripting purposes.
                 println!("{}", message_id);
                 println!("{}", ChainId::child(message_id));
-                context.save_wallet();
             }
 
             CloseChain { chain_id } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting operation to close the chain");
                 let time_start = Instant::now();
-                let certificate = chain_client.close_chain().await.unwrap();
+                let result = chain_client.close_chain().await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let certificate = result.context("failed to close chain")?;
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
                 debug!("{:?}", certificate);
-                context.update_wallet_from_client(&mut chain_client).await;
-                context.save_wallet();
             }
 
             QueryBalance { chain_id } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting query for the local balance");
                 let time_start = Instant::now();
-                let balance = chain_client
-                    .local_balance()
-                    .await
-                    .expect("Use sync_balance instead");
+                let result = chain_client.local_balance().await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let balance = result.context("Use sync_balance instead")?;
                 let time_total = time_start.elapsed().as_micros();
                 info!("Local balance obtained after {} us", time_total);
                 println!("{}", balance);
-                context.update_wallet_from_client(&mut chain_client).await;
-                context.save_wallet();
             }
 
             SyncBalance { chain_id } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Synchronize chain information");
                 let time_start = Instant::now();
-                let balance = chain_client.synchronize_from_validators().await.unwrap();
+                let result = chain_client.synchronize_from_validators().await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let balance = result.context("Failed to synchronize from validators")?;
                 let time_total = time_start.elapsed().as_micros();
                 info!("Chain balance synchronized after {} us", time_total);
                 println!("{}", balance);
-                context.update_wallet_from_client(&mut chain_client).await;
-                context.save_wallet();
             }
 
             QueryValidators { chain_id } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting operation to query validators");
                 let time_start = Instant::now();
-                let committee = chain_client.local_committee().await.unwrap();
+                let result = chain_client.local_committee().await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let committee = result.context("Failed to get local committee")?;
                 let time_total = time_start.elapsed().as_micros();
                 info!("Validators obtained after {} us", time_total);
                 info!("{:?}", committee.validators());
-                context.update_wallet_from_client(&mut chain_client).await;
-                context.save_wallet();
             }
 
             command @ (SetValidator { .. }
@@ -1502,20 +1519,22 @@ impl Runnable for Job {
                     _ => unreachable!(),
                 }
                 committee = Committee::new(validators, policy);
-                let certificate = chain_client.stage_new_committee(committee).await.unwrap();
-                context.update_wallet_from_client(&mut chain_client).await;
+                let result = chain_client.stage_new_committee(committee).await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let certificate = result.context("failed to stage committee")?;
                 info!("Staging committee:\n{:?}", certificate);
                 context.push_to_all_chains(&storage, &certificate).await;
 
                 // Remove the old committee.
-                let certificate = chain_client.finalize_committee().await.unwrap();
-                context.update_wallet_from_client(&mut chain_client).await;
+                let result = chain_client.finalize_committee().await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let certificate = result.context("failed to finalize committee")?;
                 info!("Finalizing committee:\n{:?}", certificate);
                 context.push_to_all_chains(&storage, &certificate).await;
+                context.save_wallet();
 
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operations confirmed after {} us", time_total);
-                context.save_wallet();
             }
 
             #[cfg(feature = "benchmark")]
@@ -1629,8 +1648,8 @@ impl Runnable for Job {
 
             Service { config, port } => {
                 let default_chain = context.wallet_state.default_chain();
-                let service = NodeService::new(config, port, default_chain, storage);
-                service.run(context).await?;
+                let service = NodeService::new(config, port, default_chain, storage, context);
+                service.run().await?;
             }
 
             Faucet {
@@ -1658,13 +1677,13 @@ impl Runnable for Job {
             } => {
                 let start_time = Instant::now();
                 let mut chain_client = context.make_chain_client(storage, publisher);
-                let bytecode_id = context
+                let result = context
                     .publish_bytecode(&mut chain_client, contract, service)
-                    .await?;
+                    .await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let bytecode_id = result.context("failed to publish bytecode")?;
                 println!("{}", bytecode_id);
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs());
-                context.update_wallet_from_client(&mut chain_client).await;
-                context.save_wallet();
             }
 
             CreateApplication {
@@ -1688,21 +1707,19 @@ impl Runnable for Job {
                 chain_client.process_inbox().await?;
 
                 info!("Creating application...");
-                let (application_id, _) = chain_client
+                let result = chain_client
                     .create_application_untyped(
                         bytecode_id,
                         parameters,
                         argument,
                         required_application_ids.unwrap_or_default(),
                     )
-                    .await
-                    .context("failed to create application")?;
-
+                    .await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let (application_id, _) = result.context("failed to create application")?;
                 info!("{}", "Application created successfully!".green().bold());
                 println!("{}", application_id);
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs());
-                context.update_wallet_from_client(&mut chain_client).await;
-                context.save_wallet();
             }
 
             PublishAndCreate {
@@ -1722,30 +1739,27 @@ impl Runnable for Job {
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
 
-                let bytecode_id = context
+                let result = context
                     .publish_bytecode(&mut chain_client, contract, service)
-                    .await?;
-
-                // Saving wallet state in case the next step fails.
-                context.update_wallet_from_client(&mut chain_client).await;
-                context.save_wallet();
+                    .await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let bytecode_id = result.context("failed to publish bytecode")?;
 
                 info!("Creating application...");
-                let (application_id, _) = chain_client
+                let result = chain_client
                     .create_application_untyped(
                         bytecode_id,
                         parameters,
                         argument,
                         required_application_ids.unwrap_or_default(),
                     )
-                    .await
-                    .context("failed to create application")?;
+                    .await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let (application_id, _) = result.context("failed to create application")?;
 
                 info!("{}", "Application published successfully!".green().bold());
                 println!("{}", application_id);
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs());
-                context.update_wallet_from_client(&mut chain_client).await;
-                context.save_wallet();
             }
 
             RequestApplication {
@@ -1755,13 +1769,12 @@ impl Runnable for Job {
             } => {
                 let mut chain_client = context.make_chain_client(storage, requester_chain_id);
                 info!("Starting request");
-                let certificate = chain_client
+                let result = chain_client
                     .request_application(application_id, target_chain_id)
-                    .await
-                    .unwrap();
+                    .await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let certificate = result.context("failed to create application")?;
                 debug!("{:?}", certificate);
-                context.update_wallet_from_client(&mut chain_client).await;
-                context.save_wallet();
             }
 
             Assign { key, message_id } => {
@@ -1794,33 +1807,41 @@ impl Runnable for Job {
                     let project = project::Project::from_existing_project(project_path)?;
                     let (contract_path, service_path) = project.build(name)?;
 
-                    let bytecode_id = context
+                    let result = context
                         .publish_bytecode(&mut chain_client, contract_path, service_path)
-                        .await?;
-
-                    // Saving wallet state in case the next step fails.
-                    context.update_wallet_from_client(&mut chain_client).await;
-                    context.save_wallet();
+                        .await;
+                    context.update_and_save_wallet(&mut chain_client).await;
+                    let bytecode_id = result.context("failed to publish bytecode")?;
 
                     info!("Creating application...");
-                    let (application_id, _) = chain_client
+                    let result = chain_client
                         .create_application_untyped(
                             bytecode_id,
                             parameters,
                             argument,
                             required_application_ids.unwrap_or_default(),
                         )
-                        .await
-                        .context("failed to create application")?;
+                        .await;
+                    context.update_and_save_wallet(&mut chain_client).await;
+                    let (application_id, _) = result.context("failed to create application")?;
 
                     info!("{}", "Application published successfully!".green().bold());
                     println!("{}", application_id);
                     info!("Time elapsed: {}s", start_time.elapsed().as_secs());
-                    context.update_wallet_from_client(&mut chain_client).await;
-                    context.save_wallet();
                 }
                 _ => unreachable!("other project commands do not require storage"),
             },
+
+            RetryPendingBlock { chain_id } => {
+                let mut chain_client = context.make_chain_client(storage, chain_id);
+                if let Some(certificate) = chain_client.retry_pending_block().await? {
+                    info!("Pending block committed successfully.");
+                    println!("{}", certificate.hash());
+                } else {
+                    info!("No block is currently pending.");
+                }
+                context.update_and_save_wallet(&mut chain_client).await;
+            }
 
             Wallet(WalletCommand::Init {
                 faucet: Some(faucet_url),

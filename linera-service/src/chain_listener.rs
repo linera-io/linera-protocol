@@ -76,12 +76,11 @@ where
     }
 
     /// Runs the chain listener.
-    pub fn run<C>(self, context: C, storage: S)
+    pub async fn run<C>(self, context: Arc<Mutex<C>>, storage: S)
     where
         C: ClientContext<P> + Send + 'static,
     {
-        let chain_ids = context.wallet_state().chain_ids();
-        let context = Arc::new(Mutex::new(context));
+        let chain_ids = context.lock().await.wallet_state().chain_ids();
         for chain_id in chain_ids {
             Self::run_with_chain_id(
                 chain_id,

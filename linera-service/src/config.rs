@@ -13,6 +13,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{ChainDescription, ChainId, Owner},
 };
+use linera_chain::data_types::Block;
 use linera_core::{client::ChainClient, node::ValidatorNodeProvider};
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
@@ -103,6 +104,7 @@ pub struct UserChain {
     pub block_hash: Option<CryptoHash>,
     pub timestamp: Timestamp,
     pub next_block_height: BlockHeight,
+    pub pending_block: Option<Block>,
 }
 
 impl UserChain {
@@ -119,6 +121,7 @@ impl UserChain {
             block_hash: None,
             timestamp,
             next_block_height: BlockHeight::ZERO,
+            pending_block: None,
         }
     }
 
@@ -130,6 +133,7 @@ impl UserChain {
             block_hash: None,
             timestamp,
             next_block_height: BlockHeight::ZERO,
+            pending_block: None,
         }
     }
 }
@@ -232,6 +236,7 @@ impl WalletState {
             block_hash: None,
             timestamp,
             next_block_height: BlockHeight(0),
+            pending_block: None,
         };
         self.insert(user_chain);
         Ok(())
@@ -262,6 +267,7 @@ impl WalletState {
                 block_hash: state.block_hash(),
                 next_block_height: state.next_block_height(),
                 timestamp: state.timestamp(),
+                pending_block: state.pending_block().clone(),
             },
         );
     }
