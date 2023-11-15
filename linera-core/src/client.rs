@@ -1185,7 +1185,7 @@ where
             self.pending_block.is_none() || self.pending_block.as_ref() == Some(&block),
             ChainClientError::BlockProposalError(
                 "Client state has a different pending block; \
-                use the retry-pending-block command to commit that first"
+                use the `linera retry-pending-block` command to commit that first"
             )
         );
         ensure!(
@@ -1240,7 +1240,7 @@ where
         self.node_client
             .handle_block_proposal(proposal.clone())
             .await?;
-        // Remember what we are trying to do, before sending the proposal to the validators.
+        // Remember what we are trying to do before sending the proposal to the validators.
         self.pending_block = Some(block);
         // Send the query to validators.
         let submit_action = CommunicateAction::SubmitBlock(proposal.clone());
