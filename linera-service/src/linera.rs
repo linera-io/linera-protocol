@@ -1127,9 +1127,10 @@ enum WalletCommand {
 
     /// Initialize a wallet from the genesis configuration.
     Init {
-        /// The path to the genesis configuration for a Linera deployment.
+        /// The path to the genesis configuration for a Linera deployment. Either this or `--faucet`
+        /// must be specified.
         #[structopt(long = "genesis")]
-        genesis_config_path: PathBuf,
+        genesis_config_path: Option<PathBuf>,
 
         /// The address of a faucet. If this is specified, the default chain will be newly created,
         /// and credited with tokens.
@@ -1647,7 +1648,10 @@ impl Runnable for Job {
                         Timestamp::from(micros)
                     })
                     .unwrap_or_else(Timestamp::now);
-                let faucet = FaucetService::new(port, chain_client, amount, end_timestamp).await?;
+                let genesis_config = Arc::new(context.wallet_state.genesis_config().clone());
+                let faucet =
+                    FaucetService::new(port, chain_client, amount, end_timestamp, genesis_config)
+                        .await?;
                 faucet.run().await?;
             }
 
@@ -2158,7 +2162,11 @@ async fn main() -> Result<(), anyhow::Error> {
                 with_other_chains,
                 testing_prng_seed,
             } => {
-                let genesis_config = GenesisConfig::read(genesis_config_path)?;
+                let genesis_config = match (genesis_config_path, faucet) {
+                    (Some(genesis_config_path), None) => GenesisConfig::read(genesis_config_path)?,
+                    (None, Some(url)) => cli_wrappers::Faucet::request_genesis_config(url).await?,
+                    (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
+                };
                 let timestamp = genesis_config.timestamp;
                 let chains = with_other_chains
                     .iter()
