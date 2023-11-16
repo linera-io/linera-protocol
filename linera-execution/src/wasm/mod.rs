@@ -29,6 +29,7 @@ use crate::{
     MessageContext, OperationContext, QueryContext, RawExecutionResult, ServiceRuntime,
     SessionCallResult, SessionId, UserApplication, WasmRuntime,
 };
+use async_lock::RwLock;
 use async_trait::async_trait;
 use futures::future;
 use std::{path::Path, sync::Arc};
@@ -130,7 +131,7 @@ impl UserApplication for WasmApplication {
         runtime: &dyn ContractRuntime,
         argument: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
+        let (runtime_actor, runtime_requests) = RuntimeActor::new(RwLock::new(runtime));
 
         let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
@@ -158,7 +159,7 @@ impl UserApplication for WasmApplication {
         runtime: &dyn ContractRuntime,
         operation: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
+        let (runtime_actor, runtime_requests) = RuntimeActor::new(RwLock::new(runtime));
 
         let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
@@ -186,7 +187,7 @@ impl UserApplication for WasmApplication {
         runtime: &dyn ContractRuntime,
         message: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
+        let (runtime_actor, runtime_requests) = RuntimeActor::new(RwLock::new(runtime));
 
         let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
@@ -215,7 +216,7 @@ impl UserApplication for WasmApplication {
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError> {
-        let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
+        let (runtime_actor, runtime_requests) = RuntimeActor::new(RwLock::new(runtime));
 
         let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
@@ -245,7 +246,7 @@ impl UserApplication for WasmApplication {
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, ExecutionError> {
-        let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
+        let (runtime_actor, runtime_requests) = RuntimeActor::new(RwLock::new(runtime));
 
         let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]

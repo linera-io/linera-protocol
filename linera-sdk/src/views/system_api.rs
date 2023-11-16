@@ -89,9 +89,7 @@ impl KeyValueStoreClient for KeyValueStore {
                 }
             }
         }
-        let promise = wit::WriteBatch::new(&list_oper);
-        yield_once().await;
-        promise.wait();
+        wit::write_batch(&list_oper);
         Ok(())
     }
 

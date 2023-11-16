@@ -3,6 +3,7 @@
 
 //! Different request types for different runtimes.
 
+use super::sync_response::SyncSender;
 use crate::{CallResult, UserApplicationId};
 use linera_base::{
     data_types::{Amount, Timestamp},
@@ -116,6 +117,20 @@ impl Debug for BaseRequest {
 }
 
 /// Requests from application contracts.
+///
+/// Most of the requests use [`SyncSender`]s to force the respective system APIs to be blocking.
+/// This is needed to enforce determinism, otherwise it's possible to queue two attempts to acquire
+/// the write lock, and that forces any attempts to acquire the read lock between the two writes to
+/// be pushed to the back of the queue. That would change the order of execution depending on the
+/// order the locks are acquired and released.
+///
+/// Consider for example in one validator the operation using the first write lock completes before
+/// the second operation that acquires the write lock starts. Any reads between the two operations
+/// will get changes from the first operation and no changes from the second operation. However, if
+/// on a different validator the second operation starts and attempts to acquire the lock while the
+/// first operation is still executing, the read operations will get pushed back and will read
+/// changes from both operations. This is due to the write-preferring behavior of
+/// [`async_lock::RwLock`].
 pub enum ContractRequest {
     /// Requests that are valid for both contracts and services.
     Base(BaseRequest),
@@ -128,32 +143,30 @@ pub enum ContractRequest {
     /// Requests to set the amount of execution fuel remaining before execution is aborted.
     SetRemainingFuel {
         remaining_fuel: u64,
-        response_sender: oneshot::Sender<()>,
+        response_sender: SyncSender<()>,
     },
 
     /// Requests to read the application state and prevent further reading/loading until the state
     /// is saved or unlocked.
     TryReadAndLockMyState {
-        response_sender: oneshot::Sender<Option<Vec<u8>>>,
+        response_sender: SyncSender<Option<Vec<u8>>>,
     },
 
     /// Requests to save the application state and allow reading/loading the state again.
     SaveAndUnlockMyState {
         state: Vec<u8>,
-        response_sender: oneshot::Sender<bool>,
+        response_sender: SyncSender<bool>,
     },
 
     /// Requests to unlock the application state without saving anything and allow reading/loading
     /// it again.
-    UnlockMyState {
-        response_sender: oneshot::Sender<()>,
-    },
+    UnlockMyState { response_sender: SyncSender<()> },
 
     /// Requests to write the batch and unlock the application state to allow further
     /// reading/loading it.
     WriteBatchAndUnlock {
         batch: Batch,
-        response_sender: oneshot::Sender<()>,
+        response_sender: SyncSender<()>,
     },
 
     /// Requests to call another application.
@@ -162,7 +175,7 @@ pub enum ContractRequest {
         callee_id: UserApplicationId,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-        response_sender: oneshot::Sender<CallResult>,
+        response_sender: SyncSender<CallResult>,
     },
 
     /// Calls into a session that is in our scope.
@@ -171,7 +184,7 @@ pub enum ContractRequest {
         session_id: SessionId,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-        response_sender: oneshot::Sender<CallResult>,
+        response_sender: SyncSender<CallResult>,
     },
 }
 

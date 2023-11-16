@@ -81,21 +81,19 @@ macro_rules! impl_contract_system_api {
 
             fn load_and_lock(&mut self) -> Result<Option<Vec<u8>>, Self::Error> {
                 self.runtime
-                    .send_request(|response_sender| ContractRequest::TryReadAndLockMyState {
+                    .send_sync_request(|response_sender| ContractRequest::TryReadAndLockMyState {
                         response_sender,
-                    })?
-                    .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    })
+                    .map_err(|error| error.into())
             }
 
             fn store_and_unlock(&mut self, state: &[u8]) -> Result<bool, Self::Error> {
                 self.runtime
-                    .send_request(|response_sender| ContractRequest::SaveAndUnlockMyState {
+                    .send_sync_request(|response_sender| ContractRequest::SaveAndUnlockMyState {
                         state: state.to_owned(),
                         response_sender,
-                    })?
-                    .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    })
+                    .map_err(|error| error.into())
             }
 
             fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
@@ -131,16 +129,15 @@ macro_rules! impl_contract_system_api {
                     .collect();
 
                 self.runtime
-                    .send_request(|response_sender| ContractRequest::TryCallApplication {
+                    .send_sync_request(|response_sender| ContractRequest::TryCallApplication {
                         authenticated,
                         callee_id: application.into(),
                         argument: argument.to_owned(),
                         forwarded_sessions,
                         response_sender,
-                    })?
-                    .recv()
+                    })
                     .map(|call_result| call_result.into())
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|error| error.into())
             }
 
             fn try_call_session(
@@ -157,16 +154,15 @@ macro_rules! impl_contract_system_api {
                     .collect();
 
                 self.runtime
-                    .send_request(|response_sender| ContractRequest::TryCallSession {
+                    .send_sync_request(|response_sender| ContractRequest::TryCallSession {
                         authenticated,
                         session_id: session.into(),
                         argument: argument.to_owned(),
                         forwarded_sessions,
                         response_sender,
-                    })?
-                    .recv()
+                    })
                     .map(|call_result| call_result.into())
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|error| error.into())
             }
 
             fn log(
@@ -386,7 +382,6 @@ macro_rules! impl_view_system_api_for_service {
             type ReadKeyBytes = Mutex<Option<oneshot::Receiver<Option<Vec<u8>>>>>;
             type FindKeys = Mutex<Option<oneshot::Receiver<Vec<Vec<u8>>>>>;
             type FindKeyValues = Mutex<Option<oneshot::Receiver<Vec<(Vec<u8>, Vec<u8>)>>>>;
-            type WriteBatch = ();
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -473,14 +468,10 @@ macro_rules! impl_view_system_api_for_service {
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
-            fn write_batch_new(
+            fn write_batch(
                 &mut self,
                 _list_oper: Vec<view_system_api::WriteOperation>,
-            ) -> Result<Self::WriteBatch, Self::Error> {
-                Err(WasmExecutionError::WriteAttemptToReadOnlyStorage.into())
-            }
-
-            fn write_batch_wait(&mut self, _promise: &Self::WriteBatch) -> Result<(), Self::Error> {
+            ) -> Result<(), Self::Error> {
                 Err(WasmExecutionError::WriteAttemptToReadOnlyStorage.into())
             }
         }
@@ -499,7 +490,6 @@ macro_rules! impl_view_system_api_for_contract {
             type ReadKeyBytes = Mutex<Option<oneshot::Receiver<Option<Vec<u8>>>>>;
             type FindKeys = Mutex<Option<oneshot::Receiver<Vec<Vec<u8>>>>>;
             type FindKeyValues = Mutex<Option<oneshot::Receiver<Vec<(Vec<u8>, Vec<u8>)>>>>;
-            type WriteBatch = Mutex<Option<oneshot::Receiver<()>>>;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -586,10 +576,10 @@ macro_rules! impl_view_system_api_for_contract {
                     .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
-            fn write_batch_new(
+            fn write_batch(
                 &mut self,
                 list_oper: Vec<view_system_api::WriteOperation>,
-            ) -> Result<Self::WriteBatch, Self::Error> {
+            ) -> Result<(), Self::Error> {
                 let mut batch = Batch::new();
                 for x in list_oper {
                     match x {
@@ -604,23 +594,12 @@ macro_rules! impl_view_system_api_for_contract {
                         }
                     }
                 }
-                Ok(Mutex::new(Some(self.runtime.send_request(
-                    |response_sender| ContractRequest::WriteBatchAndUnlock {
+                self.runtime
+                    .send_sync_request(|response_sender| ContractRequest::WriteBatchAndUnlock {
                         batch,
                         response_sender,
-                    },
-                )?)))
-            }
-
-            fn write_batch_wait(&mut self, promise: &Self::WriteBatch) -> Result<(), Self::Error> {
-                let receiver = promise
-                    .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
-                    .take()
-                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                receiver
-                    .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    })
+                    .map_err(|error| error.into())
             }
         }
     };

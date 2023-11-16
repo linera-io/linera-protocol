@@ -120,12 +120,10 @@ impl ApplicationRuntimeContext for Contract {
         let remaining_fuel = initial_fuel.saturating_sub(consumed_fuel);
 
         runtime
-            .send_request(|response_sender| ContractRequest::SetRemainingFuel {
+            .send_sync_request(|response_sender| ContractRequest::SetRemainingFuel {
                 remaining_fuel,
                 response_sender,
             })
-            .map_err(|_| ())?
-            .recv()
             .map_err(|_| ())
     }
 }

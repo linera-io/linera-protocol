@@ -150,6 +150,17 @@ fn store_in_memory(caller: &mut Caller<'_, Resources>, offset: i32, value: impl 
         .expect("Failed to write to guest WebAssembly module");
 }
 
+/// Stores some `bytes` at the `offset` of the guest WebAssembly module's memory.
+fn store_bytes_in_memory(caller: &mut Caller<'_, Resources>, offset: i32, bytes: &[u8]) {
+    let memory = get_memory(caller, "memory").expect("Missing `memory` export in the module.");
+    let memory_data = memory.data_mut(caller);
+
+    let start = usize::try_from(offset).expect("Invalid destination address");
+    let end = start + bytes.len();
+
+    memory_data[start..end].copy_from_slice(bytes);
+}
+
 /// Adds the mock system APIs to the linker, so that they are available to guest WebAsembly
 /// modules.
 ///
@@ -1062,13 +1073,13 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     )?;
     linker.func_wrap2_async(
         "view_system_api",
-        "write-batch::new: func(\
+        "write-batch: func(\
             key: list<variant { \
                 delete(list<u8>), \
                 deleteprefix(list<u8>), \
                 put(tuple<list<u8>, list<u8>>) \
             }>\
-        ) -> handle<write-batch>",
+        ) -> unit",
         move |mut caller: Caller<'_, Resources>,
               operations_address: i32,
               operations_length: i32| {
@@ -1112,16 +1123,6 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     operations.push(operation);
                 }
 
-                let resources = caller.data_mut();
-                resources.insert(operations)
-            })
-        },
-    )?;
-    linker.func_wrap1_async(
-        "view_system_api",
-        "write-batch::wait: func(self: handle<write-batch>) -> unit",
-        move |mut caller: Caller<'_, Resources>, handle: i32| {
-            Box::new(async move {
                 let function = get_function(
                     &mut caller,
                     "mocked-write-batch: func(\
@@ -1137,13 +1138,14 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     Please ensure `linera_sdk::test::mock_key_value_store` was called",
                 );
 
-                let alloc_function = get_function(&mut caller, "cabi_realloc").expect(
-                    "Missing `cabi_realloc` function in the module. \
+                let alloc_function = get_function(&mut caller, "cabi_realloc")
+                    .expect(
+                        "Missing `cabi_realloc` function in the module. \
                     Please ensure `linera_sdk` is compiled in with the module",
-                );
+                    )
+                    .typed::<(i32, i32, i32, i32), i32, _>(&mut caller)
+                    .expect("Incorrect `cabi_realloc` function signature");
 
-                let resources = caller.data_mut();
-                let operations: &Vec<WriteOperation> = resources.get(handle);
                 let operation_count = operations.len();
 
                 let codes_and_parameter_counts = operations
@@ -1161,8 +1163,6 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                 let vector_memory_size = vector_length * operation_size;
 
                 let operations_vector = alloc_function
-                    .typed::<(i32, i32, i32, i32), i32, _>(&mut caller)
-                    .expect("Incorrect `cabi_realloc` function signature")
                     .call_async(&mut caller, (0, 0, 1, vector_memory_size))
                     .await
                     .expect("Failed to call `cabi_realloc` function");
@@ -1176,18 +1176,22 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     store_in_memory(&mut caller, offset, operation_code);
 
                     for parameter in 0..parameter_count {
-                        let (bytes_offset, bytes_length) =
-                            store_bytes_from_resource(&mut caller, |resources| {
-                                let operations: &Vec<WriteOperation> = resources.get(handle);
-                                match (&operations[index], parameter) {
-                                    (WriteOperation::Delete { key }, 0) => key,
-                                    (WriteOperation::DeletePrefix { key_prefix }, 0) => key_prefix,
-                                    (WriteOperation::Put { key, .. }, 0) => key,
-                                    (WriteOperation::Put { value, .. }, 1) => value,
-                                    _ => unreachable!("Unknown write operation parameter"),
-                                }
-                            })
-                            .await;
+                        let bytes = match (&operations[index], parameter) {
+                            (WriteOperation::Delete { key }, 0) => key,
+                            (WriteOperation::DeletePrefix { key_prefix }, 0) => key_prefix,
+                            (WriteOperation::Put { key, .. }, 0) => key,
+                            (WriteOperation::Put { value, .. }, 1) => value,
+                            _ => unreachable!("Unknown write operation parameter"),
+                        };
+                        let bytes_length =
+                            i32::try_from(bytes.len()).expect("Operation is too large");
+
+                        let bytes_offset = alloc_function
+                            .call_async(&mut caller, (0, 0, 1, bytes_length))
+                            .await
+                            .expect("Failed to call `cabi_realloc` function");
+
+                        store_bytes_in_memory(&mut caller, bytes_offset, bytes);
 
                         let parameter_offset = offset + 4 + parameter * 8;
 

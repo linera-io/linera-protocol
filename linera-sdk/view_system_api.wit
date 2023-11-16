@@ -19,7 +19,4 @@ variant write-operation {
     put(tuple<list<u8>,list<u8>>),
 }
 
-resource write-batch {
-    static new: func(key: list<write-operation>) -> write-batch
-    wait: func()
-}
+write-batch: func(key: list<write-operation>)
