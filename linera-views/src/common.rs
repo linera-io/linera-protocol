@@ -38,14 +38,6 @@ pub(crate) enum Update<T> {
     Set(T),
 }
 
-/// We need to have a maximum key size that handles all possible underlying
-/// sizes. The constraint so far is DynamoDb which has a key length of 1024.
-/// That key length is decreased by 4 due to the use of a value splitting.
-/// Then the KeyValueStoreClient needs to handle some base_key and so we
-/// reduce to 900. Depending on the size, the error can occur in system_api
-/// or in the KeyValueStoreView.
-pub const COMMON_MAX_KEY_SIZE: usize = 900;
-
 /// Status of a table at the creation time of a [`KeyValueStoreClient`] instance.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TableStatus {

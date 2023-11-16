@@ -5,7 +5,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::{
         get_interval, get_upper_bound, Context, HasherOutput, KeyIterable, KeyValueIterable,
-        Update, COMMON_MAX_KEY_SIZE, MIN_VIEW_TAG,
+        Update, MIN_VIEW_TAG,
     },
     views::{HashableView, Hasher, View, ViewError},
 };
@@ -155,6 +155,11 @@ where
     C: Send + Context,
     ViewError: From<C::Error>,
 {
+    fn max_key_size(&self) -> usize {
+        let prefix_len = self.context.base_key().len();
+        C::MAX_KEY_SIZE - 1 - prefix_len
+    }
+
     /// Applies the function f over all indices. If the function f returns
     /// false, then the loop ends prematurely.
     /// ```rust
@@ -391,7 +396,7 @@ where
     /// # })
     /// ```
     pub async fn get(&self, index: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
-        if index.len() > COMMON_MAX_KEY_SIZE {
+        if index.len() > self.max_key_size() {
             return Err(ViewError::KeyTooLong);
         }
         if let Some(update) = self.updates.get(index) {
@@ -428,7 +433,7 @@ where
         let mut missed_indices = Vec::new();
         let mut vector_query = Vec::new();
         for (i, index) in indices.into_iter().enumerate() {
-            if index.len() > COMMON_MAX_KEY_SIZE {
+            if index.len() > self.max_key_size() {
                 return Err(ViewError::KeyTooLong);
             }
             if let Some(update) = self.updates.get(&index) {
@@ -532,7 +537,7 @@ where
     /// ```
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
         ensure!(
-            key_prefix.len() <= COMMON_MAX_KEY_SIZE,
+            key_prefix.len() <= self.max_key_size(),
             ViewError::KeyTooLong
         );
         let len = key_prefix.len();
@@ -605,7 +610,7 @@ where
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
         ensure!(
-            key_prefix.len() <= COMMON_MAX_KEY_SIZE,
+            key_prefix.len() <= self.max_key_size(),
             ViewError::KeyTooLong
         );
         let len = key_prefix.len();
@@ -679,10 +684,11 @@ where
     /// ```
     pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
         *self.hash.get_mut() = None;
+        let max_key_size = self.max_key_size();
         for op in batch.operations {
             match op {
                 WriteOperation::Delete { key } => {
-                    ensure!(key.len() <= COMMON_MAX_KEY_SIZE, ViewError::KeyTooLong);
+                    ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     if self.was_cleared {
                         self.updates.remove(&key);
                     } else {
@@ -690,14 +696,11 @@ where
                     }
                 }
                 WriteOperation::Put { key, value } => {
-                    ensure!(key.len() <= COMMON_MAX_KEY_SIZE, ViewError::KeyTooLong);
+                    ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     self.updates.insert(key, Update::Set(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    ensure!(
-                        key_prefix.len() <= COMMON_MAX_KEY_SIZE,
-                        ViewError::KeyTooLong
-                    );
+                    ensure!(key_prefix.len() <= max_key_size, ViewError::KeyTooLong);
                     self.delete_prefix(key_prefix);
                 }
             }
