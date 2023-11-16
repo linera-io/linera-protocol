@@ -2,15 +2,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, Context, Error};
+use anyhow::{anyhow, bail, Context, Error};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
 use futures::{lock::Mutex, StreamExt};
 use linera_base::{
-    crypto::{CryptoRng, KeyPair, PublicKey},
+    crypto::{CryptoHash, CryptoRng, KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{BytecodeId, ChainDescription, ChainId, MessageId},
+    identifiers::{BytecodeId, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_chain::data_types::{Certificate, CertificateValue, ExecutedBlock};
 use linera_core::{
@@ -26,7 +26,8 @@ use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
     policy::ResourceControlPolicy,
     system::{Account, UserData},
-    Bytecode, ChainOwnership, UserApplicationId, WasmRuntime, WithWasmDefault,
+    Bytecode, ChainOwnership, Message, SystemMessage, UserApplicationId, WasmRuntime,
+    WithWasmDefault,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
@@ -47,6 +48,7 @@ use linera_views::{common::CommonStoreConfig, views::ViewError};
 use rand07::Rng;
 use serde_json::Value;
 use std::{
+    collections::HashMap,
     env, fs, iter,
     num::NonZeroU16,
     path::PathBuf,
@@ -72,7 +74,7 @@ use {
         config::NetworkProtocol, grpc_network::GrpcClient, mass::MassClient, simple_network,
         HandleCertificateRequest, RpcMessage,
     },
-    std::collections::{HashMap, HashSet},
+    std::collections::HashSet,
     tracing::{error, trace},
 };
 
@@ -1849,6 +1851,7 @@ impl Runnable for Job {
 
             Wallet(WalletCommand::Init {
                 faucet: Some(faucet_url),
+                with_other_chains,
                 ..
             }) => {
                 info!("Requesting a new chain from the faucet.");
@@ -1862,11 +1865,16 @@ impl Runnable for Job {
                 Self::assign_new_chain_to_key(
                     outcome.chain_id,
                     outcome.message_id,
-                    storage,
+                    storage.clone(),
                     public_key,
                     &mut context,
                 )
                 .await?;
+                let admin_id = context.wallet_state.genesis_admin_chain();
+                let chains = with_other_chains
+                    .into_iter()
+                    .chain([admin_id, outcome.chain_id]);
+                Self::print_peg_certificate_hash(storage, chains, &context).await?;
                 context.wallet_state.set_default_chain(outcome.chain_id)?;
                 context.save_wallet();
             }
@@ -1915,20 +1923,93 @@ impl Job {
             .certificate_for(&message_id)
             .await
             .context("could not find OpenChain message")?;
-        let timestamp = match certificate.value() {
-            CertificateValue::ConfirmedBlock {
-                executed_block: ExecutedBlock { block, .. },
-                ..
-            } => block.timestamp,
-            _ => bail!(
+        let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
+            bail!(
                 "Unexpected certificate. Please make sure you are connecting to the right \
                 network and are using a current software version."
-            ),
+            );
         };
+        let Some(Message::System(SystemMessage::OpenChain { ownership, .. })) = executed_block
+            .message_by_id(&message_id)
+            .map(|msg| &msg.message)
+        else {
+            bail!(
+                "The message with the ID returned by the faucet is not OpenChain. \
+                Please make sure you are connecting to a genuine faucet."
+            );
+        };
+        anyhow::ensure!(
+            ownership.verify_owner(&Owner::from(public_key)) == Some(public_key),
+            "The chain with the ID returned by the faucet is not owned by you. \
+            Please make sure you are connecting to a genuine faucet."
+        );
         context
             .wallet_state
-            .assign_new_chain_to_key(public_key, chain_id, timestamp)
+            .assign_new_chain_to_key(public_key, chain_id, executed_block.block.timestamp)
             .context("could not assign the new chain")?;
+        Ok(())
+    }
+
+    /// Prints a warning message to explain that the wallet has been initialized using data from
+    /// untrusted nodes, and gives instructions to verify that we are connected to the right
+    /// network.
+    async fn print_peg_certificate_hash<S>(
+        storage: S,
+        chain_ids: impl IntoIterator<Item = ChainId>,
+        context: &ClientContext,
+    ) -> anyhow::Result<()>
+    where
+        S: Store + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        let mut chains = HashMap::new();
+        for chain_id in chain_ids {
+            if chains.contains_key(&chain_id) {
+                continue;
+            }
+            chains.insert(chain_id, storage.load_chain(chain_id).await?);
+        }
+        // Find a chain with the latest known epoch, preferably the admin chain.
+        let (peg_chain_id, _) = chains
+            .iter()
+            .filter_map(|(chain_id, chain)| {
+                let epoch = (*chain.execution_state.system.epoch.get())?;
+                let is_admin = Some(*chain_id) == *chain.execution_state.system.admin_id.get();
+                Some((*chain_id, (epoch, is_admin)))
+            })
+            .max_by_key(|(_, epoch)| *epoch)
+            .context("no active chain found")?;
+        let peg_chain = chains.remove(&peg_chain_id).unwrap();
+        // These are the still-trusted committees. Every chain tip should be signed by one of them.
+        let committees = peg_chain.execution_state.system.committees.get();
+        for (chain_id, chain) in &chains {
+            let Some(hash) = chain.tip_state.get().block_hash else {
+                continue; // This chain was created based on the genesis config.
+            };
+            let certificate = storage.read_certificate(hash).await?;
+            let committee = committees
+                .get(&certificate.value().epoch())
+                .ok_or_else(|| anyhow!("tip of chain {chain_id} is outdated."))?;
+            certificate.check(committee)?;
+        }
+        // This proves that once we have verified that the peg chain's tip is a block in the real
+        // network, we can be confident that all downloaded chains are.
+        let config_hash = CryptoHash::new(context.wallet_state.genesis_config());
+        let maybe_epoch = peg_chain.execution_state.system.epoch.get();
+        let epoch = maybe_epoch.context("missing epoch in peg chain")?.0;
+        warn!(
+            "Initialized wallet based on data provided by untrusted nodes. \
+            Please verify that the following is correct by comparing with a trusted user \
+            who is already connected to the network, and that {epoch} is the current epoch:\n\
+            genesis config hash: {config_hash}"
+        );
+        if let Some(peg_hash) = peg_chain.tip_state.get().block_hash {
+            warn!(
+                "In addition, verify that the following certificate exists in the real network:\n\
+                certificate hash: {peg_hash}\n\
+                chain ID:         {peg_chain_id}"
+            );
+        }
         Ok(())
     }
 }

@@ -9,7 +9,7 @@ use comfy_table::{
 };
 use file_lock::{FileLock, FileOptions};
 use linera_base::{
-    crypto::{CryptoHash, CryptoRng, KeyPair, PublicKey},
+    crypto::{BcsSignable, CryptoHash, CryptoRng, KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{ChainDescription, ChainId, Owner},
 };
@@ -458,6 +458,7 @@ pub struct GenesisConfig {
 
 impl Import for GenesisConfig {}
 impl Export for GenesisConfig {}
+impl BcsSignable for GenesisConfig {}
 
 impl GenesisConfig {
     pub fn new(

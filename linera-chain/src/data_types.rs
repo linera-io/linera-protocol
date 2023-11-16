@@ -604,6 +604,18 @@ impl ExecutedBlock {
         }
     }
 
+    pub fn message_by_id(&self, message_id: &MessageId) -> Option<&OutgoingMessage> {
+        let MessageId {
+            chain_id,
+            height,
+            index,
+        } = message_id;
+        if self.block.chain_id != *chain_id || self.block.height != *height {
+            return None;
+        }
+        self.messages.get(usize::try_from(*index).ok()?)
+    }
+
     /// Returns the message ID belonging to the `index`th outgoing message in this block.
     fn message_id(&self, index: u32) -> MessageId {
         MessageId {
