@@ -390,8 +390,8 @@ where
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        let now = self.storage.current_time();
-        let executed_block = chain.execute_block(&block, now).await?.with(block);
+        let local_time = self.storage.current_time();
+        let executed_block = chain.execute_block(&block, local_time).await?.with(block);
         let response = ChainInfoResponse::new(&chain, None);
         // Do not save the new state.
         Ok((executed_block, response))
@@ -548,14 +548,14 @@ where
             return Ok((info, actions));
         }
         if tip.is_first_block() && !chain.is_active() {
-            let now = self.storage.current_time();
+            let local_time = self.storage.current_time();
             for message in &block.incoming_messages {
                 chain
                     .execute_immediate_message(
                         message.id(),
                         &message.event.message,
                         message.event.timestamp,
-                        now,
+                        local_time,
                     )
                     .await?;
             }
@@ -595,8 +595,8 @@ where
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
         // We should always agree on the messages and state hash.
-        let now = self.storage.current_time();
-        let verified_outcome = chain.execute_block(block, now).await?;
+        let local_time = self.storage.current_time();
+        let verified_outcome = chain.execute_block(block, local_time).await?;
         ensure!(
             *messages == verified_outcome.messages,
             WorkerError::IncorrectMessages
@@ -841,10 +841,17 @@ where
                         },
                     ..
                 } => {
-                    let now = self.storage.current_time();
+                    let local_time = self.storage.current_time();
                     // Update the staged chain state with the received block.
                     chain
-                        .receive_block(origin, block.height, block.timestamp, messages, hash, now)
+                        .receive_block(
+                            origin,
+                            block.height,
+                            block.timestamp,
+                            messages,
+                            hash,
+                            local_time,
+                        )
                         .await?
                 }
                 value => {
@@ -1042,8 +1049,8 @@ where
         self.check_no_missing_bytecode(block, blobs).await?;
         // Write the values so that the bytecode is available during execution.
         self.storage.write_values(blobs).await?;
-        let now = self.storage.current_time();
-        let time_till_block = block.timestamp.saturating_diff_micros(now);
+        let local_time = self.storage.current_time();
+        let time_till_block = block.timestamp.saturating_diff_micros(local_time);
         ensure!(
             time_till_block <= self.grace_period_micros,
             WorkerError::InvalidTimestamp
@@ -1051,8 +1058,8 @@ where
         if time_till_block > 0 {
             tokio::time::sleep(Duration::from_micros(time_till_block)).await;
         }
-        let now = self.storage.current_time();
-        let outcome = chain.execute_block(block, now).await?;
+        let local_time = self.storage.current_time();
+        let outcome = chain.execute_block(block, local_time).await?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
         chain.validate_incoming_messages().await?;
         // Reset all the staged changes as we were only validating things.
@@ -1060,7 +1067,7 @@ where
         // Create the vote and store it in the chain state.
         let manager = chain.manager.get_mut();
         let round = proposal.content.round;
-        manager.create_vote(proposal, outcome, self.key_pair(), now);
+        manager.create_vote(proposal, outcome, self.key_pair(), local_time);
         // Cache the value we voted on, so the client doesn't have to send it again.
         if let Some(vote) = manager.pending() {
             self.cache_recent_value(Cow::Borrowed(&vote.value)).await;
