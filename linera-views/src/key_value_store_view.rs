@@ -5,7 +5,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::{
         get_interval, get_upper_bound, Context, HasherOutput, KeyIterable, KeyValueIterable,
-        Update, MIN_VIEW_TAG,
+        NextLowerKeyIterator, Update, MIN_VIEW_TAG,
     },
     views::{HashableView, Hasher, View, ViewError},
 };
@@ -794,81 +794,6 @@ where
     async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), Self::Error> {
         Ok(())
     }
-}
-
-/// NextLowerKeyIterator iterates over the entries of a BTreeSet.
-/// The function call `get_lower_bound(val)` returns a `Some(x)` where `x` is the highest
-/// entry such that `x <= val`. If none exists then None is returned.
-///
-/// The function calls `get_lower_bound` have to be called with increasing
-/// values in order to get correct results.
-struct NextLowerKeyIterator<'a, T: 'static> {
-    prec1: Option<T>,
-    prec2: Option<T>,
-    iter: std::collections::btree_set::Iter<'a, T>,
-}
-
-impl<'a, T> NextLowerKeyIterator<'a, T>
-where
-    T: PartialOrd + Clone,
-{
-    fn new(set: &'a BTreeSet<T>) -> Self {
-        let mut iter = set.iter();
-        let prec1 = None;
-        let prec2 = iter.next().cloned();
-        Self { prec1, prec2, iter }
-    }
-
-    fn get_lower_bound(&mut self, val: T) -> Option<T> {
-        loop {
-            match &self.prec2 {
-                None => {
-                    return self.prec1.clone();
-                }
-                Some(x) => {
-                    if x.clone() > val {
-                        return self.prec1.clone();
-                    }
-                }
-            }
-            let prec2 = self.iter.next().cloned();
-            self.prec1 = std::mem::replace(&mut self.prec2, prec2);
-        }
-    }
-}
-
-impl<'a> NextLowerKeyIterator<'a, Vec<u8>> {
-    fn is_index_present(&mut self, index: &[u8]) -> bool {
-        let lower_bound = self.get_lower_bound(index.to_vec());
-        match lower_bound {
-            None => true,
-            Some(key_prefix) => {
-                if key_prefix.len() > index.len() {
-                    return true;
-                }
-                index[0..key_prefix.len()].to_vec() != key_prefix.to_vec()
-            }
-        }
-    }
-}
-
-#[test]
-fn test_lower_bound() {
-    let mut set = BTreeSet::<u8>::new();
-    set.insert(4);
-    set.insert(7);
-    set.insert(8);
-    set.insert(10);
-    set.insert(24);
-    set.insert(40);
-
-    let mut lower_bound = NextLowerKeyIterator::new(&set);
-    assert_eq!(lower_bound.get_lower_bound(3), None);
-    assert_eq!(lower_bound.get_lower_bound(15), Some(10));
-    assert_eq!(lower_bound.get_lower_bound(17), Some(10));
-    assert_eq!(lower_bound.get_lower_bound(25), Some(24));
-    assert_eq!(lower_bound.get_lower_bound(27), Some(24));
-    assert_eq!(lower_bound.get_lower_bound(42), Some(40));
 }
 
 #[cfg(any(test, feature = "test"))]

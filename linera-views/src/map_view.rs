@@ -19,14 +19,21 @@
 use crate::{
     batch::Batch,
     common::{
-        Context, CustomSerialize, HasherOutput, KeyIterable, KeyValueIterable, Update, MIN_VIEW_TAG,
+        get_interval, Context, CustomSerialize, HasherOutput, KeyIterable, KeyValueIterable,
+        NextLowerKeyIterator, Update, MIN_VIEW_TAG,
     },
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{borrow::Borrow, collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
+use std::{
+    borrow::Borrow,
+    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+    marker::PhantomData,
+    mem,
+};
 
 /// Key tags to create the sub-keys of a MapView on top of the base key.
 #[repr(u8)]
@@ -43,6 +50,7 @@ pub struct ByteMapView<C, V> {
     context: C,
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Update<V>>,
+    deleted_prefixes: BTreeSet<Vec<u8>>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
 }
@@ -65,6 +73,7 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
+            deleted_prefixes: BTreeSet::new(),
             stored_hash: hash,
             hash: Mutex::new(hash),
         })
@@ -73,6 +82,7 @@ where
     fn rollback(&mut self) {
         self.was_cleared = false;
         self.updates.clear();
+        self.deleted_prefixes.clear();
         *self.hash.get_mut() = self.stored_hash;
     }
 
@@ -87,6 +97,10 @@ where
                 }
             }
         } else {
+            for index in mem::take(&mut self.deleted_prefixes) {
+                let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
+                batch.delete_key_prefix(key);
+            }
             for (index, update) in mem::take(&mut self.updates) {
                 let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                 match update {
@@ -114,6 +128,7 @@ where
     fn clear(&mut self) {
         self.was_cleared = true;
         self.updates.clear();
+        self.deleted_prefixes.clear();
         *self.hash.get_mut() = None;
     }
 }
@@ -158,6 +173,43 @@ where
             self.updates.remove(&short_key);
         } else {
             self.updates.insert(short_key, Update::Removed);
+        }
+    }
+
+    /// Removes a value. If absent then nothing is done.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::map_view::ByteMapView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut map = ByteMapView::load(context).await.unwrap();
+    ///   map.insert(vec![0,1], String::from("Hello"));
+    ///   map.insert(vec![0,2], String::from("Bonjour"));
+    ///   map.remove_prefixes(vec![0]);
+    ///   assert!(map.keys().await.unwrap().is_empty());
+    /// # })
+    /// ```
+    pub fn remove_prefixes(&mut self, key_prefix: Vec<u8>) {
+        *self.hash.get_mut() = None;
+        let key_list = self
+            .updates
+            .range(get_interval(key_prefix.clone()))
+            .map(|x| x.0.to_vec())
+            .collect::<Vec<_>>();
+        for key in key_list {
+            self.updates.remove(&key);
+        }
+        if !self.was_cleared {
+            let key_prefix_list = self
+                .deleted_prefixes
+                .range(get_interval(key_prefix.clone()))
+                .map(|x| x.to_vec())
+                .collect::<Vec<_>>();
+            for key in key_prefix_list {
+                self.deleted_prefixes.remove(&key);
+            }
+            self.deleted_prefixes.insert(key_prefix);
         }
     }
 
@@ -273,6 +325,7 @@ where
     {
         let mut updates = self.updates.iter();
         let mut update = updates.next();
+        let mut lower_bound = NextLowerKeyIterator::new(&self.deleted_prefixes);
         if !self.was_cleared {
             let base = self.context.base_tag(KeyTag::Index as u8);
             for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
@@ -291,7 +344,7 @@ where
                             }
                         }
                         _ => {
-                            if !f(index)? {
+                            if lower_bound.is_index_present(index) && !f(index)? {
                                 return Ok(());
                             }
                             break;
@@ -391,6 +444,7 @@ where
     {
         let mut updates = self.updates.iter();
         let mut update = updates.next();
+        let mut lower_bound = NextLowerKeyIterator::new(&self.deleted_prefixes);
         if !self.was_cleared {
             let base = self.context.base_tag(KeyTag::Index as u8);
             for entry in self
@@ -415,7 +469,7 @@ where
                             }
                         }
                         _ => {
-                            if !f(index, bytes)? {
+                            if lower_bound.is_index_present(index) && !f(index, bytes)? {
                                 return Ok(());
                             }
                             break;
