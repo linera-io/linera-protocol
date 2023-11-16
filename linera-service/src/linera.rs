@@ -941,6 +941,10 @@ enum ClientCommand {
         /// TESTING ONLY.
         #[structopt(long)]
         testing_prng_seed: Option<u64>,
+
+        /// A unique name to identify this network.
+        #[structopt(long)]
+        network_name: Option<String>,
     },
 
     /// Watch the network for notifications.
@@ -2042,6 +2046,7 @@ async fn main() -> Result<(), anyhow::Error> {
             maximum_bytes_written_per_block,
             messages_price,
             testing_prng_seed,
+            network_name,
         } => {
             let committee_config = CommitteeConfig::read(committee_config_path)
                 .expect("Unable to read committee config file");
@@ -2071,8 +2076,12 @@ async fn main() -> Result<(), anyhow::Error> {
                 })
                 .unwrap_or_else(Timestamp::now);
             let admin_id = ChainId::root(*admin_root);
+            let network_name = network_name.clone().unwrap_or_else(|| {
+                // Default: e.g. "linera-test-2023-11-14T23:13:20"
+                format!("linera-test-{}", Utc::now().naive_utc().format("%FT%T"))
+            });
             let mut genesis_config =
-                GenesisConfig::new(committee_config, admin_id, timestamp, policy);
+                GenesisConfig::new(committee_config, admin_id, timestamp, policy, network_name);
             let mut rng = Box::<dyn CryptoRng>::from(*testing_prng_seed);
             let mut chains = vec![];
             for i in 0..*num {
