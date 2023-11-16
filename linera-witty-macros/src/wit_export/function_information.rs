@@ -8,14 +8,14 @@ use proc_macro2::{Span, TokenStream};
 use proc_macro_error::abort;
 use quote::{quote, quote_spanned, ToTokens};
 use syn::{
-    spanned::Spanned, FnArg, GenericArgument, GenericParam, Ident, ImplItem, ImplItemMethod,
-    LitStr, PatType, Path, PathArguments, PathSegment, ReturnType, Signature, Token, Type,
-    TypePath, TypeReference,
+    spanned::Spanned, FnArg, GenericArgument, GenericParam, Ident, ImplItem, ImplItemFn, LitStr,
+    PatType, Path, PathArguments, PathSegment, ReturnType, Signature, Token, Type, TypePath,
+    TypeReference,
 };
 
 /// Pieces of information extracted from a function's definition.
 pub struct FunctionInformation<'input> {
-    function: &'input ImplItemMethod,
+    function: &'input ImplItemFn,
     wit_name: String,
     is_reentrant: bool,
     parameter_bindings: TokenStream,
@@ -28,7 +28,7 @@ impl<'input> FunctionInformation<'input> {
     /// [`FunctionInformation`] instance.
     pub fn from_item(item: &'input ImplItem, caller_type_parameter: Option<&'input Ident>) -> Self {
         match item {
-            ImplItem::Method(function) => FunctionInformation::new(function, caller_type_parameter),
+            ImplItem::Fn(function) => FunctionInformation::new(function, caller_type_parameter),
             ImplItem::Const(const_item) => abort!(
                 const_item.ident,
                 "Const items are not supported in exported types"
@@ -47,7 +47,7 @@ impl<'input> FunctionInformation<'input> {
 
     /// Parses a function definition and collects pieces of information into a
     /// [`FunctionInformation`] instance.
-    pub fn new(function: &'input ImplItemMethod, caller_type: Option<&'input Ident>) -> Self {
+    pub fn new(function: &'input ImplItemFn, caller_type: Option<&'input Ident>) -> Self {
         let wit_name = function.sig.ident.to_string().to_kebab_case();
         let is_reentrant = Self::is_reentrant(&function.sig)
             || Self::uses_caller_parameter(&function.sig, caller_type);

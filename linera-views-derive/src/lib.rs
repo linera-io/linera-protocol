@@ -40,11 +40,15 @@ fn get_type_field(field: syn::Field) -> Option<syn::Ident> {
 fn custom_attribute(attributes: &[Attribute], key: &str) -> Option<LitStr> {
     attributes
         .iter()
-        .filter(|attribute| attribute.path.is_ident("view"))
+        .filter(|attribute| attribute.path().is_ident("view"))
         .filter_map(|attribute| match attribute.parse_args() {
             Ok(MetaNameValue {
                 path,
-                lit: Lit::Str(value),
+                value:
+                    syn::Expr::Lit(syn::ExprLit {
+                        lit: Lit::Str(value),
+                        ..
+                    }),
                 ..
             }) => path.is_ident(key).then_some(value),
             _ => panic!(
