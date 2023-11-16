@@ -358,7 +358,7 @@ fn generate_graphql_code_for_field(
         .clone()
         .expect("anonymous fields not supported.");
     let view_type = get_type_field(field.clone()).expect("could not get view type.");
-    let type_path = match field.ty {
+    let type_path = match &field.ty {
         Type::Path(type_path) => type_path,
         _ => panic!(),
     };
@@ -368,7 +368,7 @@ fn generate_graphql_code_for_field(
     let view_name = view_type.to_string();
     match view_type.to_string().as_str() {
         "RegisterView" => {
-            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_arguments = generic_argument_from_type_path(type_path);
             let generic_types_offset =
                 generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
@@ -386,38 +386,43 @@ fn generate_graphql_code_for_field(
         | "ReentrantCollectionView"
         | "CustomCollectionView"
         | "ReentrantCustomCollectionView" => {
-            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_arguments = generic_argument_from_type_path(type_path);
             let generic_types_offset =
                 generic_offset(&context, &context_constraints, &generic_arguments);
-            let index_ident = generic_arguments
+            let key_type = generic_arguments
                 .get(generic_types_offset)
                 .unwrap_or_else(|| panic!("no index specified for '{}'", view_name));
-            let generic_ident = generic_arguments
+            let value_type = generic_arguments
                 .get(generic_types_offset + 1)
                 .unwrap_or_else(|| panic!("no generic type specified for '{}'", view_name));
 
-            let index_name = snakify(index_ident);
+            let key_name = snakify(key_type);
+            let value_name = snakify(value_type);
 
-            let camel_index_name = format!("{}", field_name);
-            let camel_index_name = AsUpperCamelCase(&camel_index_name);
-            let entry_name = format!("{}{}Entry", struct_name, camel_index_name);
-            let entry_name = string_to_ident(&entry_name);
-            let context_generics = context_constraints.as_ref().map(|_| quote! { <#context> });
+            let map_name = string_to_ident(&format!(
+                "{}{}Map",
+                struct_name,
+                AsUpperCamelCase(field_name.to_string()),
+            ));
 
-            let r#impl = quote! {
-                #[graphql(derived(name = #field_name_str))]
-                async fn #field_name_underscore(
-                    &self,
-                    #index_name: #index_ident,
-                ) -> Result<#entry_name #context_generics, async_graphql::Error> {
-                    Ok(#entry_name {
-                        #index_name: #index_name.clone(),
-                        guard: self.#field_name.try_load_entry(&#index_name).await?,
-                    })
-                }
-            };
+            let entry_name = string_to_ident(&format!(
+                "{}{}Entry",
+                struct_name,
+                AsUpperCamelCase(field_name.to_string()),
+            ));
+            let context_generics = context_constraints.as_ref().map(|_| quote! { #context });
 
-            let generic_method_name = snakify(generic_ident);
+            let input_type = string_to_ident(&format!(
+                "{}{}Input",
+                struct_name,
+                AsUpperCamelCase(field_name.to_string()),
+            ));
+
+            let filters_type = string_to_ident(&format!(
+                "{}{}Filters",
+                struct_name,
+                AsUpperCamelCase(field_name.to_string()),
+            ));
 
             let (guard, lifetime) = match view_name.as_str() {
                 "ReentrantCollectionView" | "ReentrantCustomCollectionView" => (
@@ -434,32 +439,87 @@ fn generate_graphql_code_for_field(
             };
             let context_generics_with_lifetime = context_constraints
                 .as_ref()
-                .map(|_| quote! { <#lifetime #context> })
-                .unwrap_or_else(|| quote! { <#lifetime> });
-            let (index_name_underscore, index_name_str) = get_graphql_identifiers(&index_name);
-            let (generic_underscore, generic_str) = get_graphql_identifiers(&generic_method_name);
+                .map(|_| quote! { #lifetime #context })
+                .unwrap_or_else(|| quote! { #lifetime });
+
+            let r#impl = quote! {
+                async fn #field_name(
+                    &self,
+                ) -> Result<#map_name <'_, #context_generics>, async_graphql::Error> {
+                    Ok(#map_name (&self.#field_name))
+                }
+            };
+
+            let map_lifetime = if lifetime.is_empty() {
+                quote!('_,)
+            } else {
+                lifetime.clone()
+            };
 
             let r#struct = quote! {
-                pub struct #entry_name #context_generics_with_lifetime
+                #[derive(async_graphql::InputObject)]
+                pub struct #filters_type {
+                    keys: Option<Vec<#key_type>>,
+                }
+
+                #[derive(async_graphql::InputObject)]
+                pub struct #input_type {
+                    filters: Option<#filters_type>,
+                }
+
+                pub struct #map_name <'__graphql_map, #context_generics> (&'__graphql_map #type_path);
+
+                pub struct #entry_name <#context_generics_with_lifetime>
                 #context_constraints
                 {
-                    #index_name: #index_ident,
-                    guard: #guard<#lifetime #generic_ident>,
+                    key: #key_type,
+                    value: #guard<#lifetime #value_type>,
                 }
 
                 #[async_graphql::Object]
-                impl #context_generics_with_lifetime #entry_name #context_generics_with_lifetime
+                impl <#context_generics_with_lifetime> #entry_name <#context_generics_with_lifetime>
                 #context_constraints
                 {
-                    #[graphql(derived(name = #index_name_str))]
-                    async fn #index_name_underscore(&self) -> &#index_ident {
-                        &self.#index_name
+                    async fn #key_name(&self) -> &#key_type {
+                        &self.key
                     }
 
-                    #[graphql(derived(name = #generic_str))]
-                    async fn #generic_underscore(&self) -> &#generic_ident {
-                        use std::ops::Deref;
-                        self.guard.deref()
+                    async fn #value_name(&self) -> &#value_type {
+                        &*self.value
+                    }
+                }
+
+                #[async_graphql::Object]
+                impl <#context_generics_with_lifetime> #map_name <#map_lifetime #context_generics>
+                #context_constraints {
+                    async fn values(&self, input: Option<#input_type>)
+                    -> async_graphql::Result<Vec<#entry_name <#context_generics_with_lifetime>>> {
+                        let keys = input
+                            .and_then(|input| input.filters)
+                            .and_then(|filters| filters.keys);
+                        let keys = if let Some(keys) = keys {
+                            keys
+                        } else {
+                            self.0.indices().await?
+                        };
+
+                        let mut values = vec![];
+                        for key in keys {
+                            values.push(#entry_name {
+                                value: self.0.try_load_entry(&key).await?,
+                                key,
+                            })
+                        }
+
+                        Ok(values)
+                    }
+
+                    async fn value(&self, key: #key_type)
+                    -> async_graphql::Result<#entry_name <#context_generics_with_lifetime>> {
+                        Ok(#entry_name {
+                            key: key.clone(),
+                            value: self.0.try_load_entry(&key).await?,
+                        })
                     }
                 }
             };
@@ -467,7 +527,7 @@ fn generate_graphql_code_for_field(
             (r#impl, Some(r#struct))
         }
         "SetView" | "CustomSetView" => {
-            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_arguments = generic_argument_from_type_path(type_path);
             let generic_types_offset =
                 generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
@@ -476,14 +536,14 @@ fn generate_graphql_code_for_field(
 
             let r#impl = quote! {
                 #[graphql(derived(name = #field_name_str))]
-                async fn #field_name_underscore(&self) -> Result<Vec<#generic_ident>, async_graphql::Error> {
+                async fn #field_name_underscore(&self) -> async_graphql::Result<Vec<#generic_ident>> {
                     Ok(self.#field_name.indices().await?)
                 }
             };
             (r#impl, None)
         }
         "LogView" => {
-            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_arguments = generic_argument_from_type_path(type_path);
             let generic_types_offset =
                 generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
@@ -506,7 +566,7 @@ fn generate_graphql_code_for_field(
             (r#impl, None)
         }
         "WrappedHashableContainerView" => {
-            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_arguments = generic_argument_from_type_path(type_path);
             let generic_types_offset =
                 generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
@@ -522,7 +582,7 @@ fn generate_graphql_code_for_field(
             (r#impl, None)
         }
         "QueueView" => {
-            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_arguments = generic_argument_from_type_path(type_path);
             let generic_types_offset =
                 generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
@@ -539,7 +599,7 @@ fn generate_graphql_code_for_field(
             (r#impl, None)
         }
         "ByteMapView" => {
-            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_arguments = generic_argument_from_type_path(type_path);
             let generic_types_offset =
                 generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
@@ -555,7 +615,7 @@ fn generate_graphql_code_for_field(
             (r#impl, None)
         }
         "MapView" | "CustomMapView" => {
-            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_arguments = generic_argument_from_type_path(type_path);
             let generic_types_offset =
                 generic_offset(&context, &context_constraints, &generic_arguments);
             let index_ident = generic_arguments
@@ -706,89 +766,17 @@ pub mod tests {
     use quote::quote;
     use syn::parse_quote;
 
-    fn assert_eq_no_whitespace(mut actual: String, mut expected: String) {
-        // Intentionally left here for debugging purposes
-        println!("{}", actual);
-
-        actual.retain(|c| !c.is_whitespace());
-        expected.retain(|c| !c.is_whitespace());
-
-        assert_eq!(actual, expected);
+    fn pretty(tokens: TokenStream2) -> String {
+        prettyplease::unparse(
+            &syn::parse2::<syn::File>(tokens).expect("failed to parse test output"),
+        )
     }
 
     #[test]
     fn test_generate_view_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
-            let output = generate_view_code(input, true);
-
-            let SpecificContextInfo {
-                context,
-                constraints,
-                generics,
-                ..
-            } = context;
-
-            let expected = quote!(
-                #[async_trait::async_trait]
-                impl #generics linera_views::views::View<#context> for TestView #generics
-                #constraints
-                {
-                    fn context(&self) -> &#context {
-                        use linera_views::views::View;
-                        self.register.context()
-                    }
-                    async fn load(
-                        context: #context
-                    ) -> Result<Self, linera_views::views::ViewError> {
-                        use linera_views::{futures::join, common::Context};
-                        linera_views::increment_counter(
-                            &linera_views::LOAD_VIEW_COUNTER,
-                            stringify!(TestView),
-                            &context.base_key(),
-                        );
-                        let index = 0;
-                        let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
-                        let register_fut =
-                            RegisterView::load(context.clone_with_base_key(base_key));
-                        let index = 1;
-                        let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
-                        let collection_fut =
-                            CollectionView::load(context.clone_with_base_key(base_key));
-                        let result = join!(register_fut, collection_fut);
-                        let register = result.0?;
-                        let collection = result.1?;
-                        Ok(Self {
-                            register,
-                            collection
-                        })
-                    }
-                    fn rollback(&mut self) {
-                        self.register.rollback();
-                        self.collection.rollback();
-                    }
-                    fn flush(
-                        &mut self,
-                        batch: &mut linera_views::batch::Batch
-                    ) -> Result<(), linera_views::views::ViewError> {
-                        use linera_views::views::View;
-                        self.register.flush(batch)?;
-                        self.collection.flush(batch)?;
-                        Ok(())
-                    }
-                    fn delete(self, batch: &mut linera_views::batch::Batch) {
-                        use linera_views::views::View;
-                        self.register.delete(batch);
-                        self.collection.delete(batch);
-                    }
-                    fn clear(&mut self) {
-                        self.register.clear();
-                        self.collection.clear();
-                    }
-                }
-            );
-
-            assert_eq!(output.to_string(), expected.to_string());
+            insta::assert_display_snapshot!(pretty(generate_view_code(input, true)));
         }
     }
 
@@ -796,49 +784,7 @@ pub mod tests {
     fn test_generate_hash_view_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
-            let output = generate_hash_view_code(input);
-
-            let SpecificContextInfo {
-                context,
-                constraints,
-                generics,
-                ..
-            } = context;
-
-            let expected = quote!(
-                #[async_trait::async_trait]
-                impl #generics linera_views::views::HashableView<#context> for TestView #generics
-                #constraints
-                {
-                    type Hasher = linera_views::sha3::Sha3_256;
-                    async fn hash_mut(
-                        &mut self
-                    ) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output,
-                        linera_views::views::ViewError
-                    > {
-                        use linera_views::views::{Hasher, HashableView};
-                        use std::io::Write;
-                        let mut hasher = Self::Hasher::default();
-                        hasher.write_all(self.register.hash_mut().await?.as_ref())?;
-                        hasher.write_all(self.collection.hash_mut().await?.as_ref())?;
-                        Ok(hasher.finalize())
-                    }
-                    async fn hash(
-                        &self
-                    ) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output,
-                        linera_views::views::ViewError
-                    > {
-                        use linera_views::views::{Hasher, HashableView};
-                        use std::io::Write;
-                        let mut hasher = Self::Hasher::default();
-                        hasher.write_all(self.register.hash().await?.as_ref())?;
-                        hasher.write_all(self.collection.hash().await?.as_ref())?;
-                        Ok(hasher.finalize())
-                    }
-                }
-            );
-
-            assert_eq!(output.to_string(), expected.to_string());
+            insta::assert_display_snapshot!(pretty(generate_hash_view_code(input)));
         }
     }
 
@@ -846,51 +792,7 @@ pub mod tests {
     fn test_generate_save_delete_view_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
-            let output = generate_save_delete_view_code(input);
-
-            let SpecificContextInfo {
-                context,
-                constraints,
-                generics,
-                ..
-            } = context;
-
-            let expected = quote!(
-                #[async_trait::async_trait]
-                impl #generics linera_views::views::RootView<#context> for TestView #generics
-                #constraints
-                {
-                    async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
-                        use linera_views::{common::Context, batch::Batch, views::View};
-                        linera_views::increment_counter(
-                            &linera_views::SAVE_VIEW_COUNTER,
-                            stringify!(TestView),
-                            &self.context().base_key(),
-                        );
-                        let mut batch = Batch::new();
-                        self.register.flush(&mut batch)?;
-                        self.collection.flush(&mut batch)?;
-                        self.context().write_batch(batch).await?;
-                        Ok(())
-                    }
-                    async fn write_delete(self) -> Result<(), linera_views::views::ViewError> {
-                        use linera_views::{common::Context, batch::Batch, views::View};
-                        let context = self.context().clone();
-                        let batch = Batch::build(move |batch| {
-                            Box::pin(async move {
-                                self.register.delete(batch);
-                                self.collection.delete(batch);
-                                Ok(())
-                            })
-                        })
-                        .await?;
-                        context.write_batch(batch).await?;
-                        Ok(())
-                    }
-                }
-            );
-
-            assert_eq!(output.to_string(), expected.to_string());
+            insta::assert_display_snapshot!(pretty(generate_save_delete_view_code(input)));
         }
     }
 
@@ -898,42 +800,7 @@ pub mod tests {
     fn test_generate_crypto_hash_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
-            let output = generate_crypto_hash_code(input);
-
-            let SpecificContextInfo {
-                context,
-                constraints,
-                generics,
-                ..
-            } = context;
-
-            let expected = quote!(
-                #[async_trait::async_trait]
-                impl #generics linera_views::views::CryptoHashView<#context> for TestView #generics
-                #constraints
-                {
-                    async fn crypto_hash(
-                        &self
-                    ) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError>
-                    {
-                        use linera_base::crypto::{BcsHashable, CryptoHash};
-                        use linera_views::{
-                            batch::Batch,
-                            generic_array::GenericArray,
-                            sha3::{digest::OutputSizeUser, Sha3_256},
-                            views::HashableView,
-                        };
-                        use serde::{Serialize, Deserialize};
-                        #[derive(Serialize, Deserialize)]
-                        struct TestViewHash(GenericArray<u8, <Sha3_256 as OutputSizeUser>::OutputSize>);
-                        impl BcsHashable for TestViewHash {}
-                        let hash = self.hash().await?;
-                        Ok(CryptoHash::new(&TestViewHash(hash)))
-                    }
-                }
-            );
-
-            assert_eq!(output.to_string(), expected.to_string());
+            insta::assert_display_snapshot!(pretty(generate_crypto_hash_code(input)));
         }
     }
 
@@ -943,9 +810,8 @@ pub mod tests {
             let SpecificContextInfo {
                 attribute,
                 context,
-                constraints,
                 generics,
-                generics_with_lifetime,
+                ..
             } = context;
 
             let explicit_context_cases = if attribute.is_some() {
@@ -971,111 +837,7 @@ pub mod tests {
                     }
                 );
 
-                let output = generate_graphql_code(input);
-
-                let expected = quote! {
-                    pub struct TestViewCollectionEntry #generics_with_lifetime
-                    #constraints
-                    {
-                        string: String,
-                        guard: linera_views::collection_view::ReadGuardedView<
-                            'a,
-                            SomeOtherView<#context>
-                        >,
-                    }
-                    #[async_graphql::Object]
-                    impl #generics_with_lifetime TestViewCollectionEntry #generics_with_lifetime
-                    #constraints
-                    {
-                        #[graphql(derived(name = "string"))]
-                        async fn _string(&self) -> &String {
-                            &self.string
-                        }
-                        #[graphql(derived(name = "some_other_view"))]
-                        async fn _some_other_view(&self) -> &SomeOtherView<#context> {
-                            use std::ops::Deref;
-                            self.guard.deref()
-                        }
-                    }
-                    #[async_graphql::Object]
-                    impl #generics TestView #generics
-                    #constraints
-                    {
-                        async fn raw(&self) -> &String {
-                            &self.raw
-                        }
-
-                        #[graphql(derived(name = "register"))]
-                        async fn _register(&self) -> &Option<usize> {
-                            self.register.get()
-                        }
-
-                        #[graphql(derived(name = "collection"))]
-                        async fn _collection(
-                            &self,
-                            string: String,
-                        ) -> Result<TestViewCollectionEntry #generics, async_graphql::Error> {
-                            Ok(TestViewCollectionEntry {
-                                string: string.clone(),
-                                guard: self.collection.try_load_entry(&string).await?,
-                            })
-                        }
-
-                        #[graphql(derived(name = "set"))]
-                        async fn _set(&self) -> Result<Vec<HashSet<usize>>, async_graphql::Error> {
-                            Ok(self.set.indices().await?)
-                        }
-
-                        #[graphql(derived(name = "log"))]
-                        async fn _log(
-                            &self,
-                            start: Option<usize>,
-                            end: Option<usize>
-                        ) -> Result<Vec<usize>, async_graphql::Error> {
-                            let range = std::ops::Range {
-                                start: start.unwrap_or(0),
-                                end: end.unwrap_or(self.log.count()),
-                            };
-                            Ok(self.log.read(range).await?)
-                        }
-
-                        #[graphql(derived(name = "queue"))]
-                        async fn _queue(
-                            &self,
-                            count: Option<usize>
-                        ) -> Result<Vec<usize>, async_graphql::Error> {
-                            let count = count.unwrap_or_else(|| self.queue.count());
-                            Ok(self.queue.read_front(count).await?)
-                        }
-
-                        #[graphql(derived(name = "map"))]
-                        async fn _map(
-                            &self,
-                            string: String
-                        ) -> Result<Option<usize>, async_graphql::Error> {
-                            Ok(self.map.get(&string).await?)
-                        }
-
-                        #[graphql(derived(name = "map_keys"))]
-                        async fn _map_keys(
-                            &self,
-                            count: Option<u64>
-                        ) -> Result<Vec<String>, async_graphql::Error> {
-                            let count = count.unwrap_or(u64::MAX).try_into().unwrap_or(usize::MAX);
-                            let mut keys = vec![];
-                            if count == 0 {
-                                return Ok(keys);
-                            }
-                            self.map.for_each_index_while(|key| {
-                                keys.push(key);
-                                Ok(keys.len() < count)
-                            }).await?;
-                            Ok(keys)
-                        }
-                    }
-                };
-
-                assert_eq_no_whitespace(output.to_string(), expected.to_string())
+                insta::assert_display_snapshot!(pretty(generate_graphql_code(input)));
             }
         }
     }
@@ -1084,8 +846,6 @@ pub mod tests {
         attribute: Option<TokenStream2>,
         context: Type,
         generics: TokenStream2,
-        generics_with_lifetime: TokenStream2,
-        constraints: TokenStream2,
     }
 
     impl SpecificContextInfo {
@@ -1094,12 +854,6 @@ pub mod tests {
                 attribute: None,
                 context: syn::parse_str("C").unwrap(),
                 generics: quote! { <C> },
-                generics_with_lifetime: quote! { <'a, C> },
-                constraints: quote! {
-                    where
-                        C: linera_views::common::Context + Send + Sync + Clone + 'static,
-                        linera_views::views::ViewError: From<C::Error>,
-                },
             }
         }
 
@@ -1108,8 +862,6 @@ pub mod tests {
                 attribute: Some(quote! { #[view(context = #context)] }),
                 context: syn::parse_str(context).unwrap(),
                 generics: quote! {},
-                generics_with_lifetime: quote! { <'a,> },
-                constraints: quote! {},
             }
         }
 

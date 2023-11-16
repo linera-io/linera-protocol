@@ -1,0 +1,127 @@
+---
+source: linera-views-derive/src/lib.rs
+expression: pretty(generate_graphql_code(input))
+---
+#[derive(async_graphql::InputObject)]
+pub struct TestViewCollectionFilters {
+    keys: Option<Vec<String>>,
+}
+#[derive(async_graphql::InputObject)]
+pub struct TestViewCollectionInput {
+    filters: Option<TestViewCollectionFilters>,
+}
+pub struct TestViewCollectionMap<'__graphql_map>(
+    &'__graphql_map CollectionView<
+        custom::GenericContext<T>,
+        String,
+        SomeOtherView<custom::GenericContext<T>>,
+    >,
+);
+pub struct TestViewCollectionEntry<'a> {
+    key: String,
+    value: linera_views::collection_view::ReadGuardedView<
+        'a,
+        SomeOtherView<custom::GenericContext<T>>,
+    >,
+}
+#[async_graphql::Object]
+impl<'a> TestViewCollectionEntry<'a> {
+    async fn string(&self) -> &String {
+        &self.key
+    }
+    async fn some_other_view(&self) -> &SomeOtherView<custom::GenericContext<T>> {
+        &*self.value
+    }
+}
+#[async_graphql::Object]
+impl<'a> TestViewCollectionMap<'a> {
+    async fn values(
+        &self,
+        input: Option<TestViewCollectionInput>,
+    ) -> async_graphql::Result<Vec<TestViewCollectionEntry<'a>>> {
+        let keys = input
+            .and_then(|input| input.filters)
+            .and_then(|filters| filters.keys);
+        let keys = if let Some(keys) = keys { keys } else { self.0.indices().await? };
+        let mut values = vec![];
+        for key in keys {
+            values
+                .push(TestViewCollectionEntry {
+                    value: self.0.try_load_entry(&key).await?,
+                    key,
+                })
+        }
+        Ok(values)
+    }
+    async fn value(
+        &self,
+        key: String,
+    ) -> async_graphql::Result<TestViewCollectionEntry<'a>> {
+        Ok(TestViewCollectionEntry {
+            key: key.clone(),
+            value: self.0.try_load_entry(&key).await?,
+        })
+    }
+}
+#[async_graphql::Object]
+impl TestView {
+    async fn raw(&self) -> &String {
+        &self.raw
+    }
+    #[graphql(derived(name = "register"))]
+    async fn _register(&self) -> &Option<usize> {
+        self.register.get()
+    }
+    async fn collection(
+        &self,
+    ) -> Result<TestViewCollectionMap<'_>, async_graphql::Error> {
+        Ok(TestViewCollectionMap(&self.collection))
+    }
+    #[graphql(derived(name = "set"))]
+    async fn _set(&self) -> async_graphql::Result<Vec<HashSet<usize>>> {
+        Ok(self.set.indices().await?)
+    }
+    #[graphql(derived(name = "log"))]
+    async fn _log(
+        &self,
+        start: Option<usize>,
+        end: Option<usize>,
+    ) -> Result<Vec<usize>, async_graphql::Error> {
+        let range = std::ops::Range {
+            start: start.unwrap_or(0),
+            end: end.unwrap_or(self.log.count()),
+        };
+        Ok(self.log.read(range).await?)
+    }
+    #[graphql(derived(name = "queue"))]
+    async fn _queue(
+        &self,
+        count: Option<usize>,
+    ) -> Result<Vec<usize>, async_graphql::Error> {
+        let count = count.unwrap_or_else(|| self.queue.count());
+        Ok(self.queue.read_front(count).await?)
+    }
+    #[graphql(derived(name = "map"))]
+    async fn _map(&self, string: String) -> Result<Option<usize>, async_graphql::Error> {
+        Ok(self.map.get(&string).await?)
+    }
+    #[graphql(derived(name = "map_keys"))]
+    async fn _map_keys(
+        &self,
+        count: Option<u64>,
+    ) -> Result<Vec<String>, async_graphql::Error> {
+        let count = count.unwrap_or(u64::MAX).try_into().unwrap_or(usize::MAX);
+        let mut keys = vec![];
+        if count == 0 {
+            return Ok(keys);
+        }
+        self.map
+            .for_each_index_while(|key| {
+                keys.push(key);
+                Ok(keys.len() < count)
+            })
+            .await?;
+        Ok(keys)
+    }
+}
+
