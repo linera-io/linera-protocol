@@ -20,7 +20,7 @@ metadata:
   name: shards
 spec:
   serviceName: "shards"
-  replicas: 10
+  replicas: {{ .Values.numShards }}
   selector:
     matchLabels:
       app: shards

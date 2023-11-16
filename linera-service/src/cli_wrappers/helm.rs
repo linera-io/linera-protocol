@@ -12,16 +12,15 @@ pub struct HelmRelease {
 }
 
 impl HelmRelease {
-    pub fn new(name: String) -> Self {
-        Self { name }
-    }
-
     pub async fn install(
-        &self,
+        name: String,
         configs_dir: &PathBuf,
         server_config_id: usize,
         github_root: &Path,
+        num_shards: usize,
+        cluster_id: u32,
     ) -> Result<()> {
+        let helm_release = Self { name };
         let execution_dir = format!("{}/kubernetes/linera-validator", github_root.display());
 
         let configs_dir = diff_paths(configs_dir, execution_dir.clone())
@@ -31,7 +30,7 @@ impl HelmRelease {
         Command::new("helm")
             .current_dir(&execution_dir)
             .arg("install")
-            .arg(&self.name)
+            .arg(&helm_release.name)
             .arg(".")
             .args(["--values", "values-local.yaml"])
             .arg("--wait")
@@ -44,6 +43,8 @@ impl HelmRelease {
                 "--set",
                 &format!("validator.genesisConfig={configs_dir}/genesis.json"),
             ])
+            .args(["--set", &format!("numShards={num_shards}")])
+            .args(["--kube-context", &format!("kind-{}", cluster_id)])
             .spawn_and_wait_for_stdout()
             .await?;
         Ok(())

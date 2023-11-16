@@ -1153,12 +1153,6 @@ enum NetCommand {
         #[cfg(feature = "kubernetes")]
         #[structopt(long)]
         binaries_dir: Option<PathBuf>,
-
-        /// Kind name for the cluster that will be created for the Kubernetes deployment.
-        /// Must be a number. If not specified, a random number will be generated.
-        #[cfg(feature = "kubernetes")]
-        #[structopt(long)]
-        cluster_id: Option<u32>,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is
@@ -2281,8 +2275,6 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 kubernetes,
                 #[cfg(feature = "kubernetes")]
                 binaries_dir,
-                #[cfg(feature = "kubernetes")]
-                cluster_id,
             } => {
                 if *validators < 1 {
                     panic!("The local test network must have at least one validator.");
@@ -2296,8 +2288,9 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                     let config = LocalKubernetesNetConfig {
                         network: Network::Grpc,
                         testing_prng_seed: *testing_prng_seed,
+                        num_initial_validators: *validators,
+                        num_shards: *shards,
                         binaries_dir: binaries_dir.clone(),
-                        cluster_id: *cluster_id,
                     };
                     let (net, client1) = config.instantiate().await?;
                     Ok(net_up(extra_wallets, net, client1).await?)
