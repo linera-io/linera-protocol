@@ -49,10 +49,10 @@ jobs:
         cargo build --locked --release --target wasm32-unknown-unknown
     - name: Build
       run: |
-        cargo build --locked --release --features scylladb
+        cargo build --locked --features scylladb
     - name: Setup local ScyllaDB instance
       run: |
         docker run --name my_scylla_container -d -p 9042:9042 scylladb/scylla
     - name: Run ScyllaDB tests
       run: |
-        cargo test --locked --release --features scylladb -- scylla
+        cargo test --locked --features scylladb -- scylla
