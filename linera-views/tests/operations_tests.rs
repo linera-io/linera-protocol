@@ -27,8 +27,8 @@ use linera_views::scylla_db::create_scylla_db_test_client;
 /// This test starts with a collection of key/values being inserted into the code
 /// which is then followed by a number of reading tests. The functionalities being
 /// tested are all the reading functionalities:
-/// * `read_key_bytes`
-/// * `read_multi_key_bytes`
+/// * `read_value_bytes`
+/// * `read_multi_values_bytes`
 /// * `find_keys_by_prefix` / `find_key_values_by_prefix`
 /// * The ordering of keys returned by `find_keys_by_prefix` and `find_key_values_by_prefix`
 #[cfg(test)]
@@ -85,7 +85,7 @@ async fn run_reads<C: KeyValueStoreClient + Sync>(
         }
         assert_eq!(set_key_value1, set_key_value2);
     }
-    // Now checking the read_multi_key_bytes
+    // Now checking the read_multi_values_bytes
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     for _ in 0..10 {
         let mut keys = Vec::new();
@@ -109,7 +109,7 @@ async fn run_reads<C: KeyValueStoreClient + Sync>(
                 }
             }
         }
-        let values_read = key_value_store.read_multi_key_bytes(keys).await.unwrap();
+        let values_read = key_value_store.read_multi_values_bytes(keys).await.unwrap();
         assert_eq!(values, values_read);
     }
 }
@@ -296,7 +296,7 @@ fn realize_batch(batch: &Batch) -> BTreeMap<Vec<u8>, Vec<u8>> {
 }
 
 #[cfg(test)]
-async fn read_key_prefix<C: KeyValueStoreClient + Sync>(
+async fn read_key_values_prefix<C: KeyValueStoreClient + Sync>(
     key_value_store: &C,
     key_prefix: &[u8],
 ) -> BTreeMap<Vec<u8>, Vec<u8>> {
@@ -324,7 +324,7 @@ async fn run_test_batch_from_blank<C: KeyValueStoreClient + Sync>(
     let kv_state = realize_batch(&batch);
     key_value_store.write_batch(batch, &[]).await.unwrap();
     // Checking the consistency
-    let key_values = read_key_prefix(key_value_store, &key_prefix).await;
+    let key_values = read_key_values_prefix(key_value_store, &key_prefix).await;
     assert_eq!(key_values, kv_state);
 }
 
@@ -402,7 +402,12 @@ async fn test_big_value_read_write() {
         let key = vec![43, 23, 56];
         batch.put_key_value(key.clone(), &test_string).unwrap();
         context.db.write_batch(batch, &[]).await.unwrap();
-        let read_string = context.db.read_key::<String>(&key).await.unwrap().unwrap();
+        let read_string = context
+            .db
+            .read_value::<String>(&key)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(read_string, test_string);
     }
 }
@@ -493,7 +498,7 @@ async fn run_test_batch_from_state<C: KeyValueStoreClient + Sync>(
         .unwrap();
     update_state_from_batch(&mut kv_state, &batch);
     key_value_store.write_batch(batch, &[]).await.unwrap();
-    let key_values = read_key_prefix(key_value_store, &key_prefix).await;
+    let key_values = read_key_values_prefix(key_value_store, &key_prefix).await;
     assert_eq!(key_values, kv_state);
 }
 

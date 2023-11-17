@@ -47,6 +47,7 @@ where
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
     const MAX_VALUE_SIZE: usize = usize::MAX;
+    const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE - 4;
     type Error = K::Error;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -55,10 +56,10 @@ where
         self.client.max_stream_queries()
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let mut big_key = key.to_vec();
         big_key.extend(&[0, 0, 0, 0]);
-        let value = self.client.read_key_bytes(&big_key).await?;
+        let value = self.client.read_value_bytes(&big_key).await?;
         let Some(value) = value else {
             return Ok(None);
         };
@@ -72,7 +73,7 @@ where
             let big_key_segment = Self::get_segment_key(key, i)?;
             big_keys.push(big_key_segment);
         }
-        let segments = self.client.read_multi_key_bytes(big_keys).await?;
+        let segments = self.client.read_multi_values_bytes(big_keys).await?;
         for segment in segments {
             match segment {
                 None => {
@@ -86,7 +87,7 @@ where
         Ok(Some(big_value))
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
@@ -96,7 +97,7 @@ where
             big_key.extend(&[0, 0, 0, 0]);
             big_keys.push(big_key);
         }
-        let values = self.client.read_multi_key_bytes(big_keys).await?;
+        let values = self.client.read_multi_values_bytes(big_keys).await?;
         let mut big_values = Vec::<Option<Vec<u8>>>::new();
         let mut keys_add = Vec::new();
         let mut n_blocks = Vec::new();
@@ -121,7 +122,7 @@ where
         if !keys_add.is_empty() {
             let mut segments = self
                 .client
-                .read_multi_key_bytes(keys_add)
+                .read_multi_values_bytes(keys_add)
                 .await?
                 .into_iter();
             for (idx, count) in n_blocks.iter().enumerate() {
@@ -286,6 +287,7 @@ impl KeyValueStoreClient for TestMemoryClientInternal {
     // We set up the MAX_VALUE_SIZE to the artificially low value of 100
     // purely for testing purposes.
     const MAX_VALUE_SIZE: usize = 100;
+    const MAX_KEY_SIZE: usize = usize::MAX;
     type Error = MemoryContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -294,15 +296,15 @@ impl KeyValueStoreClient for TestMemoryClientInternal {
         TEST_MEMORY_MAX_STREAM_QUERIES
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
-        self.client.read_key_bytes(key).await
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
+        self.client.read_value_bytes(key).await
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, MemoryContextError> {
-        self.client.read_multi_key_bytes(keys).await
+        self.client.read_multi_values_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(
@@ -349,6 +351,7 @@ pub struct TestMemoryClient {
 #[async_trait]
 impl KeyValueStoreClient for TestMemoryClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
+    const MAX_KEY_SIZE: usize = usize::MAX;
     type Error = MemoryContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -357,15 +360,15 @@ impl KeyValueStoreClient for TestMemoryClient {
         self.client.max_stream_queries()
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
-        self.client.read_key_bytes(key).await
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
+        self.client.read_value_bytes(key).await
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, MemoryContextError> {
-        self.client.read_multi_key_bytes(keys).await
+        self.client.read_multi_values_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(
@@ -497,14 +500,14 @@ mod tests {
         let value = Vec::from([0; MAX_LEN + 1]);
         batch.put_key_value_bytes(key.clone(), value.clone());
         big_client.write_batch(batch, &[]).await.unwrap();
-        let value_read = big_client.read_key_bytes(&key).await.unwrap();
+        let value_read = big_client.read_value_bytes(&key).await.unwrap();
         assert_eq!(value_read, Some(value));
         // Write a key with a smaller value
         let mut batch = Batch::new();
         let value = Vec::from([0, 1]);
         batch.put_key_value_bytes(key.clone(), value.clone());
         big_client.write_batch(batch, &[]).await.unwrap();
-        let value_read = big_client.read_key_bytes(&key).await.unwrap();
+        let value_read = big_client.read_value_bytes(&key).await.unwrap();
         assert_eq!(value_read, Some(value));
         // Two segments are present even though only one is used
         let keys = client.find_keys_by_prefix(&[0]).await.unwrap();
@@ -526,7 +529,7 @@ mod tests {
         }
         batch.put_key_value_bytes(key.clone(), value.clone());
         big_client.write_batch(batch, &[]).await.unwrap();
-        let value_read = big_client.read_key_bytes(&key).await.unwrap();
+        let value_read = big_client.read_value_bytes(&key).await.unwrap();
         assert_eq!(value_read, Some(value.clone()));
         // Reading the segments and checking
         let mut value_concat = Vec::<u8>::new();
@@ -535,7 +538,7 @@ mod tests {
             let mut bytes = bcs::to_bytes(&index).unwrap();
             bytes.reverse();
             segment_key.extend(bytes);
-            let value_read = client.read_key_bytes(&segment_key).await.unwrap();
+            let value_read = client.read_value_bytes(&segment_key).await.unwrap();
             let Some(value_read) = value_read else {
                 unreachable!()
             };

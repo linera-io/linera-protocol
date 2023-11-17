@@ -33,6 +33,7 @@ use aws_sdk_dynamodb::{
 use aws_smithy_types::error::operation::BuildError;
 use bcs::serialized_size;
 use futures::future::join_all;
+use linera_base::ensure;
 use serde::{Deserialize, Serialize};
 use static_assertions as sa;
 use std::{collections::HashMap, env, mem, str::FromStr, sync::Arc};
@@ -143,41 +144,43 @@ const VALUE_ATTRIBUTE: &str = "item_value";
 /// The attribute for obtaining the primary key (used as a sort key) with the stored value.
 const KEY_VALUE_ATTRIBUTE: &str = "item_key, item_value";
 
-/// TODO(#1084): The scheme below with the MAX_VALUE_BYTES has to be checked
+/// TODO(#1084): The scheme below with the MAX_VALUE_SIZE has to be checked
 /// This is the maximum size of a raw value in DynamoDb.
-const RAW_MAX_VALUE_BYTES: usize = 409600;
+const RAW_MAX_VALUE_SIZE: usize = 409600;
 
 /// Fundamental constants in DynamoDB: The maximum size of a value is 400KB
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ServiceQuotas.html
 /// However, the value being written can also be the serialization of a SimpleUnorderedBatch
-/// Therefore the actual MAX_VALUE_BYTES might be lower.
+/// Therefore the actual MAX_VALUE_SIZE might be lower.
 /// At the maximum the key_size is 1024 bytes (see below) and we pack just one entry.
 /// So if the key has 1024 bytes this gets us the inequality
 /// 1 + 1 + serialized_size(1024)? + serialized_size(x)? <= 400*1024
 /// and so this simplifies to 1 + 1 + (2 + 1024) + (3 + x) <= 400 * 1024
 /// (we write 3 because get_uleb128_size(400*1024) = 3)
 /// and so to a maximal value of 408569;
-const VISIBLE_MAX_VALUE_BYTES: usize = 408569;
+const VISIBLE_MAX_VALUE_SIZE: usize = 408569;
 
 /// Fundamental constant in DynamoDB: The maximum size of a key is 1024 bytes
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html
-const MAX_KEY_BYTES: usize = 1024;
+const MAX_KEY_SIZE: usize = 1024;
 
 /// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 4M.
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html
-const MAX_TRANSACT_WRITE_ITEM_BYTES: usize = 4194304;
+const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = 4194304;
 
 /// The DynamoDb database is potentially handling an infinite number of connections.
 /// However, for testing or some other purpose we really need to decrease the number of
 /// connections.
-pub const TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES: usize = 10;
+#[cfg(any(test, feature = "test"))]
+const TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 
 /// The number of entries in a stream of the tests can be controlled by this parameter for tests.
-pub const TEST_DYNAMO_DB_MAX_STREAM_QUERIES: usize = 10;
+#[cfg(any(test, feature = "test"))]
+const TEST_DYNAMO_DB_MAX_STREAM_QUERIES: usize = 10;
 
 /// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 100.
 /// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html>
-pub const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
+const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
 
 /// Builds the key attributes for a table item.
 ///
@@ -358,7 +361,7 @@ impl JournalHeader {
                 break;
             }
             let key = get_journaling_key(base_key, KeyTag::Entry as u8, self.block_count - 1)?;
-            let value = db.read_key::<DynamoDbBatch>(&key).await?;
+            let value = db.read_value::<DynamoDbBatch>(&key).await?;
             if let Some(value) = value {
                 let mut tb = TransactionBuilder::default();
                 tb.insert_delete_request(key, db)?; // Delete the preceding journal entry
@@ -400,7 +403,7 @@ impl DynamoDbBatch {
         for deletion in &self.0.deletions {
             total_size += deletion.len();
         }
-        total_size <= MAX_TRANSACT_WRITE_ITEM_BYTES
+        total_size <= MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE
     }
 
     fn add_journal_header_operations(
@@ -460,12 +463,12 @@ impl DynamoDbBatch {
                     + get_uleb128_size(deletions.len() + 1)
                     + get_uleb128_size(insertions.len() + 1);
                 let next_transact_size = transact_size + next_value_size;
-                let value_flush = if next_transact_size > MAX_TRANSACT_WRITE_ITEM_BYTES {
+                let value_flush = if next_transact_size > MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE {
                     true
                 } else {
-                    next_value_size > RAW_MAX_VALUE_BYTES
+                    next_value_size > RAW_MAX_VALUE_SIZE
                 };
-                let transact_flush = next_transact_size > MAX_TRANSACT_WRITE_ITEM_BYTES;
+                let transact_flush = next_transact_size > MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
                 (value_flush, transact_flush)
             };
             if value_flush {
@@ -565,12 +568,8 @@ impl DynamoDbClientInternal {
         &self,
         key: Vec<u8>,
     ) -> Result<TransactWriteItem, DynamoDbContextError> {
-        if key.is_empty() {
-            return Err(DynamoDbContextError::ZeroLengthKey);
-        }
-        if key.len() > MAX_KEY_BYTES {
-            return Err(DynamoDbContextError::KeyTooLong);
-        }
+        ensure!(!key.is_empty(), DynamoDbContextError::ZeroLengthKey);
+        ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbContextError::KeyTooLong);
         let request = Delete::builder()
             .table_name(&self.table.0)
             .set_key(Some(build_key(key)))
@@ -583,15 +582,12 @@ impl DynamoDbClientInternal {
         key: Vec<u8>,
         value: Vec<u8>,
     ) -> Result<TransactWriteItem, DynamoDbContextError> {
-        if key.is_empty() {
-            return Err(DynamoDbContextError::ZeroLengthKey);
-        }
-        if key.len() > MAX_KEY_BYTES {
-            return Err(DynamoDbContextError::KeyTooLong);
-        }
-        if value.len() > RAW_MAX_VALUE_BYTES {
-            return Err(DynamoDbContextError::ValueLengthTooLarge);
-        }
+        ensure!(!key.is_empty(), DynamoDbContextError::ZeroLengthKey);
+        ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbContextError::KeyTooLong);
+        ensure!(
+            value.len() <= RAW_MAX_VALUE_SIZE,
+            DynamoDbContextError::ValueLengthTooLarge
+        );
         let request = Put::builder()
             .table_name(&self.table.0)
             .set_item(Some(build_key_value(key, value)))
@@ -815,7 +811,7 @@ impl DynamoDbClientInternal {
         Ok(response)
     }
 
-    async fn read_key_bytes_general(
+    async fn read_value_bytes_general(
         &self,
         key_db: HashMap<String, AttributeValue>,
     ) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
@@ -1079,12 +1075,14 @@ impl DynamoDbClientInternal {
         attribute: &str,
         key_prefix: &[u8],
     ) -> Result<QueryResults, DynamoDbContextError> {
-        if key_prefix.is_empty() {
-            return Err(DynamoDbContextError::ZeroLengthKeyPrefix);
-        }
-        if key_prefix.len() > MAX_KEY_BYTES {
-            return Err(DynamoDbContextError::KeyPrefixTooLong);
-        }
+        ensure!(
+            !key_prefix.is_empty(),
+            DynamoDbContextError::ZeroLengthKeyPrefix
+        );
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            DynamoDbContextError::KeyPrefixTooLong
+        );
         let mut responses = Vec::new();
         let mut start_key = None;
         loop {
@@ -1111,7 +1109,8 @@ impl DynamoDbClientInternal {
 
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClientInternal {
-    const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_BYTES;
+    const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
@@ -1120,19 +1119,21 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
         self.max_stream_queries
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
+        ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbContextError::KeyTooLong);
         let key_db = build_key(key.to_vec());
-        self.read_key_bytes_general(key_db).await
+        self.read_value_bytes_general(key_db).await
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbContextError> {
         let mut handles = Vec::new();
         for key in keys {
+            ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbContextError::KeyTooLong);
             let key_db = build_key(key);
-            let handle = self.read_key_bytes_general(key_db);
+            let handle = self.read_value_bytes_general(key_db);
             handles.push(handle);
         }
         let result = join_all(handles).await;
@@ -1169,7 +1170,7 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
         let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
-        let value = self.read_key::<JournalHeader>(&key).await?;
+        let value = self.read_value::<JournalHeader>(&key).await?;
         if let Some(header) = value {
             header.coherently_resolve_journal(self, base_key).await?;
         }
@@ -1186,6 +1187,7 @@ pub struct DynamoDbClient {
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClient {
     const MAX_VALUE_SIZE: usize = DynamoDbClientInternal::MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = MAX_KEY_SIZE - 4;
     type Error = DynamoDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -1194,15 +1196,15 @@ impl KeyValueStoreClient for DynamoDbClient {
         self.client.max_stream_queries()
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
-        self.client.read_key_bytes(key).await
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
+        self.client.read_value_bytes(key).await
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         key: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbContextError> {
-        self.client.read_multi_key_bytes(key).await
+        self.client.read_multi_values_bytes(key).await
     }
 
     async fn find_keys_by_prefix(
@@ -1607,9 +1609,7 @@ pub async fn clear_tables(client: &aws_sdk_dynamodb::Client) -> Result<(), Dynam
 mod tests {
     use crate::{
         batch::SimpleUnorderedBatch,
-        dynamo_db::{
-            get_uleb128_size, MAX_KEY_BYTES, RAW_MAX_VALUE_BYTES, VISIBLE_MAX_VALUE_BYTES,
-        },
+        dynamo_db::{get_uleb128_size, MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE},
     };
     use bcs::serialized_size;
 
@@ -1625,9 +1625,9 @@ mod tests {
 
     #[test]
     fn test_raw_visible_sizes() {
-        let mut vis_computed = RAW_MAX_VALUE_BYTES - MAX_KEY_BYTES;
+        let mut vis_computed = RAW_MAX_VALUE_SIZE - MAX_KEY_SIZE;
         vis_computed -= serialized_size(&SimpleUnorderedBatch::default()).unwrap();
-        vis_computed -= get_uleb128_size(RAW_MAX_VALUE_BYTES) + get_uleb128_size(MAX_KEY_BYTES);
-        assert_eq!(vis_computed, VISIBLE_MAX_VALUE_BYTES);
+        vis_computed -= get_uleb128_size(RAW_MAX_VALUE_SIZE) + get_uleb128_size(MAX_KEY_SIZE);
+        assert_eq!(vis_computed, VISIBLE_MAX_VALUE_SIZE);
     }
 }

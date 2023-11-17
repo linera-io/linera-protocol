@@ -76,7 +76,7 @@ where
 
     async fn load(context: C) -> Result<Self, ViewError> {
         let key = context.base_tag(KeyTag::Hash as u8);
-        let hash = context.read_key(&key).await?;
+        let hash = context.read_value(&key).await?;
         Ok(Self {
             context,
             was_cleared: false,

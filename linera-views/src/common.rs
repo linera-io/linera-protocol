@@ -156,6 +156,9 @@ pub trait KeyValueStoreClient {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 
+    /// The maximal size of keys that can be stored.
+    const MAX_KEY_SIZE: usize;
+
     /// The error type.
     type Error: Debug;
 
@@ -169,10 +172,10 @@ pub trait KeyValueStoreClient {
     fn max_stream_queries(&self) -> usize;
 
     /// Retrieves a `Vec<u8>` from the database using the provided `key`.
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
     /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
@@ -194,15 +197,15 @@ pub trait KeyValueStoreClient {
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error>;
 
     /// Reads a single `key` and deserializes the result if present.
-    async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
+    async fn read_value<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
     where
         Self::Error: From<bcs::Error>,
     {
-        from_bytes_opt(&self.read_key_bytes(key).await?)
+        from_bytes_opt(&self.read_value_bytes(key).await?)
     }
 
     /// Reads multiple `keys` and deserializes the results if present.
-    async fn read_multi_key<V: DeserializeOwned + Send>(
+    async fn read_multi_values<V: DeserializeOwned + Send>(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<V>>, Self::Error>
@@ -210,7 +213,7 @@ pub trait KeyValueStoreClient {
         Self::Error: From<bcs::Error>,
     {
         let mut values = Vec::with_capacity(keys.len());
-        for entry in self.read_multi_key_bytes(keys).await? {
+        for entry in self.read_multi_values_bytes(keys).await? {
             values.push(from_bytes_opt(&entry)?);
         }
         Ok(values)
@@ -302,6 +305,9 @@ pub trait Context {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 
+    /// The maximal size of keys that can be stored.
+    const MAX_KEY_SIZE: usize;
+
     /// User-provided data to be carried along.
     type Extra: Clone + Send + Sync;
 
@@ -320,10 +326,10 @@ pub trait Context {
 
     /// Retrieves a `Vec<u8>` from the database using the provided `key` prefixed by the current
     /// context.
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
     /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
@@ -400,15 +406,15 @@ pub trait Context {
     /// Retrieves a generic `Item` from the database using the provided `key` prefixed by the current
     /// context.
     /// The `Item` is deserialized using [`bcs`].
-    async fn read_key<Item>(&self, key: &[u8]) -> Result<Option<Item>, Self::Error>
+    async fn read_value<Item>(&self, key: &[u8]) -> Result<Option<Item>, Self::Error>
     where
         Item: DeserializeOwned,
     {
-        from_bytes_opt(&self.read_key_bytes(key).await?)
+        from_bytes_opt(&self.read_value_bytes(key).await?)
     }
 
     /// Reads multiple `keys` and deserializes the results if present.
-    async fn read_multi_key<V: DeserializeOwned + Send>(
+    async fn read_multi_values<V: DeserializeOwned + Send>(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<V>>, Self::Error>
@@ -416,7 +422,7 @@ pub trait Context {
         Self::Error: From<bcs::Error>,
     {
         let mut values = Vec::with_capacity(keys.len());
-        for entry in self.read_multi_key_bytes(keys).await? {
+        for entry in self.read_multi_values_bytes(keys).await? {
             values.push(from_bytes_opt(&entry)?);
         }
         Ok(values)
@@ -491,6 +497,7 @@ where
     ViewError: From<DB::Error>,
 {
     const MAX_VALUE_SIZE: usize = DB::MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = DB::MAX_KEY_SIZE;
     type Extra = E;
     type Error = DB::Error;
     type Keys = DB::Keys;
@@ -508,15 +515,19 @@ where
         self.base_key.clone()
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        log_time_async(self.db.read_key_bytes(key), "read_key_bytes").await
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        log_time_async(self.db.read_value_bytes(key), "read_value_bytes").await
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        log_time_async(self.db.read_multi_key_bytes(keys), "read_multi_key_bytes").await
+        log_time_async(
+            self.db.read_multi_values_bytes(keys),
+            "read_multi_values_bytes",
+        )
+        .await
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {

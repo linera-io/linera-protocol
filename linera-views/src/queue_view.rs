@@ -53,7 +53,7 @@ where
         let key1 = context.base_tag(KeyTag::Store as u8);
         let key2 = context.base_tag(KeyTag::Hash as u8);
         let keys = vec![key1, key2];
-        let values_bytes = context.read_multi_key_bytes(keys).await?;
+        let values_bytes = context.read_multi_values_bytes(keys).await?;
         let stored_indices = from_bytes_opt(&values_bytes[0])?.unwrap_or_default();
         let hash = from_bytes_opt(&values_bytes[1])?;
         Ok(Self {
@@ -148,7 +148,7 @@ where
 {
     async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
         let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
-        Ok(self.context.read_key(&key).await?)
+        Ok(self.context.read_value(&key).await?)
     }
 
     /// Reads the front value, if any.
@@ -264,7 +264,7 @@ where
             keys.push(key)
         }
         let mut values = Vec::with_capacity(count);
-        for entry in self.context.read_multi_key(keys).await? {
+        for entry in self.context.read_multi_values(keys).await? {
             match entry {
                 None => {
                     return Err(ViewError::MissingEntries);

@@ -29,6 +29,7 @@ use crate::{
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use futures::future::join_all;
+use linera_base::ensure;
 use scylla::{
     frame::request::batch::BatchType,
     query::Query,
@@ -43,10 +44,20 @@ use thiserror::Error;
 type ScyllaDbClientPair = (Session, String);
 
 /// We limit the number of connections that can be done for tests.
-pub const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 1;
+#[cfg(any(test, feature = "test"))]
+const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 
 /// The number of connections in the stream is limited for tests.
-pub const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
+#[cfg(any(test, feature = "test"))]
+const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
+
+/// The maximal size of an operation on ScyllaDB seems to be 16M
+/// https://www.scylladb.com/2019/03/27/best-practices-for-scylla-applications/
+/// "There is a hard limit at 16MB, and nothing bigger than that can arrive at once
+///  at the database at any particular time"
+/// So, we set up the maximal size of 15M for the values and 1M for the keys
+const MAX_VALUE_SIZE: usize = 15728640;
+const MAX_KEY_SIZE: usize = 1048576;
 
 /// The client itself and the keeping of the count of active connections.
 #[derive(Clone)]
@@ -62,6 +73,10 @@ pub enum ScyllaDbContextError {
     /// BCS serialization error.
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
+
+    /// The key must have at most 1M bytes
+    #[error("The key must have at most 1M")]
+    KeyTooLong,
 
     /// A query error in ScyllaDB
     #[error(transparent)]
@@ -99,7 +114,8 @@ impl From<ScyllaDbContextError> for crate::views::ViewError {
 
 #[async_trait]
 impl KeyValueStoreClient for ScyllaDbClientInternal {
-    const MAX_VALUE_SIZE: usize = usize::MAX;
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Error = ScyllaDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -108,13 +124,13 @@ impl KeyValueStoreClient for ScyllaDbClientInternal {
         self.max_stream_queries
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let client = self.client.deref();
         let _guard = self.acquire().await;
-        Self::read_key_internal(client, key.to_vec()).await
+        Self::read_value_internal(client, key.to_vec()).await
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
@@ -122,7 +138,7 @@ impl KeyValueStoreClient for ScyllaDbClientInternal {
         let _guard = self.acquire().await;
         let handles = keys
             .into_iter()
-            .map(|key| Self::read_key_internal(client, key));
+            .map(|key| Self::read_value_internal(client, key));
         let result = join_all(handles).await;
         Ok(result.into_iter().collect::<Result<_, _>>()?)
     }
@@ -170,10 +186,11 @@ impl ScyllaDbClientInternal {
         }
     }
 
-    async fn read_key_internal(
+    async fn read_value_internal(
         client: &ScyllaDbClientPair,
         key: Vec<u8>,
     ) -> Result<Option<Vec<u8>>, ScyllaDbContextError> {
+        ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
         let session = &client.0;
         let table_name = &client.1;
         // Read the value of a key
@@ -214,6 +231,10 @@ impl ScyllaDbClientInternal {
             table_name
         );
         for key_prefix in unordered_batch.key_prefix_deletions {
+            ensure!(
+                key_prefix.len() <= MAX_KEY_SIZE,
+                ScyllaDbContextError::KeyTooLong
+            );
             match get_upper_bound_option(&key_prefix) {
                 None => {
                     let values = vec![key_prefix];
@@ -238,6 +259,7 @@ impl ScyllaDbClientInternal {
             table_name
         );
         for (key, value) in unordered_batch.simple_unordered_batch.insertions {
+            ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
             let values = vec![key, value];
             batch_values.push(values);
             batch_query.append_statement(Query::new(query4.clone()));
@@ -250,6 +272,10 @@ impl ScyllaDbClientInternal {
         client: &ScyllaDbClientPair,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, ScyllaDbContextError> {
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            ScyllaDbContextError::KeyTooLong
+        );
         let session = &client.0;
         let table_name = &client.1;
         // Read the value of a key
@@ -287,6 +313,10 @@ impl ScyllaDbClientInternal {
         client: &ScyllaDbClientPair,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ScyllaDbContextError> {
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            ScyllaDbContextError::KeyTooLong
+        );
         let session = &client.0;
         let table_name = &client.1;
         // Read the value of a key
@@ -600,6 +630,7 @@ pub struct ScyllaDbKvStoreConfig {
 #[async_trait]
 impl KeyValueStoreClient for ScyllaDbClient {
     const MAX_VALUE_SIZE: usize = ScyllaDbClientInternal::MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = ScyllaDbClientInternal::MAX_KEY_SIZE;
     type Error = <ScyllaDbClientInternal as KeyValueStoreClient>::Error;
     type Keys = <ScyllaDbClientInternal as KeyValueStoreClient>::Keys;
     type KeyValues = <ScyllaDbClientInternal as KeyValueStoreClient>::KeyValues;
@@ -608,15 +639,15 @@ impl KeyValueStoreClient for ScyllaDbClient {
         self.client.max_stream_queries()
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.client.read_key_bytes(key).await
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        self.client.read_value_bytes(key).await
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
-        key: Vec<Vec<u8>>,
+        keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        self.client.read_multi_key_bytes(key).await
+        self.client.read_multi_values_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {

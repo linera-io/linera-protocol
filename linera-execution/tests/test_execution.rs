@@ -96,7 +96,7 @@ impl UserApplication for TestApplication {
         // Modify our state.
         let chosen_key = vec![0];
         runtime.lock_view_user_state().await?;
-        let state = runtime.read_key_bytes(chosen_key.clone()).await?;
+        let state = runtime.read_value_bytes(chosen_key.clone()).await?;
         let mut state = state.unwrap_or_default();
         state.extend(operation);
         let mut batch = Batch::new();
@@ -180,7 +180,7 @@ impl UserApplication for TestApplication {
     ) -> Result<Vec<u8>, ExecutionError> {
         let chosen_key = vec![0];
         runtime.lock_view_user_state().await?;
-        let state = runtime.read_key_bytes(chosen_key).await?;
+        let state = runtime.read_value_bytes(chosen_key).await?;
         let state = state.unwrap_or_default();
         runtime.unlock_view_user_state().await?;
         Ok(state)

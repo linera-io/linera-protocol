@@ -11,6 +11,7 @@ use crate::{
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
+use linera_base::ensure;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
@@ -84,7 +85,7 @@ where
 
     async fn load(context: C) -> Result<Self, ViewError> {
         let key = context.base_tag(KeyTag::Hash as u8);
-        let hash = context.read_key(&key).await?;
+        let hash = context.read_value(&key).await?;
         Ok(Self {
             context,
             was_cleared: false,
@@ -154,6 +155,11 @@ where
     C: Send + Context,
     ViewError: From<C::Error>,
 {
+    fn max_key_size(&self) -> usize {
+        let prefix_len = self.context.base_key().len();
+        C::MAX_KEY_SIZE - 1 - prefix_len
+    }
+
     /// Applies the function f over all indices. If the function f returns
     /// false, then the loop ends prematurely.
     /// ```rust
@@ -390,6 +396,9 @@ where
     /// # })
     /// ```
     pub async fn get(&self, index: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
+        if index.len() > self.max_key_size() {
+            return Err(ViewError::KeyTooLong);
+        }
         if let Some(update) = self.updates.get(index) {
             let value = match update {
                 Update::Removed => None,
@@ -401,7 +410,7 @@ where
             return Ok(None);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, index);
-        Ok(self.context.read_key_bytes(&key).await?)
+        Ok(self.context.read_value_bytes(&key).await?)
     }
 
     /// Obtains the values of a range of indices
@@ -424,6 +433,9 @@ where
         let mut missed_indices = Vec::new();
         let mut vector_query = Vec::new();
         for (i, index) in indices.into_iter().enumerate() {
+            if index.len() > self.max_key_size() {
+                return Err(ViewError::KeyTooLong);
+            }
             if let Some(update) = self.updates.get(&index) {
                 let value = match update {
                     Update::Removed => None,
@@ -438,7 +450,7 @@ where
             }
         }
         if !self.was_cleared {
-            let values = self.context.read_multi_key_bytes(vector_query).await?;
+            let values = self.context.read_multi_values_bytes(vector_query).await?;
             for (i, value) in missed_indices.into_iter().zip(values) {
                 result[i] = value;
             }
@@ -524,6 +536,10 @@ where
     /// # })
     /// ```
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
+        ensure!(
+            key_prefix.len() <= self.max_key_size(),
+            ViewError::KeyTooLong
+        );
         let len = key_prefix.len();
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut keys = Vec::new();
@@ -593,6 +609,10 @@ where
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
+        ensure!(
+            key_prefix.len() <= self.max_key_size(),
+            ViewError::KeyTooLong
+        );
         let len = key_prefix.len();
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut key_values = Vec::new();
@@ -664,9 +684,11 @@ where
     /// ```
     pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
         *self.hash.get_mut() = None;
+        let max_key_size = self.max_key_size();
         for op in batch.operations {
             match op {
                 WriteOperation::Delete { key } => {
+                    ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     if self.was_cleared {
                         self.updates.remove(&key);
                     } else {
@@ -674,9 +696,11 @@ where
                     }
                 }
                 WriteOperation::Put { key, value } => {
+                    ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     self.updates.insert(key, Update::Set(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
+                    ensure!(key_prefix.len() <= max_key_size, ViewError::KeyTooLong);
                     self.delete_prefix(key_prefix);
                 }
             }
@@ -748,6 +772,7 @@ where
     ViewError: From<C::Error>,
 {
     const MAX_VALUE_SIZE: usize = C::MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = C::MAX_KEY_SIZE;
     type Error = ViewError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -756,12 +781,12 @@ where
         1
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         let view = self.view.read().await;
         view.get(key).await
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
@@ -880,9 +905,8 @@ where
     /// Creates a [`ViewContainer`].
     pub async fn new(context: C) -> Result<Self, ViewError> {
         let view = KeyValueStoreView::load(context).await?;
-        Ok(Self {
-            view: Arc::new(RwLock::new(view)),
-        })
+        let view = Arc::new(RwLock::new(view));
+        Ok(Self { view })
     }
 }
 

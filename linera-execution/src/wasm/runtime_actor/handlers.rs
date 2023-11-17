@@ -51,10 +51,10 @@ where
             BaseRequest::UnlockViewUserState { response_sender } => {
                 response_sender.respond(self.unlock_view_user_state().await?)
             }
-            BaseRequest::ReadKeyBytes {
+            BaseRequest::ReadValueBytes {
                 key,
                 response_sender,
-            } => response_sender.respond(self.read_key_bytes(key).await?),
+            } => response_sender.respond(self.read_value_bytes(key).await?),
             BaseRequest::FindKeysByPrefix {
                 key_prefix,
                 response_sender,

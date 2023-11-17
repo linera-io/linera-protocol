@@ -51,7 +51,7 @@ where
         let key1 = context.base_tag(KeyTag::Store as u8);
         let key2 = context.base_tag(KeyTag::Hash as u8);
         let keys = vec![key1, key2];
-        let values_bytes = context.read_multi_key_bytes(keys).await?;
+        let values_bytes = context.read_multi_values_bytes(keys).await?;
         let stored_count = from_bytes_opt(&values_bytes[0])?.unwrap_or_default();
         let hash = from_bytes_opt(&values_bytes[1])?;
         Ok(Self {
@@ -183,7 +183,7 @@ where
             self.new_values.get(index).cloned()
         } else if index < self.stored_count {
             let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
-            self.context.read_key(&key).await?
+            self.context.read_value(&key).await?
         } else {
             self.new_values.get(index - self.stored_count).cloned()
         };
@@ -222,7 +222,7 @@ where
                     result.push(self.new_values.get(index - self.stored_count).cloned());
                 }
             }
-            let values = self.context.read_multi_key(keys).await?;
+            let values = self.context.read_multi_values(keys).await?;
             for (pos, value) in positions.into_iter().zip(values) {
                 *result.get_mut(pos).unwrap() = value;
             }
@@ -238,7 +238,7 @@ where
             keys.push(key);
         }
         let mut values = Vec::with_capacity(count);
-        for entry in self.context.read_multi_key(keys).await? {
+        for entry in self.context.read_multi_values(keys).await? {
             match entry {
                 None => {
                     return Err(ViewError::MissingEntries);

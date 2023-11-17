@@ -379,7 +379,7 @@ macro_rules! impl_view_system_api_for_service {
         impl view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
-            type ReadKeyBytes = Mutex<Option<oneshot::Receiver<Option<Vec<u8>>>>>;
+            type ReadValueBytes = Mutex<Option<oneshot::Receiver<Option<Vec<u8>>>>>;
             type FindKeys = Mutex<Option<oneshot::Receiver<Vec<Vec<u8>>>>>;
             type FindKeyValues = Mutex<Option<oneshot::Receiver<Vec<(Vec<u8>, Vec<u8>)>>>>;
 
@@ -387,13 +387,13 @@ macro_rules! impl_view_system_api_for_service {
                 error.into()
             }
 
-            fn read_key_bytes_new(
+            fn read_value_bytes_new(
                 &mut self,
                 key: &[u8],
-            ) -> Result<Self::ReadKeyBytes, Self::Error> {
+            ) -> Result<Self::ReadValueBytes, Self::Error> {
                 Ok(Mutex::new(Some(self.runtime.send_request(
                     |response_sender| {
-                        ServiceRequest::Base(BaseRequest::ReadKeyBytes {
+                        ServiceRequest::Base(BaseRequest::ReadValueBytes {
                             key: key.to_owned(),
                             response_sender,
                         })
@@ -401,9 +401,9 @@ macro_rules! impl_view_system_api_for_service {
                 )?)))
             }
 
-            fn read_key_bytes_wait(
+            fn read_value_bytes_wait(
                 &mut self,
-                promise: &Self::ReadKeyBytes,
+                promise: &Self::ReadValueBytes,
             ) -> Result<Option<Vec<u8>>, Self::Error> {
                 let receiver = promise
                     .try_lock()
@@ -487,7 +487,7 @@ macro_rules! impl_view_system_api_for_contract {
         impl view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
-            type ReadKeyBytes = Mutex<Option<oneshot::Receiver<Option<Vec<u8>>>>>;
+            type ReadValueBytes = Mutex<Option<oneshot::Receiver<Option<Vec<u8>>>>>;
             type FindKeys = Mutex<Option<oneshot::Receiver<Vec<Vec<u8>>>>>;
             type FindKeyValues = Mutex<Option<oneshot::Receiver<Vec<(Vec<u8>, Vec<u8>)>>>>;
 
@@ -495,13 +495,13 @@ macro_rules! impl_view_system_api_for_contract {
                 error.into()
             }
 
-            fn read_key_bytes_new(
+            fn read_value_bytes_new(
                 &mut self,
                 key: &[u8],
-            ) -> Result<Self::ReadKeyBytes, Self::Error> {
+            ) -> Result<Self::ReadValueBytes, Self::Error> {
                 Ok(Mutex::new(Some(self.runtime.send_request(
                     |response_sender| {
-                        ContractRequest::Base(BaseRequest::ReadKeyBytes {
+                        ContractRequest::Base(BaseRequest::ReadValueBytes {
                             key: key.to_owned(),
                             response_sender,
                         })
@@ -509,9 +509,9 @@ macro_rules! impl_view_system_api_for_contract {
                 )?)))
             }
 
-            fn read_key_bytes_wait(
+            fn read_value_bytes_wait(
                 &mut self,
-                promise: &Self::ReadKeyBytes,
+                promise: &Self::ReadValueBytes,
             ) -> Result<Option<Vec<u8>>, Self::Error> {
                 let receiver = promise
                     .try_lock()

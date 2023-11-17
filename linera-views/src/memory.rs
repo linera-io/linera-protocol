@@ -36,6 +36,7 @@ pub struct MemoryClient {
 #[async_trait]
 impl KeyValueStoreClient for MemoryClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
+    const MAX_KEY_SIZE: usize = usize::MAX;
     type Error = MemoryContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -44,12 +45,12 @@ impl KeyValueStoreClient for MemoryClient {
         self.max_stream_queries
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
         let map = self.map.read().await;
         Ok(map.get(key).cloned())
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, MemoryContextError> {

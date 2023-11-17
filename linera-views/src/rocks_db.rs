@@ -8,6 +8,7 @@ use crate::{
     value_splitting::{DatabaseConsistencyError, ValueSplittingKeyValueStoreClient},
 };
 use async_trait::async_trait;
+use linera_base::ensure;
 use std::{
     fs,
     ops::{Bound, Bound::Excluded},
@@ -19,11 +20,16 @@ use thiserror::Error;
 use {crate::lru_caching::TEST_CACHE_SIZE, tempfile::TempDir};
 
 /// The number of streams for the test
-pub const TEST_ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
+#[cfg(any(test, feature = "test"))]
+const TEST_ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
 
 // The maximum size of values in RocksDB is 3 GB
 // That is 3221225472 and so for offset reason we decrease by 400
 const MAX_VALUE_SIZE: usize = 3221225072;
+
+// The maximum size of keys in RocksDB is 8 MB
+// 8388608 and so for offset reason we decrease by 400
+const MAX_KEY_SIZE: usize = 8388208;
 
 /// The RocksDB client that we use.
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
@@ -47,6 +53,7 @@ pub struct RocksDbKvStoreConfig {
 #[async_trait]
 impl KeyValueStoreClient for RocksDbClientInternal {
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Error = RocksDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -55,16 +62,20 @@ impl KeyValueStoreClient for RocksDbClientInternal {
         self.max_stream_queries
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
+        ensure!(key.len() <= MAX_KEY_SIZE, RocksDbContextError::KeyTooLong);
         let client = self.clone();
         let key = key.to_vec();
         Ok(tokio::task::spawn_blocking(move || client.db.get(&key)).await??)
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbContextError> {
+        for key in &keys {
+            ensure!(key.len() <= MAX_KEY_SIZE, RocksDbContextError::KeyTooLong);
+        }
         let client = self.clone();
         let entries = tokio::task::spawn_blocking(move || client.db.multi_get(&keys)).await?;
         Ok(entries.into_iter().collect::<Result<_, _>>()?)
@@ -74,6 +85,10 @@ impl KeyValueStoreClient for RocksDbClientInternal {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::Keys, RocksDbContextError> {
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            RocksDbContextError::KeyTooLong
+        );
         let client = self.clone();
         let prefix = key_prefix.to_vec();
         let len = prefix.len();
@@ -100,6 +115,10 @@ impl KeyValueStoreClient for RocksDbClientInternal {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, RocksDbContextError> {
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            RocksDbContextError::KeyTooLong
+        );
         let client = self.clone();
         let prefix = key_prefix.to_vec();
         let len = prefix.len();
@@ -155,9 +174,19 @@ impl KeyValueStoreClient for RocksDbClientInternal {
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
             for operation in batch.operations {
                 match operation {
-                    WriteOperation::Delete { key } => inner_batch.delete(&key),
-                    WriteOperation::Put { key, value } => inner_batch.put(&key, value),
+                    WriteOperation::Delete { key } => {
+                        ensure!(key.len() <= MAX_KEY_SIZE, RocksDbContextError::KeyTooLong);
+                        inner_batch.delete(&key)
+                    }
+                    WriteOperation::Put { key, value } => {
+                        ensure!(key.len() <= MAX_KEY_SIZE, RocksDbContextError::KeyTooLong);
+                        inner_batch.put(&key, value)
+                    }
                     WriteOperation::DeletePrefix { key_prefix } => {
+                        ensure!(
+                            key_prefix.len() <= MAX_KEY_SIZE,
+                            RocksDbContextError::KeyTooLong
+                        );
                         if let Excluded(upper_bound) = get_upper_bound(&key_prefix) {
                             inner_batch.delete_range(key_prefix, upper_bound);
                         }
@@ -318,6 +347,7 @@ pub type RocksDbContext<E> = ContextFromDb<E, RocksDbClient>;
 #[async_trait]
 impl KeyValueStoreClient for RocksDbClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
+    const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Error = RocksDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -326,15 +356,15 @@ impl KeyValueStoreClient for RocksDbClient {
         self.client.max_stream_queries()
     }
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
-        self.client.read_key_bytes(key).await
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
+        self.client.read_value_bytes(key).await
     }
 
-    async fn read_multi_key_bytes(
+    async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbContextError> {
-        self.client.read_multi_key_bytes(keys).await
+        self.client.read_multi_values_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(
@@ -389,6 +419,10 @@ pub enum RocksDbContextError {
     /// RocksDb error.
     #[error("RocksDb error: {0}")]
     RocksDb(#[from] rocksdb::Error),
+
+    /// The key must have at most 8M
+    #[error("The key must have at most 8M")]
+    KeyTooLong,
 
     /// Missing database
     #[error("Missing database")]

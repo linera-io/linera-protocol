@@ -930,7 +930,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
 
     linker.func_wrap2_async(
         "view_system_api",
-        "read-key-bytes::new: func(key: list<u8>) -> handle<read-key-bytes>",
+        "read-value-bytes::new: func(key: list<u8>) -> handle<read-value-bytes>",
         move |mut caller: Caller<'_, Resources>, key_address: i32, key_length: i32| {
             Box::new(async move {
                 let key = load_bytes(&mut caller, key_address, key_length);
@@ -942,15 +942,15 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     )?;
     linker.func_wrap2_async(
         "view_system_api",
-        "read-key-bytes::wait: func(self: handle<read-key-bytes>) -> option<list<u8>>",
+        "read-value-bytes::wait: func(self: handle<read-value-bytes>) -> option<list<u8>>",
         move |mut caller: Caller<'_, Resources>, handle: i32, return_offset: i32| {
             Box::new(async move {
                 let function = get_function(
                     &mut caller,
-                    "mocked-read-key-bytes: func(key: list<u8>) -> option<list<u8>>",
+                    "mocked-read-value-bytes: func(key: list<u8>) -> option<list<u8>>",
                 )
                 .expect(
-                    "Missing `mocked-read-key-bytes` function in the module. \
+                    "Missing `mocked-read-value-bytes` function in the module. \
                     Please ensure `linera_sdk::test::mock_key_value_store` was called",
                 );
 
@@ -963,11 +963,11 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
 
                 let (result_offset,) = function
                     .typed::<(i32, i32), (i32,), _>(&mut caller)
-                    .expect("Incorrect `mocked-read-key-bytes` function signature")
+                    .expect("Incorrect `mocked-read-value-bytes` function signature")
                     .call_async(&mut caller, (key_address, key_length))
                     .await
                     .expect(
-                        "Failed to call `mocked-read-key-bytes` function. \
+                        "Failed to call `mocked-read-value-bytes` function. \
                         Please ensure `linera_sdk::test::mock_key_value_store` was called",
                     );
 
@@ -1216,7 +1216,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     let resource_names = [
         "load",
         "lock",
-        "read-key-bytes",
+        "read-value-bytes",
         "find-keys",
         "find-key-values",
         "write-batch",

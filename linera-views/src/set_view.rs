@@ -42,7 +42,7 @@ where
 
     async fn load(context: C) -> Result<Self, ViewError> {
         let key = context.base_tag(KeyTag::Hash as u8);
-        let hash = context.read_key(&key).await?;
+        let hash = context.read_value(&key).await?;
         Ok(Self {
             context,
             was_cleared: false,
@@ -176,7 +176,7 @@ where
             return Ok(false);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
-        match self.context.read_key_bytes(&key).await? {
+        match self.context.read_value_bytes(&key).await? {
             None => Ok(false),
             Some(_) => Ok(true),
         }

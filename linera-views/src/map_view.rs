@@ -60,7 +60,7 @@ where
 
     async fn load(context: C) -> Result<Self, ViewError> {
         let key = context.base_tag(KeyTag::Hash as u8);
-        let hash = context.read_key(&key).await?;
+        let hash = context.read_value(&key).await?;
         Ok(Self {
             context,
             was_cleared: false,
@@ -197,14 +197,14 @@ where
             return Ok(None);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
-        Ok(self.context.read_key(&key).await?)
+        Ok(self.context.read_value(&key).await?)
     }
 
     /// Loads the value in updates if that is at all possible.
     async fn load_value(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
         if !self.was_cleared && !self.updates.contains_key(short_key) {
             let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
-            let value = self.context.read_key(&key).await?;
+            let value = self.context.read_value(&key).await?;
             if let Some(value) = value {
                 self.updates.insert(short_key.to_vec(), Update::Set(value));
             }
@@ -510,7 +510,7 @@ where
             Entry::Vacant(e) if self.was_cleared => e.insert(Update::Set(V::default())),
             Entry::Vacant(e) => {
                 let key = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
-                let value = self.context.read_key(&key).await?.unwrap_or_default();
+                let value = self.context.read_value(&key).await?.unwrap_or_default();
                 e.insert(Update::Set(value))
             }
             Entry::Occupied(entry) => {
