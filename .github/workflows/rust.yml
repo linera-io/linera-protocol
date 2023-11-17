@@ -103,11 +103,11 @@ jobs:
       run: >
         find linera-* -name '*.rs' -a -not -wholename '*/target/*' -print0
         | xargs -0 -L1 ./scripts/target/release/check_copyright_header
+    - name: Put lint toolchain file in place
+      run: |
+        ln -sf rust-toolchain.lint.toml rust-toolchain.toml
     - uses: Twey/setup-rust-toolchain@v1
-      with:
-        toolchain: nightly-2023-10-22
-        target: wasm32-unknown-unknown
-        components: clippy rustfmt
+      working-directory: toolchains/lint
     - name: Install cargo-machete
       run: |
         cargo install cargo-machete --locked
