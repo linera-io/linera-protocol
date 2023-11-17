@@ -52,19 +52,19 @@ jobs:
         publish_branch: gh-pages
         publish_dir: ./target/doc
 
-  docsrs:
-    runs-on: ubuntu-latest-16-cores
+  # TODO(#802): Fix this job.
+  # docsrs:
+  #   runs-on: ubuntu-latest
 
-    steps:
-    - uses: actions/checkout@v3
-    - uses: Twey/setup-rust-toolchain@v1
-    - name: Checkout docs.rs tool repository
-      run: |
-        cd ${{ runner.temp }}
-        git clone https://github.com/rust-lang/docs.rs docsrs
-        cd docsrs
-        git submodule update --init
-    # TODO(#802): Fix this.
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #   - uses: Twey/setup-rust-toolchain@v1
+  #   - name: Checkout docs.rs tool repository
+  #     run: |
+  #       cd ${{ runner.temp }}
+  #       git clone https://github.com/rust-lang/docs.rs docsrs
+  #       cd docsrs
+  #       git submodule update --init
     # - name: Generate standalone packages
     #   run: |
     #     for crate in $LINERA_CRATES; do

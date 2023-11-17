@@ -34,6 +34,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 45
 
     steps:
     - uses: actions/checkout@v3
@@ -84,7 +85,7 @@ jobs:
         cargo test -p linera-witty --features wasmer,wasmtime
 
   lint:
-    runs-on: ubuntu-latest-4-cores
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
