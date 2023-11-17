@@ -128,9 +128,9 @@ impl ChainManager {
         &mut self,
         ownership: &ChainOwnership,
         height: BlockHeight,
-        now: Timestamp,
+        local_time: Timestamp,
     ) -> Result<(), ChainError> {
-        *self = ChainManager::new(ownership.clone(), height.0, now)?;
+        *self = ChainManager::new(ownership.clone(), height.0, local_time)?;
         Ok(())
     }
 
@@ -138,7 +138,11 @@ impl ChainManager {
         self.ownership.is_active()
     }
 
-    fn new(ownership: ChainOwnership, seed: u64, now: Timestamp) -> Result<Self, ChainError> {
+    fn new(
+        ownership: ChainOwnership,
+        seed: u64,
+        local_time: Timestamp,
+    ) -> Result<Self, ChainError> {
         let distribution = if !ownership.owners.is_empty() {
             let weights = ownership
                 .owners
@@ -149,7 +153,7 @@ impl ChainManager {
         } else {
             None
         };
-        let round_timeout = now.saturating_add(TIMEOUT);
+        let round_timeout = local_time.saturating_add(TIMEOUT);
 
         Ok(ChainManager {
             ownership,
@@ -267,12 +271,12 @@ impl ChainManager {
         height: BlockHeight,
         epoch: Epoch,
         key_pair: Option<&KeyPair>,
-        now: Timestamp,
+        local_time: Timestamp,
     ) -> bool {
         let Some(key_pair) = key_pair else {
             return false; // We are not a validator.
         };
-        if now < self.round_timeout || self.ownership.owners.is_empty() {
+        if local_time < self.round_timeout || self.ownership.owners.is_empty() {
             return false; // Round has not timed out yet, or there are no regular owners.
         }
         let current_round = self.current_round();
@@ -323,10 +327,10 @@ impl ChainManager {
         proposal: BlockProposal,
         outcome: BlockExecutionOutcome,
         key_pair: Option<&KeyPair>,
-        now: Timestamp,
+        local_time: Timestamp,
     ) {
         if let Some(round) = self.ownership.previous_round(proposal.content.round) {
-            self.update_timeout(round, now);
+            self.update_timeout(round, local_time);
         }
         // Record the proposed block, so it can be supplied to clients that request it.
         self.proposed = Some(proposal.clone());
@@ -358,7 +362,7 @@ impl ChainManager {
         &mut self,
         certificate: Certificate,
         key_pair: Option<&KeyPair>,
-        now: Timestamp,
+        local_time: Timestamp,
     ) {
         let round = certificate.round;
         // Validators only change their locked block if the new one is included in a proposal in the
@@ -371,7 +375,7 @@ impl ChainManager {
             error!("Unexpected certificate; expected ValidatedBlock");
             return;
         };
-        self.update_timeout(round, now);
+        self.update_timeout(round, local_time);
         self.locked = Some(certificate);
         if let Some(key_pair) = key_pair {
             // Vote to confirm.
@@ -382,7 +386,7 @@ impl ChainManager {
     }
 
     /// Resets the timer if `round` has just ended.
-    fn update_timeout(&mut self, round: Round, now: Timestamp) {
+    fn update_timeout(&mut self, round: Round, local_time: Timestamp) {
         if self.current_round() <= round {
             let factor = if let Round::SingleLeader(r) = round {
                 r.saturating_add(2)
@@ -390,13 +394,13 @@ impl ChainManager {
                 1
             };
             let timeout = TIMEOUT.saturating_mul(factor);
-            self.round_timeout = now.saturating_add(timeout);
+            self.round_timeout = local_time.saturating_add(timeout);
         }
     }
 
     /// Updates the round number and timer if the timeout certificate is from a higher round than
     /// any known certificate.
-    pub fn handle_timeout_certificate(&mut self, certificate: Certificate, now: Timestamp) {
+    pub fn handle_timeout_certificate(&mut self, certificate: Certificate, local_time: Timestamp) {
         if !certificate.value().is_timeout() {
             // Unreachable: This is only called with timeout certificates.
             error!("Unexpected certificate; expected leader timeout");
@@ -408,7 +412,7 @@ impl ChainManager {
                 return;
             }
         }
-        self.update_timeout(round, now);
+        self.update_timeout(round, local_time);
         self.leader_timeout = Some(certificate);
     }
 

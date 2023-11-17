@@ -332,7 +332,7 @@ where
         timestamp: Timestamp,
         messages: Vec<OutgoingMessage>,
         certificate_hash: CryptoHash,
-        now: Timestamp,
+        local_time: Timestamp,
     ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         ensure!(
@@ -381,7 +381,7 @@ where
                         height,
                         index,
                     };
-                    self.execute_immediate_message(message_id, &message, timestamp, now)
+                    self.execute_immediate_message(message_id, &message, timestamp, local_time)
                         .await?;
                 }
             }
@@ -429,7 +429,7 @@ where
         message_id: MessageId,
         message: &Message,
         timestamp: Timestamp,
-        now: Timestamp,
+        local_time: Timestamp,
     ) -> Result<(), ChainError> {
         if let Message::System(SystemMessage::OpenChain {
             ownership,
@@ -456,7 +456,7 @@ where
             self.manager.get_mut().reset(
                 self.execution_state.system.ownership.get(),
                 BlockHeight(0),
-                now,
+                local_time,
             )?;
         }
         Ok(())
@@ -501,7 +501,7 @@ where
     pub async fn execute_block(
         &mut self,
         block: &Block,
-        now: Timestamp,
+        local_time: Timestamp,
     ) -> Result<BlockExecutionOutcome, ChainError> {
         let start_time = Instant::now();
 
@@ -642,7 +642,7 @@ where
         self.manager.get_mut().reset(
             self.execution_state.system.ownership.get(),
             block.height.try_add_one()?,
-            now,
+            local_time,
         )?;
 
         // Log Prometheus metrics

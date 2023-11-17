@@ -1346,12 +1346,12 @@ where
     /// This will usually be the current time according to the local clock, but may be slightly
     /// ahead to make sure it's not earlier than the incoming messages or the previous block.
     async fn next_timestamp(&self, incoming_messages: &[IncomingMessage]) -> Timestamp {
-        let now = self.storage_client().await.current_time();
+        let local_time = self.storage_client().await.current_time();
         incoming_messages
             .iter()
             .map(|msg| msg.event.timestamp)
             .max()
-            .map_or(now, |timestamp| timestamp.max(now))
+            .map_or(local_time, |timestamp| timestamp.max(local_time))
             .max(self.timestamp)
     }
 
