@@ -454,6 +454,7 @@ pub struct GenesisConfig {
     pub timestamp: Timestamp,
     pub chains: Vec<(PublicKey, Amount)>,
     pub policy: ResourceControlPolicy,
+    pub network_name: String,
 }
 
 impl Import for GenesisConfig {}
@@ -466,6 +467,7 @@ impl GenesisConfig {
         admin_id: ChainId,
         timestamp: Timestamp,
         policy: ResourceControlPolicy,
+        network_name: String,
     ) -> Self {
         Self {
             committee,
@@ -473,6 +475,7 @@ impl GenesisConfig {
             timestamp,
             chains: Vec::new(),
             policy,
+            network_name,
         }
     }
 
