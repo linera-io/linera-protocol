@@ -47,7 +47,7 @@ jobs:
         cargo build --locked --release --target wasm32-unknown-unknown
     - name: Build
       run: |
-        cargo build --locked --features aws
+        cargo build --locked --release --features aws
     - name: Setup local DynamoDB instance
       run: |
         docker run --rm -d --name local-dynamodb -p 8000:8000/tcp amazon/dynamodb-local
@@ -58,4 +58,4 @@ jobs:
         AWS_SECRET_ACCESS_KEY: test
         LOCALSTACK_ENDPOINT: http://localhost:8000
       run: |
-        cargo test --locked --features aws -- dynamo
+        cargo test --locked --release --features aws -- dynamo
