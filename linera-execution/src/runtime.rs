@@ -35,16 +35,6 @@ use std::{
 /// Runtime data tracked during the execution of a transaction.
 #[derive(Debug, Clone)]
 pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
-    /// The amount of fuel available for executing the application.
-    remaining_fuel: Arc<AtomicU64>,
-    /// The number of reads
-    num_reads: Arc<AtomicU64>,
-    /// the total size being read
-    bytes_read: Arc<AtomicU64>,
-    /// The total size being written
-    bytes_written: Arc<AtomicU64>,
-    /// The runtime limits
-    runtime_limits: RuntimeLimits,
     /// The current chain ID.
     chain_id: ChainId,
     /// The current stack of application descriptions.
@@ -61,6 +51,17 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     active_sessions: Arc<Mutex<ActiveSessions>>,
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
     execution_results: Arc<Mutex<&'a mut Vec<ExecutionResult>>>,
+
+    /// The amount of fuel available for executing the application.
+    remaining_fuel: Arc<AtomicU64>,
+    /// The number of reads
+    num_reads: Arc<AtomicU64>,
+    /// the total size being read
+    bytes_read: Arc<AtomicU64>,
+    /// The total size being written
+    bytes_written: Arc<AtomicU64>,
+    /// The runtime limits
+    runtime_limits: RuntimeLimits,
 }
 
 /// The runtime status of an application.
@@ -118,12 +119,6 @@ where
         let bytes_read = Arc::new(AtomicU64::new(0));
         let bytes_written = Arc::new(AtomicU64::new(0));
         Self {
-            remaining_fuel,
-            num_reads,
-            bytes_read,
-            bytes_written,
-            runtime_limits,
-            chain_id,
             applications: Arc::new(Mutex::new(applications)),
             execution_state: Arc::new(Mutex::new(execution_state)),
             session_manager: Arc::new(Mutex::new(session_manager)),
@@ -131,6 +126,12 @@ where
             active_view_user_states: Arc::default(),
             active_sessions: Arc::default(),
             execution_results: Arc::new(Mutex::new(execution_results)),
+            remaining_fuel,
+            num_reads,
+            bytes_read,
+            bytes_written,
+            runtime_limits,
+            chain_id,
         }
     }
 
