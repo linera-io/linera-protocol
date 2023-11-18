@@ -33,7 +33,7 @@ use std::{
 };
 
 /// Runtime data tracked during the execution of a transaction.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     /// The current chain ID.
     chain_id: ChainId,
