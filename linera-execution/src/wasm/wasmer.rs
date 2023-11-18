@@ -39,15 +39,15 @@ use super::{
     ApplicationCallResult, SessionCallResult, WasmApplication, WasmExecutionError,
 };
 use crate::{
-    Bytecode, CalleeContext, ContractRuntime, ExecutionError, MessageContext, OperationContext,
-    QueryContext, RawExecutionResult, ServiceRuntime,
+    Bytecode, CalleeContext, ExecutionError, MessageContext, OperationContext, QueryContext,
+    RawExecutionResult,
 };
 use bytes::Bytes;
 use futures::channel::mpsc;
 use linera_base::identifiers::SessionId;
 use linera_views::batch::Batch;
 use once_cell::sync::Lazy;
-use std::{marker::PhantomData, mem, sync::Arc};
+use std::{marker::PhantomData, sync::Arc};
 use tokio::sync::Mutex;
 use wasmer::{
     imports, wasmparser::Operator, CompilerConfig, Engine, EngineBuilder, Instance, Module,
@@ -319,40 +319,6 @@ impl common::Service for Service {
         argument: Vec<u8>,
     ) -> Result<Result<Vec<u8>, String>, RuntimeError> {
         service::Service::handle_query(&self.service, store, context.into(), &argument)
-    }
-}
-
-/// Unsafe trait to artificially transmute a type in order to extend its lifetime.
-///
-/// # Safety
-///
-/// It is the caller's responsibility to ensure that the resulting [`WithoutLifetime`] type is not
-/// in use after the original lifetime expires.
-pub unsafe trait RemoveLifetime {
-    type WithoutLifetime: 'static;
-
-    /// Removes the lifetime artificially.
-    ///
-    /// # Safety
-    ///
-    /// It is the caller's responsibility to ensure that the resulting [`WithoutLifetime`] type is not
-    /// in use after the original lifetime expires.
-    unsafe fn remove_lifetime(self) -> Self::WithoutLifetime;
-}
-
-unsafe impl<'runtime> RemoveLifetime for &'runtime dyn ContractRuntime {
-    type WithoutLifetime = &'static dyn ContractRuntime;
-
-    unsafe fn remove_lifetime(self) -> Self::WithoutLifetime {
-        unsafe { mem::transmute(self) }
-    }
-}
-
-unsafe impl<'runtime> RemoveLifetime for &'runtime dyn ServiceRuntime {
-    type WithoutLifetime = &'static dyn ServiceRuntime;
-
-    unsafe fn remove_lifetime(self) -> Self::WithoutLifetime {
-        unsafe { mem::transmute(self) }
     }
 }
 
