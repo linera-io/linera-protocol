@@ -4,7 +4,7 @@
 use crate::{
     execution::ExecutionStateView, BaseRuntime, CallResult, ContractRuntime, ExecutionError,
     ExecutionResult, ExecutionRuntimeContext, RuntimeCounts, RuntimeLimits, ServiceRuntime,
-    SessionId, UserApplicationCode, UserApplicationDescription, UserApplicationId,
+    SessionId, UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
 };
 use async_lock::{Mutex, MutexGuard, MutexGuardArc, RwLockWriteGuardArc};
 use async_trait::async_trait;
@@ -172,10 +172,10 @@ where
             .expect("single-threaded execution should not lock `execution_results`")
     }
 
-    async fn load_application(
+    async fn load_contract(
         &self,
         id: UserApplicationId,
-    ) -> Result<(UserApplicationCode, UserApplicationDescription), ExecutionError> {
+    ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
         let description = self
             .execution_state_mut()
             .system
@@ -186,7 +186,26 @@ where
             .execution_state_mut()
             .context()
             .extra()
-            .get_user_application(&description)
+            .get_user_contract(&description)
+            .await?;
+        Ok((code, description))
+    }
+
+    async fn load_service(
+        &self,
+        id: UserApplicationId,
+    ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
+        let description = self
+            .execution_state_mut()
+            .system
+            .registry
+            .describe_application(id)
+            .await?;
+        let code = self
+            .execution_state_mut()
+            .context()
+            .extra()
+            .get_user_service(&description)
             .await?;
         Ok((code, description))
     }
@@ -485,7 +504,7 @@ where
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
         // Load the application.
-        let (code, description) = self.load_application(queried_id).await?;
+        let (code, description) = self.load_service(queried_id).await?;
         // Make the call to user code.
         let query_context = crate::QueryContext {
             chain_id: self.chain_id,
@@ -589,7 +608,7 @@ where
             .expect("caller must exist")
             .clone();
         // Load the application.
-        let (code, description) = self.load_application(callee_id).await?;
+        let (code, description) = self.load_contract(callee_id).await?;
         // Change the owners of forwarded sessions.
         self.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
         // Make the call to user code.
@@ -643,7 +662,7 @@ where
             .expect("caller must exist")
             .clone();
         // Load the application.
-        let (code, description) = self.load_application(callee_id).await?;
+        let (code, description) = self.load_contract(callee_id).await?;
         // Change the owners of forwarded sessions.
         self.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
         // Load the session.

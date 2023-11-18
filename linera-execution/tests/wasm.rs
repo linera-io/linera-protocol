@@ -56,7 +56,18 @@ async fn test_fuel_for_counter_wasm_application(
     .await?;
     view.context()
         .extra
-        .user_applications()
+        .user_contracts()
+        .insert(app_id, Arc::new(application));
+
+    let application = WasmApplication::from_files(
+        "tests/fixtures/counter_contract.wasm",
+        "tests/fixtures/counter_service.wasm",
+        wasm_runtime,
+    )
+    .await?;
+    view.context()
+        .extra
+        .user_services()
         .insert(app_id, Arc::new(application));
 
     let app_id = app_id.with_abi::<CounterAbi>();

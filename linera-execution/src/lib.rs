@@ -181,8 +181,11 @@ pub struct RuntimeCounts {
     pub bytes_written: u64,
 }
 
-/// An implementation of [`UserApplication`]
-pub type UserApplicationCode = Arc<dyn UserApplication + Send + Sync + 'static>;
+/// An implementation of [`UserContract`]
+pub type UserContractCode = Arc<dyn UserContract + Send + Sync + 'static>;
+
+/// An implementation of [`ServiceApplication`]
+pub type UserServiceCode = Arc<dyn UserService + Send + Sync + 'static>;
 
 #[derive(Error, Debug)]
 pub enum ExecutionError {
@@ -242,9 +245,9 @@ impl From<ViewError> for ExecutionError {
     }
 }
 
-/// The public entry points provided by an application.
+/// The public entry points provided by the contract part of an application.
 #[async_trait]
-pub trait UserApplication {
+pub trait UserContract {
     /// Initializes the application state on the chain that owns the application.
     async fn initialize(
         &self,
@@ -290,12 +293,12 @@ pub trait UserApplication {
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, ExecutionError>;
+}
 
+/// The public entry points provided by the service part of an application.
+#[async_trait]
+pub trait UserService {
     /// Executes unmetered read-only queries on the state of this application.
-    ///
-    /// # Note
-    ///
-    /// This is not meant to be metered and may not be exposed by all validators.
     async fn handle_query(
         &self,
         context: &QueryContext,
@@ -330,12 +333,19 @@ pub struct SessionCallResult {
 pub trait ExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId;
 
-    fn user_applications(&self) -> &Arc<DashMap<UserApplicationId, UserApplicationCode>>;
+    fn user_contracts(&self) -> &Arc<DashMap<UserApplicationId, UserContractCode>>;
 
-    async fn get_user_application(
+    fn user_services(&self) -> &Arc<DashMap<UserApplicationId, UserServiceCode>>;
+
+    async fn get_user_contract(
         &self,
         description: &UserApplicationDescription,
-    ) -> Result<UserApplicationCode, ExecutionError>;
+    ) -> Result<UserContractCode, ExecutionError>;
+
+    async fn get_user_service(
+        &self,
+        description: &UserApplicationDescription,
+    ) -> Result<UserServiceCode, ExecutionError>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -634,7 +644,8 @@ impl OperationContext {
 #[derive(Clone)]
 pub struct TestExecutionRuntimeContext {
     chain_id: ChainId,
-    user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
+    user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
+    user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
 }
 
 #[cfg(any(test, feature = "test"))]
@@ -642,7 +653,8 @@ impl TestExecutionRuntimeContext {
     fn new(chain_id: ChainId) -> Self {
         Self {
             chain_id,
-            user_applications: Arc::default(),
+            user_contracts: Arc::default(),
+            user_services: Arc::default(),
         }
     }
 }
@@ -654,17 +666,35 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         self.chain_id
     }
 
-    fn user_applications(&self) -> &Arc<DashMap<UserApplicationId, UserApplicationCode>> {
-        &self.user_applications
+    fn user_contracts(&self) -> &Arc<DashMap<UserApplicationId, UserContractCode>> {
+        &self.user_contracts
     }
 
-    async fn get_user_application(
+    fn user_services(&self) -> &Arc<DashMap<UserApplicationId, UserServiceCode>> {
+        &self.user_services
+    }
+
+    async fn get_user_contract(
         &self,
         description: &UserApplicationDescription,
-    ) -> Result<UserApplicationCode, ExecutionError> {
+    ) -> Result<UserContractCode, ExecutionError> {
         let application_id = description.into();
         Ok(self
-            .user_applications()
+            .user_contracts()
+            .get(&application_id)
+            .ok_or_else(|| {
+                ExecutionError::ApplicationBytecodeNotFound(Box::new(description.clone()))
+            })?
+            .clone())
+    }
+
+    async fn get_user_service(
+        &self,
+        description: &UserApplicationDescription,
+    ) -> Result<UserServiceCode, ExecutionError> {
+        let application_id = description.into();
+        Ok(self
+            .user_services()
             .get(&application_id)
             .ok_or_else(|| {
                 ExecutionError::ApplicationBytecodeNotFound(Box::new(description.clone()))

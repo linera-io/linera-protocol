@@ -24,7 +24,7 @@ use linera_views_derive::CryptoHashView;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::{system::SystemExecutionState, TestExecutionRuntimeContext, UserApplicationCode},
+    crate::{system::SystemExecutionState, TestExecutionRuntimeContext, UserContractCode},
     async_lock::Mutex,
     linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
     std::collections::BTreeMap,
@@ -103,7 +103,7 @@ where
     #[cfg(any(test, feature = "test"))]
     pub async fn simulate_initialization(
         &mut self,
-        application: UserApplicationCode,
+        contract: UserContractCode,
         application_description: UserApplicationDescription,
         initialization_argument: Vec<u8>,
     ) -> Result<(), ExecutionError> {
@@ -126,8 +126,8 @@ where
 
         self.context()
             .extra()
-            .user_applications()
-            .insert(application_id, application);
+            .user_contracts()
+            .insert(application_id, contract);
 
         let mut tracker = ResourceTracker::default();
         let policy = ResourceControlPolicy::default();
@@ -172,17 +172,17 @@ where
         let balance = self.system.balance.get();
         let runtime_limits = tracker.limits(policy, balance);
         let initial_remaining_fuel = policy.remaining_fuel(*balance);
-        // Try to load the application. This may fail if the corresponding
+        // Try to load the contract. This may fail if the corresponding
         // bytecode-publishing certificate doesn't exist yet on this validator.
         let description = self
             .system
             .registry
             .describe_application(application_id)
             .await?;
-        let application = self
+        let contract = self
             .context()
             .extra()
-            .get_user_application(&description)
+            .get_user_contract(&description)
             .await?;
         let signer = action.signer();
         // Create the execution runtime for this transaction.
@@ -205,17 +205,15 @@ where
         // Make the call to user code.
         let call_result = match action {
             UserAction::Initialize(context, argument) => {
-                application.initialize(context, &runtime, &argument).await
+                contract.initialize(context, &runtime, &argument).await
             }
             UserAction::Operation(context, operation) => {
-                application
+                contract
                     .execute_operation(context, &runtime, operation)
                     .await
             }
             UserAction::Message(context, message) => {
-                application
-                    .execute_message(context, &runtime, message)
-                    .await
+                contract.execute_message(context, &runtime, message).await
             }
         };
         // TODO(#989): Make user errors fail blocks again.
@@ -354,16 +352,16 @@ where
                 application_id,
                 bytes,
             } => {
-                // Load the application.
+                // Load the service.
                 let description = self
                     .system
                     .registry
                     .describe_application(*application_id)
                     .await?;
-                let application = self
+                let service = self
                     .context()
                     .extra()
-                    .get_user_application(&description)
+                    .get_user_service(&description)
                     .await?;
                 // Create the execution runtime for this transaction.
                 let mut session_manager = SessionManager::default();
@@ -385,7 +383,7 @@ where
                     runtime_limits,
                 );
                 // Run the query.
-                let response = application.handle_query(context, &runtime, bytes).await?;
+                let response = service.handle_query(context, &runtime, bytes).await?;
                 // Check that applications were correctly stacked and unstacked.
                 assert_eq!(applications.len(), 1);
                 assert_eq!(&applications[0].id, application_id);

@@ -27,7 +27,7 @@ use self::{runtime_actor::RuntimeActor, sanitizer::sanitize};
 use crate::{
     ApplicationCallResult, Bytecode, CalleeContext, ContractRuntime, ExecutionError,
     MessageContext, OperationContext, QueryContext, RawExecutionResult, ServiceRuntime,
-    SessionCallResult, SessionId, UserApplication, WasmRuntime,
+    SessionCallResult, SessionId, UserContract, UserService, WasmRuntime,
 };
 use async_lock::RwLock;
 use async_trait::async_trait;
@@ -124,7 +124,7 @@ pub enum WasmExecutionError {
 }
 
 #[async_trait]
-impl UserApplication for WasmApplication {
+impl UserContract for WasmApplication {
     async fn initialize(
         &self,
         context: &OperationContext,
@@ -270,7 +270,10 @@ impl UserApplication for WasmApplication {
         *session_state = updated_session_state;
         Ok(result)
     }
+}
 
+#[async_trait]
+impl UserService for WasmApplication {
     async fn handle_query(
         &self,
         context: &QueryContext,
