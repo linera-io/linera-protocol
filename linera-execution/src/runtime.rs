@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    execution::ExecutionStateView, BaseRuntime, CallResult, ContractRuntime, ExecutionError,
-    ExecutionResult, ExecutionRuntimeContext, RuntimeCounts, RuntimeLimits, ServiceRuntime,
-    SessionId, UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
+    execution::ExecutionStateView,
+    resources::{RuntimeCounts, RuntimeLimits},
+    BaseRuntime, CallResult, ContractRuntime, ExecutionError, ExecutionResult,
+    ExecutionRuntimeContext, ServiceRuntime, SessionId, UserApplicationDescription,
+    UserApplicationId, UserContractCode, UserServiceCode,
 };
 use async_lock::{Mutex, MutexGuard, MutexGuardArc, RwLockWriteGuardArc};
 use async_trait::async_trait;
