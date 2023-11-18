@@ -114,10 +114,6 @@ where
         runtime_limits: RuntimeLimits,
     ) -> Self {
         assert_eq!(chain_id, execution_state.context().extra().chain_id());
-        let remaining_fuel = Arc::new(AtomicU64::new(fuel));
-        let num_reads = Arc::new(AtomicU64::new(0));
-        let bytes_read = Arc::new(AtomicU64::new(0));
-        let bytes_written = Arc::new(AtomicU64::new(0));
         Self {
             applications: Arc::new(Mutex::new(applications)),
             execution_state: Arc::new(Mutex::new(execution_state)),
@@ -126,10 +122,10 @@ where
             active_view_user_states: Arc::default(),
             active_sessions: Arc::default(),
             execution_results: Arc::new(Mutex::new(execution_results)),
-            remaining_fuel,
-            num_reads,
-            bytes_read,
-            bytes_written,
+            remaining_fuel: Arc::new(AtomicU64::new(fuel)),
+            num_reads: Arc::new(AtomicU64::new(0)),
+            bytes_read: Arc::new(AtomicU64::new(0)),
+            bytes_written: Arc::new(AtomicU64::new(0)),
             runtime_limits,
             chain_id,
         }
