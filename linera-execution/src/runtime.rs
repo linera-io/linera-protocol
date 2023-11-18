@@ -38,28 +38,28 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     /// The current chain ID.
     chain_id: ChainId,
     /// The current stack of application descriptions.
-    applications: Arc<Mutex<&'a mut Vec<ApplicationStatus>>>,
+    applications: Mutex<&'a mut Vec<ApplicationStatus>>,
     /// The storage view on the execution state.
-    execution_state: Arc<Mutex<&'a mut ExecutionStateView<C>>>,
+    execution_state: Mutex<&'a mut ExecutionStateView<C>>,
     /// All the sessions and their IDs.
-    session_manager: Arc<Mutex<&'a mut SessionManager>>,
+    session_manager: Mutex<&'a mut SessionManager>,
     /// Track active (i.e. locked) applications for which re-entrancy is disallowed.
-    active_simple_user_states: Arc<Mutex<ActiveSimpleUserStates<C>>>,
+    active_simple_user_states: Mutex<ActiveSimpleUserStates<C>>,
     /// Track active (i.e. locked) applications for which re-entrancy is disallowed.
-    active_view_user_states: Arc<Mutex<ActiveViewUserStates<C>>>,
+    active_view_user_states: Mutex<ActiveViewUserStates<C>>,
     /// Track active (i.e. locked) sessions for which re-entrancy is disallowed.
-    active_sessions: Arc<Mutex<ActiveSessions>>,
+    active_sessions: Mutex<ActiveSessions>,
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
-    execution_results: Arc<Mutex<&'a mut Vec<ExecutionResult>>>,
+    execution_results: Mutex<&'a mut Vec<ExecutionResult>>,
 
     /// The amount of fuel available for executing the application.
-    remaining_fuel: Arc<AtomicU64>,
+    remaining_fuel: AtomicU64,
     /// The number of reads
-    num_reads: Arc<AtomicU64>,
+    num_reads: AtomicU64,
     /// the total size being read
-    bytes_read: Arc<AtomicU64>,
+    bytes_read: AtomicU64,
     /// The total size being written
-    bytes_written: Arc<AtomicU64>,
+    bytes_written: AtomicU64,
     /// The runtime limits
     runtime_limits: RuntimeLimits,
 }
@@ -115,17 +115,17 @@ where
     ) -> Self {
         assert_eq!(chain_id, execution_state.context().extra().chain_id());
         Self {
-            applications: Arc::new(Mutex::new(applications)),
-            execution_state: Arc::new(Mutex::new(execution_state)),
-            session_manager: Arc::new(Mutex::new(session_manager)),
-            active_simple_user_states: Arc::default(),
-            active_view_user_states: Arc::default(),
-            active_sessions: Arc::default(),
-            execution_results: Arc::new(Mutex::new(execution_results)),
-            remaining_fuel: Arc::new(AtomicU64::new(fuel)),
-            num_reads: Arc::new(AtomicU64::new(0)),
-            bytes_read: Arc::new(AtomicU64::new(0)),
-            bytes_written: Arc::new(AtomicU64::new(0)),
+            applications: Mutex::new(applications),
+            execution_state: Mutex::new(execution_state),
+            session_manager: Mutex::new(session_manager),
+            active_simple_user_states: Mutex::default(),
+            active_view_user_states: Mutex::default(),
+            active_sessions: Mutex::default(),
+            execution_results: Mutex::new(execution_results),
+            remaining_fuel: AtomicU64::new(fuel),
+            num_reads: AtomicU64::new(0),
+            bytes_read: AtomicU64::new(0),
+            bytes_written: AtomicU64::new(0),
             runtime_limits,
             chain_id,
         }
