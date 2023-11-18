@@ -36,7 +36,7 @@ use super::{
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     module_cache::ModuleCache,
     runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
-    ApplicationCallResult, SessionCallResult, WasmApplication, WasmExecutionError,
+    ApplicationCallResult, SessionCallResult, WasmContract, WasmExecutionError, WasmService,
 };
 use crate::{
     Bytecode, CalleeContext, ExecutionError, MessageContext, OperationContext, QueryContext,
@@ -135,12 +135,9 @@ impl ApplicationRuntimeContext for Service {
     }
 }
 
-impl WasmApplication {
-    /// Creates a new [`WasmApplication`] using Wasmtime with the provided bytecodes.
-    pub async fn new_with_wasmer(
-        contract_bytecode: Bytecode,
-        service_bytecode: Bytecode,
-    ) -> Result<Self, WasmExecutionError> {
+impl WasmContract {
+    /// Creates a new [`WasmContract`] using Wasmtime with the provided bytecodes.
+    pub async fn new_with_wasmer(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
         let contract = contract_cache
             .get_or_insert_with(contract_bytecode, CachedContractModule::new)
@@ -148,15 +145,7 @@ impl WasmApplication {
             .create_execution_instance()
             .map_err(WasmExecutionError::LoadContractModule)?;
 
-        let mut service_cache = SERVICE_CACHE.lock().await;
-        let service = service_cache
-            .get_or_insert_with(service_bytecode, |bytecode| {
-                Module::new(&*SERVICE_ENGINE, bytecode)
-                    .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)
-            })
-            .map_err(WasmExecutionError::LoadServiceModule)?;
-
-        Ok(WasmApplication::Wasmer { contract, service })
+        Ok(WasmContract::Wasmer { contract })
     }
 
     /// Prepares a runtime instance to call into the Wasm contract.
@@ -187,6 +176,38 @@ impl WasmApplication {
         })
     }
 
+    /// Calculates the fuel cost of a WebAssembly [`Operator`].
+    ///
+    /// The rules try to follow the hardcoded [rules in the Wasmtime runtime
+    /// engine](https://docs.rs/wasmtime/5.0.0/wasmtime/struct.Store.html#method.add_fuel).
+    fn operation_cost(operator: &Operator) -> u64 {
+        match operator {
+            Operator::Nop
+            | Operator::Drop
+            | Operator::Block { .. }
+            | Operator::Loop { .. }
+            | Operator::Unreachable
+            | Operator::Else
+            | Operator::End => 0,
+            _ => 1,
+        }
+    }
+}
+
+impl WasmService {
+    /// Creates a new [`WasmService`] using Wasmtime with the provided bytecodes.
+    pub async fn new_with_wasmer(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
+        let mut service_cache = SERVICE_CACHE.lock().await;
+        let service = service_cache
+            .get_or_insert_with(service_bytecode, |bytecode| {
+                Module::new(&*SERVICE_ENGINE, bytecode)
+                    .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)
+            })
+            .map_err(WasmExecutionError::LoadServiceModule)?;
+
+        Ok(WasmService::Wasmer { service })
+    }
+
     /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare_service_runtime_with_wasmer(
         service_module: &Module,
@@ -213,23 +234,6 @@ impl WasmApplication {
             store,
             extra: (),
         })
-    }
-
-    /// Calculates the fuel cost of a WebAssembly [`Operator`].
-    ///
-    /// The rules try to follow the hardcoded [rules in the Wasmtime runtime
-    /// engine](https://docs.rs/wasmtime/5.0.0/wasmtime/struct.Store.html#method.add_fuel).
-    fn operation_cost(operator: &Operator) -> u64 {
-        match operator {
-            Operator::Nop
-            | Operator::Drop
-            | Operator::Block { .. }
-            | Operator::Loop { .. }
-            | Operator::Unreachable
-            | Operator::Else
-            | Operator::End => 0,
-            _ => 1,
-        }
     }
 }
 
@@ -438,7 +442,7 @@ impl CachedContractModule {
 
     /// Creates a new [`Engine`] to compile a contract bytecode.
     fn create_compilation_engine() -> Engine {
-        let metering = Arc::new(Metering::new(0, WasmApplication::operation_cost));
+        let metering = Arc::new(Metering::new(0, WasmContract::operation_cost));
         let mut compiler_config = Singlepass::default();
         compiler_config.push_middleware(metering);
         compiler_config.canonicalize_nans(true);

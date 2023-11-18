@@ -88,7 +88,7 @@ pub static WRITE_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-use linera_execution::{Operation, SystemOperation, WasmApplication};
+use linera_execution::{Operation, SystemOperation, WasmContract, WasmService};
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
@@ -250,11 +250,9 @@ pub trait Store: Sized {
         let index = usize::try_from(bytecode_location.operation_index)
             .map_err(|_| linera_base::data_types::ArithmeticError::Overflow)?;
         match operations.get(index) {
-            Some(Operation::System(SystemOperation::PublishBytecode { contract, service })) => {
-                Ok(Arc::new(
-                    WasmApplication::new(contract.clone(), service.clone(), wasm_runtime).await?,
-                ))
-            }
+            Some(Operation::System(SystemOperation::PublishBytecode { contract, .. })) => Ok(
+                Arc::new(WasmContract::new(contract.clone(), wasm_runtime).await?),
+            ),
             _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
         }
     }
@@ -306,11 +304,9 @@ pub trait Store: Sized {
         let index = usize::try_from(bytecode_location.operation_index)
             .map_err(|_| linera_base::data_types::ArithmeticError::Overflow)?;
         match operations.get(index) {
-            Some(Operation::System(SystemOperation::PublishBytecode { contract, service })) => {
-                Ok(Arc::new(
-                    WasmApplication::new(contract.clone(), service.clone(), wasm_runtime).await?,
-                ))
-            }
+            Some(Operation::System(SystemOperation::PublishBytecode { service, .. })) => Ok(
+                Arc::new(WasmService::new(service.clone(), wasm_runtime).await?),
+            ),
             _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
         }
     }

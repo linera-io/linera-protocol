@@ -40,7 +40,7 @@ use super::{
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     module_cache::ModuleCache,
     runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
-    WasmApplication, WasmExecutionError,
+    WasmContract, WasmExecutionError, WasmService,
 };
 use crate::{
     ApplicationCallResult, Bytecode, CalleeContext, ExecutionError, MessageContext,
@@ -145,11 +145,10 @@ impl ApplicationRuntimeContext for Service {
     }
 }
 
-impl WasmApplication {
-    /// Creates a new [`WasmApplication`] using Wasmtime with the provided bytecodes.
+impl WasmContract {
+    /// Creates a new [`WasmContract`] using Wasmtime with the provided bytecodes.
     pub async fn new_with_wasmtime(
         contract_bytecode: Bytecode,
-        service_bytecode: Bytecode,
     ) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
         let contract = contract_cache
@@ -158,14 +157,7 @@ impl WasmApplication {
             })
             .map_err(WasmExecutionError::LoadContractModule)?;
 
-        let mut service_cache = SERVICE_CACHE.lock().await;
-        let service = service_cache
-            .get_or_insert_with(service_bytecode, |bytecode| {
-                Module::new(&SERVICE_ENGINE, bytecode)
-            })
-            .map_err(WasmExecutionError::LoadServiceModule)?;
-
-        Ok(WasmApplication::Wasmtime { contract, service })
+        Ok(WasmContract::Wasmtime { contract })
     }
 
     /// Prepares a runtime instance to call into the Wasm contract.
@@ -196,6 +188,20 @@ impl WasmApplication {
             store,
             extra: (),
         })
+    }
+}
+
+impl WasmService {
+    /// Creates a new [`WasmService`] using Wasmtime with the provided bytecodes.
+    pub async fn new_with_wasmtime(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
+        let mut service_cache = SERVICE_CACHE.lock().await;
+        let service = service_cache
+            .get_or_insert_with(service_bytecode, |bytecode| {
+                Module::new(&SERVICE_ENGINE, bytecode)
+            })
+            .map_err(WasmExecutionError::LoadServiceModule)?;
+
+        Ok(WasmService::Wasmtime { service })
     }
 
     /// Prepares a runtime instance to call into the Wasm service.
