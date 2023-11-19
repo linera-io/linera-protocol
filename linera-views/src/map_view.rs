@@ -186,11 +186,11 @@ where
     ///   let mut map = ByteMapView::load(context).await.unwrap();
     ///   map.insert(vec![0,1], String::from("Hello"));
     ///   map.insert(vec![0,2], String::from("Bonjour"));
-    ///   map.remove_prefixes(vec![0]);
+    ///   map.remove_by_prefix(vec![0]);
     ///   assert!(map.keys().await.unwrap().is_empty());
     /// # })
     /// ```
-    pub fn remove_prefixes(&mut self, key_prefix: Vec<u8>) {
+    pub fn remove_by_prefix(&mut self, key_prefix: Vec<u8>) {
         *self.hash.get_mut() = None;
         let key_list = self
             .updates
@@ -417,6 +417,30 @@ where
         Ok(keys)
     }
 
+    /// Returns the number of keys of the map
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::map_view::ByteMapView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut map = ByteMapView::load(context).await.unwrap();
+    ///   map.insert(vec![0,1], String::from("Hello"));
+    ///   map.insert(vec![1,2], String::from("Bonjour"));
+    ///   map.insert(vec![2,2], String::from("Hallo"));
+    ///   assert_eq!(map.count().await.unwrap(), 3);
+    /// # })
+    /// ```
+    pub async fn count(&self) -> Result<usize, ViewError> {
+        let mut count = 0;
+        self.for_each_key(|_key| {
+            count += 1;
+            Ok(())
+        })
+        .await?;
+        Ok(count)
+    }
+
     /// Applies a function f on each index/value pair. Keys and values are visited
     /// in the lexicographic order. If the function returns false, then loop
     /// ends prematurely.
@@ -531,6 +555,37 @@ where
         .await?;
         hasher.update_with_bcs_bytes(&count)?;
         Ok(hasher.finalize())
+    }
+}
+
+impl<C, V> ByteMapView<C, V>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    V: Sync + Send + Serialize + DeserializeOwned + 'static,
+{
+
+    /// Returns the list of keys and values of the map in lexicographic order.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::map_view::ByteMapView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut map = ByteMapView::load(context).await.unwrap();
+    ///   map.insert(vec![1,2], String::from("Hello"));
+    ///   assert_eq!(map.key_values().await.unwrap(), vec![(vec![1,2], String::from("Hello"))]);
+    /// # })
+    /// ```
+    pub async fn key_values(&self) -> Result<Vec<(Vec<u8>, V)>, ViewError> {
+        let mut key_values = Vec::new();
+        self.for_each_key_value(|key, value| {
+            let value = bcs::from_bytes(value)?;
+            key_values.push((key.to_vec(), value));
+            Ok(())
+        })
+        .await?;
+        Ok(key_values)
     }
 }
 
