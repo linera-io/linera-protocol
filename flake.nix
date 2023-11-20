@@ -26,10 +26,12 @@
           pkg-config
           nodejs
         ];
-        rustBuildToolchain = (pkgs.rust-bin.fromRustupToolchainFile
-          ./toolchains/build/rust-toolchain.toml);
-        rustLintToolchain = (pkgs.rust-bin.fromRustupToolchainFile
-          ./toolchains/lint/rust-toolchain.toml);
+        rustToolchain = (pkgs.rust-bin.fromRustupToolchainFile
+          ./rust-toolchain.toml);
+        rustPlatform = pkgs.makeRustPlatform {
+          rustc = rustToolchain;
+          cargo = rustToolchain;
+        };
       in {
         _module.args.pkgs = import inputs.nixpkgs {
           inherit system;
@@ -43,19 +45,15 @@
           ];
           shellHook = ''
             # For rust-analyzer 'hover' tooltips to work.
-            export RUST_SRC_PATH=${rustBuildToolchain.availableComponents.rust-src}
+            export RUST_SRC_PATH=${rustToolchain.availableComponents.rust-src}
             export LIBCLANG_PATH=${pkgs.libclang.lib}/lib
             export PATH=$PWD/target/release:~/.cargo/bin:$PATH
           '';
           buildInputs = nonRustDeps;
           nativeBuildInputs = with pkgs; [
-            rustBuildToolchain
+            rustToolchain
             rust-analyzer
           ];
-        };
-
-        devShells.lint = pkgs.mkShell {
-          nativeBuildInputs = [ rustLintToolchain ];
         };
 
         # Add your auto-formatters here.
