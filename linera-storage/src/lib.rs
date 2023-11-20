@@ -55,7 +55,7 @@ pub static READ_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
         "read_value",
         "The metric counting how often a value is read from storage",
-        &["chain_id"]
+        &[]
     )
     .expect("Counter creation should not fail")
 });
@@ -64,7 +64,7 @@ pub static WRITE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
         "write_value",
         "The metric counting how often a value is written to storage",
-        &["chain_id"]
+        &[]
     )
     .expect("Counter creation should not fail")
 });
@@ -73,7 +73,7 @@ pub static READ_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
         "read_certificate",
         "The metric counting how often a certificate is read from storage",
-        &["chain_id"]
+        &[]
     )
     .expect("Counter creation should not fail")
 });
@@ -82,7 +82,7 @@ pub static WRITE_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
         "write_certificate",
         "The metric counting how often a certificate is written to storage",
-        &["chain_id"]
+        &[]
     )
     .expect("Counter creation should not fail")
 });
@@ -435,11 +435,7 @@ where
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let maybe_value: Option<CertificateValue> =
             self.client.client.read_value(&value_key).await?;
-        let id = match &maybe_value {
-            Some(value) => value.chain_id().to_string(),
-            None => "not found".to_string(),
-        };
-        READ_VALUE_COUNTER.with_label_values(&[&id]).inc();
+        READ_VALUE_COUNTER.with_label_values(&[]).inc();
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         Ok(value.with_hash_unchecked(hash))
     }
@@ -488,12 +484,8 @@ where
                 .client
                 .read_value::<CertificateValue>(&value_key)
         );
-        if let Ok(maybe_value) = &value_result {
-            let id = match maybe_value {
-                Some(value) => value.chain_id().to_string(),
-                None => "not found".to_string(),
-            };
-            READ_CERTIFICATE_COUNTER.with_label_values(&[&id]).inc();
+        if value_result.is_ok() {
+            READ_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         };
         let value: CertificateValue =
             value_result?.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
@@ -531,8 +523,7 @@ where
     <Client as KeyValueStoreClient>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
     fn add_value_to_batch(&self, value: &HashedValue, batch: &mut Batch) -> Result<(), ViewError> {
-        let id = value.inner().chain_id().to_string();
-        WRITE_VALUE_COUNTER.with_label_values(&[&id]).inc();
+        WRITE_VALUE_COUNTER.with_label_values(&[]).inc();
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         batch.put_key_value(value_key.to_vec(), value)?;
         Ok(())
@@ -543,8 +534,7 @@ where
         certificate: &Certificate,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
-        let id = certificate.value().chain_id().to_string();
-        WRITE_CERTIFICATE_COUNTER.with_label_values(&[&id]).inc();
+        WRITE_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         let hash = certificate.hash();
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
