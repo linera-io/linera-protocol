@@ -283,10 +283,10 @@ async fn read_publish_bytecode_operation(
 #[derive(Clone)]
 pub struct ChainRuntimeContext<S> {
     store: S,
-    pub chain_id: ChainId,
-    pub user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
-    pub user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
-    pub chain_guard: Option<Arc<ChainGuard>>,
+    chain_id: ChainId,
+    user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
+    user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
+    _chain_guard: Arc<ChainGuard>,
 }
 
 #[async_trait]

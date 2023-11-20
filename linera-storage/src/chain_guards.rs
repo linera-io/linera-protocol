@@ -151,13 +151,3 @@ impl Debug for ChainGuard {
             .finish_non_exhaustive()
     }
 }
-
-#[cfg(test)]
-impl ChainGuard {
-    /// A test helper method to create a dummy [`ChainGuard`].
-    pub async fn dummy() -> Self {
-        let guards = ChainGuards::default();
-        let chain_id = ChainId::root(0);
-        guards.guard(chain_id).await
-    }
-}

@@ -63,11 +63,11 @@ pub static WRITE_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 
 /// A store implemented from a [`KeyValueStoreClient`]
 pub struct DbStoreInner<Client> {
-    pub(crate) client: Client,
+    client: Client,
     pub(crate) guards: ChainGuards,
-    pub(crate) user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
-    pub(crate) user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
-    pub(crate) wasm_runtime: Option<WasmRuntime>,
+    user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
+    user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
+    wasm_runtime: Option<WasmRuntime>,
 }
 
 impl<Client> DbStoreInner<Client> {
@@ -82,8 +82,8 @@ impl<Client> DbStoreInner<Client> {
     }
 }
 
-#[derive(Clone)]
 /// A DbStore wrapping with Arc
+#[derive(Clone)]
 pub struct DbStore<Client, Clock> {
     pub(crate) client: Arc<DbStoreInner<Client>>,
     pub clock: Clock,
@@ -171,7 +171,7 @@ where
             chain_id,
             user_contracts: self.client.user_contracts.clone(),
             user_services: self.client.user_services.clone(),
-            chain_guard: Some(Arc::new(guard)),
+            _chain_guard: Arc::new(guard),
         };
         let client = self.client.client.clone();
         let base_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
