@@ -5,6 +5,129 @@ query Chains {
   }
 }
 
+query ChainOutbox($chainId: ChainId!, $target: Target!) {
+  chain(chainId: $chainId) {
+    outboxes {
+      value(key: $target) {
+        target
+        outboxStateView {
+          nextHeightToSchedule
+          queue
+        }
+      }
+    }
+  }
+}
+
+query ChainChannel($chainId: ChainId!, $channelFullName: ChannelFullName!) {
+  chain(chainId: $chainId) {
+    channels {
+      value(key: $channelFullName) {
+        channelFullName
+        channelStateView {
+          subscribers
+          blockHeight
+        }
+      }
+    }
+  }
+}
+
+query ChainInbox($chainId: ChainId!, $origin: Origin!) {
+  chain(chainId: $chainId) {
+    inboxes {
+      value(key: $origin) {
+        origin
+        inboxStateView {
+          nextCursorToAdd {
+            height
+            index
+          }
+          nextCursorToRemove {
+            height
+            index
+          }
+          addedEvents
+          removedEvents
+        }
+      }
+    }
+  }
+}
+
+query Chain(
+  $chainId: ChainId!,
+  $inboxesInput: ChainStateViewInboxesInput,
+  $outboxesInput: ChainStateViewOutboxesInput,
+  $channelsInput: ChainStateViewChannelsInput,
+) {
+  chain(chainId: $chainId) {
+    chainId
+    executionState {
+      system {
+        description
+        epoch
+        adminId
+        subscriptions {
+          chainId
+          name
+        }
+        ownership
+        balance
+        timestamp
+      }
+    }
+    executionStateHash
+    tipState {
+      blockHash
+      nextBlockHeight
+    }
+    manager
+    confirmedLog
+    receivedLog {
+      chainId
+      height
+    }
+    inboxes {
+      values(input: $inboxesInput) {
+        origin
+        inboxStateView {
+          nextCursorToAdd {
+            height
+            index
+          }
+          nextCursorToRemove {
+            height
+	    index
+          }
+          addedEvents
+          removedEvents
+        }
+      }
+    }
+    outboxes {
+      values(input: $outboxesInput) {
+        target
+        outboxStateView {
+          nextHeightToSchedule
+          queue
+        }
+      }
+    }
+    outboxCounters
+    channels {
+      values(input: $channelsInput) {
+        channelFullName
+        channelStateView {
+          subscribers
+          blockHeight
+        }
+      }
+    }
+
+  }
+}
+
 query Applications($chainId: ChainId!) {
   applications(chainId: $chainId) {
     id

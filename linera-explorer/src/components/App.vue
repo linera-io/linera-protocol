@@ -2,6 +2,7 @@
 import { data, save_config, route } from '../../pkg/linera_explorer'
 import Block from './Block.vue'
 import Blocks from './Blocks.vue'
+import Chain from './Chain.vue'
 import Applications from './Applications.vue'
 import Application from './Application.vue'
 import Operations from './Operations.vue'
@@ -17,6 +18,7 @@ export default {
   components: {
     Block,
     Blocks,
+    Chain,
     Applications,
     Application,
     Operations,
@@ -80,8 +82,8 @@ export default {
               </button>
             </li>
           </ul>
-              </div>
         </div>
+      </div>
     </nav>
     <div class="container pb-5">
       <div v-if="page=='unloaded'">
@@ -92,6 +94,7 @@ export default {
       </div>
 
       <div v-else-if="page.home">
+        <Chain title="Chain" :chain="page.home.chain" />
         <Block v-if="page.home.blocks.length!=0" :block="page.home.blocks[0]" title="Head"/>
         <div class="card">
           <div class="card-header">Blocks</div>

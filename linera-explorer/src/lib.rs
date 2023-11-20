@@ -13,9 +13,11 @@ mod js_utils;
 use anyhow::{anyhow, Context as _, Result};
 use futures::prelude::*;
 use gql_service::{
-    applications, applications::ApplicationsApplications as Application, block,
-    block::BlockBlock as Block, blocks, blocks::BlocksBlocks as Blocks, chains, notifications,
-    request, Chains, Reason,
+    applications::{self, ApplicationsApplications as Application},
+    block::{self, BlockBlock as Block},
+    blocks::{self, BlocksBlocks as Blocks},
+    chain::{self, ChainChain as Chain},
+    chains, notifications, request, Chains, Reason,
 };
 use graphql_client::Response;
 use js_utils::{getf, log_str, parse, setf, stringify, SER};
@@ -55,6 +57,7 @@ static WEBSOCKET: OnceCell<WsMeta> = OnceCell::new();
 enum Page {
     Unloaded,
     Home {
+        chain: Chain,
         blocks: Vec<Blocks>,
         apps: Vec<Application>,
     },
@@ -162,6 +165,21 @@ fn url(config: &Config, protocol: Protocol, kind: AddressKind) -> String {
     format!("{}{}://{}", protocol, tls, address)
 }
 
+async fn get_chain(node: &str, chain_id: ChainId) -> Result<Chain> {
+    let client = reqwest::Client::new();
+    let variables = chain::Variables {
+        chain_id,
+        channels_input: None,
+        inboxes_input: None,
+        outboxes_input: None,
+    };
+    let chain = request::<gql_service::Chain, _>(&client, node, variables)
+        .await?
+        .chain;
+    log_str(&serde_json::to_string_pretty(&chain).unwrap());
+    Ok(chain)
+}
+
 async fn get_blocks(
     node: &str,
     chain_id: ChainId,
@@ -210,9 +228,17 @@ fn error(error: &anyhow::Error) -> (Page, String) {
 
 /// Returns the home page.
 async fn home(node: &str, chain_id: ChainId) -> Result<(Page, String)> {
+    let chain = get_chain(node, chain_id).await?;
     let blocks = get_blocks(node, chain_id, None, None).await?;
     let apps = get_applications(node, chain_id).await?;
-    Ok((Page::Home { blocks, apps }, format!("/?chain={}", chain_id)))
+    Ok((
+        Page::Home {
+            chain,
+            blocks,
+            apps,
+        },
+        format!("/?chain={}", chain_id),
+    ))
 }
 
 /// Returns the blocks page.

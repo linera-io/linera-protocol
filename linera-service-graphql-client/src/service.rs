@@ -5,8 +5,10 @@ use graphql_client::GraphQLQuery;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{ChainId, Destination, Owner},
+    identifiers::{ChainDescription, ChainId, ChannelName, Destination, Owner},
 };
+
+pub type JSONObject = serde_json::Value;
 
 #[cfg(target_arch = "wasm32")]
 mod types {
@@ -15,11 +17,15 @@ mod types {
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
 
+    pub type ChainManager = Value;
+    pub type ChainOwnership = Value;
+    pub type ChannelFullName = Value;
     pub type Epoch = Value;
+    pub type Event = Value;
     pub type Message = Value;
     pub type Operation = Value;
-    pub type Event = Value;
     pub type Origin = Value;
+    pub type Target = Value;
     pub type UserApplicationDescription = Value;
 
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -48,13 +54,26 @@ mod types {
 
 #[cfg(not(target_arch = "wasm32"))]
 mod types {
-    pub use linera_chain::data_types::{Event, Origin};
+    pub use linera_chain::{
+        data_types::{ChannelFullName, Event, Origin, Target},
+        ChainManager,
+    };
     pub use linera_core::worker::{Notification, Reason};
-    pub use linera_execution::{committee::Epoch, Message, Operation, UserApplicationDescription};
+    pub use linera_execution::{
+        committee::Epoch, ChainOwnership, Message, Operation, UserApplicationDescription,
+    };
 }
 
 pub use types::*;
 pub type ApplicationId = String;
+
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "gql/service_schema.graphql",
+    query_path = "gql/service_requests.graphql",
+    response_derives = "Debug, Serialize, Clone"
+)]
+pub struct Chain;
 
 #[derive(GraphQLQuery)]
 #[graphql(
