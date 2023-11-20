@@ -298,9 +298,9 @@ where
     ViewError: From<C::Error>,
     V: Sync + Serialize + DeserializeOwned + 'static,
 {
-    /// Applies the function f on each index (aka key). Keys are visited
-    /// in the lexicographic order. If the function returns false, then
-    /// the loop exits
+    /// Applies the function f on each index (aka key) which has the assigned prefix.
+    /// Keys are visited in the lexicographic order. The shortened key is send to the
+    /// function and if it returns false, then the loop exits
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_memory_context;
@@ -310,36 +310,50 @@ where
     ///   let mut map = ByteMapView::load(context).await.unwrap();
     ///   map.insert(vec![0,1], String::from("Hello"));
     ///   map.insert(vec![1,2], String::from("Bonjour"));
-    ///   map.insert(vec![2,2], String::from("Bonjour"));
+    ///   map.insert(vec![1,3], String::from("Bonjour"));
+    ///   let prefix = vec![1];
     ///   let mut count = 0;
     ///   map.for_each_key_while(|_key| {
     ///     count += 1;
-    ///     Ok(count < 1)
-    ///   }).await.unwrap();
-    ///   assert_eq!(count, 1);
+    ///     Ok(count < 3)
+    ///   }, prefix).await.unwrap();
+    ///   assert_eq!(count, 2);
     /// # })
     /// ```
-    pub async fn for_each_key_while<F>(&self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_key_while<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
-        let mut updates = self.updates.iter();
+        let prefix_len = prefix.len();
+        let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
-        let mut lower_bound = NextLowerKeyIterator::new(&self.deleted_prefixes);
+        let mut deleted_prefixes = BTreeSet::new();
+        let mut lower_bound = if prefix_len == 0 {
+            NextLowerKeyIterator::new(&self.deleted_prefixes)
+        } else {
+            for deleted_prefix in &self.deleted_prefixes {
+                if deleted_prefix.len() >= prefix_len {
+                    if deleted_prefix[0..prefix_len] == prefix {
+                        deleted_prefixes.insert(deleted_prefix[prefix_len..].to_vec());
+                    }
+                }
+            }
+            NextLowerKeyIterator::new(&deleted_prefixes)
+        };
         if !self.was_cleared {
-            let base = self.context.base_tag(KeyTag::Index as u8);
+            let base = self.context.base_tag_index(KeyTag::Index as u8, &prefix);
             for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
                 let index = index?;
                 loop {
                     match update {
-                        Some((key, value)) if key.as_slice() <= index => {
+                        Some((key, value)) if &key[prefix_len..] <= index => {
                             if let Update::Set(_) = value {
-                                if !f(key)? {
+                                if !f(&key[prefix_len..])? {
                                     return Ok(());
                                 }
                             }
                             update = updates.next();
-                            if key == index {
+                            if &key[prefix_len..] == index {
                                 break;
                             }
                         }
@@ -355,7 +369,7 @@ where
         }
         while let Some((key, value)) = update {
             if let Update::Set(_) = value {
-                if !f(key)? {
+                if !f(&key[prefix_len..])? {
                     return Ok(());
                 }
             }
@@ -364,8 +378,9 @@ where
         Ok(())
     }
 
-    /// Applies the function f on each index (aka key). Keys are visited
-    /// in the lexicographic order.
+    /// Applies the function f on each index (aka key) having the specified prefix.
+    /// The shortened keys are sent to the function f. Keys are visited in the
+    /// lexicographic order.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_memory_context;
@@ -375,21 +390,22 @@ where
     ///   let mut map = ByteMapView::load(context).await.unwrap();
     ///   map.insert(vec![0,1], String::from("Hello"));
     ///   let mut count = 0;
+    ///   let prefix = Vec::new();
     ///   map.for_each_key(|_key| {
     ///     count += 1;
     ///     Ok(())
-    ///   }).await.unwrap();
+    ///   }, prefix).await.unwrap();
     ///   assert_eq!(count, 1);
     /// # })
     /// ```
-    pub async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_key<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
     {
         self.for_each_key_while(|key| {
             f(key)?;
             Ok(true)
-        })
+        }, prefix)
         .await
     }
 
@@ -409,10 +425,39 @@ where
     /// ```
     pub async fn keys(&self) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut keys = Vec::new();
+        let prefix = Vec::new();
         self.for_each_key(|key| {
             keys.push(key.to_vec());
             Ok(())
-        })
+        }, prefix)
+        .await?;
+        Ok(keys)
+    }
+
+    /// Returns the list of keys of the map having a specified prefix
+    /// in lexicographic order.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::map_view::ByteMapView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut map = ByteMapView::load(context).await.unwrap();
+    ///   map.insert(vec![0,1], String::from("Hello"));
+    ///   map.insert(vec![1,2], String::from("Bonjour"));
+    ///   map.insert(vec![1,3], String::from("Hallo"));
+    ///   assert_eq!(map.keys_by_prefix(vec![1]).await.unwrap(), vec![vec![1,2], vec![1,3]]);
+    /// # })
+    /// ```
+    pub async fn keys_by_prefix(&self, prefix: Vec<u8>) -> Result<Vec<Vec<u8>>, ViewError> {
+        let mut keys = Vec::new();
+        let prefix_clone = prefix.clone();
+        self.for_each_key(|key| {
+            let mut big_key = prefix.clone();
+            big_key.extend(key);
+            keys.push(big_key);
+            Ok(())
+        }, prefix_clone)
         .await?;
         Ok(keys)
     }
@@ -433,17 +478,19 @@ where
     /// ```
     pub async fn count(&self) -> Result<usize, ViewError> {
         let mut count = 0;
+        let prefix = Vec::new();
         self.for_each_key(|_key| {
             count += 1;
             Ok(())
-        })
+        }, prefix)
         .await?;
         Ok(count)
     }
 
-    /// Applies a function f on each index/value pair. Keys and values are visited
-    /// in the lexicographic order. If the function returns false, then loop
-    /// ends prematurely.
+    /// Applies a function f on each index/value pair matching a prefix. Keys
+    /// and values are visited in the lexicographic order. The shortened index
+    /// is send to the function f and if it returns false then the loop ends
+    /// prematurely
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_memory_context;
@@ -453,24 +500,38 @@ where
     ///   let mut map = ByteMapView::load(context).await.unwrap();
     ///   map.insert(vec![0,1], String::from("Hello"));
     ///   map.insert(vec![1,2], String::from("Bonjour"));
-    ///   map.insert(vec![2,2], String::from("Hallo"));
+    ///   map.insert(vec![1,3], String::from("Hallo"));
     ///   let mut part_keys = Vec::new();
+    ///   let prefix = vec![1];
     ///   map.for_each_key_value_while(|key, _value| {
     ///     part_keys.push(key.to_vec());
     ///     Ok(part_keys.len() < 2)
-    ///   }).await.unwrap();
+    ///   }, prefix).await.unwrap();
     ///   assert_eq!(part_keys.len(), 2);
     /// # })
     /// ```
-    pub async fn for_each_key_value_while<F>(&self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_key_value_while<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], &[u8]) -> Result<bool, ViewError> + Send,
     {
-        let mut updates = self.updates.iter();
+        let prefix_len = prefix.len();
+        let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
-        let mut lower_bound = NextLowerKeyIterator::new(&self.deleted_prefixes);
+        let mut deleted_prefixes = BTreeSet::new();
+        let mut lower_bound = if prefix_len == 0 {
+            NextLowerKeyIterator::new(&self.deleted_prefixes)
+        } else {
+            for deleted_prefix in &self.deleted_prefixes {
+                if deleted_prefix.len() >= prefix_len {
+                    if deleted_prefix[0..prefix_len] == prefix {
+                        deleted_prefixes.insert(deleted_prefix[prefix_len..].to_vec());
+                    }
+                }
+            }
+            NextLowerKeyIterator::new(&deleted_prefixes)
+        };
         if !self.was_cleared {
-            let base = self.context.base_tag(KeyTag::Index as u8);
+            let base = self.context.base_tag_index(KeyTag::Index as u8, &prefix);
             for entry in self
                 .context
                 .find_key_values_by_prefix(&base)
@@ -480,15 +541,15 @@ where
                 let (index, bytes) = entry?;
                 loop {
                     match update {
-                        Some((key, value)) if key.as_slice() <= index => {
+                        Some((key, value)) if &key[prefix_len..] <= index => {
                             if let Update::Set(value) = value {
                                 let bytes = bcs::to_bytes(value)?;
-                                if !f(key, &bytes)? {
+                                if !f(&key[prefix_len..], &bytes)? {
                                     return Ok(());
                                 }
                             }
                             update = updates.next();
-                            if key == index {
+                            if &key[prefix_len..] == index {
                                 break;
                             }
                         }
@@ -505,7 +566,7 @@ where
         while let Some((key, value)) = update {
             if let Update::Set(value) = value {
                 let bytes = bcs::to_bytes(value)?;
-                if !f(key, &bytes)? {
+                if !f(&key[prefix_len..], &bytes)? {
                     return Ok(());
                 }
             }
@@ -514,8 +575,9 @@ where
         Ok(())
     }
 
-    /// Applies a function f on each key/value pair. Keys and values are visited
-    /// in the lexicographic order.
+    /// Applies a function f on each key/value pair matching a prefix. The shortened
+    /// key and value are send to the function f. Keys and values are visited in the
+    /// lexicographic order.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_memory_context;
@@ -525,33 +587,35 @@ where
     ///   let mut map = ByteMapView::load(context).await.unwrap();
     ///   map.insert(vec![0,1], String::from("Hello"));
     ///   let mut count = 0;
+    ///   let prefix = Vec::new();
     ///   map.for_each_key_value(|_key, _value| {
     ///     count += 1;
     ///     Ok(())
-    ///   }).await.unwrap();
+    ///   }, prefix).await.unwrap();
     ///   assert_eq!(count, 1);
     /// # })
     /// ```
-    pub async fn for_each_key_value<F>(&self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_key_value<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
     {
         self.for_each_key_value_while(|key, value| {
             f(key, value)?;
             Ok(true)
-        })
+        }, prefix)
         .await
     }
 
     async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0;
+        let prefix = Vec::new();
         self.for_each_key_value(|index, value| {
             count += 1;
             hasher.update_with_bytes(index)?;
             hasher.update_with_bytes(value)?;
             Ok(())
-        })
+        }, prefix)
         .await?;
         hasher.update_with_bcs_bytes(&count)?;
         Ok(hasher.finalize())
@@ -564,6 +628,34 @@ where
     ViewError: From<C::Error>,
     V: Sync + Send + Serialize + DeserializeOwned + 'static,
 {
+
+    /// Returns the list of keys and values of the map matching a prefix
+    /// in lexicographic order.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::map_view::ByteMapView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut map = ByteMapView::load(context).await.unwrap();
+    ///   map.insert(vec![1,2], String::from("Hello"));
+    ///   let prefix = vec![1];
+    ///   assert_eq!(map.key_values_by_prefix(prefix).await.unwrap(), vec![(vec![1,2], String::from("Hello"))]);
+    /// # })
+    /// ```
+    pub async fn key_values_by_prefix(&self, prefix: Vec<u8>) -> Result<Vec<(Vec<u8>, V)>, ViewError> {
+        let mut key_values = Vec::new();
+        let prefix_copy = prefix.clone();
+        self.for_each_key_value(|key, value| {
+            let value = bcs::from_bytes(value)?;
+            let mut big_key = prefix.clone();
+            big_key.extend(key);
+            key_values.push((big_key, value));
+            Ok(())
+        }, prefix_copy)
+        .await?;
+        Ok(key_values)
+    }
 
     /// Returns the list of keys and values of the map in lexicographic order.
     /// ```rust
@@ -578,14 +670,7 @@ where
     /// # })
     /// ```
     pub async fn key_values(&self) -> Result<Vec<(Vec<u8>, V)>, ViewError> {
-        let mut key_values = Vec::new();
-        self.for_each_key_value(|key, value| {
-            let value = bcs::from_bytes(value)?;
-            key_values.push((key.to_vec(), value));
-            Ok(())
-        })
-        .await?;
-        Ok(key_values)
+        self.key_values_by_prefix(Vec::new()).await
     }
 }
 
@@ -884,11 +969,12 @@ where
     where
         F: FnMut(I) -> Result<bool, ViewError> + Send,
     {
+        let prefix = Vec::new();
         self.map
             .for_each_key_while(|key| {
                 let index = C::deserialize_value(key)?;
                 f(index)
-            })
+            }, prefix)
             .await?;
         Ok(())
     }
@@ -915,11 +1001,12 @@ where
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
     {
+        let prefix = Vec::new();
         self.map
             .for_each_key(|key| {
                 let index = C::deserialize_value(key)?;
                 f(index)
-            })
+            }, prefix)
             .await?;
         Ok(())
     }
@@ -949,12 +1036,13 @@ where
     where
         F: FnMut(I, V) -> Result<bool, ViewError> + Send,
     {
+        let prefix = Vec::new();
         self.map
             .for_each_key_value_while(|key, bytes| {
                 let index = C::deserialize_value(key)?;
                 let value = C::deserialize_value(bytes)?;
                 f(index, value)
-            })
+            }, prefix)
             .await?;
         Ok(())
     }
@@ -981,12 +1069,13 @@ where
     where
         F: FnMut(I, V) -> Result<(), ViewError> + Send,
     {
+        let prefix = Vec::new();
         self.map
             .for_each_key_value(|key, bytes| {
                 let index = C::deserialize_value(key)?;
                 let value = C::deserialize_value(bytes)?;
                 f(index, value)
-            })
+            }, prefix)
             .await?;
         Ok(())
     }
@@ -1249,11 +1338,12 @@ where
     where
         F: FnMut(I) -> Result<bool, ViewError> + Send,
     {
+        let prefix = Vec::new();
         self.map
             .for_each_key_while(|key| {
                 let index = I::from_custom_bytes(key)?;
                 f(index)
-            })
+            }, prefix)
             .await?;
         Ok(())
     }
@@ -1281,11 +1371,12 @@ where
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
     {
+        let prefix = Vec::new();
         self.map
             .for_each_key(|key| {
                 let index = I::from_custom_bytes(key)?;
                 f(index)
-            })
+            }, prefix)
             .await?;
         Ok(())
     }
@@ -1314,12 +1405,13 @@ where
     where
         F: FnMut(I, V) -> Result<bool, ViewError> + Send,
     {
+        let prefix = Vec::new();
         self.map
             .for_each_key_value_while(|key, bytes| {
                 let index = I::from_custom_bytes(key)?;
                 let value = C::deserialize_value(bytes)?;
                 f(index, value)
-            })
+            }, prefix)
             .await?;
         Ok(())
     }
@@ -1347,12 +1439,13 @@ where
     where
         F: FnMut(I, V) -> Result<(), ViewError> + Send,
     {
+        let prefix = Vec::new();
         self.map
             .for_each_key_value(|key, bytes| {
                 let index = I::from_custom_bytes(key)?;
                 let value = C::deserialize_value(bytes)?;
                 f(index, value)
-            })
+            }, prefix)
             .await?;
         Ok(())
     }

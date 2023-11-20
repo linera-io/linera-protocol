@@ -33,11 +33,6 @@ fn convert_map<V>(map: BTreeMap<Vec<u8>,V>) -> Vec<(Vec<u8>, V)> {
     vec
 }
 
-
-
-
-
-
 #[tokio::test]
 async fn map_view_mutability_check() {
     let context = create_memory_context();
@@ -61,7 +56,7 @@ async fn map_view_mutability_check() {
                 // inserting random stuff
                 let n_ins = rng.gen_range(0..10);
                 for _ in 0..n_ins {
-                    let len = rng.gen_range(0..4);
+                    let len = rng.gen_range(1..6);
                     let mut key = Vec::new();
                     for _ in 0..len {
                         let val = rng.gen_range(0..4) as u8;
@@ -87,7 +82,7 @@ async fn map_view_mutability_check() {
             }
             if thr == 2 && count > 0 {
                 // deleting a prefix
-                let val = rng.gen_range(0..4) as u8;
+                let val = rng.gen_range(0..5) as u8;
                 let key_prefix = vec![val];
                 view.map.remove_by_prefix(key_prefix.clone());
                 remove_by_prefix(&mut new_state_map, key_prefix);
@@ -103,8 +98,23 @@ async fn map_view_mutability_check() {
                 new_state_map = state_map.clone();
             }
             new_state_vec = convert_map(new_state_map.clone());
+            println!("= = = = = = = = = = = = = = = = = = = = = = = = =");
             let new_key_values = view.map.key_values().await.unwrap();
             assert_eq!(new_state_vec, new_key_values);
+            println!("new_state_vec={:?}", new_state_vec);
+            for u in 0..4 {
+                println!("-------------------------");
+                println!("u={}", u);
+                let part_state_vec = new_state_vec
+                    .iter()
+                    .filter(|&x| (*x).0[0] == u)
+                    .map(|x| x.clone())
+                    .collect::<Vec<_>>();
+                let part_key_values = view.map.key_values_by_prefix(vec![u]).await.unwrap();
+                println!("part_state_vec={:?}", part_state_vec);
+                println!("part_key_values={:?}", part_key_values);
+                assert_eq!(part_state_vec, part_key_values);
+            }
         }
         if save {
             state_map = new_state_map.clone();
