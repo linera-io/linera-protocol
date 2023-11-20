@@ -146,6 +146,11 @@ impl LineraNetConfig for LocalNetConfig {
         net.run().await.unwrap();
         Ok((net, client))
     }
+
+    #[cfg(any(test, feature = "test"))]
+    fn get_network(&self) -> Network {
+        self.network
+    }
 }
 
 #[cfg(any(test, feature = "test"))]
@@ -178,6 +183,11 @@ impl LineraNetConfig for LocalNetTestingConfig {
         }
         Ok((net, client))
     }
+
+    #[cfg(any(test, feature = "test"))]
+    fn get_network(&self) -> Network {
+        self.network
+    }
 }
 
 #[async_trait]
@@ -207,6 +217,64 @@ impl LineraNet for LocalNet {
         for (_, validator) in self.running_validators {
             validator.terminate().await.context("in local network")?
         }
+        Ok(())
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    fn validator_name(&self, i: usize) -> Option<&String> {
+        self.validator_names.get(&i)
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    async fn generate_validator_config(&mut self, i: usize) -> Result<()> {
+        let stdout = self
+            .command_for_binary("linera-server")
+            .await?
+            .arg("generate")
+            .arg("--validators")
+            .arg(&self.configuration_string(i)?)
+            .spawn_and_wait_for_stdout()
+            .await?;
+        self.validator_names.insert(i, stdout.trim().to_string());
+        Ok(())
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    async fn terminate_server(&mut self, i: usize, j: usize) -> Result<()> {
+        self.running_validators
+            .get_mut(&i)
+            .context("server not found")?
+            .terminate_server(j)
+            .await?;
+        Ok(())
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    fn remove_validator(&mut self, i: usize) -> Result<()> {
+        self.running_validators
+            .remove(&i)
+            .context("validator not found")?;
+        Ok(())
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    async fn start_server(&mut self, i: usize, j: usize) -> Result<()> {
+        let server = self.run_server(i, j).await?;
+        self.running_validators
+            .get_mut(&i)
+            .context("could not find server")?
+            .add_server(server);
+        Ok(())
+    }
+
+    async fn start_validator(&mut self, i: usize) -> Result<()> {
+        let proxy = self.run_proxy(i).await?;
+        let mut validator = Validator::new(proxy);
+        for j in 0..self.num_shards {
+            let server = self.run_server(i, j).await?;
+            validator.add_server(server);
+        }
+        self.running_validators.insert(i, validator);
         Ok(())
     }
 }
@@ -441,62 +509,6 @@ impl LocalNet {
         for i in 0..self.num_initial_validators {
             self.start_validator(i).await?;
         }
-        Ok(())
-    }
-
-    pub async fn start_validator(&mut self, i: usize) -> Result<()> {
-        let proxy = self.run_proxy(i).await?;
-        let mut validator = Validator::new(proxy);
-        for j in 0..self.num_shards {
-            let server = self.run_server(i, j).await?;
-            validator.add_server(server);
-        }
-        self.running_validators.insert(i, validator);
-        Ok(())
-    }
-}
-
-#[cfg(any(test, feature = "test"))]
-impl LocalNet {
-    pub fn validator_name(&self, i: usize) -> Option<&String> {
-        self.validator_names.get(&i)
-    }
-
-    pub async fn generate_validator_config(&mut self, i: usize) -> Result<()> {
-        let stdout = self
-            .command_for_binary("linera-server")
-            .await?
-            .arg("generate")
-            .arg("--validators")
-            .arg(&self.configuration_string(i)?)
-            .spawn_and_wait_for_stdout()
-            .await?;
-        self.validator_names.insert(i, stdout.trim().to_string());
-        Ok(())
-    }
-
-    pub async fn terminate_server(&mut self, i: usize, j: usize) -> Result<()> {
-        self.running_validators
-            .get_mut(&i)
-            .context("server not found")?
-            .terminate_server(j)
-            .await?;
-        Ok(())
-    }
-
-    pub fn remove_validator(&mut self, i: usize) -> Result<()> {
-        self.running_validators
-            .remove(&i)
-            .context("validator not found")?;
-        Ok(())
-    }
-
-    pub async fn start_server(&mut self, i: usize, j: usize) -> Result<()> {
-        let server = self.run_server(i, j).await?;
-        self.running_validators
-            .get_mut(&i)
-            .context("could not find server")?
-            .add_server(server);
         Ok(())
     }
 }

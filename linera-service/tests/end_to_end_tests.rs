@@ -41,9 +41,9 @@ async fn test_resolve_binary() {
 #[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Simple) ; "scylladb_simple"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Simple) ; "aws_simple"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
+async fn test_end_to_end_reconfiguration(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let network = config.network;
+    let network = config.get_network();
     let (mut net, client) = config.instantiate().await.unwrap();
 
     let client_2 = net.make_client();
@@ -275,7 +275,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
 #[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_retry_notification_stream(config: LocalNetTestingConfig) {
+async fn test_end_to_end_retry_notification_stream(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client1) = config.instantiate().await.unwrap();
@@ -794,7 +794,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
 #[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_retry_pending_block(config: LocalNetTestingConfig) {
+async fn test_end_to_end_retry_pending_block(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     // Create runner and client.
     let (mut net, client) = config.instantiate().await.unwrap();
