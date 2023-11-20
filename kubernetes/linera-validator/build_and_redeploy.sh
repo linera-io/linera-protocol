@@ -141,8 +141,12 @@ kubectl get pods
 echo -e "\nServices:"
 kubectl get svc
 
-docker rm linera-test-local || true
-docker run -d --name linera-test-local "$docker_image"
+echo -e "\nMake sure the terminal you'll run the linera client from has these exports:"
+echo 'export LINERA_WALLET=/tmp/wallet.json'
+echo 'export LINERA_STORAGE="rocksdb:/tmp/linera.db"'
+
+echo -e "\nTo access Prometheus, you need to port forward yourself, that won't be done here. Run:"
+echo -e "kubectl port-forward prometheus-linera-core-kube-prometheu-prometheus-0 9090"
 
 # Get the Grafana pod name
 grafana_pod_name=$(kubectl get pods | grep grafana | awk '{ print $1 }')
