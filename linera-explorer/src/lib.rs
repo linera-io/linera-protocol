@@ -40,7 +40,7 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_wasm_bindgen::from_value;
-use std::{str::FromStr, time::Duration};
+use std::str::FromStr;
 use url::Url;
 use uuid::Uuid;
 use wasm_bindgen::prelude::*;
@@ -48,13 +48,10 @@ use wasm_bindgen_futures::spawn_local;
 use ws_stream_wasm::*;
 
 static WEBSOCKET: OnceCell<WsMeta> = OnceCell::new();
-static DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub(crate) fn reqwest_client() -> reqwest::Client {
-    reqwest::ClientBuilder::new()
-        .timeout(DEFAULT_TIMEOUT)
-        .build()
-        .unwrap()
+    // timeouts cannot be enforced when compiling to wasm-js.
+    reqwest::ClientBuilder::new().build().unwrap()
 }
 
 /// Page enum containing info for each page.
