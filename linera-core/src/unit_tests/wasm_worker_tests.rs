@@ -30,8 +30,7 @@ use linera_execution::{
     system::{SystemChannel, SystemMessage, SystemOperation},
     Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription, ExecutionStateView,
     GenericApplicationId, Message, Operation, OperationContext, ResourceTracker,
-    SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmApplication,
-    WasmRuntime,
+    SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmContract, WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, Store};
 use linera_views::views::{CryptoHashView, ViewError};
@@ -117,14 +116,7 @@ where
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
     let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
     let service_bytecode = Bytecode::load_from_file(service_path).await?;
-    let application = Arc::new(
-        WasmApplication::new(
-            contract_bytecode.clone(),
-            service_bytecode.clone(),
-            wasm_runtime,
-        )
-        .await?,
-    );
+    let contract = Arc::new(WasmContract::new(contract_bytecode.clone(), wasm_runtime).await?);
 
     // Publish some bytecode.
     let publish_operation = SystemOperation::PublishBytecode {
@@ -378,7 +370,7 @@ where
     let mut creator_state = ExecutionStateView::from_system_state(creator_system_state).await;
     creator_state
         .simulate_initialization(
-            application,
+            contract,
             application_description,
             initial_value_bytes.clone(),
         )

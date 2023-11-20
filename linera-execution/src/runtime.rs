@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    execution::ExecutionStateView, BaseRuntime, CallResult, ContractRuntime, ExecutionError,
-    ExecutionResult, ExecutionRuntimeContext, RuntimeCounts, RuntimeLimits, ServiceRuntime,
-    SessionId, UserApplicationCode, UserApplicationDescription, UserApplicationId,
+    execution::ExecutionStateView,
+    resources::{RuntimeCounts, RuntimeLimits},
+    BaseRuntime, CallResult, ContractRuntime, ExecutionError, ExecutionResult,
+    ExecutionRuntimeContext, ServiceRuntime, SessionId, UserApplicationDescription,
+    UserApplicationId, UserContractCode, UserServiceCode,
 };
 use async_lock::{Mutex, MutexGuard, MutexGuardArc, RwLockWriteGuardArc};
 use async_trait::async_trait;
@@ -31,34 +33,35 @@ use std::{
 };
 
 /// Runtime data tracked during the execution of a transaction.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
-    /// The amount of fuel available for executing the application.
-    remaining_fuel: Arc<AtomicU64>,
-    /// The number of reads
-    num_reads: Arc<AtomicU64>,
-    /// the total size being read
-    bytes_read: Arc<AtomicU64>,
-    /// The total size being written
-    bytes_written: Arc<AtomicU64>,
-    /// The runtime limits
-    runtime_limits: RuntimeLimits,
     /// The current chain ID.
     chain_id: ChainId,
     /// The current stack of application descriptions.
-    applications: Arc<Mutex<&'a mut Vec<ApplicationStatus>>>,
+    applications: Mutex<&'a mut Vec<ApplicationStatus>>,
     /// The storage view on the execution state.
-    execution_state: Arc<Mutex<&'a mut ExecutionStateView<C>>>,
+    execution_state: Mutex<&'a mut ExecutionStateView<C>>,
     /// All the sessions and their IDs.
-    session_manager: Arc<Mutex<&'a mut SessionManager>>,
+    session_manager: Mutex<&'a mut SessionManager>,
     /// Track active (i.e. locked) applications for which re-entrancy is disallowed.
-    active_simple_user_states: Arc<Mutex<ActiveSimpleUserStates<C>>>,
+    active_simple_user_states: Mutex<ActiveSimpleUserStates<C>>,
     /// Track active (i.e. locked) applications for which re-entrancy is disallowed.
-    active_view_user_states: Arc<Mutex<ActiveViewUserStates<C>>>,
+    active_view_user_states: Mutex<ActiveViewUserStates<C>>,
     /// Track active (i.e. locked) sessions for which re-entrancy is disallowed.
-    active_sessions: Arc<Mutex<ActiveSessions>>,
+    active_sessions: Mutex<ActiveSessions>,
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
-    execution_results: Arc<Mutex<&'a mut Vec<ExecutionResult>>>,
+    execution_results: Mutex<&'a mut Vec<ExecutionResult>>,
+
+    /// The amount of fuel available for executing the application.
+    remaining_fuel: AtomicU64,
+    /// The number of reads
+    num_reads: AtomicU64,
+    /// the total size being read
+    bytes_read: AtomicU64,
+    /// The total size being written
+    bytes_written: AtomicU64,
+    /// The runtime limits
+    runtime_limits: RuntimeLimits,
 }
 
 /// The runtime status of an application.
@@ -111,24 +114,20 @@ where
         runtime_limits: RuntimeLimits,
     ) -> Self {
         assert_eq!(chain_id, execution_state.context().extra().chain_id());
-        let remaining_fuel = Arc::new(AtomicU64::new(fuel));
-        let num_reads = Arc::new(AtomicU64::new(0));
-        let bytes_read = Arc::new(AtomicU64::new(0));
-        let bytes_written = Arc::new(AtomicU64::new(0));
         Self {
-            remaining_fuel,
-            num_reads,
-            bytes_read,
-            bytes_written,
+            applications: Mutex::new(applications),
+            execution_state: Mutex::new(execution_state),
+            session_manager: Mutex::new(session_manager),
+            active_simple_user_states: Mutex::default(),
+            active_view_user_states: Mutex::default(),
+            active_sessions: Mutex::default(),
+            execution_results: Mutex::new(execution_results),
+            remaining_fuel: AtomicU64::new(fuel),
+            num_reads: AtomicU64::new(0),
+            bytes_read: AtomicU64::new(0),
+            bytes_written: AtomicU64::new(0),
             runtime_limits,
             chain_id,
-            applications: Arc::new(Mutex::new(applications)),
-            execution_state: Arc::new(Mutex::new(execution_state)),
-            session_manager: Arc::new(Mutex::new(session_manager)),
-            active_simple_user_states: Arc::default(),
-            active_view_user_states: Arc::default(),
-            active_sessions: Arc::default(),
-            execution_results: Arc::new(Mutex::new(execution_results)),
         }
     }
 
@@ -172,10 +171,10 @@ where
             .expect("single-threaded execution should not lock `execution_results`")
     }
 
-    async fn load_application(
+    async fn load_contract(
         &self,
         id: UserApplicationId,
-    ) -> Result<(UserApplicationCode, UserApplicationDescription), ExecutionError> {
+    ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
         let description = self
             .execution_state_mut()
             .system
@@ -186,7 +185,26 @@ where
             .execution_state_mut()
             .context()
             .extra()
-            .get_user_application(&description)
+            .get_user_contract(&description)
+            .await?;
+        Ok((code, description))
+    }
+
+    async fn load_service(
+        &self,
+        id: UserApplicationId,
+    ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
+        let description = self
+            .execution_state_mut()
+            .system
+            .registry
+            .describe_application(id)
+            .await?;
+        let code = self
+            .execution_state_mut()
+            .context()
+            .extra()
+            .get_user_service(&description)
             .await?;
         Ok((code, description))
     }
@@ -485,7 +503,7 @@ where
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
         // Load the application.
-        let (code, description) = self.load_application(queried_id).await?;
+        let (code, description) = self.load_service(queried_id).await?;
         // Make the call to user code.
         let query_context = crate::QueryContext {
             chain_id: self.chain_id,
@@ -589,7 +607,7 @@ where
             .expect("caller must exist")
             .clone();
         // Load the application.
-        let (code, description) = self.load_application(callee_id).await?;
+        let (code, description) = self.load_contract(callee_id).await?;
         // Change the owners of forwarded sessions.
         self.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
         // Make the call to user code.
@@ -643,7 +661,7 @@ where
             .expect("caller must exist")
             .clone();
         // Load the application.
-        let (code, description) = self.load_application(callee_id).await?;
+        let (code, description) = self.load_contract(callee_id).await?;
         // Change the owners of forwarded sessions.
         self.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
         // Load the session.

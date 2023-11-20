@@ -9,10 +9,10 @@ mod execution;
 mod graphql;
 mod ownership;
 pub mod policy;
+mod resources;
 mod runtime;
 pub mod system;
 mod wasm;
-use crate::policy::{PricingError, ResourceControlPolicy};
 
 pub use applications::{
     ApplicationRegistryView, BytecodeLocation, GenericApplicationId, UserApplicationDescription,
@@ -20,6 +20,7 @@ pub use applications::{
 };
 pub use execution::ExecutionStateView;
 pub use ownership::ChainOwnership;
+pub use resources::ResourceTracker;
 pub use system::{
     SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation, SystemQuery,
     SystemResponse,
@@ -30,10 +31,11 @@ pub use system::{
 ))]
 pub use wasm::test as wasm_test;
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-pub use wasm::{WasmApplication, WasmExecutionError};
+pub use wasm::{WasmContract, WasmExecutionError, WasmService};
 #[cfg(any(test, feature = "test"))]
 pub use {applications::ApplicationRegistry, system::SystemExecutionState};
 
+use crate::policy::PricingError;
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
@@ -47,142 +49,16 @@ use linera_base::{
     identifiers::{BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId},
 };
 use linera_views::{batch::Batch, views::ViewError};
+use resources::RuntimeCounts;
 use serde::{Deserialize, Serialize};
 use std::{io, path::Path, str::FromStr, sync::Arc};
 use thiserror::Error;
 
-/// The entries of the runtime related to storage
-#[derive(Copy, Debug, Clone)]
-pub struct RuntimeLimits {
-    /// maximum_budget for reading
-    pub max_budget_num_reads: u64,
-    /// maximum budget of bytes read
-    pub max_budget_bytes_read: u64,
-    /// maximum budget of bytes written
-    pub max_budget_bytes_written: u64,
-    /// The maximum size of read allowed per block
-    pub maximum_bytes_left_to_read: u64,
-    /// The maximum size of write allowed per block
-    pub maximum_bytes_left_to_write: u64,
-}
+/// An implementation of [`UserContract`]
+pub type UserContractCode = Arc<dyn UserContract + Send + Sync + 'static>;
 
-/// The entries of the runtime related to storage
-#[derive(Copy, Debug, Clone)]
-pub struct ResourceTracker {
-    /// The used fuel in the computation
-    pub used_fuel: u64,
-    /// The number of reads in the computation
-    pub num_reads: u64,
-    /// The total number of bytes read
-    pub bytes_read: u64,
-    /// The total number of bytes written
-    pub bytes_written: u64,
-    /// The maximum size of read that remains available for use
-    pub maximum_bytes_left_to_read: u64,
-    /// The maximum size of write that remains available for use
-    pub maximum_bytes_left_to_write: u64,
-}
-
-#[cfg(any(test, feature = "test"))]
-impl Default for ResourceTracker {
-    fn default() -> Self {
-        ResourceTracker {
-            used_fuel: 0,
-            num_reads: 0,
-            bytes_read: 0,
-            bytes_written: 0,
-            maximum_bytes_left_to_read: u64::MAX / 2,
-            maximum_bytes_left_to_write: u64::MAX / 2,
-        }
-    }
-}
-
-impl Default for RuntimeLimits {
-    fn default() -> Self {
-        RuntimeLimits {
-            max_budget_num_reads: u64::MAX / 2,
-            max_budget_bytes_read: u64::MAX / 2,
-            max_budget_bytes_written: u64::MAX / 2,
-            maximum_bytes_left_to_read: u64::MAX / 2,
-            maximum_bytes_left_to_write: u64::MAX / 2,
-        }
-    }
-}
-
-impl ResourceTracker {
-    /// Subtracts an amount from a balance and reports an error if that is impossible
-    fn sub_assign_fees(balance: &mut Amount, fees: Amount) -> Result<(), SystemExecutionError> {
-        balance
-            .try_sub_assign(fees)
-            .map_err(|_| SystemExecutionError::InsufficientFunding {
-                current_balance: *balance,
-            })
-    }
-
-    /// Updates the limits for the maximum and updates the balance.
-    pub fn update_limits(
-        &mut self,
-        balance: &mut Amount,
-        policy: &ResourceControlPolicy,
-        runtime_counts: RuntimeCounts,
-    ) -> Result<(), ExecutionError> {
-        // The fuel being used
-        let initial_fuel = policy.remaining_fuel(*balance);
-        let used_fuel = initial_fuel.saturating_sub(runtime_counts.remaining_fuel);
-        self.used_fuel += used_fuel;
-        Self::sub_assign_fees(balance, policy.fuel_price(used_fuel)?)?;
-        // The number of reads
-        Self::sub_assign_fees(
-            balance,
-            policy.storage_num_reads_price(&runtime_counts.num_reads)?,
-        )?;
-        self.num_reads += runtime_counts.num_reads;
-        // The number of bytes read
-        let bytes_read = runtime_counts.bytes_read;
-        self.maximum_bytes_left_to_read -= bytes_read;
-        self.bytes_read += runtime_counts.bytes_read;
-        Self::sub_assign_fees(balance, policy.storage_bytes_read_price(&bytes_read)?)?;
-        // The number of bytes written
-        let bytes_written = runtime_counts.bytes_written;
-        self.maximum_bytes_left_to_write -= bytes_written;
-        self.bytes_written += bytes_written;
-        Self::sub_assign_fees(balance, policy.storage_bytes_written_price(&bytes_written)?)?;
-        Ok(())
-    }
-
-    /// Obtain the limits for the running of the system
-    pub fn limits(&self, policy: &ResourceControlPolicy, balance: &Amount) -> RuntimeLimits {
-        let max_budget_num_reads =
-            u64::try_from(balance.saturating_div(policy.storage_num_reads)).unwrap_or(u64::MAX);
-        let max_budget_bytes_read =
-            u64::try_from(balance.saturating_div(policy.storage_bytes_read)).unwrap_or(u64::MAX);
-        let max_budget_bytes_written =
-            u64::try_from(balance.saturating_div(policy.storage_bytes_read)).unwrap_or(u64::MAX);
-        RuntimeLimits {
-            max_budget_num_reads,
-            max_budget_bytes_read,
-            max_budget_bytes_written,
-            maximum_bytes_left_to_read: self.maximum_bytes_left_to_read,
-            maximum_bytes_left_to_write: self.maximum_bytes_left_to_write,
-        }
-    }
-}
-
-/// The entries of the runtime related to fuel and storage
-#[derive(Copy, Debug, Clone)]
-pub struct RuntimeCounts {
-    /// The remaining fuel available
-    pub remaining_fuel: u64,
-    /// The number of read operations
-    pub num_reads: u64,
-    /// The bytes that have been read
-    pub bytes_read: u64,
-    /// The bytes that have been written
-    pub bytes_written: u64,
-}
-
-/// An implementation of [`UserApplication`]
-pub type UserApplicationCode = Arc<dyn UserApplication + Send + Sync + 'static>;
+/// An implementation of [`UserService`].
+pub type UserServiceCode = Arc<dyn UserService + Send + Sync + 'static>;
 
 #[derive(Error, Debug)]
 pub enum ExecutionError {
@@ -242,9 +118,9 @@ impl From<ViewError> for ExecutionError {
     }
 }
 
-/// The public entry points provided by an application.
+/// The public entry points provided by the contract part of an application.
 #[async_trait]
-pub trait UserApplication {
+pub trait UserContract {
     /// Initializes the application state on the chain that owns the application.
     async fn initialize(
         &self,
@@ -290,12 +166,12 @@ pub trait UserApplication {
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, ExecutionError>;
+}
 
+/// The public entry points provided by the service part of an application.
+#[async_trait]
+pub trait UserService {
     /// Executes unmetered read-only queries on the state of this application.
-    ///
-    /// # Note
-    ///
-    /// This is not meant to be metered and may not be exposed by all validators.
     async fn handle_query(
         &self,
         context: &QueryContext,
@@ -330,12 +206,19 @@ pub struct SessionCallResult {
 pub trait ExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId;
 
-    fn user_applications(&self) -> &Arc<DashMap<UserApplicationId, UserApplicationCode>>;
+    fn user_contracts(&self) -> &Arc<DashMap<UserApplicationId, UserContractCode>>;
 
-    async fn get_user_application(
+    fn user_services(&self) -> &Arc<DashMap<UserApplicationId, UserServiceCode>>;
+
+    async fn get_user_contract(
         &self,
         description: &UserApplicationDescription,
-    ) -> Result<UserApplicationCode, ExecutionError>;
+    ) -> Result<UserContractCode, ExecutionError>;
+
+    async fn get_user_service(
+        &self,
+        description: &UserApplicationDescription,
+    ) -> Result<UserServiceCode, ExecutionError>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -634,7 +517,8 @@ impl OperationContext {
 #[derive(Clone)]
 pub struct TestExecutionRuntimeContext {
     chain_id: ChainId,
-    user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
+    user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
+    user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
 }
 
 #[cfg(any(test, feature = "test"))]
@@ -642,7 +526,8 @@ impl TestExecutionRuntimeContext {
     fn new(chain_id: ChainId) -> Self {
         Self {
             chain_id,
-            user_applications: Arc::default(),
+            user_contracts: Arc::default(),
+            user_services: Arc::default(),
         }
     }
 }
@@ -654,17 +539,35 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         self.chain_id
     }
 
-    fn user_applications(&self) -> &Arc<DashMap<UserApplicationId, UserApplicationCode>> {
-        &self.user_applications
+    fn user_contracts(&self) -> &Arc<DashMap<UserApplicationId, UserContractCode>> {
+        &self.user_contracts
     }
 
-    async fn get_user_application(
+    fn user_services(&self) -> &Arc<DashMap<UserApplicationId, UserServiceCode>> {
+        &self.user_services
+    }
+
+    async fn get_user_contract(
         &self,
         description: &UserApplicationDescription,
-    ) -> Result<UserApplicationCode, ExecutionError> {
+    ) -> Result<UserContractCode, ExecutionError> {
         let application_id = description.into();
         Ok(self
-            .user_applications()
+            .user_contracts()
+            .get(&application_id)
+            .ok_or_else(|| {
+                ExecutionError::ApplicationBytecodeNotFound(Box::new(description.clone()))
+            })?
+            .clone())
+    }
+
+    async fn get_user_service(
+        &self,
+        description: &UserApplicationDescription,
+    ) -> Result<UserServiceCode, ExecutionError> {
+        let application_id = description.into();
+        Ok(self
+            .user_services()
             .get(&application_id)
             .ok_or_else(|| {
                 ExecutionError::ApplicationBytecodeNotFound(Box::new(description.clone()))

@@ -68,7 +68,7 @@ struct TestApplication {
 }
 
 #[async_trait]
-impl UserApplication for TestApplication {
+impl UserContract for TestApplication {
     /// Nothing needs to be done during initialization.
     async fn initialize(
         &self,
@@ -170,7 +170,10 @@ impl UserApplication for TestApplication {
             close_session: true,
         })
     }
+}
 
+#[async_trait]
+impl UserService for TestApplication {
     /// Returns the application state.
     async fn handle_query(
         &self,
@@ -203,7 +206,11 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         .await?;
     view.context()
         .extra()
-        .user_applications()
+        .user_contracts()
+        .insert(app_id, Arc::new(TestApplication { owner }));
+    view.context()
+        .extra()
+        .user_services()
         .insert(app_id, Arc::new(TestApplication { owner }));
 
     let context = OperationContext {
@@ -276,7 +283,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
         .await?;
     view.context()
         .extra()
-        .user_applications()
+        .user_contracts()
         .insert(app_id, Arc::new(TestApplication { owner }));
 
     let context = OperationContext {

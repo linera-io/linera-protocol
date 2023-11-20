@@ -36,8 +36,8 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    ChainOwnership, ExecutionError, ExecutionRuntimeContext, UserApplicationCode,
-    UserApplicationDescription, UserApplicationId, WasmRuntime,
+    ChainOwnership, ExecutionError, ExecutionRuntimeContext, UserApplicationDescription,
+    UserApplicationId, UserContractCode, UserServiceCode, WasmRuntime,
 };
 use linera_views::{
     batch::Batch,
@@ -88,7 +88,7 @@ pub static WRITE_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-use linera_execution::{Operation, SystemOperation, WasmApplication};
+use linera_execution::{Operation, SystemOperation, WasmContract, WasmService};
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
@@ -216,55 +216,61 @@ pub trait Store: Sized {
     /// Selects the WebAssembly runtime to use for applications (if any).
     fn wasm_runtime(&self) -> Option<WasmRuntime>;
 
-    /// Creates a [`linera-sdk::UserApplication`] instance using the bytecode in storage referenced
+    /// Creates a [`UserContractCode`] instance using the bytecode in storage referenced
     /// by the `application_description`.
     #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-    async fn load_application(
+    async fn load_contract(
         &self,
         application_description: &UserApplicationDescription,
-    ) -> Result<UserApplicationCode, ExecutionError> {
+    ) -> Result<UserContractCode, ExecutionError> {
         let Some(wasm_runtime) = self.wasm_runtime() else {
             panic!("A Wasm runtime is required to load user applications.");
         };
-        let UserApplicationDescription {
-            bytecode_id,
-            bytecode_location,
-            ..
-        } = application_description;
-        let value = self
-            .read_value(bytecode_location.certificate_hash)
-            .await
-            .map_err(|error| match error {
-                ViewError::NotFound(_) => ExecutionError::ApplicationBytecodeNotFound(Box::new(
-                    application_description.clone(),
-                )),
-                _ => error.into(),
-            })?
-            .into_inner();
-        let operations = match value {
-            CertificateValue::ConfirmedBlock { executed_block, .. } => {
-                executed_block.block.operations
-            }
-            _ => return Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
+        let SystemOperation::PublishBytecode { contract, .. } =
+            read_publish_bytecode_operation(self, application_description).await?
+        else {
+            unreachable!();
         };
-        let index = usize::try_from(bytecode_location.operation_index)
-            .map_err(|_| linera_base::data_types::ArithmeticError::Overflow)?;
-        match operations.get(index) {
-            Some(Operation::System(SystemOperation::PublishBytecode { contract, service })) => {
-                Ok(Arc::new(
-                    WasmApplication::new(contract.clone(), service.clone(), wasm_runtime).await?,
-                ))
-            }
-            _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
-        }
+        Ok(Arc::new(WasmContract::new(contract, wasm_runtime).await?))
     }
 
     #[cfg(not(any(feature = "wasmer", feature = "wasmtime")))]
     #[allow(clippy::diverging_sub_expression)]
-    async fn load_application(
+    async fn load_contract(
         &self,
         _application_description: &UserApplicationDescription,
-    ) -> Result<UserApplicationCode, ExecutionError> {
+    ) -> Result<UserContractCode, ExecutionError> {
+        panic!(
+            "A Wasm runtime is required to load user applications. \
+            Please enable the `wasmer` or the `wasmtime` feature flags \
+            when compiling `linera-storage`."
+        );
+    }
+
+    /// Creates a [`linera-sdk::UserContract`] instance using the bytecode in storage referenced
+    /// by the `application_description`.
+    #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+    async fn load_service(
+        &self,
+        application_description: &UserApplicationDescription,
+    ) -> Result<UserServiceCode, ExecutionError> {
+        let Some(wasm_runtime) = self.wasm_runtime() else {
+            panic!("A Wasm runtime is required to load user applications.");
+        };
+        let SystemOperation::PublishBytecode { service, .. } =
+            read_publish_bytecode_operation(self, application_description).await?
+        else {
+            unreachable!();
+        };
+        Ok(Arc::new(WasmService::new(service, wasm_runtime).await?))
+    }
+
+    #[cfg(not(any(feature = "wasmer", feature = "wasmtime")))]
+    #[allow(clippy::diverging_sub_expression)]
+    async fn load_service(
+        &self,
+        _application_description: &UserApplicationDescription,
+    ) -> Result<UserServiceCode, ExecutionError> {
         panic!(
             "A Wasm runtime is required to load user applications. \
             Please enable the `wasmer` or the `wasmtime` feature flags \
@@ -273,12 +279,59 @@ pub trait Store: Sized {
     }
 }
 
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+async fn read_publish_bytecode_operation(
+    store: &impl Store,
+    application_description: &UserApplicationDescription,
+) -> Result<SystemOperation, ExecutionError> {
+    let UserApplicationDescription {
+        bytecode_id,
+        bytecode_location,
+        ..
+    } = application_description;
+    let value = store
+        .read_value(bytecode_location.certificate_hash)
+        .await
+        .map_err(|error| match error {
+            ViewError::NotFound(_) => ExecutionError::ApplicationBytecodeNotFound(Box::new(
+                application_description.clone(),
+            )),
+            _ => error.into(),
+        })?
+        .into_inner();
+    let operations = match value {
+        CertificateValue::ConfirmedBlock { executed_block, .. } => executed_block.block.operations,
+        _ => return Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
+    };
+    let index = usize::try_from(bytecode_location.operation_index)
+        .map_err(|_| linera_base::data_types::ArithmeticError::Overflow)?;
+    match operations.into_iter().nth(index) {
+        Some(Operation::System(operation @ SystemOperation::PublishBytecode { .. })) => {
+            Ok(operation)
+        }
+        _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
+    }
+}
+
 /// A store implemented from a [`KeyValueStoreClient`]
 pub struct DbStoreInner<Client> {
     client: Client,
     guards: ChainGuards,
-    user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
+    user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
+    user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
     wasm_runtime: Option<WasmRuntime>,
+}
+
+impl<Client> DbStoreInner<Client> {
+    fn new(client: Client, wasm_runtime: Option<WasmRuntime>) -> Self {
+        Self {
+            client,
+            guards: ChainGuards::default(),
+            user_contracts: Arc::new(DashMap::new()),
+            user_services: Arc::new(DashMap::new()),
+            wasm_runtime,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -368,7 +421,8 @@ where
         let runtime_context = ChainRuntimeContext {
             store: self.clone(),
             chain_id,
-            user_applications: self.client.user_applications.clone(),
+            user_contracts: self.client.user_contracts.clone(),
+            user_services: self.client.user_services.clone(),
             chain_guard: Some(Arc::new(guard)),
         };
         let client = self.client.client.clone();
@@ -509,7 +563,8 @@ where
 pub struct ChainRuntimeContext<StoreClient> {
     store: StoreClient,
     pub chain_id: ChainId,
-    pub user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
+    pub user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
+    pub user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
     pub chain_guard: Option<Arc<ChainGuard>>,
 }
 
@@ -522,20 +577,38 @@ where
         self.chain_id
     }
 
-    fn user_applications(&self) -> &Arc<DashMap<UserApplicationId, UserApplicationCode>> {
-        &self.user_applications
+    fn user_contracts(&self) -> &Arc<DashMap<UserApplicationId, UserContractCode>> {
+        &self.user_contracts
     }
 
-    async fn get_user_application(
+    fn user_services(&self) -> &Arc<DashMap<UserApplicationId, UserServiceCode>> {
+        &self.user_services
+    }
+
+    async fn get_user_contract(
         &self,
         description: &UserApplicationDescription,
-    ) -> Result<UserApplicationCode, ExecutionError> {
-        match self.user_applications.entry(description.into()) {
+    ) -> Result<UserContractCode, ExecutionError> {
+        match self.user_contracts.entry(description.into()) {
             Entry::Occupied(entry) => Ok(entry.get().clone()),
             Entry::Vacant(entry) => {
-                let application = self.store.load_application(description).await?;
-                entry.insert(application.clone());
-                Ok(application)
+                let contract = self.store.load_contract(description).await?;
+                entry.insert(contract.clone());
+                Ok(contract)
+            }
+        }
+    }
+
+    async fn get_user_service(
+        &self,
+        description: &UserApplicationDescription,
+    ) -> Result<UserServiceCode, ExecutionError> {
+        match self.user_services.entry(description.into()) {
+            Entry::Occupied(entry) => Ok(entry.get().clone()),
+            Entry::Vacant(entry) => {
+                let service = self.store.load_service(description).await?;
+                entry.insert(service.clone());
+                Ok(service)
             }
         }
     }

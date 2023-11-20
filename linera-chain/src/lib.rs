@@ -12,6 +12,8 @@ mod outbox;
 pub mod test;
 
 pub use chain::ChainStateView;
+pub use manager::{ChainManager, ChainManagerInfo, Outcome as ChainManagerOutcome};
+
 use data_types::{Event, Origin};
 use linera_base::{
     crypto::CryptoError,
@@ -20,7 +22,6 @@ use linera_base::{
 };
 use linera_execution::{policy::PricingError, ExecutionError};
 use linera_views::views::ViewError;
-pub use manager::{ChainManager, ChainManagerInfo, Outcome as ChainManagerOutcome};
 use rand_distr::WeightedError;
 use thiserror::Error;
 

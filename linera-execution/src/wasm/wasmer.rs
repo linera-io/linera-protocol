@@ -36,18 +36,18 @@ use super::{
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     module_cache::ModuleCache,
     runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
-    ApplicationCallResult, SessionCallResult, WasmApplication, WasmExecutionError,
+    ApplicationCallResult, SessionCallResult, WasmContract, WasmExecutionError, WasmService,
 };
 use crate::{
-    Bytecode, CalleeContext, ContractRuntime, ExecutionError, MessageContext, OperationContext,
-    QueryContext, RawExecutionResult, ServiceRuntime,
+    Bytecode, CalleeContext, ExecutionError, MessageContext, OperationContext, QueryContext,
+    RawExecutionResult,
 };
 use bytes::Bytes;
 use futures::channel::mpsc;
 use linera_base::identifiers::SessionId;
 use linera_views::batch::Batch;
 use once_cell::sync::Lazy;
-use std::{marker::PhantomData, mem, sync::Arc};
+use std::{marker::PhantomData, sync::Arc};
 use tokio::sync::Mutex;
 use wasmer::{
     imports, wasmparser::Operator, CompilerConfig, Engine, EngineBuilder, Instance, Module,
@@ -135,33 +135,23 @@ impl ApplicationRuntimeContext for Service {
     }
 }
 
-impl WasmApplication {
-    /// Creates a new [`WasmApplication`] using Wasmtime with the provided bytecodes.
-    pub async fn new_with_wasmer(
-        contract_bytecode: Bytecode,
-        service_bytecode: Bytecode,
-    ) -> Result<Self, WasmExecutionError> {
+impl WasmContract {
+    /// Creates a new [`WasmContract`] using Wasmer with the provided bytecodes.
+    pub async fn new_with_wasmer(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
-        let contract = contract_cache
+        let (engine, module) = contract_cache
             .get_or_insert_with(contract_bytecode, CachedContractModule::new)
             .map_err(WasmExecutionError::LoadContractModule)?
             .create_execution_instance()
             .map_err(WasmExecutionError::LoadContractModule)?;
 
-        let mut service_cache = SERVICE_CACHE.lock().await;
-        let service = service_cache
-            .get_or_insert_with(service_bytecode, |bytecode| {
-                Module::new(&*SERVICE_ENGINE, bytecode)
-                    .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)
-            })
-            .map_err(WasmExecutionError::LoadServiceModule)?;
-
-        Ok(WasmApplication::Wasmer { contract, service })
+        Ok(WasmContract::Wasmer { engine, module })
     }
 
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare_contract_runtime_with_wasmer(
-        (contract_engine, contract_module): &(Engine, Module),
+        contract_engine: &Engine,
+        contract_module: &Module,
         runtime: mpsc::UnboundedSender<ContractRequest>,
     ) -> Result<WasmRuntimeContext<Contract>, WasmExecutionError> {
         let mut store = Store::new(contract_engine);
@@ -185,6 +175,38 @@ impl WasmApplication {
             store,
             extra: WasmerContractExtra { runtime, instance },
         })
+    }
+
+    /// Calculates the fuel cost of a WebAssembly [`Operator`].
+    ///
+    /// The rules try to follow the hardcoded [rules in the Wasmtime runtime
+    /// engine](https://docs.rs/wasmtime/5.0.0/wasmtime/struct.Store.html#method.add_fuel).
+    fn operation_cost(operator: &Operator) -> u64 {
+        match operator {
+            Operator::Nop
+            | Operator::Drop
+            | Operator::Block { .. }
+            | Operator::Loop { .. }
+            | Operator::Unreachable
+            | Operator::Else
+            | Operator::End => 0,
+            _ => 1,
+        }
+    }
+}
+
+impl WasmService {
+    /// Creates a new [`WasmService`] using Wasmer with the provided bytecodes.
+    pub async fn new_with_wasmer(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
+        let mut service_cache = SERVICE_CACHE.lock().await;
+        let module = service_cache
+            .get_or_insert_with(service_bytecode, |bytecode| {
+                Module::new(&*SERVICE_ENGINE, bytecode)
+                    .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)
+            })
+            .map_err(WasmExecutionError::LoadServiceModule)?;
+
+        Ok(WasmService::Wasmer { module })
     }
 
     /// Prepares a runtime instance to call into the Wasm service.
@@ -213,23 +235,6 @@ impl WasmApplication {
             store,
             extra: (),
         })
-    }
-
-    /// Calculates the fuel cost of a WebAssembly [`Operator`].
-    ///
-    /// The rules try to follow the hardcoded [rules in the Wasmtime runtime
-    /// engine](https://docs.rs/wasmtime/5.0.0/wasmtime/struct.Store.html#method.add_fuel).
-    fn operation_cost(operator: &Operator) -> u64 {
-        match operator {
-            Operator::Nop
-            | Operator::Drop
-            | Operator::Block { .. }
-            | Operator::Loop { .. }
-            | Operator::Unreachable
-            | Operator::Else
-            | Operator::End => 0,
-            _ => 1,
-        }
     }
 }
 
@@ -319,40 +324,6 @@ impl common::Service for Service {
         argument: Vec<u8>,
     ) -> Result<Result<Vec<u8>, String>, RuntimeError> {
         service::Service::handle_query(&self.service, store, context.into(), &argument)
-    }
-}
-
-/// Unsafe trait to artificially transmute a type in order to extend its lifetime.
-///
-/// # Safety
-///
-/// It is the caller's responsibility to ensure that the resulting [`WithoutLifetime`] type is not
-/// in use after the original lifetime expires.
-pub unsafe trait RemoveLifetime {
-    type WithoutLifetime: 'static;
-
-    /// Removes the lifetime artificially.
-    ///
-    /// # Safety
-    ///
-    /// It is the caller's responsibility to ensure that the resulting [`WithoutLifetime`] type is not
-    /// in use after the original lifetime expires.
-    unsafe fn remove_lifetime(self) -> Self::WithoutLifetime;
-}
-
-unsafe impl<'runtime> RemoveLifetime for &'runtime dyn ContractRuntime {
-    type WithoutLifetime = &'static dyn ContractRuntime;
-
-    unsafe fn remove_lifetime(self) -> Self::WithoutLifetime {
-        unsafe { mem::transmute(self) }
-    }
-}
-
-unsafe impl<'runtime> RemoveLifetime for &'runtime dyn ServiceRuntime {
-    type WithoutLifetime = &'static dyn ServiceRuntime;
-
-    unsafe fn remove_lifetime(self) -> Self::WithoutLifetime {
-        unsafe { mem::transmute(self) }
     }
 }
 
@@ -472,7 +443,7 @@ impl CachedContractModule {
 
     /// Creates a new [`Engine`] to compile a contract bytecode.
     fn create_compilation_engine() -> Engine {
-        let metering = Arc::new(Metering::new(0, WasmApplication::operation_cost));
+        let metering = Arc::new(Metering::new(0, WasmContract::operation_cost));
         let mut compiler_config = Singlepass::default();
         compiler_config.push_middleware(metering);
         compiler_config.canonicalize_nans(true);
