@@ -216,7 +216,7 @@ pub trait Store: Sized {
     /// Selects the WebAssembly runtime to use for applications (if any).
     fn wasm_runtime(&self) -> Option<WasmRuntime>;
 
-    /// Creates a [`linera-sdk::UserApplication`] instance using the bytecode in storage referenced
+    /// Creates a [`UserContractCode`] instance using the bytecode in storage referenced
     /// by the `application_description`.
     #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
     async fn load_contract(
@@ -299,18 +299,16 @@ async fn read_publish_bytecode_operation(
             _ => error.into(),
         })?
         .into_inner();
-    let mut operations = match value {
+    let operations = match value {
         CertificateValue::ConfirmedBlock { executed_block, .. } => executed_block.block.operations,
         _ => return Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
     };
     let index = usize::try_from(bytecode_location.operation_index)
         .map_err(|_| linera_base::data_types::ArithmeticError::Overflow)?;
-    linera_base::ensure!(
-        index < operations.len(),
-        ExecutionError::InvalidBytecodeId(*bytecode_id)
-    );
-    match operations.swap_remove(index) {
-        Operation::System(operation @ SystemOperation::PublishBytecode { .. }) => Ok(operation),
+    match operations.into_iter().nth(index) {
+        Some(Operation::System(operation @ SystemOperation::PublishBytecode { .. })) => {
+            Ok(operation)
+        }
         _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
     }
 }

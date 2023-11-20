@@ -151,13 +151,13 @@ impl WasmContract {
         contract_bytecode: Bytecode,
     ) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
-        let contract = contract_cache
+        let module = contract_cache
             .get_or_insert_with(contract_bytecode, |bytecode| {
                 Module::new(&CONTRACT_ENGINE, bytecode)
             })
             .map_err(WasmExecutionError::LoadContractModule)?;
 
-        Ok(WasmContract::Wasmtime { contract })
+        Ok(WasmContract::Wasmtime { module })
     }
 
     /// Prepares a runtime instance to call into the Wasm contract.
@@ -195,13 +195,13 @@ impl WasmService {
     /// Creates a new [`WasmService`] using Wasmtime with the provided bytecodes.
     pub async fn new_with_wasmtime(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut service_cache = SERVICE_CACHE.lock().await;
-        let service = service_cache
+        let module = service_cache
             .get_or_insert_with(service_bytecode, |bytecode| {
                 Module::new(&SERVICE_ENGINE, bytecode)
             })
             .map_err(WasmExecutionError::LoadServiceModule)?;
 
-        Ok(WasmService::Wasmtime { service })
+        Ok(WasmService::Wasmtime { module })
     }
 
     /// Prepares a runtime instance to call into the Wasm service.

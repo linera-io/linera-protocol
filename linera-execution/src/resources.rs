@@ -11,11 +11,11 @@ use linera_base::data_types::Amount;
 /// The entries of the runtime related to storage
 #[derive(Copy, Debug, Clone)]
 pub struct RuntimeLimits {
-    /// maximum_budget for reading
+    /// The maximum read requests per block
     pub max_budget_num_reads: u64,
-    /// maximum budget of bytes read
+    /// The maximum number of bytes that can be read per block
     pub max_budget_bytes_read: u64,
-    /// maximum budget of bytes written
+    /// The maximum number of bytes that can be written per block
     pub max_budget_bytes_written: u64,
     /// The maximum size of read allowed per block
     pub maximum_bytes_left_to_read: u64,

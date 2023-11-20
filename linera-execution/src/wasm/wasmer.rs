@@ -136,21 +136,22 @@ impl ApplicationRuntimeContext for Service {
 }
 
 impl WasmContract {
-    /// Creates a new [`WasmContract`] using Wasmtime with the provided bytecodes.
+    /// Creates a new [`WasmContract`] using Wasmer with the provided bytecodes.
     pub async fn new_with_wasmer(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
-        let contract = contract_cache
+        let (engine, module) = contract_cache
             .get_or_insert_with(contract_bytecode, CachedContractModule::new)
             .map_err(WasmExecutionError::LoadContractModule)?
             .create_execution_instance()
             .map_err(WasmExecutionError::LoadContractModule)?;
 
-        Ok(WasmContract::Wasmer { contract })
+        Ok(WasmContract::Wasmer { engine, module })
     }
 
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare_contract_runtime_with_wasmer(
-        (contract_engine, contract_module): &(Engine, Module),
+        contract_engine: &Engine,
+        contract_module: &Module,
         runtime: mpsc::UnboundedSender<ContractRequest>,
     ) -> Result<WasmRuntimeContext<Contract>, WasmExecutionError> {
         let mut store = Store::new(contract_engine);
@@ -195,17 +196,17 @@ impl WasmContract {
 }
 
 impl WasmService {
-    /// Creates a new [`WasmService`] using Wasmtime with the provided bytecodes.
+    /// Creates a new [`WasmService`] using Wasmer with the provided bytecodes.
     pub async fn new_with_wasmer(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut service_cache = SERVICE_CACHE.lock().await;
-        let service = service_cache
+        let module = service_cache
             .get_or_insert_with(service_bytecode, |bytecode| {
                 Module::new(&*SERVICE_ENGINE, bytecode)
                     .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)
             })
             .map_err(WasmExecutionError::LoadServiceModule)?;
 
-        Ok(WasmService::Wasmer { service })
+        Ok(WasmService::Wasmer { module })
     }
 
     /// Prepares a runtime instance to call into the Wasm service.

@@ -57,7 +57,7 @@ use thiserror::Error;
 /// An implementation of [`UserContract`]
 pub type UserContractCode = Arc<dyn UserContract + Send + Sync + 'static>;
 
-/// An implementation of [`ServiceApplication`]
+/// An implementation of [`UserService`].
 pub type UserServiceCode = Arc<dyn UserService + Send + Sync + 'static>;
 
 #[derive(Error, Debug)]
