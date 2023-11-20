@@ -5,7 +5,7 @@ use criterion::{criterion_group, criterion_main, measurement::Measurement, Batch
 use linera_base::{data_types::Amount, identifiers::ChainDescription};
 use linera_core::client::{
     self,
-    client_test_utils::{MakeMemoryStoreClient, NodeProvider, StoreBuilder, TestBuilder},
+    client_test_utils::{MakeMemoryStore, NodeProvider, StoreBuilder, TestBuilder},
 };
 use linera_execution::system::{Account, Recipient, UserData};
 use linera_storage::{
@@ -92,8 +92,8 @@ fn criterion_benchmark<M: Measurement + 'static>(c: &mut Criterion<M>) {
     c.bench_function("claim", |b| {
         b.to_async(tokio::runtime::Runtime::new().unwrap())
             .iter_batched(
-                setup_claim_bench::<MakeMemoryStoreClient>,
-                run_claim_bench::<MakeMemoryStoreClient>,
+                setup_claim_bench::<MakeMemoryStore>,
+                run_claim_bench::<MakeMemoryStore>,
                 BatchSize::PerIteration,
             )
     });

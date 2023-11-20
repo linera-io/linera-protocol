@@ -7,7 +7,7 @@ mod wasm;
 
 use crate::{
     client::{
-        client_test_utils::{FaultType, MakeMemoryStoreClient, StoreBuilder, TestBuilder},
+        client_test_utils::{FaultType, MakeMemoryStore, StoreBuilder, TestBuilder},
         ChainClient, ChainClientError, CommunicateAction,
     },
     local_node::LocalNodeError,
@@ -49,7 +49,7 @@ use crate::client::client_test_utils::MakeScyllaDbStore;
 #[test(tokio::test)]
 pub async fn test_memory_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
 {
-    run_test_initiating_valid_transfer_with_notifications(MakeMemoryStoreClient::default()).await
+    run_test_initiating_valid_transfer_with_notifications(MakeMemoryStore::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -128,7 +128,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_claim_amount() -> Result<(), anyhow::Error> {
-    run_test_claim_amount(MakeMemoryStoreClient::default()).await
+    run_test_claim_amount(MakeMemoryStore::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -218,7 +218,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_rotate_key_pair() -> Result<(), anyhow::Error> {
-    run_test_rotate_key_pair(MakeMemoryStoreClient::default()).await
+    run_test_rotate_key_pair(MakeMemoryStore::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -288,7 +288,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfer_ownership() -> Result<(), anyhow::Error> {
-    run_test_transfer_ownership(MakeMemoryStoreClient::default()).await
+    run_test_transfer_ownership(MakeMemoryStore::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -366,7 +366,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_share_ownership() -> Result<(), anyhow::Error> {
-    run_test_share_ownership(MakeMemoryStoreClient::default()).await
+    run_test_share_ownership(MakeMemoryStore::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -537,7 +537,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_open_chain_then_close_it() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_close_it(MakeMemoryStoreClient::default()).await
+    run_test_open_chain_then_close_it(MakeMemoryStore::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -598,7 +598,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfer_then_open_chain() -> Result<(), anyhow::Error> {
-    run_test_transfer_then_open_chain(MakeMemoryStoreClient::default()).await
+    run_test_transfer_then_open_chain(MakeMemoryStore::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -713,7 +713,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_open_chain_must_be_first() -> Result<(), anyhow::Error> {
-    run_test_open_chain_must_be_first(MakeMemoryStoreClient::default()).await
+    run_test_open_chain_must_be_first(MakeMemoryStore::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -819,7 +819,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_open_chain_then_transfer() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_transfer(MakeMemoryStoreClient::default()).await
+    run_test_open_chain_then_transfer(MakeMemoryStore::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -907,7 +907,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_close_chain() -> Result<(), anyhow::Error> {
-    run_test_close_chain(MakeMemoryStoreClient::default()).await
+    run_test_close_chain(MakeMemoryStore::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -982,7 +982,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer_too_many_faults(MakeMemoryStoreClient::default()).await
+    run_test_initiating_valid_transfer_too_many_faults(MakeMemoryStore::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -1044,7 +1044,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_bidirectional_transfer() -> Result<(), anyhow::Error> {
-    run_test_bidirectional_transfer(MakeMemoryStoreClient::default()).await
+    run_test_bidirectional_transfer(MakeMemoryStore::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -1174,7 +1174,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer(MakeMemoryStoreClient::default()).await
+    run_test_receiving_unconfirmed_transfer(MakeMemoryStore::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -1238,10 +1238,8 @@ where
 #[test(tokio::test)]
 async fn test_memory_receiving_unconfirmed_transfer_with_lagging_sender_balances(
 ) -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-        MakeMemoryStoreClient::default(),
-    )
-    .await
+    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(MakeMemoryStore::default())
+        .await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -1370,7 +1368,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_change_voting_rights() -> Result<(), anyhow::Error> {
-    run_test_change_voting_rights(MakeMemoryStoreClient::default()).await
+    run_test_change_voting_rights(MakeMemoryStore::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -1504,7 +1502,7 @@ where
 
 #[test(tokio::test)]
 pub async fn test_memory_insufficient_balance() -> Result<(), anyhow::Error> {
-    run_test_insufficient_balance(MakeMemoryStoreClient::default()).await
+    run_test_insufficient_balance(MakeMemoryStore::default()).await
 }
 
 async fn run_test_insufficient_balance<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -1534,7 +1532,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_request_leader_timeout() -> Result<(), anyhow::Error> {
-    run_test_request_leader_timeout(MakeMemoryStoreClient::default()).await
+    run_test_request_leader_timeout(MakeMemoryStore::default()).await
 }
 
 #[cfg(feature = "rocksdb")]

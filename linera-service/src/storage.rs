@@ -5,7 +5,7 @@ use crate::config::GenesisConfig;
 use anyhow::{bail, format_err};
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
-use linera_storage::{MemoryStoreClient, Store, WallClock};
+use linera_storage::{MemoryStore, Store, WallClock};
 use linera_views::{common::CommonStoreConfig, memory::MemoryKvStoreConfig, views::ViewError};
 use std::str::FromStr;
 use tracing::error;
@@ -374,7 +374,7 @@ where
 {
     match config {
         FullStorageConfig::Memory(store_config) => {
-            let mut store = MemoryStoreClient::new(
+            let mut store = MemoryStore::new(
                 wasm_runtime,
                 store_config.common_config.max_stream_queries,
                 WallClock,

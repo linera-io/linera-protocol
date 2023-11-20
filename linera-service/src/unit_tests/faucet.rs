@@ -8,14 +8,12 @@ use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::ChainDescription,
 };
-use linera_core::client::client_test_utils::{
-    MakeMemoryStoreClient, StoreBuilder as _, TestBuilder,
-};
+use linera_core::client::client_test_utils::{MakeMemoryStore, StoreBuilder as _, TestBuilder};
 use std::sync::Arc;
 
 #[tokio::test]
 async fn test_faucet_rate_limiting() {
-    let store_builder = MakeMemoryStoreClient::default();
+    let store_builder = MakeMemoryStore::default();
     let clock = store_builder.clock().clone();
     clock.set(Timestamp::from(0));
     let mut builder = TestBuilder::new(store_builder, 4, 1).await.unwrap();

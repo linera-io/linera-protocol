@@ -8,7 +8,7 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use crate::client::client_tests::{MakeMemoryStoreClient, StoreBuilder, TestBuilder};
+use crate::client::client_tests::{MakeMemoryStore, StoreBuilder, TestBuilder};
 use async_graphql::Request;
 use linera_base::{
     data_types::Amount,
@@ -38,7 +38,7 @@ use crate::client::client_tests::MakeScyllaDbStore;
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    run_test_create_application(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
+    run_test_create_application(MakeMemoryStore::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -145,8 +145,7 @@ where
 async fn test_memory_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    run_test_run_application_with_dependency(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime))
-        .await
+    run_test_run_application_with_dependency(MakeMemoryStore::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -287,7 +286,7 @@ where
 async fn test_memory_run_reentrant_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    run_test_run_reentrant_application(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
+    run_test_run_reentrant_application(MakeMemoryStore::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -392,7 +391,7 @@ where
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    run_test_cross_chain_message(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
+    run_test_cross_chain_message(MakeMemoryStore::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -584,7 +583,7 @@ where
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    run_test_user_pub_sub_channels(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
+    run_test_user_pub_sub_channels(MakeMemoryStore::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "rocksdb")]

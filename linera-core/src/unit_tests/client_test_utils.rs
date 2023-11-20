@@ -21,7 +21,7 @@ use linera_execution::{
     policy::ResourceControlPolicy,
     WasmRuntime,
 };
-use linera_storage::{MemoryStoreClient, Store, TestClock};
+use linera_storage::{MemoryStore, Store, TestClock};
 use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -591,17 +591,17 @@ where
 pub static ROCKS_DB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
 
 #[derive(Default)]
-pub struct MakeMemoryStoreClient {
+pub struct MakeMemoryStore {
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
 }
 
 #[async_trait]
-impl StoreBuilder for MakeMemoryStoreClient {
-    type Store = MemoryStoreClient<TestClock>;
+impl StoreBuilder for MakeMemoryStore {
+    type Store = MemoryStore<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
-        Ok(MemoryStoreClient::new(
+        Ok(MemoryStore::new(
             self.wasm_runtime,
             TEST_MEMORY_MAX_STREAM_QUERIES,
             self.clock.clone(),
@@ -613,14 +613,14 @@ impl StoreBuilder for MakeMemoryStoreClient {
     }
 }
 
-impl MakeMemoryStoreClient {
-    /// Creates a [`MakeMemoryStoreClient`] that uses the specified [`WasmRuntime`] to run Wasm
+impl MakeMemoryStore {
+    /// Creates a [`MakeMemoryStore`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        MakeMemoryStoreClient {
+        MakeMemoryStore {
             wasm_runtime: wasm_runtime.into(),
-            ..MakeMemoryStoreClient::default()
+            ..MakeMemoryStore::default()
         }
     }
 }

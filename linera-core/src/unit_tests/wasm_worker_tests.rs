@@ -32,7 +32,7 @@ use linera_execution::{
     GenericApplicationId, Message, Operation, OperationContext, ResourceTracker,
     SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmContract, WasmRuntime,
 };
-use linera_storage::{MemoryStoreClient, Store};
+use linera_storage::{MemoryStore, Store};
 use linera_views::views::{CryptoHashView, ViewError};
 use std::sync::Arc;
 use test_case::test_case;
@@ -52,7 +52,7 @@ use linera_storage::ScyllaDbStore;
 async fn test_memory_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let store = MemoryStoreClient::make_test_store(Some(wasm_runtime)).await;
+    let store = MemoryStore::make_test_store(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(store, wasm_runtime).await
 }
 

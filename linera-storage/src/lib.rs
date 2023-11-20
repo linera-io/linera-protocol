@@ -24,7 +24,7 @@ pub use crate::{
         Clock, DbStore, TestClock, WallClock, READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER,
         WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
     },
-    memory::MemoryStoreClient,
+    memory::MemoryStore,
 };
 
 use async_trait::async_trait;
