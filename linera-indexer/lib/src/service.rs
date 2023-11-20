@@ -21,6 +21,7 @@ use linera_service_graphql_client::{block, chains, notifications, Block, Chains,
 use linera_views::{
     common::KeyValueStoreClient, value_splitting::DatabaseConsistencyError, views::ViewError,
 };
+use std::time::Duration;
 use structopt::StructOpt;
 use tokio::runtime::Handle;
 use tracing::error;
@@ -37,6 +38,13 @@ impl Spawn for TokioSpawner {
 pub enum Protocol {
     Http,
     WebSocket,
+}
+
+fn reqwest_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .unwrap()
 }
 
 #[derive(StructOpt, Debug, Clone)]
@@ -79,7 +87,7 @@ impl Service {
         chain_id: ChainId,
         hash: Option<CryptoHash>,
     ) -> Result<HashedValue, IndexerError> {
-        let client = reqwest::Client::new();
+        let client = reqwest_client();
         let variables = block::Variables { hash, chain_id };
         let response = post_graphql::<Block, _>(&client, &self.http(), variables).await?;
         response
@@ -93,7 +101,7 @@ impl Service {
 
     /// Gets chains
     pub async fn get_chains(&self) -> Result<Vec<ChainId>, IndexerError> {
-        let client = reqwest::Client::new();
+        let client = reqwest_client();
         let variables = chains::Variables;
         let result = post_graphql::<Chains, _>(&client, &self.http(), variables).await?;
         Ok(result

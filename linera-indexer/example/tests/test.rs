@@ -28,6 +28,12 @@ use tracing::{info, warn};
 
 /// A static lock to prevent integration tests from running in parallel.
 static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+fn reqwest_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .unwrap()
+}
 
 async fn run_indexer(tmp_dir: &Arc<TempDir>) -> Child {
     let port = 8081;
@@ -40,7 +46,7 @@ async fn run_indexer(tmp_dir: &Arc<TempDir>) -> Child {
         .kill_on_drop(true)
         .args(["run"]);
     let child = command.spawn().unwrap();
-    let client = reqwest::Client::new();
+    let client = reqwest_client();
     for i in 0..10 {
         tokio::time::sleep(Duration::from_secs(i)).await;
         let request = client
@@ -93,7 +99,7 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
     let mut indexer = run_indexer(&client.tmp_dir).await;
 
     // check operations plugin
-    let req_client = reqwest::Client::new();
+    let req_client = reqwest_client();
     let plugins = request::<Plugins, _>(&req_client, "http://localhost:8081", plugins::Variables)
         .await
         .unwrap()
