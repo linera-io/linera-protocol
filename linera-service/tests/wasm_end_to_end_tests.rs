@@ -190,7 +190,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) {
 
     node_service.ensure_is_running().unwrap();
 
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }
 
@@ -237,7 +237,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 
     node_service.ensure_is_running().unwrap();
 
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }
 
@@ -323,7 +323,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     node_service1.ensure_is_running().unwrap();
     node_service2.ensure_is_running().unwrap();
 
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }
 
@@ -440,7 +440,7 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
     node_service1.ensure_is_running().unwrap();
     node_service2.ensure_is_running().unwrap();
 
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }
 
@@ -520,7 +520,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(config: impl LineraNetConfig)
 
     node_service.ensure_is_running().unwrap();
 
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }
 
@@ -646,7 +646,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
     node_service1.ensure_is_running().unwrap();
     node_service2.ensure_is_running().unwrap();
 
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }
 
@@ -911,7 +911,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     node_service_a.ensure_is_running().unwrap();
     node_service_b.ensure_is_running().unwrap();
 
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }
 
@@ -1231,6 +1231,6 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     node_service0.ensure_is_running().unwrap();
     node_service1.ensure_is_running().unwrap();
 
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }

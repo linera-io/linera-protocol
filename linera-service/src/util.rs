@@ -23,19 +23,12 @@ pub async fn resolve_binary(name: &'static str, package: &'static str) -> Result
     resolve_binary_in_same_directory_as(&current_binary, name, package).await
 }
 
-/// Same as [`resolve_binary`] but gives the option to specify a binary path to use as
-/// reference. The path may be relative or absolute but it must point to a valid file on
-/// disk.
-pub async fn resolve_binary_in_same_directory_as<P: AsRef<Path>>(
-    current_binary: P,
-    name: &'static str,
-    package: &'static str,
-) -> Result<PathBuf> {
-    let current_binary = current_binary.as_ref();
-    debug!(
-        "Resolving binary {name} based on the current binary path: {}",
-        current_binary.display()
-    );
+pub fn current_binary_parent() -> Result<PathBuf> {
+    let current_binary = std::env::current_exe()?;
+    binary_parent(&current_binary)
+}
+
+pub fn binary_parent(current_binary: &Path) -> Result<PathBuf> {
     let mut current_binary_parent = current_binary
         .canonicalize()
         .with_context(|| format!("Failed to canonicalize '{}'", current_binary.display()))?;
@@ -51,6 +44,26 @@ pub async fn resolve_binary_in_same_directory_as<P: AsRef<Path>>(
     } else {
         current_binary_parent
     };
+
+    Ok(current_binary_parent)
+}
+
+/// Same as [`resolve_binary`] but gives the option to specify a binary path to use as
+/// reference. The path may be relative or absolute but it must point to a valid file on
+/// disk.
+pub async fn resolve_binary_in_same_directory_as<P: AsRef<Path>>(
+    current_binary: P,
+    name: &'static str,
+    package: &'static str,
+) -> Result<PathBuf> {
+    let current_binary = current_binary.as_ref();
+    debug!(
+        "Resolving binary {name} based on the current binary path: {}",
+        current_binary.display()
+    );
+
+    let current_binary_parent =
+        binary_parent(current_binary).expect("Fetching binary directory should not fail");
 
     let binary = current_binary_parent.join(name);
     let version = env!("CARGO_PKG_VERSION");

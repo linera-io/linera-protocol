@@ -1,0 +1,265 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use super::{
+    docker::DockerImage, helm::HelmRelease, kind::KindCluster, kubectl::KubectlInstance,
+    util::get_github_root,
+};
+use crate::{
+    cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
+    util::{self, current_binary_parent, CommandExt},
+};
+use anyhow::{anyhow, bail, Result};
+use async_trait::async_trait;
+use k8s_openapi::api::core::v1::Pod;
+use kube::{
+    api::{Api, ListParams},
+    Client,
+};
+use std::{fs, path::PathBuf, sync::Arc};
+use tempfile::{tempdir, TempDir};
+use tokio::process::Command;
+
+/// The information needed to start a [`LocalKubernetesNet`].
+pub struct LocalKubernetesNetConfig {
+    pub network: Network,
+    pub testing_prng_seed: Option<u64>,
+    pub binaries_dir: Option<PathBuf>,
+    pub cluster_id: Option<u32>,
+}
+
+/// A set of Linera validators running locally as native processes.
+pub struct LocalKubernetesNet {
+    network: Network,
+    testing_prng_seed: Option<u64>,
+    next_client_id: usize,
+    tmp_dir: Arc<TempDir>,
+    binaries_dir: Option<PathBuf>,
+    kubectl_instance: KubectlInstance,
+    kind_cluster: KindCluster,
+}
+
+#[async_trait]
+impl LineraNetConfig for LocalKubernetesNetConfig {
+    type Net = LocalKubernetesNet;
+
+    async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
+        let mut net = LocalKubernetesNet::new(
+            self.network,
+            self.testing_prng_seed,
+            self.binaries_dir,
+            KubectlInstance::new(None),
+            KindCluster::new(self.cluster_id).await?,
+        )?;
+        let client = net.make_client();
+        net.generate_initial_validator_config().await.unwrap();
+        client.create_genesis_config().await.unwrap();
+        net.run().await.unwrap();
+        Ok((net, client))
+    }
+}
+
+#[async_trait]
+impl LineraNet for LocalKubernetesNet {
+    async fn ensure_is_running(&mut self) -> Result<()> {
+        let client = Client::try_default().await?;
+        let pods: Api<Pod> = Api::namespaced(client, "default");
+
+        let list_params = ListParams::default().labels("app=proxy");
+        for pod in pods.list(&list_params).await? {
+            if let Some(status) = pod.status {
+                if let Some(phase) = status.phase {
+                    if phase != "Running" {
+                        bail!(
+                            "Validator {} is not Running",
+                            pod.metadata
+                                .name
+                                .expect("Fetching pod name should not fail")
+                        );
+                    }
+                }
+            }
+        }
+
+        let list_params = ListParams::default().labels("app=shards");
+        for pod in pods.list(&list_params).await? {
+            if let Some(status) = pod.status {
+                if let Some(phase) = status.phase {
+                    if phase != "Running" {
+                        bail!(
+                            "Shard {} is not Running",
+                            pod.metadata
+                                .name
+                                .expect("Fetching pod name should not fail")
+                        );
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn make_client(&mut self) -> ClientWrapper {
+        let client = ClientWrapper::new(
+            self.tmp_dir.clone(),
+            self.network,
+            self.testing_prng_seed,
+            self.next_client_id,
+        );
+        if let Some(seed) = self.testing_prng_seed {
+            self.testing_prng_seed = Some(seed + 1);
+        }
+        self.next_client_id += 1;
+        client
+    }
+
+    async fn terminate(mut self) -> Result<()> {
+        let mut port_forward_child = self
+            .kubectl_instance
+            .port_forward_child
+            .expect("Child should be set");
+        port_forward_child.kill().await?;
+
+        self.kind_cluster.delete().await?;
+        Ok(())
+    }
+}
+
+impl LocalKubernetesNet {
+    fn new(
+        network: Network,
+        testing_prng_seed: Option<u64>,
+        binaries_dir: Option<PathBuf>,
+        kubectl_instance: KubectlInstance,
+        kind_cluster: KindCluster,
+    ) -> Result<Self> {
+        Ok(Self {
+            network,
+            testing_prng_seed,
+            next_client_id: 0,
+            tmp_dir: Arc::new(tempdir()?),
+            binaries_dir,
+            kubectl_instance,
+            kind_cluster,
+        })
+    }
+
+    async fn command_for_binary(&self, name: &'static str) -> Result<Command> {
+        let path = util::resolve_binary(name, env!("CARGO_PKG_NAME")).await?;
+        let mut command = Command::new(path);
+        command.current_dir(self.tmp_dir.path());
+        Ok(command)
+    }
+
+    fn configuration_string(&self, server_number: usize) -> Result<String> {
+        let n = server_number;
+        let path = self.tmp_dir.path().join(format!("validator_{n}.toml"));
+        let port = 19100;
+        let internal_port = 20100;
+        let metrics_port = 21100;
+        let mut content = format!(
+            r#"
+                server_config_path = "server_{n}.json"
+                host = "127.0.0.1"
+                port = {port}
+                internal_host = "127.0.0.1"
+                internal_port = {internal_port}
+                metrics_host = "127.0.0.1"
+                metrics_port = {metrics_port}
+                [external_protocol]
+                Grpc = "ClearText"
+                [internal_protocol]
+                Grpc = "ClearText"
+            "#
+        );
+        for k in 0..10 {
+            let shard_port = 19100;
+            let shard_metrics_port = 21100;
+            content.push_str(&format!(
+                r#"
+
+                [[shards]]
+                host = "shards-{k}.shards.default.svc.cluster.local"
+                port = {shard_port}
+                metrics_host = "shards-{k}.shards.default.svc.cluster.local"
+                metrics_port = {shard_metrics_port}
+                "#
+            ));
+        }
+        fs::write(&path, content)?;
+        path.into_os_string().into_string().map_err(|error| {
+            anyhow!(
+                "could not parse OS string into string: {}",
+                error.to_string_lossy()
+            )
+        })
+    }
+
+    async fn generate_initial_validator_config(&mut self) -> Result<()> {
+        let mut command = self.command_for_binary("linera-server").await?;
+        command.arg("generate");
+        if let Some(seed) = self.testing_prng_seed {
+            command.arg("--testing-prng-seed").arg(seed.to_string());
+            self.testing_prng_seed = Some(seed + 1);
+        }
+        command.arg("--validators");
+        command.arg(&self.configuration_string(0)?);
+        command
+            .args(["--committee", "committee.json"])
+            .spawn_and_wait_for_stdout()
+            .await?;
+        Ok(())
+    }
+
+    async fn run(&mut self) -> Result<()> {
+        let binary_parent =
+            current_binary_parent().expect("Fetching current binaries path should not fail");
+        let binaries_path = if let Some(binaries_dir) = &self.binaries_dir {
+            binaries_dir
+        } else {
+            &binary_parent
+        };
+
+        let github_root = get_github_root().await?;
+        // Build Docker image
+        let docker_image = DockerImage::new(
+            String::from("linera-test:latest"),
+            binaries_path,
+            &github_root,
+        )
+        .await?;
+
+        self.kind_cluster
+            .load_docker_image(docker_image.get_name())
+            .await?;
+
+        let base_dir = github_root
+            .join("kubernetes")
+            .join("linera-validator")
+            .join("working");
+        fs::copy(
+            self.tmp_dir.path().join("server_0.json"),
+            base_dir.join("server_0.json"),
+        )?;
+        fs::copy(
+            self.tmp_dir.path().join("genesis.json"),
+            base_dir.join("genesis.json"),
+        )?;
+
+        let helm_release = HelmRelease::new(String::from("linera-core"));
+        helm_release.install(&base_dir, 0, &github_root).await?;
+
+        let output = self.kubectl_instance.get_pods().await?;
+        let validator_pod_name = output
+            .split_whitespace()
+            .find(|&t| t.contains("proxy"))
+            .expect("Getting validator pod name should not fail");
+
+        self.kubectl_instance
+            .port_forward(validator_pod_name, "19100:19100")
+            .await?;
+
+        Ok(())
+    }
+}

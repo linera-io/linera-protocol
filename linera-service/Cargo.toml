@@ -19,6 +19,7 @@ wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb", "linera-storage/rocksdb"]
 aws = ["linera-views/aws", "linera-core/aws", "linera-storage/aws"]
 scylladb = ["linera-views/scylladb", "linera-core/scylladb", "linera-storage/scylladb"]
+kubernetes = ["dep:k8s-openapi", "dep:kube", "dep:pathdiff"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -37,6 +38,8 @@ file-lock = "2.1.10"
 futures = { workspace = true }
 hex = { workspace = true }
 http = { workspace = true }
+k8s-openapi = { workspace = true, optional = true }
+kube = { workspace = true, optional = true }
 linera-base = { workspace = true }
 linera-chain = { workspace = true }
 linera-core = { workspace = true }
@@ -46,7 +49,9 @@ linera-storage = { workspace = true }
 linera-views = { workspace = true }
 once_cell = { workspace = true }
 parse_duration = { workspace = true }
+pathdiff = { workspace = true, optional = true }
 prometheus = { workspace = true }
+rand = { workspace = true }
 rand07 = { workspace = true }
 rcgen = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }

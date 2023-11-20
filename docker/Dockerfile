@@ -98,7 +98,6 @@ RUN mv \
     target/"$target"/release/linera-db \
     ./
 
-
 RUN strip linera linera-proxy linera-server linera-db
 
 # Stage 3.5 - Optionally copy binaries instead of using the build
@@ -116,6 +115,7 @@ FROM builder$copy as binaries
 
 # Stage 4 - Setup running environment for container
 FROM debian:latest
+
 ARG environment
 ARG target
 

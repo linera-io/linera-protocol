@@ -176,7 +176,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
         panic!("Failed to receive new block");
     }
 
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }
 
@@ -263,7 +263,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
         if response1["chain"]["executionState"]["system"]["balance"].as_str() == Some("6.")
             && response2["chain"]["executionState"]["system"]["balance"].as_str() == Some("4.")
         {
-            net.ensure_is_running().unwrap();
+            net.ensure_is_running().await.unwrap();
             net.terminate().await.unwrap();
             return;
         }
@@ -327,7 +327,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetTestingConfig
 
     node_service2.ensure_is_running().unwrap();
 
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }
 
@@ -397,7 +397,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
         Amount::from_tokens(3)
     );
 
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }
 
@@ -470,7 +470,7 @@ async fn test_project_publish(database: Database, network: Network) {
         1
     );
 
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }
 
@@ -560,7 +560,7 @@ async fn test_example_publish(database: Database, network: Network) {
         1
     );
 
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }
 
@@ -651,7 +651,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
         Amount::from_tokens(3)
     );
 
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }
 
@@ -706,7 +706,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
         Amount::from_tokens(4)
     );
 
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }
 
@@ -786,7 +786,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
         .await
         .unwrap();
     assert_eq!(client3.query_balance(chain3).await.unwrap(), Amount::ZERO);
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }
 
@@ -828,6 +828,6 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetTestingConfig) {
     let result = client.retry_pending_block(Some(chain_id)).await;
     assert!(result.unwrap().is_none());
 
-    net.ensure_is_running().unwrap();
+    net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }

@@ -30,12 +30,14 @@ use linera_execution::{
     WithWasmDefault,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
+#[cfg(feature = "kubernetes")]
+use linera_service::cli_wrappers::local_kubernetes_net::LocalKubernetesNetConfig;
 use linera_service::{
     chain_listener::{self, ChainListenerConfig},
     cli_wrappers::{
         self,
         local_net::{Database, LocalNetConfig},
-        LineraNet, LineraNetConfig, Network,
+        ClientWrapper, LineraNet, LineraNetConfig, Network,
     },
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     faucet::FaucetService,
@@ -1136,6 +1138,23 @@ enum NetCommand {
         /// The name for the database table to store the chain data in.
         #[structopt(long, default_value = "table_default")]
         table_name: String,
+
+        /// Start the local network on a local Kubernetes deployment.
+        #[cfg(feature = "kubernetes")]
+        #[structopt(long, short = "k8s")]
+        kubernetes: bool,
+
+        /// Directory where we should grab the binaries to be packaged in the Docker image
+        /// and run inside the Kubernetes deployment.
+        #[cfg(feature = "kubernetes")]
+        #[structopt(long)]
+        binaries_dir: Option<PathBuf>,
+
+        /// Kind name for the cluster that will be created for the Kubernetes deployment.
+        /// Must be a number. If not specified, a random number will be generated.
+        #[cfg(feature = "kubernetes")]
+        #[structopt(long)]
+        cluster_id: Option<u32>,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is
@@ -2018,6 +2037,104 @@ impl Job {
     }
 }
 
+async fn net_up(
+    extra_wallets: &Option<usize>,
+    mut net: impl LineraNet,
+    client1: ClientWrapper,
+) -> Result<(), anyhow::Error> {
+    let default_chain = client1
+        .default_chain()
+        .expect("Initialized clients should always have a default chain");
+
+    // Make time to (hopefully) display the message after the tracing logs.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // Create the wallet for the initial "root" chains.
+    info!("Local test network successfully started.");
+    let suffix = if let Some(extra_wallets) = *extra_wallets {
+        eprintln!(
+            "To use the initial wallet and the extra wallets of this test \
+            network, you may set the environment variables LINERA_WALLET_$N \
+            and LINERA_STORAGE_$N (N = 0..={extra_wallets}) as printed on \
+            the standard output, then use the option `--with-wallet $N` (or \
+            `-w $N` for short) to select a wallet in the linera tool.\n"
+        );
+        "_0"
+    } else {
+        eprintln!(
+            "To use the initial wallet of this test network, you may set \
+            the environment variables LINERA_WALLET and LINERA_STORAGE as follows.\n"
+        );
+        ""
+    };
+    println!(
+        "{}",
+        format!(
+            "export LINERA_WALLET{suffix}=\"{}\"",
+            client1.wallet_path().display()
+        )
+        .bold()
+    );
+    println!(
+        "{}",
+        format!(
+            "export LINERA_STORAGE{suffix}=\"{}\"\n",
+            client1.storage_path()
+        )
+        .bold()
+    );
+
+    // Create the extra wallets.
+    if let Some(extra_wallets) = *extra_wallets {
+        for wallet in 1..=extra_wallets {
+            let extra_wallet = net.make_client();
+            extra_wallet.wallet_init(&[], None).await?;
+            let unassigned_key = extra_wallet.keygen().await?;
+            let new_chain_msg_id = client1
+                .open_chain(default_chain, Some(unassigned_key))
+                .await?
+                .0;
+            extra_wallet
+                .assign(unassigned_key, new_chain_msg_id)
+                .await?;
+            println!(
+                "{}",
+                format!(
+                    "export LINERA_WALLET_{wallet}=\"{}\"",
+                    extra_wallet.wallet_path().display(),
+                )
+                .bold()
+            );
+            println!(
+                "{}",
+                format!(
+                    "export LINERA_STORAGE_{wallet}=\"{}\"\n",
+                    extra_wallet.storage_path(),
+                )
+                .bold()
+            );
+        }
+    }
+
+    eprintln!(
+        "\nREADY!\nPress ^C to terminate the local test network and clean the temporary directory."
+    );
+    let mut sigint = unix::signal(unix::SignalKind::interrupt())?;
+    let mut sigterm = unix::signal(unix::SignalKind::terminate())?;
+    let mut sigpipe = unix::signal(unix::SignalKind::pipe())?;
+    let mut sighup = unix::signal(unix::SignalKind::hangup())?;
+    tokio::select! {
+        _ = sigint.recv() => (),
+        _ = sigterm.recv() => (),
+        _ = sigpipe.recv() => (),
+        _ = sighup.recv() => (),
+    }
+    eprintln!("\nTerminating the local test network...");
+    net.terminate().await?;
+    eprintln!("\nDone.");
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let env_filter = tracing_subscriber::EnvFilter::builder()
@@ -2137,6 +2254,12 @@ async fn main() -> Result<(), anyhow::Error> {
                 shards,
                 testing_prng_seed,
                 table_name,
+                #[cfg(feature = "kubernetes")]
+                kubernetes,
+                #[cfg(feature = "kubernetes")]
+                binaries_dir,
+                #[cfg(feature = "kubernetes")]
+                cluster_id,
             } => {
                 if *validators < 1 {
                     panic!("The local test network must have at least one validator.");
@@ -2144,103 +2267,42 @@ async fn main() -> Result<(), anyhow::Error> {
                 if *shards < 1 {
                     panic!("The local test network must have at least one shard per validator.");
                 }
-                let config = LocalNetConfig {
-                    network: Network::Grpc,
-                    database: Database::RocksDb,
-                    testing_prng_seed: *testing_prng_seed,
-                    table_name: table_name.to_string(),
-                    num_initial_validators: *validators,
-                    num_shards: *shards,
-                };
-                let (mut net, client1) = config.instantiate().await?;
 
-                let default_chain = client1
-                    .default_chain()
-                    .expect("Initialized clients should always have a default chain");
-
-                // Make time to (hopefully) display the message after the tracing logs.
-                tokio::time::sleep(Duration::from_secs(1)).await;
-
-                // Create the wallet for the initial "root" chains.
-                info!("Local test network successfully started.");
-                let suffix = if let Some(extra_wallets) = *extra_wallets {
-                    eprintln!(
-                        "To use the initial wallet and the extra wallets of this test \
-                         network, you may set the environment variables LINERA_WALLET_$N \
-                         and LINERA_STORAGE_$N (N = 0..={extra_wallets}) as printed on \
-                         the standard output, then use the option `--with-wallet $N` (or \
-                         `-w $N` for short) to select a wallet in the linera tool.\n"
-                    );
-                    "_0"
+                #[cfg(feature = "kubernetes")]
+                if *kubernetes {
+                    let config = LocalKubernetesNetConfig {
+                        network: Network::Grpc,
+                        testing_prng_seed: *testing_prng_seed,
+                        binaries_dir: binaries_dir.clone(),
+                        cluster_id: *cluster_id,
+                    };
+                    let (net, client1) = config.instantiate().await?;
+                    Ok(net_up(extra_wallets, net, client1).await?)
                 } else {
-                    eprintln!("To use the initial wallet of this test network, you may set \
-                               the environment variables LINERA_WALLET and LINERA_STORAGE as follows.\n");
-                    ""
-                };
-                println!(
-                    "{}",
-                    format!(
-                        "export LINERA_WALLET{suffix}=\"{}\"",
-                        client1.wallet_path().display()
-                    )
-                    .bold()
-                );
-                println!(
-                    "{}",
-                    format!(
-                        "export LINERA_STORAGE{suffix}=\"{}\"\n",
-                        client1.storage_path()
-                    )
-                    .bold()
-                );
-
-                // Create the extra wallets.
-                if let Some(extra_wallets) = *extra_wallets {
-                    for wallet in 1..=extra_wallets {
-                        let extra_wallet = net.make_client();
-                        extra_wallet.wallet_init(&[], None).await?;
-                        let unassigned_key = extra_wallet.keygen().await?;
-                        let new_chain_msg_id = client1
-                            .open_chain(default_chain, Some(unassigned_key))
-                            .await?
-                            .0;
-                        extra_wallet
-                            .assign(unassigned_key, new_chain_msg_id)
-                            .await?;
-                        println!(
-                            "{}",
-                            format!(
-                                "export LINERA_WALLET_{wallet}=\"{}\"",
-                                extra_wallet.wallet_path().display(),
-                            )
-                            .bold()
-                        );
-                        println!(
-                            "{}",
-                            format!(
-                                "export LINERA_STORAGE_{wallet}=\"{}\"\n",
-                                extra_wallet.storage_path(),
-                            )
-                            .bold()
-                        );
-                    }
+                    let config = LocalNetConfig {
+                        network: Network::Grpc,
+                        database: Database::RocksDb,
+                        testing_prng_seed: *testing_prng_seed,
+                        table_name: table_name.to_string(),
+                        num_initial_validators: *validators,
+                        num_shards: *shards,
+                    };
+                    let (net, client1) = config.instantiate().await?;
+                    Ok(net_up(extra_wallets, net, client1).await?)
                 }
-
-                eprintln!("\nREADY!\nPress ^C to terminate the local test network and clean the temporary directory.");
-                let mut sigint = unix::signal(unix::SignalKind::interrupt())?;
-                let mut sigterm = unix::signal(unix::SignalKind::terminate())?;
-                let mut sigpipe = unix::signal(unix::SignalKind::pipe())?;
-                let mut sighup = unix::signal(unix::SignalKind::hangup())?;
-                tokio::select! {
-                    _ = sigint.recv() => (),
-                    _ = sigterm.recv() => (),
-                    _ = sigpipe.recv() => (),
-                    _ = sighup.recv() => (),
+                #[cfg(not(feature = "kubernetes"))]
+                {
+                    let config = LocalNetConfig {
+                        network: Network::Grpc,
+                        database: Database::RocksDb,
+                        testing_prng_seed: *testing_prng_seed,
+                        table_name: table_name.to_string(),
+                        num_initial_validators: *validators,
+                        num_shards: *shards,
+                    };
+                    let (net, client1) = config.instantiate().await?;
+                    Ok(net_up(extra_wallets, net, client1).await?)
                 }
-                eprintln!("\nTerminating the local test network...");
-                net.terminate().await?;
-                eprintln!("\nDone.");
-                Ok(())
             }
 
             NetCommand::Helper => {
