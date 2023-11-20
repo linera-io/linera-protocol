@@ -3,6 +3,7 @@
 
 use super::js_utils::{getf, js_to_json, setf, SER};
 
+use crate::reqwest_client;
 use serde::Serialize;
 use serde_json::Value;
 use serde_wasm_bindgen::from_value;
@@ -129,7 +130,7 @@ pub async fn query(app: JsValue, query: JsValue, kind: String) {
     let response = forge_response(&query_json["type"]);
     let body =
         serde_json::json!({ "query": format!("{} {{{} {}}}", kind, input, response) }).to_string();
-    let client = reqwest::Client::new();
+    let client = reqwest_client();
     match client.post(&link).body(body).send().await {
         Err(e) => setf(&app, "errors", &JsValue::from_str(&e.to_string())),
         Ok(response) => match response.text().await {

@@ -3,9 +3,10 @@
 
 use anyhow::Result;
 use serde_json::Value;
+use crate::reqwest_client;
 
 pub async fn introspection(url: &str) -> Result<Value> {
-    let client = reqwest::Client::new();
+    let client = reqwest_client();
     let graphql_query =
         "query { \
            __schema { \

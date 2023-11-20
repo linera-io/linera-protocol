@@ -40,7 +40,7 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_wasm_bindgen::from_value;
-use std::str::FromStr;
+use std::{str::FromStr, time::Duration};
 use url::Url;
 use uuid::Uuid;
 use wasm_bindgen::prelude::*;
@@ -48,6 +48,14 @@ use wasm_bindgen_futures::spawn_local;
 use ws_stream_wasm::*;
 
 static WEBSOCKET: OnceCell<WsMeta> = OnceCell::new();
+static DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+
+pub(crate) fn reqwest_client() -> reqwest::Client {
+    reqwest::ClientBuilder::new()
+        .timeout(DEFAULT_TIMEOUT)
+        .build()
+        .unwrap()
+}
 
 /// Page enum containing info for each page.
 #[derive(Serialize, Deserialize, Clone)]
@@ -168,7 +176,7 @@ async fn get_blocks(
     from: Option<CryptoHash>,
     limit: Option<u32>,
 ) -> Result<Vec<Blocks>> {
-    let client = reqwest::Client::new();
+    let client = reqwest_client();
     let variables = blocks::Variables {
         from,
         chain_id,
@@ -180,7 +188,7 @@ async fn get_blocks(
 }
 
 async fn get_applications(node: &str, chain_id: ChainId) -> Result<Vec<Application>> {
-    let client = reqwest::Client::new();
+    let client = reqwest_client();
     let variables = applications::Variables { chain_id };
     Ok(
         request::<gql_service::Applications, _>(&client, node, variables)
@@ -190,7 +198,7 @@ async fn get_applications(node: &str, chain_id: ChainId) -> Result<Vec<Applicati
 }
 
 async fn get_operations(indexer: &str, chain_id: ChainId) -> Result<Vec<Operations>> {
-    let client = reqwest::Client::new();
+    let client = reqwest_client();
     let operations_indexer = format!("{}/operations", indexer);
     let variables = operations::Variables {
         from: OperationsKeyKind::Last(chain_id),
@@ -229,7 +237,7 @@ async fn blocks(
 
 /// Returns the block page.
 async fn block(node: &str, chain_id: ChainId, hash: Option<CryptoHash>) -> Result<(Page, String)> {
-    let client = reqwest::Client::new();
+    let client = reqwest_client();
     let variables = block::Variables { hash, chain_id };
     let block = request::<gql_service::Block, _>(&client, node, variables)
         .await?
@@ -244,7 +252,7 @@ async fn block(node: &str, chain_id: ChainId, hash: Option<CryptoHash>) -> Resul
 
 /// Queries wallet chains.
 async fn chains(app: &JsValue, node: &str) -> Result<ChainId> {
-    let client = reqwest::Client::new();
+    let client = reqwest_client();
     let variables = chains::Variables;
     let chains = request::<Chains, _>(&client, node, variables).await?.chains;
     let chains_js = chains
@@ -260,7 +268,7 @@ async fn chains(app: &JsValue, node: &str) -> Result<ChainId> {
 
 /// Queries indexer plugins.
 async fn plugins(app: &JsValue, indexer: &str) {
-    let client = reqwest::Client::new();
+    let client = reqwest_client();
     let Ok(data) = request::<Plugins, _>(&client, indexer, plugins::Variables).await else {
         return;
     };
@@ -295,7 +303,7 @@ async fn operation(
     key: Option<OperationKey>,
     chain_id: ChainId,
 ) -> Result<(Page, String)> {
-    let client = reqwest::Client::new();
+    let client = reqwest_client();
     let operations_indexer = format!("{}/operations", indexer);
     let key = match key {
         Some(key) => OperationKeyKind::Key(key),
