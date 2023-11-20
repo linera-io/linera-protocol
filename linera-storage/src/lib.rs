@@ -226,35 +226,12 @@ pub trait Store: Sized {
         let Some(wasm_runtime) = self.wasm_runtime() else {
             panic!("A Wasm runtime is required to load user applications.");
         };
-        let UserApplicationDescription {
-            bytecode_id,
-            bytecode_location,
-            ..
-        } = application_description;
-        let value = self
-            .read_value(bytecode_location.certificate_hash)
-            .await
-            .map_err(|error| match error {
-                ViewError::NotFound(_) => ExecutionError::ApplicationBytecodeNotFound(Box::new(
-                    application_description.clone(),
-                )),
-                _ => error.into(),
-            })?
-            .into_inner();
-        let operations = match value {
-            CertificateValue::ConfirmedBlock { executed_block, .. } => {
-                executed_block.block.operations
-            }
-            _ => return Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
+        let SystemOperation::PublishBytecode { contract, .. } =
+            read_publish_bytecode_operation(self, application_description).await?
+        else {
+            unreachable!();
         };
-        let index = usize::try_from(bytecode_location.operation_index)
-            .map_err(|_| linera_base::data_types::ArithmeticError::Overflow)?;
-        match operations.get(index) {
-            Some(Operation::System(SystemOperation::PublishBytecode { contract, .. })) => Ok(
-                Arc::new(WasmContract::new(contract.clone(), wasm_runtime).await?),
-            ),
-            _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
-        }
+        Ok(Arc::new(WasmContract::new(contract, wasm_runtime).await?))
     }
 
     #[cfg(not(any(feature = "wasmer", feature = "wasmtime")))]
@@ -280,35 +257,12 @@ pub trait Store: Sized {
         let Some(wasm_runtime) = self.wasm_runtime() else {
             panic!("A Wasm runtime is required to load user applications.");
         };
-        let UserApplicationDescription {
-            bytecode_id,
-            bytecode_location,
-            ..
-        } = application_description;
-        let value = self
-            .read_value(bytecode_location.certificate_hash)
-            .await
-            .map_err(|error| match error {
-                ViewError::NotFound(_) => ExecutionError::ApplicationBytecodeNotFound(Box::new(
-                    application_description.clone(),
-                )),
-                _ => error.into(),
-            })?
-            .into_inner();
-        let operations = match value {
-            CertificateValue::ConfirmedBlock { executed_block, .. } => {
-                executed_block.block.operations
-            }
-            _ => return Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
+        let SystemOperation::PublishBytecode { service, .. } =
+            read_publish_bytecode_operation(self, application_description).await?
+        else {
+            unreachable!();
         };
-        let index = usize::try_from(bytecode_location.operation_index)
-            .map_err(|_| linera_base::data_types::ArithmeticError::Overflow)?;
-        match operations.get(index) {
-            Some(Operation::System(SystemOperation::PublishBytecode { service, .. })) => Ok(
-                Arc::new(WasmService::new(service.clone(), wasm_runtime).await?),
-            ),
-            _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
-        }
+        Ok(Arc::new(WasmService::new(service, wasm_runtime).await?))
     }
 
     #[cfg(not(any(feature = "wasmer", feature = "wasmtime")))]
@@ -322,6 +276,42 @@ pub trait Store: Sized {
             Please enable the `wasmer` or the `wasmtime` feature flags \
             when compiling `linera-storage`."
         );
+    }
+}
+
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+async fn read_publish_bytecode_operation(
+    store: &impl Store,
+    application_description: &UserApplicationDescription,
+) -> Result<SystemOperation, ExecutionError> {
+    let UserApplicationDescription {
+        bytecode_id,
+        bytecode_location,
+        ..
+    } = application_description;
+    let value = store
+        .read_value(bytecode_location.certificate_hash)
+        .await
+        .map_err(|error| match error {
+            ViewError::NotFound(_) => ExecutionError::ApplicationBytecodeNotFound(Box::new(
+                application_description.clone(),
+            )),
+            _ => error.into(),
+        })?
+        .into_inner();
+    let mut operations = match value {
+        CertificateValue::ConfirmedBlock { executed_block, .. } => executed_block.block.operations,
+        _ => return Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
+    };
+    let index = usize::try_from(bytecode_location.operation_index)
+        .map_err(|_| linera_base::data_types::ArithmeticError::Overflow)?;
+    linera_base::ensure!(
+        index < operations.len(),
+        ExecutionError::InvalidBytecodeId(*bytecode_id)
+    );
+    match operations.swap_remove(index) {
+        Operation::System(operation @ SystemOperation::PublishBytecode { .. }) => Ok(operation),
+        _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
     }
 }
 
