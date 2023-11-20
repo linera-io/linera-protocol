@@ -281,8 +281,8 @@ async fn read_publish_bytecode_operation(
 }
 
 #[derive(Clone)]
-pub struct ChainRuntimeContext<StoreClient> {
-    store: StoreClient,
+pub struct ChainRuntimeContext<S> {
+    store: S,
     pub chain_id: ChainId,
     pub user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     pub user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
@@ -290,9 +290,9 @@ pub struct ChainRuntimeContext<StoreClient> {
 }
 
 #[async_trait]
-impl<StoreClient> ExecutionRuntimeContext for ChainRuntimeContext<StoreClient>
+impl<S> ExecutionRuntimeContext for ChainRuntimeContext<S>
 where
-    StoreClient: Store + Send + Sync,
+    S: Store + Send + Sync,
 {
     fn chain_id(&self) -> ChainId {
         self.chain_id
