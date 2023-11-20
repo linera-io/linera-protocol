@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{DbStore, DbStoreInner};
+use crate::db_store::{DbStore, DbStoreInner};
 use linera_execution::WasmRuntime;
 use linera_views::memory::{create_memory_client_stream_queries, MemoryClient};
 use std::sync::Arc;

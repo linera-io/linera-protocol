@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{DbStore, DbStoreInner, WallClock};
+use crate::db_store::{DbStore, DbStoreInner, WallClock};
 use linera_execution::WasmRuntime;
 use linera_views::{
     common::TableStatus,
@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::TestClock,
+    crate::db_store::TestClock,
     linera_views::{
         dynamo_db::{create_dynamo_db_common_config, LocalStackTestContext},
         test_utils::get_table_name,

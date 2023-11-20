@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{DbStore, DbStoreInner, WallClock};
+use crate::db_store::{DbStore, DbStoreInner, WallClock};
 use linera_execution::WasmRuntime;
 use linera_views::{
     common::TableStatus,
@@ -10,7 +10,10 @@ use linera_views::{
 use std::sync::Arc;
 
 #[cfg(any(test, feature = "test"))]
-use {crate::TestClock, linera_views::rocks_db::create_rocks_db_common_config, tempfile::TempDir};
+use {
+    crate::db_store::TestClock, linera_views::rocks_db::create_rocks_db_common_config,
+    tempfile::TempDir,
+};
 
 #[cfg(test)]
 #[path = "unit_tests/rocks_db.rs"]
