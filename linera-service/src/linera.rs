@@ -45,7 +45,7 @@ use linera_service::{
     project::{self, Project},
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfig},
 };
-use linera_storage::Store;
+use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
 use rand07::Rng;
 use serde_json::Value;
@@ -116,7 +116,7 @@ impl chain_listener::ClientContext<NodeProvider> for ClientContext {
 
     async fn update_wallet<'a, S>(&'a mut self, client: &'a mut ChainClient<NodeProvider, S>)
     where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         self.update_and_save_wallet(client).await;
@@ -291,7 +291,7 @@ impl ClientContext {
     #[cfg(feature = "benchmark")]
     async fn process_inboxes_and_force_validator_updates<S>(&mut self, storage: &S)
     where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         for chain_id in self.wallet_state.own_chain_ids() {
@@ -439,7 +439,7 @@ impl ClientContext {
     async fn update_wallet_from_client<P, S>(&mut self, state: &mut ChainClient<P, S>)
     where
         P: ValidatorNodeProvider + Sync + 'static,
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         self.wallet_state.update_from_state(state).await
@@ -448,7 +448,7 @@ impl ClientContext {
     async fn update_and_save_wallet<P, S>(&mut self, state: &mut ChainClient<P, S>)
     where
         P: ValidatorNodeProvider + Sync + 'static,
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         self.update_wallet_from_client(state).await;
@@ -480,7 +480,7 @@ impl ClientContext {
         storage: S,
         certificates: Vec<Certificate>,
     ) where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         // First instantiate a local node on top of storage.
@@ -505,7 +505,7 @@ impl ClientContext {
 
     async fn ensure_admin_subscription<S>(&mut self, storage: &S) -> Vec<Certificate>
     where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         let mut certificates = Vec::new();
@@ -526,7 +526,7 @@ impl ClientContext {
 
     async fn push_to_all_chains<S>(&mut self, storage: &S, certificate: &Certificate)
     where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         for chain_id in self.wallet_state.own_chain_ids() {
@@ -549,7 +549,7 @@ impl ClientContext {
         service: PathBuf,
     ) -> Result<BytecodeId, anyhow::Error>
     where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         info!("Loading bytecode files...");
@@ -1270,7 +1270,7 @@ impl Runnable for Job {
 
     async fn run<S>(self, storage: S) -> Result<(), anyhow::Error>
     where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         let Job(mut context, command) = self;
@@ -1917,7 +1917,7 @@ impl Job {
         context: &mut ClientContext,
     ) -> anyhow::Result<()>
     where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         let state = WorkerState::new("Local node".to_string(), None, storage)
@@ -1982,7 +1982,7 @@ impl Job {
         context: &ClientContext,
     ) -> anyhow::Result<()>
     where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         let mut chains = HashMap::new();

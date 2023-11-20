@@ -15,7 +15,7 @@ use linera_core::{
     node::ValidatorNodeProvider,
 };
 use linera_execution::ChainOwnership;
-use linera_storage::Store;
+use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde_json::json;
 use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
@@ -78,7 +78,7 @@ impl QueryRoot {
 impl<P, S> MutationRoot<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
@@ -90,7 +90,7 @@ where
 impl<P, S> MutationRoot<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     async fn do_claim(&self, public_key: PublicKey) -> Result<ClaimOutcome, Error> {
@@ -157,7 +157,7 @@ pub struct FaucetService<P, S> {
 impl<P, S> FaucetService<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + Clone + 'static,
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     /// Creates a new instance of the faucet service.

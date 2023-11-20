@@ -5,36 +5,36 @@ use crate::config::GenesisConfig;
 use anyhow::{bail, format_err};
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
-use linera_storage::{MemoryStore, Store, WallClock};
+use linera_storage::{MemoryStorage, Storage, WallClock};
 use linera_views::{common::CommonStoreConfig, memory::MemoryKvStoreConfig, views::ViewError};
 use std::str::FromStr;
 use tracing::error;
 
 #[cfg(feature = "rocksdb")]
 use {
-    linera_storage::RocksDbStore,
+    linera_storage::RocksDbStorage,
     linera_views::rocks_db::{RocksDbClient, RocksDbKvStoreConfig},
     std::path::PathBuf,
 };
 
 #[cfg(feature = "aws")]
 use {
-    linera_storage::DynamoDbStore,
+    linera_storage::DynamoDbStorage,
     linera_views::dynamo_db::{get_config, DynamoDbClient, DynamoDbKvStoreConfig, TableName},
 };
 
 #[cfg(feature = "scylladb")]
 use {
     anyhow::Context,
-    linera_storage::ScyllaDbStore,
+    linera_storage::ScyllaDbStorage,
     linera_views::scylla_db::{ScyllaDbClient, ScyllaDbKvStoreConfig},
     std::num::NonZeroU16,
     tracing::debug,
 };
 
-/// The Full storage input to the constructor of the database client.
+/// The configuration of the key value store in use.
 #[allow(clippy::large_enum_variant)]
-pub enum FullStorageConfig {
+pub enum KvStoreConfig {
     /// The memory key value store
     Memory(MemoryKvStoreConfig),
     /// The RocksDb key value store
@@ -183,20 +183,20 @@ impl StorageConfig {
     pub async fn add_common_config(
         &self,
         common_config: CommonStoreConfig,
-    ) -> Result<FullStorageConfig, anyhow::Error> {
+    ) -> Result<KvStoreConfig, anyhow::Error> {
         match self {
             StorageConfig::Memory => {
-                let store_config = MemoryKvStoreConfig { common_config };
-                Ok(FullStorageConfig::Memory(store_config))
+                let config = MemoryKvStoreConfig { common_config };
+                Ok(KvStoreConfig::Memory(config))
             }
             #[cfg(feature = "rocksdb")]
             StorageConfig::RocksDb { path } => {
                 let path_buf = path.to_path_buf();
-                let store_config = RocksDbKvStoreConfig {
+                let config = RocksDbKvStoreConfig {
                     path_buf,
                     common_config,
                 };
-                Ok(FullStorageConfig::RocksDb(store_config))
+                Ok(KvStoreConfig::RocksDb(config))
             }
             #[cfg(feature = "aws")]
             StorageConfig::DynamoDb {
@@ -204,47 +204,47 @@ impl StorageConfig {
                 use_localstack,
             } => {
                 let aws_config = get_config(*use_localstack).await?;
-                let store_config = DynamoDbKvStoreConfig {
+                let config = DynamoDbKvStoreConfig {
                     config: aws_config,
                     table_name: table.clone(),
                     common_config,
                 };
-                Ok(FullStorageConfig::DynamoDb(store_config))
+                Ok(KvStoreConfig::DynamoDb(config))
             }
             #[cfg(feature = "scylladb")]
             StorageConfig::ScyllaDb { uri, table_name } => {
-                let store_config = ScyllaDbKvStoreConfig {
+                let config = ScyllaDbKvStoreConfig {
                     uri: uri.to_string(),
                     table_name: table_name.to_string(),
                     common_config,
                 };
-                Ok(FullStorageConfig::ScyllaDb(store_config))
+                Ok(KvStoreConfig::ScyllaDb(config))
             }
         }
     }
 }
 
-impl FullStorageConfig {
+impl KvStoreConfig {
     /// Deletes all the entries in the database
     pub async fn delete_all(self) -> Result<(), ViewError> {
         match self {
-            FullStorageConfig::Memory(_) => Err(ViewError::ContextError {
+            KvStoreConfig::Memory(_) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
                 error: "delete_all does not make sense for memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
-            FullStorageConfig::RocksDb(store_config) => {
-                RocksDbClient::delete_all(store_config).await?;
+            KvStoreConfig::RocksDb(config) => {
+                RocksDbClient::delete_all(config).await?;
                 Ok(())
             }
             #[cfg(feature = "aws")]
-            FullStorageConfig::DynamoDb(store_config) => {
-                DynamoDbClient::delete_all(store_config).await?;
+            KvStoreConfig::DynamoDb(config) => {
+                DynamoDbClient::delete_all(config).await?;
                 Ok(())
             }
             #[cfg(feature = "scylladb")]
-            FullStorageConfig::ScyllaDb(store_config) => {
-                ScyllaDbClient::delete_all(store_config).await?;
+            KvStoreConfig::ScyllaDb(config) => {
+                ScyllaDbClient::delete_all(config).await?;
                 Ok(())
             }
         }
@@ -253,23 +253,23 @@ impl FullStorageConfig {
     /// Deletes only one table of the database
     pub async fn delete_single(self) -> Result<(), ViewError> {
         match self {
-            FullStorageConfig::Memory(_) => Err(ViewError::ContextError {
+            KvStoreConfig::Memory(_) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
                 error: "delete_single does not make sense for memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
-            FullStorageConfig::RocksDb(store_config) => {
-                RocksDbClient::delete_single(store_config).await?;
+            KvStoreConfig::RocksDb(config) => {
+                RocksDbClient::delete_single(config).await?;
                 Ok(())
             }
             #[cfg(feature = "aws")]
-            FullStorageConfig::DynamoDb(store_config) => {
-                DynamoDbClient::delete_single(store_config).await?;
+            KvStoreConfig::DynamoDb(config) => {
+                DynamoDbClient::delete_single(config).await?;
                 Ok(())
             }
             #[cfg(feature = "scylladb")]
-            FullStorageConfig::ScyllaDb(store_config) => {
-                ScyllaDbClient::delete_single(store_config).await?;
+            KvStoreConfig::ScyllaDb(config) => {
+                ScyllaDbClient::delete_single(config).await?;
                 Ok(())
             }
         }
@@ -278,45 +278,39 @@ impl FullStorageConfig {
     /// Test existence of one table in the database
     pub async fn test_existence(self) -> Result<bool, ViewError> {
         match self {
-            FullStorageConfig::Memory(_) => Err(ViewError::ContextError {
+            KvStoreConfig::Memory(_) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
                 error: "existence not make sense for memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
-            FullStorageConfig::RocksDb(store_config) => {
-                Ok(RocksDbClient::test_existence(store_config).await?)
-            }
+            KvStoreConfig::RocksDb(config) => Ok(RocksDbClient::test_existence(config).await?),
             #[cfg(feature = "aws")]
-            FullStorageConfig::DynamoDb(store_config) => {
-                Ok(DynamoDbClient::test_existence(store_config).await?)
-            }
+            KvStoreConfig::DynamoDb(config) => Ok(DynamoDbClient::test_existence(config).await?),
             #[cfg(feature = "scylladb")]
-            FullStorageConfig::ScyllaDb(store_config) => {
-                Ok(ScyllaDbClient::test_existence(store_config).await?)
-            }
+            KvStoreConfig::ScyllaDb(config) => Ok(ScyllaDbClient::test_existence(config).await?),
         }
     }
 
     /// Deletes only one table of the database
     pub async fn initialize(self) -> Result<(), ViewError> {
         match self {
-            FullStorageConfig::Memory(_) => Err(ViewError::ContextError {
+            KvStoreConfig::Memory(_) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
                 error: "delete_single does not make sense for memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
-            FullStorageConfig::RocksDb(store_config) => {
-                RocksDbClient::initialize(store_config).await?;
+            KvStoreConfig::RocksDb(config) => {
+                RocksDbClient::initialize(config).await?;
                 Ok(())
             }
             #[cfg(feature = "aws")]
-            FullStorageConfig::DynamoDb(store_config) => {
-                DynamoDbClient::initialize(store_config).await?;
+            KvStoreConfig::DynamoDb(config) => {
+                DynamoDbClient::initialize(config).await?;
                 Ok(())
             }
             #[cfg(feature = "scylladb")]
-            FullStorageConfig::ScyllaDb(store_config) => {
-                ScyllaDbClient::initialize(store_config).await?;
+            KvStoreConfig::ScyllaDb(config) => {
+                ScyllaDbClient::initialize(config).await?;
                 Ok(())
             }
         }
@@ -325,23 +319,23 @@ impl FullStorageConfig {
     /// List all the tables of the database
     pub async fn list_tables(self) -> Result<Vec<String>, ViewError> {
         match self {
-            FullStorageConfig::Memory(_) => Err(ViewError::ContextError {
+            KvStoreConfig::Memory(_) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
                 error: "list_tables is not supported for the memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
-            FullStorageConfig::RocksDb(_) => Err(ViewError::ContextError {
+            KvStoreConfig::RocksDb(_) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
                 error: "list_tables is not currently supported for the RocksDb storage".to_string(),
             }),
             #[cfg(feature = "aws")]
-            FullStorageConfig::DynamoDb(store_config) => {
-                let tables = DynamoDbClient::list_tables(store_config).await?;
+            KvStoreConfig::DynamoDb(config) => {
+                let tables = DynamoDbClient::list_tables(config).await?;
                 Ok(tables)
             }
             #[cfg(feature = "scylladb")]
-            FullStorageConfig::ScyllaDb(store_config) => {
-                let tables = ScyllaDbClient::list_tables(store_config).await?;
+            KvStoreConfig::ScyllaDb(config) => {
+                let tables = ScyllaDbClient::list_tables(config).await?;
                 Ok(tables)
             }
         }
@@ -354,17 +348,17 @@ pub trait Runnable {
 
     async fn run<S>(self, storage: S) -> Result<Self::Output, anyhow::Error>
     where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>;
 }
 
 // The design is that the initialization of the accounts should be separate
 // from the running of the database.
-// However, that does not apply to the memory store which must be initialized
+// However, that does not apply to the memory storage which must be initialized
 // in the same context in which it is used.
 #[allow(unused_variables)]
 pub async fn run_with_storage<Job>(
-    config: FullStorageConfig,
+    config: KvStoreConfig,
     genesis_config: &GenesisConfig,
     wasm_runtime: Option<WasmRuntime>,
     job: Job,
@@ -373,81 +367,75 @@ where
     Job: Runnable,
 {
     match config {
-        FullStorageConfig::Memory(store_config) => {
-            let mut store = MemoryStore::new(
+        KvStoreConfig::Memory(config) => {
+            let mut storage = MemoryStorage::new(
                 wasm_runtime,
-                store_config.common_config.max_stream_queries,
+                config.common_config.max_stream_queries,
                 WallClock,
             );
-            genesis_config.initialize_store(&mut store).await?;
-            job.run(store).await
+            genesis_config.initialize_storage(&mut storage).await?;
+            job.run(storage).await
         }
         #[cfg(feature = "rocksdb")]
-        FullStorageConfig::RocksDb(store_config) => {
-            let (store, table_status) = RocksDbStore::new(store_config, wasm_runtime).await?;
-            job.run(store).await
+        KvStoreConfig::RocksDb(config) => {
+            let (storage, table_status) = RocksDbStorage::new(config, wasm_runtime).await?;
+            job.run(storage).await
         }
         #[cfg(feature = "aws")]
-        FullStorageConfig::DynamoDb(store_config) => {
-            let (store, table_status) = DynamoDbStore::new(store_config, wasm_runtime).await?;
-            job.run(store).await
+        KvStoreConfig::DynamoDb(config) => {
+            let (storage, table_status) = DynamoDbStorage::new(config, wasm_runtime).await?;
+            job.run(storage).await
         }
         #[cfg(feature = "scylladb")]
-        FullStorageConfig::ScyllaDb(store_config) => {
-            let (store, table_status) = ScyllaDbStore::new(store_config, wasm_runtime).await?;
-            job.run(store).await
+        KvStoreConfig::ScyllaDb(config) => {
+            let (storage, table_status) = ScyllaDbStorage::new(config, wasm_runtime).await?;
+            job.run(storage).await
         }
     }
 }
 
 #[allow(unused_variables)]
 pub async fn full_initialize_storage(
-    config: FullStorageConfig,
+    config: KvStoreConfig,
     genesis_config: &GenesisConfig,
 ) -> Result<(), anyhow::Error> {
     match config {
-        FullStorageConfig::Memory(_) => {
+        KvStoreConfig::Memory(_) => {
             bail!("The initialization should not be called for memory");
         }
         #[cfg(feature = "rocksdb")]
-        FullStorageConfig::RocksDb(store_config) => {
+        KvStoreConfig::RocksDb(config) => {
             let wasm_runtime = None;
-            let mut store = RocksDbStore::initialize(store_config, wasm_runtime).await?;
-            genesis_config.initialize_store(&mut store).await
+            let mut storage = RocksDbStorage::initialize(config, wasm_runtime).await?;
+            genesis_config.initialize_storage(&mut storage).await
         }
         #[cfg(feature = "aws")]
-        FullStorageConfig::DynamoDb(store_config) => {
+        KvStoreConfig::DynamoDb(config) => {
             let wasm_runtime = None;
-            let mut store = DynamoDbStore::initialize(store_config, wasm_runtime).await?;
-            genesis_config.initialize_store(&mut store).await
+            let mut storage = DynamoDbStorage::initialize(config, wasm_runtime).await?;
+            genesis_config.initialize_storage(&mut storage).await
         }
         #[cfg(feature = "scylladb")]
-        FullStorageConfig::ScyllaDb(store_config) => {
+        KvStoreConfig::ScyllaDb(config) => {
             let wasm_runtime = None;
-            let mut store = ScyllaDbStore::initialize(store_config, wasm_runtime).await?;
-            genesis_config.initialize_store(&mut store).await
+            let mut storage = ScyllaDbStorage::initialize(config, wasm_runtime).await?;
+            genesis_config.initialize_storage(&mut storage).await
         }
     }
 }
 
 #[allow(unused_variables)]
-pub async fn test_existence_storage(config: FullStorageConfig) -> Result<bool, anyhow::Error> {
+pub async fn test_existence_storage(config: KvStoreConfig) -> Result<bool, anyhow::Error> {
     match config {
-        FullStorageConfig::Memory(_) => {
+        KvStoreConfig::Memory(_) => {
             bail!("The initialization should not be called for memory");
         }
         #[cfg(feature = "rocksdb")]
-        FullStorageConfig::RocksDb(store_config) => {
-            Ok(RocksDbClient::test_existence(store_config).await?)
-        }
+        KvStoreConfig::RocksDb(config) => Ok(RocksDbClient::test_existence(config).await?),
         #[cfg(feature = "aws")]
-        FullStorageConfig::DynamoDb(store_config) => {
-            Ok(DynamoDbClient::test_existence(store_config).await?)
-        }
+        KvStoreConfig::DynamoDb(config) => Ok(DynamoDbClient::test_existence(config).await?),
         #[cfg(feature = "scylladb")]
-        FullStorageConfig::ScyllaDb(store_config) => {
-            Ok(ScyllaDbClient::test_existence(store_config).await?)
-        }
+        KvStoreConfig::ScyllaDb(config) => Ok(ScyllaDbClient::test_existence(config).await?),
     }
 }
 

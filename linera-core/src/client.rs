@@ -41,7 +41,7 @@ use linera_execution::{
     Bytecode, ChainOwnership, Message, Operation, Query, Response, SystemMessage, SystemQuery,
     SystemResponse, UserApplicationId,
 };
-use linera_storage::Store;
+use linera_storage::Storage;
 use linera_views::views::ViewError;
 use lru::LruCache;
 use std::{
@@ -105,17 +105,17 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
 
     /// Creates a new `ChainClient`.
     #[allow(clippy::too_many_arguments)]
-    pub fn build<StorageClient>(
+    pub fn build<Storage>(
         &self,
         chain_id: ChainId,
         known_key_pairs: Vec<KeyPair>,
-        storage: StorageClient,
+        storage: Storage,
         admin_id: ChainId,
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
         pending_block: Option<Block>,
-    ) -> ChainClient<ValidatorNodeProvider, StorageClient> {
+    ) -> ChainClient<ValidatorNodeProvider, Storage> {
         let known_key_pairs = known_key_pairs
             .into_iter()
             .map(|kp| (Owner::from(kp.public()), kp))
@@ -152,7 +152,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
 /// * The chain being operated is called the "local chain" or just the "chain".
 /// * As a rule, operations are considered successful (and communication may stop) when
 /// they succeeded in gathering a quorum of responses.
-pub struct ChainClient<ValidatorNodeProvider, StorageClient> {
+pub struct ChainClient<ValidatorNodeProvider, Storage> {
     /// The off-chain chain id.
     chain_id: ChainId,
     /// How to talk to the validators.
@@ -181,7 +181,7 @@ pub struct ChainClient<ValidatorNodeProvider, StorageClient> {
     cross_chain_retries: usize,
     /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
-    node_client: LocalNodeClient<StorageClient>,
+    node_client: LocalNodeClient<Storage>,
 }
 
 /// Error type for [`ChainClient`].
@@ -271,7 +271,7 @@ enum ReceiveCertificateMode {
 impl<P, S> ChainClient<P, S>
 where
     P: ValidatorNodeProvider + Sync,
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     /// Obtains a `ChainStateView` for a given `ChainId`.
@@ -742,7 +742,7 @@ where
                 let mut updater = ValidatorUpdater {
                     name,
                     node,
-                    store: storage_client.clone(),
+                    storage: storage_client.clone(),
                     delay: cross_chain_delay,
                     retries: cross_chain_retries,
                 };

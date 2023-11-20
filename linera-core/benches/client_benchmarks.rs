@@ -5,11 +5,11 @@ use criterion::{criterion_group, criterion_main, measurement::Measurement, Batch
 use linera_base::{data_types::Amount, identifiers::ChainDescription};
 use linera_core::client::{
     self,
-    client_test_utils::{MakeMemoryStore, NodeProvider, StoreBuilder, TestBuilder},
+    client_test_utils::{MakeMemoryStorage, NodeProvider, StorageBuilder, TestBuilder},
 };
 use linera_execution::system::{Account, Recipient, UserData};
 use linera_storage::{
-    Store, READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
+    Storage, READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
     WRITE_VALUE_COUNTER,
 };
 use linera_views::{views::ViewError, LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER};
@@ -18,24 +18,26 @@ use recorder::BenchRecorderMeasurement;
 use std::time::Duration;
 use tokio::runtime;
 
-type ChainClient<B> =
-    client::ChainClient<NodeProvider<<B as StoreBuilder>::Store>, <B as StoreBuilder>::Store>;
+type ChainClient<B> = client::ChainClient<
+    NodeProvider<<B as StorageBuilder>::Storage>,
+    <B as StorageBuilder>::Storage,
+>;
 
 mod recorder;
 
 /// Creates root chains 1 and 2, the first one with a positive balance.
 pub fn setup_claim_bench<B>() -> (ChainClient<B>, ChainClient<B>)
 where
-    B: StoreBuilder + Default,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder + Default,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let store_builder = B::default();
+    let storage_builder = B::default();
     // Criterion doesn't allow setup functions to be async, but it runs them inside an async
     // context. But our setup uses async functions:
     let handle = runtime::Handle::current();
     let _guard = handle.enter();
     futures::executor::block_on(async move {
-        let mut builder = TestBuilder::new(store_builder, 4, 1).await.unwrap();
+        let mut builder = TestBuilder::new(storage_builder, 4, 1).await.unwrap();
         let chain1 = builder
             .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(10))
             .await
@@ -52,8 +54,8 @@ where
 /// reclaims that amount.
 pub async fn run_claim_bench<B>((mut chain1, mut chain2): (ChainClient<B>, ChainClient<B>))
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     let owner1 = chain1.identity().await.unwrap();
     let amt = Amount::ONE;
@@ -92,8 +94,8 @@ fn criterion_benchmark<M: Measurement + 'static>(c: &mut Criterion<M>) {
     c.bench_function("claim", |b| {
         b.to_async(tokio::runtime::Runtime::new().unwrap())
             .iter_batched(
-                setup_claim_bench::<MakeMemoryStore>,
-                run_claim_bench::<MakeMemoryStore>,
+                setup_claim_bench::<MakeMemoryStorage>,
+                run_claim_bench::<MakeMemoryStorage>,
                 BatchSize::PerIteration,
             )
     });

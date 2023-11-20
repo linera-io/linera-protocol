@@ -20,7 +20,7 @@ use linera_execution::{
     committee::ValidatorName, BytecodeLocation, Query, Response, UserApplicationDescription,
     UserApplicationId,
 };
-use linera_storage::Store;
+use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::prelude::SliceRandom;
 use std::{borrow::Cow, sync::Arc};
@@ -69,7 +69,7 @@ pub enum LocalNodeError {
 
 impl<S> LocalNodeClient<S>
 where
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     pub async fn handle_block_proposal(
@@ -161,7 +161,7 @@ where
 
 impl<S> LocalNodeClient<S>
 where
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     pub(crate) async fn stage_block_execution(

@@ -21,7 +21,7 @@ use linera_core::{
     node::{NodeError, NotificationStream, ValidatorNode},
     worker::{NetworkActions, ValidatorWorker, WorkerError, WorkerState},
 };
-use linera_storage::Store;
+use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::Rng;
 use std::{io, time::Duration};
@@ -74,7 +74,7 @@ impl<S> Server<S> {
 
 impl<S> Server<S>
 where
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     #[allow(clippy::too_many_arguments)]
@@ -183,7 +183,7 @@ struct RunningServerState<S> {
 #[async_trait]
 impl<S> MessageHandler for RunningServerState<S>
 where
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     #[instrument(target = "simple_server", skip_all, fields(nickname = self.server.state.nickname(), chain_id = ?message.target_chain_id()))]

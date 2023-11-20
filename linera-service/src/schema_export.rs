@@ -15,7 +15,7 @@ use linera_service::{
     config::WalletState,
     node_service::NodeService,
 };
-use linera_storage::{MemoryStore, Store, WallClock};
+use linera_storage::{MemoryStorage, Storage, WallClock};
 use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
 use structopt::StructOpt;
 
@@ -101,7 +101,7 @@ impl ClientContext<DummyValidatorNodeProvider> for DummyContext {
         &'a mut self,
         _: &'a mut ChainClient<DummyValidatorNodeProvider, S>,
     ) where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
     }
@@ -110,7 +110,7 @@ impl ClientContext<DummyValidatorNodeProvider> for DummyContext {
 fn main() -> std::io::Result<()> {
     let _options = Options::from_args();
 
-    let store = MemoryStore::new(None, TEST_MEMORY_MAX_STREAM_QUERIES, WallClock);
+    let storage = MemoryStorage::new(None, TEST_MEMORY_MAX_STREAM_QUERIES, WallClock);
     let config = ChainListenerConfig {
         delay_before_ms: 0,
         delay_after_ms: 0,
@@ -120,7 +120,7 @@ fn main() -> std::io::Result<()> {
         config,
         std::num::NonZeroU16::new(8080).unwrap(),
         None,
-        store,
+        storage,
         context,
     );
     let schema = service.schema().sdl();

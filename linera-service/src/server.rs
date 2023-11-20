@@ -24,7 +24,7 @@ use linera_service::{
     prometheus_server,
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfig},
 };
-use linera_storage::Store;
+use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
 use serde::Deserialize;
 use std::{net::SocketAddr, path::PathBuf};
@@ -48,7 +48,7 @@ impl ServerContext {
         storage: S,
     ) -> (WorkerState<S>, ShardId, ShardConfig)
     where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
     {
         let shard = self.server_config.internal_network.shard(shard_id);
         info!("Shard booted on {}", shard.host);
@@ -70,7 +70,7 @@ impl ServerContext {
         protocol: TransportProtocol,
     ) -> Result<(), anyhow::Error>
     where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         let internal_network = self
@@ -118,7 +118,7 @@ impl ServerContext {
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
     ) -> Result<(), anyhow::Error>
     where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         let mut handles = Vec::new();
@@ -176,7 +176,7 @@ impl Runnable for ServerContext {
 
     async fn run<S>(self, storage: S) -> Result<(), anyhow::Error>
     where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         let listen_address = self.get_listen_address();

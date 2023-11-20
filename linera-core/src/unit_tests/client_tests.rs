@@ -7,7 +7,7 @@ mod wasm;
 
 use crate::{
     client::{
-        client_test_utils::{FaultType, MakeMemoryStore, StoreBuilder, TestBuilder},
+        client_test_utils::{FaultType, MakeMemoryStorage, StorageBuilder, TestBuilder},
         ChainClient, ChainClientError, CommunicateAction,
     },
     local_node::LocalNodeError,
@@ -32,55 +32,55 @@ use linera_execution::{
     ChainOwnership, ExecutionError, Message, Operation, SystemExecutionError, SystemMessage,
     SystemQuery, SystemResponse,
 };
-use linera_storage::Store;
+use linera_storage::Storage;
 use linera_views::views::ViewError;
 use std::sync::Arc;
 use test_log::test;
 
 #[cfg(feature = "rocksdb")]
-use crate::client::client_test_utils::{MakeRocksDbStore, ROCKS_DB_SEMAPHORE};
+use crate::client::client_test_utils::{MakeRocksDbStorage, ROCKS_DB_SEMAPHORE};
 
 #[cfg(feature = "aws")]
-use crate::client::client_test_utils::MakeDynamoDbStore;
+use crate::client::client_test_utils::MakeDynamoDbStorage;
 
 #[cfg(feature = "scylladb")]
-use crate::client::client_test_utils::MakeScyllaDbStore;
+use crate::client::client_test_utils::MakeScyllaDbStorage;
 
 #[test(tokio::test)]
 pub async fn test_memory_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
 {
-    run_test_initiating_valid_transfer_with_notifications(MakeMemoryStore::default()).await
+    run_test_initiating_valid_transfer_with_notifications(MakeMemoryStorage::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_initiating_valid_transfer_with_notifications(MakeRocksDbStore::default()).await
+    run_test_initiating_valid_transfer_with_notifications(MakeRocksDbStorage::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
 {
-    run_test_initiating_valid_transfer_with_notifications(MakeDynamoDbStore::default()).await
+    run_test_initiating_valid_transfer_with_notifications(MakeDynamoDbStorage::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
 {
-    run_test_initiating_valid_transfer_with_notifications(MakeScyllaDbStore::default()).await
+    run_test_initiating_valid_transfer_with_notifications(MakeScyllaDbStorage::default()).await
 }
 
 async fn run_test_initiating_valid_transfer_with_notifications<B>(
-    store_builder: B,
+    storage_builder: B,
 ) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_certificate());
     let sender = builder
@@ -128,34 +128,34 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_claim_amount() -> Result<(), anyhow::Error> {
-    run_test_claim_amount(MakeMemoryStore::default()).await
+    run_test_claim_amount(MakeMemoryStorage::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_claim_amount() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_claim_amount(MakeRocksDbStore::default()).await
+    run_test_claim_amount(MakeRocksDbStorage::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_claim_amount() -> Result<(), anyhow::Error> {
-    run_test_claim_amount(MakeDynamoDbStore::default()).await
+    run_test_claim_amount(MakeDynamoDbStorage::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_claim_amount() -> Result<(), anyhow::Error> {
-    run_test_claim_amount(MakeScyllaDbStore::default()).await
+    run_test_claim_amount(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_claim_amount<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_claim_amount<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::only_fuel());
     let mut sender = builder
@@ -218,34 +218,34 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_rotate_key_pair() -> Result<(), anyhow::Error> {
-    run_test_rotate_key_pair(MakeMemoryStore::default()).await
+    run_test_rotate_key_pair(MakeMemoryStorage::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_rotate_key_pair() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_rotate_key_pair(MakeRocksDbStore::default()).await
+    run_test_rotate_key_pair(MakeRocksDbStorage::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_rotate_key_pair() -> Result<(), anyhow::Error> {
-    run_test_rotate_key_pair(MakeDynamoDbStore::default()).await
+    run_test_rotate_key_pair(MakeDynamoDbStorage::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_rotate_key_pair() -> Result<(), anyhow::Error> {
-    run_test_rotate_key_pair(MakeScyllaDbStore::default()).await
+    run_test_rotate_key_pair(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_rotate_key_pair<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_rotate_key_pair<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_certificate());
     let mut sender = builder
@@ -288,34 +288,34 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfer_ownership() -> Result<(), anyhow::Error> {
-    run_test_transfer_ownership(MakeMemoryStore::default()).await
+    run_test_transfer_ownership(MakeMemoryStorage::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_transfer_ownership() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_transfer_ownership(MakeRocksDbStore::default()).await
+    run_test_transfer_ownership(MakeRocksDbStorage::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_transfer_ownership() -> Result<(), anyhow::Error> {
-    run_test_transfer_ownership(MakeDynamoDbStore::default()).await
+    run_test_transfer_ownership(MakeDynamoDbStorage::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_transfer_ownership() -> Result<(), anyhow::Error> {
-    run_test_transfer_ownership(MakeScyllaDbStore::default()).await
+    run_test_transfer_ownership(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_transfer_ownership<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_transfer_ownership<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_certificate());
     let mut sender = builder
@@ -366,34 +366,34 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_share_ownership() -> Result<(), anyhow::Error> {
-    run_test_share_ownership(MakeMemoryStore::default()).await
+    run_test_share_ownership(MakeMemoryStorage::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_share_ownership() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_share_ownership(MakeRocksDbStore::default()).await
+    run_test_share_ownership(MakeRocksDbStorage::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_share_ownership() -> Result<(), anyhow::Error> {
-    run_test_share_ownership(MakeDynamoDbStore::default()).await
+    run_test_share_ownership(MakeDynamoDbStorage::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_share_ownership() -> Result<(), anyhow::Error> {
-    run_test_share_ownership(MakeScyllaDbStore::default()).await
+    run_test_share_ownership(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_share_ownership<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_share_ownership<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 0).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
@@ -537,34 +537,34 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_open_chain_then_close_it() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_close_it(MakeMemoryStore::default()).await
+    run_test_open_chain_then_close_it(MakeMemoryStorage::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_open_chain_then_close_it() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_open_chain_then_close_it(MakeRocksDbStore::default()).await
+    run_test_open_chain_then_close_it(MakeRocksDbStorage::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_open_chain_then_close_it() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_close_it(MakeDynamoDbStore::default()).await
+    run_test_open_chain_then_close_it(MakeDynamoDbStorage::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_open_chain_then_close_it() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_close_it(MakeScyllaDbStore::default()).await
+    run_test_open_chain_then_close_it(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_open_chain_then_close_it<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_open_chain_then_close_it<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
     builder
         .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
@@ -598,34 +598,34 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfer_then_open_chain() -> Result<(), anyhow::Error> {
-    run_test_transfer_then_open_chain(MakeMemoryStore::default()).await
+    run_test_transfer_then_open_chain(MakeMemoryStorage::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_transfer_then_open_chain() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_transfer_then_open_chain(MakeRocksDbStore::default()).await
+    run_test_transfer_then_open_chain(MakeRocksDbStorage::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_transfer_then_open_chain() -> Result<(), anyhow::Error> {
-    run_test_transfer_then_open_chain(MakeDynamoDbStore::default()).await
+    run_test_transfer_then_open_chain(MakeDynamoDbStorage::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_transfer_then_open_chain() -> Result<(), anyhow::Error> {
-    run_test_transfer_then_open_chain(MakeScyllaDbStore::default()).await
+    run_test_transfer_then_open_chain(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_transfer_then_open_chain<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_transfer_then_open_chain<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
     builder
         .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
@@ -713,34 +713,34 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_open_chain_must_be_first() -> Result<(), anyhow::Error> {
-    run_test_open_chain_must_be_first(MakeMemoryStore::default()).await
+    run_test_open_chain_must_be_first(MakeMemoryStorage::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_open_chain_must_be_first() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_open_chain_must_be_first(MakeRocksDbStore::default()).await
+    run_test_open_chain_must_be_first(MakeRocksDbStorage::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_open_chain_must_be_first() -> Result<(), anyhow::Error> {
-    run_test_open_chain_must_be_first(MakeDynamoDbStore::default()).await
+    run_test_open_chain_must_be_first(MakeDynamoDbStorage::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_open_chain_must_be_first() -> Result<(), anyhow::Error> {
-    run_test_open_chain_must_be_first(MakeScyllaDbStore::default()).await
+    run_test_open_chain_must_be_first(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_open_chain_must_be_first<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_open_chain_must_be_first<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
     builder
         .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
@@ -819,34 +819,34 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_open_chain_then_transfer() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_transfer(MakeMemoryStore::default()).await
+    run_test_open_chain_then_transfer(MakeMemoryStorage::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_open_chain_then_transfer() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_open_chain_then_transfer(MakeRocksDbStore::default()).await
+    run_test_open_chain_then_transfer(MakeRocksDbStorage::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_open_chain_then_transfer() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_transfer(MakeDynamoDbStore::default()).await
+    run_test_open_chain_then_transfer(MakeDynamoDbStorage::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_open_chain_then_transfer() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_transfer(MakeScyllaDbStore::default()).await
+    run_test_open_chain_then_transfer(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_open_chain_then_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_open_chain_then_transfer<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
     builder
         .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
@@ -907,34 +907,34 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_close_chain() -> Result<(), anyhow::Error> {
-    run_test_close_chain(MakeMemoryStore::default()).await
+    run_test_close_chain(MakeMemoryStorage::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_close_chain() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_close_chain(MakeRocksDbStore::default()).await
+    run_test_close_chain(MakeRocksDbStorage::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_close_chain() -> Result<(), anyhow::Error> {
-    run_test_close_chain(MakeDynamoDbStore::default()).await
+    run_test_close_chain(MakeDynamoDbStorage::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_close_chain() -> Result<(), anyhow::Error> {
-    run_test_close_chain(MakeScyllaDbStore::default()).await
+    run_test_close_chain(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_close_chain<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_close_chain<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     let mut sender = builder
@@ -982,36 +982,36 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer_too_many_faults(MakeMemoryStore::default()).await
+    run_test_initiating_valid_transfer_too_many_faults(MakeMemoryStorage::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_initiating_valid_transfer_too_many_faults(MakeRocksDbStore::default()).await
+    run_test_initiating_valid_transfer_too_many_faults(MakeRocksDbStorage::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer_too_many_faults(MakeDynamoDbStore::default()).await
+    run_test_initiating_valid_transfer_too_many_faults(MakeDynamoDbStorage::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer_too_many_faults(MakeScyllaDbStore::default()).await
+    run_test_initiating_valid_transfer_too_many_faults(MakeScyllaDbStorage::default()).await
 }
 
 async fn run_test_initiating_valid_transfer_too_many_faults<B>(
-    store_builder: B,
+    storage_builder: B,
 ) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 2).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 2).await?;
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
@@ -1044,34 +1044,34 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_bidirectional_transfer() -> Result<(), anyhow::Error> {
-    run_test_bidirectional_transfer(MakeMemoryStore::default()).await
+    run_test_bidirectional_transfer(MakeMemoryStorage::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_bidirectional_transfer(MakeRocksDbStore::default()).await
+    run_test_bidirectional_transfer(MakeRocksDbStorage::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
-    run_test_bidirectional_transfer(MakeDynamoDbStore::default()).await
+    run_test_bidirectional_transfer(MakeDynamoDbStorage::default()).await
 }
 
 #[cfg(feature = "scylla")]
 #[test(tokio::test)]
 async fn test_scylla_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
-    run_test_bidirectional_transfer(MakeScyllaDbStore::default()).await
+    run_test_bidirectional_transfer(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_bidirectional_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_bidirectional_transfer<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
         .await?;
@@ -1174,34 +1174,34 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer(MakeMemoryStore::default()).await
+    run_test_receiving_unconfirmed_transfer(MakeMemoryStorage::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_receiving_unconfirmed_transfer(MakeRocksDbStore::default()).await
+    run_test_receiving_unconfirmed_transfer(MakeRocksDbStorage::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer(MakeDynamoDbStore::default()).await
+    run_test_receiving_unconfirmed_transfer(MakeDynamoDbStorage::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer(MakeScyllaDbStore::default()).await
+    run_test_receiving_unconfirmed_transfer(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_receiving_unconfirmed_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_receiving_unconfirmed_transfer<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_certificate());
     let mut client1 = builder
@@ -1238,8 +1238,10 @@ where
 #[test(tokio::test)]
 async fn test_memory_receiving_unconfirmed_transfer_with_lagging_sender_balances(
 ) -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(MakeMemoryStore::default())
-        .await
+    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
+        MakeMemoryStorage::default(),
+    )
+    .await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -1248,7 +1250,7 @@ async fn test_rocks_db_receiving_unconfirmed_transfer_with_lagging_sender_balanc
 ) -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
     run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-        MakeRocksDbStore::default(),
+        MakeRocksDbStorage::default(),
     )
     .await
 }
@@ -1258,7 +1260,7 @@ async fn test_rocks_db_receiving_unconfirmed_transfer_with_lagging_sender_balanc
 async fn test_dynamo_db_receiving_unconfirmed_transfer_with_lagging_sender_balances(
 ) -> Result<(), anyhow::Error> {
     run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-        MakeDynamoDbStore::default(),
+        MakeDynamoDbStorage::default(),
     )
     .await
 }
@@ -1268,19 +1270,19 @@ async fn test_dynamo_db_receiving_unconfirmed_transfer_with_lagging_sender_balan
 async fn test_scylla_db_receiving_unconfirmed_transfer_with_lagging_sender_balances(
 ) -> Result<(), anyhow::Error> {
     run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-        MakeScyllaDbStore::default(),
+        MakeScyllaDbStorage::default(),
     )
     .await
 }
 
 async fn run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>(
-    store_builder: B,
+    storage_builder: B,
 ) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
         .await?;
@@ -1368,34 +1370,34 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_change_voting_rights() -> Result<(), anyhow::Error> {
-    run_test_change_voting_rights(MakeMemoryStore::default()).await
+    run_test_change_voting_rights(MakeMemoryStorage::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_change_voting_rights() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_change_voting_rights(MakeRocksDbStore::default()).await
+    run_test_change_voting_rights(MakeRocksDbStorage::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_change_voting_rights() -> Result<(), anyhow::Error> {
-    run_test_change_voting_rights(MakeDynamoDbStore::default()).await
+    run_test_change_voting_rights(MakeDynamoDbStorage::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_change_voting_rights() -> Result<(), anyhow::Error> {
-    run_test_change_voting_rights(MakeScyllaDbStore::default()).await
+    run_test_change_voting_rights(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_change_voting_rights<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_change_voting_rights<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     let mut admin = builder
         .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
         .await?;
@@ -1502,15 +1504,15 @@ where
 
 #[test(tokio::test)]
 pub async fn test_memory_insufficient_balance() -> Result<(), anyhow::Error> {
-    run_test_insufficient_balance(MakeMemoryStore::default()).await
+    run_test_insufficient_balance(MakeMemoryStorage::default()).await
 }
 
-async fn run_test_insufficient_balance<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_insufficient_balance<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_certificate());
     let mut sender = builder
@@ -1532,35 +1534,35 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_request_leader_timeout() -> Result<(), anyhow::Error> {
-    run_test_request_leader_timeout(MakeMemoryStore::default()).await
+    run_test_request_leader_timeout(MakeMemoryStorage::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_request_leader_timeout() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_request_leader_timeout(MakeRocksDbStore::default()).await
+    run_test_request_leader_timeout(MakeRocksDbStorage::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_request_leader_timeout() -> Result<(), anyhow::Error> {
-    run_test_request_leader_timeout(MakeDynamoDbStore::default()).await
+    run_test_request_leader_timeout(MakeDynamoDbStorage::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_request_leader_timeout() -> Result<(), anyhow::Error> {
-    run_test_request_leader_timeout(MakeScyllaDbStore::default()).await
+    run_test_request_leader_timeout(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_request_leader_timeout<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_request_leader_timeout<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let clock = store_builder.clock().clone();
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     let description = ChainDescription::Root(1);
     let chain_id = ChainId::from(description);
     let mut client = builder

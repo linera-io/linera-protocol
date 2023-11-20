@@ -41,7 +41,7 @@ use linera_core::{
     node::{NodeError, NotificationStream, ValidatorNode},
     worker::{NetworkActions, Notification, ValidatorWorker, WorkerError, WorkerState},
 };
-use linera_storage::Store;
+use linera_storage::Storage;
 use linera_views::views::ViewError;
 use once_cell::sync::Lazy;
 use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
@@ -193,7 +193,7 @@ where
 
 impl<S> GrpcServer<S>
 where
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     #[allow(clippy::too_many_arguments)]
@@ -421,7 +421,7 @@ where
 #[tonic::async_trait]
 impl<S> ValidatorWorkerRpc for GrpcServer<S>
 where
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]

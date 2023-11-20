@@ -4,7 +4,7 @@
 //! This module defines the storage abstractions for individual chains and certificates.
 
 mod chain_guards;
-mod db_store;
+mod db_storage;
 #[cfg(feature = "aws")]
 mod dynamo_db;
 mod memory;
@@ -14,17 +14,17 @@ mod rocks_db;
 mod scylla_db;
 
 #[cfg(feature = "aws")]
-pub use crate::dynamo_db::DynamoDbStore;
+pub use crate::dynamo_db::DynamoDbStorage;
 #[cfg(feature = "rocksdb")]
-pub use crate::rocks_db::RocksDbStore;
+pub use crate::rocks_db::RocksDbStorage;
 #[cfg(feature = "scylladb")]
-pub use crate::scylla_db::ScyllaDbStore;
+pub use crate::scylla_db::ScyllaDbStorage;
 pub use crate::{
-    db_store::{
-        Clock, DbStore, TestClock, WallClock, READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER,
+    db_storage::{
+        Clock, DbStorage, TestClock, WallClock, READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER,
         WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
     },
-    memory::MemoryStore,
+    memory::MemoryStorage,
 };
 
 use async_trait::async_trait;
@@ -59,7 +59,7 @@ use {
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
-pub trait Store: Sized {
+pub trait Storage: Sized {
     /// The low-level storage implementation in use.
     type Context: Context<Extra = ChainRuntimeContext<Self>, Error = Self::ContextError>
         + Clone
@@ -248,7 +248,7 @@ pub trait Store: Sized {
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 async fn read_publish_bytecode_operation(
-    store: &impl Store,
+    storage: &impl Storage,
     application_description: &UserApplicationDescription,
 ) -> Result<SystemOperation, ExecutionError> {
     let UserApplicationDescription {
@@ -256,7 +256,7 @@ async fn read_publish_bytecode_operation(
         bytecode_location,
         ..
     } = application_description;
-    let value = store
+    let value = storage
         .read_value(bytecode_location.certificate_hash)
         .await
         .map_err(|error| match error {
@@ -282,7 +282,7 @@ async fn read_publish_bytecode_operation(
 
 #[derive(Clone)]
 pub struct ChainRuntimeContext<S> {
-    store: S,
+    storage: S,
     chain_id: ChainId,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
@@ -292,7 +292,7 @@ pub struct ChainRuntimeContext<S> {
 #[async_trait]
 impl<S> ExecutionRuntimeContext for ChainRuntimeContext<S>
 where
-    S: Store + Send + Sync,
+    S: Storage + Send + Sync,
 {
     fn chain_id(&self) -> ChainId {
         self.chain_id
@@ -313,7 +313,7 @@ where
         match self.user_contracts.entry(description.into()) {
             Entry::Occupied(entry) => Ok(entry.get().clone()),
             Entry::Vacant(entry) => {
-                let contract = self.store.load_contract(description).await?;
+                let contract = self.storage.load_contract(description).await?;
                 entry.insert(contract.clone());
                 Ok(contract)
             }
@@ -327,7 +327,7 @@ where
         match self.user_services.entry(description.into()) {
             Entry::Occupied(entry) => Ok(entry.get().clone()),
             Entry::Vacant(entry) => {
-                let service = self.store.load_service(description).await?;
+                let service = self.storage.load_service(description).await?;
                 entry.insert(service.clone());
                 Ok(service)
             }

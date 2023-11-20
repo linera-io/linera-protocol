@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, LiteVote};
 use linera_execution::committee::{Committee, Epoch, ValidatorName};
-use linera_storage::Store;
+use linera_storage::Storage;
 use linera_views::views::ViewError;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -48,7 +48,7 @@ pub enum CommunicateAction {
 pub struct ValidatorUpdater<A, S> {
     pub name: ValidatorName,
     pub node: A,
-    pub store: S,
+    pub storage: S,
     pub delay: Duration,
     pub retries: usize,
 }
@@ -159,7 +159,7 @@ where
 impl<A, S> ValidatorUpdater<A, S>
 where
     A: ValidatorNode + Clone + Send + Sync + 'static,
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     async fn send_certificate(
@@ -211,7 +211,7 @@ where
                 let blobs = future::join_all(
                     unique_locations
                         .into_iter()
-                        .map(|location| self.store.read_value(location.certificate_hash)),
+                        .map(|location| self.storage.read_value(location.certificate_hash)),
                 )
                 .await
                 .into_iter()
@@ -337,7 +337,7 @@ where
                     response.check(self.name)?;
                     // Obtain the chain description from our local node.
                     let description = *self
-                        .store
+                        .storage
                         .load_chain(chain_id)
                         .await?
                         .execution_state
@@ -376,17 +376,23 @@ where
                 initial_block_height.try_into()?..target_block_height.try_into()?;
             if !range.is_empty() {
                 let keys = {
-                    let chain = self.store.load_chain(chain_id).await?;
+                    let chain = self.storage.load_chain(chain_id).await?;
                     chain.confirmed_log.read(range).await?
                 };
                 // Send the requested certificates in order.
-                let certs = self.store.read_certificates(keys.into_iter()).await?;
+                let certs = self.storage.read_certificates(keys.into_iter()).await?;
                 for cert in certs {
                     self.send_certificate(cert, retryable).await?;
                 }
             }
         }
-        let manager = self.store.load_chain(chain_id).await?.manager.get().clone();
+        let manager = self
+            .storage
+            .load_chain(chain_id)
+            .await?
+            .manager
+            .get()
+            .clone();
         if let Some(cert) = manager.locked {
             if cert.value().is_validated() && cert.value().chain_id() == chain_id {
                 self.send_certificate(cert, false).await?;
@@ -406,7 +412,7 @@ where
     ) -> Result<(), NodeError> {
         let mut info = BTreeMap::new();
         {
-            let chain = self.store.load_chain(chain_id).await?;
+            let chain = self.storage.load_chain(chain_id).await?;
             let origins = chain.inboxes.indices().await?;
             let inboxes = chain.inboxes.try_load_entries(&origins).await?;
             for (origin, inbox) in origins.into_iter().zip(inboxes) {

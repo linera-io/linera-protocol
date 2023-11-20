@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain_guards::ChainGuards, ChainRuntimeContext, Store};
+use crate::{chain_guards::ChainGuards, ChainRuntimeContext, Storage};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{crypto::CryptoHash, data_types::Timestamp, identifiers::ChainId};
@@ -61,8 +61,8 @@ pub static WRITE_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
-/// A store implemented from a [`KeyValueStoreClient`]
-pub struct DbStoreInner<Client> {
+/// A storage implemented from a [`KeyValueStoreClient`]
+pub struct DbStorageInner<Client> {
     client: Client,
     pub(crate) guards: ChainGuards,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
@@ -70,7 +70,7 @@ pub struct DbStoreInner<Client> {
     wasm_runtime: Option<WasmRuntime>,
 }
 
-impl<Client> DbStoreInner<Client> {
+impl<Client> DbStorageInner<Client> {
     pub(crate) fn new(client: Client, wasm_runtime: Option<WasmRuntime>) -> Self {
         Self {
             client,
@@ -82,10 +82,10 @@ impl<Client> DbStoreInner<Client> {
     }
 }
 
-/// A DbStore wrapping with Arc
+/// A DbStorage wrapping with Arc
 #[derive(Clone)]
-pub struct DbStore<Client, Clock> {
-    pub(crate) client: Arc<DbStoreInner<Client>>,
+pub struct DbStorage<Client, Clock> {
+    pub(crate) client: Arc<DbStorageInner<Client>>,
     pub clock: Clock,
 }
 
@@ -145,7 +145,7 @@ impl TestClock {
 }
 
 #[async_trait]
-impl<Client, C> Store for DbStore<Client, C>
+impl<Client, C> Storage for DbStorage<Client, C>
 where
     Client: KeyValueStoreClient + Clone + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
@@ -167,7 +167,7 @@ where
         tracing::trace!("Acquiring lock on {:?}", chain_id);
         let guard = self.client.guards.guard(chain_id).await;
         let runtime_context = ChainRuntimeContext {
-            store: self.clone(),
+            storage: self.clone(),
             chain_id,
             user_contracts: self.client.user_contracts.clone(),
             user_services: self.client.user_services.clone(),
@@ -263,7 +263,7 @@ where
     }
 }
 
-impl<Client, C> DbStore<Client, C>
+impl<Client, C> DbStorage<Client, C>
 where
     Client: KeyValueStoreClient + Clone + Send + Sync + 'static,
     C: Clock,
