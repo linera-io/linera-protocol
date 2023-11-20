@@ -332,10 +332,8 @@ where
             NextLowerKeyIterator::new(&self.deleted_prefixes)
         } else {
             for deleted_prefix in &self.deleted_prefixes {
-                if deleted_prefix.len() >= prefix_len {
-                    if deleted_prefix[0..prefix_len] == prefix {
-                        deleted_prefixes.insert(deleted_prefix[prefix_len..].to_vec());
-                    }
+                if deleted_prefix.len() >= prefix_len && deleted_prefix[0..prefix_len] == prefix {
+                    deleted_prefixes.insert(deleted_prefix[prefix_len..].to_vec());
                 }
             }
             NextLowerKeyIterator::new(&deleted_prefixes)
@@ -402,10 +400,13 @@ where
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
     {
-        self.for_each_key_while(|key| {
-            f(key)?;
-            Ok(true)
-        }, prefix)
+        self.for_each_key_while(
+            |key| {
+                f(key)?;
+                Ok(true)
+            },
+            prefix,
+        )
         .await
     }
 
@@ -426,10 +427,13 @@ where
     pub async fn keys(&self) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut keys = Vec::new();
         let prefix = Vec::new();
-        self.for_each_key(|key| {
-            keys.push(key.to_vec());
-            Ok(())
-        }, prefix)
+        self.for_each_key(
+            |key| {
+                keys.push(key.to_vec());
+                Ok(())
+            },
+            prefix,
+        )
         .await?;
         Ok(keys)
     }
@@ -452,12 +456,15 @@ where
     pub async fn keys_by_prefix(&self, prefix: Vec<u8>) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut keys = Vec::new();
         let prefix_clone = prefix.clone();
-        self.for_each_key(|key| {
-            let mut big_key = prefix.clone();
-            big_key.extend(key);
-            keys.push(big_key);
-            Ok(())
-        }, prefix_clone)
+        self.for_each_key(
+            |key| {
+                let mut big_key = prefix.clone();
+                big_key.extend(key);
+                keys.push(big_key);
+                Ok(())
+            },
+            prefix_clone,
+        )
         .await?;
         Ok(keys)
     }
@@ -479,10 +486,13 @@ where
     pub async fn count(&self) -> Result<usize, ViewError> {
         let mut count = 0;
         let prefix = Vec::new();
-        self.for_each_key(|_key| {
-            count += 1;
-            Ok(())
-        }, prefix)
+        self.for_each_key(
+            |_key| {
+                count += 1;
+                Ok(())
+            },
+            prefix,
+        )
         .await?;
         Ok(count)
     }
@@ -510,7 +520,11 @@ where
     ///   assert_eq!(part_keys.len(), 2);
     /// # })
     /// ```
-    pub async fn for_each_key_value_while<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
+    pub async fn for_each_key_value_while<F>(
+        &self,
+        mut f: F,
+        prefix: Vec<u8>,
+    ) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], &[u8]) -> Result<bool, ViewError> + Send,
     {
@@ -522,10 +536,8 @@ where
             NextLowerKeyIterator::new(&self.deleted_prefixes)
         } else {
             for deleted_prefix in &self.deleted_prefixes {
-                if deleted_prefix.len() >= prefix_len {
-                    if deleted_prefix[0..prefix_len] == prefix {
-                        deleted_prefixes.insert(deleted_prefix[prefix_len..].to_vec());
-                    }
+                if deleted_prefix.len() >= prefix_len && deleted_prefix[0..prefix_len] == prefix {
+                    deleted_prefixes.insert(deleted_prefix[prefix_len..].to_vec());
                 }
             }
             NextLowerKeyIterator::new(&deleted_prefixes)
@@ -599,10 +611,13 @@ where
     where
         F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
     {
-        self.for_each_key_value_while(|key, value| {
-            f(key, value)?;
-            Ok(true)
-        }, prefix)
+        self.for_each_key_value_while(
+            |key, value| {
+                f(key, value)?;
+                Ok(true)
+            },
+            prefix,
+        )
         .await
     }
 
@@ -610,12 +625,15 @@ where
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0;
         let prefix = Vec::new();
-        self.for_each_key_value(|index, value| {
-            count += 1;
-            hasher.update_with_bytes(index)?;
-            hasher.update_with_bytes(value)?;
-            Ok(())
-        }, prefix)
+        self.for_each_key_value(
+            |index, value| {
+                count += 1;
+                hasher.update_with_bytes(index)?;
+                hasher.update_with_bytes(value)?;
+                Ok(())
+            },
+            prefix,
+        )
         .await?;
         hasher.update_with_bcs_bytes(&count)?;
         Ok(hasher.finalize())
@@ -628,7 +646,6 @@ where
     ViewError: From<C::Error>,
     V: Sync + Send + Serialize + DeserializeOwned + 'static,
 {
-
     /// Returns the list of keys and values of the map matching a prefix
     /// in lexicographic order.
     /// ```rust
@@ -643,16 +660,22 @@ where
     ///   assert_eq!(map.key_values_by_prefix(prefix).await.unwrap(), vec![(vec![1,2], String::from("Hello"))]);
     /// # })
     /// ```
-    pub async fn key_values_by_prefix(&self, prefix: Vec<u8>) -> Result<Vec<(Vec<u8>, V)>, ViewError> {
+    pub async fn key_values_by_prefix(
+        &self,
+        prefix: Vec<u8>,
+    ) -> Result<Vec<(Vec<u8>, V)>, ViewError> {
         let mut key_values = Vec::new();
         let prefix_copy = prefix.clone();
-        self.for_each_key_value(|key, value| {
-            let value = bcs::from_bytes(value)?;
-            let mut big_key = prefix.clone();
-            big_key.extend(key);
-            key_values.push((big_key, value));
-            Ok(())
-        }, prefix_copy)
+        self.for_each_key_value(
+            |key, value| {
+                let value = bcs::from_bytes(value)?;
+                let mut big_key = prefix.clone();
+                big_key.extend(key);
+                key_values.push((big_key, value));
+                Ok(())
+            },
+            prefix_copy,
+        )
         .await?;
         Ok(key_values)
     }
@@ -971,10 +994,13 @@ where
     {
         let prefix = Vec::new();
         self.map
-            .for_each_key_while(|key| {
-                let index = C::deserialize_value(key)?;
-                f(index)
-            }, prefix)
+            .for_each_key_while(
+                |key| {
+                    let index = C::deserialize_value(key)?;
+                    f(index)
+                },
+                prefix,
+            )
             .await?;
         Ok(())
     }
@@ -1003,10 +1029,13 @@ where
     {
         let prefix = Vec::new();
         self.map
-            .for_each_key(|key| {
-                let index = C::deserialize_value(key)?;
-                f(index)
-            }, prefix)
+            .for_each_key(
+                |key| {
+                    let index = C::deserialize_value(key)?;
+                    f(index)
+                },
+                prefix,
+            )
             .await?;
         Ok(())
     }
@@ -1038,11 +1067,14 @@ where
     {
         let prefix = Vec::new();
         self.map
-            .for_each_key_value_while(|key, bytes| {
-                let index = C::deserialize_value(key)?;
-                let value = C::deserialize_value(bytes)?;
-                f(index, value)
-            }, prefix)
+            .for_each_key_value_while(
+                |key, bytes| {
+                    let index = C::deserialize_value(key)?;
+                    let value = C::deserialize_value(bytes)?;
+                    f(index, value)
+                },
+                prefix,
+            )
             .await?;
         Ok(())
     }
@@ -1071,11 +1103,14 @@ where
     {
         let prefix = Vec::new();
         self.map
-            .for_each_key_value(|key, bytes| {
-                let index = C::deserialize_value(key)?;
-                let value = C::deserialize_value(bytes)?;
-                f(index, value)
-            }, prefix)
+            .for_each_key_value(
+                |key, bytes| {
+                    let index = C::deserialize_value(key)?;
+                    let value = C::deserialize_value(bytes)?;
+                    f(index, value)
+                },
+                prefix,
+            )
             .await?;
         Ok(())
     }
@@ -1340,10 +1375,13 @@ where
     {
         let prefix = Vec::new();
         self.map
-            .for_each_key_while(|key| {
-                let index = I::from_custom_bytes(key)?;
-                f(index)
-            }, prefix)
+            .for_each_key_while(
+                |key| {
+                    let index = I::from_custom_bytes(key)?;
+                    f(index)
+                },
+                prefix,
+            )
             .await?;
         Ok(())
     }
@@ -1373,10 +1411,13 @@ where
     {
         let prefix = Vec::new();
         self.map
-            .for_each_key(|key| {
-                let index = I::from_custom_bytes(key)?;
-                f(index)
-            }, prefix)
+            .for_each_key(
+                |key| {
+                    let index = I::from_custom_bytes(key)?;
+                    f(index)
+                },
+                prefix,
+            )
             .await?;
         Ok(())
     }
@@ -1407,11 +1448,14 @@ where
     {
         let prefix = Vec::new();
         self.map
-            .for_each_key_value_while(|key, bytes| {
-                let index = I::from_custom_bytes(key)?;
-                let value = C::deserialize_value(bytes)?;
-                f(index, value)
-            }, prefix)
+            .for_each_key_value_while(
+                |key, bytes| {
+                    let index = I::from_custom_bytes(key)?;
+                    let value = C::deserialize_value(bytes)?;
+                    f(index, value)
+                },
+                prefix,
+            )
             .await?;
         Ok(())
     }
@@ -1441,11 +1485,14 @@ where
     {
         let prefix = Vec::new();
         self.map
-            .for_each_key_value(|key, bytes| {
-                let index = I::from_custom_bytes(key)?;
-                let value = C::deserialize_value(bytes)?;
-                f(index, value)
-            }, prefix)
+            .for_each_key_value(
+                |key, bytes| {
+                    let index = I::from_custom_bytes(key)?;
+                    let value = C::deserialize_value(bytes)?;
+                    f(index, value)
+                },
+                prefix,
+            )
             .await?;
         Ok(())
     }

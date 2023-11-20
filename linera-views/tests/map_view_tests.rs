@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    memory::create_memory_context,
+    common::get_interval,
     map_view::ByteMapView,
+    memory::create_memory_context,
     views::{CryptoHashRootView, RootView, View},
 };
 use rand::{Rng, SeedableRng};
 use std::collections::BTreeMap;
-use linera_views::common::get_interval;
 
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {
@@ -25,7 +25,7 @@ fn remove_by_prefix<V>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8>) {
     }
 }
 
-fn convert_map<V>(map: BTreeMap<Vec<u8>,V>) -> Vec<(Vec<u8>, V)> {
+fn convert_map<V>(map: BTreeMap<Vec<u8>, V>) -> Vec<(Vec<u8>, V)> {
     let mut vec = Vec::new();
     for (key, value) in map {
         vec.push((key, value));
@@ -73,7 +73,6 @@ async fn map_view_mutability_check() {
                     let n_remove = rng.gen_range(0..count);
                     for _ in 0..n_remove {
                         let pos = rng.gen_range(0..count);
-                        println!("|new_state_vec|={} pos={}", new_state_vec.len(), pos);
                         let vec = new_state_vec[pos].clone();
                         view.map.remove(vec.0.clone());
                         new_state_map.remove(&vec.0);
@@ -98,21 +97,15 @@ async fn map_view_mutability_check() {
                 new_state_map = state_map.clone();
             }
             new_state_vec = convert_map(new_state_map.clone());
-            println!("= = = = = = = = = = = = = = = = = = = = = = = = =");
             let new_key_values = view.map.key_values().await.unwrap();
             assert_eq!(new_state_vec, new_key_values);
-            println!("new_state_vec={:?}", new_state_vec);
             for u in 0..4 {
-                println!("-------------------------");
-                println!("u={}", u);
                 let part_state_vec = new_state_vec
                     .iter()
-                    .filter(|&x| (*x).0[0] == u)
-                    .map(|x| x.clone())
+                    .filter(|&x| x.0[0] == u)
+                    .cloned()
                     .collect::<Vec<_>>();
                 let part_key_values = view.map.key_values_by_prefix(vec![u]).await.unwrap();
-                println!("part_state_vec={:?}", part_state_vec);
-                println!("part_key_values={:?}", part_key_values);
                 assert_eq!(part_state_vec, part_key_values);
             }
         }
