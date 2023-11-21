@@ -8,6 +8,7 @@ use linera_views::{
 };
 use rand::{Rng, SeedableRng};
 use std::collections::BTreeMap;
+use rand::distributions::Uniform;
 
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {
@@ -42,26 +43,20 @@ async fn map_view_mutability_check() {
                 let n_ins = rng.gen_range(0..10);
                 for _ in 0..n_ins {
                     let len = rng.gen_range(1..6);
-                    let mut key = Vec::new();
-                    for _ in 0..len {
-                        let val = rng.gen_range(0..4) as u8;
-                        key.push(val);
-                    }
+                    let key = rng.clone().sample_iter(Uniform::from(0..4)).take(len).collect::<Vec<_>>();
                     let value = rng.gen::<u8>();
                     view.map.insert(key.clone(), value);
                     new_state_map.insert(key, value);
                 }
             }
-            if thr == 1 {
+            if thr == 1 && count > 0 {
                 // deleting some entries
-                if count > 0 {
-                    let n_remove = rng.gen_range(0..count);
-                    for _ in 0..n_remove {
-                        let pos = rng.gen_range(0..count);
-                        let vec = new_state_vec[pos].clone();
-                        view.map.remove(vec.0.clone());
-                        new_state_map.remove(&vec.0);
-                    }
+                let n_remove = rng.gen_range(0..count);
+                for _ in 0..n_remove {
+                    let pos = rng.gen_range(0..count);
+                    let vec = new_state_vec[pos].clone();
+                    view.map.remove(vec.0.clone());
+                    new_state_map.remove(&vec.0);
                 }
             }
             if thr == 2 && count > 0 {

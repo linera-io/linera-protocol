@@ -325,8 +325,6 @@ where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
         let prefix_len = prefix.len();
-        let mut updates = self.updates.range(get_interval(prefix.clone()));
-        let mut update = updates.next();
         let mut deleted_prefixes = BTreeSet::new();
         let mut lower_bound = if prefix_len == 0 {
             GreatestLowerBoundIterator::new(&self.deleted_prefixes)
@@ -338,6 +336,8 @@ where
             }
             GreatestLowerBoundIterator::new(&deleted_prefixes)
         };
+        let mut updates = self.updates.range(get_interval(prefix.clone()));
+        let mut update = updates.next();
         if !self.was_cleared {
             let base = self.context.base_tag_index(KeyTag::Index as u8, &prefix);
             for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
@@ -529,8 +529,6 @@ where
         F: FnMut(&[u8], &[u8]) -> Result<bool, ViewError> + Send,
     {
         let prefix_len = prefix.len();
-        let mut updates = self.updates.range(get_interval(prefix.clone()));
-        let mut update = updates.next();
         let mut deleted_prefixes = BTreeSet::new();
         let mut lower_bound = if prefix_len == 0 {
             GreatestLowerBoundIterator::new(&self.deleted_prefixes)
@@ -542,6 +540,8 @@ where
             }
             GreatestLowerBoundIterator::new(&deleted_prefixes)
         };
+        let mut updates = self.updates.range(get_interval(prefix.clone()));
+        let mut update = updates.next();
         if !self.was_cleared {
             let base = self.context.base_tag_index(KeyTag::Index as u8, &prefix);
             for entry in self
