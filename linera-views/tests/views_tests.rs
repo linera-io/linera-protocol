@@ -1041,8 +1041,14 @@ async fn compute_hash_view_iter<R: RngCore>(rng: &mut R, n: usize, k: usize) {
             .push(compute_hash_ordered_view(rng, &mut store3, key_value_vector.clone()).await);
     }
     for i in 1..n_iter {
-        assert_eq!(unord1_hashes.first().unwrap(), unord1_hashes.get(i).unwrap());
-        assert_eq!(unord2_hashes.first().unwrap(), unord2_hashes.get(i).unwrap());
+        assert_eq!(
+            unord1_hashes.first().unwrap(),
+            unord1_hashes.get(i).unwrap(),
+        );
+        assert_eq!(
+            unord2_hashes.first().unwrap(),
+            unord2_hashes.get(i).unwrap(),
+        );
         assert_eq!(ord_hashes.first().unwrap(), ord_hashes.get(i).unwrap());
     }
 }
