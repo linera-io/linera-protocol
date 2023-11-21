@@ -197,8 +197,8 @@ where
                 }
             }
             tracker.insert(notification);
-            let mut context_guard = context.lock().await;
-            context_guard.update_wallet(&mut *client.lock().await).await;
+            let mut client_guard = client.lock().await;
+            context.lock().await.update_wallet(&mut *client_guard).await;
         }
         Ok(())
     }
