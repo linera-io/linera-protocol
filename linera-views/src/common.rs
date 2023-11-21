@@ -129,7 +129,7 @@ where
 /// The function call `get_lower_bound(val)` returns a `Some(x)` where `x` is the highest
 /// entry such that `x <= val`. If none exists then None is returned.
 ///
-/// The function calls `get_lower_bound` have to be called with increasing
+/// The function calls `is_index_absent` have to be done with increasing
 /// values in order to get correct results.
 pub(crate) struct GreatestLowerBoundIterator<'a, IT> {
     prefix_len: usize,
@@ -148,14 +148,26 @@ where
         Self { prefix_len, prec1, prec2, iter }
     }
 
-    fn get_lower_bound(&mut self, val: Vec<u8>) -> Option<&'a Vec<u8>> {
+    fn compar(&self, x: &'a Vec<u8>, val: &[u8]) -> bool {
+        let len1 = x.len() - self.prefix_len;
+        let len2 = val.len();
+        let min_len = len1.min(len2);
+        for u in 0..min_len {
+            if x[self.prefix_len + u] > val[u] {
+                return true;
+            }
+        }
+        len1 > len2
+    }
+
+    fn get_lower_bound(&mut self, val: &[u8]) -> Option<&'a Vec<u8>> {
         loop {
             match &self.prec2 {
                 None => {
                     return self.prec1.clone();
                 }
                 Some(x) => {
-                    if (*x)[self.prefix_len..] > val[self.prefix_len..] {
+                    if self.compar(x, val) {
                         return self.prec1.clone();
                     }
                 }
@@ -166,21 +178,18 @@ where
     }
 
     pub(crate) fn is_index_absent(&mut self, index: &[u8]) -> bool {
-        let lower_bound = self.get_lower_bound(index.to_vec());
+        let lower_bound = self.get_lower_bound(index);
         match lower_bound {
             None => true,
             Some(key_prefix) => {
-                if key_prefix.len() > index.len() {
-                    return true;
-                }
-                index[0..key_prefix.len()].to_vec() != key_prefix[self.prefix_len..].to_vec()
+                !index.starts_with(&key_prefix[self.prefix_len..])
             }
         }
     }
 }
 
 #[test]
-fn test_lower_bound() {
+fn lower_bound_test1_the_lower_bound() {
     let mut set = BTreeSet::<Vec<u8>>::new();
     set.insert(vec!(4));
     set.insert(vec!(7));
@@ -190,13 +199,47 @@ fn test_lower_bound() {
     set.insert(vec!(40));
 
     let mut lower_bound = GreatestLowerBoundIterator::new(0, set.iter());
-    assert_eq!(lower_bound.get_lower_bound(vec!(3)), None);
-    assert_eq!(lower_bound.get_lower_bound(vec!(15)), Some(vec!(10)).as_ref());
-    assert_eq!(lower_bound.get_lower_bound(vec!(17)), Some(vec!(10)).as_ref());
-    assert_eq!(lower_bound.get_lower_bound(vec!(25)), Some(vec!(24)).as_ref());
-    assert_eq!(lower_bound.get_lower_bound(vec!(27)), Some(vec!(24)).as_ref());
-    assert_eq!(lower_bound.get_lower_bound(vec!(42)), Some(vec!(40)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(&vec!(3)), None);
+    assert_eq!(lower_bound.get_lower_bound(&vec!(15)), Some(vec!(10)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(&vec!(17)), Some(vec!(10)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(&vec!(25)), Some(vec!(24)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(&vec!(27)), Some(vec!(24)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(&vec!(42)), Some(vec!(40)).as_ref());
 }
+
+#[test]
+fn lower_bound_test2_is_index_absent() {
+    let mut set = BTreeSet::<Vec<u8>>::new();
+    set.insert(vec!(4));
+    set.insert(vec!(0, 3));
+    set.insert(vec!(5));
+
+    let mut lower_bound = GreatestLowerBoundIterator::new(0, set.iter());
+    assert!(lower_bound.is_index_absent(&vec!(0)));
+    assert!(!lower_bound.is_index_absent(&vec!(0,3)));
+    assert!(!lower_bound.is_index_absent(&vec!(0,3,4)));
+    assert!(lower_bound.is_index_absent(&vec!(1)));
+    assert!(!lower_bound.is_index_absent(&vec!(4)));
+}
+
+#[test]
+fn lower_bound_test3_is_index_absent_prefix_len() {
+    let mut set = BTreeSet::<Vec<u8>>::new();
+    set.insert(vec!(0, 4));
+    set.insert(vec!(0, 3));
+    set.insert(vec!(0, 0, 1));
+
+    let mut lower_bound = GreatestLowerBoundIterator::new(1, set.iter());
+    assert!(lower_bound.is_index_absent(&vec!(0)));
+    assert!(!lower_bound.is_index_absent(&vec!(0, 1)));
+    assert!(!lower_bound.is_index_absent(&vec!(0, 1, 4)));
+    assert!(!lower_bound.is_index_absent(&vec!(3)));
+    assert!(lower_bound.is_index_absent(&vec!(5)));
+}
+
+
+
+
 
 /// How to iterate over the keys returned by a search query.
 pub trait KeyIterable<Error> {
