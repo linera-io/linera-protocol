@@ -4,8 +4,8 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_interval, get_upper_bound, Context, HasherOutput, KeyIterable, KeyValueIterable,
-        GreatestLowerBoundIterator, Update, MIN_VIEW_TAG,
+        get_interval, get_upper_bound, Context, GreatestLowerBoundIterator, HasherOutput,
+        KeyIterable, KeyValueIterable, Update, MIN_VIEW_TAG,
     },
     views::{HashableView, Hasher, View, ViewError},
 };

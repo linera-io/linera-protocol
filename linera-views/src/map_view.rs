@@ -19,8 +19,8 @@
 use crate::{
     batch::Batch,
     common::{
-        get_interval, Context, CustomSerialize, HasherOutput, KeyIterable, KeyValueIterable,
-        GreatestLowerBoundIterator, Update, MIN_VIEW_TAG,
+        get_interval, Context, CustomSerialize, GreatestLowerBoundIterator, HasherOutput,
+        KeyIterable, KeyValueIterable, Update, MIN_VIEW_TAG,
     },
     views::{HashableView, Hasher, View, ViewError},
 };

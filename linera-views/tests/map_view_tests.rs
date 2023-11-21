@@ -6,9 +6,8 @@ use linera_views::{
     memory::create_memory_context,
     views::{CryptoHashRootView, RootView, View},
 };
-use rand::{Rng, SeedableRng};
+use rand::{distributions::Uniform, Rng, SeedableRng};
 use std::collections::BTreeMap;
-use rand::distributions::Uniform;
 
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {
@@ -43,7 +42,11 @@ async fn map_view_mutability_check() {
                 let n_ins = rng.gen_range(0..10);
                 for _ in 0..n_ins {
                     let len = rng.gen_range(1..6);
-                    let key = rng.clone().sample_iter(Uniform::from(0..4)).take(len).collect::<Vec<_>>();
+                    let key = rng
+                        .clone()
+                        .sample_iter(Uniform::from(0..4))
+                        .take(len)
+                        .collect::<Vec<_>>();
                     let value = rng.gen::<u8>();
                     view.map.insert(key.clone(), value);
                     new_state_map.insert(key, value);
