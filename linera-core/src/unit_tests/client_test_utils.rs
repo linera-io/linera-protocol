@@ -21,7 +21,7 @@ use linera_execution::{
     policy::ResourceControlPolicy,
     WasmRuntime,
 };
-use linera_storage::{MemoryStoreClient, Store, TestClock};
+use linera_storage::{MemoryStorage, Storage, TestClock};
 use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -34,20 +34,20 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 #[cfg(feature = "rocksdb")]
 use {
-    linera_storage::RocksDbStore, linera_views::rocks_db::create_rocks_db_common_config,
+    linera_storage::RocksDbStorage, linera_views::rocks_db::create_rocks_db_common_config,
     linera_views::rocks_db::RocksDbKvStoreConfig, tokio::sync::Semaphore,
 };
 
 #[cfg(feature = "aws")]
 use {
-    linera_storage::DynamoDbStore,
+    linera_storage::DynamoDbStorage,
     linera_views::dynamo_db::DynamoDbKvStoreConfig,
     linera_views::dynamo_db::{create_dynamo_db_common_config, LocalStackTestContext},
 };
 
 #[cfg(feature = "scylladb")]
 use {
-    linera_storage::ScyllaDbStore, linera_views::scylla_db::create_scylla_db_common_config,
+    linera_storage::ScyllaDbStorage, linera_views::scylla_db::create_scylla_db_common_config,
     linera_views::scylla_db::ScyllaDbKvStoreConfig,
 };
 
@@ -84,7 +84,7 @@ pub struct LocalValidatorClient<S> {
 #[async_trait]
 impl<S> ValidatorNode for LocalValidatorClient<S>
 where
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     async fn handle_block_proposal(
@@ -137,7 +137,7 @@ where
 
 impl<S> LocalValidatorClient<S>
 where
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     fn new(name: ValidatorName, state: WorkerState<S>) -> Self {
@@ -267,7 +267,7 @@ pub struct NodeProvider<S>(BTreeMap<ValidatorName, Arc<Mutex<LocalValidator<S>>>
 
 impl<S> ValidatorNodeProvider for NodeProvider<S>
 where
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     type Node = LocalValidatorClient<S>;
@@ -301,27 +301,27 @@ impl<S> FromIterator<LocalValidatorClient<S>> for NodeProvider<S> {
 // * When using `LocalValidatorClient`, clients communicate with an exact quorum then stop.
 // * Most tests have 1 faulty validator out 4 so that there is exactly only 1 quorum to
 // communicate with.
-pub struct TestBuilder<B: StoreBuilder> {
-    store_builder: B,
+pub struct TestBuilder<B: StorageBuilder> {
+    storage_builder: B,
     pub initial_committee: Committee,
     admin_id: ChainId,
-    genesis_store_builder: GenesisStoreBuilder,
-    validator_clients: Vec<LocalValidatorClient<B::Store>>,
-    validator_stores: HashMap<ValidatorName, B::Store>,
-    chain_client_stores: Vec<B::Store>,
+    genesis_storage_builder: GenesisStorageBuilder,
+    validator_clients: Vec<LocalValidatorClient<B::Storage>>,
+    validator_storages: HashMap<ValidatorName, B::Storage>,
+    chain_client_storages: Vec<B::Storage>,
 }
 
 #[async_trait]
-pub trait StoreBuilder {
-    type Store: Store + Clone + Send + Sync + 'static;
+pub trait StorageBuilder {
+    type Storage: Storage + Clone + Send + Sync + 'static;
 
-    async fn build(&mut self) -> Result<Self::Store, anyhow::Error>;
+    async fn build(&mut self) -> Result<Self::Storage, anyhow::Error>;
 
     fn clock(&self) -> &TestClock;
 }
 
 #[derive(Default)]
-struct GenesisStoreBuilder {
+struct GenesisStorageBuilder {
     accounts: Vec<GenesisAccount>,
 }
 
@@ -331,7 +331,7 @@ struct GenesisAccount {
     balance: Amount,
 }
 
-impl GenesisStoreBuilder {
+impl GenesisStorageBuilder {
     fn add(&mut self, description: ChainDescription, public_key: PublicKey, balance: Amount) {
         self.accounts.push(GenesisAccount {
             description,
@@ -340,13 +340,13 @@ impl GenesisStoreBuilder {
         })
     }
 
-    async fn build<S>(&self, store: S, initial_committee: Committee, admin_id: ChainId) -> S
+    async fn build<S>(&self, storage: S, initial_committee: Committee, admin_id: ChainId) -> S
     where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         for account in &self.accounts {
-            store
+            storage
                 .create_chain(
                     initial_committee.clone(),
                     admin_id,
@@ -358,17 +358,17 @@ impl GenesisStoreBuilder {
                 .await
                 .unwrap();
         }
-        store
+        storage
     }
 }
 
 impl<B> TestBuilder<B>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
     pub async fn new(
-        mut store_builder: B,
+        mut storage_builder: B,
         count: usize,
         with_faulty_validators: usize,
     ) -> Result<Self, anyhow::Error> {
@@ -382,12 +382,12 @@ where
         }
         let initial_committee = Committee::make_simple(validators);
         let mut validator_clients = Vec::new();
-        let mut validator_stores = HashMap::new();
+        let mut validator_storages = HashMap::new();
         let mut faulty_validators = HashSet::new();
         for (i, key_pair) in key_pairs.into_iter().enumerate() {
             let name = ValidatorName(key_pair.public());
-            let store = store_builder.build().await?;
-            let state = WorkerState::new(format!("Node {}", i), Some(key_pair), store.clone())
+            let storage = storage_builder.build().await?;
+            let state = WorkerState::new(format!("Node {}", i), Some(key_pair), storage.clone())
                 .with_allow_inactive_chains(false)
                 .with_allow_messages_from_deprecated_epochs(false);
             let validator = LocalValidatorClient::new(name, state);
@@ -396,20 +396,20 @@ where
                 validator.set_fault_type(FaultType::Malicious).await;
             }
             validator_clients.push(validator);
-            validator_stores.insert(name, store);
+            validator_storages.insert(name, storage);
         }
         tracing::info!(
             "Test will use the following faulty validators: {:?}",
             faulty_validators
         );
         Ok(Self {
-            store_builder,
+            storage_builder,
             initial_committee,
             admin_id: ChainId::root(0),
-            genesis_store_builder: GenesisStoreBuilder::default(),
+            genesis_storage_builder: GenesisStorageBuilder::default(),
             validator_clients,
-            validator_stores,
-            chain_client_stores: Vec::new(),
+            validator_storages,
+            chain_client_storages: Vec::new(),
         })
     }
 
@@ -421,7 +421,10 @@ where
 
     pub async fn set_fault_type<I>(&mut self, range: I, fault_type: FaultType)
     where
-        I: SliceIndex<[LocalValidatorClient<B::Store>], Output = [LocalValidatorClient<B::Store>]>,
+        I: SliceIndex<
+            [LocalValidatorClient<B::Storage>],
+            Output = [LocalValidatorClient<B::Storage>],
+        >,
     {
         let mut faulty_validators = vec![];
         for validator in &mut self.validator_clients[range] {
@@ -439,16 +442,16 @@ where
         &mut self,
         description: ChainDescription,
         balance: Amount,
-    ) -> Result<ChainClient<NodeProvider<B::Store>, B::Store>, anyhow::Error> {
+    ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {
         let key_pair = KeyPair::generate();
         let public_key = key_pair.public();
         // Remember what's in the genesis store for future clients to join.
-        self.genesis_store_builder
+        self.genesis_storage_builder
             .add(description, public_key, balance);
         for validator in &self.validator_clients {
-            let store = self.validator_stores.get_mut(&validator.name).unwrap();
+            let storage = self.validator_storages.get_mut(&validator.name).unwrap();
             if validator.fault_type().await == FaultType::Malicious {
-                store
+                storage
                     .create_chain(
                         self.initial_committee.clone(),
                         self.admin_id,
@@ -460,7 +463,7 @@ where
                     .await
                     .unwrap();
             } else {
-                store
+                storage
                     .create_chain(
                         self.initial_committee.clone(),
                         self.admin_id,
@@ -473,8 +476,8 @@ where
                     .unwrap();
             }
         }
-        for store in self.chain_client_stores.iter_mut() {
-            store
+        for storage in self.chain_client_storages.iter_mut() {
+            storage
                 .create_chain(
                     self.initial_committee.clone(),
                     self.admin_id,
@@ -496,25 +499,25 @@ where
         key_pair: KeyPair,
         block_hash: Option<CryptoHash>,
         block_height: BlockHeight,
-    ) -> Result<ChainClient<NodeProvider<B::Store>, B::Store>, anyhow::Error> {
+    ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {
         // Note that new clients are only given the genesis store: they must figure out
         // the rest by asking validators.
-        let store = self
-            .genesis_store_builder
+        let storage = self
+            .genesis_storage_builder
             .build(
-                self.store_builder.build().await?,
+                self.storage_builder.build().await?,
                 self.initial_committee.clone(),
                 self.admin_id,
             )
             .await;
-        self.chain_client_stores.push(store.clone());
+        self.chain_client_storages.push(storage.clone());
         let provider = self.validator_clients.iter().cloned().collect();
         let cross_chain_delay = std::time::Duration::from_millis(500);
         let builder = ChainClientBuilder::new(provider, 10, cross_chain_delay, 10);
         Ok(builder.build(
             chain_id,
             vec![key_pair],
-            store,
+            storage,
             self.admin_id,
             block_hash,
             Timestamp::from(0),
@@ -591,17 +594,17 @@ where
 pub static ROCKS_DB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
 
 #[derive(Default)]
-pub struct MakeMemoryStoreClient {
+pub struct MakeMemoryStorage {
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
 }
 
 #[async_trait]
-impl StoreBuilder for MakeMemoryStoreClient {
-    type Store = MemoryStoreClient<TestClock>;
+impl StorageBuilder for MakeMemoryStorage {
+    type Storage = MemoryStorage<TestClock>;
 
-    async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
-        Ok(MemoryStoreClient::new(
+    async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
+        Ok(MemoryStorage::new(
             self.wasm_runtime,
             TEST_MEMORY_MAX_STREAM_QUERIES,
             self.clock.clone(),
@@ -613,45 +616,45 @@ impl StoreBuilder for MakeMemoryStoreClient {
     }
 }
 
-impl MakeMemoryStoreClient {
-    /// Creates a [`MakeMemoryStoreClient`] that uses the specified [`WasmRuntime`] to run Wasm
+impl MakeMemoryStorage {
+    /// Creates a [`MakeMemoryStorage`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        MakeMemoryStoreClient {
+        MakeMemoryStorage {
             wasm_runtime: wasm_runtime.into(),
-            ..MakeMemoryStoreClient::default()
+            ..MakeMemoryStorage::default()
         }
     }
 }
 
 #[cfg(feature = "rocksdb")]
 #[derive(Default)]
-pub struct MakeRocksDbStore {
+pub struct MakeRocksDbStorage {
     temp_dirs: Vec<tempfile::TempDir>,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
 }
 
 #[cfg(feature = "rocksdb")]
-impl MakeRocksDbStore {
-    /// Creates a [`MakeRocksDbStore`] that uses the specified [`WasmRuntime`] to run Wasm
+impl MakeRocksDbStorage {
+    /// Creates a [`MakeRocksDbStorage`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        MakeRocksDbStore {
+        MakeRocksDbStorage {
             wasm_runtime: wasm_runtime.into(),
-            ..MakeRocksDbStore::default()
+            ..MakeRocksDbStorage::default()
         }
     }
 }
 
 #[cfg(feature = "rocksdb")]
 #[async_trait]
-impl StoreBuilder for MakeRocksDbStore {
-    type Store = RocksDbStore<TestClock>;
+impl StorageBuilder for MakeRocksDbStorage {
+    type Storage = RocksDbStorage<TestClock>;
 
-    async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
+    async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
         let dir = tempfile::TempDir::new()?;
         let path_buf = dir.path().to_path_buf();
         self.temp_dirs.push(dir);
@@ -660,10 +663,10 @@ impl StoreBuilder for MakeRocksDbStore {
             path_buf,
             common_config,
         };
-        let (store, _) =
-            RocksDbStore::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
+        let (storage, _) =
+            RocksDbStorage::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
                 .await?;
-        Ok(store)
+        Ok(storage)
     }
 
     fn clock(&self) -> &TestClock {
@@ -673,7 +676,7 @@ impl StoreBuilder for MakeRocksDbStore {
 
 #[cfg(feature = "aws")]
 #[derive(Default)]
-pub struct MakeDynamoDbStore {
+pub struct MakeDynamoDbStorage {
     instance_counter: usize,
     localstack: Option<LocalStackTestContext>,
     wasm_runtime: Option<WasmRuntime>,
@@ -681,24 +684,24 @@ pub struct MakeDynamoDbStore {
 }
 
 #[cfg(feature = "aws")]
-impl MakeDynamoDbStore {
-    /// Creates a [`MakeDynamoDbStore`] that uses the specified [`WasmRuntime`] to run Wasm
+impl MakeDynamoDbStorage {
+    /// Creates a [`MakeDynamoDbStorage`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        MakeDynamoDbStore {
+        MakeDynamoDbStorage {
             wasm_runtime: wasm_runtime.into(),
-            ..MakeDynamoDbStore::default()
+            ..MakeDynamoDbStorage::default()
         }
     }
 }
 
 #[cfg(feature = "aws")]
 #[async_trait]
-impl StoreBuilder for MakeDynamoDbStore {
-    type Store = DynamoDbStore<TestClock>;
+impl StorageBuilder for MakeDynamoDbStorage {
+    type Storage = DynamoDbStorage<TestClock>;
 
-    async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
+    async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
         if self.localstack.is_none() {
             self.localstack = Some(LocalStackTestContext::new().await?);
         }
@@ -713,10 +716,10 @@ impl StoreBuilder for MakeDynamoDbStore {
             common_config,
         };
         self.instance_counter += 1;
-        let (store, _) =
-            DynamoDbStore::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
+        let (storage, _) =
+            DynamoDbStorage::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
                 .await?;
-        Ok(store)
+        Ok(storage)
     }
 
     fn clock(&self) -> &TestClock {
@@ -725,7 +728,7 @@ impl StoreBuilder for MakeDynamoDbStore {
 }
 
 #[cfg(feature = "scylladb")]
-pub struct MakeScyllaDbStore {
+pub struct MakeScyllaDbStorage {
     instance_counter: usize,
     uri: String,
     wasm_runtime: Option<WasmRuntime>,
@@ -733,13 +736,13 @@ pub struct MakeScyllaDbStore {
 }
 
 #[cfg(feature = "scylladb")]
-impl Default for MakeScyllaDbStore {
+impl Default for MakeScyllaDbStorage {
     fn default() -> Self {
         let instance_counter = 0;
         let uri = "localhost:9042".to_string();
         let wasm_runtime = None;
         let clock = TestClock::new();
-        MakeScyllaDbStore {
+        MakeScyllaDbStorage {
             instance_counter,
             uri,
             wasm_runtime,
@@ -749,24 +752,24 @@ impl Default for MakeScyllaDbStore {
 }
 
 #[cfg(feature = "scylladb")]
-impl MakeScyllaDbStore {
-    /// Creates a [`MakeScyllaDbStore`] that uses the specified [`WasmRuntime`] to run Wasm
+impl MakeScyllaDbStorage {
+    /// Creates a [`MakeScyllaDbStorage`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        MakeScyllaDbStore {
+        MakeScyllaDbStorage {
             wasm_runtime: wasm_runtime.into(),
-            ..MakeScyllaDbStore::default()
+            ..MakeScyllaDbStorage::default()
         }
     }
 }
 
 #[cfg(feature = "scylladb")]
 #[async_trait]
-impl StoreBuilder for MakeScyllaDbStore {
-    type Store = ScyllaDbStore<TestClock>;
+impl StorageBuilder for MakeScyllaDbStorage {
+    type Storage = ScyllaDbStorage<TestClock>;
 
-    async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
+    async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
         self.instance_counter += 1;
         let table_name = get_table_name();
         let table_name = format!("{}_{}", table_name, self.instance_counter);
@@ -776,10 +779,10 @@ impl StoreBuilder for MakeScyllaDbStore {
             table_name,
             common_config,
         };
-        let (store, _) =
-            ScyllaDbStore::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
+        let (storage, _) =
+            ScyllaDbStorage::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
                 .await?;
-        Ok(store)
+        Ok(storage)
     }
 
     fn clock(&self) -> &TestClock {

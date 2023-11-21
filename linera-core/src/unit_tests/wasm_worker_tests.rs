@@ -32,19 +32,19 @@ use linera_execution::{
     GenericApplicationId, Message, Operation, OperationContext, ResourceTracker,
     SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmContract, WasmRuntime,
 };
-use linera_storage::{MemoryStoreClient, Store};
+use linera_storage::{MemoryStorage, Storage};
 use linera_views::views::{CryptoHashView, ViewError};
 use std::sync::Arc;
 use test_case::test_case;
 
 #[cfg(feature = "rocksdb")]
-use linera_storage::RocksDbStore;
+use linera_storage::RocksDbStorage;
 
 #[cfg(feature = "aws")]
-use linera_storage::DynamoDbStore;
+use linera_storage::DynamoDbStorage;
 
 #[cfg(feature = "scylladb")]
-use linera_storage::ScyllaDbStore;
+use linera_storage::ScyllaDbStorage;
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -52,8 +52,8 @@ use linera_storage::ScyllaDbStore;
 async fn test_memory_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let store = MemoryStoreClient::make_test_store(Some(wasm_runtime)).await;
-    run_test_handle_certificates_to_create_application(store, wasm_runtime).await
+    let storage = MemoryStorage::make_test_storage(Some(wasm_runtime)).await;
+    run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -63,8 +63,8 @@ async fn test_memory_handle_certificates_to_create_application(
 async fn test_rocks_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let store = RocksDbStore::make_test_store(Some(wasm_runtime)).await;
-    run_test_handle_certificates_to_create_application(store, wasm_runtime).await
+    let storage = RocksDbStorage::make_test_storage(Some(wasm_runtime)).await;
+    run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 
 #[cfg(feature = "aws")]
@@ -74,8 +74,8 @@ async fn test_rocks_db_handle_certificates_to_create_application(
 async fn test_dynamo_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let store = DynamoDbStore::make_test_store(Some(wasm_runtime)).await;
-    run_test_handle_certificates_to_create_application(store, wasm_runtime).await
+    let storage = DynamoDbStorage::make_test_storage(Some(wasm_runtime)).await;
+    run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 
 #[cfg(feature = "scylladb")]
@@ -85,16 +85,16 @@ async fn test_dynamo_db_handle_certificates_to_create_application(
 async fn test_scylla_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let store = ScyllaDbStore::make_test_store(Some(wasm_runtime)).await;
-    run_test_handle_certificates_to_create_application(store, wasm_runtime).await
+    let storage = ScyllaDbStorage::make_test_storage(Some(wasm_runtime)).await;
+    run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 
 async fn run_test_handle_certificates_to_create_application<S>(
-    store: S,
+    storage: S,
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error>
 where
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let admin_id = ChainDescription::Root(0);
@@ -103,7 +103,7 @@ where
     let creator_key_pair = KeyPair::generate();
     let creator_chain = ChainDescription::Root(2);
     let (committee, mut worker) = init_worker_with_chains(
-        store,
+        storage,
         vec![
             (publisher_chain, publisher_key_pair.public(), Amount::ZERO),
             (creator_chain, creator_key_pair.public(), Amount::ZERO),

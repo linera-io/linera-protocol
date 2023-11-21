@@ -17,7 +17,7 @@ use linera_core::{
     worker::{Notification, Reason},
 };
 use linera_execution::{Message, SystemMessage};
-use linera_storage::Store;
+use linera_storage::Storage;
 use linera_views::views::ViewError;
 use std::{sync::Arc, time::Duration};
 use structopt::StructOpt;
@@ -53,7 +53,7 @@ pub trait ClientContext<P: ValidatorNodeProvider> {
 
     async fn update_wallet<'a, S>(&'a mut self, client: &'a mut ChainClient<P, S>)
     where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>;
 }
 
@@ -67,7 +67,7 @@ pub struct ChainListener<P, S> {
 impl<P, S> ChainListener<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     /// Creates a new chain listener given client chains.

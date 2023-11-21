@@ -22,7 +22,7 @@ use linera_execution::{
     committee::{Committee, Epoch},
     BytecodeLocation, Query, Response, UserApplicationDescription, UserApplicationId,
 };
-use linera_storage::Store;
+use linera_storage::Storage;
 use linera_views::{
     log_view::LogView,
     views::{RootView, View, ViewError},
@@ -348,7 +348,7 @@ impl<StorageClient> WorkerState<StorageClient> {
 
 impl<StorageClient> WorkerState<StorageClient>
 where
-    StorageClient: Store + Clone + Send + Sync + 'static,
+    StorageClient: Storage + Clone + Send + Sync + 'static,
     ViewError: From<StorageClient::ContextError>,
 {
     // NOTE: This only works for non-sharded workers!
@@ -986,7 +986,7 @@ where
 #[async_trait]
 impl<StorageClient> ValidatorWorker for WorkerState<StorageClient>
 where
-    StorageClient: Store + Clone + Send + Sync + 'static,
+    StorageClient: Storage + Clone + Send + Sync + 'static,
     ViewError: From<StorageClient::ContextError>,
 {
     #[instrument(skip_all, fields(

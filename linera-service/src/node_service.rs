@@ -34,7 +34,7 @@ use linera_execution::{
     Bytecode, ChainOwnership, Operation, Query, Response, SystemOperation,
     UserApplicationDescription, UserApplicationId,
 };
-use linera_storage::Store;
+use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -189,7 +189,7 @@ impl IntoResponse for NodeServiceError {
 impl<P, S> SubscriptionRoot<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     /// Subscribes to notifications from the specified chain.
@@ -205,7 +205,7 @@ where
 impl<P, S, C> MutationRoot<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     C: ClientContext<P> + Send + 'static,
     ViewError: From<S::ContextError>,
 {
@@ -226,7 +226,7 @@ where
 impl<P, S, C> MutationRoot<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     C: ClientContext<P> + Send + 'static,
     ViewError: From<S::ContextError>,
 {
@@ -491,7 +491,7 @@ where
 impl<P, S> QueryRoot<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     async fn chain(&self, chain_id: ChainId) -> Result<ChainStateExtendedView<S::Context>, Error> {
@@ -703,7 +703,7 @@ impl<P, S: Clone, C> Clone for NodeService<P, S, C> {
 impl<P, S, C> NodeService<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Store + Clone + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     C: ClientContext<P> + Send + 'static,
     ViewError: From<S::ContextError>,
 {

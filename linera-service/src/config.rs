@@ -20,7 +20,7 @@ use linera_execution::{
     policy::ResourceControlPolicy,
 };
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
-use linera_storage::Store;
+use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand07::Rng;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -256,7 +256,7 @@ impl WalletState {
     pub async fn update_from_state<P, S>(&mut self, state: &mut ChainClient<P, S>)
     where
         P: ValidatorNodeProvider + Sync + 'static,
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         self.inner.chains.insert(
@@ -479,13 +479,13 @@ impl GenesisConfig {
         }
     }
 
-    pub async fn initialize_store<S>(&self, store: &mut S) -> Result<(), anyhow::Error>
+    pub async fn initialize_storage<S>(&self, storage: &mut S) -> Result<(), anyhow::Error>
     where
-        S: Store + Clone + Send + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
         for (chain_number, (public_key, balance)) in (0..).zip(&self.chains) {
-            store
+            storage
                 .create_chain(
                     self.create_committee(),
                     self.admin_id,

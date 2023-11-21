@@ -8,7 +8,7 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use crate::client::client_tests::{MakeMemoryStoreClient, StoreBuilder, TestBuilder};
+use crate::client::client_tests::{MakeMemoryStorage, StorageBuilder, TestBuilder};
 use async_graphql::Request;
 use linera_base::{
     data_types::Amount,
@@ -19,26 +19,26 @@ use linera_execution::{
     policy::ResourceControlPolicy, Bytecode, Message, Operation, SystemMessage,
     UserApplicationDescription, WasmRuntime,
 };
-use linera_storage::Store;
+use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde_json::json;
 use std::collections::BTreeMap;
 use test_case::test_case;
 
 #[cfg(feature = "rocksdb")]
-use crate::client::client_tests::{MakeRocksDbStore, ROCKS_DB_SEMAPHORE};
+use crate::client::client_tests::{MakeRocksDbStorage, ROCKS_DB_SEMAPHORE};
 
 #[cfg(feature = "aws")]
-use crate::client::client_tests::MakeDynamoDbStore;
+use crate::client::client_tests::MakeDynamoDbStorage;
 
 #[cfg(feature = "scylladb")]
-use crate::client::client_tests::MakeScyllaDbStore;
+use crate::client::client_tests::MakeScyllaDbStorage;
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    run_test_create_application(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
+    run_test_create_application(MakeMemoryStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -47,7 +47,7 @@ async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> Result<(),
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_rocks_db_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_create_application(MakeRocksDbStore::with_wasm_runtime(wasm_runtime)).await
+    run_test_create_application(MakeRocksDbStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "aws")]
@@ -55,7 +55,7 @@ async fn test_rocks_db_create_application(wasm_runtime: WasmRuntime) -> Result<(
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_dynamo_db_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    run_test_create_application(MakeDynamoDbStore::with_wasm_runtime(wasm_runtime)).await
+    run_test_create_application(MakeDynamoDbStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "scylladb")]
@@ -63,15 +63,15 @@ async fn test_dynamo_db_create_application(wasm_runtime: WasmRuntime) -> Result<
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_scylla_db_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    run_test_create_application(MakeScyllaDbStore::with_wasm_runtime(wasm_runtime)).await
+    run_test_create_application(MakeScyllaDbStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
-async fn run_test_create_application<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_create_application<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     let mut publisher = builder
@@ -145,7 +145,7 @@ where
 async fn test_memory_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    run_test_run_application_with_dependency(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime))
+    run_test_run_application_with_dependency(MakeMemoryStorage::with_wasm_runtime(wasm_runtime))
         .await
 }
 
@@ -157,7 +157,7 @@ async fn test_rocks_db_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_run_application_with_dependency(MakeRocksDbStore::with_wasm_runtime(wasm_runtime))
+    run_test_run_application_with_dependency(MakeRocksDbStorage::with_wasm_runtime(wasm_runtime))
         .await
 }
 
@@ -168,7 +168,7 @@ async fn test_rocks_db_run_application_with_dependency(
 async fn test_dynamo_db_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    run_test_run_application_with_dependency(MakeDynamoDbStore::with_wasm_runtime(wasm_runtime))
+    run_test_run_application_with_dependency(MakeDynamoDbStorage::with_wasm_runtime(wasm_runtime))
         .await
 }
 
@@ -179,16 +179,18 @@ async fn test_dynamo_db_run_application_with_dependency(
 async fn test_scylla_db_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    run_test_run_application_with_dependency(MakeScyllaDbStore::with_wasm_runtime(wasm_runtime))
+    run_test_run_application_with_dependency(MakeScyllaDbStorage::with_wasm_runtime(wasm_runtime))
         .await
 }
 
-async fn run_test_run_application_with_dependency<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_run_application_with_dependency<B>(
+    storage_builder: B,
+) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     // Will publish the bytecodes.
@@ -287,7 +289,7 @@ where
 async fn test_memory_run_reentrant_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    run_test_run_reentrant_application(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
+    run_test_run_reentrant_application(MakeMemoryStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -298,7 +300,7 @@ async fn test_rocks_db_run_reentrant_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_run_reentrant_application(MakeRocksDbStore::with_wasm_runtime(wasm_runtime)).await
+    run_test_run_reentrant_application(MakeRocksDbStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "aws")]
@@ -308,7 +310,7 @@ async fn test_rocks_db_run_reentrant_application(
 async fn test_dynamo_db_run_reentrant_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    run_test_run_reentrant_application(MakeDynamoDbStore::with_wasm_runtime(wasm_runtime)).await
+    run_test_run_reentrant_application(MakeDynamoDbStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "scylladb")]
@@ -318,15 +320,15 @@ async fn test_dynamo_db_run_reentrant_application(
 async fn test_scylla_db_run_reentrant_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    run_test_run_reentrant_application(MakeScyllaDbStore::with_wasm_runtime(wasm_runtime)).await
+    run_test_run_reentrant_application(MakeScyllaDbStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
-async fn run_test_run_reentrant_application<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_run_reentrant_application<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     // Will publish the bytecodes.
@@ -392,7 +394,7 @@ where
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    run_test_cross_chain_message(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
+    run_test_cross_chain_message(MakeMemoryStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -401,7 +403,7 @@ async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<()
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_cross_chain_message(MakeRocksDbStore::with_wasm_runtime(wasm_runtime)).await
+    run_test_cross_chain_message(MakeRocksDbStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "aws")]
@@ -411,7 +413,7 @@ async fn test_rocks_db_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<
 async fn test_dynamo_db_cross_chain_message(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    run_test_cross_chain_message(MakeDynamoDbStore::with_wasm_runtime(wasm_runtime)).await
+    run_test_cross_chain_message(MakeDynamoDbStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "scylladb")]
@@ -421,15 +423,15 @@ async fn test_dynamo_db_cross_chain_message(
 async fn test_scylla_db_cross_chain_message(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    run_test_cross_chain_message(MakeScyllaDbStore::with_wasm_runtime(wasm_runtime)).await
+    run_test_cross_chain_message(MakeScyllaDbStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
-async fn run_test_cross_chain_message<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_cross_chain_message<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     let mut sender = builder
@@ -584,7 +586,7 @@ where
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    run_test_user_pub_sub_channels(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
+    run_test_user_pub_sub_channels(MakeMemoryStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -595,7 +597,7 @@ async fn test_rocks_db_user_pub_sub_channels(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_user_pub_sub_channels(MakeRocksDbStore::with_wasm_runtime(wasm_runtime)).await
+    run_test_user_pub_sub_channels(MakeRocksDbStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "aws")]
@@ -605,7 +607,7 @@ async fn test_rocks_db_user_pub_sub_channels(
 async fn test_dynamo_db_user_pub_sub_channels(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    run_test_user_pub_sub_channels(MakeDynamoDbStore::with_wasm_runtime(wasm_runtime)).await
+    run_test_user_pub_sub_channels(MakeDynamoDbStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "scylladb")]
@@ -615,15 +617,15 @@ async fn test_dynamo_db_user_pub_sub_channels(
 async fn test_scylla_db_user_pub_sub_channels(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    run_test_user_pub_sub_channels(MakeScyllaDbStore::with_wasm_runtime(wasm_runtime)).await
+    run_test_user_pub_sub_channels(MakeScyllaDbStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
-async fn run_test_user_pub_sub_channels<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_user_pub_sub_channels<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
-    B: StoreBuilder,
-    ViewError: From<<B::Store as Store>::ContextError>,
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1)
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     let mut sender = builder
