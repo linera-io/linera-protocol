@@ -155,7 +155,7 @@ where
                     return self.prec1.clone();
                 }
                 Some(x) => {
-                    if *x > &val {
+                    if (*x)[self.prefix_len..] > val[self.prefix_len..] {
                         return self.prec1.clone();
                     }
                 }
@@ -173,7 +173,7 @@ where
                 if key_prefix.len() > index.len() {
                     return true;
                 }
-                index[0..key_prefix.len()].to_vec() != key_prefix.to_vec()
+                index[0..key_prefix.len()].to_vec() != key_prefix[self.prefix_len..].to_vec()
             }
         }
     }
