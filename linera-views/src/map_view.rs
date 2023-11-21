@@ -332,7 +332,7 @@ where
             GreatestLowerBoundIterator::new(&self.deleted_prefixes)
         } else {
             for deleted_prefix in &self.deleted_prefixes {
-                if deleted_prefix.len() >= prefix_len && deleted_prefix[0..prefix_len] == prefix {
+                if deleted_prefix.starts_with(&prefix) {
                     deleted_prefixes.insert(deleted_prefix[prefix_len..].to_vec());
                 }
             }
@@ -536,7 +536,7 @@ where
             GreatestLowerBoundIterator::new(&self.deleted_prefixes)
         } else {
             for deleted_prefix in &self.deleted_prefixes {
-                if deleted_prefix.len() >= prefix_len && deleted_prefix[0..prefix_len] == prefix {
+                if deleted_prefix.starts_with(&prefix) {
                     deleted_prefixes.insert(deleted_prefix[prefix_len..].to_vec());
                 }
             }
