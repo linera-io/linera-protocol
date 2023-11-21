@@ -131,23 +131,20 @@ where
 ///
 /// The function calls `get_lower_bound` have to be called with increasing
 /// values in order to get correct results.
-pub(crate) struct GreatestLowerBoundIterator<'a, T: 'static> {
-    prec1: Option<T>,
-    prec2: Option<T>,
-    iter: std::collections::btree_set::Iter<'a, T>,
+pub(crate) struct GreatestLowerBoundIterator<'a> {
+    prec1: Option<Vec<u8>>,
+    prec2: Option<Vec<u8>>,
+    iter: std::collections::btree_set::Iter<'a, Vec<u8>>,
 }
 
-impl<'a, T> GreatestLowerBoundIterator<'a, T>
-where
-    T: PartialOrd + Clone,
-{
-    pub(crate) fn new(mut iter: std::collections::btree_set::Iter<'a, T>) -> Self {
+impl<'a> GreatestLowerBoundIterator<'a> {
+    pub(crate) fn new(mut iter: std::collections::btree_set::Iter<'a, Vec<u8>>) -> Self {
         let prec1 = None;
         let prec2 = iter.next().cloned();
         Self { prec1, prec2, iter }
     }
 
-    fn get_lower_bound(&mut self, val: T) -> Option<T> {
+    fn get_lower_bound(&mut self, val: Vec<u8>) -> Option<Vec<u8>> {
         loop {
             match &self.prec2 {
                 None => {
@@ -163,9 +160,7 @@ where
             self.prec1 = std::mem::replace(&mut self.prec2, prec2);
         }
     }
-}
 
-impl<'a> GreatestLowerBoundIterator<'a, Vec<u8>> {
     pub(crate) fn is_index_absent(&mut self, index: &[u8]) -> bool {
         let lower_bound = self.get_lower_bound(index.to_vec());
         match lower_bound {
@@ -182,21 +177,21 @@ impl<'a> GreatestLowerBoundIterator<'a, Vec<u8>> {
 
 #[test]
 fn test_lower_bound() {
-    let mut set = BTreeSet::<u8>::new();
-    set.insert(4);
-    set.insert(7);
-    set.insert(8);
-    set.insert(10);
-    set.insert(24);
-    set.insert(40);
+    let mut set = BTreeSet::<Vec<u8>>::new();
+    set.insert(vec!(4));
+    set.insert(vec!(7));
+    set.insert(vec!(8));
+    set.insert(vec!(10));
+    set.insert(vec!(24));
+    set.insert(vec!(40));
 
     let mut lower_bound = GreatestLowerBoundIterator::new(set.iter());
-    assert_eq!(lower_bound.get_lower_bound(3), None);
-    assert_eq!(lower_bound.get_lower_bound(15), Some(10));
-    assert_eq!(lower_bound.get_lower_bound(17), Some(10));
-    assert_eq!(lower_bound.get_lower_bound(25), Some(24));
-    assert_eq!(lower_bound.get_lower_bound(27), Some(24));
-    assert_eq!(lower_bound.get_lower_bound(42), Some(40));
+    assert_eq!(lower_bound.get_lower_bound(vec!(3)), None);
+    assert_eq!(lower_bound.get_lower_bound(vec!(15)), Some(vec!(10)));
+    assert_eq!(lower_bound.get_lower_bound(vec!(17)), Some(vec!(10)));
+    assert_eq!(lower_bound.get_lower_bound(vec!(25)), Some(vec!(24)));
+    assert_eq!(lower_bound.get_lower_bound(vec!(27)), Some(vec!(24)));
+    assert_eq!(lower_bound.get_lower_bound(vec!(42)), Some(vec!(40)));
 }
 
 /// How to iterate over the keys returned by a search query.
