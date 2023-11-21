@@ -131,33 +131,36 @@ where
 ///
 /// The function calls `get_lower_bound` have to be called with increasing
 /// values in order to get correct results.
-pub(crate) struct GreatestLowerBoundIterator<'a> {
+pub(crate) struct GreatestLowerBoundIterator<'a, IT> {
     prefix_len: usize,
-    prec1: Option<Vec<u8>>,
-    prec2: Option<Vec<u8>>,
-    iter: std::collections::btree_set::Iter<'a, Vec<u8>>,
+    prec1: Option<&'a Vec<u8>>,
+    prec2: Option<&'a Vec<u8>>,
+    iter: IT,
 }
 
-impl<'a> GreatestLowerBoundIterator<'a> {
-    pub(crate) fn new(prefix_len: usize, mut iter: std::collections::btree_set::Iter<'a, Vec<u8>>) -> Self {
+impl<'a, IT> GreatestLowerBoundIterator<'a, IT>
+where
+    IT: Iterator<Item = &'a Vec<u8>>,
+{
+    pub(crate) fn new(prefix_len: usize, mut iter: IT) -> Self {
         let prec1 = None;
-        let prec2 = iter.next().cloned();
+        let prec2 = iter.next();
         Self { prefix_len, prec1, prec2, iter }
     }
 
-    fn get_lower_bound(&mut self, val: Vec<u8>) -> Option<Vec<u8>> {
+    fn get_lower_bound(&mut self, val: Vec<u8>) -> Option<&'a Vec<u8>> {
         loop {
             match &self.prec2 {
                 None => {
                     return self.prec1.clone();
                 }
                 Some(x) => {
-                    if *x > val {
+                    if *x > &val {
                         return self.prec1.clone();
                     }
                 }
             }
-            let prec2 = self.iter.next().cloned();
+            let prec2 = self.iter.next();
             self.prec1 = std::mem::replace(&mut self.prec2, prec2);
         }
     }
@@ -170,7 +173,7 @@ impl<'a> GreatestLowerBoundIterator<'a> {
                 if key_prefix.len() > index.len() {
                     return true;
                 }
-                index[0..key_prefix.len()] != key_prefix
+                index[0..key_prefix.len()].to_vec() != key_prefix.to_vec()
             }
         }
     }
@@ -188,11 +191,11 @@ fn test_lower_bound() {
 
     let mut lower_bound = GreatestLowerBoundIterator::new(0, set.iter());
     assert_eq!(lower_bound.get_lower_bound(vec!(3)), None);
-    assert_eq!(lower_bound.get_lower_bound(vec!(15)), Some(vec!(10)));
-    assert_eq!(lower_bound.get_lower_bound(vec!(17)), Some(vec!(10)));
-    assert_eq!(lower_bound.get_lower_bound(vec!(25)), Some(vec!(24)));
-    assert_eq!(lower_bound.get_lower_bound(vec!(27)), Some(vec!(24)));
-    assert_eq!(lower_bound.get_lower_bound(vec!(42)), Some(vec!(40)));
+    assert_eq!(lower_bound.get_lower_bound(vec!(15)), Some(vec!(10)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(vec!(17)), Some(vec!(10)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(vec!(25)), Some(vec!(24)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(vec!(27)), Some(vec!(24)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(vec!(42)), Some(vec!(40)).as_ref());
 }
 
 /// How to iterate over the keys returned by a search query.
