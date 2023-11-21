@@ -145,7 +145,12 @@ where
     pub(crate) fn new(prefix_len: usize, mut iter: IT) -> Self {
         let prec1 = None;
         let prec2 = iter.next();
-        Self { prefix_len, prec1, prec2, iter }
+        Self {
+            prefix_len,
+            prec1,
+            prec2,
+            iter,
+        }
     }
 
     fn compar(&self, x: &'a Vec<u8>, val: &[u8]) -> bool {
@@ -164,11 +169,11 @@ where
         loop {
             match &self.prec2 {
                 None => {
-                    return self.prec1.clone();
+                    return self.prec1;
                 }
                 Some(x) => {
                     if self.compar(x, val) {
-                        return self.prec1.clone();
+                        return self.prec1;
                     }
                 }
             }
@@ -181,9 +186,7 @@ where
         let lower_bound = self.get_lower_bound(index);
         match lower_bound {
             None => true,
-            Some(key_prefix) => {
-                !index.starts_with(&key_prefix[self.prefix_len..])
-            }
+            Some(key_prefix) => !index.starts_with(&key_prefix[self.prefix_len..]),
         }
     }
 }
@@ -191,55 +194,51 @@ where
 #[test]
 fn lower_bound_test1_the_lower_bound() {
     let mut set = BTreeSet::<Vec<u8>>::new();
-    set.insert(vec!(4));
-    set.insert(vec!(7));
-    set.insert(vec!(8));
-    set.insert(vec!(10));
-    set.insert(vec!(24));
-    set.insert(vec!(40));
+    set.insert(vec![4]);
+    set.insert(vec![7]);
+    set.insert(vec![8]);
+    set.insert(vec![10]);
+    set.insert(vec![24]);
+    set.insert(vec![40]);
 
     let mut lower_bound = GreatestLowerBoundIterator::new(0, set.iter());
-    assert_eq!(lower_bound.get_lower_bound(&vec!(3)), None);
-    assert_eq!(lower_bound.get_lower_bound(&vec!(15)), Some(vec!(10)).as_ref());
-    assert_eq!(lower_bound.get_lower_bound(&vec!(17)), Some(vec!(10)).as_ref());
-    assert_eq!(lower_bound.get_lower_bound(&vec!(25)), Some(vec!(24)).as_ref());
-    assert_eq!(lower_bound.get_lower_bound(&vec!(27)), Some(vec!(24)).as_ref());
-    assert_eq!(lower_bound.get_lower_bound(&vec!(42)), Some(vec!(40)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(&[3]), None);
+    assert_eq!(lower_bound.get_lower_bound(&[15]), Some(vec!(10)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(&[17]), Some(vec!(10)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(&[25]), Some(vec!(24)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(&[27]), Some(vec!(24)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(&[42]), Some(vec!(40)).as_ref());
 }
 
 #[test]
 fn lower_bound_test2_is_index_absent() {
     let mut set = BTreeSet::<Vec<u8>>::new();
-    set.insert(vec!(4));
-    set.insert(vec!(0, 3));
-    set.insert(vec!(5));
+    set.insert(vec![4]);
+    set.insert(vec![0, 3]);
+    set.insert(vec![5]);
 
     let mut lower_bound = GreatestLowerBoundIterator::new(0, set.iter());
-    assert!(lower_bound.is_index_absent(&vec!(0)));
-    assert!(!lower_bound.is_index_absent(&vec!(0,3)));
-    assert!(!lower_bound.is_index_absent(&vec!(0,3,4)));
-    assert!(lower_bound.is_index_absent(&vec!(1)));
-    assert!(!lower_bound.is_index_absent(&vec!(4)));
+    assert!(lower_bound.is_index_absent(&[0]));
+    assert!(!lower_bound.is_index_absent(&[0, 3]));
+    assert!(!lower_bound.is_index_absent(&[0, 3, 4]));
+    assert!(lower_bound.is_index_absent(&[1]));
+    assert!(!lower_bound.is_index_absent(&[4]));
 }
 
 #[test]
 fn lower_bound_test3_is_index_absent_prefix_len() {
     let mut set = BTreeSet::<Vec<u8>>::new();
-    set.insert(vec!(0, 4));
-    set.insert(vec!(0, 3));
-    set.insert(vec!(0, 0, 1));
+    set.insert(vec![0, 4]);
+    set.insert(vec![0, 3]);
+    set.insert(vec![0, 0, 1]);
 
     let mut lower_bound = GreatestLowerBoundIterator::new(1, set.iter());
-    assert!(lower_bound.is_index_absent(&vec!(0)));
-    assert!(!lower_bound.is_index_absent(&vec!(0, 1)));
-    assert!(!lower_bound.is_index_absent(&vec!(0, 1, 4)));
-    assert!(!lower_bound.is_index_absent(&vec!(3)));
-    assert!(lower_bound.is_index_absent(&vec!(5)));
+    assert!(lower_bound.is_index_absent(&[0]));
+    assert!(!lower_bound.is_index_absent(&[0, 1]));
+    assert!(!lower_bound.is_index_absent(&[0, 1, 4]));
+    assert!(!lower_bound.is_index_absent(&[3]));
+    assert!(lower_bound.is_index_absent(&[5]));
 }
-
-
-
-
 
 /// How to iterate over the keys returned by a search query.
 pub trait KeyIterable<Error> {
