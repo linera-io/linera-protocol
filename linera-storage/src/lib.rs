@@ -13,6 +13,8 @@ mod rocks_db;
 #[cfg(feature = "scylladb")]
 mod scylla_db;
 
+#[cfg(any(test, feature = "test"))]
+pub use crate::db_storage::TestClock;
 #[cfg(feature = "aws")]
 pub use crate::dynamo_db::DynamoDbStorage;
 #[cfg(feature = "rocksdb")]
@@ -21,7 +23,7 @@ pub use crate::rocks_db::RocksDbStorage;
 pub use crate::scylla_db::ScyllaDbStorage;
 pub use crate::{
     db_storage::{
-        Clock, DbStorage, TestClock, WallClock, READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER,
+        Clock, DbStorage, WallClock, READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER,
         WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
     },
     memory::MemoryStorage,
