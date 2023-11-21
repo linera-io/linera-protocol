@@ -295,8 +295,7 @@ where
         if count == 0 {
             return Ok(Vec::new());
         }
-        let mut values = Vec::new();
-        values.reserve(count);
+        let mut values = Vec::with_capacity(count);
         if !self.was_cleared {
             let stored_remainder = self.stored_count();
             let start = self.stored_indices.end - stored_remainder;
@@ -336,8 +335,7 @@ where
         if count == 0 {
             return Ok(Vec::new());
         }
-        let mut values = Vec::new();
-        values.reserve(count);
+        let mut values = Vec::with_capacity(count);
         let new_back_len = self.new_back_values.len();
         if count <= new_back_len || self.was_cleared {
             values.extend(

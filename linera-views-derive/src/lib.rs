@@ -73,7 +73,7 @@ fn context_and_constraints(
         context = Type::Path(TypePath {
             qself: None,
             path: template_vect
-                .get(0)
+                .first()
                 .expect("failed to find the first generic parameter")
                 .clone()
                 .into(),
@@ -126,7 +126,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         clear_quotes.push(quote! { self.#name.clear(); });
     }
     let first_name_quote = name_quotes
-        .get(0)
+        .first()
         .expect("list of names should be non-empty");
 
     let increment_counter = if root {

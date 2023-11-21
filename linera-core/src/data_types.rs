@@ -204,7 +204,7 @@ impl CrossChainRequest {
             CrossChainRequest::UpdateRecipient { height_map, .. } => {
                 height_map.iter().any(|(_, heights)| {
                     debug_assert!(heights.windows(2).all(|w| w[0] <= w[1]));
-                    matches!(heights.get(0), Some(h) if *h <= height)
+                    matches!(heights.first(), Some(h) if *h <= height)
                 })
             }
             _ => false,
