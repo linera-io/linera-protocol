@@ -327,14 +327,14 @@ where
         let prefix_len = prefix.len();
         let mut deleted_prefixes = BTreeSet::new();
         let mut lower_bound = if prefix_len == 0 {
-            GreatestLowerBoundIterator::new(&self.deleted_prefixes)
+            GreatestLowerBoundIterator::new(self.deleted_prefixes.iter())
         } else {
             for deleted_prefix in &self.deleted_prefixes {
                 if deleted_prefix.starts_with(&prefix) {
                     deleted_prefixes.insert(deleted_prefix[prefix_len..].to_vec());
                 }
             }
-            GreatestLowerBoundIterator::new(&deleted_prefixes)
+            GreatestLowerBoundIterator::new(deleted_prefixes.iter())
         };
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
@@ -531,14 +531,14 @@ where
         let prefix_len = prefix.len();
         let mut deleted_prefixes = BTreeSet::new();
         let mut lower_bound = if prefix_len == 0 {
-            GreatestLowerBoundIterator::new(&self.deleted_prefixes)
+            GreatestLowerBoundIterator::new(self.deleted_prefixes.iter())
         } else {
             for deleted_prefix in &self.deleted_prefixes {
                 if deleted_prefix.starts_with(&prefix) {
                     deleted_prefixes.insert(deleted_prefix[prefix_len..].to_vec());
                 }
             }
-            GreatestLowerBoundIterator::new(&deleted_prefixes)
+            GreatestLowerBoundIterator::new(deleted_prefixes.iter())
         };
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();

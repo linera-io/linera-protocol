@@ -181,7 +181,7 @@ where
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
-        let mut lower_bound = GreatestLowerBoundIterator::new(&self.deleted_prefixes);
+        let mut lower_bound = GreatestLowerBoundIterator::new(self.deleted_prefixes.iter());
         if !self.was_cleared {
             for index in self
                 .context
@@ -280,7 +280,7 @@ where
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
-        let mut lower_bound = GreatestLowerBoundIterator::new(&self.deleted_prefixes);
+        let mut lower_bound = GreatestLowerBoundIterator::new(self.deleted_prefixes.iter());
         if !self.was_cleared {
             for entry in self
                 .context
@@ -532,7 +532,7 @@ where
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
-        let mut lower_bound = GreatestLowerBoundIterator::new(&self.deleted_prefixes);
+        let mut lower_bound = GreatestLowerBoundIterator::new(self.deleted_prefixes.iter());
         if !self.was_cleared {
             for key in self
                 .context
@@ -601,7 +601,7 @@ where
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
-        let mut lower_bound = GreatestLowerBoundIterator::new(&self.deleted_prefixes);
+        let mut lower_bound = GreatestLowerBoundIterator::new(self.deleted_prefixes.iter());
         if !self.was_cleared {
             for entry in self
                 .context

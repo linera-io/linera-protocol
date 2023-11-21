@@ -14,7 +14,6 @@ use crate::{batch::Batch, views::ViewError};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
-    collections::BTreeSet,
     fmt::{Debug, Display},
     future::Future,
     ops::{
@@ -23,6 +22,9 @@ use std::{
     },
     time::{Duration, Instant},
 };
+
+#[cfg(test)]
+use std::collections::BTreeSet;
 
 #[cfg(test)]
 #[path = "unit_tests/common_tests.rs"]
@@ -139,8 +141,7 @@ impl<'a, T> GreatestLowerBoundIterator<'a, T>
 where
     T: PartialOrd + Clone,
 {
-    pub(crate) fn new(set: &'a BTreeSet<T>) -> Self {
-        let mut iter = set.iter();
+    pub(crate) fn new(mut iter: std::collections::btree_set::Iter<'a, T>) -> Self {
         let prec1 = None;
         let prec2 = iter.next().cloned();
         Self { prec1, prec2, iter }
@@ -189,7 +190,7 @@ fn test_lower_bound() {
     set.insert(24);
     set.insert(40);
 
-    let mut lower_bound = GreatestLowerBoundIterator::new(&set);
+    let mut lower_bound = GreatestLowerBoundIterator::new(set.iter());
     assert_eq!(lower_bound.get_lower_bound(3), None);
     assert_eq!(lower_bound.get_lower_bound(15), Some(10));
     assert_eq!(lower_bound.get_lower_bound(17), Some(10));
