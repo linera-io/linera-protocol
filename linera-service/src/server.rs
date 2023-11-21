@@ -219,6 +219,10 @@ struct ServerOptions {
     /// Subcommands. Acceptable values are run and generate.
     #[structopt(subcommand)]
     command: ServerCommand,
+
+    /// The number of Tokio worker threads to use.
+    #[structopt(long, env = "LINERA_SERVER_TOKIO_THREADS")]
+    tokio_threads: Option<usize>,
 }
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
@@ -382,8 +386,7 @@ fn parse_duration(s: &str) -> Result<u64, parse_duration::parse::Error> {
         .unwrap_or(u64::MAX))
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let env_filter = tracing_subscriber::EnvFilter::builder()
         .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
         .from_env_lossy();
@@ -394,6 +397,26 @@ async fn main() {
 
     let options = ServerOptions::from_args();
 
+    let mut runtime = if options.tokio_threads == Some(1) {
+        tokio::runtime::Builder::new_current_thread()
+    } else {
+        let mut builder = tokio::runtime::Builder::new_multi_thread();
+
+        if let Some(threads) = options.tokio_threads {
+            builder.worker_threads(threads);
+        }
+
+        builder
+    };
+
+    runtime
+        .enable_all()
+        .build()
+        .expect("Failed to create Tokio runtime")
+        .block_on(run(options))
+}
+
+async fn run(options: ServerOptions) {
     match options.command {
         ServerCommand::Run {
             server_config_path,

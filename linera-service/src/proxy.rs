@@ -38,6 +38,10 @@ pub struct ProxyOptions {
     /// Timeout for receiving responses (us)
     #[structopt(long, default_value = "4000000")]
     recv_timeout_us: u64,
+
+    /// The number of Tokio worker threads to use.
+    #[structopt(long, env = "LINERA_PROXY_TOKIO_THREADS")]
+    tokio_threads: Option<usize>,
 }
 
 /// A Linera Proxy, either gRPC or over 'Simple Transport', meaning TCP or UDP.
@@ -182,8 +186,7 @@ impl SimpleProxy {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let env_filter = tracing_subscriber::EnvFilter::builder()
         .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
         .from_env_lossy();
@@ -192,6 +195,23 @@ async fn main() -> Result<()> {
         .with_env_filter(env_filter)
         .init();
 
-    let proxy = Proxy::from_options(ProxyOptions::from_args()).await?;
-    proxy.run().await
+    let options = ProxyOptions::from_args();
+
+    let mut runtime = if options.tokio_threads == Some(1) {
+        tokio::runtime::Builder::new_current_thread()
+    } else {
+        let mut builder = tokio::runtime::Builder::new_multi_thread();
+
+        if let Some(threads) = options.tokio_threads {
+            builder.worker_threads(threads);
+        }
+
+        builder
+    };
+
+    runtime
+        .enable_all()
+        .build()
+        .expect("Failed to create Tokio runtime")
+        .block_on(async move { Proxy::from_options(options).await?.run().await })
 }
