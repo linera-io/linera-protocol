@@ -132,16 +132,17 @@ where
 /// The function calls `get_lower_bound` have to be called with increasing
 /// values in order to get correct results.
 pub(crate) struct GreatestLowerBoundIterator<'a> {
+    prefix_len: usize,
     prec1: Option<Vec<u8>>,
     prec2: Option<Vec<u8>>,
     iter: std::collections::btree_set::Iter<'a, Vec<u8>>,
 }
 
 impl<'a> GreatestLowerBoundIterator<'a> {
-    pub(crate) fn new(mut iter: std::collections::btree_set::Iter<'a, Vec<u8>>) -> Self {
+    pub(crate) fn new(prefix_len: usize, mut iter: std::collections::btree_set::Iter<'a, Vec<u8>>) -> Self {
         let prec1 = None;
         let prec2 = iter.next().cloned();
-        Self { prec1, prec2, iter }
+        Self { prefix_len, prec1, prec2, iter }
     }
 
     fn get_lower_bound(&mut self, val: Vec<u8>) -> Option<Vec<u8>> {
@@ -185,7 +186,7 @@ fn test_lower_bound() {
     set.insert(vec!(24));
     set.insert(vec!(40));
 
-    let mut lower_bound = GreatestLowerBoundIterator::new(set.iter());
+    let mut lower_bound = GreatestLowerBoundIterator::new(0, set.iter());
     assert_eq!(lower_bound.get_lower_bound(vec!(3)), None);
     assert_eq!(lower_bound.get_lower_bound(vec!(15)), Some(vec!(10)));
     assert_eq!(lower_bound.get_lower_bound(vec!(17)), Some(vec!(10)));
