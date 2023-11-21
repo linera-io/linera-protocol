@@ -24,6 +24,9 @@ use std::{
 };
 
 #[cfg(test)]
+use std::collections::BTreeSet;
+
+#[cfg(test)]
 #[path = "unit_tests/common_tests.rs"]
 mod common_tests;
 
@@ -120,6 +123,112 @@ where
         }
         None => Ok(None),
     }
+}
+
+/// `GreatestLowerBoundIterator` iterates over the entries of a container ordered
+/// lexicographically.
+///
+/// The function call `get_lower_bound(val)` returns a `Some(x)` where `x` is the highest
+/// entry such that `x <= val`. If none exists then None is returned. The function calls
+/// have to be done with increasing `val`.
+///
+/// The function calls `is_index_absent(val)` tests whether there exist a prefix p in the
+/// set of vectors such that p is a prefix of val.
+pub(crate) struct GreatestLowerBoundIterator<'a, IT> {
+    prefix_len: usize,
+    prec1: Option<&'a Vec<u8>>,
+    prec2: Option<&'a Vec<u8>>,
+    iter: IT,
+}
+
+impl<'a, IT> GreatestLowerBoundIterator<'a, IT>
+where
+    IT: Iterator<Item = &'a Vec<u8>>,
+{
+    pub(crate) fn new(prefix_len: usize, mut iter: IT) -> Self {
+        let prec1 = None;
+        let prec2 = iter.next();
+        Self {
+            prefix_len,
+            prec1,
+            prec2,
+            iter,
+        }
+    }
+
+    pub(crate) fn get_lower_bound(&mut self, val: &[u8]) -> Option<&'a Vec<u8>> {
+        loop {
+            match &self.prec2 {
+                None => {
+                    return self.prec1;
+                }
+                Some(x) => {
+                    if &x[self.prefix_len..] > val {
+                        return self.prec1;
+                    }
+                }
+            }
+            let prec2 = self.iter.next();
+            self.prec1 = std::mem::replace(&mut self.prec2, prec2);
+        }
+    }
+
+    pub(crate) fn is_index_absent(&mut self, index: &[u8]) -> bool {
+        let lower_bound = self.get_lower_bound(index);
+        match lower_bound {
+            None => true,
+            Some(key_prefix) => !index.starts_with(&key_prefix[self.prefix_len..]),
+        }
+    }
+}
+
+#[test]
+fn lower_bound_test1_the_lower_bound() {
+    let mut set = BTreeSet::<Vec<u8>>::new();
+    set.insert(vec![4]);
+    set.insert(vec![7]);
+    set.insert(vec![8]);
+    set.insert(vec![10]);
+    set.insert(vec![24]);
+    set.insert(vec![40]);
+
+    let mut lower_bound = GreatestLowerBoundIterator::new(0, set.iter());
+    assert_eq!(lower_bound.get_lower_bound(&[3]), None);
+    assert_eq!(lower_bound.get_lower_bound(&[15]), Some(vec!(10)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(&[17]), Some(vec!(10)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(&[25]), Some(vec!(24)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(&[27]), Some(vec!(24)).as_ref());
+    assert_eq!(lower_bound.get_lower_bound(&[42]), Some(vec!(40)).as_ref());
+}
+
+#[test]
+fn lower_bound_test2_is_index_absent() {
+    let mut set = BTreeSet::<Vec<u8>>::new();
+    set.insert(vec![4]);
+    set.insert(vec![0, 3]);
+    set.insert(vec![5]);
+
+    let mut lower_bound = GreatestLowerBoundIterator::new(0, set.iter());
+    assert!(lower_bound.is_index_absent(&[0]));
+    assert!(!lower_bound.is_index_absent(&[0, 3]));
+    assert!(!lower_bound.is_index_absent(&[0, 3, 4]));
+    assert!(lower_bound.is_index_absent(&[1]));
+    assert!(!lower_bound.is_index_absent(&[4]));
+}
+
+#[test]
+fn lower_bound_test3_is_index_absent_prefix_len() {
+    let mut set = BTreeSet::<Vec<u8>>::new();
+    set.insert(vec![0, 4]);
+    set.insert(vec![0, 3]);
+    set.insert(vec![0, 0, 1]);
+
+    let mut lower_bound = GreatestLowerBoundIterator::new(1, set.iter());
+    assert!(lower_bound.is_index_absent(&[0]));
+    assert!(!lower_bound.is_index_absent(&[0, 1]));
+    assert!(!lower_bound.is_index_absent(&[0, 1, 4]));
+    assert!(!lower_bound.is_index_absent(&[3]));
+    assert!(lower_bound.is_index_absent(&[5]));
 }
 
 /// How to iterate over the keys returned by a search query.

@@ -28,9 +28,9 @@ async fn queue_view_mutability_check() {
         let count_oper = rng.gen_range(0..25);
         let mut new_vector = vector.clone();
         for _ in 0..count_oper {
-            let thr = rng.gen_range(0..5);
+            let choice = rng.gen_range(0..5);
             let count = view.queue.count();
-            if thr == 0 {
+            if choice == 0 {
                 // inserting random stuff
                 let n_ins = rng.gen_range(0..10);
                 for _ in 0..n_ins {
@@ -39,7 +39,7 @@ async fn queue_view_mutability_check() {
                     new_vector.push(val);
                 }
             }
-            if thr == 1 {
+            if choice == 1 {
                 // deleting some entries
                 if count > 0 {
                     let n_remove = rng.gen_range(0..count);
@@ -50,7 +50,7 @@ async fn queue_view_mutability_check() {
                     }
                 }
             }
-            if thr == 2 && count > 0 {
+            if choice == 2 && count > 0 {
                 // changing some random entries
                 let pos = rng.gen_range(0..count);
                 let val = rng.gen::<u8>();
@@ -65,12 +65,12 @@ async fn queue_view_mutability_check() {
                     *value = val;
                 }
             }
-            if thr == 3 {
+            if choice == 3 {
                 // Doing the clearing
                 view.clear();
                 new_vector.clear();
             }
-            if thr == 4 {
+            if choice == 4 {
                 // Doing the rollback
                 view.rollback();
                 new_vector = vector.clone();

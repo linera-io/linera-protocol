@@ -29,14 +29,14 @@ async fn reentrant_collection_view_check() {
         let count_oper = rng.gen_range(0..25);
         let mut new_map = map.clone();
         for _ in 0..count_oper {
-            let thr = rng.gen_range(0..5);
-            if thr == 0 {
+            let choice = rng.gen_range(0..5);
+            if choice == 0 {
                 // deleting random stuff
                 let pos = rng.gen_range(0..nmax);
                 view.v.remove_entry(&pos).unwrap();
                 new_map.remove(&pos);
             }
-            if thr == 1 {
+            if choice == 1 {
                 // getting an array of reference
                 let mut indices = Vec::new();
                 let mut set_indices = BTreeSet::new();
@@ -60,7 +60,7 @@ async fn reentrant_collection_view_check() {
                     }
                 }
             }
-            if thr == 2 {
+            if choice == 2 {
                 // changing some random entries
                 let n_ins = rng.gen_range(0..5);
                 for _i in 0..n_ins {
@@ -71,12 +71,12 @@ async fn reentrant_collection_view_check() {
                     new_map.insert(pos, value);
                 }
             }
-            if thr == 3 {
+            if choice == 3 {
                 // Doing the clearing
                 view.clear();
                 new_map.clear();
             }
-            if thr == 4 {
+            if choice == 4 {
                 // Doing the rollback
                 view.rollback();
                 new_map = map.clone();
