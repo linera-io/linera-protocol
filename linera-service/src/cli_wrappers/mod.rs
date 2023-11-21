@@ -38,6 +38,9 @@ pub trait LineraNetConfig {
     type Net: LineraNet + Sized + Send + Sync + 'static;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)>;
+
+    #[cfg(any(test, feature = "test"))]
+    fn get_network(&self) -> Network;
 }
 
 /// A running Linera net.
@@ -48,6 +51,23 @@ pub trait LineraNet {
     fn make_client(&mut self) -> ClientWrapper;
 
     async fn terminate(mut self) -> Result<()>;
+
+    #[cfg(any(test, feature = "test"))]
+    async fn terminate_server(&mut self, i: usize, j: usize) -> Result<()>;
+
+    #[cfg(any(test, feature = "test"))]
+    async fn start_server(&mut self, i: usize, j: usize) -> Result<()>;
+
+    #[cfg(any(test, feature = "test"))]
+    async fn generate_validator_config(&mut self, i: usize) -> Result<()>;
+
+    async fn start_validator(&mut self, i: usize) -> Result<()>;
+
+    #[cfg(any(test, feature = "test"))]
+    fn validator_name(&self, i: usize) -> Option<&String>;
+
+    #[cfg(any(test, feature = "test"))]
+    fn remove_validator(&mut self, i: usize) -> Result<()>;
 }
 
 /// Network protocol in use outside and inside a Linera net.

@@ -20,7 +20,7 @@ use kube::{
     api::{Api, ListParams},
     Client,
 };
-use std::{fs, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, fs, path::PathBuf, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
 
@@ -44,6 +44,7 @@ pub struct LocalKubernetesNet {
     kind_clusters: Vec<KindCluster>,
     num_initial_validators: usize,
     num_shards: usize,
+    validator_names: BTreeMap<usize, String>,
 }
 
 #[async_trait]
@@ -77,6 +78,11 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
         client.create_genesis_config().await.unwrap();
         net.run().await.unwrap();
         Ok((net, client))
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    fn get_network(&self) -> Network {
+        self.network
     }
 }
 
@@ -145,6 +151,44 @@ impl LineraNet for LocalKubernetesNet {
         }
         Ok(())
     }
+
+    #[cfg(any(test, feature = "test"))]
+    fn validator_name(&self, i: usize) -> Option<&String> {
+        self.validator_names.get(&i)
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    async fn generate_validator_config(&mut self, i: usize) -> Result<()> {
+        let stdout = self
+            .command_for_binary("linera-server")
+            .await?
+            .arg("generate")
+            .arg("--validators")
+            .arg(&self.configuration_string(i)?)
+            .spawn_and_wait_for_stdout()
+            .await?;
+        self.validator_names.insert(i, stdout.trim().to_string());
+        Ok(())
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    async fn terminate_server(&mut self, _i: usize, _j: usize) -> Result<()> {
+        unimplemented!()
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    fn remove_validator(&mut self, _i: usize) -> Result<()> {
+        unimplemented!()
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    async fn start_server(&mut self, _i: usize, _j: usize) -> Result<()> {
+        unimplemented!()
+    }
+
+    async fn start_validator(&mut self, _i: usize) -> Result<()> {
+        unimplemented!()
+    }
 }
 
 impl LocalKubernetesNet {
@@ -167,6 +211,7 @@ impl LocalKubernetesNet {
             kind_clusters,
             num_initial_validators,
             num_shards,
+            validator_names: BTreeMap::new(),
         })
     }
 
@@ -232,10 +277,15 @@ impl LocalKubernetesNet {
         for i in 0..self.num_initial_validators {
             command.arg(&self.configuration_string(i)?);
         }
-        command
+        let output = command
             .args(["--committee", "committee.json"])
             .spawn_and_wait_for_stdout()
             .await?;
+        self.validator_names = output
+            .split_whitespace()
+            .map(str::to_string)
+            .enumerate()
+            .collect();
         Ok(())
     }
 
