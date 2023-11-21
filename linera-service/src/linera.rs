@@ -666,6 +666,10 @@ struct ClientOptions {
     /// messages have been delivered.
     #[structopt(long)]
     wait_for_outgoing_messages: bool,
+
+    /// The number of Tokio worker threads to use.
+    #[structopt(long, env = "LINERA_CLIENT_TOKIO_THREADS")]
+    tokio_threads: Option<usize>,
 }
 
 impl ClientOptions {
@@ -2135,8 +2139,7 @@ async fn net_up(
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
+fn main() -> Result<(), anyhow::Error> {
     let env_filter = tracing_subscriber::EnvFilter::builder()
         .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
         .from_env_lossy();
@@ -2146,6 +2149,26 @@ async fn main() -> Result<(), anyhow::Error> {
         .init();
     let options = ClientOptions::init()?;
 
+    let mut runtime = if options.tokio_threads == Some(1) {
+        tokio::runtime::Builder::new_current_thread()
+    } else {
+        let mut builder = tokio::runtime::Builder::new_multi_thread();
+
+        if let Some(threads) = options.tokio_threads {
+            builder.worker_threads(threads);
+        }
+
+        builder
+    };
+
+    runtime
+        .enable_all()
+        .build()
+        .expect("Failed to create Tokio runtime")
+        .block_on(run(options))
+}
+
+async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
     match &options.command {
         ClientCommand::CreateGenesisConfig {
             committee_config_path,
