@@ -17,13 +17,20 @@ use linera_service_graphql_client::{
     Transfer,
 };
 use once_cell::sync::Lazy;
-use std::{collections::BTreeMap, io::Read, rc::Rc, str::FromStr};
+use std::{collections::BTreeMap, io::Read, rc::Rc, str::FromStr, time::Duration};
 use tempfile::tempdir;
 use test_case::test_case;
 use tokio::{process::Command, sync::Mutex};
 
 /// A static lock to prevent integration tests from running in parallel.
 pub static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+fn reqwest_client() -> reqwest::Client {
+    reqwest::ClientBuilder::new()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .unwrap()
+}
 
 async fn transfer(client: &reqwest::Client, url: &str, from: ChainId, to: ChainId, amount: &str) {
     let variables = transfer::Variables {
@@ -62,7 +69,7 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
         .unwrap();
 
     let mut node_service = client.run_node_service(None).await.unwrap();
-    let req_client = &reqwest::Client::new();
+    let req_client = &reqwest_client();
     let url = &format!("http://localhost:{}/", node_service.port());
 
     // sending a few transfers
@@ -109,7 +116,7 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
 
     // check block query
     let _block = request::<Block, _>(
-        &reqwest::Client::new(),
+        &reqwest_client(),
         &format!("http://localhost:{}/", node_service.port()),
         block::Variables {
             chain_id,

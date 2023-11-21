@@ -1,11 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::reqwest_client;
 use anyhow::Result;
 use serde_json::Value;
 
 pub async fn introspection(url: &str) -> Result<Value> {
-    let client = reqwest::Client::new();
+    let client = reqwest_client();
     let graphql_query =
         "query { \
            __schema { \

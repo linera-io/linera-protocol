@@ -36,6 +36,13 @@ use tracing::{info, warn};
 /// to the node-service command of the client.
 const CLIENT_SERVICE_ENV: &str = "LINERA_CLIENT_SERVICE_PARAMS";
 
+fn reqwest_client() -> reqwest::Client {
+    reqwest::ClientBuilder::new()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .unwrap()
+}
+
 /// Wrapper to run a Linera client command.
 pub struct ClientWrapper {
     testing_prng_seed: Option<u64>,
@@ -271,7 +278,7 @@ impl ClientWrapper {
         let child = command
             .args(["--port".to_string(), port.to_string()])
             .spawn_into()?;
-        let client = reqwest::Client::new();
+        let client = reqwest_client();
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let request = client
@@ -314,7 +321,7 @@ impl ClientWrapper {
             .args(["--port".to_string(), port.to_string()])
             .args(["--amount".to_string(), amount.to_string()])
             .spawn_into()?;
-        let client = reqwest::Client::new();
+        let client = reqwest_client();
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let request = client
@@ -684,7 +691,7 @@ impl NodeService {
         for i in 0..n_try {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let url = format!("http://localhost:{}/", self.port);
-            let client = reqwest::Client::new();
+            let client = reqwest_client();
             let response = client
                 .post(url)
                 .json(&json!({ "query": query }))
@@ -808,7 +815,7 @@ impl Faucet {
 
     pub async fn request_genesis_config(url: &str) -> Result<GenesisConfig> {
         let query = "query { genesisConfig }";
-        let client = reqwest::Client::new();
+        let client = reqwest_client();
         let response = client
             .post(url)
             .json(&json!({ "query": query }))
@@ -838,7 +845,7 @@ impl Faucet {
                 messageId chainId certificateHash \
             }} }}"
         );
-        let client = reqwest::Client::new();
+        let client = reqwest_client();
         let response = client
             .post(url)
             .json(&json!({ "query": &query }))
@@ -892,7 +899,7 @@ pub struct ApplicationWrapper<A> {
 impl<A> ApplicationWrapper<A> {
     pub async fn raw_query(&self, query: impl AsRef<str>) -> Result<Value> {
         let query = query.as_ref();
-        let client = reqwest::Client::new();
+        let client = reqwest_client();
         let response = client
             .post(&self.uri)
             .json(&json!({ "query": query }))
