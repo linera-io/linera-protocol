@@ -125,12 +125,15 @@ where
     }
 }
 
-/// GreatestLowerBoundIterator iterates over the entries of a BTreeSet.
-/// The function call `get_lower_bound(val)` returns a `Some(x)` where `x` is the highest
-/// entry such that `x <= val`. If none exists then None is returned.
+/// `GreatestLowerBoundIterator` iterates over the entries of a container ordered
+/// lexicographically.
 ///
-/// The function calls `is_index_absent` have to be done with increasing
-/// values in order to get correct results.
+/// The function call `get_lower_bound(val)` returns a `Some(x)` where `x` is the highest
+/// entry such that `x <= val`. If none exists then None is returned. The function calls
+/// have to be done with increasing `val`.
+///
+/// The function calls `is_index_absent(val)` tests whether there exist a prefix p in the
+/// set of vectors such that p is a prefix of val.
 pub(crate) struct GreatestLowerBoundIterator<'a, IT> {
     prefix_len: usize,
     prec1: Option<&'a Vec<u8>>,
@@ -153,26 +156,14 @@ where
         }
     }
 
-    fn compar(&self, x: &'a Vec<u8>, val: &[u8]) -> bool {
-        let len1 = x.len() - self.prefix_len;
-        let len2 = val.len();
-        let min_len = len1.min(len2);
-        for u in 0..min_len {
-            if x[self.prefix_len + u] > val[u] {
-                return true;
-            }
-        }
-        len1 > len2
-    }
-
-    fn get_lower_bound(&mut self, val: &[u8]) -> Option<&'a Vec<u8>> {
+    pub(crate) fn get_lower_bound(&mut self, val: &[u8]) -> Option<&'a Vec<u8>> {
         loop {
             match &self.prec2 {
                 None => {
                     return self.prec1;
                 }
                 Some(x) => {
-                    if self.compar(x, val) {
+                    if &x[self.prefix_len..] > val {
                         return self.prec1;
                     }
                 }
