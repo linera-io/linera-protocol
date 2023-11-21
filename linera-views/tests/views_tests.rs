@@ -940,8 +940,8 @@ where
             subview.push(value_usize as u32);
         }
         //
-        let thr = rng.gen_range(0..20);
-        if thr == 0 {
+        let choice = rng.gen_range(0..20);
+        if choice == 0 {
             view.save().await.unwrap();
         }
     }
@@ -984,8 +984,8 @@ where
             DeletePrefix { key_prefix: _ } => {}
         }
         //
-        let thr = rng.gen_range(0..10);
-        if thr == 0 {
+        let choice = rng.gen_range(0..10);
+        if choice == 0 {
             view.save().await.unwrap();
         }
     }
@@ -1009,8 +1009,8 @@ where
         view.log.push(value_usize as u32);
         view.queue.push_back(value_usize as u64);
         //
-        let thr = rng.gen_range(0..20);
-        if thr == 0 {
+        let choice = rng.gen_range(0..20);
+        if choice == 0 {
             view.save().await.unwrap();
         }
     }
@@ -1076,8 +1076,8 @@ async fn check_hash_memoization_persistence<S>(
         let str1 = format!("{:?}", &pair.1);
         let pair0_first_u8 = *pair.0.first().unwrap();
         let pair1_first_u8 = *pair.1.first().unwrap();
-        let thr = rng.gen_range(0..7);
-        if thr < 3 {
+        let choice = rng.gen_range(0..7);
+        if choice < 3 {
             let mut view = store.load(1).await.unwrap();
             view.x1.set(pair0_first_u8 as u64);
             view.x2.set(pair1_first_u8 as u32);
@@ -1088,25 +1088,25 @@ async fn check_hash_memoization_persistence<S>(
             view.map.insert(&str0, pair1_first_u8 as usize).unwrap();
             view.map.insert(&str1, pair0_first_u8 as usize).unwrap();
             view.key_value_store.insert(pair.0.clone(), pair.1.clone());
-            if thr == 0 {
+            if choice == 0 {
                 view.rollback();
                 let hash_new = view.hash().await.unwrap();
                 assert_eq!(hash, hash_new);
             } else {
                 let hash_new = view.hash().await.unwrap();
                 assert_ne!(hash, hash_new);
-                if thr == 2 {
+                if choice == 2 {
                     view.save().await.unwrap();
                     hash = hash_new;
                 }
             }
         }
-        if thr == 3 {
+        if choice == 3 {
             let view = store.load(1).await.unwrap();
             let hash_new = view.hash().await.unwrap();
             assert_eq!(hash, hash_new);
         }
-        if thr == 4 {
+        if choice == 4 {
             let mut view = store.load(1).await.unwrap();
             let subview = view.collection.load_entry_mut(&str0).await.unwrap();
             subview.push(pair1_first_u8 as u32);
@@ -1115,7 +1115,7 @@ async fn check_hash_memoization_persistence<S>(
             view.save().await.unwrap();
             hash = hash_new;
         }
-        if thr == 5 {
+        if choice == 5 {
             let mut view = store.load(1).await.unwrap();
             if view.queue.count() > 0 {
                 view.queue.delete_front();
@@ -1125,7 +1125,7 @@ async fn check_hash_memoization_persistence<S>(
                 hash = hash_new;
             }
         }
-        if thr == 6 {
+        if choice == 6 {
             let mut view = store.load(1).await.unwrap();
             let indices = view.collection.indices().await.unwrap();
             let size = indices.len();

@@ -35,9 +35,9 @@ async fn map_view_mutability_check() {
         let mut new_state_map = state_map.clone();
         let mut new_state_vec = state_vec.clone();
         for _ in 0..count_oper {
-            let thr = rng.gen_range(0..5);
+            let choice = rng.gen_range(0..5);
             let count = view.map.count().await.unwrap();
-            if thr == 0 {
+            if choice == 0 {
                 // inserting random stuff
                 let n_ins = rng.gen_range(0..10);
                 for _ in 0..n_ins {
@@ -52,7 +52,7 @@ async fn map_view_mutability_check() {
                     new_state_map.insert(key, value);
                 }
             }
-            if thr == 1 && count > 0 {
+            if choice == 1 && count > 0 {
                 // deleting some entries
                 let n_remove = rng.gen_range(0..count);
                 for _ in 0..n_remove {
@@ -62,19 +62,19 @@ async fn map_view_mutability_check() {
                     new_state_map.remove(&vec.0);
                 }
             }
-            if thr == 2 && count > 0 {
+            if choice == 2 && count > 0 {
                 // deleting a prefix
                 let val = rng.gen_range(0..5) as u8;
                 let key_prefix = vec![val];
                 view.map.remove_by_prefix(key_prefix.clone());
                 remove_by_prefix(&mut new_state_map, key_prefix);
             }
-            if thr == 3 {
+            if choice == 3 {
                 // Doing the clearing
                 view.clear();
                 new_state_map.clear();
             }
-            if thr == 4 {
+            if choice == 4 {
                 // Doing the rollback
                 view.rollback();
                 new_state_map = state_map.clone();
