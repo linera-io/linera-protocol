@@ -123,19 +123,19 @@ where
     }
 }
 
-/// NextLowerKeyIterator iterates over the entries of a BTreeSet.
+/// GreatestLowerBoundIterator iterates over the entries of a BTreeSet.
 /// The function call `get_lower_bound(val)` returns a `Some(x)` where `x` is the highest
 /// entry such that `x <= val`. If none exists then None is returned.
 ///
 /// The function calls `get_lower_bound` have to be called with increasing
 /// values in order to get correct results.
-pub(crate) struct NextLowerKeyIterator<'a, T: 'static> {
+pub(crate) struct GreatestLowerBoundIterator<'a, T: 'static> {
     prec1: Option<T>,
     prec2: Option<T>,
     iter: std::collections::btree_set::Iter<'a, T>,
 }
 
-impl<'a, T> NextLowerKeyIterator<'a, T>
+impl<'a, T> GreatestLowerBoundIterator<'a, T>
 where
     T: PartialOrd + Clone,
 {
@@ -153,7 +153,7 @@ where
                     return self.prec1.clone();
                 }
                 Some(x) => {
-                    if x.clone() > val {
+                    if *x > val {
                         return self.prec1.clone();
                     }
                 }
@@ -164,8 +164,8 @@ where
     }
 }
 
-impl<'a> NextLowerKeyIterator<'a, Vec<u8>> {
-    pub(crate) fn is_index_present(&mut self, index: &[u8]) -> bool {
+impl<'a> GreatestLowerBoundIterator<'a, Vec<u8>> {
+    pub(crate) fn is_index_absent(&mut self, index: &[u8]) -> bool {
         let lower_bound = self.get_lower_bound(index.to_vec());
         match lower_bound {
             None => true,
@@ -173,7 +173,7 @@ impl<'a> NextLowerKeyIterator<'a, Vec<u8>> {
                 if key_prefix.len() > index.len() {
                     return true;
                 }
-                index[0..key_prefix.len()].to_vec() != key_prefix.to_vec()
+                index[0..key_prefix.len()] != key_prefix
             }
         }
     }
@@ -189,7 +189,7 @@ fn test_lower_bound() {
     set.insert(24);
     set.insert(40);
 
-    let mut lower_bound = NextLowerKeyIterator::new(&set);
+    let mut lower_bound = GreatestLowerBoundIterator::new(&set);
     assert_eq!(lower_bound.get_lower_bound(3), None);
     assert_eq!(lower_bound.get_lower_bound(15), Some(10));
     assert_eq!(lower_bound.get_lower_bound(17), Some(10));

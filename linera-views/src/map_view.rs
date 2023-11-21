@@ -20,7 +20,7 @@ use crate::{
     batch::Batch,
     common::{
         get_interval, Context, CustomSerialize, HasherOutput, KeyIterable, KeyValueIterable,
-        NextLowerKeyIterator, Update, MIN_VIEW_TAG,
+        GreatestLowerBoundIterator, Update, MIN_VIEW_TAG,
     },
     views::{HashableView, Hasher, View, ViewError},
 };
@@ -329,14 +329,14 @@ where
         let mut update = updates.next();
         let mut deleted_prefixes = BTreeSet::new();
         let mut lower_bound = if prefix_len == 0 {
-            NextLowerKeyIterator::new(&self.deleted_prefixes)
+            GreatestLowerBoundIterator::new(&self.deleted_prefixes)
         } else {
             for deleted_prefix in &self.deleted_prefixes {
                 if deleted_prefix.len() >= prefix_len && deleted_prefix[0..prefix_len] == prefix {
                     deleted_prefixes.insert(deleted_prefix[prefix_len..].to_vec());
                 }
             }
-            NextLowerKeyIterator::new(&deleted_prefixes)
+            GreatestLowerBoundIterator::new(&deleted_prefixes)
         };
         if !self.was_cleared {
             let base = self.context.base_tag_index(KeyTag::Index as u8, &prefix);
@@ -356,7 +356,7 @@ where
                             }
                         }
                         _ => {
-                            if lower_bound.is_index_present(index) && !f(index)? {
+                            if lower_bound.is_index_absent(index) && !f(index)? {
                                 return Ok(());
                             }
                             break;
@@ -533,14 +533,14 @@ where
         let mut update = updates.next();
         let mut deleted_prefixes = BTreeSet::new();
         let mut lower_bound = if prefix_len == 0 {
-            NextLowerKeyIterator::new(&self.deleted_prefixes)
+            GreatestLowerBoundIterator::new(&self.deleted_prefixes)
         } else {
             for deleted_prefix in &self.deleted_prefixes {
                 if deleted_prefix.len() >= prefix_len && deleted_prefix[0..prefix_len] == prefix {
                     deleted_prefixes.insert(deleted_prefix[prefix_len..].to_vec());
                 }
             }
-            NextLowerKeyIterator::new(&deleted_prefixes)
+            GreatestLowerBoundIterator::new(&deleted_prefixes)
         };
         if !self.was_cleared {
             let base = self.context.base_tag_index(KeyTag::Index as u8, &prefix);
@@ -566,7 +566,7 @@ where
                             }
                         }
                         _ => {
-                            if lower_bound.is_index_present(index) && !f(index, bytes)? {
+                            if lower_bound.is_index_absent(index) && !f(index, bytes)? {
                                 return Ok(());
                             }
                             break;
