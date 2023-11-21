@@ -12,6 +12,10 @@ struct DatabaseToolOptions {
     /// Subcommands. Acceptable values are run and generate.
     #[structopt(subcommand)]
     command: DatabaseToolCommand,
+
+    /// The number of Tokio worker threads to use.
+    #[structopt(long, env = "LINERA_DB_TOOL_TOKIO_THREADS")]
+    tokio_threads: Option<usize>,
 }
 
 #[derive(StructOpt)]
@@ -120,8 +124,7 @@ async fn evaluate_options(options: DatabaseToolOptions) -> Result<i32, anyhow::E
     Ok(0)
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let env_filter = tracing_subscriber::EnvFilter::builder()
         .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
         .from_env_lossy();
@@ -131,7 +134,26 @@ async fn main() {
         .init();
 
     let options = DatabaseToolOptions::from_args();
-    let error_code = match evaluate_options(options).await {
+
+    let mut runtime = if options.tokio_threads == Some(1) {
+        tokio::runtime::Builder::new_current_thread()
+    } else {
+        let mut builder = tokio::runtime::Builder::new_multi_thread();
+
+        if let Some(threads) = options.tokio_threads {
+            builder.worker_threads(threads);
+        }
+
+        builder
+    };
+
+    let result = runtime
+        .enable_all()
+        .build()
+        .expect("Failed to create Tokio runtime")
+        .block_on(evaluate_options(options));
+
+    let error_code = match result {
         Ok(code) => code,
         Err(msg) => {
             tracing::error!("Error is {:?}", msg);
