@@ -28,7 +28,7 @@ use crate::{
 };
 
 #[cfg(feature = "scylladb")]
-use crate::{scylla_db::create_scylla_db_test_client, scylla_db::ScyllaDbContext};
+use crate::{scylla_db::create_scylla_db_test_store, scylla_db::ScyllaDbContext};
 
 #[tokio::test]
 async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error> {
@@ -286,9 +286,9 @@ impl TestContextFactory for ScyllaDbContextFactory {
     type Context = ScyllaDbContext<()>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let client = create_scylla_db_test_client().await;
-        let table_name = client.get_table_name().await;
-        let context = ScyllaDbContext::new(client, vec![], ());
+        let store = create_scylla_db_test_store().await;
+        let table_name = store.get_table_name().await;
+        let context = ScyllaDbContext::new(store, vec![], ());
 
         self.table_names.push(table_name);
 

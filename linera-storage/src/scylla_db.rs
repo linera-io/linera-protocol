@@ -5,7 +5,7 @@ use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
 use linera_execution::WasmRuntime;
 use linera_views::{
     common::TableStatus,
-    scylla_db::{ScyllaDbClient, ScyllaDbContextError, ScyllaDbStoreConfig},
+    scylla_db::{ScyllaDbStore, ScyllaDbContextError, ScyllaDbStoreConfig},
 };
 use std::sync::Arc;
 
@@ -19,7 +19,7 @@ use {
 #[path = "unit_tests/scylla_db.rs"]
 mod tests;
 
-type ScyllaDbStorageInner = DbStorageInner<ScyllaDbClient>;
+type ScyllaDbStorageInner = DbStorageInner<ScyllaDbStore>;
 
 impl ScyllaDbStorageInner {
     #[cfg(any(test, feature = "test"))]
@@ -27,8 +27,8 @@ impl ScyllaDbStorageInner {
         store_config: ScyllaDbStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
-        let (client, table_status) = ScyllaDbClient::new_for_testing(store_config).await?;
-        let storage = Self::new(client, wasm_runtime);
+        let (store, table_status) = ScyllaDbStore::new_for_testing(store_config).await?;
+        let storage = Self::new(store, wasm_runtime);
         Ok((storage, table_status))
     }
 
@@ -36,8 +36,8 @@ impl ScyllaDbStorageInner {
         store_config: ScyllaDbStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, ScyllaDbContextError> {
-        let client = ScyllaDbClient::initialize(store_config).await?;
-        let storage = Self::new(client, wasm_runtime);
+        let store = ScyllaDbStore::initialize(store_config).await?;
+        let storage = Self::new(store, wasm_runtime);
         Ok(storage)
     }
 
@@ -45,13 +45,13 @@ impl ScyllaDbStorageInner {
         store_config: ScyllaDbStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
-        let (client, table_status) = ScyllaDbClient::new(store_config).await?;
-        let storage = Self::new(client, wasm_runtime);
+        let (store, table_status) = ScyllaDbStore::new(store_config).await?;
+        let storage = Self::new(store, wasm_runtime);
         Ok((storage, table_status))
     }
 }
 
-pub type ScyllaDbStorage<C> = DbStorage<ScyllaDbClient, C>;
+pub type ScyllaDbStorage<C> = DbStorage<ScyllaDbStore, C>;
 
 #[cfg(any(test, feature = "test"))]
 impl ScyllaDbStorage<TestClock> {

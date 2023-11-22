@@ -44,7 +44,7 @@ use linera_views::{
 };
 
 #[cfg(feature = "scylladb")]
-use linera_views::scylla_db::{create_scylla_db_test_client, ScyllaDbClient, ScyllaDbContext};
+use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbStore, ScyllaDbContext};
 
 #[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 use std::collections::BTreeSet;
@@ -190,7 +190,7 @@ impl StateStore for RocksDbTestStore {
 
 #[cfg(feature = "scylladb")]
 pub struct ScyllaDbTestStore {
-    client: ScyllaDbClient,
+    store: ScyllaDbStore,
     accessed_chains: BTreeSet<usize>,
 }
 
@@ -200,10 +200,10 @@ impl StateStore for ScyllaDbTestStore {
     type Context = ScyllaDbContext<usize>;
 
     async fn new() -> Self {
-        let client = create_scylla_db_test_client().await;
+        let store = create_scylla_db_test_store().await;
         let accessed_chains = BTreeSet::new();
         ScyllaDbTestStore {
-            client,
+            store,
             accessed_chains,
         }
     }
@@ -213,7 +213,7 @@ impl StateStore for ScyllaDbTestStore {
         // TODO(#643): Actually acquire a lock.
         tracing::trace!("Acquiring lock on {:?}", id);
         let base_key = bcs::to_bytes(&id)?;
-        let context = ScyllaDbContext::new(self.client.clone(), base_key, id);
+        let context = ScyllaDbContext::new(self.store.clone(), base_key, id);
         StateView::load(context).await
     }
 }

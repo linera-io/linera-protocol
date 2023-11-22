@@ -27,7 +27,7 @@ use {
 use {
     anyhow::Context,
     linera_storage::ScyllaDbStorage,
-    linera_views::scylla_db::{ScyllaDbClient, ScyllaDbStoreConfig},
+    linera_views::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
     std::num::NonZeroU16,
     tracing::debug,
 };
@@ -244,7 +244,7 @@ impl StoreConfig {
             }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(config) => {
-                ScyllaDbClient::delete_all(config).await?;
+                ScyllaDbStore::delete_all(config).await?;
                 Ok(())
             }
         }
@@ -269,7 +269,7 @@ impl StoreConfig {
             }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(config) => {
-                ScyllaDbClient::delete_single(config).await?;
+                ScyllaDbStore::delete_single(config).await?;
                 Ok(())
             }
         }
@@ -287,7 +287,7 @@ impl StoreConfig {
             #[cfg(feature = "aws")]
             StoreConfig::DynamoDb(config) => Ok(DynamoDbStore::test_existence(config).await?),
             #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config) => Ok(ScyllaDbClient::test_existence(config).await?),
+            StoreConfig::ScyllaDb(config) => Ok(ScyllaDbStore::test_existence(config).await?),
         }
     }
 
@@ -310,7 +310,7 @@ impl StoreConfig {
             }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(config) => {
-                ScyllaDbClient::initialize(config).await?;
+                ScyllaDbStore::initialize(config).await?;
                 Ok(())
             }
         }
@@ -335,7 +335,7 @@ impl StoreConfig {
             }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(config) => {
-                let tables = ScyllaDbClient::list_tables(config).await?;
+                let tables = ScyllaDbStore::list_tables(config).await?;
                 Ok(tables)
             }
         }
@@ -435,7 +435,7 @@ pub async fn test_existence_storage(config: StoreConfig) -> Result<bool, anyhow:
         #[cfg(feature = "aws")]
         StoreConfig::DynamoDb(config) => Ok(DynamoDbStore::test_existence(config).await?),
         #[cfg(feature = "scylladb")]
-        StoreConfig::ScyllaDb(config) => Ok(ScyllaDbClient::test_existence(config).await?),
+        StoreConfig::ScyllaDb(config) => Ok(ScyllaDbStore::test_existence(config).await?),
     }
 }
 
