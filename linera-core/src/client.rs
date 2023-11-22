@@ -16,8 +16,8 @@ use futures::{
     channel::mpsc,
     future,
     lock::Mutex,
-    sink,
     stream::{self, FuturesUnordered, StreamExt},
+    Stream,
 };
 use linera_base::{
     abi::{Abi, ContractAbi},
@@ -50,6 +50,7 @@ use std::{
     convert::Infallible,
     iter,
     num::NonZeroUsize,
+    pin::Pin,
     sync::Arc,
     time::Duration,
 };
@@ -618,7 +619,9 @@ where
     }
 
     /// Listens to notifications about the current chain from all validators.
-    pub async fn listen(this: Arc<Mutex<Self>>) -> Result<(), ChainClientError>
+    pub async fn listen(
+        this: Arc<Mutex<Self>>,
+    ) -> Result<Pin<Box<dyn Stream<Item = ()> + Send>>, ChainClientError>
     where
         P: Send + 'static,
     {
@@ -636,11 +639,10 @@ where
                         error!("Failed to update committee: {}", err);
                     }
                 }
-                Some((Ok(()), streams))
+                Some(((), streams))
             }
         });
-        stream.forward(sink::drain()).await?;
-        Ok(())
+        Ok(Box::pin(stream))
     }
 
     async fn update_streams(
