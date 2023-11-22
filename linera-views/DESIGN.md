@@ -11,7 +11,7 @@ of a key-value store whose keys are `Vec<u8>` and whose values are `Vec<u8>`.
 We provide an implementation of the trait `KeyValueStore` for the following key-value stores:
 * `MemoryClient` is using the memory (and uses internally a simple B-Tree map).
 * `RocksDbStore` is a disk-based key-value store
-* `DynamoDbClient` is the AWS-based DynamoDB service.
+* `DynamoDbStore` is the AWS-based DynamoDB service.
 
 The trait `KeyValueStore` was designed so that more storage solutions can be easily added in the future.
 

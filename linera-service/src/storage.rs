@@ -20,7 +20,7 @@ use {
 #[cfg(feature = "aws")]
 use {
     linera_storage::DynamoDbStorage,
-    linera_views::dynamo_db::{get_config, DynamoDbClient, DynamoDbStoreConfig, TableName},
+    linera_views::dynamo_db::{get_config, DynamoDbStore, DynamoDbStoreConfig, TableName},
 };
 
 #[cfg(feature = "scylladb")]
@@ -239,7 +239,7 @@ impl StoreConfig {
             }
             #[cfg(feature = "aws")]
             StoreConfig::DynamoDb(config) => {
-                DynamoDbClient::delete_all(config).await?;
+                DynamoDbStore::delete_all(config).await?;
                 Ok(())
             }
             #[cfg(feature = "scylladb")]
@@ -264,7 +264,7 @@ impl StoreConfig {
             }
             #[cfg(feature = "aws")]
             StoreConfig::DynamoDb(config) => {
-                DynamoDbClient::delete_single(config).await?;
+                DynamoDbStore::delete_single(config).await?;
                 Ok(())
             }
             #[cfg(feature = "scylladb")]
@@ -285,7 +285,7 @@ impl StoreConfig {
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config) => Ok(RocksDbStore::test_existence(config).await?),
             #[cfg(feature = "aws")]
-            StoreConfig::DynamoDb(config) => Ok(DynamoDbClient::test_existence(config).await?),
+            StoreConfig::DynamoDb(config) => Ok(DynamoDbStore::test_existence(config).await?),
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(config) => Ok(ScyllaDbClient::test_existence(config).await?),
         }
@@ -305,7 +305,7 @@ impl StoreConfig {
             }
             #[cfg(feature = "aws")]
             StoreConfig::DynamoDb(config) => {
-                DynamoDbClient::initialize(config).await?;
+                DynamoDbStore::initialize(config).await?;
                 Ok(())
             }
             #[cfg(feature = "scylladb")]
@@ -330,7 +330,7 @@ impl StoreConfig {
             }),
             #[cfg(feature = "aws")]
             StoreConfig::DynamoDb(config) => {
-                let tables = DynamoDbClient::list_tables(config).await?;
+                let tables = DynamoDbStore::list_tables(config).await?;
                 Ok(tables)
             }
             #[cfg(feature = "scylladb")]
@@ -433,7 +433,7 @@ pub async fn test_existence_storage(config: StoreConfig) -> Result<bool, anyhow:
         #[cfg(feature = "rocksdb")]
         StoreConfig::RocksDb(config) => Ok(RocksDbStore::test_existence(config).await?),
         #[cfg(feature = "aws")]
-        StoreConfig::DynamoDb(config) => Ok(DynamoDbClient::test_existence(config).await?),
+        StoreConfig::DynamoDb(config) => Ok(DynamoDbStore::test_existence(config).await?),
         #[cfg(feature = "scylladb")]
         StoreConfig::ScyllaDb(config) => Ok(ScyllaDbClient::test_existence(config).await?),
     }

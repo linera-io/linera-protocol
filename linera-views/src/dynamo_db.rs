@@ -302,7 +302,7 @@ impl TransactionBuilder {
     fn insert_delete_request(
         &mut self,
         key: Vec<u8>,
-        db: &DynamoDbClientInternal,
+        db: &DynamoDbStoreInternal,
     ) -> Result<(), DynamoDbContextError> {
         let transact = db.build_delete_transact(key)?;
         self.transacts.push(transact);
@@ -313,14 +313,14 @@ impl TransactionBuilder {
         &mut self,
         key: Vec<u8>,
         value: Vec<u8>,
-        db: &DynamoDbClientInternal,
+        db: &DynamoDbStoreInternal,
     ) -> Result<(), DynamoDbContextError> {
         let transact = db.build_put_transact(key, value)?;
         self.transacts.push(transact);
         Ok(())
     }
 
-    async fn submit(self, db: &DynamoDbClientInternal) -> Result<(), DynamoDbContextError> {
+    async fn submit(self, db: &DynamoDbStoreInternal) -> Result<(), DynamoDbContextError> {
         db.submit_transactions(self.transacts).await
     }
 }
@@ -353,7 +353,7 @@ impl JournalHeader {
     /// Resolves the database by using the header that has been retrieved
     async fn coherently_resolve_journal(
         mut self,
-        db: &DynamoDbClientInternal,
+        db: &DynamoDbStoreInternal,
         base_key: &[u8],
     ) -> Result<(), DynamoDbContextError> {
         loop {
@@ -409,7 +409,7 @@ impl DynamoDbBatch {
     fn add_journal_header_operations(
         transact_builder: &mut TransactionBuilder,
         header: &JournalHeader,
-        db: &DynamoDbClientInternal,
+        db: &DynamoDbStoreInternal,
         base_key: &[u8],
     ) -> Result<(), DynamoDbContextError> {
         let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
@@ -425,7 +425,7 @@ impl DynamoDbBatch {
     /// Writes blocks to the database and resolves them later.
     pub async fn write_journal(
         self,
-        db: &DynamoDbClientInternal,
+        db: &DynamoDbStoreInternal,
         base_key: &[u8],
     ) -> Result<JournalHeader, DynamoDbContextError> {
         let mut delete_iter = self.0.deletions.into_iter().peekable();
@@ -504,7 +504,7 @@ impl DynamoDbBatch {
     /// This code is for submitting the transaction in one single transaction when that is possible.
     pub async fn write_fastpath_failsafe(
         self,
-        db: &DynamoDbClientInternal,
+        db: &DynamoDbStoreInternal,
     ) -> Result<(), DynamoDbContextError> {
         let mut tb = TransactionBuilder::default();
         for key in self.0.deletions {
@@ -517,7 +517,7 @@ impl DynamoDbBatch {
     }
 
     async fn from_batch(
-        db: &DynamoDbClientInternal,
+        db: &DynamoDbStoreInternal,
         batch: Batch,
     ) -> Result<Self, DynamoDbContextError> {
         // The DynamoDB does not support the `DeletePrefix` operation.
@@ -533,7 +533,7 @@ impl DynamoDbBatch {
 
 /// A DynamoDB client.
 #[derive(Debug, Clone)]
-pub struct DynamoDbClientInternal {
+pub struct DynamoDbStoreInternal {
     client: Client,
     table: TableName,
     semaphore: Option<Arc<Semaphore>>,
@@ -541,7 +541,7 @@ pub struct DynamoDbClientInternal {
 }
 
 #[async_trait]
-impl DeletePrefixExpander for DynamoDbClientInternal {
+impl DeletePrefixExpander for DynamoDbStoreInternal {
     type Error = DynamoDbContextError;
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         let mut vector_list = Vec::new();
@@ -563,7 +563,7 @@ pub struct DynamoDbStoreConfig {
     pub common_config: CommonStoreConfig,
 }
 
-impl DynamoDbClientInternal {
+impl DynamoDbStoreInternal {
     fn build_delete_transact(
         &self,
         key: Vec<u8>,
@@ -653,7 +653,7 @@ impl DynamoDbClientInternal {
         }
     }
 
-    /// Creates a new [`DynamoDbClientInternal`] instance from scratch using the provided `config` parameters.
+    /// Creates a new [`DynamoDbStoreInternal`] instance from scratch using the provided `config` parameters.
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
         store_config: DynamoDbStoreConfig,
@@ -711,7 +711,7 @@ impl DynamoDbClientInternal {
         Ok(())
     }
 
-    /// Creates a new [`DynamoDbClientInternal`] instance using the provided `config` parameters.
+    /// Creates a new [`DynamoDbStoreInternal`] instance using the provided `config` parameters.
     pub async fn new(
         store_config: DynamoDbStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
@@ -749,7 +749,7 @@ impl DynamoDbClientInternal {
         Ok(client)
     }
 
-    /// Creates a new [`DynamoDbClientInternal`] instance using the provided `config` parameters.
+    /// Creates a new [`DynamoDbStoreInternal`] instance using the provided `config` parameters.
     async fn new_internal(
         client: Client,
         table: TableName,
@@ -1069,7 +1069,7 @@ impl KeyValueIterable<DynamoDbContextError> for DynamoDbKeyValues {
     }
 }
 
-impl DynamoDbClientInternal {
+impl DynamoDbStoreInternal {
     async fn get_list_responses(
         &self,
         attribute: &str,
@@ -1108,7 +1108,7 @@ impl DynamoDbClientInternal {
 }
 
 #[async_trait]
-impl KeyValueStore for DynamoDbClientInternal {
+impl KeyValueStore for DynamoDbStoreInternal {
     const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Error = DynamoDbContextError;
@@ -1180,130 +1180,130 @@ impl KeyValueStore for DynamoDbClientInternal {
 
 /// A shared DB client for DynamoDb implementing LruCaching
 #[derive(Clone)]
-pub struct DynamoDbClient {
-    client: LruCachingKeyValueClient<ValueSplittingKeyValueStore<DynamoDbClientInternal>>,
+pub struct DynamoDbStore {
+    store: LruCachingKeyValueClient<ValueSplittingKeyValueStore<DynamoDbStoreInternal>>,
 }
 
 #[async_trait]
-impl KeyValueStore for DynamoDbClient {
-    const MAX_VALUE_SIZE: usize = DynamoDbClientInternal::MAX_VALUE_SIZE;
+impl KeyValueStore for DynamoDbStore {
+    const MAX_VALUE_SIZE: usize = DynamoDbStoreInternal::MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE - 4;
     type Error = DynamoDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     fn max_stream_queries(&self) -> usize {
-        self.client.max_stream_queries()
+        self.store.max_stream_queries()
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
-        self.client.read_value_bytes(key).await
+        self.store.read_value_bytes(key).await
     }
 
     async fn read_multi_values_bytes(
         &self,
         key: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbContextError> {
-        self.client.read_multi_values_bytes(key).await
+        self.store.read_multi_values_bytes(key).await
     }
 
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::Keys, DynamoDbContextError> {
-        self.client.find_keys_by_prefix(key_prefix).await
+        self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, DynamoDbContextError> {
-        self.client.find_key_values_by_prefix(key_prefix).await
+        self.store.find_key_values_by_prefix(key_prefix).await
     }
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
-        self.client.write_batch(batch, base_key).await
+        self.store.write_batch(batch, base_key).await
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
-        self.client.clear_journal(base_key).await
+        self.store.clear_journal(base_key).await
     }
 }
 
-impl DynamoDbClient {
-    /// Creates a `DynamoDbClient` from scratch with an LRU cache
+impl DynamoDbStore {
+    /// Creates a `DynamoDbStore` from scratch with an LRU cache
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
         store_config: DynamoDbStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (client, table_status) = DynamoDbClientInternal::new_for_testing(store_config).await?;
-        let client = ValueSplittingKeyValueStore::new(client);
-        let client = Self {
-            client: LruCachingKeyValueClient::new(client, cache_size),
+        let (store, table_status) = DynamoDbStoreInternal::new_for_testing(store_config).await?;
+        let store = ValueSplittingKeyValueStore::new(store);
+        let store = Self {
+            store: LruCachingKeyValueClient::new(store, cache_size),
         };
-        Ok((client, table_status))
+        Ok((store, table_status))
     }
 
-    /// Initializes a `DynamoDbClient`.
+    /// Initializes a `DynamoDbStore`.
     pub async fn initialize(
         store_config: DynamoDbStoreConfig,
     ) -> Result<Self, DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let client = DynamoDbClientInternal::initialize(store_config).await?;
-        let client = ValueSplittingKeyValueStore::new(client);
-        let client = Self {
-            client: LruCachingKeyValueClient::new(client, cache_size),
+        let store = DynamoDbStoreInternal::initialize(store_config).await?;
+        let store = ValueSplittingKeyValueStore::new(store);
+        let store = Self {
+            store: LruCachingKeyValueClient::new(store, cache_size),
         };
-        Ok(client)
+        Ok(store)
     }
 
     /// Deletes all the tables from the database
     pub async fn test_existence(
         store_config: DynamoDbStoreConfig,
     ) -> Result<bool, DynamoDbContextError> {
-        DynamoDbClientInternal::test_existence(store_config).await
+        DynamoDbStoreInternal::test_existence(store_config).await
     }
 
     /// List all the tables of the database
     pub async fn list_tables(
         store_config: DynamoDbStoreConfig,
     ) -> Result<Vec<String>, DynamoDbContextError> {
-        DynamoDbClientInternal::list_tables(store_config).await
+        DynamoDbStoreInternal::list_tables(store_config).await
     }
 
     /// Deletes all the tables from the database
     pub async fn delete_all(
         store_config: DynamoDbStoreConfig,
     ) -> Result<(), DynamoDbContextError> {
-        DynamoDbClientInternal::delete_all(store_config).await
+        DynamoDbStoreInternal::delete_all(store_config).await
     }
 
     /// Deletes a single table from the database
     pub async fn delete_single(
         store_config: DynamoDbStoreConfig,
     ) -> Result<(), DynamoDbContextError> {
-        DynamoDbClientInternal::delete_single(store_config).await
+        DynamoDbStoreInternal::delete_single(store_config).await
     }
 
-    /// Creates a `DynamoDbClient` with an LRU cache
+    /// Creates a `DynamoDbStore` with an LRU cache
     pub async fn new(
         store_config: DynamoDbStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (client, table_name) = DynamoDbClientInternal::new(store_config).await?;
-        let client = ValueSplittingKeyValueStore::new(client);
-        let client = Self {
-            client: LruCachingKeyValueClient::new(client, cache_size),
+        let (store, table_name) = DynamoDbStoreInternal::new(store_config).await?;
+        let store = ValueSplittingKeyValueStore::new(store);
+        let store = Self {
+            store: LruCachingKeyValueClient::new(store, cache_size),
         };
-        Ok((client, table_name))
+        Ok((store, table_name))
     }
 }
 
-/// An implementation of [`Context`][trait1] based on [`DynamoDbClient`].
+/// An implementation of [`Context`][trait1] based on [`DynamoDbStore`].
 ///
 /// [trait1]: crate::common::Context
-pub type DynamoDbContext<E> = ContextFromDb<E, DynamoDbClient>;
+pub type DynamoDbContext<E> = ContextFromDb<E, DynamoDbStore>;
 
 impl<E> DynamoDbContext<E>
 where
@@ -1316,7 +1316,7 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (db, table_status) = DynamoDbClient::new_for_testing(store_config).await?;
+        let (db, table_status) = DynamoDbStore::new_for_testing(store_config).await?;
         let storage = DynamoDbContext {
             db,
             base_key,
@@ -1331,7 +1331,7 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (db, table_status) = DynamoDbClient::new(store_config).await?;
+        let (db, table_status) = DynamoDbStore::new(store_config).await?;
         let storage = DynamoDbContext {
             db,
             base_key,
@@ -1567,7 +1567,7 @@ pub fn create_dynamo_db_common_config() -> CommonStoreConfig {
 
 /// Creates a basic client that can be used for tests.
 #[cfg(any(test, feature = "test"))]
-pub async fn create_dynamo_db_test_client() -> DynamoDbClient {
+pub async fn create_dynamo_db_test_store() -> DynamoDbStore {
     let common_config = create_dynamo_db_common_config();
     let table = get_table_name();
     let table_name = table.parse().expect("Invalid table name");
@@ -1578,7 +1578,7 @@ pub async fn create_dynamo_db_test_client() -> DynamoDbClient {
         table_name,
         common_config,
     };
-    let (key_value_store, _) = DynamoDbClient::new_for_testing(store_config)
+    let (key_value_store, _) = DynamoDbStore::new_for_testing(store_config)
         .await
         .expect("key_value_store");
     key_value_store

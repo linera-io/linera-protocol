@@ -19,7 +19,7 @@
 //! We provide support for the following databases:
 //! * `MemoryClient` is using the memory
 //! * `RocksDbStore` is a disk-based key-value store
-//! * `DynamoDbClient` is the AWS-based DynamoDB service.
+//! * `DynamoDbStore` is the AWS-based DynamoDB service.
 //!
 //! The corresponding type in the code is the `KeyValueStore`.
 //! A context is the combination of a client and a path (named `base_key` which is
