@@ -5,12 +5,12 @@ use linera_views::{
     batch::{Batch, WriteOperation},
     common::{KeyIterable, KeyValueIterable, KeyValueStore},
     key_value_store_view::ViewContainer,
-    memory::{create_memory_client, create_memory_context},
+    memory::{create_memory_store, create_memory_context},
     test_utils::{
         get_random_byte_vector, get_random_key_prefix, get_random_key_values_prefix,
         get_small_key_space,
     },
-    value_splitting::create_test_memory_client,
+    value_splitting::create_test_memory_store,
 };
 use rand::{Rng, RngCore, SeedableRng};
 use std::collections::{BTreeMap, HashSet};
@@ -153,7 +153,7 @@ fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
 #[tokio::test]
 async fn test_reads_test_memory() {
     for scenario in get_random_test_scenarios() {
-        let key_value_store = create_test_memory_client();
+        let key_value_store = create_test_memory_store();
         run_reads(key_value_store, scenario).await;
     }
 }
@@ -161,7 +161,7 @@ async fn test_reads_test_memory() {
 #[tokio::test]
 async fn test_reads_memory() {
     for scenario in get_random_test_scenarios() {
-        let key_value_store = create_memory_client();
+        let key_value_store = create_memory_store();
         run_reads(key_value_store, scenario).await;
     }
 }
@@ -204,7 +204,7 @@ async fn test_reads_key_value_store_view_memory() {
 
 #[tokio::test]
 async fn test_reads_memory_specific() {
-    let key_value_store = create_memory_client();
+    let key_value_store = create_memory_store();
     let key_values = vec![
         (vec![0, 1, 255], Vec::new()),
         (vec![0, 1, 255, 37], Vec::new()),
@@ -349,13 +349,13 @@ async fn run_writes_from_blank<C: KeyValueStore + Sync>(key_value_store: &C) {
 
 #[tokio::test]
 async fn test_test_memory_writes_from_blank() {
-    let key_value_store = create_test_memory_client();
+    let key_value_store = create_test_memory_store();
     run_writes_from_blank(&key_value_store).await;
 }
 
 #[tokio::test]
 async fn test_memory_writes_from_blank() {
-    let key_value_store = create_memory_client();
+    let key_value_store = create_memory_store();
     run_writes_from_blank(&key_value_store).await;
 }
 
@@ -450,7 +450,7 @@ async fn test_scylla_db_big_write_read() {
 
 #[tokio::test]
 async fn test_memory_big_write_read() {
-    let key_value_store = create_memory_client();
+    let key_value_store = create_memory_store();
     let value_sizes = vec![100, 1000, 200000, 5000000];
     let target_size = 20000000;
     run_big_write_read(key_value_store, target_size, value_sizes).await;
@@ -589,7 +589,7 @@ async fn run_writes_from_state<C: KeyValueStore + Sync>(key_value_store: &C) {
 
 #[tokio::test]
 async fn test_memory_writes_from_state() {
-    let key_value_store = create_memory_client();
+    let key_value_store = create_memory_store();
     run_writes_from_state(&key_value_store).await;
 }
 

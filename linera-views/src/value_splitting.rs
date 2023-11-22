@@ -4,7 +4,7 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStore},
-    memory::{MemoryClient, MemoryContextError, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
+    memory::{MemoryStore, MemoryContextError, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
 };
 use async_lock::{Mutex, MutexGuardArc};
 use async_trait::async_trait;
@@ -37,7 +37,7 @@ pub enum DatabaseConsistencyError {
 #[derive(Clone)]
 pub struct ValueSplittingKeyValueStore<K> {
     /// The underlying client of the transformed client.
-    pub client: K,
+    pub store: K,
 }
 
 #[async_trait]
@@ -53,13 +53,13 @@ where
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     fn max_stream_queries(&self) -> usize {
-        self.client.max_stream_queries()
+        self.store.max_stream_queries()
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let mut big_key = key.to_vec();
         big_key.extend(&[0, 0, 0, 0]);
-        let value = self.client.read_value_bytes(&big_key).await?;
+        let value = self.store.read_value_bytes(&big_key).await?;
         let Some(value) = value else {
             return Ok(None);
         };
@@ -73,7 +73,7 @@ where
             let big_key_segment = Self::get_segment_key(key, i)?;
             big_keys.push(big_key_segment);
         }
-        let segments = self.client.read_multi_values_bytes(big_keys).await?;
+        let segments = self.store.read_multi_values_bytes(big_keys).await?;
         for segment in segments {
             match segment {
                 None => {
@@ -97,7 +97,7 @@ where
             big_key.extend(&[0, 0, 0, 0]);
             big_keys.push(big_key);
         }
-        let values = self.client.read_multi_values_bytes(big_keys).await?;
+        let values = self.store.read_multi_values_bytes(big_keys).await?;
         let mut big_values = Vec::<Option<Vec<u8>>>::new();
         let mut keys_add = Vec::new();
         let mut n_blocks = Vec::new();
@@ -121,7 +121,7 @@ where
         }
         if !keys_add.is_empty() {
             let mut segments = self
-                .client
+                .store
                 .read_multi_values_bytes(keys_add)
                 .await?
                 .into_iter();
@@ -143,7 +143,7 @@ where
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
         let mut keys = Vec::new();
         for big_key in self
-            .client
+            .store
             .find_keys_by_prefix(key_prefix)
             .await?
             .iterator()
@@ -162,7 +162,7 @@ where
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error> {
-        let small_key_values = self.client.find_key_values_by_prefix(key_prefix).await?;
+        let small_key_values = self.store.find_key_values_by_prefix(key_prefix).await?;
         let mut small_kv_iterator = small_key_values.into_iterator_owned();
         let mut key_values = Vec::new();
         while let Some(result) = small_kv_iterator.next() {
@@ -221,11 +221,11 @@ where
                 }
             }
         }
-        self.client.write_batch(batch_new, base_key).await
+        self.store.write_batch(batch_new, base_key).await
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
-        self.client.clear_journal(base_key).await
+        self.store.clear_journal(base_key).await
     }
 }
 
@@ -235,8 +235,8 @@ where
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
     /// Creates a new client that deals with big values from one that does not.
-    pub fn new(client: K) -> Self {
-        ValueSplittingKeyValueStore { client }
+    pub fn new(store: K) -> Self {
+        ValueSplittingKeyValueStore { store }
     }
 
     fn read_count_from_value(value: &[u8]) -> Result<u32, K::Error> {
@@ -278,12 +278,12 @@ where
 
 /// A virtual DB client where data are persisted in memory.
 #[derive(Clone)]
-pub struct TestMemoryClientInternal {
-    client: MemoryClient,
+pub struct TestMemoryStoreInternal {
+    store: MemoryStore,
 }
 
 #[async_trait]
-impl KeyValueStore for TestMemoryClientInternal {
+impl KeyValueStore for TestMemoryStoreInternal {
     // We set up the MAX_VALUE_SIZE to the artificially low value of 100
     // purely for testing purposes.
     const MAX_VALUE_SIZE: usize = 100;
@@ -297,28 +297,28 @@ impl KeyValueStore for TestMemoryClientInternal {
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
-        self.client.read_value_bytes(key).await
+        self.store.read_value_bytes(key).await
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, MemoryContextError> {
-        self.client.read_multi_values_bytes(keys).await
+        self.store.read_multi_values_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::Keys, MemoryContextError> {
-        self.client.find_keys_by_prefix(key_prefix).await
+        self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, MemoryContextError> {
-        self.client.find_key_values_by_prefix(key_prefix).await
+        self.store.find_key_values_by_prefix(key_prefix).await
     }
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), MemoryContextError> {
@@ -326,30 +326,30 @@ impl KeyValueStore for TestMemoryClientInternal {
             batch.check_value_size(Self::MAX_VALUE_SIZE),
             MemoryContextError::TooLargeValue
         );
-        self.client.write_batch(batch, base_key).await
+        self.store.write_batch(batch, base_key).await
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
-        self.client.clear_journal(base_key).await
+        self.store.clear_journal(base_key).await
     }
 }
 
-impl TestMemoryClientInternal {
-    /// Creates a `TestMemoryClient` from the guard
+impl TestMemoryStoreInternal {
+    /// Creates a `TestMemoryStore` from the guard
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>) -> Self {
-        let client = MemoryClient::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES);
-        TestMemoryClientInternal { client }
+        let store = MemoryStore::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES);
+        TestMemoryStoreInternal { store }
     }
 }
 
 /// Supposed to be removed later
 #[derive(Clone)]
-pub struct TestMemoryClient {
-    client: ValueSplittingKeyValueStore<TestMemoryClientInternal>,
+pub struct TestMemoryStore {
+    store: ValueSplittingKeyValueStore<TestMemoryStoreInternal>,
 }
 
 #[async_trait]
-impl KeyValueStore for TestMemoryClient {
+impl KeyValueStore for TestMemoryStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Error = MemoryContextError;
@@ -357,59 +357,59 @@ impl KeyValueStore for TestMemoryClient {
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     fn max_stream_queries(&self) -> usize {
-        self.client.max_stream_queries()
+        self.store.max_stream_queries()
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
-        self.client.read_value_bytes(key).await
+        self.store.read_value_bytes(key).await
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, MemoryContextError> {
-        self.client.read_multi_values_bytes(keys).await
+        self.store.read_multi_values_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::Keys, MemoryContextError> {
-        self.client.find_keys_by_prefix(key_prefix).await
+        self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, MemoryContextError> {
-        self.client.find_key_values_by_prefix(key_prefix).await
+        self.store.find_key_values_by_prefix(key_prefix).await
     }
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), MemoryContextError> {
-        self.client.write_batch(batch, base_key).await
+        self.store.write_batch(batch, base_key).await
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
-        self.client.clear_journal(base_key).await
+        self.store.clear_journal(base_key).await
     }
 }
 
-impl TestMemoryClient {
-    /// Creates a `TestMemoryClient` from the guard
+impl TestMemoryStore {
+    /// Creates a `TestMemoryStore` from the guard
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>) -> Self {
-        let client = TestMemoryClientInternal::new(guard);
-        let client = ValueSplittingKeyValueStore::new(client);
-        TestMemoryClient { client }
+        let store = TestMemoryStoreInternal::new(guard);
+        let store = ValueSplittingKeyValueStore::new(store);
+        TestMemoryStore { store }
     }
 }
 
 /// An implementation of [`crate::common::Context`] that stores all values in memory.
-pub type TestMemoryContext<E> = ContextFromDb<E, TestMemoryClient>;
+pub type TestMemoryContext<E> = ContextFromDb<E, TestMemoryStore>;
 
 impl<E> TestMemoryContext<E> {
     /// Creates a [`TestMemoryContext`].
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>, extra: E) -> Self {
-        let db = TestMemoryClient::new(guard);
+        let db = TestMemoryStore::new(guard);
         let base_key = Vec::new();
         Self {
             db,
@@ -430,22 +430,22 @@ pub fn create_test_memory_context() -> TestMemoryContext<()> {
     TestMemoryContext::new(guard, ())
 }
 
-/// Creates a `TestMemoryClient` for working.
-pub fn create_test_memory_client() -> TestMemoryClient {
+/// Creates a `TestMemoryStore` for working.
+pub fn create_test_memory_store() -> TestMemoryStore {
     let state = Arc::new(Mutex::new(BTreeMap::new()));
     let guard = state
         .try_lock_arc()
         .expect("We should acquire the lock just after creating the object");
-    TestMemoryClient::new(guard)
+    TestMemoryStore::new(guard)
 }
 
 /// An implementation of [`crate::common::Context`] that stores all values in memory.
-pub type TestMemoryContextInternal<E> = ContextFromDb<E, TestMemoryClientInternal>;
+pub type TestMemoryContextInternal<E> = ContextFromDb<E, TestMemoryStoreInternal>;
 
 impl<E> TestMemoryContextInternal<E> {
     /// Creates a [`TestMemoryContextInternal`].
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>, extra: E) -> Self {
-        let db = TestMemoryClientInternal::new(guard);
+        let db = TestMemoryStoreInternal::new(guard);
         let base_key = Vec::new();
         Self {
             db,
@@ -455,13 +455,13 @@ impl<E> TestMemoryContextInternal<E> {
     }
 }
 
-/// Provides a `TestMemoryClientInternal<()>` that can be used for tests.
-pub fn create_test_memory_client_internal() -> TestMemoryClientInternal {
+/// Provides a `TestMemoryStoreInternal<()>` that can be used for tests.
+pub fn create_test_memory_store_internal() -> TestMemoryStoreInternal {
     let state = Arc::new(Mutex::new(BTreeMap::new()));
     let guard = state
         .try_lock_arc()
         .expect("We should acquire the lock just after creating the object");
-    TestMemoryClientInternal::new(guard)
+    TestMemoryStoreInternal::new(guard)
 }
 
 /// Provides a `TestMemoryContextInternal<()>` that can be used for tests.
@@ -479,7 +479,7 @@ mod tests {
         batch::Batch,
         common::KeyValueStore,
         value_splitting::{
-            create_test_memory_client_internal, TestMemoryClientInternal,
+            create_test_memory_store_internal, TestMemoryStoreInternal,
             ValueSplittingKeyValueStore,
         },
     };
@@ -490,8 +490,8 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::assertions_on_constants)]
     async fn test_value_splitting1_testing_leftovers() {
-        let client = create_test_memory_client_internal();
-        const MAX_LEN: usize = TestMemoryClientInternal::MAX_VALUE_SIZE;
+        let client = create_test_memory_store_internal();
+        const MAX_LEN: usize = TestMemoryStoreInternal::MAX_VALUE_SIZE;
         assert!(MAX_LEN > 10);
         let big_client = ValueSplittingKeyValueStore::new(client.clone());
         let key = vec![0, 0];
@@ -516,8 +516,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_value_splitting2_testing_splitting() {
-        let client = create_test_memory_client_internal();
-        const MAX_LEN: usize = TestMemoryClientInternal::MAX_VALUE_SIZE;
+        let client = create_test_memory_store_internal();
+        const MAX_LEN: usize = TestMemoryStoreInternal::MAX_VALUE_SIZE;
         let big_client = ValueSplittingKeyValueStore::new(client.clone());
         let key = vec![0, 0];
         // Writing a big value
@@ -553,8 +553,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_value_splitting3_write_and_delete() {
-        let client = create_test_memory_client_internal();
-        const MAX_LEN: usize = TestMemoryClientInternal::MAX_VALUE_SIZE;
+        let client = create_test_memory_store_internal();
+        const MAX_LEN: usize = TestMemoryStoreInternal::MAX_VALUE_SIZE;
         let big_client = ValueSplittingKeyValueStore::new(client.clone());
         let key = vec![0, 0];
         // writing a big key
