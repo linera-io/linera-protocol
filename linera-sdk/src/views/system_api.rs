@@ -18,7 +18,7 @@ use linera_views::{
 /// That key length is decreased by 4 due to the use of a value splitting.
 /// Then the `KeyValueStore` needs to handle some base_key and so we
 /// reduce to 900. Depending on the size, the error can occur in system_api
-/// or in the KeyValueStoreView.
+/// or in the `KeyValueStoreView`.
 const MAX_KEY_SIZE: usize = 900;
 
 /// A type to interface with the key value storage provided to applications.
