@@ -79,12 +79,12 @@ impl Validator {
         }
     }
 
-    async fn terminate(mut self) -> Result<()> {
+    async fn terminate(&mut self) -> Result<()> {
         self.proxy
             .kill()
             .await
             .context("terminating validator proxy")?;
-        for mut server in self.servers {
+        for server in &mut self.servers {
             server
                 .kill()
                 .await
@@ -203,8 +203,8 @@ impl LineraNet for LocalNet {
         client
     }
 
-    async fn terminate(mut self) -> Result<()> {
-        for (_, validator) in self.running_validators {
+    async fn terminate(&mut self) -> Result<()> {
+        for validator in self.running_validators.values_mut() {
             validator.terminate().await.context("in local network")?
         }
         Ok(())

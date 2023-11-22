@@ -47,7 +47,7 @@ pub trait LineraNet {
 
     fn make_client(&mut self) -> ClientWrapper;
 
-    async fn terminate(mut self) -> Result<()>;
+    async fn terminate(&mut self) -> Result<()>;
 }
 
 /// Network protocol in use outside and inside a Linera net.
