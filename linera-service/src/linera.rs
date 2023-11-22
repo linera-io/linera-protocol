@@ -19,7 +19,6 @@ use linera_core::{
     local_node::LocalNodeClient,
     node::ValidatorNodeProvider,
     notifier::Notifier,
-    tracker::NotificationTracker,
     worker::WorkerState,
 };
 use linera_execution::{
@@ -1655,14 +1654,13 @@ impl Runnable for Job {
             }
 
             Watch { chain_id, raw } => {
-                let chain_client = context.make_chain_client(storage, chain_id);
+                let mut chain_client = context.make_chain_client(storage, chain_id);
                 let chain_id = chain_client.chain_id();
                 info!("Watching for notifications for chain {:?}", chain_id);
-                let mut tracker = NotificationTracker::default();
-                let mut notification_stream =
-                    ChainClient::listen(Arc::new(Mutex::new(chain_client))).await?;
+                let mut notification_stream = chain_client.subscribe().await?;
+                tokio::spawn(ChainClient::listen(Arc::new(Mutex::new(chain_client))));
                 while let Some(notification) = notification_stream.next().await {
-                    if raw || tracker.insert(notification.clone()) {
+                    if raw {
                         println!("{:?}", notification);
                     }
                 }

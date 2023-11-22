@@ -13,7 +13,6 @@ use linera_chain::data_types::OutgoingMessage;
 use linera_core::{
     client::ChainClient,
     node::ValidatorNodeProvider,
-    tracker::NotificationTracker,
     worker::{Notification, Reason},
 };
 use linera_execution::{Message, SystemMessage};
@@ -124,6 +123,9 @@ where
             let mut map_guard = clients.map_lock().await;
             let context_guard = context.lock().await;
             let btree_map::Entry::Vacant(entry) = map_guard.entry(chain_id) else {
+                // We got an OpenChain notification about a chain we already have, i.e. we
+                // downloaded the child before the parent. For every entry in the client map we
+                // are already listening to notifications, so there's nothing to do.
                 return Ok(());
             };
             let client = context_guard.make_chain_client(storage.clone(), chain_id);
@@ -131,24 +133,19 @@ where
             entry.insert(client.clone());
             client
         };
-        let mut stream = ChainClient::listen(client.clone()).await?;
-        tokio::spawn(async move { while stream.next().await.is_some() {} });
-        let mut tracker = NotificationTracker::default();
+        tokio::spawn(ChainClient::listen(client.clone()));
         let mut local_stream = {
             let mut guard = client.lock().await;
             let stream = guard.subscribe().await?;
             // Process the inbox: For messages that are already there we won't receive a
             // notification.
             guard.synchronize_from_validators().await?;
-            if let Err(error) = guard.process_inbox().await {
+            if let Err(error) = guard.process_inbox_if_owned().await {
                 warn!(%error, "Failed to process inbox after starting stream.");
             }
             stream
         };
         while let Some(notification) = local_stream.next().await {
-            if !tracker.is_new(&notification) {
-                continue;
-            }
             info!("Received new notification: {:?}", notification);
             if config.delay_before_ms > 0 {
                 tokio::time::sleep(Duration::from_millis(config.delay_before_ms)).await;
@@ -195,7 +192,6 @@ where
                     }
                 }
             }
-            tracker.insert(notification);
             let mut client_guard = client.lock().await;
             context.lock().await.update_wallet(&mut *client_guard).await;
         }
@@ -214,7 +210,7 @@ where
                 }
             }
             Reason::NewIncomingMessage { .. } => {
-                if let Err(e) = client.process_inbox().await {
+                if let Err(e) = client.process_inbox_if_owned().await {
                     warn!(
                         "Failed to process inbox after receiving new message: {:?} \
                         with error: {:?}",

@@ -16,6 +16,7 @@ use futures::{
     channel::mpsc,
     future,
     lock::Mutex,
+    sink,
     stream::{self, FuturesUnordered, StreamExt},
 };
 use linera_base::{
@@ -46,6 +47,7 @@ use linera_views::views::ViewError;
 use lru::LruCache;
 use std::{
     collections::{hash_map, BTreeMap, HashMap},
+    convert::Infallible,
     iter,
     num::NonZeroUsize,
     sync::Arc,
@@ -237,6 +239,12 @@ pub enum ChainClientError {
 
     #[error("Leader timeout certificate does not match the expected one.")]
     UnexpectedLeaderTimeout,
+}
+
+impl From<Infallible> for ChainClientError {
+    fn from(infallible: Infallible) -> Self {
+        infallible.into()
+    }
 }
 
 impl<P, S> ChainClient<P, S> {
@@ -610,7 +618,7 @@ where
     }
 
     /// Listens to notifications about the current chain from all validators.
-    pub async fn listen(this: Arc<Mutex<Self>>) -> Result<NotificationStream, ChainClientError>
+    pub async fn listen(this: Arc<Mutex<Self>>) -> Result<(), ChainClientError>
     where
         P: Send + 'static,
     {
@@ -628,10 +636,11 @@ where
                         error!("Failed to update committee: {}", err);
                     }
                 }
-                Some((notification, streams))
+                Some((Ok(()), streams))
             }
         });
-        Ok(Box::pin(stream))
+        stream.forward(sink::drain()).await?;
+        Ok(())
     }
 
     async fn update_streams(
@@ -1712,6 +1721,16 @@ where
             certificates.push(certificate);
         }
         Ok(certificates)
+    }
+
+    /// Creates an empty block to process all incoming messages. This may require several blocks.
+    /// If we are not a chain owner, this doesn't fail, and just returns an empty list.
+    pub async fn process_inbox_if_owned(&mut self) -> Result<Vec<Certificate>, ChainClientError> {
+        match self.process_inbox().await {
+            Ok(certificates) => Ok(certificates),
+            Err(ChainClientError::CannotFindKeyForChain(_)) => Ok(Vec::new()),
+            Err(error) => Err(error),
+        }
     }
 
     /// Starts listening to the admin chain for new committees. (This is only useful for
