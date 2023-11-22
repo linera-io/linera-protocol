@@ -15,7 +15,7 @@ use std::collections::VecDeque;
 use {
     crate::rocks_db::create_rocks_db_common_config,
     crate::rocks_db::RocksDbStoreConfig,
-    crate::rocks_db::{RocksDbClient, RocksDbContext},
+    crate::rocks_db::{RocksDbStore, RocksDbContext},
     tempfile::TempDir,
 };
 
@@ -227,10 +227,10 @@ impl TestContextFactory for RocksDbContextFactory {
             path_buf,
             common_config,
         };
-        let (client, _) = RocksDbClient::new_for_testing(store_config)
+        let (store, _) = RocksDbStore::new_for_testing(store_config)
             .await
-            .expect("client");
-        let context = RocksDbContext::new(client, vec![], ());
+            .expect("store");
+        let context = RocksDbContext::new(store, vec![], ());
 
         self.temporary_directories.push(directory);
 

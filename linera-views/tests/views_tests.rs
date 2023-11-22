@@ -34,7 +34,7 @@ use std::{
 };
 
 #[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::{create_rocks_db_test_client, RocksDbClient, RocksDbContext};
+use linera_views::rocks_db::{create_rocks_db_test_store, RocksDbStore, RocksDbContext};
 
 #[cfg(feature = "aws")]
 use linera_views::{
@@ -160,7 +160,7 @@ impl StateStore for LruMemoryStore {
 
 #[cfg(feature = "rocksdb")]
 pub struct RocksDbTestStore {
-    client: RocksDbClient,
+    store: RocksDbStore,
     accessed_chains: BTreeSet<usize>,
 }
 
@@ -170,10 +170,10 @@ impl StateStore for RocksDbTestStore {
     type Context = RocksDbContext<usize>;
 
     async fn new() -> Self {
-        let client = create_rocks_db_test_client().await;
+        let store = create_rocks_db_test_store().await;
         let accessed_chains = BTreeSet::new();
         RocksDbTestStore {
-            client,
+            store,
             accessed_chains,
         }
     }
@@ -183,7 +183,7 @@ impl StateStore for RocksDbTestStore {
         // TODO(#643): Actually acquire a lock.
         tracing::trace!("Acquiring lock on {:?}", id);
         let base_key = bcs::to_bytes(&id)?;
-        let context = RocksDbContext::new(self.client.clone(), base_key, id);
+        let context = RocksDbContext::new(self.store.clone(), base_key, id);
         StateView::load(context).await
     }
 }

@@ -5,7 +5,7 @@ use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
 use linera_execution::WasmRuntime;
 use linera_views::{
     common::TableStatus,
-    rocks_db::{RocksDbClient, RocksDbContextError, RocksDbStoreConfig},
+    rocks_db::{RocksDbStore, RocksDbContextError, RocksDbStoreConfig},
 };
 use std::sync::Arc;
 
@@ -19,7 +19,7 @@ use {
 #[path = "unit_tests/rocks_db.rs"]
 mod tests;
 
-type RocksDbStorageInner = DbStorageInner<RocksDbClient>;
+type RocksDbStorageInner = DbStorageInner<RocksDbStore>;
 
 impl RocksDbStorageInner {
     #[cfg(any(test, feature = "test"))]
@@ -27,7 +27,7 @@ impl RocksDbStorageInner {
         store_config: RocksDbStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), RocksDbContextError> {
-        let (client, table_status) = RocksDbClient::new_for_testing(store_config).await?;
+        let (client, table_status) = RocksDbStore::new_for_testing(store_config).await?;
         let storage = Self::new(client, wasm_runtime);
         Ok((storage, table_status))
     }
@@ -36,7 +36,7 @@ impl RocksDbStorageInner {
         store_config: RocksDbStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, RocksDbContextError> {
-        let client = RocksDbClient::initialize(store_config).await?;
+        let client = RocksDbStore::initialize(store_config).await?;
         let storage = Self::new(client, wasm_runtime);
         Ok(storage)
     }
@@ -45,13 +45,13 @@ impl RocksDbStorageInner {
         store_config: RocksDbStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), RocksDbContextError> {
-        let (client, table_status) = RocksDbClient::new(store_config).await?;
+        let (client, table_status) = RocksDbStore::new(store_config).await?;
         let storage = Self::new(client, wasm_runtime);
         Ok((storage, table_status))
     }
 }
 
-pub type RocksDbStorage<C> = DbStorage<RocksDbClient, C>;
+pub type RocksDbStorage<C> = DbStorage<RocksDbStore, C>;
 
 #[cfg(any(test, feature = "test"))]
 impl RocksDbStorage<TestClock> {

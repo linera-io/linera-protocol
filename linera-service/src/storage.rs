@@ -13,7 +13,7 @@ use tracing::error;
 #[cfg(feature = "rocksdb")]
 use {
     linera_storage::RocksDbStorage,
-    linera_views::rocks_db::{RocksDbClient, RocksDbStoreConfig},
+    linera_views::rocks_db::{RocksDbStore, RocksDbStoreConfig},
     std::path::PathBuf,
 };
 
@@ -234,7 +234,7 @@ impl StoreConfig {
             }),
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config) => {
-                RocksDbClient::delete_all(config).await?;
+                RocksDbStore::delete_all(config).await?;
                 Ok(())
             }
             #[cfg(feature = "aws")]
@@ -259,7 +259,7 @@ impl StoreConfig {
             }),
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config) => {
-                RocksDbClient::delete_single(config).await?;
+                RocksDbStore::delete_single(config).await?;
                 Ok(())
             }
             #[cfg(feature = "aws")]
@@ -283,7 +283,7 @@ impl StoreConfig {
                 error: "existence not make sense for memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config) => Ok(RocksDbClient::test_existence(config).await?),
+            StoreConfig::RocksDb(config) => Ok(RocksDbStore::test_existence(config).await?),
             #[cfg(feature = "aws")]
             StoreConfig::DynamoDb(config) => Ok(DynamoDbClient::test_existence(config).await?),
             #[cfg(feature = "scylladb")]
@@ -300,7 +300,7 @@ impl StoreConfig {
             }),
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config) => {
-                RocksDbClient::initialize(config).await?;
+                RocksDbStore::initialize(config).await?;
                 Ok(())
             }
             #[cfg(feature = "aws")]
@@ -431,7 +431,7 @@ pub async fn test_existence_storage(config: StoreConfig) -> Result<bool, anyhow:
             bail!("The initialization should not be called for memory");
         }
         #[cfg(feature = "rocksdb")]
-        StoreConfig::RocksDb(config) => Ok(RocksDbClient::test_existence(config).await?),
+        StoreConfig::RocksDb(config) => Ok(RocksDbStore::test_existence(config).await?),
         #[cfg(feature = "aws")]
         StoreConfig::DynamoDb(config) => Ok(DynamoDbClient::test_existence(config).await?),
         #[cfg(feature = "scylladb")]
