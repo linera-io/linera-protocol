@@ -3,7 +3,7 @@
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_interval, CommonStoreConfig, ContextFromDb, KeyValueStoreClient},
+    common::{get_interval, CommonStoreConfig, ContextFromDb, KeyValueStore},
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
 };
@@ -34,7 +34,7 @@ pub struct MemoryClient {
 }
 
 #[async_trait]
-impl KeyValueStoreClient for MemoryClient {
+impl KeyValueStore for MemoryClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Error = MemoryContextError;

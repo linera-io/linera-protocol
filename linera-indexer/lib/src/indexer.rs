@@ -14,7 +14,7 @@ use axum::{extract::Extension, routing::get, Router};
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
 use linera_chain::data_types::HashedValue;
 use linera_views::{
-    common::{Context, ContextFromDb, KeyValueStoreClient},
+    common::{Context, ContextFromDb, KeyValueStore},
     map_view::MapView,
     register_view::RegisterView,
     set_view::SetView,
@@ -56,7 +56,7 @@ enum LatestBlock {
 
 impl<DB> Indexer<DB>
 where
-    DB: KeyValueStoreClient + Clone + Send + Sync + 'static,
+    DB: KeyValueStore + Clone + Send + Sync + 'static,
     DB::Error: From<bcs::Error>
         + From<DatabaseConsistencyError>
         + Send

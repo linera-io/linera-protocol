@@ -5,21 +5,21 @@ For an overview, see `README.md`.
 
 ## Key Value Store Clients
 
-We have designed a `KeyValueStoreClient` trait that represents the basic functionalities
+We have designed a `KeyValueStore` trait that represents the basic functionalities
 of a key-value store whose keys are `Vec<u8>` and whose values are `Vec<u8>`.
 
-We provide an implementation of the trait `KeyValueStoreClient` for the following key-value stores:
+We provide an implementation of the trait `KeyValueStore` for the following key-value stores:
 * `MemoryClient` is using the memory (and uses internally a simple B-Tree map).
 * `RocksDbClient` is a disk-based key-value store
 * `DynamoDbClient` is the AWS-based DynamoDB service.
 
-The trait `KeyValueStoreClient` was designed so that more storage solutions can be easily added in the future.
+The trait `KeyValueStore` was designed so that more storage solutions can be easily added in the future.
 
-The `KeyValueStoreClient` trait is also implemented for several internal constructions of clients:
+The `KeyValueStore` trait is also implemented for several internal constructions of clients:
 * The `LruCachingKeyValueClient<K>` client implements the Least Recently Used (LRU)
 caching of reads into the client.
 * The `ViewContainer<C>` client implements a key-value store client from a context.
-* The `ValueSplittingKeyValueStoreClient<K>` implements a client for which the
+* The `ValueSplittingKeyValueStore<K>` implements a client for which the
 size of the values is unbounded, on top of another client for which it is bounded.
 (Some databases have strict limitations on the value size.)
 
@@ -41,7 +41,7 @@ we have a view or any other object then we have a `base_key` associated with it 
 with no other objects. A view is associated to many keys, all of whom share the same
 `base_key` as prefix.
 This leads us to introduce a trait `Context` that can be implemented with a specific
-`KeyValueStoreClient` client and a `base_key`.
+`KeyValueStore` client and a `base_key`.
 
 Another issue to consider is that we do not want to just store the values, but we
 also need to accommodate other features:
@@ -66,7 +66,7 @@ If the user is using a single view then for whatever `base_key` is chosen, the s
 created will be prefix-free. If several views are created then their base keys must be
 chosen to be prefix-free so that the whole set of keys is prefix-free.
 
-## API of the `KeyValueStoreClient`
+## API of the `KeyValueStore`
 
 The design of the key-value store client is done in the following way:
 * We can put a `(key, value)` and delete a `key`.
@@ -97,7 +97,7 @@ the block entries would be processed after accessing the database the next time.
 ## Splitting large values across keys
 
 Some key-value store clients limit the size of the values (named `MAX_VALUE_SIZE`
-in the code). `ValueSplittingKeyValueStoreClient` is a wrapper that accepts values
+in the code). `ValueSplittingKeyValueStore` is a wrapper that accepts values
 of any size. Internally, it splits them into smaller pieces and stores them
 using a wrapped, possibly size-limited, client.
 

@@ -21,7 +21,7 @@
 //! * `RocksDbClient` is a disk-based key-value store
 //! * `DynamoDbClient` is the AWS-based DynamoDB service.
 //!
-//! The corresponding type in the code is the `KeyValueStoreClient`.
+//! The corresponding type in the code is the `KeyValueStore`.
 //! A context is the combination of a client and a path (named `base_key` which is
 //! of type `Vec<u8>`).
 //!
@@ -46,7 +46,7 @@
 //! * `SetView` implements a set with keys.
 //! * `CollectionView` implements a map whose values are views themselves.
 //! * `ReentrantCollectionView` implements a map for which different keys can be accessed independently.
-//! * `ViewContainer<C>` implements a `KeyValueStoreClient` and is used internally.
+//! * `ViewContainer<C>` implements a `KeyValueStore` and is used internally.
 //!
 //! The `LogView` can be seen as an analog of `VecDeque` while `MapView` is an analog of `BTreeMap`.
 
@@ -55,7 +55,7 @@
 /// The definition of the batches for writing in the database.
 pub mod batch;
 
-/// The definitions used for the `KeyValueStoreClient` and `Context`.
+/// The definitions used for the `KeyValueStore` and `Context`.
 pub mod common;
 
 /// The code for handling big values by splitting them into several small ones.

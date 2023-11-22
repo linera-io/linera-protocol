@@ -3,11 +3,11 @@
 
 //! This provides several functionalities for the handling of data.
 //! The most important traits are:
-//! * [`KeyValueStoreClient`][trait1] which manages the access to a database and is clonable. It has a minimal interface
+//! * [`KeyValueStore`][trait1] which manages the access to a database and is clonable. It has a minimal interface
 //! * [`Context`][trait2] which provides access to a database plus a `base_key` and some extra type `E` which is carried along
 //! and has no impact on the running of the system. There is also a bunch of other helper functions.
 //!
-//! [trait1]: common::KeyValueStoreClient
+//! [trait1]: common::KeyValueStore
 //! [trait2]: common::Context
 
 use crate::{batch::Batch, views::ViewError};
@@ -41,12 +41,12 @@ pub(crate) enum Update<T> {
     Set(T),
 }
 
-/// Status of a table at the creation time of a [`KeyValueStoreClient`] instance.
+/// Status of a table at the creation time of a [`KeyValueStore`] instance.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TableStatus {
-    /// Table was created during the construction of the [`KeyValueStoreClient`] instance.
+    /// Table was created during the construction of the [`KeyValueStore`] instance.
     New,
-    /// Table already existed when the [`KeyValueStoreClient`] instance was created.
+    /// Table already existed when the [`KeyValueStore`] instance was created.
     Existing,
 }
 
@@ -261,7 +261,7 @@ pub trait KeyValueIterable<Error> {
 
 /// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.
 #[async_trait]
-pub trait KeyValueStoreClient {
+pub trait KeyValueStore {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 
@@ -539,7 +539,7 @@ pub trait Context {
 }
 
 /// Implementation of the [`Context`] trait on top of a DB client implementing
-/// [`KeyValueStoreClient`].
+/// [`KeyValueStore`].
 #[derive(Debug, Default, Clone)]
 pub struct ContextFromDb<E, DB> {
     /// The DB client that is shared between views.
@@ -553,7 +553,7 @@ pub struct ContextFromDb<E, DB> {
 impl<E, DB> ContextFromDb<E, DB>
 where
     E: Clone + Send + Sync,
-    DB: KeyValueStoreClient + Clone + Send + Sync,
+    DB: KeyValueStore + Clone + Send + Sync,
     DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<DB::Error>,
 {
@@ -601,7 +601,7 @@ where
 impl<E, DB> Context for ContextFromDb<E, DB>
 where
     E: Clone + Send + Sync,
-    DB: KeyValueStoreClient + Clone + Send + Sync,
+    DB: KeyValueStore + Clone + Send + Sync,
     DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<DB::Error>,
 {

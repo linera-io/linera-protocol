@@ -36,7 +36,7 @@ use linera_execution::{
 };
 use linera_storage::{DbStorage, MemoryStorage, Storage, TestClock};
 use linera_views::{
-    common::KeyValueStoreClient,
+    common::KeyValueStore,
     memory::TEST_MEMORY_MAX_STREAM_QUERIES,
     value_splitting::DatabaseConsistencyError,
     views::{CryptoHashView, ViewError},
@@ -450,9 +450,9 @@ async fn test_scylla_db_handle_block_proposal_ticks() {
 
 async fn run_test_handle_block_proposal_ticks<C>(storage: DbStorage<C, TestClock>)
 where
-    C: KeyValueStoreClient + Clone + Send + Sync + 'static,
-    ViewError: From<<C as KeyValueStoreClient>::Error>,
-    <C as KeyValueStoreClient>::Error:
+    C: KeyValueStore + Clone + Send + Sync + 'static,
+    ViewError: From<<C as KeyValueStore>::Error>,
+    <C as KeyValueStore>::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     let key_pair = KeyPair::generate();
@@ -3420,9 +3420,9 @@ async fn test_scylla_db_leader_timeouts() {
 
 async fn run_test_leader_timeouts<C>(storage: DbStorage<C, TestClock>)
 where
-    C: KeyValueStoreClient + Clone + Send + Sync + 'static,
-    ViewError: From<<C as KeyValueStoreClient>::Error>,
-    <C as KeyValueStoreClient>::Error:
+    C: KeyValueStore + Clone + Send + Sync + 'static,
+    ViewError: From<<C as KeyValueStore>::Error>,
+    <C as KeyValueStore>::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     let chain_id = ChainId::root(0);
@@ -3646,9 +3646,9 @@ async fn test_scylla_db_round_types() {
 
 async fn run_test_round_types<C>(storage: DbStorage<C, TestClock>)
 where
-    C: KeyValueStoreClient + Clone + Send + Sync + 'static,
-    ViewError: From<<C as KeyValueStoreClient>::Error>,
-    <C as KeyValueStoreClient>::Error:
+    C: KeyValueStore + Clone + Send + Sync + 'static,
+    ViewError: From<<C as KeyValueStore>::Error>,
+    <C as KeyValueStore>::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     let chain_id = ChainId::root(0);

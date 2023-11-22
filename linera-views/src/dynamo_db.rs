@@ -4,11 +4,11 @@
 use crate::{
     batch::{Batch, DeletePrefixExpander, SimpleUnorderedBatch},
     common::{
-        CommonStoreConfig, ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient,
+        CommonStoreConfig, ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStore,
         TableStatus, MIN_VIEW_TAG,
     },
     lru_caching::LruCachingKeyValueClient,
-    value_splitting::{DatabaseConsistencyError, ValueSplittingKeyValueStoreClient},
+    value_splitting::{DatabaseConsistencyError, ValueSplittingKeyValueStore},
 };
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
@@ -1108,7 +1108,7 @@ impl DynamoDbClientInternal {
 }
 
 #[async_trait]
-impl KeyValueStoreClient for DynamoDbClientInternal {
+impl KeyValueStore for DynamoDbClientInternal {
     const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Error = DynamoDbContextError;
@@ -1181,11 +1181,11 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
 /// A shared DB client for DynamoDb implementing LruCaching
 #[derive(Clone)]
 pub struct DynamoDbClient {
-    client: LruCachingKeyValueClient<ValueSplittingKeyValueStoreClient<DynamoDbClientInternal>>,
+    client: LruCachingKeyValueClient<ValueSplittingKeyValueStore<DynamoDbClientInternal>>,
 }
 
 #[async_trait]
-impl KeyValueStoreClient for DynamoDbClient {
+impl KeyValueStore for DynamoDbClient {
     const MAX_VALUE_SIZE: usize = DynamoDbClientInternal::MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE - 4;
     type Error = DynamoDbContextError;
@@ -1238,7 +1238,7 @@ impl DynamoDbClient {
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let (client, table_status) = DynamoDbClientInternal::new_for_testing(store_config).await?;
-        let client = ValueSplittingKeyValueStoreClient::new(client);
+        let client = ValueSplittingKeyValueStore::new(client);
         let client = Self {
             client: LruCachingKeyValueClient::new(client, cache_size),
         };
@@ -1251,7 +1251,7 @@ impl DynamoDbClient {
     ) -> Result<Self, DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let client = DynamoDbClientInternal::initialize(store_config).await?;
-        let client = ValueSplittingKeyValueStoreClient::new(client);
+        let client = ValueSplittingKeyValueStore::new(client);
         let client = Self {
             client: LruCachingKeyValueClient::new(client, cache_size),
         };
@@ -1292,7 +1292,7 @@ impl DynamoDbClient {
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let (client, table_name) = DynamoDbClientInternal::new(store_config).await?;
-        let client = ValueSplittingKeyValueStoreClient::new(client);
+        let client = ValueSplittingKeyValueStore::new(client);
         let client = Self {
             client: LruCachingKeyValueClient::new(client, cache_size),
         };

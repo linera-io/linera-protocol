@@ -6,7 +6,7 @@ pub const TEST_CACHE_SIZE: usize = 1000;
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_interval, KeyValueStoreClient},
+    common::{get_interval, KeyValueStore},
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -93,9 +93,9 @@ pub struct LruCachingKeyValueClient<K> {
 }
 
 #[async_trait]
-impl<K> KeyValueStoreClient for LruCachingKeyValueClient<K>
+impl<K> KeyValueStore for LruCachingKeyValueClient<K>
 where
-    K: KeyValueStoreClient + Send + Sync,
+    K: KeyValueStore + Send + Sync,
 {
     // The LRU cache does not change the underlying client's size limits.
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
@@ -212,7 +212,7 @@ where
 
 impl<K> LruCachingKeyValueClient<K>
 where
-    K: KeyValueStoreClient,
+    K: KeyValueStore,
 {
     /// Creates a new key-value store client that implements an LRU cache.
     pub fn new(client: K, max_size: usize) -> Self {

@@ -8,7 +8,7 @@ use async_graphql::{EmptyMutation, EmptySubscription, ObjectType, Schema};
 use axum::Router;
 use linera_chain::data_types::HashedValue;
 use linera_views::{
-    common::{ContextFromDb, KeyValueStoreClient},
+    common::{ContextFromDb, KeyValueStore},
     views::{View, ViewError},
 };
 use std::sync::Arc;
@@ -17,7 +17,7 @@ use tokio::sync::Mutex;
 #[async_trait::async_trait]
 pub trait Plugin<DB>: Send + Sync
 where
-    DB: KeyValueStoreClient + Clone + Send + Sync + 'static,
+    DB: KeyValueStore + Clone + Send + Sync + 'static,
     DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<DB::Error>,
 {
@@ -74,7 +74,7 @@ pub async fn load<DB, V: View<ContextFromDb<(), DB>>>(
     name: &str,
 ) -> Result<Arc<Mutex<V>>, IndexerError>
 where
-    DB: KeyValueStoreClient + Clone + Send + Sync + 'static,
+    DB: KeyValueStore + Clone + Send + Sync + 'static,
     DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<DB::Error>,
 {

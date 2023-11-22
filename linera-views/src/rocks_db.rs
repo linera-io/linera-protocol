@@ -3,9 +3,9 @@
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_upper_bound, CommonStoreConfig, ContextFromDb, KeyValueStoreClient, TableStatus},
+    common::{get_upper_bound, CommonStoreConfig, ContextFromDb, KeyValueStore, TableStatus},
     lru_caching::LruCachingKeyValueClient,
-    value_splitting::{DatabaseConsistencyError, ValueSplittingKeyValueStoreClient},
+    value_splitting::{DatabaseConsistencyError, ValueSplittingKeyValueStore},
 };
 use async_trait::async_trait;
 use linera_base::ensure;
@@ -51,7 +51,7 @@ pub struct RocksDbStoreConfig {
 }
 
 #[async_trait]
-impl KeyValueStoreClient for RocksDbClientInternal {
+impl KeyValueStore for RocksDbClientInternal {
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Error = RocksDbContextError;
@@ -208,7 +208,7 @@ impl KeyValueStoreClient for RocksDbClientInternal {
 /// A shared DB client for RocksDB implementing LruCaching
 #[derive(Clone)]
 pub struct RocksDbClient {
-    client: LruCachingKeyValueClient<ValueSplittingKeyValueStoreClient<RocksDbClientInternal>>,
+    client: LruCachingKeyValueClient<ValueSplittingKeyValueStore<RocksDbClientInternal>>,
 }
 
 impl RocksDbClient {
@@ -307,7 +307,7 @@ impl RocksDbClient {
             db: Arc::new(db),
             max_stream_queries,
         };
-        let client = ValueSplittingKeyValueStoreClient::new(client);
+        let client = ValueSplittingKeyValueStore::new(client);
         let client = Self {
             client: LruCachingKeyValueClient::new(client, cache_size),
         };
@@ -345,7 +345,7 @@ pub async fn create_rocks_db_test_client() -> RocksDbClient {
 pub type RocksDbContext<E> = ContextFromDb<E, RocksDbClient>;
 
 #[async_trait]
-impl KeyValueStoreClient for RocksDbClient {
+impl KeyValueStore for RocksDbClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Error = RocksDbContextError;

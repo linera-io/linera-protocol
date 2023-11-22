@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This provides a KeyValueStoreClient for the ScyllaDB database.
+//! This provides a KeyValueStore for the ScyllaDB database.
 //! The code is functional but some aspects are missing.
 //!
 //! The current connection is done via a Session and a corresponding
@@ -9,10 +9,10 @@
 //! concurrent queries is controlled by max_concurrent_queries.
 //!
 //! We thus implement the
-//! * [`KeyValueStoreClient`][trait1] for a database access.
+//! * [`KeyValueStore`][trait1] for a database access.
 //! * [`Context`][trait2] for the context.
 //!
-//! [trait1]: common::KeyValueStoreClient
+//! [trait1]: common::KeyValueStore
 //! [trait2]: common::Context
 
 #[cfg(any(test, feature = "test"))]
@@ -21,7 +21,7 @@ use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::get_table_name};
 use crate::{
     batch::{Batch, DeletePrefixExpander},
     common::{
-        get_upper_bound_option, CommonStoreConfig, ContextFromDb, KeyValueStoreClient, TableStatus,
+        get_upper_bound_option, CommonStoreConfig, ContextFromDb, KeyValueStore, TableStatus,
     },
     lru_caching::LruCachingKeyValueClient,
     value_splitting::DatabaseConsistencyError,
@@ -113,7 +113,7 @@ impl From<ScyllaDbContextError> for crate::views::ViewError {
 }
 
 #[async_trait]
-impl KeyValueStoreClient for ScyllaDbClientInternal {
+impl KeyValueStore for ScyllaDbClientInternal {
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Error = ScyllaDbContextError;
@@ -628,12 +628,12 @@ pub struct ScyllaDbStoreConfig {
 }
 
 #[async_trait]
-impl KeyValueStoreClient for ScyllaDbClient {
+impl KeyValueStore for ScyllaDbClient {
     const MAX_VALUE_SIZE: usize = ScyllaDbClientInternal::MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = ScyllaDbClientInternal::MAX_KEY_SIZE;
-    type Error = <ScyllaDbClientInternal as KeyValueStoreClient>::Error;
-    type Keys = <ScyllaDbClientInternal as KeyValueStoreClient>::Keys;
-    type KeyValues = <ScyllaDbClientInternal as KeyValueStoreClient>::KeyValues;
+    type Error = <ScyllaDbClientInternal as KeyValueStore>::Error;
+    type Keys = <ScyllaDbClientInternal as KeyValueStore>::Keys;
+    type KeyValues = <ScyllaDbClientInternal as KeyValueStore>::KeyValues;
 
     fn max_stream_queries(&self) -> usize {
         self.client.max_stream_queries()

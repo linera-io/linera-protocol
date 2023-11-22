@@ -3,7 +3,7 @@
 
 use linera_views::{
     batch::{Batch, WriteOperation},
-    common::{KeyIterable, KeyValueIterable, KeyValueStoreClient},
+    common::{KeyIterable, KeyValueIterable, KeyValueStore},
     key_value_store_view::ViewContainer,
     memory::{create_memory_client, create_memory_context},
     test_utils::{
@@ -32,7 +32,7 @@ use linera_views::scylla_db::create_scylla_db_test_client;
 /// * `find_keys_by_prefix` / `find_key_values_by_prefix`
 /// * The ordering of keys returned by `find_keys_by_prefix` and `find_key_values_by_prefix`
 #[cfg(test)]
-async fn run_reads<C: KeyValueStoreClient + Sync>(
+async fn run_reads<C: KeyValueStore + Sync>(
     key_value_store: C,
     key_values: Vec<(Vec<u8>, Vec<u8>)>,
 ) {
@@ -296,7 +296,7 @@ fn realize_batch(batch: &Batch) -> BTreeMap<Vec<u8>, Vec<u8>> {
 }
 
 #[cfg(test)]
-async fn read_key_values_prefix<C: KeyValueStoreClient + Sync>(
+async fn read_key_values_prefix<C: KeyValueStore + Sync>(
     key_value_store: &C,
     key_prefix: &[u8],
 ) -> BTreeMap<Vec<u8>, Vec<u8>> {
@@ -316,7 +316,7 @@ async fn read_key_values_prefix<C: KeyValueStoreClient + Sync>(
 }
 
 #[cfg(test)]
-async fn run_test_batch_from_blank<C: KeyValueStoreClient + Sync>(
+async fn run_test_batch_from_blank<C: KeyValueStore + Sync>(
     key_value_store: &C,
     key_prefix: Vec<u8>,
     batch: Batch,
@@ -329,7 +329,7 @@ async fn run_test_batch_from_blank<C: KeyValueStoreClient + Sync>(
 }
 
 #[cfg(test)]
-async fn run_writes_from_blank<C: KeyValueStoreClient + Sync>(key_value_store: &C) {
+async fn run_writes_from_blank<C: KeyValueStore + Sync>(key_value_store: &C) {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     let n_oper = 1000;
     let batch_size = 500;
@@ -414,12 +414,12 @@ async fn test_big_value_read_write() {
 
 // DynamoDb has limits at 1M (for pagination), 4M (for write)
 // Let us go right past them at 20M of data with writing and then
-// reading it. And 20M is not huge by any mean. All KeyValueStoreClient
+// reading it. And 20M is not huge by any mean. All KeyValueStore
 // must handle that.
 //
 // The size of the value vary as each size has its own issues.
 #[cfg(test)]
-async fn run_big_write_read<C: KeyValueStoreClient + Sync>(
+async fn run_big_write_read<C: KeyValueStore + Sync>(
     key_value_store: C,
     target_size: usize,
     value_sizes: Vec<usize>,
@@ -480,7 +480,7 @@ async fn test_dynamo_db_big_write_read() {
 type StateBatch = (Vec<(Vec<u8>, Vec<u8>)>, Batch);
 
 #[cfg(test)]
-async fn run_test_batch_from_state<C: KeyValueStoreClient + Sync>(
+async fn run_test_batch_from_state<C: KeyValueStore + Sync>(
     key_value_store: &C,
     key_prefix: Vec<u8>,
     state_and_batch: StateBatch,
@@ -575,7 +575,7 @@ fn generate_specific_state_batch(key_prefix: &[u8], option: usize) -> StateBatch
 }
 
 #[cfg(test)]
-async fn run_writes_from_state<C: KeyValueStoreClient + Sync>(key_value_store: &C) {
+async fn run_writes_from_state<C: KeyValueStore + Sync>(key_value_store: &C) {
     for option in 0..7 {
         let key_prefix = if option == 6 {
             vec![255, 255, 255]

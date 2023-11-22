@@ -3,7 +3,7 @@
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient},
+    common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStore},
     memory::{MemoryClient, MemoryContextError, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
 };
 use async_lock::{Mutex, MutexGuardArc};
@@ -35,15 +35,15 @@ pub enum DatabaseConsistencyError {
 /// stored as multiple smaller key-value pairs in the wrapped store.
 /// See the README.md for additional details.
 #[derive(Clone)]
-pub struct ValueSplittingKeyValueStoreClient<K> {
+pub struct ValueSplittingKeyValueStore<K> {
     /// The underlying client of the transformed client.
     pub client: K,
 }
 
 #[async_trait]
-impl<K> KeyValueStoreClient for ValueSplittingKeyValueStoreClient<K>
+impl<K> KeyValueStore for ValueSplittingKeyValueStore<K>
 where
-    K: KeyValueStoreClient + Send + Sync,
+    K: KeyValueStore + Send + Sync,
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
     const MAX_VALUE_SIZE: usize = usize::MAX;
@@ -229,14 +229,14 @@ where
     }
 }
 
-impl<K> ValueSplittingKeyValueStoreClient<K>
+impl<K> ValueSplittingKeyValueStore<K>
 where
-    K: KeyValueStoreClient + Send + Sync,
+    K: KeyValueStore + Send + Sync,
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
     /// Creates a new client that deals with big values from one that does not.
     pub fn new(client: K) -> Self {
-        ValueSplittingKeyValueStoreClient { client }
+        ValueSplittingKeyValueStore { client }
     }
 
     fn read_count_from_value(value: &[u8]) -> Result<u32, K::Error> {
@@ -283,7 +283,7 @@ pub struct TestMemoryClientInternal {
 }
 
 #[async_trait]
-impl KeyValueStoreClient for TestMemoryClientInternal {
+impl KeyValueStore for TestMemoryClientInternal {
     // We set up the MAX_VALUE_SIZE to the artificially low value of 100
     // purely for testing purposes.
     const MAX_VALUE_SIZE: usize = 100;
@@ -345,11 +345,11 @@ impl TestMemoryClientInternal {
 /// Supposed to be removed later
 #[derive(Clone)]
 pub struct TestMemoryClient {
-    client: ValueSplittingKeyValueStoreClient<TestMemoryClientInternal>,
+    client: ValueSplittingKeyValueStore<TestMemoryClientInternal>,
 }
 
 #[async_trait]
-impl KeyValueStoreClient for TestMemoryClient {
+impl KeyValueStore for TestMemoryClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Error = MemoryContextError;
@@ -398,7 +398,7 @@ impl TestMemoryClient {
     /// Creates a `TestMemoryClient` from the guard
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>) -> Self {
         let client = TestMemoryClientInternal::new(guard);
-        let client = ValueSplittingKeyValueStoreClient::new(client);
+        let client = ValueSplittingKeyValueStore::new(client);
         TestMemoryClient { client }
     }
 }
@@ -477,10 +477,10 @@ pub fn create_test_memory_context_internal() -> TestMemoryContextInternal<()> {
 mod tests {
     use linera_views::{
         batch::Batch,
-        common::KeyValueStoreClient,
+        common::KeyValueStore,
         value_splitting::{
             create_test_memory_client_internal, TestMemoryClientInternal,
-            ValueSplittingKeyValueStoreClient,
+            ValueSplittingKeyValueStore,
         },
     };
     use rand::{Rng, SeedableRng};
@@ -493,7 +493,7 @@ mod tests {
         let client = create_test_memory_client_internal();
         const MAX_LEN: usize = TestMemoryClientInternal::MAX_VALUE_SIZE;
         assert!(MAX_LEN > 10);
-        let big_client = ValueSplittingKeyValueStoreClient::new(client.clone());
+        let big_client = ValueSplittingKeyValueStore::new(client.clone());
         let key = vec![0, 0];
         // Write a key with a long value
         let mut batch = Batch::new();
@@ -518,7 +518,7 @@ mod tests {
     async fn test_value_splitting2_testing_splitting() {
         let client = create_test_memory_client_internal();
         const MAX_LEN: usize = TestMemoryClientInternal::MAX_VALUE_SIZE;
-        let big_client = ValueSplittingKeyValueStoreClient::new(client.clone());
+        let big_client = ValueSplittingKeyValueStore::new(client.clone());
         let key = vec![0, 0];
         // Writing a big value
         let mut batch = Batch::new();
@@ -555,7 +555,7 @@ mod tests {
     async fn test_value_splitting3_write_and_delete() {
         let client = create_test_memory_client_internal();
         const MAX_LEN: usize = TestMemoryClientInternal::MAX_VALUE_SIZE;
-        let big_client = ValueSplittingKeyValueStoreClient::new(client.clone());
+        let big_client = ValueSplittingKeyValueStore::new(client.clone());
         let key = vec![0, 0];
         // writing a big key
         let mut batch = Batch::new();
