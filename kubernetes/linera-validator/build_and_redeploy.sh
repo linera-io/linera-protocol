@@ -125,6 +125,7 @@ if [ -n "$cloud_mode" ]; then
         --values values-local-with-cloud-build.yaml \
         --wait \
         --set installCRDs=true \
+        --timeout 10m \
         --set validator.serverConfig=working/server_1.json \
         --set validator.genesisConfig=working/genesis.json
 else
@@ -132,6 +133,7 @@ else
         --values values-local.yaml \
         --wait \
         --set installCRDs=true \
+        --timeout 10m \
         --set validator.serverConfig=working/server_1.json \
         --set validator.genesisConfig=working/genesis.json
 fi
