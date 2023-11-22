@@ -283,7 +283,7 @@ async fn chains(app: &JsValue, node: &str) -> Result<ChainId> {
         .serialize(&SER)
         .expect("failed to serialize ChainIds");
     setf(app, "chains", &chains_js);
-    Ok(chains.default.unwrap_or_else(|| match chains.list.get(0) {
+    Ok(chains.default.unwrap_or_else(|| match chains.list.first() {
         None => ChainId::from(ChainDescription::Root(0)),
         Some(chain_id) => *chain_id,
     }))
