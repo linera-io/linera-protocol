@@ -19,6 +19,34 @@ use std::{
     sync::Arc,
 };
 
+/// A read-only accessor for a particular subview in a [`ReentrantCollectionView`].
+#[derive(Debug)]
+pub struct ReadGuardedView<T>(RwLockReadGuardArc<T>);
+
+impl<T> std::ops::Deref for ReadGuardedView<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        self.0.deref()
+    }
+}
+
+/// A read-write accessor for a particular subview in a [`ReentrantCollectionView`].
+#[derive(Debug)]
+pub struct WriteGuardedView<T>(RwLockWriteGuardArc<T>);
+
+impl<T> std::ops::Deref for WriteGuardedView<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        self.0.deref()
+    }
+}
+
+impl<T> std::ops::DerefMut for WriteGuardedView<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.0.deref_mut()
+    }
+}
+
 /// A view that supports accessing a collection of views of the same kind, indexed by `Vec<u8>`,
 /// possibly several subviews at a time.
 #[derive(Debug)]
@@ -171,49 +199,46 @@ where
     pub async fn try_load_entry_mut(
         &mut self,
         short_key: Vec<u8>,
-    ) -> Result<RwLockWriteGuardArc<W>, ViewError> {
+    ) -> Result<WriteGuardedView<W>, ViewError> {
         *self.hash.get_mut() = None;
         let updates = self.updates.get_mut();
-        match updates.entry(short_key.clone()) {
-            btree_map::Entry::Occupied(entry) => {
-                let entry = entry.into_mut();
-                match entry {
-                    Update::Set(view) => Ok(view
-                        .clone()
-                        .try_write_arc()
-                        .ok_or_else(|| ViewError::TryLockError(short_key))?),
-                    Update::Removed => {
-                        let key = self
-                            .context
-                            .base_tag_index(KeyTag::Subview as u8, &short_key);
-                        let context = self.context.clone_with_base_key(key);
-                        // Obtain a view and set its pending state to the default (e.g. empty) state
-                        let mut view = W::load(context).await?;
-                        view.clear();
-                        let wrapped_view = Arc::new(RwLock::new(view));
-                        *entry = Update::Set(wrapped_view.clone());
-                        Ok(wrapped_view
-                            .try_write_arc()
-                            .ok_or_else(|| ViewError::TryLockError(short_key))?)
+        Ok(WriteGuardedView(
+            match updates.entry(short_key.clone()) {
+                btree_map::Entry::Occupied(entry) => {
+                    let entry = entry.into_mut();
+                    match entry {
+                        Update::Set(view) => view.clone(),
+                        Update::Removed => {
+                            let key = self
+                                .context
+                                .base_tag_index(KeyTag::Subview as u8, &short_key);
+                            let context = self.context.clone_with_base_key(key);
+                            // Obtain a view and set its pending state to the default (e.g. empty) state
+                            let mut view = W::load(context).await?;
+                            view.clear();
+                            let wrapped_view = Arc::new(RwLock::new(view));
+                            *entry = Update::Set(wrapped_view.clone());
+                            wrapped_view
+                        }
                     }
                 }
-            }
-            btree_map::Entry::Vacant(entry) => {
-                let key = self
-                    .context
-                    .base_tag_index(KeyTag::Subview as u8, &short_key);
-                let context = self.context.clone_with_base_key(key);
-                let mut view = W::load(context).await?;
-                if self.was_cleared {
-                    view.clear();
+                btree_map::Entry::Vacant(entry) => {
+                    let key = self
+                        .context
+                        .base_tag_index(KeyTag::Subview as u8, &short_key);
+                    let context = self.context.clone_with_base_key(key);
+                    let mut view = W::load(context).await?;
+                    if self.was_cleared {
+                        view.clear();
+                    }
+                    let wrapped_view = Arc::new(RwLock::new(view));
+                    entry.insert(Update::Set(wrapped_view.clone()));
+                    wrapped_view
                 }
-                let wrapped_view = Arc::new(RwLock::new(view));
-                entry.insert(Update::Set(wrapped_view.clone()));
-                Ok(wrapped_view
-                    .try_write_arc()
-                    .ok_or_else(|| ViewError::TryLockError(short_key))?)
             }
-        }
+            .try_write_arc()
+            .ok_or_else(|| ViewError::TryLockError(short_key))?,
+        ))
     }
 
     /// Loads a subview at the given index in the collection and gives read-only access to the data.
@@ -234,48 +259,45 @@ where
     pub async fn try_load_entry(
         &self,
         short_key: Vec<u8>,
-    ) -> Result<RwLockReadGuardArc<W>, ViewError> {
+    ) -> Result<ReadGuardedView<W>, ViewError> {
         let mut updates = self.updates.lock().await;
-        match updates.entry(short_key.clone()) {
-            btree_map::Entry::Occupied(entry) => {
-                let entry = entry.into_mut();
-                match entry {
-                    Update::Set(view) => Ok(view
-                        .clone()
-                        .try_read_arc()
-                        .ok_or_else(|| ViewError::TryLockError(short_key))?),
-                    Update::Removed => {
-                        let key = self
-                            .context
-                            .base_tag_index(KeyTag::Subview as u8, &short_key);
-                        let context = self.context.clone_with_base_key(key);
-                        // Obtain a view and set its pending state to the default (e.g. empty) state
-                        let mut view = W::load(context).await?;
-                        view.clear();
-                        let wrapped_view = Arc::new(RwLock::new(view));
-                        *entry = Update::Set(wrapped_view.clone());
-                        Ok(wrapped_view
-                            .try_read_arc()
-                            .ok_or_else(|| ViewError::TryLockError(short_key))?)
+        Ok(ReadGuardedView(
+            match updates.entry(short_key.clone()) {
+                btree_map::Entry::Occupied(entry) => {
+                    let entry = entry.into_mut();
+                    match entry {
+                        Update::Set(view) => view.clone(),
+                        Update::Removed => {
+                            let key = self
+                                .context
+                                .base_tag_index(KeyTag::Subview as u8, &short_key);
+                            let context = self.context.clone_with_base_key(key);
+                            // Obtain a view and set its pending state to the default (e.g. empty) state
+                            let mut view = W::load(context).await?;
+                            view.clear();
+                            let wrapped_view = Arc::new(RwLock::new(view));
+                            *entry = Update::Set(wrapped_view.clone());
+                            wrapped_view
+                        }
                     }
                 }
-            }
-            btree_map::Entry::Vacant(entry) => {
-                let key = self
-                    .context
-                    .base_tag_index(KeyTag::Subview as u8, &short_key);
-                let context = self.context.clone_with_base_key(key);
-                let mut view = W::load(context).await?;
-                if self.was_cleared {
-                    view.clear();
+                btree_map::Entry::Vacant(entry) => {
+                    let key = self
+                        .context
+                        .base_tag_index(KeyTag::Subview as u8, &short_key);
+                    let context = self.context.clone_with_base_key(key);
+                    let mut view = W::load(context).await?;
+                    if self.was_cleared {
+                        view.clear();
+                    }
+                    let wrapped_view = Arc::new(RwLock::new(view));
+                    entry.insert(Update::Set(wrapped_view.clone()));
+                    wrapped_view
                 }
-                let wrapped_view = Arc::new(RwLock::new(view));
-                entry.insert(Update::Set(wrapped_view.clone()));
-                Ok(wrapped_view
-                    .try_read_arc()
-                    .ok_or_else(|| ViewError::TryLockError(short_key))?)
             }
-        }
+            .try_read_arc()
+            .ok_or_else(|| ViewError::TryLockError(short_key))?,
+        ))
     }
 
     /// Removes an entry. If absent then nothing happens.
@@ -372,7 +394,7 @@ where
     pub async fn try_load_entries_mut(
         &mut self,
         short_keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<RwLockWriteGuardArc<W>>, ViewError> {
+    ) -> Result<Vec<WriteGuardedView<W>>, ViewError> {
         let mut selected_short_keys = Vec::new();
         *self.hash.get_mut() = None;
         let updates = self.updates.get_mut();
@@ -409,24 +431,25 @@ where
             let wrapped_view = Arc::new(RwLock::new(view));
             updates.insert(short_key.clone(), Update::Set(wrapped_view));
         }
-        let mut result = Vec::new();
-        for short_key in short_keys {
-            result.push(
+
+        short_keys
+            .into_iter()
+            .map(|short_key| {
                 if let btree_map::Entry::Occupied(entry) = updates.entry(short_key.clone()) {
-                    let entry = entry.into_mut();
-                    if let Update::Set(view) = entry {
-                        view.clone()
-                            .try_write_arc()
-                            .ok_or_else(|| ViewError::TryLockError(short_key))?
+                    if let Update::Set(view) = entry.into_mut() {
+                        Ok(WriteGuardedView(
+                            view.clone()
+                                .try_write_arc()
+                                .ok_or_else(|| ViewError::TryLockError(short_key))?,
+                        ))
                     } else {
                         unreachable!()
                     }
                 } else {
                     unreachable!()
-                },
-            );
-        }
-        Ok(result)
+                }
+            })
+            .collect()
     }
 
     /// Load multiple entries for reading at once.
@@ -451,7 +474,7 @@ where
     pub async fn try_load_entries(
         &self,
         short_keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<RwLockReadGuardArc<W>>, ViewError> {
+    ) -> Result<Vec<ReadGuardedView<W>>, ViewError> {
         let mut selected_short_keys = Vec::new();
         let mut updates = self.updates.lock().await;
         for short_key in short_keys.clone() {
@@ -489,7 +512,7 @@ where
         }
         let mut result = Vec::new();
         for short_key in short_keys {
-            result.push(
+            result.push(ReadGuardedView(
                 if let btree_map::Entry::Occupied(entry) = updates.entry(short_key.clone()) {
                     let entry = entry.into_mut();
                     if let Update::Set(view) = entry {
@@ -502,7 +525,7 @@ where
                 } else {
                     unreachable!()
                 },
-            );
+            ));
         }
         Ok(result)
     }
@@ -756,7 +779,7 @@ where
     pub async fn try_load_entry_mut<Q>(
         &mut self,
         index: &Q,
-    ) -> Result<RwLockWriteGuardArc<W>, ViewError>
+    ) -> Result<WriteGuardedView<W>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
@@ -780,7 +803,7 @@ where
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<RwLockReadGuardArc<W>, ViewError>
+    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
@@ -880,7 +903,7 @@ where
     pub async fn try_load_entries_mut<'a, Q>(
         &'a mut self,
         indices: impl IntoIterator<Item = &'a Q>,
-    ) -> Result<Vec<RwLockWriteGuardArc<W>>, ViewError>
+    ) -> Result<Vec<WriteGuardedView<W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + 'a,
@@ -914,7 +937,7 @@ where
     pub async fn try_load_entries<'a, Q>(
         &'a self,
         indices: impl IntoIterator<Item = &'a Q>,
-    ) -> Result<Vec<RwLockReadGuardArc<W>>, ViewError>
+    ) -> Result<Vec<ReadGuardedView<W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + 'a,
@@ -1113,7 +1136,7 @@ where
     pub async fn try_load_entry_mut<Q>(
         &mut self,
         index: &Q,
-    ) -> Result<RwLockWriteGuardArc<W>, ViewError>
+    ) -> Result<WriteGuardedView<W>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
@@ -1137,7 +1160,7 @@ where
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<RwLockReadGuardArc<W>, ViewError>
+    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
@@ -1239,7 +1262,7 @@ where
     pub async fn try_load_entries_mut<Q>(
         &mut self,
         indices: impl IntoIterator<Item = Q>,
-    ) -> Result<Vec<RwLockWriteGuardArc<W>>, ViewError>
+    ) -> Result<Vec<WriteGuardedView<W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize,
@@ -1273,7 +1296,7 @@ where
     pub async fn try_load_entries<Q>(
         &self,
         indices: impl IntoIterator<Item = Q>,
-    ) -> Result<Vec<RwLockReadGuardArc<W>>, ViewError>
+    ) -> Result<Vec<ReadGuardedView<W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize,

@@ -406,7 +406,7 @@ fn generate_graphql_code_for_field(
 
             let (guard, lifetime) = match view_name.as_str() {
                 "ReentrantCollectionView" | "ReentrantCustomCollectionView" => (
-                    quote!(linera_views::async_lock::RwLockReadGuardArc),
+                    quote!(linera_views::reentrant_collection_view::ReadGuardedView),
                     quote!(),
                 ),
                 "CollectionView" | "CustomCollectionView" => (
