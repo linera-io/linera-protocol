@@ -3432,6 +3432,7 @@ name = "linera-views"
 version = "0.6.0"
 dependencies = [
  "anyhow",
+ "async-graphql",
  "async-lock",
  "async-trait",
  "aws-config",
@@ -3455,6 +3456,7 @@ dependencies = [
  "rocksdb",
  "scylla",
  "serde",
+ "serde_json",
  "sha3",
  "static_assertions",
  "tempfile",

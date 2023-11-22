@@ -80,6 +80,8 @@ pub mod map_view;
 /// The `SetView` implements a set with ordered entries.
 pub mod set_view;
 
+mod graphql;
+
 /// The `CollectionView` implements a map structure whose keys are ordered and the values are views.
 pub mod collection_view;
 

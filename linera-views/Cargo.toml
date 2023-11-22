@@ -23,6 +23,7 @@ metrics = ["dep:hex"]
 
 [dependencies]
 anyhow = { workspace = true }
+async-graphql = { workspace = true }
 async-lock = { workspace = true }
 async-trait = { workspace = true }
 bcs = { workspace = true }
@@ -35,6 +36,7 @@ linked-hash-map = { workspace = true }
 once_cell = { workspace = true }
 prometheus = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 sha3 = { workspace = true }
 static_assertions = { workspace = true }
 tempfile = { workspace = true }
