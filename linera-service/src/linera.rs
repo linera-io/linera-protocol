@@ -487,7 +487,7 @@ impl ClientContext {
         let worker = WorkerState::new("Temporary client node".to_string(), None, storage)
             .with_allow_inactive_chains(true)
             .with_allow_messages_from_deprecated_epochs(true);
-        let mut node = LocalNodeClient::new(worker, Notifier::default());
+        let mut node = LocalNodeClient::new(worker, Arc::new(Notifier::default()));
         // Second replay the certificates locally.
         for certificate in certificates {
             // No required certificates from other chains: This is only used with benchmark.
@@ -1921,7 +1921,7 @@ impl Job {
         let state = WorkerState::new("Local node".to_string(), None, storage)
             .with_allow_inactive_chains(true)
             .with_allow_messages_from_deprecated_epochs(true);
-        let mut node_client = LocalNodeClient::new(state, Notifier::default());
+        let mut node_client = LocalNodeClient::new(state, Arc::new(Notifier::default()));
 
         // Take the latest committee we know of.
         let admin_chain_id = context.wallet_state.genesis_admin_chain();

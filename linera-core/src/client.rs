@@ -78,7 +78,7 @@ pub struct ChainClientBuilder<ValidatorNodeProvider> {
     /// delivered.
     delivery_notifiers: Arc<tokio::sync::Mutex<DeliveryNotifiers>>,
     /// References to clients waiting for chain notifications.
-    notifier: Notifier<Notification>,
+    notifier: Arc<Notifier<Notification>>,
 }
 
 impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
@@ -99,7 +99,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
             cross_chain_retries,
             recent_values,
             delivery_notifiers: Arc::new(tokio::sync::Mutex::new(DeliveryNotifiers::default())),
-            notifier: Notifier::default(),
+            notifier: Arc::new(Notifier::default()),
         }
     }
 
