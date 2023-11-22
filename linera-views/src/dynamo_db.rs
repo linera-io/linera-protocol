@@ -554,7 +554,7 @@ impl DeletePrefixExpander for DynamoDbClientInternal {
 
 /// The initial configuration of the system
 #[derive(Debug)]
-pub struct DynamoDbKvStoreConfig {
+pub struct DynamoDbStoreConfig {
     /// The AWS configuration
     pub config: Config,
     /// The table_name used
@@ -656,7 +656,7 @@ impl DynamoDbClientInternal {
     /// Creates a new [`DynamoDbClientInternal`] instance from scratch using the provided `config` parameters.
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
-        store_config: DynamoDbKvStoreConfig,
+        store_config: DynamoDbStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
         if Self::test_table_existence(&client, &store_config.table_name).await? {
@@ -680,27 +680,27 @@ impl DynamoDbClientInternal {
 
     /// Testing the existence of a table
     pub async fn test_existence(
-        store_config: DynamoDbKvStoreConfig,
+        store_config: DynamoDbStoreConfig,
     ) -> Result<bool, DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
         Self::test_table_existence(&client, &store_config.table_name).await
     }
 
-    async fn delete_all(store_config: DynamoDbKvStoreConfig) -> Result<(), DynamoDbContextError> {
+    async fn delete_all(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
         clear_tables(&client).await?;
         Ok(())
     }
 
     async fn list_tables(
-        store_config: DynamoDbKvStoreConfig,
+        store_config: DynamoDbStoreConfig,
     ) -> Result<Vec<String>, DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
         list_tables_from_client(&client).await
     }
 
     async fn delete_single(
-        store_config: DynamoDbKvStoreConfig,
+        store_config: DynamoDbStoreConfig,
     ) -> Result<(), DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
         client
@@ -713,7 +713,7 @@ impl DynamoDbClientInternal {
 
     /// Creates a new [`DynamoDbClientInternal`] instance using the provided `config` parameters.
     pub async fn new(
-        store_config: DynamoDbKvStoreConfig,
+        store_config: DynamoDbStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
         let stop_if_table_exists = false;
@@ -730,7 +730,7 @@ impl DynamoDbClientInternal {
 
     /// Initializes a RocksDB database from a specified path.
     pub async fn initialize(
-        store_config: DynamoDbKvStoreConfig,
+        store_config: DynamoDbStoreConfig,
     ) -> Result<Self, DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
         let stop_if_table_exists = false;
@@ -1234,7 +1234,7 @@ impl DynamoDbClient {
     /// Creates a `DynamoDbClient` from scratch with an LRU cache
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
-        store_config: DynamoDbKvStoreConfig,
+        store_config: DynamoDbStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let (client, table_status) = DynamoDbClientInternal::new_for_testing(store_config).await?;
@@ -1247,7 +1247,7 @@ impl DynamoDbClient {
 
     /// Initializes a `DynamoDbClient`.
     pub async fn initialize(
-        store_config: DynamoDbKvStoreConfig,
+        store_config: DynamoDbStoreConfig,
     ) -> Result<Self, DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let client = DynamoDbClientInternal::initialize(store_config).await?;
@@ -1260,35 +1260,35 @@ impl DynamoDbClient {
 
     /// Deletes all the tables from the database
     pub async fn test_existence(
-        store_config: DynamoDbKvStoreConfig,
+        store_config: DynamoDbStoreConfig,
     ) -> Result<bool, DynamoDbContextError> {
         DynamoDbClientInternal::test_existence(store_config).await
     }
 
     /// List all the tables of the database
     pub async fn list_tables(
-        store_config: DynamoDbKvStoreConfig,
+        store_config: DynamoDbStoreConfig,
     ) -> Result<Vec<String>, DynamoDbContextError> {
         DynamoDbClientInternal::list_tables(store_config).await
     }
 
     /// Deletes all the tables from the database
     pub async fn delete_all(
-        store_config: DynamoDbKvStoreConfig,
+        store_config: DynamoDbStoreConfig,
     ) -> Result<(), DynamoDbContextError> {
         DynamoDbClientInternal::delete_all(store_config).await
     }
 
     /// Deletes a single table from the database
     pub async fn delete_single(
-        store_config: DynamoDbKvStoreConfig,
+        store_config: DynamoDbStoreConfig,
     ) -> Result<(), DynamoDbContextError> {
         DynamoDbClientInternal::delete_single(store_config).await
     }
 
     /// Creates a `DynamoDbClient` with an LRU cache
     pub async fn new(
-        store_config: DynamoDbKvStoreConfig,
+        store_config: DynamoDbStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let (client, table_name) = DynamoDbClientInternal::new(store_config).await?;
@@ -1312,7 +1312,7 @@ where
     /// Creates a new [`DynamoDbContext`] instance from scratch from the given AWS configuration.
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
-        store_config: DynamoDbKvStoreConfig,
+        store_config: DynamoDbStoreConfig,
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
@@ -1327,7 +1327,7 @@ where
 
     /// Creates a new [`DynamoDbContext`] instance from the given AWS configuration.
     pub async fn new(
-        store_config: DynamoDbKvStoreConfig,
+        store_config: DynamoDbStoreConfig,
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
@@ -1573,7 +1573,7 @@ pub async fn create_dynamo_db_test_client() -> DynamoDbClient {
     let table_name = table.parse().expect("Invalid table name");
     let use_localstack = true;
     let config = get_config(use_localstack).await.expect("config");
-    let store_config = DynamoDbKvStoreConfig {
+    let store_config = DynamoDbStoreConfig {
         config,
         table_name,
         common_config,

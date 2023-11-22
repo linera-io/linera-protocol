@@ -358,7 +358,7 @@ impl ScyllaDbClientInternal {
 
     /// Tests if a table is present in the database or not
     pub async fn test_existence(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<bool, ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
@@ -468,7 +468,7 @@ impl ScyllaDbClientInternal {
 
     #[cfg(any(test, feature = "test"))]
     async fn new_for_testing(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
@@ -489,7 +489,7 @@ impl ScyllaDbClientInternal {
         .await
     }
 
-    async fn initialize(store_config: ScyllaDbKvStoreConfig) -> Result<Self, ScyllaDbContextError> {
+    async fn initialize(store_config: ScyllaDbStoreConfig) -> Result<Self, ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
@@ -510,7 +510,7 @@ impl ScyllaDbClientInternal {
     }
 
     async fn list_tables(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<Vec<String>, ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
@@ -529,7 +529,7 @@ impl ScyllaDbClientInternal {
         Ok(tables)
     }
 
-    async fn delete_all(store_config: ScyllaDbKvStoreConfig) -> Result<(), ScyllaDbContextError> {
+    async fn delete_all(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
@@ -540,7 +540,7 @@ impl ScyllaDbClientInternal {
     }
 
     async fn delete_single(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<(), ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
@@ -552,7 +552,7 @@ impl ScyllaDbClientInternal {
     }
 
     async fn new(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
@@ -571,7 +571,7 @@ impl ScyllaDbClientInternal {
 
     async fn new_internal(
         session: Session,
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
         stop_if_table_exists: bool,
         create_if_missing: bool,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
@@ -618,7 +618,7 @@ pub struct ScyllaDbClient {
 
 /// The type for building a new ScyllaDb Key Value Store Client
 #[derive(Debug)]
-pub struct ScyllaDbKvStoreConfig {
+pub struct ScyllaDbStoreConfig {
     /// The url to which the requests have to be sent
     pub uri: String,
     /// The name of the table that we create
@@ -679,7 +679,7 @@ impl ScyllaDbClient {
     /// Creates a [`ScyllaDbClient`] from the input parameters.
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let (client, table_status) = ScyllaDbClientInternal::new_for_testing(store_config).await?;
@@ -690,7 +690,7 @@ impl ScyllaDbClient {
 
     /// Creates a [`ScyllaDbClient`] from the input parameters.
     pub async fn initialize(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<Self, ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let client = ScyllaDbClientInternal::initialize(store_config).await?;
@@ -701,35 +701,35 @@ impl ScyllaDbClient {
 
     /// Delete all the tables of a database
     pub async fn test_existence(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<bool, ScyllaDbContextError> {
         ScyllaDbClientInternal::test_existence(store_config).await
     }
 
     /// Delete all the tables of a database
     pub async fn delete_all(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<(), ScyllaDbContextError> {
         ScyllaDbClientInternal::delete_all(store_config).await
     }
 
     /// Delete all the tables of a database
     pub async fn list_tables(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<Vec<String>, ScyllaDbContextError> {
         ScyllaDbClientInternal::list_tables(store_config).await
     }
 
     /// Deletes a single table from the database
     pub async fn delete_single(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<(), ScyllaDbContextError> {
         ScyllaDbClientInternal::delete_single(store_config).await
     }
 
     /// Creates a [`ScyllaDbClient`] from the input parameters.
     pub async fn new(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let (client, table_status) = ScyllaDbClientInternal::new(store_config).await?;
@@ -755,7 +755,7 @@ pub async fn create_scylla_db_test_client() -> ScyllaDbClient {
     let uri = "localhost:9042".to_string();
     let table_name = get_table_name();
     let common_config = create_scylla_db_common_config();
-    let store_config = ScyllaDbKvStoreConfig {
+    let store_config = ScyllaDbStoreConfig {
         uri,
         table_name,
         common_config,

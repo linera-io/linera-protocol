@@ -14,14 +14,14 @@ use std::collections::VecDeque;
 #[cfg(feature = "rocksdb")]
 use {
     crate::rocks_db::create_rocks_db_common_config,
-    crate::rocks_db::RocksDbKvStoreConfig,
+    crate::rocks_db::RocksDbStoreConfig,
     crate::rocks_db::{RocksDbClient, RocksDbContext},
     tempfile::TempDir,
 };
 
 #[cfg(feature = "aws")]
 use crate::{
-    dynamo_db::DynamoDbKvStoreConfig,
+    dynamo_db::DynamoDbStoreConfig,
     dynamo_db::LocalStackTestContext,
     dynamo_db::{create_dynamo_db_common_config, DynamoDbContext},
     test_utils::get_table_name,
@@ -223,7 +223,7 @@ impl TestContextFactory for RocksDbContextFactory {
         let directory = TempDir::new()?;
         let common_config = create_rocks_db_common_config();
         let path_buf = directory.path().to_path_buf();
-        let store_config = RocksDbKvStoreConfig {
+        let store_config = RocksDbStoreConfig {
             path_buf,
             common_config,
         };
@@ -262,7 +262,7 @@ impl TestContextFactory for DynamoDbContextFactory {
         self.table_counter += 1;
         let common_config = create_dynamo_db_common_config();
         let dummy_key_prefix = vec![0];
-        let store_config = DynamoDbKvStoreConfig {
+        let store_config = DynamoDbStoreConfig {
             config,
             table_name,
             common_config,

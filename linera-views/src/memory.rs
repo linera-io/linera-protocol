@@ -14,7 +14,7 @@ use thiserror::Error;
 
 /// The initial configuration of the system
 #[derive(Debug)]
-pub struct MemoryKvStoreConfig {
+pub struct MemoryStoreConfig {
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
 }

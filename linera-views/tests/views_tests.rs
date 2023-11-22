@@ -39,7 +39,7 @@ use linera_views::rocks_db::{create_rocks_db_test_client, RocksDbClient, RocksDb
 #[cfg(feature = "aws")]
 use linera_views::{
     common::CommonStoreConfig, dynamo_db::create_dynamo_db_common_config,
-    dynamo_db::DynamoDbContext, dynamo_db::DynamoDbKvStoreConfig, dynamo_db::LocalStackTestContext,
+    dynamo_db::DynamoDbContext, dynamo_db::DynamoDbStoreConfig, dynamo_db::LocalStackTestContext,
     dynamo_db::TableName, test_utils::get_table_name,
 };
 
@@ -253,7 +253,7 @@ impl StateStore for DynamoDbTestStore {
         // TODO(#643): Actually acquire a lock.
         tracing::trace!("Acquiring lock on {:?}", id);
         let base_key = bcs::to_bytes(&id)?;
-        let store_config = DynamoDbKvStoreConfig {
+        let store_config = DynamoDbStoreConfig {
             config: self.localstack.dynamo_db_config(),
             table_name: self.table_name.clone(),
             common_config: self.common_config.clone(),

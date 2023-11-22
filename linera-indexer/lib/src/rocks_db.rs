@@ -7,7 +7,7 @@ use crate::{
 };
 use linera_views::{
     common::CommonStoreConfig,
-    rocks_db::{RocksDbClient, RocksDbKvStoreConfig},
+    rocks_db::{RocksDbClient, RocksDbStoreConfig},
 };
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -38,7 +38,7 @@ impl RocksDbRunner {
             max_stream_queries: config.client.max_stream_queries,
             cache_size: config.client.cache_size,
         };
-        let store_config = RocksDbKvStoreConfig {
+        let store_config = RocksDbStoreConfig {
             path_buf: config.client.storage.as_path().to_path_buf(),
             common_config,
         };

@@ -5,7 +5,7 @@ use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
 use linera_execution::WasmRuntime;
 use linera_views::{
     common::TableStatus,
-    rocks_db::{RocksDbClient, RocksDbContextError, RocksDbKvStoreConfig},
+    rocks_db::{RocksDbClient, RocksDbContextError, RocksDbStoreConfig},
 };
 use std::sync::Arc;
 
@@ -24,7 +24,7 @@ type RocksDbStorageInner = DbStorageInner<RocksDbClient>;
 impl RocksDbStorageInner {
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
-        store_config: RocksDbKvStoreConfig,
+        store_config: RocksDbStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), RocksDbContextError> {
         let (client, table_status) = RocksDbClient::new_for_testing(store_config).await?;
@@ -33,7 +33,7 @@ impl RocksDbStorageInner {
     }
 
     async fn initialize(
-        store_config: RocksDbKvStoreConfig,
+        store_config: RocksDbStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, RocksDbContextError> {
         let client = RocksDbClient::initialize(store_config).await?;
@@ -42,7 +42,7 @@ impl RocksDbStorageInner {
     }
 
     async fn make(
-        store_config: RocksDbKvStoreConfig,
+        store_config: RocksDbStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), RocksDbContextError> {
         let (client, table_status) = RocksDbClient::new(store_config).await?;
@@ -59,7 +59,7 @@ impl RocksDbStorage<TestClock> {
         let dir = TempDir::new().unwrap();
         let path_buf = dir.path().to_path_buf();
         let common_config = create_rocks_db_common_config();
-        let store_config = RocksDbKvStoreConfig {
+        let store_config = RocksDbStoreConfig {
             path_buf,
             common_config,
         };
@@ -71,7 +71,7 @@ impl RocksDbStorage<TestClock> {
     }
 
     pub async fn new_for_testing(
-        store_config: RocksDbKvStoreConfig,
+        store_config: RocksDbStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
     ) -> Result<(Self, TableStatus), RocksDbContextError> {
@@ -87,7 +87,7 @@ impl RocksDbStorage<TestClock> {
 
 impl RocksDbStorage<WallClock> {
     pub async fn initialize(
-        store_config: RocksDbKvStoreConfig,
+        store_config: RocksDbStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, RocksDbContextError> {
         let storage = RocksDbStorageInner::initialize(store_config, wasm_runtime).await?;
@@ -99,7 +99,7 @@ impl RocksDbStorage<WallClock> {
     }
 
     pub async fn new(
-        store_config: RocksDbKvStoreConfig,
+        store_config: RocksDbStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), RocksDbContextError> {
         let (storage, table_status) = RocksDbStorageInner::make(store_config, wasm_runtime).await?;

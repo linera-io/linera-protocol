@@ -43,7 +43,7 @@ pub struct RocksDbClientInternal {
 
 /// The initial configuration of the system
 #[derive(Clone, Debug)]
-pub struct RocksDbKvStoreConfig {
+pub struct RocksDbStoreConfig {
     /// The AWS configuration
     pub path_buf: PathBuf,
     /// The common configuration of the key value store
@@ -214,7 +214,7 @@ pub struct RocksDbClient {
 impl RocksDbClient {
     /// Returns whether a table already exists.
     pub async fn test_existence(
-        store_config: RocksDbKvStoreConfig,
+        store_config: RocksDbStoreConfig,
     ) -> Result<bool, RocksDbContextError> {
         let options = rocksdb::Options::default();
         let result = DB::open(&options, store_config.path_buf.clone());
@@ -230,7 +230,7 @@ impl RocksDbClient {
     /// Creates a RocksDB database for unit tests from a specified path.
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
-        store_config: RocksDbKvStoreConfig,
+        store_config: RocksDbStoreConfig,
     ) -> Result<(RocksDbClient, TableStatus), RocksDbContextError> {
         let path = store_config.path_buf.as_path();
         fs::remove_dir_all(path)?;
@@ -239,7 +239,7 @@ impl RocksDbClient {
     }
 
     /// Creates all RocksDB databases
-    pub async fn delete_all(store_config: RocksDbKvStoreConfig) -> Result<(), RocksDbContextError> {
+    pub async fn delete_all(store_config: RocksDbStoreConfig) -> Result<(), RocksDbContextError> {
         let path = store_config.path_buf.as_path();
         fs::remove_dir_all(path)?;
         Ok(())
@@ -247,7 +247,7 @@ impl RocksDbClient {
 
     /// Creates all RocksDB databases
     pub async fn delete_single(
-        store_config: RocksDbKvStoreConfig,
+        store_config: RocksDbStoreConfig,
     ) -> Result<(), RocksDbContextError> {
         let path = store_config.path_buf.as_path();
         fs::remove_dir_all(path)?;
@@ -256,7 +256,7 @@ impl RocksDbClient {
 
     /// Creates a RocksDB database from a specified path.
     pub async fn new(
-        store_config: RocksDbKvStoreConfig,
+        store_config: RocksDbStoreConfig,
     ) -> Result<(RocksDbClient, TableStatus), RocksDbContextError> {
         let create_if_missing = false;
         Self::new_internal(store_config, create_if_missing).await
@@ -264,7 +264,7 @@ impl RocksDbClient {
 
     /// Initializes a RocksDB database from a specified path.
     pub async fn initialize(
-        store_config: RocksDbKvStoreConfig,
+        store_config: RocksDbStoreConfig,
     ) -> Result<Self, RocksDbContextError> {
         let create_if_missing = true;
         let (client, table_status) = Self::new_internal(store_config, create_if_missing).await?;
@@ -276,7 +276,7 @@ impl RocksDbClient {
 
     /// Creates a RocksDB database from a specified path.
     async fn new_internal(
-        store_config: RocksDbKvStoreConfig,
+        store_config: RocksDbStoreConfig,
         create_if_missing: bool,
     ) -> Result<(RocksDbClient, TableStatus), RocksDbContextError> {
         let kv_name = format!(
@@ -331,7 +331,7 @@ pub async fn create_rocks_db_test_client() -> RocksDbClient {
     let dir = TempDir::new().unwrap();
     let path_buf = dir.path().to_path_buf();
     let common_config = create_rocks_db_common_config();
-    let store_config = RocksDbKvStoreConfig {
+    let store_config = RocksDbStoreConfig {
         path_buf,
         common_config,
     };

@@ -35,20 +35,20 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 #[cfg(feature = "rocksdb")]
 use {
     linera_storage::RocksDbStorage, linera_views::rocks_db::create_rocks_db_common_config,
-    linera_views::rocks_db::RocksDbKvStoreConfig, tokio::sync::Semaphore,
+    linera_views::rocks_db::RocksDbStoreConfig, tokio::sync::Semaphore,
 };
 
 #[cfg(feature = "aws")]
 use {
     linera_storage::DynamoDbStorage,
-    linera_views::dynamo_db::DynamoDbKvStoreConfig,
+    linera_views::dynamo_db::DynamoDbStoreConfig,
     linera_views::dynamo_db::{create_dynamo_db_common_config, LocalStackTestContext},
 };
 
 #[cfg(feature = "scylladb")]
 use {
     linera_storage::ScyllaDbStorage, linera_views::scylla_db::create_scylla_db_common_config,
-    linera_views::scylla_db::ScyllaDbKvStoreConfig,
+    linera_views::scylla_db::ScyllaDbStoreConfig,
 };
 
 #[cfg(any(feature = "aws", feature = "scylladb"))]
@@ -659,7 +659,7 @@ impl StorageBuilder for MakeRocksDbStorage {
         let path_buf = dir.path().to_path_buf();
         self.temp_dirs.push(dir);
         let common_config = create_rocks_db_common_config();
-        let store_config = RocksDbKvStoreConfig {
+        let store_config = RocksDbStoreConfig {
             path_buf,
             common_config,
         };
@@ -710,7 +710,7 @@ impl StorageBuilder for MakeDynamoDbStorage {
         let table = format!("{}_{}", table, self.instance_counter);
         let table_name = table.parse()?;
         let common_config = create_dynamo_db_common_config();
-        let store_config = DynamoDbKvStoreConfig {
+        let store_config = DynamoDbStoreConfig {
             config,
             table_name,
             common_config,
@@ -774,7 +774,7 @@ impl StorageBuilder for MakeScyllaDbStorage {
         let table_name = get_table_name();
         let table_name = format!("{}_{}", table_name, self.instance_counter);
         let common_config = create_scylla_db_common_config();
-        let store_config = ScyllaDbKvStoreConfig {
+        let store_config = ScyllaDbStoreConfig {
             uri: self.uri.clone(),
             table_name,
             common_config,

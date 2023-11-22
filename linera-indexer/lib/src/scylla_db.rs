@@ -7,7 +7,7 @@ use crate::{
 };
 use linera_views::{
     common::CommonStoreConfig,
-    scylla_db::{ScyllaDbClient, ScyllaDbKvStoreConfig},
+    scylla_db::{ScyllaDbClient, ScyllaDbStoreConfig},
 };
 use structopt::StructOpt;
 
@@ -39,7 +39,7 @@ impl ScyllaDbRunner {
             max_stream_queries: config.client.max_stream_queries,
             cache_size: config.client.cache_size,
         };
-        let store_config = ScyllaDbKvStoreConfig {
+        let store_config = ScyllaDbStoreConfig {
             uri: config.client.uri.clone(),
             table_name: config.client.table.clone(),
             common_config,
