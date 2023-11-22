@@ -18,7 +18,7 @@ use std::{
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::common::ContextFromDb,
+    crate::common::ContextFromStore,
     crate::memory::{MemoryStore, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
     crate::views::ViewError,
     async_lock::MutexGuardArc,
@@ -233,7 +233,7 @@ where
 
 /// A context that stores all values in memory.
 #[cfg(any(test, feature = "test"))]
-pub type LruCachingMemoryContext<E> = ContextFromDb<E, LruCachingKeyValueStore<MemoryStore>>;
+pub type LruCachingMemoryContext<E> = ContextFromStore<E, LruCachingKeyValueStore<MemoryStore>>;
 
 #[cfg(any(test, feature = "test"))]
 impl<E> LruCachingMemoryContext<E> {
@@ -246,10 +246,6 @@ impl<E> LruCachingMemoryContext<E> {
     ) -> Result<Self, ViewError> {
         let store = MemoryStore::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES);
         let store = LruCachingKeyValueStore::new(store, n);
-        Ok(Self {
-            db: store,
-            base_key,
-            extra,
-        })
+        Ok(Self { store, base_key, extra })
     }
 }

@@ -3,7 +3,7 @@
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_upper_bound, CommonStoreConfig, ContextFromDb, KeyValueStore, TableStatus},
+    common::{get_upper_bound, CommonStoreConfig, ContextFromStore, KeyValueStore, TableStatus},
     lru_caching::LruCachingKeyValueStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingKeyValueStore},
 };
@@ -340,7 +340,7 @@ pub async fn create_rocks_db_test_store() -> RocksDbStore {
 }
 
 /// An implementation of [`crate::common::Context`] based on RocksDB
-pub type RocksDbContext<E> = ContextFromDb<E, RocksDbStore>;
+pub type RocksDbContext<E> = ContextFromStore<E, RocksDbStore>;
 
 #[async_trait]
 impl KeyValueStore for RocksDbStore {
@@ -390,12 +390,8 @@ impl KeyValueStore for RocksDbStore {
 
 impl<E: Clone + Send + Sync> RocksDbContext<E> {
     /// Creates a [`RocksDbContext`].
-    pub fn new(db: RocksDbStore, base_key: Vec<u8>, extra: E) -> Self {
-        Self {
-            db,
-            base_key,
-            extra,
-        }
+    pub fn new(store: RocksDbStore, base_key: Vec<u8>, extra: E) -> Self {
+        Self { store, base_key, extra }
     }
 }
 

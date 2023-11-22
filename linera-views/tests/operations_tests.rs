@@ -401,9 +401,9 @@ async fn test_big_value_read_write() {
         let mut batch = Batch::new();
         let key = vec![43, 23, 56];
         batch.put_key_value(key.clone(), &test_string).unwrap();
-        context.db.write_batch(batch, &[]).await.unwrap();
+        context.store.write_batch(batch, &[]).await.unwrap();
         let read_string = context
-            .db
+            .store
             .read_value::<String>(&key)
             .await
             .unwrap()

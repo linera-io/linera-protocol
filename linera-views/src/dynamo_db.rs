@@ -4,7 +4,7 @@
 use crate::{
     batch::{Batch, DeletePrefixExpander, SimpleUnorderedBatch},
     common::{
-        CommonStoreConfig, ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStore,
+        CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore,
         TableStatus, MIN_VIEW_TAG,
     },
     lru_caching::LruCachingKeyValueStore,
@@ -302,9 +302,9 @@ impl TransactionBuilder {
     fn insert_delete_request(
         &mut self,
         key: Vec<u8>,
-        db: &DynamoDbStoreInternal,
+        store: &DynamoDbStoreInternal,
     ) -> Result<(), DynamoDbContextError> {
-        let transact = db.build_delete_transact(key)?;
+        let transact = store.build_delete_transact(key)?;
         self.transacts.push(transact);
         Ok(())
     }
@@ -313,15 +313,15 @@ impl TransactionBuilder {
         &mut self,
         key: Vec<u8>,
         value: Vec<u8>,
-        db: &DynamoDbStoreInternal,
+        store: &DynamoDbStoreInternal,
     ) -> Result<(), DynamoDbContextError> {
-        let transact = db.build_put_transact(key, value)?;
+        let transact = store.build_put_transact(key, value)?;
         self.transacts.push(transact);
         Ok(())
     }
 
-    async fn submit(self, db: &DynamoDbStoreInternal) -> Result<(), DynamoDbContextError> {
-        db.submit_transactions(self.transacts).await
+    async fn submit(self, store: &DynamoDbStoreInternal) -> Result<(), DynamoDbContextError> {
+        store.submit_transactions(self.transacts).await
     }
 }
 
@@ -353,7 +353,7 @@ impl JournalHeader {
     /// Resolves the database by using the header that has been retrieved
     async fn coherently_resolve_journal(
         mut self,
-        db: &DynamoDbStoreInternal,
+        store: &DynamoDbStoreInternal,
         base_key: &[u8],
     ) -> Result<(), DynamoDbContextError> {
         loop {
@@ -361,19 +361,19 @@ impl JournalHeader {
                 break;
             }
             let key = get_journaling_key(base_key, KeyTag::Entry as u8, self.block_count - 1)?;
-            let value = db.read_value::<DynamoDbBatch>(&key).await?;
+            let value = store.read_value::<DynamoDbBatch>(&key).await?;
             if let Some(value) = value {
                 let mut tb = TransactionBuilder::default();
-                tb.insert_delete_request(key, db)?; // Delete the preceding journal entry
+                tb.insert_delete_request(key, store)?; // Delete the preceding journal entry
                 for delete in value.0.deletions {
-                    tb.insert_delete_request(delete, db)?;
+                    tb.insert_delete_request(delete, store)?;
                 }
                 for key_value in value.0.insertions {
-                    tb.insert_put_request(key_value.0, key_value.1, db)?;
+                    tb.insert_put_request(key_value.0, key_value.1, store)?;
                 }
                 self.block_count -= 1;
-                DynamoDbBatch::add_journal_header_operations(&mut tb, &self, db, base_key)?;
-                tb.submit(db).await?;
+                DynamoDbBatch::add_journal_header_operations(&mut tb, &self, store, base_key)?;
+                tb.submit(store).await?;
             } else {
                 return Err(DynamoDbContextError::DatabaseRecoveryFailed);
             }
@@ -409,15 +409,15 @@ impl DynamoDbBatch {
     fn add_journal_header_operations(
         transact_builder: &mut TransactionBuilder,
         header: &JournalHeader,
-        db: &DynamoDbStoreInternal,
+        store: &DynamoDbStoreInternal,
         base_key: &[u8],
     ) -> Result<(), DynamoDbContextError> {
         let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
         if header.block_count > 0 {
             let value = bcs::to_bytes(header)?;
-            transact_builder.insert_put_request(key, value, db)?;
+            transact_builder.insert_put_request(key, value, store)?;
         } else {
-            transact_builder.insert_delete_request(key, db)?;
+            transact_builder.insert_delete_request(key, store)?;
         }
         Ok(())
     }
@@ -425,7 +425,7 @@ impl DynamoDbBatch {
     /// Writes blocks to the database and resolves them later.
     pub async fn write_journal(
         self,
-        db: &DynamoDbStoreInternal,
+        store: &DynamoDbStoreInternal,
         base_key: &[u8],
     ) -> Result<JournalHeader, DynamoDbContextError> {
         let mut delete_iter = self.0.deletions.into_iter().peekable();
@@ -482,13 +482,13 @@ impl DynamoDbBatch {
                 let value = bcs::to_bytes(&entry)?;
                 assert_eq!(value.len(), value_size);
                 let key = get_journaling_key(base_key, KeyTag::Entry as u8, block_count)?;
-                transacts.push(db.build_put_transact(key, value)?);
+                transacts.push(store.build_put_transact(key, value)?);
                 block_count += 1;
                 transact_size += value_size;
                 value_size = 0;
             }
             if transact_flush {
-                db.submit_transactions(mem::take(&mut transacts)).await?;
+                store.submit_transactions(mem::take(&mut transacts)).await?;
                 transact_size = 0;
             }
         }
@@ -496,7 +496,7 @@ impl DynamoDbBatch {
         if block_count > 0 {
             let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
             let value = bcs::to_bytes(&header)?;
-            db.write_single_key_value(key, value).await?;
+            store.write_single_key_value(key, value).await?;
         }
         Ok(header)
     }
@@ -504,20 +504,20 @@ impl DynamoDbBatch {
     /// This code is for submitting the transaction in one single transaction when that is possible.
     pub async fn write_fastpath_failsafe(
         self,
-        db: &DynamoDbStoreInternal,
+        store: &DynamoDbStoreInternal,
     ) -> Result<(), DynamoDbContextError> {
         let mut tb = TransactionBuilder::default();
         for key in self.0.deletions {
-            tb.insert_delete_request(key, db)?;
+            tb.insert_delete_request(key, store)?;
         }
         for key_value in self.0.insertions {
-            tb.insert_put_request(key_value.0, key_value.1, db)?;
+            tb.insert_put_request(key_value.0, key_value.1, store)?;
         }
-        tb.submit(db).await
+        tb.submit(store).await
     }
 
     async fn from_batch(
-        db: &DynamoDbStoreInternal,
+        store: &DynamoDbStoreInternal,
         batch: Batch,
     ) -> Result<Self, DynamoDbContextError> {
         // The DynamoDB does not support the `DeletePrefix` operation.
@@ -526,7 +526,7 @@ impl DynamoDbBatch {
         // Also we remove the deletes that are followed by inserts on the same key because
         // the TransactWriteItem and BatchWriteItem are not going to work that way.
         let unordered_batch = batch.simplify();
-        let simple_unordered_batch = unordered_batch.expand_delete_prefixes(db).await?;
+        let simple_unordered_batch = unordered_batch.expand_delete_prefixes(store).await?;
         Ok(DynamoDbBatch(simple_unordered_batch))
     }
 }
@@ -761,7 +761,7 @@ impl DynamoDbStoreInternal {
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = common_config.max_stream_queries;
-        let db = Self {
+        let store = Self {
             client,
             table,
             semaphore,
@@ -769,7 +769,7 @@ impl DynamoDbStoreInternal {
         };
         if !existing_table {
             if create_if_missing {
-                existing_table = db.create_table(stop_if_table_exists).await?;
+                existing_table = store.create_table(stop_if_table_exists).await?;
             } else {
                 tracing::info!("DynamoDb: Missing database for kv_name={}", kv_name);
                 return Err(DynamoDbContextError::MissingDatabase(kv_name));
@@ -780,7 +780,7 @@ impl DynamoDbStoreInternal {
         } else {
             TableStatus::New
         };
-        Ok((db, table_status))
+        Ok((store, table_status))
     }
 
     async fn get_query_output(
@@ -1299,7 +1299,7 @@ impl DynamoDbStore {
 /// An implementation of [`Context`][trait1] based on [`DynamoDbStore`].
 ///
 /// [trait1]: crate::common::Context
-pub type DynamoDbContext<E> = ContextFromDb<E, DynamoDbStore>;
+pub type DynamoDbContext<E> = ContextFromStore<E, DynamoDbStore>;
 
 impl<E> DynamoDbContext<E>
 where
@@ -1312,9 +1312,9 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (db, table_status) = DynamoDbStore::new_for_testing(store_config).await?;
+        let (store, table_status) = DynamoDbStore::new_for_testing(store_config).await?;
         let storage = DynamoDbContext {
-            db,
+            store,
             base_key,
             extra,
         };
@@ -1327,9 +1327,9 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (db, table_status) = DynamoDbStore::new(store_config).await?;
+        let (store, table_status) = DynamoDbStore::new(store_config).await?;
         let storage = DynamoDbContext {
-            db,
+            store,
             base_key,
             extra,
         };

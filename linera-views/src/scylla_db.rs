@@ -21,7 +21,7 @@ use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::get_table_name};
 use crate::{
     batch::{Batch, DeletePrefixExpander},
     common::{
-        get_upper_bound_option, CommonStoreConfig, ContextFromDb, KeyValueStore, TableStatus,
+        get_upper_bound_option, CommonStoreConfig, ContextFromStore, KeyValueStore, TableStatus,
     },
     lru_caching::LruCachingKeyValueStore,
     value_splitting::DatabaseConsistencyError,
@@ -763,16 +763,12 @@ pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
 }
 
 /// An implementation of [`crate::common::Context`] based on ScyllaDB
-pub type ScyllaDbContext<E> = ContextFromDb<E, ScyllaDbStore>;
+pub type ScyllaDbContext<E> = ContextFromStore<E, ScyllaDbStore>;
 
 impl<E: Clone + Send + Sync> ScyllaDbContext<E> {
     /// Creates a [`ScyllaDbContext`].
-    pub fn new(db: ScyllaDbStore, base_key: Vec<u8>, extra: E) -> Self {
-        Self {
-            db,
-            base_key,
-            extra,
-        }
+    pub fn new(store: ScyllaDbStore, base_key: Vec<u8>, extra: E) -> Self {
+        Self { store, base_key, extra }
     }
 }
 

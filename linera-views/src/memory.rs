@@ -3,7 +3,7 @@
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_interval, CommonStoreConfig, ContextFromDb, KeyValueStore},
+    common::{get_interval, CommonStoreConfig, ContextFromStore, KeyValueStore},
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
 };
@@ -130,18 +130,14 @@ impl MemoryStore {
 }
 
 /// An implementation of [`crate::common::Context`] that stores all values in memory.
-pub type MemoryContext<E> = ContextFromDb<E, MemoryStore>;
+pub type MemoryContext<E> = ContextFromStore<E, MemoryStore>;
 
 impl<E> MemoryContext<E> {
     /// Creates a [`MemoryContext`].
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>, max_stream_queries: usize, extra: E) -> Self {
-        let db = MemoryStore::new(guard, max_stream_queries);
+        let store = MemoryStore::new(guard, max_stream_queries);
         let base_key = Vec::new();
-        Self {
-            db,
-            base_key,
-            extra,
-        }
+        Self { store, base_key, extra }
     }
 }
 

@@ -12,7 +12,7 @@ use linera_chain::{
 use linera_execution::{UserApplicationId, UserContractCode, UserServiceCode, WasmRuntime};
 use linera_views::{
     batch::Batch,
-    common::{ContextFromDb, KeyValueStore},
+    common::{ContextFromStore, KeyValueStore},
     value_splitting::DatabaseConsistencyError,
     views::{View, ViewError},
 };
@@ -153,7 +153,7 @@ where
     <Client as KeyValueStore>::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
-    type Context = ContextFromDb<ChainRuntimeContext<Self>, Client>;
+    type Context = ContextFromStore<ChainRuntimeContext<Self>, Client>;
     type ContextError = <Client as KeyValueStore>::Error;
 
     fn current_time(&self) -> Timestamp {
@@ -175,7 +175,7 @@ where
         };
         let client = self.client.client.clone();
         let base_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
-        let context = ContextFromDb::create(client, base_key, runtime_context).await?;
+        let context = ContextFromStore::create(client, base_key, runtime_context).await?;
         ChainStateView::load(context).await
     }
 

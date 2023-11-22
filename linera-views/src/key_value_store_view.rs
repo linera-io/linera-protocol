@@ -21,7 +21,7 @@ use std::{
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::common::{ContextFromDb, KeyValueStore},
+    crate::common::{ContextFromStore, KeyValueStore},
     crate::memory::{MemoryContext, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
     async_lock::{MutexGuardArc, RwLock},
     std::sync::Arc,
@@ -837,7 +837,7 @@ where
 
 /// A context that stores all values in memory.
 #[cfg(any(test, feature = "test"))]
-pub type KeyValueStoreMemoryContext<E> = ContextFromDb<E, ViewContainer<MemoryContext<()>>>;
+pub type KeyValueStoreMemoryContext<E> = ContextFromStore<E, ViewContainer<MemoryContext<()>>>;
 
 #[cfg(any(test, feature = "test"))]
 impl<E> KeyValueStoreMemoryContext<E> {
@@ -848,11 +848,7 @@ impl<E> KeyValueStoreMemoryContext<E> {
         extra: E,
     ) -> Result<Self, ViewError> {
         let context = MemoryContext::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES, ());
-        let key_value_store_view = ViewContainer::new(context).await?;
-        Ok(Self {
-            db: key_value_store_view,
-            base_key,
-            extra,
-        })
+        let store = ViewContainer::new(context).await?;
+        Ok(Self { store, base_key, extra })
     }
 }

@@ -3,7 +3,7 @@
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStore},
+    common::{ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore},
     memory::{MemoryContextError, MemoryStore, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
 };
 use async_lock::{Mutex, MutexGuardArc};
@@ -399,18 +399,14 @@ impl TestMemoryStore {
 }
 
 /// An implementation of [`crate::common::Context`] that stores all values in memory.
-pub type TestMemoryContext<E> = ContextFromDb<E, TestMemoryStore>;
+pub type TestMemoryContext<E> = ContextFromStore<E, TestMemoryStore>;
 
 impl<E> TestMemoryContext<E> {
     /// Creates a [`TestMemoryContext`].
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>, extra: E) -> Self {
-        let db = TestMemoryStore::new(guard);
+        let store = TestMemoryStore::new(guard);
         let base_key = Vec::new();
-        Self {
-            db,
-            base_key,
-            extra,
-        }
+        Self { store, base_key, extra }
     }
 }
 
@@ -435,18 +431,14 @@ pub fn create_test_memory_store() -> TestMemoryStore {
 }
 
 /// An implementation of [`crate::common::Context`] that stores all values in memory.
-pub type TestMemoryContextInternal<E> = ContextFromDb<E, TestMemoryStoreInternal>;
+pub type TestMemoryContextInternal<E> = ContextFromStore<E, TestMemoryStoreInternal>;
 
 impl<E> TestMemoryContextInternal<E> {
     /// Creates a [`TestMemoryContextInternal`].
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>, extra: E) -> Self {
-        let db = TestMemoryStoreInternal::new(guard);
+        let store = TestMemoryStoreInternal::new(guard);
         let base_key = Vec::new();
-        Self {
-            db,
-            base_key,
-            extra,
-        }
+        Self { store, base_key, extra }
     }
 }
 

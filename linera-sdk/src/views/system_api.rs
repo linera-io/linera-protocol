@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use linera_base::ensure;
 use linera_views::{
     batch::{Batch, WriteOperation},
-    common::{ContextFromDb, KeyValueStore},
+    common::{ContextFromStore, KeyValueStore},
     views::ViewError,
 };
 
@@ -23,9 +23,9 @@ const MAX_KEY_SIZE: usize = 900;
 
 /// A type to interface with the key value storage provided to applications.
 #[derive(Default, Clone)]
-pub struct KeyValueWasm;
+pub struct WasmStore;
 
-impl KeyValueWasm {
+impl WasmStore {
     async fn find_keys_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
         let promise = wit::FindKeys::new(key_prefix);
         yield_once().await;
@@ -40,8 +40,8 @@ impl KeyValueWasm {
 }
 
 #[async_trait]
-impl KeyValueStore for KeyValueWasm {
-    // The KeyValueWasm of the system_api does not have limits
+impl KeyValueStore for WasmStore {
+    // The WasmStore of the system_api does not have limits
     // on the size of its values.
     const MAX_VALUE_SIZE: usize = usize::MAX;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
@@ -126,4 +126,4 @@ impl KeyValueStore for KeyValueWasm {
 
 /// Implementation of [`linera_views::common::Context`] to be used for data storage
 /// by Linera applications.
-pub type ViewStorageContext = ContextFromDb<(), KeyValueWasm>;
+pub type ViewStorageContext = ContextFromStore<(), WasmStore>;
