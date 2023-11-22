@@ -137,7 +137,11 @@ impl<E> MemoryContext<E> {
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>, max_stream_queries: usize, extra: E) -> Self {
         let store = MemoryStore::new(guard, max_stream_queries);
         let base_key = Vec::new();
-        Self { store, base_key, extra }
+        Self {
+            store,
+            base_key,
+            extra,
+        }
     }
 }
 

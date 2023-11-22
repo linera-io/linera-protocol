@@ -768,7 +768,11 @@ pub type ScyllaDbContext<E> = ContextFromStore<E, ScyllaDbStore>;
 impl<E: Clone + Send + Sync> ScyllaDbContext<E> {
     /// Creates a [`ScyllaDbContext`].
     pub fn new(store: ScyllaDbStore, base_key: Vec<u8>, extra: E) -> Self {
-        Self { store, base_key, extra }
+        Self {
+            store,
+            base_key,
+            extra,
+        }
     }
 }
 

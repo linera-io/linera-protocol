@@ -246,6 +246,10 @@ impl<E> LruCachingMemoryContext<E> {
     ) -> Result<Self, ViewError> {
         let store = MemoryStore::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES);
         let store = LruCachingKeyValueStore::new(store, n);
-        Ok(Self { store, base_key, extra })
+        Ok(Self {
+            store,
+            base_key,
+            extra,
+        })
     }
 }

@@ -406,7 +406,11 @@ impl<E> TestMemoryContext<E> {
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>, extra: E) -> Self {
         let store = TestMemoryStore::new(guard);
         let base_key = Vec::new();
-        Self { store, base_key, extra }
+        Self {
+            store,
+            base_key,
+            extra,
+        }
     }
 }
 
@@ -438,7 +442,11 @@ impl<E> TestMemoryContextInternal<E> {
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>, extra: E) -> Self {
         let store = TestMemoryStoreInternal::new(guard);
         let base_key = Vec::new();
-        Self { store, base_key, extra }
+        Self {
+            store,
+            base_key,
+            extra,
+        }
     }
 }
 

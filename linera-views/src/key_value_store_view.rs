@@ -849,6 +849,10 @@ impl<E> KeyValueStoreMemoryContext<E> {
     ) -> Result<Self, ViewError> {
         let context = MemoryContext::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES, ());
         let store = ViewContainer::new(context).await?;
-        Ok(Self { store, base_key, extra })
+        Ok(Self {
+            store,
+            base_key,
+            extra,
+        })
     }
 }

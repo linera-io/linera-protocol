@@ -391,7 +391,11 @@ impl KeyValueStore for RocksDbStore {
 impl<E: Clone + Send + Sync> RocksDbContext<E> {
     /// Creates a [`RocksDbContext`].
     pub fn new(store: RocksDbStore, base_key: Vec<u8>, extra: E) -> Self {
-        Self { store, base_key, extra }
+        Self {
+            store,
+            base_key,
+            extra,
+        }
     }
 }
 
