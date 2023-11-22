@@ -86,14 +86,14 @@ impl<'a> LruPrefixCache {
 
 /// We take a client, a maximum size and build a LRU-based system.
 #[derive(Clone)]
-pub struct LruCachingKeyValueClient<K> {
+pub struct LruCachingKeyValueStore<K> {
     /// The inner client that is called by the LRU cache one
     pub client: K,
     lru_read_values: Option<Arc<Mutex<LruPrefixCache>>>,
 }
 
 #[async_trait]
-impl<K> KeyValueStore for LruCachingKeyValueClient<K>
+impl<K> KeyValueStore for LruCachingKeyValueStore<K>
 where
     K: KeyValueStore + Send + Sync,
 {
@@ -210,7 +210,7 @@ where
     }
 }
 
-impl<K> LruCachingKeyValueClient<K>
+impl<K> LruCachingKeyValueStore<K>
 where
     K: KeyValueStore,
 {
@@ -233,7 +233,7 @@ where
 
 /// A context that stores all values in memory.
 #[cfg(any(test, feature = "test"))]
-pub type LruCachingMemoryContext<E> = ContextFromDb<E, LruCachingKeyValueClient<MemoryClient>>;
+pub type LruCachingMemoryContext<E> = ContextFromDb<E, LruCachingKeyValueStore<MemoryClient>>;
 
 #[cfg(any(test, feature = "test"))]
 impl<E> LruCachingMemoryContext<E> {
@@ -244,10 +244,10 @@ impl<E> LruCachingMemoryContext<E> {
         extra: E,
         n: usize,
     ) -> Result<Self, ViewError> {
-        let client = MemoryClient::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES);
-        let lru_client = LruCachingKeyValueClient::new(client, n);
+        let store = MemoryClient::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES);
+        let store = LruCachingKeyValueStore::new(store, n);
         Ok(Self {
-            db: lru_client,
+            db: store,
             base_key,
             extra,
         })

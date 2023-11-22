@@ -7,7 +7,7 @@ use crate::{
         CommonStoreConfig, ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStore,
         TableStatus, MIN_VIEW_TAG,
     },
-    lru_caching::LruCachingKeyValueClient,
+    lru_caching::LruCachingKeyValueStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingKeyValueStore},
 };
 use async_lock::{Semaphore, SemaphoreGuard};
@@ -1181,7 +1181,7 @@ impl KeyValueStore for DynamoDbStoreInternal {
 /// A shared DB client for DynamoDb implementing LruCaching
 #[derive(Clone)]
 pub struct DynamoDbStore {
-    store: LruCachingKeyValueClient<ValueSplittingKeyValueStore<DynamoDbStoreInternal>>,
+    store: LruCachingKeyValueStore<ValueSplittingKeyValueStore<DynamoDbStoreInternal>>,
 }
 
 #[async_trait]
@@ -1240,7 +1240,7 @@ impl DynamoDbStore {
         let (store, table_status) = DynamoDbStoreInternal::new_for_testing(store_config).await?;
         let store = ValueSplittingKeyValueStore::new(store);
         let store = Self {
-            store: LruCachingKeyValueClient::new(store, cache_size),
+            store: LruCachingKeyValueStore::new(store, cache_size),
         };
         Ok((store, table_status))
     }
@@ -1253,7 +1253,7 @@ impl DynamoDbStore {
         let store = DynamoDbStoreInternal::initialize(store_config).await?;
         let store = ValueSplittingKeyValueStore::new(store);
         let store = Self {
-            store: LruCachingKeyValueClient::new(store, cache_size),
+            store: LruCachingKeyValueStore::new(store, cache_size),
         };
         Ok(store)
     }
@@ -1294,7 +1294,7 @@ impl DynamoDbStore {
         let (store, table_name) = DynamoDbStoreInternal::new(store_config).await?;
         let store = ValueSplittingKeyValueStore::new(store);
         let store = Self {
-            store: LruCachingKeyValueClient::new(store, cache_size),
+            store: LruCachingKeyValueStore::new(store, cache_size),
         };
         Ok((store, table_name))
     }
