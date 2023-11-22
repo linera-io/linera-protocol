@@ -9,8 +9,12 @@ use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
     util::{self, current_binary_parent, CommandExt},
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
+use futures::{
+    future::{self, join_all},
+    FutureExt,
+};
 use k8s_openapi::api::core::v1::Pod;
 use kube::{
     api::{Api, ListParams},
@@ -24,8 +28,9 @@ use tokio::process::Command;
 pub struct LocalKubernetesNetConfig {
     pub network: Network,
     pub testing_prng_seed: Option<u64>,
+    pub num_initial_validators: usize,
+    pub num_shards: usize,
     pub binaries_dir: Option<PathBuf>,
-    pub cluster_id: Option<u32>,
 }
 
 /// A set of Linera validators running locally as native processes.
@@ -36,7 +41,9 @@ pub struct LocalKubernetesNet {
     tmp_dir: Arc<TempDir>,
     binaries_dir: Option<PathBuf>,
     kubectl_instance: KubectlInstance,
-    kind_cluster: KindCluster,
+    kind_clusters: Vec<KindCluster>,
+    num_initial_validators: usize,
+    num_shards: usize,
 }
 
 #[async_trait]
@@ -48,10 +55,24 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
             self.network,
             self.testing_prng_seed,
             self.binaries_dir,
-            KubectlInstance::new(None),
-            KindCluster::new(self.cluster_id).await?,
+            KubectlInstance::new(Vec::new()),
+            future::ready(
+                (0..self.num_initial_validators)
+                    .map(|_| async { KindCluster::create().await })
+                    .collect::<Vec<_>>(),
+            )
+            .then(join_all)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?,
+            self.num_initial_validators,
+            self.num_shards,
         )?;
         let client = net.make_client();
+        ensure!(
+            self.num_initial_validators > 0,
+            "There should be at least one initial validator"
+        );
         net.generate_initial_validator_config().await.unwrap();
         client.create_genesis_config().await.unwrap();
         net.run().await.unwrap();
@@ -115,13 +136,13 @@ impl LineraNet for LocalKubernetesNet {
     }
 
     async fn terminate(mut self) -> Result<()> {
-        let mut port_forward_child = self
-            .kubectl_instance
-            .port_forward_child
-            .expect("Child should be set");
-        port_forward_child.kill().await?;
+        for mut port_forward_child in self.kubectl_instance.port_forward_children {
+            port_forward_child.kill().await?;
+        }
 
-        self.kind_cluster.delete().await?;
+        for kind_cluster in self.kind_clusters {
+            kind_cluster.delete().await?;
+        }
         Ok(())
     }
 }
@@ -132,7 +153,9 @@ impl LocalKubernetesNet {
         testing_prng_seed: Option<u64>,
         binaries_dir: Option<PathBuf>,
         kubectl_instance: KubectlInstance,
-        kind_cluster: KindCluster,
+        kind_clusters: Vec<KindCluster>,
+        num_initial_validators: usize,
+        num_shards: usize,
     ) -> Result<Self> {
         Ok(Self {
             network,
@@ -141,7 +164,9 @@ impl LocalKubernetesNet {
             tmp_dir: Arc::new(tempdir()?),
             binaries_dir,
             kubectl_instance,
-            kind_cluster,
+            kind_clusters,
+            num_initial_validators,
+            num_shards,
         })
     }
 
@@ -155,9 +180,9 @@ impl LocalKubernetesNet {
     fn configuration_string(&self, server_number: usize) -> Result<String> {
         let n = server_number;
         let path = self.tmp_dir.path().join(format!("validator_{n}.toml"));
-        let port = 19100;
-        let internal_port = 20100;
-        let metrics_port = 21100;
+        let port = 19100 + server_number;
+        let internal_port = 20100 + server_number;
+        let metrics_port = 21100 + server_number;
         let mut content = format!(
             r#"
                 server_config_path = "server_{n}.json"
@@ -173,9 +198,9 @@ impl LocalKubernetesNet {
                 Grpc = "ClearText"
             "#
         );
-        for k in 0..10 {
-            let shard_port = 19100;
-            let shard_metrics_port = 21100;
+        for k in 0..self.num_shards {
+            let shard_port = 19100 + server_number;
+            let shard_metrics_port = 21100 + server_number;
             content.push_str(&format!(
                 r#"
 
@@ -204,7 +229,9 @@ impl LocalKubernetesNet {
             self.testing_prng_seed = Some(seed + 1);
         }
         command.arg("--validators");
-        command.arg(&self.configuration_string(0)?);
+        for i in 0..self.num_initial_validators {
+            command.arg(&self.configuration_string(i)?);
+        }
         command
             .args(["--committee", "committee.json"])
             .spawn_and_wait_for_stdout()
@@ -230,35 +257,53 @@ impl LocalKubernetesNet {
         )
         .await?;
 
-        self.kind_cluster
-            .load_docker_image(docker_image.get_name())
-            .await?;
-
         let base_dir = github_root
             .join("kubernetes")
             .join("linera-validator")
             .join("working");
         fs::copy(
-            self.tmp_dir.path().join("server_0.json"),
-            base_dir.join("server_0.json"),
-        )?;
-        fs::copy(
             self.tmp_dir.path().join("genesis.json"),
             base_dir.join("genesis.json"),
         )?;
 
-        let helm_release = HelmRelease::new(String::from("linera-core"));
-        helm_release.install(&base_dir, 0, &github_root).await?;
+        for i in 0..self.num_initial_validators {
+            let cluster_id = self.kind_clusters[i].id();
+            self.kind_clusters[i]
+                .load_docker_image(docker_image.get_name())
+                .await?;
 
-        let output = self.kubectl_instance.get_pods().await?;
-        let validator_pod_name = output
-            .split_whitespace()
-            .find(|&t| t.contains("proxy"))
-            .expect("Getting validator pod name should not fail");
+            let server_config_filename = format!("server_{}.json", i);
+            fs::copy(
+                self.tmp_dir.path().join(&server_config_filename),
+                base_dir.join(&server_config_filename),
+            )?;
 
-        self.kubectl_instance
-            .port_forward(validator_pod_name, "19100:19100")
+            HelmRelease::install(
+                String::from("linera-core"),
+                &base_dir,
+                i,
+                &github_root,
+                self.num_shards,
+                cluster_id,
+            )
             .await?;
+
+            // Query the cluster
+            let output = self.kubectl_instance.get_pods(cluster_id).await?;
+            let validator_pod_name = output
+                .split_whitespace()
+                .find(|&t| t.contains("proxy"))
+                .expect("Getting validator pod name should not fail");
+
+            let local_port = 19100 + i;
+            self.kubectl_instance
+                .port_forward(
+                    validator_pod_name,
+                    &format!("{local_port}:{local_port}"),
+                    cluster_id,
+                )
+                .await?;
+        }
 
         Ok(())
     }

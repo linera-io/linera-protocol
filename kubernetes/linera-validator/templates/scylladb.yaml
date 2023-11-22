@@ -29,6 +29,16 @@ spec:
       labels:
         app: scylladb
     spec:
+      # In local runs we noticed that subsequent validators don't reset this value
+      # so we need to set it to a large enough value before initializing ScyllaDB,
+      # or the initialization will fail. 1048576 seems to be a commonly used constant
+      # for this for ScyllaDB
+      initContainers:
+      - name: increase-aio-max-nr
+        image: busybox
+        command: ['sh', '-c', 'echo 1048576 > /proc/sys/fs/aio-max-nr']
+        securityContext:
+          privileged: true
       containers:
         - name: scylladb
           image: scylladb/scylla:5.2
