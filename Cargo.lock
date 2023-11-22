@@ -2985,6 +2985,7 @@ name = "linera-base"
 version = "0.6.0"
 dependencies = [
  "async-graphql",
+ "async-lock",
  "bcs",
  "chrono",
  "custom_debug_derive",
@@ -3000,6 +3001,7 @@ dependencies = [
  "sha3",
  "test-strategy",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]

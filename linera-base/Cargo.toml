@@ -11,10 +11,12 @@ license = "Apache-2.0"
 edition = "2021"
 
 [features]
+locks = ["async-lock", "tracing"]
 test = ["test-strategy", "proptest"]
 
 [dependencies]
 async-graphql = { workspace = true }
+async-lock = { workspace = true, optional = true }
 bcs = { workspace = true }
 ed25519-dalek = { workspace = true }
 generic-array = { workspace = true }
@@ -26,6 +28,7 @@ serde_bytes = { workspace = true }
 sha3 = { workspace = true }
 test-strategy = { workspace = true, optional = true }
 thiserror = { workspace = true }
+tracing = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono = { workspace = true }
