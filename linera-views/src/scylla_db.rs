@@ -539,9 +539,7 @@ impl ScyllaDbStoreInternal {
         Ok(())
     }
 
-    async fn delete_single(
-        store_config: ScyllaDbStoreConfig,
-    ) -> Result<(), ScyllaDbContextError> {
+    async fn delete_single(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
@@ -707,9 +705,7 @@ impl ScyllaDbStore {
     }
 
     /// Delete all the tables of a database
-    pub async fn delete_all(
-        store_config: ScyllaDbStoreConfig,
-    ) -> Result<(), ScyllaDbContextError> {
+    pub async fn delete_all(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
         ScyllaDbStoreInternal::delete_all(store_config).await
     }
 

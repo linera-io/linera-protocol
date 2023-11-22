@@ -15,7 +15,7 @@ use std::collections::VecDeque;
 use {
     crate::rocks_db::create_rocks_db_common_config,
     crate::rocks_db::RocksDbStoreConfig,
-    crate::rocks_db::{RocksDbStore, RocksDbContext},
+    crate::rocks_db::{RocksDbContext, RocksDbStore},
     tempfile::TempDir,
 };
 

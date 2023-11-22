@@ -699,9 +699,7 @@ impl DynamoDbStoreInternal {
         list_tables_from_client(&client).await
     }
 
-    async fn delete_single(
-        store_config: DynamoDbStoreConfig,
-    ) -> Result<(), DynamoDbContextError> {
+    async fn delete_single(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
         client
             .delete_table()
@@ -1273,9 +1271,7 @@ impl DynamoDbStore {
     }
 
     /// Deletes all the tables from the database
-    pub async fn delete_all(
-        store_config: DynamoDbStoreConfig,
-    ) -> Result<(), DynamoDbContextError> {
+    pub async fn delete_all(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
         DynamoDbStoreInternal::delete_all(store_config).await
     }
 

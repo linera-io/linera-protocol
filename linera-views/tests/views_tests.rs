@@ -34,7 +34,7 @@ use std::{
 };
 
 #[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::{create_rocks_db_test_store, RocksDbStore, RocksDbContext};
+use linera_views::rocks_db::{create_rocks_db_test_store, RocksDbContext, RocksDbStore};
 
 #[cfg(feature = "aws")]
 use linera_views::{
@@ -44,7 +44,7 @@ use linera_views::{
 };
 
 #[cfg(feature = "scylladb")]
-use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbStore, ScyllaDbContext};
+use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbContext, ScyllaDbStore};
 
 #[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 use std::collections::BTreeSet;

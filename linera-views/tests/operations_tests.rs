@@ -5,7 +5,7 @@ use linera_views::{
     batch::{Batch, WriteOperation},
     common::{KeyIterable, KeyValueIterable, KeyValueStore},
     key_value_store_view::ViewContainer,
-    memory::{create_memory_store, create_memory_context},
+    memory::{create_memory_context, create_memory_store},
     test_utils::{
         get_random_byte_vector, get_random_key_prefix, get_random_key_values_prefix,
         get_small_key_space,

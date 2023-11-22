@@ -5,7 +5,7 @@ use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
 use linera_execution::WasmRuntime;
 use linera_views::{
     common::TableStatus,
-    scylla_db::{ScyllaDbStore, ScyllaDbContextError, ScyllaDbStoreConfig},
+    scylla_db::{ScyllaDbContextError, ScyllaDbStore, ScyllaDbStoreConfig},
 };
 use std::sync::Arc;
 

@@ -263,9 +263,7 @@ impl RocksDbStore {
     }
 
     /// Initializes a RocksDB database from a specified path.
-    pub async fn initialize(
-        store_config: RocksDbStoreConfig,
-    ) -> Result<Self, RocksDbContextError> {
+    pub async fn initialize(store_config: RocksDbStoreConfig) -> Result<Self, RocksDbContextError> {
         let create_if_missing = true;
         let (client, table_status) = Self::new_internal(store_config, create_if_missing).await?;
         if table_status == TableStatus::Existing {

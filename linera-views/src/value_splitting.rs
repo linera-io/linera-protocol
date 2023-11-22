@@ -4,7 +4,7 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStore},
-    memory::{MemoryStore, MemoryContextError, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
+    memory::{MemoryContextError, MemoryStore, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
 };
 use async_lock::{Mutex, MutexGuardArc};
 use async_trait::async_trait;
@@ -142,12 +142,7 @@ where
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
         let mut keys = Vec::new();
-        for big_key in self
-            .store
-            .find_keys_by_prefix(key_prefix)
-            .await?
-            .iterator()
-        {
+        for big_key in self.store.find_keys_by_prefix(key_prefix).await?.iterator() {
             let big_key = big_key?;
             let len = big_key.len();
             if Self::read_index_from_key(big_key)? == 0 {
@@ -479,8 +474,7 @@ mod tests {
         batch::Batch,
         common::KeyValueStore,
         value_splitting::{
-            create_test_memory_store_internal, TestMemoryStoreInternal,
-            ValueSplittingKeyValueStore,
+            create_test_memory_store_internal, TestMemoryStoreInternal, ValueSplittingKeyValueStore,
         },
     };
     use rand::{Rng, SeedableRng};

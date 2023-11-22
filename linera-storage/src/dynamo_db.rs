@@ -5,7 +5,7 @@ use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
 use linera_execution::WasmRuntime;
 use linera_views::{
     common::TableStatus,
-    dynamo_db::{DynamoDbStore, DynamoDbContextError, DynamoDbStoreConfig},
+    dynamo_db::{DynamoDbContextError, DynamoDbStore, DynamoDbStoreConfig},
 };
 use std::sync::Arc;
 

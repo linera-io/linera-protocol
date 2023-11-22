@@ -5,7 +5,7 @@ use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
 use linera_execution::WasmRuntime;
 use linera_views::{
     common::TableStatus,
-    rocks_db::{RocksDbStore, RocksDbContextError, RocksDbStoreConfig},
+    rocks_db::{RocksDbContextError, RocksDbStore, RocksDbStoreConfig},
 };
 use std::sync::Arc;
 
