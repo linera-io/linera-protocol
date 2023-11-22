@@ -15,7 +15,7 @@ use crate::{
     updater::CommunicationError,
     worker::{Notification, Reason, WorkerError},
 };
-use futures::{lock::Mutex, sink, StreamExt};
+use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::*,
     data_types::*,
@@ -89,8 +89,7 @@ where
     let sender = Arc::new(Mutex::new(sender));
     // Listen to the notifications on the sender chain.
     let mut notifications = sender.lock().await.subscribe().await?;
-    let stream = ChainClient::listen(sender.clone()).await?;
-    tokio::spawn(stream.map(Ok).forward(sink::drain()));
+    ChainClient::listen(sender.clone()).await?;
     {
         let mut sender = sender.lock().await;
         let certificate = sender

@@ -6,7 +6,7 @@ use anyhow::{anyhow, bail, Context, Error};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
-use futures::{lock::Mutex, sink, StreamExt};
+use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::{CryptoHash, CryptoRng, KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, Timestamp},
@@ -1658,8 +1658,7 @@ impl Runnable for Job {
                 let chain_id = chain_client.chain_id();
                 info!("Watching for notifications for chain {:?}", chain_id);
                 let mut notification_stream = chain_client.subscribe().await?;
-                let stream = ChainClient::listen(Arc::new(Mutex::new(chain_client))).await?;
-                tokio::spawn(stream.map(Ok).forward(sink::drain()));
+                ChainClient::listen(Arc::new(Mutex::new(chain_client))).await?;
                 while let Some(notification) = notification_stream.next().await {
                     if raw {
                         println!("{:?}", notification);

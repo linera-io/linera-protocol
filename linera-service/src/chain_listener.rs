@@ -3,7 +3,7 @@
 
 use crate::{config::WalletState, node_service::ChainClients};
 use async_trait::async_trait;
-use futures::{lock::Mutex, sink, StreamExt};
+use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::KeyPair,
     data_types::Timestamp,
@@ -133,8 +133,7 @@ where
             entry.insert(client.clone());
             client
         };
-        let stream = ChainClient::listen(client.clone()).await?;
-        tokio::spawn(stream.map(Ok).forward(sink::drain()));
+        ChainClient::listen(client.clone()).await?;
         let mut local_stream = {
             let mut guard = client.lock().await;
             let stream = guard.subscribe().await?;

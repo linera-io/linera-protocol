@@ -13,11 +13,10 @@ use crate::{
     },
 };
 use futures::{
-    channel::mpsc,
+    channel::oneshot,
     future,
     lock::Mutex,
-    stream::{self, FuturesUnordered, StreamExt},
-    Stream,
+    stream::{FuturesUnordered, StreamExt},
 };
 use linera_base::{
     abi::{Abi, ContractAbi},
@@ -50,7 +49,6 @@ use std::{
     convert::Infallible,
     iter,
     num::NonZeroUsize,
-    pin::Pin,
     sync::Arc,
     time::Duration,
 };
@@ -515,8 +513,7 @@ where
         node: A,
         mut local_node: LocalNodeClient<S>,
         notification: Notification,
-    ) -> bool
-    where
+    ) where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
         match notification.reason {
@@ -525,28 +522,24 @@ where
                     > Some(height)
                 {
                     debug!("Accepting redundant notification for new message");
-                    return true;
                 }
                 if let Err(e) =
                     Self::find_received_certificates_from_validator(this.clone(), name, node).await
                 {
                     error!("Fail to process notification: {e}");
-                    return false;
                 }
                 if Self::local_next_block_height(this, origin.sender, &mut local_node).await
                     <= Some(height)
                 {
                     error!("Fail to synchronize new message after notification");
-                    return false;
                 }
             }
-            Reason::NewBlock { height, hash } => {
+            Reason::NewBlock { height, .. } => {
                 let chain_id = notification.chain_id;
                 if Self::local_next_block_height(this.clone(), chain_id, &mut local_node).await
                     > Some(height)
                 {
                     debug!("Accepting redundant notification for new block");
-                    return true;
                 }
                 match local_node
                     .try_synchronize_chain_state_from(name, node, chain_id)
@@ -557,31 +550,10 @@ where
                             <= Some(height)
                         {
                             error!("Fail to synchronize new block after notification");
-                            return false;
-                        }
-                        // TODO(#940): Avoid reading the block we just stored.
-                        match local_node
-                            .storage_client()
-                            .await
-                            .read_certificate(hash)
-                            .await
-                        {
-                            Ok(certificate)
-                                if certificate.value().chain_id() == chain_id
-                                    && certificate.value().height() == height => {}
-                            Ok(_) => {
-                                error!("Certificate hash in notification doesn't match");
-                                return false;
-                            }
-                            Err(error) => {
-                                error!(%error, "Could not download certificate with hash {hash}.");
-                                return false;
-                            }
                         }
                     }
                     Err(e) => {
                         error!("Fail to process notification: {e}");
-                        return false;
                     }
                 }
             }
@@ -592,7 +564,6 @@ where
                 {
                     if (info.next_block_height, info.manager.current_round) >= (height, round) {
                         debug!("Accepting redundant notification for new round");
-                        return true;
                     }
                 }
                 if let Err(error) = local_node
@@ -600,54 +571,46 @@ where
                     .await
                 {
                     error!("Fail to process notification: {error}");
-                    return false;
                 }
                 let Some(info) =
                     Self::local_chain_info(this.clone(), chain_id, &mut local_node).await
                 else {
                     error!("Fail to read local chain info for {chain_id}");
-                    return false;
+                    return;
                 };
                 if (info.next_block_height, info.manager.current_round) < (height, round) {
                     error!("Fail to synchronize new block after notification");
-                    return false;
                 }
             }
         }
-        // Accept the notification.
-        true
     }
 
-    /// Listens to notifications about the current chain from all validators.
-    pub async fn listen(
-        this: Arc<Mutex<Self>>,
-    ) -> Result<Pin<Box<dyn Stream<Item = ()> + Send>>, ChainClientError>
+    /// Spawns a thread that listens to notifications about the current chain from all validators,
+    /// and synchronizes the local state accordingly.
+    pub async fn listen(this: Arc<Mutex<Self>>) -> Result<(), ChainClientError>
     where
         P: Send + 'static,
     {
         let mut streams = HashMap::new();
+        let mut notifications = this.lock().await.subscribe().await?;
         if let Err(err) = Self::update_streams(&this, &mut streams).await {
             error!("Failed to update committee: {}", err);
         }
-        let stream = stream::unfold(streams, move |mut streams| {
-            let this = this.clone();
-            async move {
-                let nexts = streams.values_mut().map(StreamExt::next);
-                let notification = future::select_all(nexts).await.0?;
+        tokio::spawn(async move {
+            while let Some(notification) = notifications.next().await {
                 if matches!(notification.reason, Reason::NewBlock { .. }) {
                     if let Err(err) = Self::update_streams(&this, &mut streams).await {
                         error!("Failed to update committee: {}", err);
                     }
                 }
-                Some(((), streams))
             }
         });
-        Ok(Box::pin(stream))
+        Ok(())
     }
 
     async fn update_streams(
         this: &Arc<Mutex<Self>>,
-        streams: &mut HashMap<ValidatorName, mpsc::UnboundedReceiver<Notification>>,
+        streams: &mut HashMap<ValidatorName, oneshot::Sender<()>>,
     ) -> Result<(), ChainClientError>
     where
         P: Send + 'static,
@@ -658,38 +621,41 @@ where
             let nodes: HashMap<_, _> = guard.validator_node_provider.make_nodes(&committee)?;
             (guard.chain_id, nodes, guard.node_client.clone())
         };
-        // Drop notification streams from removed validators.
+        // Drop removed validators.
         streams.retain(|name, _| nodes.contains_key(name));
-        // Add notification streams from added validators.
+        // Add tasks for new validators.
         for (name, mut node) in nodes {
             let hash_map::Entry::Vacant(entry) = streams.entry(name) else {
                 continue;
             };
-            let stream = match node.subscribe(vec![chain_id]).await {
+            let mut stream = match node.subscribe(vec![chain_id]).await {
                 Err(e) => {
                     info!("Could not connect to validator {name}: {e:?}");
                     continue;
                 }
-                Ok(stream) => stream,
+                Ok(stream) => stream.fuse(),
             };
             let this = this.clone();
             let local_node = local_node.clone();
-            let (sender, receiver) = mpsc::unbounded();
-            tokio::spawn(
-                stream
-                    .filter(move |notification| {
-                        Self::process_notification(
-                            this.clone(),
-                            name,
-                            node.clone(),
-                            local_node.clone(),
-                            notification.clone(),
-                        )
-                    })
-                    .map(Ok)
-                    .forward(sender),
-            );
-            entry.insert(receiver);
+            let (sender, mut receiver) = oneshot::channel();
+            tokio::spawn(async move {
+                loop {
+                    futures::select! {
+                        notification = stream.next() => {
+                            Self::process_notification(
+                                this.clone(),
+                                name,
+                                node.clone(),
+                                local_node.clone(),
+                                notification.unwrap(),
+                            )
+                            .await;
+                        },
+                        _ = receiver => break,
+                    }
+                }
+            });
+            entry.insert(sender);
         }
         Ok(())
     }
