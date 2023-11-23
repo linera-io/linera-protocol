@@ -7,7 +7,7 @@ use crate::{
         get_interval, get_upper_bound, Context, GreatestLowerBoundIterator, HasherOutput,
         KeyIterable, KeyValueIterable, Update, MIN_VIEW_TAG,
     },
-    map_view::MapView,
+    map_view::ByteMapView,
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
@@ -75,7 +75,7 @@ pub struct KeyValueStoreView<C> {
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
     stored_total_size: u64,
     total_size: u64,
-    sizes: MapView<C, Vec<u8>, u64>,
+    sizes: ByteMapView<C, u64>,
     deleted_prefixes: BTreeSet<Vec<u8>>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
@@ -98,7 +98,7 @@ where
         let total_size = context.read_value(&key).await?.unwrap_or_default();
         let base_key = context.base_tag(KeyTag::Sizes as u8);
         let context_sizes = context.clone_with_base_key(base_key);
-        let sizes = MapView::load(context_sizes).await?;
+        let sizes = ByteMapView::load(context_sizes).await?;
         Ok(Self {
             context,
             was_cleared: false,
@@ -178,7 +178,7 @@ where
 
 impl<'a, C> KeyValueStoreView<C>
 where
-    C: Send + Context,
+    C: Send + Context + Sync,
     ViewError: From<C::Error>,
 {
     fn max_key_size(&self) -> usize {
@@ -534,6 +534,10 @@ where
             match op {
                 WriteOperation::Delete { key } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
+                    if let Some(size) = self.sizes.get(&key).await? {
+                        self.total_size -= size;
+                    }
+                    self.sizes.remove(key.clone());
                     if self.was_cleared {
                         self.updates.remove(&key);
                     } else {
@@ -542,6 +546,12 @@ where
                 }
                 WriteOperation::Put { key, value } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
+                    let single_size = (key.len() + value.len()) as u64;
+                    self.total_size += single_size;
+                    if let Some(size) = self.sizes.get(&key).await? {
+                        self.total_size -= size;
+                    }
+                    self.sizes.insert(key.clone(), single_size);
                     self.updates.insert(key, Update::Set(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
@@ -554,6 +564,11 @@ where
                     for key in key_list {
                         self.updates.remove(&key);
                     }
+                    let key_values = self.sizes.key_values_by_prefix(key_prefix.clone()).await?;
+                    for (_,value) in key_values {
+                        self.total_size -= value;
+                    }
+                    self.sizes.remove_by_prefix(key_prefix.clone());
                     if !self.was_cleared {
                         let key_prefix_list = self
                             .deleted_prefixes
