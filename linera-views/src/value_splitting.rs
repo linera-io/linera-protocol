@@ -35,13 +35,13 @@ pub enum DatabaseConsistencyError {
 /// stored as multiple smaller key-value pairs in the wrapped store.
 /// See the README.md for additional details.
 #[derive(Clone)]
-pub struct ValueSplittingKeyValueStore<K> {
-    /// The underlying client of the transformed client.
+pub struct ValueSplittingStore<K> {
+    /// The underlying store of the transformed store.
     pub store: K,
 }
 
 #[async_trait]
-impl<K> KeyValueStore for ValueSplittingKeyValueStore<K>
+impl<K> KeyValueStore for ValueSplittingStore<K>
 where
     K: KeyValueStore + Send + Sync,
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
@@ -224,14 +224,14 @@ where
     }
 }
 
-impl<K> ValueSplittingKeyValueStore<K>
+impl<K> ValueSplittingStore<K>
 where
     K: KeyValueStore + Send + Sync,
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
-    /// Creates a new client that deals with big values from one that does not.
+    /// Creates a new store that deals with big values from one that does not.
     pub fn new(store: K) -> Self {
-        ValueSplittingKeyValueStore { store }
+        ValueSplittingStore { store }
     }
 
     fn read_count_from_value(value: &[u8]) -> Result<u32, K::Error> {
@@ -271,7 +271,7 @@ where
     }
 }
 
-/// A virtual DB client where data are persisted in memory.
+/// A virtual DB store where data are persisted in memory.
 #[derive(Clone)]
 pub struct TestMemoryStoreInternal {
     store: MemoryStore,
@@ -340,7 +340,7 @@ impl TestMemoryStoreInternal {
 /// Supposed to be removed later
 #[derive(Clone)]
 pub struct TestMemoryStore {
-    store: ValueSplittingKeyValueStore<TestMemoryStoreInternal>,
+    store: ValueSplittingStore<TestMemoryStoreInternal>,
 }
 
 #[async_trait]
@@ -393,7 +393,7 @@ impl TestMemoryStore {
     /// Creates a `TestMemoryStore` from the guard
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>) -> Self {
         let store = TestMemoryStoreInternal::new(guard);
-        let store = ValueSplittingKeyValueStore::new(store);
+        let store = ValueSplittingStore::new(store);
         TestMemoryStore { store }
     }
 }
@@ -474,7 +474,7 @@ mod tests {
         batch::Batch,
         common::KeyValueStore,
         value_splitting::{
-            create_test_memory_store_internal, TestMemoryStoreInternal, ValueSplittingKeyValueStore,
+            create_test_memory_store_internal, TestMemoryStoreInternal, ValueSplittingStore,
         },
     };
     use rand::{Rng, SeedableRng};
@@ -484,35 +484,35 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::assertions_on_constants)]
     async fn test_value_splitting1_testing_leftovers() {
-        let client = create_test_memory_store_internal();
+        let store = create_test_memory_store_internal();
         const MAX_LEN: usize = TestMemoryStoreInternal::MAX_VALUE_SIZE;
         assert!(MAX_LEN > 10);
-        let big_client = ValueSplittingKeyValueStore::new(client.clone());
+        let big_store = ValueSplittingStore::new(store.clone());
         let key = vec![0, 0];
         // Write a key with a long value
         let mut batch = Batch::new();
         let value = Vec::from([0; MAX_LEN + 1]);
         batch.put_key_value_bytes(key.clone(), value.clone());
-        big_client.write_batch(batch, &[]).await.unwrap();
-        let value_read = big_client.read_value_bytes(&key).await.unwrap();
+        big_store.write_batch(batch, &[]).await.unwrap();
+        let value_read = big_store.read_value_bytes(&key).await.unwrap();
         assert_eq!(value_read, Some(value));
         // Write a key with a smaller value
         let mut batch = Batch::new();
         let value = Vec::from([0, 1]);
         batch.put_key_value_bytes(key.clone(), value.clone());
-        big_client.write_batch(batch, &[]).await.unwrap();
-        let value_read = big_client.read_value_bytes(&key).await.unwrap();
+        big_store.write_batch(batch, &[]).await.unwrap();
+        let value_read = big_store.read_value_bytes(&key).await.unwrap();
         assert_eq!(value_read, Some(value));
         // Two segments are present even though only one is used
-        let keys = client.find_keys_by_prefix(&[0]).await.unwrap();
+        let keys = store.find_keys_by_prefix(&[0]).await.unwrap();
         assert_eq!(keys, vec![vec![0, 0, 0, 0, 0], vec![0, 0, 0, 0, 1]]);
     }
 
     #[tokio::test]
     async fn test_value_splitting2_testing_splitting() {
-        let client = create_test_memory_store_internal();
+        let store = create_test_memory_store_internal();
         const MAX_LEN: usize = TestMemoryStoreInternal::MAX_VALUE_SIZE;
-        let big_client = ValueSplittingKeyValueStore::new(client.clone());
+        let big_store = ValueSplittingStore::new(store.clone());
         let key = vec![0, 0];
         // Writing a big value
         let mut batch = Batch::new();
@@ -522,8 +522,8 @@ mod tests {
             value.push(rng.gen::<u8>());
         }
         batch.put_key_value_bytes(key.clone(), value.clone());
-        big_client.write_batch(batch, &[]).await.unwrap();
-        let value_read = big_client.read_value_bytes(&key).await.unwrap();
+        big_store.write_batch(batch, &[]).await.unwrap();
+        let value_read = big_store.read_value_bytes(&key).await.unwrap();
         assert_eq!(value_read, Some(value.clone()));
         // Reading the segments and checking
         let mut value_concat = Vec::<u8>::new();
@@ -532,7 +532,7 @@ mod tests {
             let mut bytes = bcs::to_bytes(&index).unwrap();
             bytes.reverse();
             segment_key.extend(bytes);
-            let value_read = client.read_value_bytes(&segment_key).await.unwrap();
+            let value_read = store.read_value_bytes(&segment_key).await.unwrap();
             let Some(value_read) = value_read else {
                 unreachable!()
             };
@@ -547,9 +547,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_value_splitting3_write_and_delete() {
-        let client = create_test_memory_store_internal();
+        let store = create_test_memory_store_internal();
         const MAX_LEN: usize = TestMemoryStoreInternal::MAX_VALUE_SIZE;
-        let big_client = ValueSplittingKeyValueStore::new(client.clone());
+        let big_store = ValueSplittingStore::new(store.clone());
         let key = vec![0, 0];
         // writing a big key
         let mut batch = Batch::new();
@@ -559,16 +559,16 @@ mod tests {
             value.push(rng.gen::<u8>());
         }
         batch.put_key_value_bytes(key.clone(), value.clone());
-        big_client.write_batch(batch, &[]).await.unwrap();
+        big_store.write_batch(batch, &[]).await.unwrap();
         // deleting it
         let mut batch = Batch::new();
         batch.delete_key(key.clone());
-        big_client.write_batch(batch, &[]).await.unwrap();
+        big_store.write_batch(batch, &[]).await.unwrap();
         // reading everything (there are leftover keys)
-        let key_values = big_client.find_key_values_by_prefix(&[0]).await.unwrap();
+        let key_values = big_store.find_key_values_by_prefix(&[0]).await.unwrap();
         assert_eq!(key_values.len(), 0);
         // Two segments remain
-        let keys = client.find_keys_by_prefix(&[0]).await.unwrap();
+        let keys = store.find_keys_by_prefix(&[0]).await.unwrap();
         assert_eq!(keys, vec![vec![0, 0, 0, 0, 1], vec![0, 0, 0, 0, 2]]);
     }
 }

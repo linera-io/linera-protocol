@@ -17,10 +17,10 @@ We provide an implementation of the trait `KeyValueStore` for the following key-
 The trait `KeyValueStore` was designed so that more storage solutions can be easily added in the future.
 
 The `KeyValueStore` trait is also implemented for several internal constructions of clients:
-* The `LruCachingKeyValueStore<K>` client implements the Least Recently Used (LRU)
+* The `LruCachingStore<K>` client implements the Least Recently Used (LRU)
 caching of reads into the client.
 * The `ViewContainer<C>` client implements a key-value store client from a context.
-* The `ValueSplittingKeyValueStore<K>` implements a client for which the
+* The `ValueSplittingStore<K>` implements a client for which the
 size of the values is unbounded, on top of another client for which it is bounded.
 (Some databases have strict limitations on the value size.)
 
@@ -98,7 +98,7 @@ the block entries would be processed after accessing the database the next time.
 ## Splitting large values across keys
 
 Some key-value store clients limit the size of the values (named `MAX_VALUE_SIZE`
-in the code). `ValueSplittingKeyValueStore` is a wrapper that accepts values
+in the code). `ValueSplittingStore` is a wrapper that accepts values
 of any size. Internally, it splits them into smaller pieces and stores them
 using a wrapped, possibly size-limited, client.
 

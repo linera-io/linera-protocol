@@ -7,8 +7,8 @@ use crate::{
         CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore,
         TableStatus, MIN_VIEW_TAG,
     },
-    lru_caching::LruCachingKeyValueStore,
-    value_splitting::{DatabaseConsistencyError, ValueSplittingKeyValueStore},
+    lru_caching::LruCachingStore,
+    value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
@@ -1179,7 +1179,7 @@ impl KeyValueStore for DynamoDbStoreInternal {
 /// A shared DB client for DynamoDb implementing LruCaching
 #[derive(Clone)]
 pub struct DynamoDbStore {
-    store: LruCachingKeyValueStore<ValueSplittingKeyValueStore<DynamoDbStoreInternal>>,
+    store: LruCachingStore<ValueSplittingStore<DynamoDbStoreInternal>>,
 }
 
 #[async_trait]
@@ -1236,10 +1236,9 @@ impl DynamoDbStore {
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let (store, table_status) = DynamoDbStoreInternal::new_for_testing(store_config).await?;
-        let store = ValueSplittingKeyValueStore::new(store);
-        let store = Self {
-            store: LruCachingKeyValueStore::new(store, cache_size),
-        };
+        let store = ValueSplittingStore::new(store);
+        let store = LruCachingStore::new(store, cache_size);
+        let store = Self { store };
         Ok((store, table_status))
     }
 
@@ -1249,10 +1248,9 @@ impl DynamoDbStore {
     ) -> Result<Self, DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let store = DynamoDbStoreInternal::initialize(store_config).await?;
-        let store = ValueSplittingKeyValueStore::new(store);
-        let store = Self {
-            store: LruCachingKeyValueStore::new(store, cache_size),
-        };
+        let store = ValueSplittingStore::new(store);
+        let store = LruCachingStore::new(store, cache_size);
+        let store = Self { store };
         Ok(store)
     }
 
@@ -1288,10 +1286,9 @@ impl DynamoDbStore {
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let (store, table_name) = DynamoDbStoreInternal::new(store_config).await?;
-        let store = ValueSplittingKeyValueStore::new(store);
-        let store = Self {
-            store: LruCachingKeyValueStore::new(store, cache_size),
-        };
+        let store = ValueSplittingStore::new(store);
+        let store = LruCachingStore::new(store, cache_size);
+        let store = Self { store };
         Ok((store, table_name))
     }
 }

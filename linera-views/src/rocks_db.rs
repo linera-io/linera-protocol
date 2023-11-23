@@ -4,8 +4,8 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{get_upper_bound, CommonStoreConfig, ContextFromStore, KeyValueStore, TableStatus},
-    lru_caching::LruCachingKeyValueStore,
-    value_splitting::{DatabaseConsistencyError, ValueSplittingKeyValueStore},
+    lru_caching::LruCachingStore,
+    value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
 use async_trait::async_trait;
 use linera_base::ensure;
@@ -208,7 +208,7 @@ impl KeyValueStore for RocksDbStoreInternal {
 /// A shared DB client for RocksDB implementing LruCaching
 #[derive(Clone)]
 pub struct RocksDbStore {
-    store: LruCachingKeyValueStore<ValueSplittingKeyValueStore<RocksDbStoreInternal>>,
+    store: LruCachingStore<ValueSplittingStore<RocksDbStoreInternal>>,
 }
 
 impl RocksDbStore {
@@ -305,10 +305,9 @@ impl RocksDbStore {
             db: Arc::new(db),
             max_stream_queries,
         };
-        let store = ValueSplittingKeyValueStore::new(store);
-        let store = Self {
-            store: LruCachingKeyValueStore::new(store, cache_size),
-        };
+        let store = ValueSplittingStore::new(store);
+        let store = LruCachingStore::new(store, cache_size);
+        let store = Self { store };
         Ok((store, table_status))
     }
 }

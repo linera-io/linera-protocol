@@ -23,7 +23,7 @@ use crate::{
     common::{
         get_upper_bound_option, CommonStoreConfig, ContextFromStore, KeyValueStore, TableStatus,
     },
-    lru_caching::LruCachingKeyValueStore,
+    lru_caching::LruCachingStore,
     value_splitting::DatabaseConsistencyError,
 };
 use async_lock::{Semaphore, SemaphoreGuard};
@@ -611,7 +611,7 @@ impl ScyllaDbStoreInternal {
 /// A shared DB store for ScyllaDB implementing LruCaching
 #[derive(Clone)]
 pub struct ScyllaDbStore {
-    store: LruCachingKeyValueStore<ScyllaDbStoreInternal>,
+    store: LruCachingStore<ScyllaDbStoreInternal>,
 }
 
 /// The type for building a new ScyllaDb Key Value Store
@@ -681,7 +681,7 @@ impl ScyllaDbStore {
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let (store, table_status) = ScyllaDbStoreInternal::new_for_testing(store_config).await?;
-        let store = LruCachingKeyValueStore::new(store, cache_size);
+        let store = LruCachingStore::new(store, cache_size);
         let store = ScyllaDbStore { store };
         Ok((store, table_status))
     }
@@ -692,7 +692,7 @@ impl ScyllaDbStore {
     ) -> Result<Self, ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let store = ScyllaDbStoreInternal::initialize(store_config).await?;
-        let store = LruCachingKeyValueStore::new(store, cache_size);
+        let store = LruCachingStore::new(store, cache_size);
         let store = ScyllaDbStore { store };
         Ok(store)
     }
@@ -729,7 +729,7 @@ impl ScyllaDbStore {
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let (store, table_status) = ScyllaDbStoreInternal::new(store_config).await?;
-        let store = LruCachingKeyValueStore::new(store, cache_size);
+        let store = LruCachingStore::new(store, cache_size);
         let store = ScyllaDbStore { store };
         Ok((store, table_status))
     }
