@@ -234,11 +234,11 @@ where
     /// # let context = create_memory_context();
     ///   let mut map = ByteMapView::load(context).await.unwrap();
     ///   map.insert(vec![0,1], String::from("Hello"));
-    ///   assert_eq!(map.get(vec![0,1]).await.unwrap(), Some(String::from("Hello")));
+    ///   assert_eq!(map.get(&[0,1]).await.unwrap(), Some(String::from("Hello")));
     /// # })
     /// ```
-    pub async fn get(&self, short_key: Vec<u8>) -> Result<Option<V>, ViewError> {
-        if let Some(update) = self.updates.get(&short_key) {
+    pub async fn get(&self, short_key: &[u8]) -> Result<Option<V>, ViewError> {
+        if let Some(update) = self.updates.get(short_key) {
             let value = match update {
                 Update::Removed => None,
                 Update::Set(value) => Some(value.clone()),
@@ -250,10 +250,10 @@ where
         }
         let iter = self.deleted_prefixes.iter();
         let mut lower_bound = GreatestLowerBoundIterator::new(0, iter);
-        if !lower_bound.is_index_absent(&short_key) {
+        if !lower_bound.is_index_absent(short_key) {
             return Ok(None);
         }
-        let key = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
+        let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
         Ok(self.context.read_value(&key).await?)
     }
 
@@ -281,7 +281,7 @@ where
     ///   let value = map.get_mut(vec![0,1]).await.unwrap().unwrap();
     ///   assert_eq!(*value, String::from("Hello"));
     ///   *value = String::from("Hola");
-    ///   assert_eq!(map.get(vec![0,1]).await.unwrap(), Some(String::from("Hola")));
+    ///   assert_eq!(map.get(&[0,1]).await.unwrap(), Some(String::from("Hola")));
     /// # })
     /// ```
     pub async fn get_mut(&mut self, short_key: Vec<u8>) -> Result<Option<&mut V>, ViewError> {
@@ -704,7 +704,7 @@ where
     ///   let value = map.get_mut_or_default(vec![0,1]).await.unwrap();
     ///   assert_eq!(*value, String::from("Hello"));
     ///   *value = String::from("Hola");
-    ///   assert_eq!(map.get(vec![0,1]).await.unwrap(), Some(String::from("Hola")));
+    ///   assert_eq!(map.get(&[0,1]).await.unwrap(), Some(String::from("Hola")));
     /// # })
     /// ```
     pub async fn get_mut_or_default(&mut self, short_key: Vec<u8>) -> Result<&mut V, ViewError> {
@@ -897,7 +897,7 @@ where
         Q: Serialize + ?Sized,
     {
         let short_key = C::derive_short_key(index)?;
-        self.map.get(short_key).await
+        self.map.get(&short_key).await
     }
 
     /// Obtains a mutable reference to a value at a given position if available
@@ -1278,7 +1278,7 @@ where
         Q: Serialize + ?Sized + CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
-        self.map.get(short_key).await
+        self.map.get(&short_key).await
     }
 
     /// Obtains a mutable reference to a value at a given position if available

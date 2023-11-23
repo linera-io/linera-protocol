@@ -113,7 +113,7 @@ where
     /// # let context = create_memory_context();
     ///   let mut set = ByteSetView::load(context).await.unwrap();
     ///   set.insert(vec![0,1]);
-    ///   assert_eq!(set.contains(vec![0,1]).await.unwrap(), true);
+    ///   assert_eq!(set.contains(&[0,1]).await.unwrap(), true);
     /// # })
     /// ```
     pub fn insert(&mut self, short_key: Vec<u8>) {
@@ -129,7 +129,7 @@ where
     /// # let context = create_memory_context();
     ///   let mut set = ByteSetView::load(context).await.unwrap();
     ///   set.remove(vec![0,1]);
-    ///   assert_eq!(set.contains(vec![0,1]).await.unwrap(), false);
+    ///   assert_eq!(set.contains(&[0,1]).await.unwrap(), false);
     /// # })
     /// ```
     pub fn remove(&mut self, short_key: Vec<u8>) {
@@ -160,12 +160,12 @@ where
     /// # let context = create_memory_context();
     ///   let mut set = ByteSetView::load(context).await.unwrap();
     ///   set.insert(vec![0,1]);
-    ///   assert_eq!(set.contains(vec![34]).await.unwrap(), false);
-    ///   assert_eq!(set.contains(vec![0,1]).await.unwrap(), true);
+    ///   assert_eq!(set.contains(&[34]).await.unwrap(), false);
+    ///   assert_eq!(set.contains(&[0,1]).await.unwrap(), true);
     /// # })
     /// ```
-    pub async fn contains(&self, short_key: Vec<u8>) -> Result<bool, ViewError> {
-        if let Some(update) = self.updates.get(&short_key) {
+    pub async fn contains(&self, short_key: &[u8]) -> Result<bool, ViewError> {
+        if let Some(update) = self.updates.get(short_key) {
             let value = match update {
                 Update::Removed => false,
                 Update::Set(()) => true,
@@ -175,7 +175,7 @@ where
         if self.was_cleared {
             return Ok(false);
         }
-        let key = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
+        let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
         match self.context.read_value_bytes(&key).await? {
             None => Ok(false),
             Some(_) => Ok(true),
@@ -474,7 +474,7 @@ where
         Q: Serialize + ?Sized,
     {
         let short_key = C::derive_short_key(index)?;
-        self.set.contains(short_key).await
+        self.set.contains(&short_key).await
     }
 }
 
@@ -715,7 +715,7 @@ where
         Q: CustomSerialize + ?Sized,
     {
         let short_key = index.to_custom_bytes()?;
-        self.set.contains(short_key).await
+        self.set.contains(&short_key).await
     }
 }
 
