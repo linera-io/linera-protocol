@@ -4,9 +4,7 @@
 use crate::{batch::Batch, common::HasherOutput};
 use async_trait::async_trait;
 use linera_base::{crypto::CryptoHash, data_types::ArithmeticError};
-pub use linera_views_derive::{
-    CryptoHashRootView, CryptoHashView, GraphQLView, HashableView, RootView, View,
-};
+pub use linera_views_derive::{CryptoHashRootView, CryptoHashView, HashableView, RootView, View};
 use serde::Serialize;
 use std::{fmt::Debug, io::Write};
 use thiserror::Error;

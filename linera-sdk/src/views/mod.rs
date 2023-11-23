@@ -9,7 +9,7 @@ pub use self::system_api::ViewStorageContext;
 pub use linera_views::{
     self,
     common::CustomSerialize,
-    views::{GraphQLView, RootView, View, ViewError},
+    views::{RootView, View, ViewError},
 };
 
 // Import the views system interface.

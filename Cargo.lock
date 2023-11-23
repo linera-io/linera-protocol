@@ -3456,7 +3456,6 @@ dependencies = [
  "rocksdb",
  "scylla",
  "serde",
- "serde_json",
  "sha3",
  "static_assertions",
  "tempfile",
@@ -3470,8 +3469,6 @@ dependencies = [
 name = "linera-views-derive"
 version = "0.6.0"
 dependencies = [
- "convert_case 0.6.0",
- "heck 0.4.1",
  "insta",
  "prettyplease 0.2.15",
  "proc-macro2",
