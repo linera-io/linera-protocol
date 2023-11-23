@@ -11,12 +11,14 @@
 //! instance is dropped.
 
 use dashmap::DashMap;
-use linera_base::identifiers::ChainId;
+use linera_base::{
+    identifiers::ChainId,
+    locks::{AsyncMutex, OwnedAsyncMutexGuard, WeakAsyncMutex},
+};
 use std::{
     fmt::{self, Debug, Formatter},
-    sync::{Arc, Weak},
+    sync::Arc,
 };
-use tokio::sync::{Mutex, OwnedMutexGuard};
 
 #[cfg(test)]
 #[path = "unit_tests/chain_guards.rs"]
@@ -24,10 +26,10 @@ mod unit_tests;
 
 /// The internal map type.
 ///
-/// Every chain ID is mapped to a weak reference to an asynchronous [`Mutex`].
+/// Every chain ID is mapped to a weak reference to an asynchronous [`AsyncMutex`].
 ///
 /// Attempting to upgrade the weak reference allows checking if there's a live guard for that chain.
-type ChainGuardMap = DashMap<ChainId, Weak<Mutex<()>>>;
+type ChainGuardMap = DashMap<ChainId, WeakAsyncMutex<()>>;
 
 /// Manager of [`ChainGuard`]s for chains.
 ///
@@ -72,25 +74,24 @@ impl ChainGuards {
     /// It's important that the returned lock is only locked after the write lock for the map entry
     /// is released at the end of this method, to avoid deadlocks. See [`ChainGuard::drop`] for
     /// more details.
-    fn get_or_create_lock(&self, chain_id: ChainId) -> Arc<Mutex<()>> {
+    fn get_or_create_lock(&self, chain_id: ChainId) -> AsyncMutex<()> {
         let mut new_guard_holder = None;
         let mut guard_reference = self.guards.entry(chain_id).or_insert_with(|| {
-            let (new_guard, weak_reference) = Self::create_new_mutex();
+            let (new_guard, weak_reference) = Self::create_new_mutex(chain_id);
             new_guard_holder = Some(new_guard);
             weak_reference
         });
         guard_reference.upgrade().unwrap_or_else(|| {
-            let (new_guard, weak_reference) = Self::create_new_mutex();
+            let (new_guard, weak_reference) = Self::create_new_mutex(chain_id);
             *guard_reference = weak_reference;
             new_guard
         })
     }
 
-    /// Creates a new [`Mutex`] in the heap, returning both a strong reference and a weak
-    /// reference to it.
-    fn create_new_mutex() -> (Arc<Mutex<()>>, Weak<Mutex<()>>) {
-        let new_guard = Arc::new(Mutex::new(()));
-        let weak_reference = Arc::downgrade(&new_guard);
+    /// Creates a new [`AsyncMutex`], returning both a strong reference and a weak reference to it.
+    fn create_new_mutex(chain_id: ChainId) -> (AsyncMutex<()>, WeakAsyncMutex<()>) {
+        let new_guard = AsyncMutex::new(format!("ChainGuard for {chain_id}"), ());
+        let weak_reference = new_guard.downgrade();
         (new_guard, weak_reference)
     }
 
@@ -110,7 +111,7 @@ impl ChainGuards {
 pub struct ChainGuard {
     chain_id: ChainId,
     guards: Arc<ChainGuardMap>,
-    guard: Option<OwnedMutexGuard<()>>,
+    guard: Option<OwnedAsyncMutexGuard<()>>,
 }
 
 impl Drop for ChainGuard {
@@ -126,7 +127,7 @@ impl Drop for ChainGuard {
             // acquire a write lock to the map, so only one of them will fully execute at any given
             // moment.
             self.guard.take();
-            weak_reference.strong_count() == 0
+            weak_reference.no_longer_upgradable()
         });
     }
 }

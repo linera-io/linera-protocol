@@ -30,7 +30,7 @@ async-trait = { workspace = true }
 bcs = { workspace = true }
 dashmap = { workspace = true }
 futures = { workspace = true }
-linera-base = { workspace = true }
+linera-base = { workspace = true, features = ["locks"] }
 linera-chain = { workspace = true }
 linera-execution = { workspace = true }
 linera-views = { workspace = true, features = ["metrics"] }
