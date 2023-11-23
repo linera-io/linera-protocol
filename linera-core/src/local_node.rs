@@ -8,10 +8,11 @@ use crate::{
     notifier::Notifier,
     worker::{Notification, ValidatorWorker, WorkerError, WorkerState},
 };
-use futures::{future, lock::Mutex};
+use futures::future;
 use linera_base::{
     data_types::{ArithmeticError, BlockHeight},
     identifiers::{ChainId, MessageId},
+    locks::AsyncMutex,
 };
 use linera_chain::data_types::{
     Block, BlockProposal, Certificate, ExecutedBlock, HashedValue, LiteCertificate,
@@ -36,7 +37,7 @@ pub struct LocalNode<S> {
 /// A client to a local node.
 #[derive(Clone)]
 pub struct LocalNodeClient<S> {
-    node: Arc<Mutex<LocalNode<S>>>,
+    node: AsyncMutex<LocalNode<S>>,
 }
 
 /// Error type for the operations on a local node.
@@ -144,7 +145,7 @@ impl<S> LocalNodeClient<S> {
     pub fn new(state: WorkerState<S>, notifier: Arc<Notifier<Notification>>) -> Self {
         let node = LocalNode { state, notifier };
         Self {
-            node: Arc::new(Mutex::new(node)),
+            node: AsyncMutex::new("LocalNode", node),
         }
     }
 }
