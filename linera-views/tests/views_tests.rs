@@ -34,17 +34,17 @@ use std::{
 };
 
 #[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::{create_rocks_db_test_client, RocksDbClient, RocksDbContext};
+use linera_views::rocks_db::{create_rocks_db_test_store, RocksDbContext, RocksDbStore};
 
 #[cfg(feature = "aws")]
 use linera_views::{
     common::CommonStoreConfig, dynamo_db::create_dynamo_db_common_config,
-    dynamo_db::DynamoDbContext, dynamo_db::DynamoDbKvStoreConfig, dynamo_db::LocalStackTestContext,
+    dynamo_db::DynamoDbContext, dynamo_db::DynamoDbStoreConfig, dynamo_db::LocalStackTestContext,
     dynamo_db::TableName, test_utils::get_table_name,
 };
 
 #[cfg(feature = "scylladb")]
-use linera_views::scylla_db::{create_scylla_db_test_client, ScyllaDbClient, ScyllaDbContext};
+use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbContext, ScyllaDbStore};
 
 #[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 use std::collections::BTreeSet;
@@ -160,7 +160,7 @@ impl StateStore for LruMemoryStore {
 
 #[cfg(feature = "rocksdb")]
 pub struct RocksDbTestStore {
-    client: RocksDbClient,
+    store: RocksDbStore,
     accessed_chains: BTreeSet<usize>,
 }
 
@@ -170,10 +170,10 @@ impl StateStore for RocksDbTestStore {
     type Context = RocksDbContext<usize>;
 
     async fn new() -> Self {
-        let client = create_rocks_db_test_client().await;
+        let store = create_rocks_db_test_store().await;
         let accessed_chains = BTreeSet::new();
         RocksDbTestStore {
-            client,
+            store,
             accessed_chains,
         }
     }
@@ -183,14 +183,14 @@ impl StateStore for RocksDbTestStore {
         // TODO(#643): Actually acquire a lock.
         tracing::trace!("Acquiring lock on {:?}", id);
         let base_key = bcs::to_bytes(&id)?;
-        let context = RocksDbContext::new(self.client.clone(), base_key, id);
+        let context = RocksDbContext::new(self.store.clone(), base_key, id);
         StateView::load(context).await
     }
 }
 
 #[cfg(feature = "scylladb")]
 pub struct ScyllaDbTestStore {
-    client: ScyllaDbClient,
+    store: ScyllaDbStore,
     accessed_chains: BTreeSet<usize>,
 }
 
@@ -200,10 +200,10 @@ impl StateStore for ScyllaDbTestStore {
     type Context = ScyllaDbContext<usize>;
 
     async fn new() -> Self {
-        let client = create_scylla_db_test_client().await;
+        let store = create_scylla_db_test_store().await;
         let accessed_chains = BTreeSet::new();
         ScyllaDbTestStore {
-            client,
+            store,
             accessed_chains,
         }
     }
@@ -213,7 +213,7 @@ impl StateStore for ScyllaDbTestStore {
         // TODO(#643): Actually acquire a lock.
         tracing::trace!("Acquiring lock on {:?}", id);
         let base_key = bcs::to_bytes(&id)?;
-        let context = ScyllaDbContext::new(self.client.clone(), base_key, id);
+        let context = ScyllaDbContext::new(self.store.clone(), base_key, id);
         StateView::load(context).await
     }
 }
@@ -253,7 +253,7 @@ impl StateStore for DynamoDbTestStore {
         // TODO(#643): Actually acquire a lock.
         tracing::trace!("Acquiring lock on {:?}", id);
         let base_key = bcs::to_bytes(&id)?;
-        let store_config = DynamoDbKvStoreConfig {
+        let store_config = DynamoDbStoreConfig {
             config: self.localstack.dynamo_db_config(),
             table_name: self.table_name.clone(),
             common_config: self.common_config.clone(),

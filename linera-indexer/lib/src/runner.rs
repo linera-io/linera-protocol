@@ -7,7 +7,7 @@ use crate::{common::IndexerError, indexer::Indexer, plugin::Plugin, service::Lis
 use axum::Server;
 use linera_base::identifiers::ChainId;
 use linera_views::{
-    common::KeyValueStoreClient, value_splitting::DatabaseConsistencyError, views::ViewError,
+    common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
 };
 use structopt::{StructOpt, StructOptInternal};
 use tokio::select;
@@ -47,7 +47,7 @@ impl<DB, Config> Runner<DB, Config>
 where
     Self: Send,
     Config: Clone + std::fmt::Debug + Send + Sync + StructOptInternal,
-    DB: KeyValueStoreClient + Clone + Send + Sync + 'static,
+    DB: KeyValueStore + Clone + Send + Sync + 'static,
     DB::Error: From<bcs::Error>
         + From<DatabaseConsistencyError>
         + Send

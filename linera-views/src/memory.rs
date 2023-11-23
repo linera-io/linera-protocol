@@ -3,7 +3,7 @@
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_interval, CommonStoreConfig, ContextFromDb, KeyValueStoreClient},
+    common::{get_interval, CommonStoreConfig, ContextFromStore, KeyValueStore},
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
 };
@@ -14,7 +14,7 @@ use thiserror::Error;
 
 /// The initial configuration of the system
 #[derive(Debug)]
-pub struct MemoryKvStoreConfig {
+pub struct MemoryStoreConfig {
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
 }
@@ -28,13 +28,13 @@ pub type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 
 /// A virtual DB client where data are persisted in memory.
 #[derive(Clone)]
-pub struct MemoryClient {
+pub struct MemoryStore {
     map: Arc<RwLock<MutexGuardArc<MemoryStoreMap>>>,
     max_stream_queries: usize,
 }
 
 #[async_trait]
-impl KeyValueStoreClient for MemoryClient {
+impl KeyValueStore for MemoryStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Error = MemoryContextError;
@@ -118,11 +118,11 @@ impl KeyValueStoreClient for MemoryClient {
     }
 }
 
-impl MemoryClient {
-    /// constructor of MemoryClient
+impl MemoryStore {
+    /// constructor of MemoryStore
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>, max_stream_queries: usize) -> Self {
         let map = Arc::new(RwLock::new(guard));
-        MemoryClient {
+        MemoryStore {
             map,
             max_stream_queries,
         }
@@ -130,15 +130,15 @@ impl MemoryClient {
 }
 
 /// An implementation of [`crate::common::Context`] that stores all values in memory.
-pub type MemoryContext<E> = ContextFromDb<E, MemoryClient>;
+pub type MemoryContext<E> = ContextFromStore<E, MemoryStore>;
 
 impl<E> MemoryContext<E> {
     /// Creates a [`MemoryContext`].
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>, max_stream_queries: usize, extra: E) -> Self {
-        let db = MemoryClient::new(guard, max_stream_queries);
+        let store = MemoryStore::new(guard, max_stream_queries);
         let base_key = Vec::new();
         Self {
-            db,
+            store,
             base_key,
             extra,
         }
@@ -157,17 +157,17 @@ pub fn create_memory_context() -> MemoryContext<()> {
 }
 
 /// Creates a test memory client for working.
-pub fn create_memory_client_stream_queries(max_stream_queries: usize) -> MemoryClient {
+pub fn create_memory_store_stream_queries(max_stream_queries: usize) -> MemoryStore {
     let state = Arc::new(Mutex::new(BTreeMap::new()));
     let guard = state
         .try_lock_arc()
         .expect("We should acquire the lock just after creating the object");
-    MemoryClient::new(guard, max_stream_queries)
+    MemoryStore::new(guard, max_stream_queries)
 }
 
-/// Creates a test memory client for working.
-pub fn create_memory_client() -> MemoryClient {
-    create_memory_client_stream_queries(TEST_MEMORY_MAX_STREAM_QUERIES)
+/// Creates a test memory store for working.
+pub fn create_memory_store() -> MemoryStore {
+    create_memory_store_stream_queries(TEST_MEMORY_MAX_STREAM_QUERIES)
 }
 
 /// The error type for [`MemoryContext`].
@@ -177,8 +177,8 @@ pub enum MemoryContextError {
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
 
-    /// The value is too large for the MemoryClient
-    #[error("The value is too large for the MemoryClient")]
+    /// The value is too large for the MemoryStore
+    #[error("The value is too large for the MemoryStore")]
     TooLargeValue,
 
     /// The database is not consistent

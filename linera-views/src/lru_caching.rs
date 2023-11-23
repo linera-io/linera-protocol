@@ -6,7 +6,7 @@ pub const TEST_CACHE_SIZE: usize = 1000;
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_interval, KeyValueStoreClient},
+    common::{get_interval, KeyValueStore},
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -18,8 +18,8 @@ use std::{
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::common::ContextFromDb,
-    crate::memory::{MemoryClient, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
+    crate::common::ContextFromStore,
+    crate::memory::{MemoryStore, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
     crate::views::ViewError,
     async_lock::MutexGuardArc,
 };
@@ -86,16 +86,16 @@ impl<'a> LruPrefixCache {
 
 /// We take a client, a maximum size and build a LRU-based system.
 #[derive(Clone)]
-pub struct LruCachingKeyValueClient<K> {
+pub struct LruCachingStore<K> {
     /// The inner client that is called by the LRU cache one
     pub client: K,
     lru_read_values: Option<Arc<Mutex<LruPrefixCache>>>,
 }
 
 #[async_trait]
-impl<K> KeyValueStoreClient for LruCachingKeyValueClient<K>
+impl<K> KeyValueStore for LruCachingStore<K>
 where
-    K: KeyValueStoreClient + Send + Sync,
+    K: KeyValueStore + Send + Sync,
 {
     // The LRU cache does not change the underlying client's size limits.
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
@@ -210,9 +210,9 @@ where
     }
 }
 
-impl<K> LruCachingKeyValueClient<K>
+impl<K> LruCachingStore<K>
 where
-    K: KeyValueStoreClient,
+    K: KeyValueStore,
 {
     /// Creates a new key-value store client that implements an LRU cache.
     pub fn new(client: K, max_size: usize) -> Self {
@@ -233,7 +233,7 @@ where
 
 /// A context that stores all values in memory.
 #[cfg(any(test, feature = "test"))]
-pub type LruCachingMemoryContext<E> = ContextFromDb<E, LruCachingKeyValueClient<MemoryClient>>;
+pub type LruCachingMemoryContext<E> = ContextFromStore<E, LruCachingStore<MemoryStore>>;
 
 #[cfg(any(test, feature = "test"))]
 impl<E> LruCachingMemoryContext<E> {
@@ -244,10 +244,10 @@ impl<E> LruCachingMemoryContext<E> {
         extra: E,
         n: usize,
     ) -> Result<Self, ViewError> {
-        let client = MemoryClient::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES);
-        let lru_client = LruCachingKeyValueClient::new(client, n);
+        let store = MemoryStore::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES);
+        let store = LruCachingStore::new(store, n);
         Ok(Self {
-            db: lru_client,
+            store,
             base_key,
             extra,
         })

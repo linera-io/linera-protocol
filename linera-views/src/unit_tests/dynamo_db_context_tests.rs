@@ -4,7 +4,7 @@
 use super::{DynamoDbContext, TableName, TableStatus};
 use crate::dynamo_db::{
     clear_tables, create_dynamo_db_common_config, list_tables_from_client, DynamoDbContextError,
-    DynamoDbKvStoreConfig, LocalStackTestContext,
+    DynamoDbStoreConfig, LocalStackTestContext,
 };
 use anyhow::Error;
 
@@ -13,7 +13,7 @@ async fn get_table_status(
     table_name: &TableName,
 ) -> Result<TableStatus, DynamoDbContextError> {
     let common_config = create_dynamo_db_common_config();
-    let store_config = DynamoDbKvStoreConfig {
+    let store_config = DynamoDbStoreConfig {
         config: localstack.dynamo_db_config(),
         table_name: table_name.clone(),
         common_config,

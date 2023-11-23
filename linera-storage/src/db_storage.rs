@@ -12,7 +12,7 @@ use linera_chain::{
 use linera_execution::{UserApplicationId, UserContractCode, UserServiceCode, WasmRuntime};
 use linera_views::{
     batch::Batch,
-    common::{ContextFromDb, KeyValueStoreClient},
+    common::{ContextFromStore, KeyValueStore},
     value_splitting::DatabaseConsistencyError,
     views::{View, ViewError},
 };
@@ -61,7 +61,7 @@ pub static WRITE_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
-/// A storage implemented from a [`KeyValueStoreClient`]
+/// A storage implemented from a [`KeyValueStore`]
 pub struct DbStorageInner<Client> {
     client: Client,
     pub(crate) guards: ChainGuards,
@@ -147,14 +147,14 @@ impl TestClock {
 #[async_trait]
 impl<Client, C> Storage for DbStorage<Client, C>
 where
-    Client: KeyValueStoreClient + Clone + Send + Sync + 'static,
+    Client: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
-    ViewError: From<<Client as KeyValueStoreClient>::Error>,
-    <Client as KeyValueStoreClient>::Error:
+    ViewError: From<<Client as KeyValueStore>::Error>,
+    <Client as KeyValueStore>::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
-    type Context = ContextFromDb<ChainRuntimeContext<Self>, Client>;
-    type ContextError = <Client as KeyValueStoreClient>::Error;
+    type Context = ContextFromStore<ChainRuntimeContext<Self>, Client>;
+    type ContextError = <Client as KeyValueStore>::Error;
 
     fn current_time(&self) -> Timestamp {
         self.clock.current_time()
@@ -175,7 +175,7 @@ where
         };
         let client = self.client.client.clone();
         let base_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
-        let context = ContextFromDb::create(client, base_key, runtime_context).await?;
+        let context = ContextFromStore::create(client, base_key, runtime_context).await?;
         ChainStateView::load(context).await
     }
 
@@ -265,10 +265,10 @@ where
 
 impl<Client, C> DbStorage<Client, C>
 where
-    Client: KeyValueStoreClient + Clone + Send + Sync + 'static,
+    Client: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock,
-    ViewError: From<<Client as KeyValueStoreClient>::Error>,
-    <Client as KeyValueStoreClient>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
+    ViewError: From<<Client as KeyValueStore>::Error>,
+    <Client as KeyValueStore>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
     fn add_value_to_batch(&self, value: &HashedValue, batch: &mut Batch) -> Result<(), ViewError> {
         WRITE_VALUE_COUNTER.with_label_values(&[]).inc();

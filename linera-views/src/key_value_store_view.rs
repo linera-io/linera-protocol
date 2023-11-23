@@ -21,15 +21,15 @@ use std::{
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::common::{ContextFromDb, KeyValueStoreClient},
+    crate::common::{ContextFromStore, KeyValueStore},
     crate::memory::{MemoryContext, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
     async_lock::{MutexGuardArc, RwLock},
     std::sync::Arc,
 };
 
 /// We implement two types:
-/// 1) The first type KeyValueStoreView implements View and the function of KeyValueStoreClient
-/// (though not KeyValueStoreClient).
+/// 1) The first type KeyValueStoreView implements View and the function of KeyValueStore
+/// (though not KeyValueStore).
 ///
 /// 2) The second type ViewContainer encapsulates KeyValueStoreView and provides the following functionalities:
 /// * The Clone trait
@@ -46,7 +46,7 @@ enum KeyTag {
     Hash,
 }
 
-/// A view that represents the functions of KeyValueStoreClient (though not KeyValueStoreClient).
+/// A view that represents the functions of KeyValueStore (though not KeyValueStore).
 ///
 /// Comment on the data set:
 /// In order to work, the view needs to store the updates and deleted_prefixes.
@@ -766,7 +766,7 @@ pub struct ViewContainer<C> {
 
 #[cfg(any(test, feature = "test"))]
 #[async_trait]
-impl<C> KeyValueStoreClient for ViewContainer<C>
+impl<C> KeyValueStore for ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
@@ -837,7 +837,7 @@ where
 
 /// A context that stores all values in memory.
 #[cfg(any(test, feature = "test"))]
-pub type KeyValueStoreMemoryContext<E> = ContextFromDb<E, ViewContainer<MemoryContext<()>>>;
+pub type KeyValueStoreMemoryContext<E> = ContextFromStore<E, ViewContainer<MemoryContext<()>>>;
 
 #[cfg(any(test, feature = "test"))]
 impl<E> KeyValueStoreMemoryContext<E> {
@@ -848,9 +848,9 @@ impl<E> KeyValueStoreMemoryContext<E> {
         extra: E,
     ) -> Result<Self, ViewError> {
         let context = MemoryContext::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES, ());
-        let key_value_store_view = ViewContainer::new(context).await?;
+        let store = ViewContainer::new(context).await?;
         Ok(Self {
-            db: key_value_store_view,
+            store,
             base_key,
             extra,
         })

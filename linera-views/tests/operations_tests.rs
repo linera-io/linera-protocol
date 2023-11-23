@@ -3,26 +3,26 @@
 
 use linera_views::{
     batch::{Batch, WriteOperation},
-    common::{KeyIterable, KeyValueIterable, KeyValueStoreClient},
+    common::{KeyIterable, KeyValueIterable, KeyValueStore},
     key_value_store_view::ViewContainer,
-    memory::{create_memory_client, create_memory_context},
+    memory::{create_memory_context, create_memory_store},
     test_utils::{
         get_random_byte_vector, get_random_key_prefix, get_random_key_values_prefix,
         get_small_key_space,
     },
-    value_splitting::create_test_memory_client,
+    value_splitting::create_test_memory_store,
 };
 use rand::{Rng, RngCore, SeedableRng};
 use std::collections::{BTreeMap, HashSet};
 
 #[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::create_rocks_db_test_client;
+use linera_views::rocks_db::create_rocks_db_test_store;
 
 #[cfg(feature = "aws")]
-use linera_views::dynamo_db::create_dynamo_db_test_client;
+use linera_views::dynamo_db::create_dynamo_db_test_store;
 
 #[cfg(feature = "scylladb")]
-use linera_views::scylla_db::create_scylla_db_test_client;
+use linera_views::scylla_db::create_scylla_db_test_store;
 
 /// This test starts with a collection of key/values being inserted into the code
 /// which is then followed by a number of reading tests. The functionalities being
@@ -32,7 +32,7 @@ use linera_views::scylla_db::create_scylla_db_test_client;
 /// * `find_keys_by_prefix` / `find_key_values_by_prefix`
 /// * The ordering of keys returned by `find_keys_by_prefix` and `find_key_values_by_prefix`
 #[cfg(test)]
-async fn run_reads<C: KeyValueStoreClient + Sync>(
+async fn run_reads<C: KeyValueStore + Sync>(
     key_value_store: C,
     key_values: Vec<(Vec<u8>, Vec<u8>)>,
 ) {
@@ -153,7 +153,7 @@ fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
 #[tokio::test]
 async fn test_reads_test_memory() {
     for scenario in get_random_test_scenarios() {
-        let key_value_store = create_test_memory_client();
+        let key_value_store = create_test_memory_store();
         run_reads(key_value_store, scenario).await;
     }
 }
@@ -161,7 +161,7 @@ async fn test_reads_test_memory() {
 #[tokio::test]
 async fn test_reads_memory() {
     for scenario in get_random_test_scenarios() {
-        let key_value_store = create_memory_client();
+        let key_value_store = create_memory_store();
         run_reads(key_value_store, scenario).await;
     }
 }
@@ -170,7 +170,7 @@ async fn test_reads_memory() {
 #[tokio::test]
 async fn test_reads_rocks_db() {
     for scenario in get_random_test_scenarios() {
-        let key_value_store = create_rocks_db_test_client().await;
+        let key_value_store = create_rocks_db_test_store().await;
         run_reads(key_value_store, scenario).await;
     }
 }
@@ -179,7 +179,7 @@ async fn test_reads_rocks_db() {
 #[tokio::test]
 async fn test_reads_dynamodb() {
     for scenario in get_random_test_scenarios() {
-        let key_value_store = create_dynamo_db_test_client().await;
+        let key_value_store = create_dynamo_db_test_store().await;
         run_reads(key_value_store, scenario).await;
     }
 }
@@ -188,7 +188,7 @@ async fn test_reads_dynamodb() {
 #[tokio::test]
 async fn test_reads_scylla_db() {
     for scenario in get_random_test_scenarios() {
-        let key_value_store = create_scylla_db_test_client().await;
+        let key_value_store = create_scylla_db_test_store().await;
         run_reads(key_value_store, scenario).await;
     }
 }
@@ -204,7 +204,7 @@ async fn test_reads_key_value_store_view_memory() {
 
 #[tokio::test]
 async fn test_reads_memory_specific() {
-    let key_value_store = create_memory_client();
+    let key_value_store = create_memory_store();
     let key_values = vec![
         (vec![0, 1, 255], Vec::new()),
         (vec![0, 1, 255, 37], Vec::new()),
@@ -296,7 +296,7 @@ fn realize_batch(batch: &Batch) -> BTreeMap<Vec<u8>, Vec<u8>> {
 }
 
 #[cfg(test)]
-async fn read_key_values_prefix<C: KeyValueStoreClient + Sync>(
+async fn read_key_values_prefix<C: KeyValueStore + Sync>(
     key_value_store: &C,
     key_prefix: &[u8],
 ) -> BTreeMap<Vec<u8>, Vec<u8>> {
@@ -316,7 +316,7 @@ async fn read_key_values_prefix<C: KeyValueStoreClient + Sync>(
 }
 
 #[cfg(test)]
-async fn run_test_batch_from_blank<C: KeyValueStoreClient + Sync>(
+async fn run_test_batch_from_blank<C: KeyValueStore + Sync>(
     key_value_store: &C,
     key_prefix: Vec<u8>,
     batch: Batch,
@@ -329,7 +329,7 @@ async fn run_test_batch_from_blank<C: KeyValueStoreClient + Sync>(
 }
 
 #[cfg(test)]
-async fn run_writes_from_blank<C: KeyValueStoreClient + Sync>(key_value_store: &C) {
+async fn run_writes_from_blank<C: KeyValueStore + Sync>(key_value_store: &C) {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     let n_oper = 1000;
     let batch_size = 500;
@@ -349,13 +349,13 @@ async fn run_writes_from_blank<C: KeyValueStoreClient + Sync>(key_value_store: &
 
 #[tokio::test]
 async fn test_test_memory_writes_from_blank() {
-    let key_value_store = create_test_memory_client();
+    let key_value_store = create_test_memory_store();
     run_writes_from_blank(&key_value_store).await;
 }
 
 #[tokio::test]
 async fn test_memory_writes_from_blank() {
-    let key_value_store = create_memory_client();
+    let key_value_store = create_memory_store();
     run_writes_from_blank(&key_value_store).await;
 }
 
@@ -369,21 +369,21 @@ async fn test_key_value_store_view_memory_writes_from_blank() {
 #[cfg(feature = "rocksdb")]
 #[tokio::test]
 async fn test_rocks_db_writes_from_blank() {
-    let key_value_store = create_rocks_db_test_client().await;
+    let key_value_store = create_rocks_db_test_store().await;
     run_writes_from_blank(&key_value_store).await;
 }
 
 #[cfg(feature = "aws")]
 #[tokio::test]
 async fn test_dynamo_db_writes_from_blank() {
-    let key_value_store = create_dynamo_db_test_client().await;
+    let key_value_store = create_dynamo_db_test_store().await;
     run_writes_from_blank(&key_value_store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[tokio::test]
 async fn test_scylla_db_writes_from_blank() {
-    let key_value_store = create_scylla_db_test_client().await;
+    let key_value_store = create_scylla_db_test_store().await;
     run_writes_from_blank(&key_value_store).await;
 }
 
@@ -401,9 +401,9 @@ async fn test_big_value_read_write() {
         let mut batch = Batch::new();
         let key = vec![43, 23, 56];
         batch.put_key_value(key.clone(), &test_string).unwrap();
-        context.db.write_batch(batch, &[]).await.unwrap();
+        context.store.write_batch(batch, &[]).await.unwrap();
         let read_string = context
-            .db
+            .store
             .read_value::<String>(&key)
             .await
             .unwrap()
@@ -414,12 +414,12 @@ async fn test_big_value_read_write() {
 
 // DynamoDb has limits at 1M (for pagination), 4M (for write)
 // Let us go right past them at 20M of data with writing and then
-// reading it. And 20M is not huge by any mean. All KeyValueStoreClient
+// reading it. And 20M is not huge by any mean. All KeyValueStore
 // must handle that.
 //
 // The size of the value vary as each size has its own issues.
 #[cfg(test)]
-async fn run_big_write_read<C: KeyValueStoreClient + Sync>(
+async fn run_big_write_read<C: KeyValueStore + Sync>(
     key_value_store: C,
     target_size: usize,
     value_sizes: Vec<usize>,
@@ -442,7 +442,7 @@ async fn run_big_write_read<C: KeyValueStoreClient + Sync>(
 #[cfg(feature = "scylladb")]
 #[tokio::test]
 async fn test_scylla_db_big_write_read() {
-    let key_value_store = create_scylla_db_test_client().await;
+    let key_value_store = create_scylla_db_test_store().await;
     let value_sizes = vec![1000, 200000, 5000000];
     let target_size = 14000000;
     run_big_write_read(key_value_store, target_size, value_sizes).await;
@@ -450,7 +450,7 @@ async fn test_scylla_db_big_write_read() {
 
 #[tokio::test]
 async fn test_memory_big_write_read() {
-    let key_value_store = create_memory_client();
+    let key_value_store = create_memory_store();
     let value_sizes = vec![100, 1000, 200000, 5000000];
     let target_size = 20000000;
     run_big_write_read(key_value_store, target_size, value_sizes).await;
@@ -461,7 +461,7 @@ async fn test_memory_big_write_read() {
 #[cfg(feature = "rocksdb")]
 #[tokio::test]
 async fn test_rocks_db_big_write_read() {
-    let key_value_store = create_rocks_db_test_client().await;
+    let key_value_store = create_rocks_db_test_store().await;
     let value_sizes = vec![100, 1000, 200000, 5000000];
     let target_size = 20000000;
     run_big_write_read(key_value_store, target_size, value_sizes).await;
@@ -470,7 +470,7 @@ async fn test_rocks_db_big_write_read() {
 #[cfg(feature = "aws")]
 #[tokio::test]
 async fn test_dynamo_db_big_write_read() {
-    let key_value_store = create_dynamo_db_test_client().await;
+    let key_value_store = create_dynamo_db_test_store().await;
     let value_sizes = vec![100, 1000, 200000, 5000000];
     let target_size = 20000000;
     run_big_write_read(key_value_store, target_size, value_sizes).await;
@@ -480,7 +480,7 @@ async fn test_dynamo_db_big_write_read() {
 type StateBatch = (Vec<(Vec<u8>, Vec<u8>)>, Batch);
 
 #[cfg(test)]
-async fn run_test_batch_from_state<C: KeyValueStoreClient + Sync>(
+async fn run_test_batch_from_state<C: KeyValueStore + Sync>(
     key_value_store: &C,
     key_prefix: Vec<u8>,
     state_and_batch: StateBatch,
@@ -575,7 +575,7 @@ fn generate_specific_state_batch(key_prefix: &[u8], option: usize) -> StateBatch
 }
 
 #[cfg(test)]
-async fn run_writes_from_state<C: KeyValueStoreClient + Sync>(key_value_store: &C) {
+async fn run_writes_from_state<C: KeyValueStore + Sync>(key_value_store: &C) {
     for option in 0..7 {
         let key_prefix = if option == 6 {
             vec![255, 255, 255]
@@ -589,27 +589,27 @@ async fn run_writes_from_state<C: KeyValueStoreClient + Sync>(key_value_store: &
 
 #[tokio::test]
 async fn test_memory_writes_from_state() {
-    let key_value_store = create_memory_client();
+    let key_value_store = create_memory_store();
     run_writes_from_state(&key_value_store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[tokio::test]
 async fn test_rocks_db_writes_from_state() {
-    let key_value_store = create_rocks_db_test_client().await;
+    let key_value_store = create_rocks_db_test_store().await;
     run_writes_from_state(&key_value_store).await;
 }
 
 #[cfg(feature = "aws")]
 #[tokio::test]
 async fn test_dynamo_db_writes_from_state() {
-    let key_value_store = create_dynamo_db_test_client().await;
+    let key_value_store = create_dynamo_db_test_store().await;
     run_writes_from_state(&key_value_store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[tokio::test]
 async fn test_scylla_db_writes_from_state() {
-    let key_value_store = create_scylla_db_test_client().await;
+    let key_value_store = create_scylla_db_test_store().await;
     run_writes_from_state(&key_value_store).await;
 }

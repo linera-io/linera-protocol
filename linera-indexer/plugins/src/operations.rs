@@ -11,7 +11,7 @@ use linera_indexer::{
     plugin::{load, route, sdl, Plugin},
 };
 use linera_views::{
-    common::{Context, ContextFromDb, KeyValueStoreClient},
+    common::{Context, ContextFromStore, KeyValueStore},
     map_view::MapView,
     views::{RootView, ViewError},
 };
@@ -109,17 +109,17 @@ static NAME: &str = "operations";
 
 /// Implements `Plugin`
 #[async_trait::async_trait]
-impl<DB> Plugin<DB> for OperationsPlugin<ContextFromDb<(), DB>>
+impl<S> Plugin<S> for OperationsPlugin<ContextFromStore<(), S>>
 where
-    DB: KeyValueStoreClient + Clone + Send + Sync + 'static,
-    DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: From<DB::Error>,
+    S: KeyValueStore + Clone + Send + Sync + 'static,
+    S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    ViewError: From<S::Error>,
 {
     fn name(&self) -> String {
         NAME.to_string()
     }
 
-    async fn load(store: DB) -> Result<Self, IndexerError>
+    async fn load(store: S) -> Result<Self, IndexerError>
     where
         Self: Sized,
     {

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This provides a KeyValueStoreClient for the ScyllaDB database.
+//! This provides a KeyValueStore for the ScyllaDB database.
 //! The code is functional but some aspects are missing.
 //!
 //! The current connection is done via a Session and a corresponding
@@ -9,10 +9,10 @@
 //! concurrent queries is controlled by max_concurrent_queries.
 //!
 //! We thus implement the
-//! * [`KeyValueStoreClient`][trait1] for a database access.
+//! * [`KeyValueStore`][trait1] for a database access.
 //! * [`Context`][trait2] for the context.
 //!
-//! [trait1]: common::KeyValueStoreClient
+//! [trait1]: common::KeyValueStore
 //! [trait2]: common::Context
 
 #[cfg(any(test, feature = "test"))]
@@ -21,9 +21,9 @@ use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::get_table_name};
 use crate::{
     batch::{Batch, DeletePrefixExpander},
     common::{
-        get_upper_bound_option, CommonStoreConfig, ContextFromDb, KeyValueStoreClient, TableStatus,
+        get_upper_bound_option, CommonStoreConfig, ContextFromStore, KeyValueStore, TableStatus,
     },
-    lru_caching::LruCachingKeyValueClient,
+    lru_caching::LruCachingStore,
     value_splitting::DatabaseConsistencyError,
 };
 use async_lock::{Semaphore, SemaphoreGuard};
@@ -41,7 +41,7 @@ use thiserror::Error;
 
 /// The creation of a ScyllaDB client that can be used for accessing it.
 /// The `Vec<u8>`is a primary key.
-type ScyllaDbClientPair = (Session, String);
+type ScyllaDbStorePair = (Session, String);
 
 /// We limit the number of connections that can be done for tests.
 #[cfg(any(test, feature = "test"))]
@@ -61,13 +61,13 @@ const MAX_KEY_SIZE: usize = 1048576;
 
 /// The client itself and the keeping of the count of active connections.
 #[derive(Clone)]
-pub struct ScyllaDbClientInternal {
-    client: Arc<ScyllaDbClientPair>,
+pub struct ScyllaDbStoreInternal {
+    store: Arc<ScyllaDbStorePair>,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
 }
 
-/// The error type for [`ScyllaDbClientInternal`]
+/// The error type for [`ScyllaDbStoreInternal`]
 #[derive(Error, Debug)]
 pub enum ScyllaDbContextError {
     /// BCS serialization error.
@@ -113,7 +113,7 @@ impl From<ScyllaDbContextError> for crate::views::ViewError {
 }
 
 #[async_trait]
-impl KeyValueStoreClient for ScyllaDbClientInternal {
+impl KeyValueStore for ScyllaDbStoreInternal {
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Error = ScyllaDbContextError;
@@ -125,43 +125,43 @@ impl KeyValueStoreClient for ScyllaDbClientInternal {
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        let client = self.client.deref();
+        let store = self.store.deref();
         let _guard = self.acquire().await;
-        Self::read_value_internal(client, key.to_vec()).await
+        Self::read_value_internal(store, key.to_vec()).await
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        let client = self.client.deref();
+        let store = self.store.deref();
         let _guard = self.acquire().await;
         let handles = keys
             .into_iter()
-            .map(|key| Self::read_value_internal(client, key));
+            .map(|key| Self::read_value_internal(store, key));
         let result = join_all(handles).await;
         Ok(result.into_iter().collect::<Result<_, _>>()?)
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
-        let client = self.client.deref();
+        let store = self.store.deref();
         let _guard = self.acquire().await;
-        Self::find_keys_by_prefix_internal(client, key_prefix.to_vec()).await
+        Self::find_keys_by_prefix_internal(store, key_prefix.to_vec()).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error> {
-        let client = self.client.deref();
+        let store = self.store.deref();
         let _guard = self.acquire().await;
-        Self::find_key_values_by_prefix_internal(client, key_prefix.to_vec()).await
+        Self::find_key_values_by_prefix_internal(store, key_prefix.to_vec()).await
     }
 
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), Self::Error> {
-        let client = self.client.deref();
+        let store = self.store.deref();
         let _guard = self.acquire().await;
-        Self::write_batch_internal(client, batch).await
+        Self::write_batch_internal(store, batch).await
     }
 
     async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), Self::Error> {
@@ -170,14 +170,14 @@ impl KeyValueStoreClient for ScyllaDbClientInternal {
 }
 
 #[async_trait]
-impl DeletePrefixExpander for ScyllaDbClientPair {
+impl DeletePrefixExpander for ScyllaDbStorePair {
     type Error = ScyllaDbContextError;
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        ScyllaDbClientInternal::find_keys_by_prefix_internal(self, key_prefix.to_vec()).await
+        ScyllaDbStoreInternal::find_keys_by_prefix_internal(self, key_prefix.to_vec()).await
     }
 }
 
-impl ScyllaDbClientInternal {
+impl ScyllaDbStoreInternal {
     /// Obtains the semaphore lock on the database if needed.
     async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
         match &self.semaphore {
@@ -187,12 +187,12 @@ impl ScyllaDbClientInternal {
     }
 
     async fn read_value_internal(
-        client: &ScyllaDbClientPair,
+        store: &ScyllaDbStorePair,
         key: Vec<u8>,
     ) -> Result<Option<Vec<u8>>, ScyllaDbContextError> {
         ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
-        let session = &client.0;
-        let table_name = &client.1;
+        let session = &store.0;
+        let table_name = &store.1;
         // Read the value of a key
         let values = (key,);
         let query = format!(
@@ -210,7 +210,7 @@ impl ScyllaDbClientInternal {
     }
 
     async fn write_batch_internal(
-        client: &ScyllaDbClientPair,
+        store: &ScyllaDbStorePair,
         batch: Batch,
     ) -> Result<(), ScyllaDbContextError> {
         // We cannot directly write the batch because if a delete is followed by a write then
@@ -219,10 +219,10 @@ impl ScyllaDbClientInternal {
         // from https://github.com/scylladb/scylladb/blob/master/docs/dev/timestamp-conflict-resolution.md
         let mut unordered_batch = batch.simplify();
         unordered_batch
-            .expand_colliding_prefix_deletions(client)
+            .expand_colliding_prefix_deletions(store)
             .await?;
-        let session = &client.0;
-        let table_name = &client.1;
+        let session = &store.0;
+        let table_name = &store.1;
         let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Logged);
         let mut batch_values = Vec::new();
         let query1 = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k >= ?", table_name);
@@ -269,15 +269,15 @@ impl ScyllaDbClientInternal {
     }
 
     async fn find_keys_by_prefix_internal(
-        client: &ScyllaDbClientPair,
+        store: &ScyllaDbStorePair,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, ScyllaDbContextError> {
         ensure!(
             key_prefix.len() <= MAX_KEY_SIZE,
             ScyllaDbContextError::KeyTooLong
         );
-        let session = &client.0;
-        let table_name = &client.1;
+        let session = &store.0;
+        let table_name = &store.1;
         // Read the value of a key
         let len = key_prefix.len();
         let rows = match get_upper_bound_option(&key_prefix) {
@@ -310,15 +310,15 @@ impl ScyllaDbClientInternal {
     }
 
     async fn find_key_values_by_prefix_internal(
-        client: &ScyllaDbClientPair,
+        store: &ScyllaDbStorePair,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ScyllaDbContextError> {
         ensure!(
             key_prefix.len() <= MAX_KEY_SIZE,
             ScyllaDbContextError::KeyTooLong
         );
-        let session = &client.0;
-        let table_name = &client.1;
+        let session = &store.0;
+        let table_name = &store.1;
         // Read the value of a key
         let len = key_prefix.len();
         let rows = match get_upper_bound_option(&key_prefix) {
@@ -350,15 +350,15 @@ impl ScyllaDbClientInternal {
         Ok(key_values)
     }
 
-    /// Retrieves the table_name from the client.
+    /// Retrieves the table_name from the store
     pub async fn get_table_name(&self) -> String {
-        let client = self.client.deref();
-        client.1.clone()
+        let store = self.store.deref();
+        store.1.clone()
     }
 
     /// Tests if a table is present in the database or not
     pub async fn test_existence(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<bool, ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
@@ -468,7 +468,7 @@ impl ScyllaDbClientInternal {
 
     #[cfg(any(test, feature = "test"))]
     async fn new_for_testing(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
@@ -489,14 +489,14 @@ impl ScyllaDbClientInternal {
         .await
     }
 
-    async fn initialize(store_config: ScyllaDbKvStoreConfig) -> Result<Self, ScyllaDbContextError> {
+    async fn initialize(store_config: ScyllaDbStoreConfig) -> Result<Self, ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
             .await?;
         let stop_if_table_exists = false;
         let create_if_missing = true;
-        let (client, table_status) = Self::new_internal(
+        let (store, table_status) = Self::new_internal(
             session,
             store_config,
             stop_if_table_exists,
@@ -506,11 +506,11 @@ impl ScyllaDbClientInternal {
         if table_status == TableStatus::Existing {
             return Err(ScyllaDbContextError::AlreadyExistingDatabase);
         }
-        Ok(client)
+        Ok(store)
     }
 
     async fn list_tables(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<Vec<String>, ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
@@ -529,7 +529,7 @@ impl ScyllaDbClientInternal {
         Ok(tables)
     }
 
-    async fn delete_all(store_config: ScyllaDbKvStoreConfig) -> Result<(), ScyllaDbContextError> {
+    async fn delete_all(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
@@ -539,9 +539,7 @@ impl ScyllaDbClientInternal {
         Ok(())
     }
 
-    async fn delete_single(
-        store_config: ScyllaDbKvStoreConfig,
-    ) -> Result<(), ScyllaDbContextError> {
+    async fn delete_single(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
@@ -552,7 +550,7 @@ impl ScyllaDbClientInternal {
     }
 
     async fn new(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
@@ -571,7 +569,7 @@ impl ScyllaDbClientInternal {
 
     async fn new_internal(
         session: Session,
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
         stop_if_table_exists: bool,
         create_if_missing: bool,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
@@ -594,31 +592,31 @@ impl ScyllaDbClientInternal {
         } else {
             TableStatus::New
         };
-        let client = (session, store_config.table_name);
-        let client = Arc::new(client);
+        let store = (session, store_config.table_name);
+        let store = Arc::new(store);
         let semaphore = store_config
             .common_config
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = store_config.common_config.max_stream_queries;
-        let client = Self {
-            client,
+        let store = Self {
+            store,
             semaphore,
             max_stream_queries,
         };
-        Ok((client, table_status))
+        Ok((store, table_status))
     }
 }
 
-/// A shared DB client for ScyllaDB implementing LruCaching
+/// A shared DB store for ScyllaDB implementing LruCaching
 #[derive(Clone)]
-pub struct ScyllaDbClient {
-    client: LruCachingKeyValueClient<ScyllaDbClientInternal>,
+pub struct ScyllaDbStore {
+    store: LruCachingStore<ScyllaDbStoreInternal>,
 }
 
-/// The type for building a new ScyllaDb Key Value Store Client
+/// The type for building a new ScyllaDb Key Value Store
 #[derive(Debug)]
-pub struct ScyllaDbKvStoreConfig {
+pub struct ScyllaDbStoreConfig {
     /// The url to which the requests have to be sent
     pub uri: String,
     /// The name of the table that we create
@@ -628,114 +626,112 @@ pub struct ScyllaDbKvStoreConfig {
 }
 
 #[async_trait]
-impl KeyValueStoreClient for ScyllaDbClient {
-    const MAX_VALUE_SIZE: usize = ScyllaDbClientInternal::MAX_VALUE_SIZE;
-    const MAX_KEY_SIZE: usize = ScyllaDbClientInternal::MAX_KEY_SIZE;
-    type Error = <ScyllaDbClientInternal as KeyValueStoreClient>::Error;
-    type Keys = <ScyllaDbClientInternal as KeyValueStoreClient>::Keys;
-    type KeyValues = <ScyllaDbClientInternal as KeyValueStoreClient>::KeyValues;
+impl KeyValueStore for ScyllaDbStore {
+    const MAX_VALUE_SIZE: usize = ScyllaDbStoreInternal::MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = ScyllaDbStoreInternal::MAX_KEY_SIZE;
+    type Error = <ScyllaDbStoreInternal as KeyValueStore>::Error;
+    type Keys = <ScyllaDbStoreInternal as KeyValueStore>::Keys;
+    type KeyValues = <ScyllaDbStoreInternal as KeyValueStore>::KeyValues;
 
     fn max_stream_queries(&self) -> usize {
-        self.client.max_stream_queries()
+        self.store.max_stream_queries()
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.client.read_value_bytes(key).await
+        self.store.read_value_bytes(key).await
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        self.client.read_multi_values_bytes(keys).await
+        self.store.read_multi_values_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
-        self.client.find_keys_by_prefix(key_prefix).await
+        self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error> {
-        self.client.find_key_values_by_prefix(key_prefix).await
+        self.store.find_key_values_by_prefix(key_prefix).await
     }
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
-        self.client.write_batch(batch, base_key).await
+        self.store.write_batch(batch, base_key).await
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
-        self.client.clear_journal(base_key).await
+        self.store.clear_journal(base_key).await
     }
 }
 
-impl ScyllaDbClient {
-    /// Gets the table name of a client
+impl ScyllaDbStore {
+    /// Gets the table name of a store
     pub async fn get_table_name(&self) -> String {
-        self.client.client.get_table_name().await
+        self.store.client.get_table_name().await
     }
 
-    /// Creates a [`ScyllaDbClient`] from the input parameters.
+    /// Creates a [`ScyllaDbStore`] from the input parameters.
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (client, table_status) = ScyllaDbClientInternal::new_for_testing(store_config).await?;
-        let client = LruCachingKeyValueClient::new(client, cache_size);
-        let client = ScyllaDbClient { client };
-        Ok((client, table_status))
+        let (store, table_status) = ScyllaDbStoreInternal::new_for_testing(store_config).await?;
+        let store = LruCachingStore::new(store, cache_size);
+        let store = ScyllaDbStore { store };
+        Ok((store, table_status))
     }
 
-    /// Creates a [`ScyllaDbClient`] from the input parameters.
+    /// Creates a [`ScyllaDbStore`] from the input parameters.
     pub async fn initialize(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<Self, ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let client = ScyllaDbClientInternal::initialize(store_config).await?;
-        let client = LruCachingKeyValueClient::new(client, cache_size);
-        let client = ScyllaDbClient { client };
-        Ok(client)
+        let store = ScyllaDbStoreInternal::initialize(store_config).await?;
+        let store = LruCachingStore::new(store, cache_size);
+        let store = ScyllaDbStore { store };
+        Ok(store)
     }
 
     /// Delete all the tables of a database
     pub async fn test_existence(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<bool, ScyllaDbContextError> {
-        ScyllaDbClientInternal::test_existence(store_config).await
+        ScyllaDbStoreInternal::test_existence(store_config).await
     }
 
     /// Delete all the tables of a database
-    pub async fn delete_all(
-        store_config: ScyllaDbKvStoreConfig,
-    ) -> Result<(), ScyllaDbContextError> {
-        ScyllaDbClientInternal::delete_all(store_config).await
+    pub async fn delete_all(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
+        ScyllaDbStoreInternal::delete_all(store_config).await
     }
 
     /// Delete all the tables of a database
     pub async fn list_tables(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<Vec<String>, ScyllaDbContextError> {
-        ScyllaDbClientInternal::list_tables(store_config).await
+        ScyllaDbStoreInternal::list_tables(store_config).await
     }
 
     /// Deletes a single table from the database
     pub async fn delete_single(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<(), ScyllaDbContextError> {
-        ScyllaDbClientInternal::delete_single(store_config).await
+        ScyllaDbStoreInternal::delete_single(store_config).await
     }
 
-    /// Creates a [`ScyllaDbClient`] from the input parameters.
+    /// Creates a [`ScyllaDbStore`] from the input parameters.
     pub async fn new(
-        store_config: ScyllaDbKvStoreConfig,
+        store_config: ScyllaDbStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (client, table_status) = ScyllaDbClientInternal::new(store_config).await?;
-        let client = LruCachingKeyValueClient::new(client, cache_size);
-        let client = ScyllaDbClient { client };
-        Ok((client, table_status))
+        let (store, table_status) = ScyllaDbStoreInternal::new(store_config).await?;
+        let store = LruCachingStore::new(store, cache_size);
+        let store = ScyllaDbStore { store };
+        Ok((store, table_status))
     }
 }
 
@@ -749,31 +745,31 @@ pub fn create_scylla_db_common_config() -> CommonStoreConfig {
     }
 }
 
-/// Creates a ScyllaDB test client
+/// Creates a ScyllaDB test store
 #[cfg(any(test, feature = "test"))]
-pub async fn create_scylla_db_test_client() -> ScyllaDbClient {
+pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
     let uri = "localhost:9042".to_string();
     let table_name = get_table_name();
     let common_config = create_scylla_db_common_config();
-    let store_config = ScyllaDbKvStoreConfig {
+    let store_config = ScyllaDbStoreConfig {
         uri,
         table_name,
         common_config,
     };
-    let (client, _) = ScyllaDbClient::new_for_testing(store_config)
+    let (store, _) = ScyllaDbStore::new_for_testing(store_config)
         .await
-        .expect("client");
-    client
+        .expect("store");
+    store
 }
 
 /// An implementation of [`crate::common::Context`] based on ScyllaDB
-pub type ScyllaDbContext<E> = ContextFromDb<E, ScyllaDbClient>;
+pub type ScyllaDbContext<E> = ContextFromStore<E, ScyllaDbStore>;
 
 impl<E: Clone + Send + Sync> ScyllaDbContext<E> {
     /// Creates a [`ScyllaDbContext`].
-    pub fn new(db: ScyllaDbClient, base_key: Vec<u8>, extra: E) -> Self {
+    pub fn new(store: ScyllaDbStore, base_key: Vec<u8>, extra: E) -> Self {
         Self {
-            db,
+            store,
             base_key,
             extra,
         }
@@ -784,6 +780,6 @@ impl<E: Clone + Send + Sync> ScyllaDbContext<E> {
 #[cfg(any(test, feature = "test"))]
 pub async fn create_scylla_db_test_context() -> ScyllaDbContext<()> {
     let base_key = vec![];
-    let db = create_scylla_db_test_client().await;
+    let db = create_scylla_db_test_store().await;
     ScyllaDbContext::new(db, base_key, ())
 }

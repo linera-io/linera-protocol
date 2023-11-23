@@ -3,9 +3,9 @@
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_upper_bound, CommonStoreConfig, ContextFromDb, KeyValueStoreClient, TableStatus},
-    lru_caching::LruCachingKeyValueClient,
-    value_splitting::{DatabaseConsistencyError, ValueSplittingKeyValueStoreClient},
+    common::{get_upper_bound, CommonStoreConfig, ContextFromStore, KeyValueStore, TableStatus},
+    lru_caching::LruCachingStore,
+    value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
 use async_trait::async_trait;
 use linera_base::ensure;
@@ -36,14 +36,14 @@ pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
 /// The internal client
 #[derive(Clone)]
-pub struct RocksDbClientInternal {
+pub struct RocksDbStoreInternal {
     db: Arc<DB>,
     max_stream_queries: usize,
 }
 
 /// The initial configuration of the system
 #[derive(Clone, Debug)]
-pub struct RocksDbKvStoreConfig {
+pub struct RocksDbStoreConfig {
     /// The AWS configuration
     pub path_buf: PathBuf,
     /// The common configuration of the key value store
@@ -51,7 +51,7 @@ pub struct RocksDbKvStoreConfig {
 }
 
 #[async_trait]
-impl KeyValueStoreClient for RocksDbClientInternal {
+impl KeyValueStore for RocksDbStoreInternal {
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Error = RocksDbContextError;
@@ -207,14 +207,14 @@ impl KeyValueStoreClient for RocksDbClientInternal {
 
 /// A shared DB client for RocksDB implementing LruCaching
 #[derive(Clone)]
-pub struct RocksDbClient {
-    client: LruCachingKeyValueClient<ValueSplittingKeyValueStoreClient<RocksDbClientInternal>>,
+pub struct RocksDbStore {
+    store: LruCachingStore<ValueSplittingStore<RocksDbStoreInternal>>,
 }
 
-impl RocksDbClient {
+impl RocksDbStore {
     /// Returns whether a table already exists.
     pub async fn test_existence(
-        store_config: RocksDbKvStoreConfig,
+        store_config: RocksDbStoreConfig,
     ) -> Result<bool, RocksDbContextError> {
         let options = rocksdb::Options::default();
         let result = DB::open(&options, store_config.path_buf.clone());
@@ -230,8 +230,8 @@ impl RocksDbClient {
     /// Creates a RocksDB database for unit tests from a specified path.
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
-        store_config: RocksDbKvStoreConfig,
-    ) -> Result<(RocksDbClient, TableStatus), RocksDbContextError> {
+        store_config: RocksDbStoreConfig,
+    ) -> Result<(RocksDbStore, TableStatus), RocksDbContextError> {
         let path = store_config.path_buf.as_path();
         fs::remove_dir_all(path)?;
         let create_if_missing = true;
@@ -239,7 +239,7 @@ impl RocksDbClient {
     }
 
     /// Creates all RocksDB databases
-    pub async fn delete_all(store_config: RocksDbKvStoreConfig) -> Result<(), RocksDbContextError> {
+    pub async fn delete_all(store_config: RocksDbStoreConfig) -> Result<(), RocksDbContextError> {
         let path = store_config.path_buf.as_path();
         fs::remove_dir_all(path)?;
         Ok(())
@@ -247,7 +247,7 @@ impl RocksDbClient {
 
     /// Creates all RocksDB databases
     pub async fn delete_single(
-        store_config: RocksDbKvStoreConfig,
+        store_config: RocksDbStoreConfig,
     ) -> Result<(), RocksDbContextError> {
         let path = store_config.path_buf.as_path();
         fs::remove_dir_all(path)?;
@@ -256,16 +256,14 @@ impl RocksDbClient {
 
     /// Creates a RocksDB database from a specified path.
     pub async fn new(
-        store_config: RocksDbKvStoreConfig,
-    ) -> Result<(RocksDbClient, TableStatus), RocksDbContextError> {
+        store_config: RocksDbStoreConfig,
+    ) -> Result<(RocksDbStore, TableStatus), RocksDbContextError> {
         let create_if_missing = false;
         Self::new_internal(store_config, create_if_missing).await
     }
 
     /// Initializes a RocksDB database from a specified path.
-    pub async fn initialize(
-        store_config: RocksDbKvStoreConfig,
-    ) -> Result<Self, RocksDbContextError> {
+    pub async fn initialize(store_config: RocksDbStoreConfig) -> Result<Self, RocksDbContextError> {
         let create_if_missing = true;
         let (client, table_status) = Self::new_internal(store_config, create_if_missing).await?;
         if table_status == TableStatus::Existing {
@@ -276,9 +274,9 @@ impl RocksDbClient {
 
     /// Creates a RocksDB database from a specified path.
     async fn new_internal(
-        store_config: RocksDbKvStoreConfig,
+        store_config: RocksDbStoreConfig,
         create_if_missing: bool,
-    ) -> Result<(RocksDbClient, TableStatus), RocksDbContextError> {
+    ) -> Result<(RocksDbStore, TableStatus), RocksDbContextError> {
         let kv_name = format!(
             "store_config={:?} create_if_missing={:?}",
             store_config, create_if_missing
@@ -303,15 +301,14 @@ impl RocksDbClient {
             }
             DB::open(&options, path)?
         };
-        let client = RocksDbClientInternal {
+        let store = RocksDbStoreInternal {
             db: Arc::new(db),
             max_stream_queries,
         };
-        let client = ValueSplittingKeyValueStoreClient::new(client);
-        let client = Self {
-            client: LruCachingKeyValueClient::new(client, cache_size),
-        };
-        Ok((client, table_status))
+        let store = ValueSplittingStore::new(store);
+        let store = LruCachingStore::new(store, cache_size);
+        let store = Self { store };
+        Ok((store, table_status))
     }
 }
 
@@ -327,25 +324,25 @@ pub fn create_rocks_db_common_config() -> CommonStoreConfig {
 
 /// Creates a RocksDB database client to be used for tests.
 #[cfg(any(test, feature = "test"))]
-pub async fn create_rocks_db_test_client() -> RocksDbClient {
+pub async fn create_rocks_db_test_store() -> RocksDbStore {
     let dir = TempDir::new().unwrap();
     let path_buf = dir.path().to_path_buf();
     let common_config = create_rocks_db_common_config();
-    let store_config = RocksDbKvStoreConfig {
+    let store_config = RocksDbStoreConfig {
         path_buf,
         common_config,
     };
-    let (client, _) = RocksDbClient::new_for_testing(store_config)
+    let (store, _) = RocksDbStore::new_for_testing(store_config)
         .await
         .expect("client");
-    client
+    store
 }
 
 /// An implementation of [`crate::common::Context`] based on RocksDB
-pub type RocksDbContext<E> = ContextFromDb<E, RocksDbClient>;
+pub type RocksDbContext<E> = ContextFromStore<E, RocksDbStore>;
 
 #[async_trait]
-impl KeyValueStoreClient for RocksDbClient {
+impl KeyValueStore for RocksDbStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Error = RocksDbContextError;
@@ -353,48 +350,48 @@ impl KeyValueStoreClient for RocksDbClient {
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     fn max_stream_queries(&self) -> usize {
-        self.client.max_stream_queries()
+        self.store.max_stream_queries()
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
-        self.client.read_value_bytes(key).await
+        self.store.read_value_bytes(key).await
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbContextError> {
-        self.client.read_multi_values_bytes(keys).await
+        self.store.read_multi_values_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::Keys, RocksDbContextError> {
-        self.client.find_keys_by_prefix(key_prefix).await
+        self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, RocksDbContextError> {
-        self.client.find_key_values_by_prefix(key_prefix).await
+        self.store.find_key_values_by_prefix(key_prefix).await
     }
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), RocksDbContextError> {
-        self.client.write_batch(batch, base_key).await
+        self.store.write_batch(batch, base_key).await
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
-        self.client.clear_journal(base_key).await
+        self.store.clear_journal(base_key).await
     }
 }
 
 impl<E: Clone + Send + Sync> RocksDbContext<E> {
     /// Creates a [`RocksDbContext`].
-    pub fn new(db: RocksDbClient, base_key: Vec<u8>, extra: E) -> Self {
+    pub fn new(store: RocksDbStore, base_key: Vec<u8>, extra: E) -> Self {
         Self {
-            db,
+            store,
             base_key,
             extra,
         }
@@ -404,9 +401,9 @@ impl<E: Clone + Send + Sync> RocksDbContext<E> {
 /// Create a [`crate::common::Context`] that can be used for tests.
 #[cfg(any(test, feature = "test"))]
 pub async fn create_rocks_db_test_context() -> RocksDbContext<()> {
-    let client = create_rocks_db_test_client().await;
+    let store = create_rocks_db_test_store().await;
     let base_key = vec![];
-    RocksDbContext::new(client, base_key, ())
+    RocksDbContext::new(store, base_key, ())
 }
 
 /// The error type for [`RocksDbContext`]

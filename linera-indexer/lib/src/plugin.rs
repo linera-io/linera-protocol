@@ -8,18 +8,18 @@ use async_graphql::{EmptyMutation, EmptySubscription, ObjectType, Schema};
 use axum::Router;
 use linera_chain::data_types::HashedValue;
 use linera_views::{
-    common::{ContextFromDb, KeyValueStoreClient},
+    common::{ContextFromStore, KeyValueStore},
     views::{View, ViewError},
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[async_trait::async_trait]
-pub trait Plugin<DB>: Send + Sync
+pub trait Plugin<S>: Send + Sync
 where
-    DB: KeyValueStoreClient + Clone + Send + Sync + 'static,
-    DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: From<DB::Error>,
+    S: KeyValueStore + Clone + Send + Sync + 'static,
+    S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    ViewError: From<S::Error>,
 {
     /// Gets the name of the plugin
     fn name(&self) -> String
@@ -27,7 +27,7 @@ where
         Self: Sized;
 
     /// Loads the plugin from a store
-    async fn load(store: DB) -> Result<Self, IndexerError>
+    async fn load(store: S) -> Result<Self, IndexerError>
     where
         Self: Sized;
 
@@ -69,16 +69,16 @@ pub fn route<Q: async_graphql::ObjectType + 'static>(
     .layer(tower_http::cors::CorsLayer::permissive())
 }
 
-pub async fn load<DB, V: View<ContextFromDb<(), DB>>>(
-    store: DB,
+pub async fn load<S, V: View<ContextFromStore<(), S>>>(
+    store: S,
     name: &str,
 ) -> Result<Arc<Mutex<V>>, IndexerError>
 where
-    DB: KeyValueStoreClient + Clone + Send + Sync + 'static,
-    DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: From<DB::Error>,
+    S: KeyValueStore + Clone + Send + Sync + 'static,
+    S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    ViewError: From<S::Error>,
 {
-    let context = ContextFromDb::create(store, name.as_bytes().to_vec(), ())
+    let context = ContextFromStore::create(store, name.as_bytes().to_vec(), ())
         .await
         .map_err(|e| IndexerError::ViewError(e.into()))?;
     let plugin = V::load(context).await?;

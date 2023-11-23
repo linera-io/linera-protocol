@@ -3,11 +3,11 @@
 
 //! This provides several functionalities for the handling of data.
 //! The most important traits are:
-//! * [`KeyValueStoreClient`][trait1] which manages the access to a database and is clonable. It has a minimal interface
+//! * [`KeyValueStore`][trait1] which manages the access to a database and is clonable. It has a minimal interface
 //! * [`Context`][trait2] which provides access to a database plus a `base_key` and some extra type `E` which is carried along
 //! and has no impact on the running of the system. There is also a bunch of other helper functions.
 //!
-//! [trait1]: common::KeyValueStoreClient
+//! [trait1]: common::KeyValueStore
 //! [trait2]: common::Context
 
 use crate::{batch::Batch, views::ViewError};
@@ -41,12 +41,12 @@ pub(crate) enum Update<T> {
     Set(T),
 }
 
-/// Status of a table at the creation time of a [`KeyValueStoreClient`] instance.
+/// Status of a table at the creation time of a [`KeyValueStore`] instance.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TableStatus {
-    /// Table was created during the construction of the [`KeyValueStoreClient`] instance.
+    /// Table was created during the construction of the [`KeyValueStore`] instance.
     New,
-    /// Table already existed when the [`KeyValueStoreClient`] instance was created.
+    /// Table already existed when the [`KeyValueStore`] instance was created.
     Existing,
 }
 
@@ -261,7 +261,7 @@ pub trait KeyValueIterable<Error> {
 
 /// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.
 #[async_trait]
-pub trait KeyValueStoreClient {
+pub trait KeyValueStore {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 
@@ -539,33 +539,33 @@ pub trait Context {
 }
 
 /// Implementation of the [`Context`] trait on top of a DB client implementing
-/// [`KeyValueStoreClient`].
+/// [`KeyValueStore`].
 #[derive(Debug, Default, Clone)]
-pub struct ContextFromDb<E, DB> {
+pub struct ContextFromStore<E, S> {
     /// The DB client that is shared between views.
-    pub db: DB,
+    pub store: S,
     /// The base key for the current view.
     pub base_key: Vec<u8>,
     /// User-defined data attached to the view.
     pub extra: E,
 }
 
-impl<E, DB> ContextFromDb<E, DB>
+impl<E, S> ContextFromStore<E, S>
 where
     E: Clone + Send + Sync,
-    DB: KeyValueStoreClient + Clone + Send + Sync,
-    DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: From<DB::Error>,
+    S: KeyValueStore + Clone + Send + Sync,
+    S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    ViewError: From<S::Error>,
 {
-    /// Creates a context from db that also clears the journal before making it available.
+    /// Creates a context from store that also clears the journal before making it available.
     pub async fn create(
-        db: DB,
+        store: S,
         base_key: Vec<u8>,
         extra: E,
-    ) -> Result<Self, <ContextFromDb<E, DB> as Context>::Error> {
-        db.clear_journal(&base_key).await?;
-        Ok(ContextFromDb {
-            db,
+    ) -> Result<Self, <ContextFromStore<E, S> as Context>::Error> {
+        store.clear_journal(&base_key).await?;
+        Ok(ContextFromStore {
+            store,
             base_key,
             extra,
         })
@@ -587,7 +587,7 @@ where
     F: Future<Output = O>,
     D: Display,
 {
-    if cfg!(feature = "db_timings") {
+    if cfg!(feature = "store_timings") {
         let (out, duration) = time_async(f).await;
         let duration = duration.as_nanos();
         println!("|{name}|={duration:?}");
@@ -598,22 +598,22 @@ where
 }
 
 #[async_trait]
-impl<E, DB> Context for ContextFromDb<E, DB>
+impl<E, S> Context for ContextFromStore<E, S>
 where
     E: Clone + Send + Sync,
-    DB: KeyValueStoreClient + Clone + Send + Sync,
-    DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: From<DB::Error>,
+    S: KeyValueStore + Clone + Send + Sync,
+    S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    ViewError: From<S::Error>,
 {
-    const MAX_VALUE_SIZE: usize = DB::MAX_VALUE_SIZE;
-    const MAX_KEY_SIZE: usize = DB::MAX_KEY_SIZE;
+    const MAX_VALUE_SIZE: usize = S::MAX_VALUE_SIZE;
+    const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE;
     type Extra = E;
-    type Error = DB::Error;
-    type Keys = DB::Keys;
-    type KeyValues = DB::KeyValues;
+    type Error = S::Error;
+    type Keys = S::Keys;
+    type KeyValues = S::KeyValues;
 
     fn max_stream_queries(&self) -> usize {
-        self.db.max_stream_queries()
+        self.store.max_stream_queries()
     }
 
     fn extra(&self) -> &E {
@@ -625,7 +625,7 @@ where
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        log_time_async(self.db.read_value_bytes(key), "read_value_bytes").await
+        log_time_async(self.store.read_value_bytes(key), "read_value_bytes").await
     }
 
     async fn read_multi_values_bytes(
@@ -633,7 +633,7 @@ where
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         log_time_async(
-            self.db.read_multi_values_bytes(keys),
+            self.store.read_multi_values_bytes(keys),
             "read_multi_values_bytes",
         )
         .await
@@ -641,7 +641,7 @@ where
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
         log_time_async(
-            self.db.find_keys_by_prefix(key_prefix),
+            self.store.find_keys_by_prefix(key_prefix),
             "find_keys_by_prefix",
         )
         .await
@@ -652,19 +652,19 @@ where
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error> {
         log_time_async(
-            self.db.find_key_values_by_prefix(key_prefix),
+            self.store.find_key_values_by_prefix(key_prefix),
             "find_key_values_by_prefix",
         )
         .await
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
-        log_time_async(self.db.write_batch(batch, &self.base_key), "write_batch").await
+        log_time_async(self.store.write_batch(batch, &self.base_key), "write_batch").await
     }
 
     fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self {
         Self {
-            db: self.db.clone(),
+            store: self.store.clone(),
             base_key,
             extra: self.extra.clone(),
         }

@@ -14,7 +14,7 @@ use axum::{extract::Extension, routing::get, Router};
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
 use linera_chain::data_types::HashedValue;
 use linera_views::{
-    common::{Context, ContextFromDb, KeyValueStoreClient},
+    common::{Context, ContextFromStore, KeyValueStore},
     map_view::MapView,
     register_view::RegisterView,
     set_view::SetView,
@@ -36,11 +36,11 @@ pub struct StateView<C> {
 #[derive(Clone)]
 pub struct State<C>(Arc<Mutex<StateView<C>>>);
 
-type StateSchema<DB> = Schema<State<ContextFromDb<(), DB>>, EmptyMutation, EmptySubscription>;
+type StateSchema<S> = Schema<State<ContextFromStore<(), S>>, EmptyMutation, EmptySubscription>;
 
-pub struct Indexer<DB> {
-    pub state: State<ContextFromDb<(), DB>>,
-    pub plugins: BTreeMap<String, Box<dyn Plugin<DB>>>,
+pub struct Indexer<S> {
+    pub state: State<ContextFromStore<(), S>>,
+    pub plugins: BTreeMap<String, Box<dyn Plugin<S>>>,
 }
 
 pub enum IndexerCommand {
@@ -54,20 +54,20 @@ enum LatestBlock {
     StartHeight(BlockHeight),
 }
 
-impl<DB> Indexer<DB>
+impl<S> Indexer<S>
 where
-    DB: KeyValueStoreClient + Clone + Send + Sync + 'static,
-    DB::Error: From<bcs::Error>
+    S: KeyValueStore + Clone + Send + Sync + 'static,
+    S::Error: From<bcs::Error>
         + From<DatabaseConsistencyError>
         + Send
         + Sync
         + std::error::Error
         + 'static,
-    ViewError: From<DB::Error>,
+    ViewError: From<S::Error>,
 {
     /// Loads the indexer using a database backend with an `indexer` prefix.
-    pub async fn load(store: DB) -> Result<Self, IndexerError> {
-        let context = ContextFromDb::create(store.clone(), "indexer".as_bytes().to_vec(), ())
+    pub async fn load(store: S) -> Result<Self, IndexerError> {
+        let context = ContextFromStore::create(store.clone(), "indexer".as_bytes().to_vec(), ())
             .await
             .map_err(|e| IndexerError::ViewError(e.into()))?;
         let state = State(Arc::new(Mutex::new(StateView::load(context).await?)));
@@ -81,7 +81,7 @@ where
     /// the indexer.
     pub async fn process_value(
         &self,
-        state: &mut StateView<ContextFromDb<(), DB>>,
+        state: &mut StateView<ContextFromStore<(), S>>,
         value: &HashedValue,
     ) -> Result<(), IndexerError> {
         for plugin in self.plugins.values() {
@@ -176,7 +176,7 @@ where
     /// Registers a new plugin in the indexer
     pub async fn add_plugin(
         &mut self,
-        plugin: impl Plugin<DB> + 'static,
+        plugin: impl Plugin<S> + 'static,
     ) -> Result<(), IndexerError> {
         let name = plugin.name();
         self.plugins
@@ -187,7 +187,7 @@ where
     }
 
     /// Handles queries made to the root of the indexer
-    async fn handler(schema: Extension<StateSchema<DB>>, req: GraphQLRequest) -> GraphQLResponse {
+    async fn handler(schema: Extension<StateSchema<S>>, req: GraphQLRequest) -> GraphQLResponse {
         schema.execute(req.into_inner()).await.into()
     }
 

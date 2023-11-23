@@ -9,23 +9,23 @@ use async_trait::async_trait;
 use linera_base::ensure;
 use linera_views::{
     batch::{Batch, WriteOperation},
-    common::{ContextFromDb, KeyValueStoreClient},
+    common::{ContextFromStore, KeyValueStore},
     views::ViewError,
 };
 
 /// We need to have a maximum key size that handles all possible underlying
 /// sizes. The constraint so far is DynamoDb which has a key length of 1024.
 /// That key length is decreased by 4 due to the use of a value splitting.
-/// Then the KeyValueStoreClient needs to handle some base_key and so we
+/// Then the `KeyValueStore` needs to handle some base_key and so we
 /// reduce to 900. Depending on the size, the error can occur in system_api
-/// or in the KeyValueStoreView.
+/// or in the `KeyValueStoreView`.
 const MAX_KEY_SIZE: usize = 900;
 
 /// A type to interface with the key value storage provided to applications.
 #[derive(Default, Clone)]
-pub struct KeyValueStore;
+pub struct AppStateStore;
 
-impl KeyValueStore {
+impl AppStateStore {
     async fn find_keys_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
         let promise = wit::FindKeys::new(key_prefix);
         yield_once().await;
@@ -40,8 +40,8 @@ impl KeyValueStore {
 }
 
 #[async_trait]
-impl KeyValueStoreClient for KeyValueStore {
-    // The KeyValueStoreClient of the system_api does not have limits
+impl KeyValueStore for AppStateStore {
+    // The AppStateStore of the system_api does not have limits
     // on the size of its values.
     const MAX_VALUE_SIZE: usize = usize::MAX;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
@@ -126,4 +126,4 @@ impl KeyValueStoreClient for KeyValueStore {
 
 /// Implementation of [`linera_views::common::Context`] to be used for data storage
 /// by Linera applications.
-pub type ViewStorageContext = ContextFromDb<(), KeyValueStore>;
+pub type ViewStorageContext = ContextFromStore<(), AppStateStore>;
