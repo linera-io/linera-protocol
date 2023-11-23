@@ -116,29 +116,17 @@ pub struct ChainGuard {
 impl Drop for ChainGuard {
     /// Releases the lock and removes the entry from the map if possible.
     ///
-    /// Before the releasing the lock, a weak reference to the lock is obtained. After releasing
-    /// the lock, an attempt is made to upgrade the weak reference to a strong reference. If that
-    /// succeeds, it indicates that there's a [`ChainGuards`] instance waiting to obtain the lock,
-    /// so the entry in the [`ChainGuardMap`] is not removed.
-    ///
-    /// A race condition while obtaining the weak reference, releasing the lock, and attempting to
-    /// upgrade the weak reference is guaranteed to not occur, because:
-    ///
-    /// 1. The steps are performed inside [`DashMap::remove_if`], which holds write lock to the
-    ///    entry.
-    /// 2. The [`ChainGuards::get_or_create_lock`] method's body is only executed after obtaining a
-    ///    write lock to the entry.
-    /// 3. The mutex is only locked in [`ChainGuards::guard`], which does not hold any locks to the
-    ///    map.
+    /// Only removes the entry from the map if there are no active attempts to acquire the lock.
+    /// This is checked through the number of strong references to the lock, since every attempt to
+    /// lock the guard uses a strong reference to the underlying lock.
     fn drop(&mut self) {
-        self.guards.remove_if(&self.chain_id, |_, _| {
-            let mutex = Arc::downgrade(OwnedMutexGuard::mutex(
-                &self
-                    .guard
-                    .take()
-                    .expect("Guard dropped before `Drop` implementation"),
-            ));
-            mutex.upgrade().is_none()
+        self.guards.remove_if(&self.chain_id, |_, weak_reference| {
+            // The mutex is unlocked inside `remove_if` to avoid a race condition with
+            // `get_or_create_lock`. Both `remove_if` here and `entry` in `get_or_create_lock` will
+            // acquire a write lock to the map, so only one of them will fully execute at any given
+            // moment.
+            self.guard.take();
+            weak_reference.strong_count() == 0
         });
     }
 }
