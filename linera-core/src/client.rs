@@ -16,7 +16,7 @@ use futures::{
     channel::oneshot,
     future,
     lock::Mutex,
-    stream::{FuturesUnordered, StreamExt},
+    stream::{self, FuturesUnordered, StreamExt},
 };
 use linera_base::{
     abi::{Abi, ContractAbi},
@@ -591,15 +591,15 @@ where
     where
         P: Send + 'static,
     {
-        let mut streams = HashMap::new();
+        let mut senders = HashMap::new(); // Senders to cancel notification streams.
         let mut notifications = this.lock().await.subscribe().await?;
-        if let Err(err) = Self::update_streams(&this, &mut streams).await {
+        if let Err(err) = Self::update_streams(&this, &mut senders).await {
             error!("Failed to update committee: {}", err);
         }
         tokio::spawn(async move {
             while let Some(notification) = notifications.next().await {
                 if matches!(notification.reason, Reason::NewBlock { .. }) {
-                    if let Err(err) = Self::update_streams(&this, &mut streams).await {
+                    if let Err(err) = Self::update_streams(&this, &mut senders).await {
                         error!("Failed to update committee: {}", err);
                     }
                 }
@@ -610,7 +610,7 @@ where
 
     async fn update_streams(
         this: &Arc<Mutex<Self>>,
-        streams: &mut HashMap<ValidatorName, oneshot::Sender<()>>,
+        senders: &mut HashMap<ValidatorName, oneshot::Sender<()>>,
     ) -> Result<(), ChainClientError>
     where
         P: Send + 'static,
@@ -622,37 +622,38 @@ where
             (guard.chain_id, nodes, guard.node_client.clone())
         };
         // Drop removed validators.
-        streams.retain(|name, _| nodes.contains_key(name));
+        senders.retain(|name, _| nodes.contains_key(name));
         // Add tasks for new validators.
         for (name, mut node) in nodes {
-            let hash_map::Entry::Vacant(entry) = streams.entry(name) else {
+            let hash_map::Entry::Vacant(entry) = senders.entry(name) else {
                 continue;
             };
-            let mut stream = match node.subscribe(vec![chain_id]).await {
+            let stream = match node.subscribe(vec![chain_id]).await {
                 Err(e) => {
                     info!("Could not connect to validator {name}: {e:?}");
                     continue;
                 }
-                Ok(stream) => stream.fuse(),
+                Ok(stream) => stream,
             };
             let this = this.clone();
             let local_node = local_node.clone();
-            let (sender, mut receiver) = oneshot::channel();
+            let (sender, receiver) = oneshot::channel();
+            // Calling tokio_stream::StreamExt::merge explicitly because it would conflict with the
+            // the futures_util::StreamExt trait.
+            let mut cancelable_stream = tokio_stream::StreamExt::merge(
+                stream.map(Some),
+                stream::once(receiver).map(|_| None),
+            );
             tokio::spawn(async move {
-                loop {
-                    futures::select! {
-                        notification = stream.next() => {
-                            Self::process_notification(
-                                this.clone(),
-                                name,
-                                node.clone(),
-                                local_node.clone(),
-                                notification.unwrap(),
-                            )
-                            .await;
-                        },
-                        _ = receiver => break,
-                    }
+                while let Some(Some(notification)) = cancelable_stream.next().await {
+                    Self::process_notification(
+                        this.clone(),
+                        name,
+                        node.clone(),
+                        local_node.clone(),
+                        notification,
+                    )
+                    .await;
                 }
             });
             entry.insert(sender);

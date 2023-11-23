@@ -1661,7 +1661,7 @@ impl Runnable for Job {
                 ChainClient::listen(Arc::new(Mutex::new(chain_client))).await?;
                 while let Some(notification) = notification_stream.next().await {
                     if raw {
-                        println!("{:?}", notification);
+                        println!("{}", serde_json::to_string(&notification)?);
                     }
                 }
                 info!("Notification stream ended.");

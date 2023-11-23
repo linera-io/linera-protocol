@@ -123,9 +123,9 @@ where
             let mut map_guard = clients.map_lock().await;
             let context_guard = context.lock().await;
             let btree_map::Entry::Vacant(entry) = map_guard.entry(chain_id) else {
-                // We got an OpenChain notification about a chain we already have, i.e. we
-                // downloaded the child before the parent. For every entry in the client map we
-                // are already listening to notifications, so there's nothing to do.
+                // For every entry in the client map we are already listening to notifications, so
+                // there's nothing to do. This can happen if we download a child before the parent
+                // chain, and then process the OpenChain message in the parent.
                 return Ok(());
             };
             let client = context_guard.make_chain_client(storage.clone(), chain_id);
