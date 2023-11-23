@@ -538,17 +538,14 @@ where
     /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![34]).await.unwrap();
-    ///   view.remove(vec![0,1]);
+    ///   view.remove(vec![0,1]).await.unwrap();
     ///   assert_eq!(view.get(&[0,1]).await.unwrap(), None);
     /// # })
     /// ```
-    pub fn remove(&mut self, index: Vec<u8>) {
-        *self.hash.get_mut() = None;
-        if self.was_cleared {
-            self.updates.remove(&index);
-        } else {
-            self.updates.insert(index, Update::Removed);
-        }
+    pub async fn remove(&mut self, index: Vec<u8>) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        batch.delete_key(index);
+        self.write_batch(batch).await
     }
 
     /// Deletes a key_prefix.

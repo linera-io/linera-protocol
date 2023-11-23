@@ -979,7 +979,7 @@ where
             Delete { key } => {
                 let key_str = format!("{:?}", &key);
                 view.map.remove(&key_str).unwrap();
-                view.key_value_store.remove(key);
+                view.key_value_store.remove(key).await.unwrap();
             }
             DeletePrefix { key_prefix: _ } => {}
         }
