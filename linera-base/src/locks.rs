@@ -8,7 +8,7 @@ use std::{
     any::type_name,
     fmt::{self, Debug, Formatter},
     ops::{Deref, DerefMut},
-    sync::Arc,
+    sync::{Arc, Weak},
 };
 
 /// A mutex to be used in asynchronous tasks.
@@ -44,6 +44,16 @@ impl<T> AsyncMutex<T> {
         tracing::trace!(name = %self.name, "Locked");
         OwnedAsyncMutexGuard { name, guard }
     }
+
+    /// Downgrades this [`AsyncMutex`], returning a handle that can be upgraded back to the
+    /// [`AsyncMutex`] as long as there's at least one other reference to the same underlying
+    /// instance.
+    pub fn downgrade(&self) -> WeakAsyncMutex<T> {
+        WeakAsyncMutex {
+            name: Arc::downgrade(&self.name),
+            lock: Arc::downgrade(&self.lock),
+        }
+    }
 }
 
 impl<T> Clone for AsyncMutex<T> {
@@ -61,6 +71,40 @@ impl<T> Debug for AsyncMutex<T> {
             .debug_struct("AsyncMutex")
             .field("name", &self.name)
             .field("lock", &format_args!("Arc<Mutex<{}>>", type_name::<T>()))
+            .finish()
+    }
+}
+
+/// A weak handle to an [`AsyncMutex`].
+pub struct WeakAsyncMutex<T> {
+    name: Weak<str>,
+    lock: Weak<Mutex<T>>,
+}
+
+impl<T> WeakAsyncMutex<T> {
+    /// Attempts to upgrade this [`WeakAsyncMutex`] into its respective [`AsyncMutex`].
+    pub fn upgrade(&self) -> Option<AsyncMutex<T>> {
+        Some(AsyncMutex {
+            name: self.name.upgrade()?,
+            lock: self.lock.upgrade()?,
+        })
+    }
+
+    /// Returns `true` if this weak reference can no longer be upgraded.
+    pub fn no_longer_upgradable(&self) -> bool {
+        // Both `Weak` handles below may race and have different strong counts, but if any one of
+        // them reaches zero, it's impossible to upgrade because the referenced data has been
+        // dropped.
+        self.name.strong_count() == 0 || self.lock.strong_count() == 0
+    }
+}
+
+impl<T> Debug for WeakAsyncMutex<T> {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        formatter
+            .debug_struct("WeakAsyncMutex")
+            .field("name", &format_args!("Weak<str>"))
+            .field("lock", &format_args!("Weak<Mutex<{}>>", type_name::<T>()))
             .finish()
     }
 }
