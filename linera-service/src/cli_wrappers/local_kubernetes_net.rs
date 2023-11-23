@@ -21,6 +21,7 @@ use kube::{
     api::{Api, ListParams},
     Client,
 };
+use portpicker::pick_unused_port;
 use std::{fs, path::PathBuf, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use tokio::{process::Command, sync::Semaphore};
@@ -31,6 +32,13 @@ pub struct LocalKubernetesNetConfig {
     pub testing_prng_seed: Option<u64>,
     pub num_initial_validators: usize,
     pub num_shards: usize,
+    pub binaries_dir: Option<PathBuf>,
+}
+
+/// A simplified version of [`LocalKubernetesNetConfig`]
+#[cfg(any(test, feature = "test"))]
+pub struct LocalKubernetesNetTestingConfig {
+    pub network: Network,
     pub binaries_dir: Option<PathBuf>,
 }
 
@@ -45,6 +53,16 @@ pub struct LocalKubernetesNet {
     kind_clusters: Vec<KindCluster>,
     num_initial_validators: usize,
     num_shards: usize,
+}
+
+#[cfg(any(test, feature = "test"))]
+impl LocalKubernetesNetTestingConfig {
+    pub fn new(network: Network, binaries_dir: Option<PathBuf>) -> Self {
+        Self {
+            network,
+            binaries_dir,
+        }
+    }
 }
 
 #[async_trait]
@@ -93,6 +111,47 @@ impl Drop for LocalKubernetesNet {
         futures::executor::block_on(async move {
             self.terminate().await.unwrap();
         });
+    }
+}
+
+#[cfg(any(test, feature = "test"))]
+#[async_trait]
+impl LineraNetConfig for LocalKubernetesNetTestingConfig {
+    type Net = LocalKubernetesNet;
+
+    async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
+        let seed = 37;
+        let num_validators = 4;
+        let num_shards = 4;
+
+        let mut net = LocalKubernetesNet::new(
+            self.network,
+            Some(seed),
+            self.binaries_dir,
+            KubectlInstance::new(Vec::new()),
+            future::ready(
+                (0..num_validators)
+                    .map(|_| async {
+                        KindCluster::create()
+                            .await
+                            .expect("Creating kind cluster should not fail")
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .then(join_all)
+            .await
+            .into_iter()
+            .collect::<Vec<_>>(),
+            num_validators,
+            num_shards,
+        )?;
+        let client = net.make_client();
+        if num_validators > 0 {
+            net.generate_initial_validator_config().await.unwrap();
+            client.create_genesis_config().await.unwrap();
+            net.run().await.unwrap();
+        }
+        Ok((net, client))
     }
 }
 
@@ -352,11 +411,12 @@ impl LocalKubernetesNet {
                     .find(|&t| t.contains("proxy"))
                     .expect("Getting validator pod name should not fail");
 
-                let local_port = 19100 + i;
+                let local_port = pick_unused_port().expect("Finding unused port should not fail!");
+                let cluster_port = 19100 + i;
                 kubectl_instance
                     .port_forward(
                         validator_pod_name,
-                        &format!("{local_port}:{local_port}"),
+                        &format!("{local_port}:{cluster_port}"),
                         cluster_id,
                     )
                     .await?;
