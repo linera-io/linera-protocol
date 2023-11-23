@@ -10,8 +10,8 @@ type MemoryStorageInner = DbStorageInner<MemoryStore>;
 
 impl MemoryStorageInner {
     pub fn make(wasm_runtime: Option<WasmRuntime>, max_stream_queries: usize) -> Self {
-        let client = create_memory_store_stream_queries(max_stream_queries);
-        Self::new(client, wasm_runtime)
+        let store = create_memory_store_stream_queries(max_stream_queries);
+        Self::new(store, wasm_runtime)
     }
 }
 

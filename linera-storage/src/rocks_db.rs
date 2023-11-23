@@ -36,8 +36,8 @@ impl RocksDbStorageInner {
         store_config: RocksDbStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, RocksDbContextError> {
-        let client = RocksDbStore::initialize(store_config).await?;
-        let storage = Self::new(client, wasm_runtime);
+        let store = RocksDbStore::initialize(store_config).await?;
+        let storage = Self::new(store, wasm_runtime);
         Ok(storage)
     }
 
