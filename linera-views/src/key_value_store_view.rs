@@ -424,6 +424,54 @@ where
         Ok(indices)
     }
 
+    /// Returns the list of indices and values in lexicographic order.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
+    ///   view.insert(vec![0,1], vec![0]).await.unwrap();
+    ///   view.insert(vec![0,2], vec![0]).await.unwrap();
+    ///   let key_values = view.indices().await.unwrap();
+    ///   assert_eq!(key_values, vec![vec![0,1],vec![0,2]]);
+    /// # })
+    /// ```
+    pub async fn index_values(&self) -> Result<Vec<(Vec<u8>,Vec<u8>)>, ViewError> {
+        let mut index_values = Vec::new();
+        self.for_each_index_value(|index, value| {
+            index_values.push((index.to_vec(), value.to_vec()));
+            Ok(())
+        })
+        .await?;
+        Ok(index_values)
+    }
+
+    /// Returns the list of indices and values in lexicographic order.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
+    ///   view.insert(vec![0,1], vec![0]).await.unwrap();
+    ///   view.insert(vec![0,2], vec![0]).await.unwrap();
+    ///   let count = view.count().await.unwrap();
+    ///   assert_eq!(count, 2);
+    /// # })
+    /// ```
+    pub async fn count(&self) -> Result<usize, ViewError> {
+        let mut count = 0;
+        self.for_each_index(|_index| {
+            count += 1;
+            Ok(())
+        })
+        .await?;
+        Ok(count)
+    }
+
     /// Obtains the value at the given index, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -632,11 +680,11 @@ where
     /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![34]).await.unwrap();
-    ///   view.delete_prefix(vec![0]).await.unwrap();
+    ///   view.remove_by_prefix(vec![0]).await.unwrap();
     ///   assert_eq!(view.get(&[0,1]).await.unwrap(), None);
     /// # })
     /// ```
-    pub async fn delete_prefix(&mut self, key_prefix: Vec<u8>) -> Result<(), ViewError> {
+    pub async fn remove_by_prefix(&mut self, key_prefix: Vec<u8>) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         batch.delete_key_prefix(key_prefix);
         self.write_batch(batch).await
