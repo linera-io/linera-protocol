@@ -144,6 +144,7 @@ where
                 }
             }
         }
+        self.sizes.flush(batch)?;
         let hash = *self.hash.get_mut();
         if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
@@ -152,6 +153,11 @@ where
                 Some(hash) => batch.put_key_value(key, &hash)?,
             }
             self.stored_hash = hash;
+        }
+        if self.stored_total_size != self.total_size {
+            let key = self.context.base_tag(KeyTag::TotalSize as u8);
+            batch.put_key_value(key, &self.total_size)?;
+            self.stored_total_size = self.total_size;
         }
         Ok(())
     }
