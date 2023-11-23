@@ -7,6 +7,7 @@ use crate::{
         get_interval, get_upper_bound, Context, GreatestLowerBoundIterator, HasherOutput,
         KeyIterable, KeyValueIterable, Update, MIN_VIEW_TAG,
     },
+    map_view::MapView,
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
@@ -44,6 +45,8 @@ enum KeyTag {
     Index = MIN_VIEW_TAG,
     /// The total stored size
     TotalSize,
+    /// The prefix where the sizes are being stored
+    Sizes,
     /// Prefix for the hash.
     Hash,
 }
@@ -71,6 +74,7 @@ pub struct KeyValueStoreView<C> {
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
     total_size: u64,
+    sizes: MapView<C, Vec<u8>, u64>,
     deleted_prefixes: BTreeSet<Vec<u8>>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
@@ -91,11 +95,15 @@ where
         let hash = context.read_value(&key).await?;
         let key = context.base_tag(KeyTag::TotalSize as u8);
         let total_size = context.read_value(&key).await?.unwrap_or_default();
+        let base_key = context.base_tag(KeyTag::Sizes as u8);
+        let context_sizes = context.clone_with_base_key(base_key);
+        let sizes = MapView::load(context_sizes).await?;
         Ok(Self {
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
             total_size,
+            sizes,
             deleted_prefixes: BTreeSet::new(),
             stored_hash: hash,
             hash: Mutex::new(hash),
