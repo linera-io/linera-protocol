@@ -45,6 +45,7 @@ impl HelmRelease {
             ])
             .args(["--set", &format!("numShards={num_shards}")])
             .args(["--kube-context", &format!("kind-{}", cluster_id)])
+            .args(["--timeout", "10m"])
             .spawn_and_wait_for_stdout()
             .await?;
         Ok(())
