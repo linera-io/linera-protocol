@@ -29,16 +29,21 @@ spec:
       labels:
         app: scylladb
     spec:
-      # In local runs we noticed that subsequent validators don't reset this value
-      # so we need to set it to a large enough value before initializing ScyllaDB,
-      # or the initialization will fail. 1048576 seems to be a commonly used constant
-      # for this for ScyllaDB
+      # If you're not on Linux, Docker will spin up a Linux VM to run Linux containers
+      # All containers (regardless of what clusters they're in) will share the same Linux VM kernel
+      # Because of that, when we're running with kind clusters, we'll need to alter
+      # aio-max-nr to make sure it can handle multiple scyllaDB instances (for multiple Validators
+      # running locally in parallel)
+      # Each ScyllaDB instance seems to request 510260 of AIO, so setting this to 8 * 510260
+      # so we have some buffer
       initContainers:
+      {{- if eq .Values.environment "kind" }}
       - name: increase-aio-max-nr
         image: busybox
-        command: ['sh', '-c', 'echo 1048576 > /proc/sys/fs/aio-max-nr']
+        command: ['sh', '-c', 'echo 4082080 > /proc/sys/fs/aio-max-nr']
         securityContext:
           privileged: true
+      {{- end }}
       containers:
         - name: scylladb
           image: scylladb/scylla:5.2
