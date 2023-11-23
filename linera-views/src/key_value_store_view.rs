@@ -169,9 +169,9 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![0]);
-    ///   view.insert(vec![0,2], vec![0]);
-    ///   view.insert(vec![0,3], vec![0]);
+    ///   view.insert(vec![0,1], vec![0]).await.unwrap();
+    ///   view.insert(vec![0,2], vec![0]).await.unwrap();
+    ///   view.insert(vec![0,3], vec![0]).await.unwrap();
     ///   let mut count = 0;
     ///   view.for_each_index_while(|_key| {
     ///     count += 1;
@@ -238,9 +238,9 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![0]);
-    ///   view.insert(vec![0,2], vec![0]);
-    ///   view.insert(vec![0,3], vec![0]);
+    ///   view.insert(vec![0,1], vec![0]).await.unwrap();
+    ///   view.insert(vec![0,2], vec![0]).await.unwrap();
+    ///   view.insert(vec![0,3], vec![0]).await.unwrap();
     ///   let mut count = 0;
     ///   view.for_each_index(|_key| {
     ///     count += 1;
@@ -269,8 +269,8 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![0]);
-    ///   view.insert(vec![0,2], vec![0]);
+    ///   view.insert(vec![0,1], vec![0]).await.unwrap();
+    ///   view.insert(vec![0,2], vec![0]).await.unwrap();
     ///   let mut values = Vec::new();
     ///   view.for_each_index_value_while(|_key, value| {
     ///     values.push(value.to_vec());
@@ -337,8 +337,8 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![0]);
-    ///   view.insert(vec![0,2], vec![0]);
+    ///   view.insert(vec![0,1], vec![0]).await.unwrap();
+    ///   view.insert(vec![0,2], vec![0]).await.unwrap();
     ///   let mut part_keys = Vec::new();
     ///   view.for_each_index_while(|key| {
     ///     part_keys.push(key.to_vec());
@@ -366,8 +366,8 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![0]);
-    ///   view.insert(vec![0,2], vec![0]);
+    ///   view.insert(vec![0,1], vec![0]).await.unwrap();
+    ///   view.insert(vec![0,2], vec![0]).await.unwrap();
     ///   let indices = view.indices().await.unwrap();
     ///   assert_eq!(indices, vec![vec![0,1],vec![0,2]]);
     /// # })
@@ -390,7 +390,7 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![42]);
+    ///   view.insert(vec![0,1], vec![42]).await.unwrap();
     ///   assert_eq!(view.get(&[0,1]).await.unwrap(), Some(vec![42]));
     ///   assert_eq!(view.get(&[0,2]).await.unwrap(), None);
     /// # })
@@ -426,7 +426,7 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![42]);
+    ///   view.insert(vec![0,1], vec![42]).await.unwrap();
     ///   assert_eq!(view.multi_get(vec![vec![0,1], vec![0,2]]).await.unwrap(), vec![Some(vec![42]), None]);
     /// # })
     /// ```
@@ -467,6 +467,50 @@ where
         Ok(result)
     }
 
+    /// Applies the given batch of `crate::common::WriteOperation`.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::batch::Batch;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
+    ///   view.insert(vec![0,1], vec![34]).await.unwrap();
+    ///   view.insert(vec![3,4], vec![42]).await.unwrap();
+    ///   let mut batch = Batch::new();
+    ///   batch.delete_key_prefix(vec![0]);
+    ///   view.write_batch(batch).await.unwrap();
+    ///   let key_values = view.find_key_values_by_prefix(&[0]).await.unwrap();
+    ///   assert_eq!(key_values, vec![]);
+    /// # })
+    /// ```
+    pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
+        *self.hash.get_mut() = None;
+        let max_key_size = self.max_key_size();
+        for op in batch.operations {
+            match op {
+                WriteOperation::Delete { key } => {
+                    ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
+                    if self.was_cleared {
+                        self.updates.remove(&key);
+                    } else {
+                        self.updates.insert(key, Update::Removed);
+                    }
+                }
+                WriteOperation::Put { key, value } => {
+                    ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
+                    self.updates.insert(key, Update::Set(value));
+                }
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    ensure!(key_prefix.len() <= max_key_size, ViewError::KeyTooLong);
+                    self.delete_prefix(key_prefix);
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Sets or inserts a value.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -475,13 +519,14 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![34]);
+    ///   view.insert(vec![0,1], vec![34]).await.unwrap();
     ///   assert_eq!(view.get(&[0,1]).await.unwrap(), Some(vec![34]));
     /// # })
     /// ```
-    pub fn insert(&mut self, index: Vec<u8>, value: Vec<u8>) {
-        self.updates.insert(index, Update::Set(value));
-        *self.hash.get_mut() = None;
+    pub async fn insert(&mut self, index: Vec<u8>, value: Vec<u8>) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(index, value);
+        self.write_batch(batch).await
     }
 
     /// Removes a value. If absent then the action has no effect.
@@ -492,7 +537,7 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![34]);
+    ///   view.insert(vec![0,1], vec![34]).await.unwrap();
     ///   view.remove(vec![0,1]);
     ///   assert_eq!(view.get(&[0,1]).await.unwrap(), None);
     /// # })
@@ -538,8 +583,8 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![34]);
-    ///   view.insert(vec![3,4], vec![42]);
+    ///   view.insert(vec![0,1], vec![34]).await.unwrap();
+    ///   view.insert(vec![3,4], vec![42]).await.unwrap();
     ///   let keys = view.find_keys_by_prefix(&[0]).await.unwrap();
     ///   assert_eq!(keys, vec![vec![1]]);
     /// # })
@@ -608,8 +653,8 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![34]);
-    ///   view.insert(vec![3,4], vec![42]);
+    ///   view.insert(vec![0,1], vec![34]).await.unwrap();
+    ///   view.insert(vec![3,4], vec![42]).await.unwrap();
     ///   let key_values = view.find_key_values_by_prefix(&[0]).await.unwrap();
     ///   assert_eq!(key_values, vec![(vec![1],vec![34])]);
     /// # })
@@ -671,50 +716,6 @@ where
             update = updates.next();
         }
         Ok(key_values)
-    }
-
-    /// Applies the given batch of `crate::common::WriteOperation`.
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
-    /// # use linera_views::batch::Batch;
-    /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
-    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
-    ///   view.insert(vec![0,1], vec![34]);
-    ///   view.insert(vec![3,4], vec![42]);
-    ///   let mut batch = Batch::new();
-    ///   batch.delete_key_prefix(vec![0]);
-    ///   view.write_batch(batch).await.unwrap();
-    ///   let key_values = view.find_key_values_by_prefix(&[0]).await.unwrap();
-    ///   assert_eq!(key_values, vec![]);
-    /// # })
-    /// ```
-    pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
-        *self.hash.get_mut() = None;
-        let max_key_size = self.max_key_size();
-        for op in batch.operations {
-            match op {
-                WriteOperation::Delete { key } => {
-                    ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
-                    if self.was_cleared {
-                        self.updates.remove(&key);
-                    } else {
-                        self.updates.insert(key, Update::Removed);
-                    }
-                }
-                WriteOperation::Put { key, value } => {
-                    ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
-                    self.updates.insert(key, Update::Set(value));
-                }
-                WriteOperation::DeletePrefix { key_prefix } => {
-                    ensure!(key_prefix.len() <= max_key_size, ViewError::KeyTooLong);
-                    self.delete_prefix(key_prefix);
-                }
-            }
-        }
-        Ok(())
     }
 
     async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
