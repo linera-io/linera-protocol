@@ -15,11 +15,12 @@ use crate::{
     updater::CommunicationError,
     worker::{Notification, Reason, WorkerError},
 };
-use futures::{lock::Mutex, StreamExt};
+use futures::StreamExt;
 use linera_base::{
     crypto::*,
     data_types::*,
     identifiers::{ChainDescription, ChainId, MessageId, Owner},
+    locks::AsyncMutex,
 };
 use linera_chain::{
     data_types::{CertificateValue, Event, ExecutedBlock},
@@ -34,7 +35,6 @@ use linera_execution::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use std::sync::Arc;
 use test_log::test;
 
 #[cfg(feature = "rocksdb")]
@@ -86,7 +86,7 @@ where
     let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
-    let sender = Arc::new(Mutex::new(sender));
+    let sender = AsyncMutex::new("sender", sender);
     // Listen to the notifications on the sender chain.
     let mut notifications = sender.lock().await.subscribe().await?;
     ChainClient::listen(sender.clone()).await?;
