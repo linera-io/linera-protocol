@@ -20,6 +20,7 @@ use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
     data_types::Amount,
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner},
+    locks::AsyncMutex,
     BcsHexParseError,
 };
 use linera_chain::{data_types::HashedValue, ChainStateView};
@@ -105,7 +106,7 @@ pub struct SubscriptionRoot<P, S> {
 /// Our root GraphQL mutation type.
 pub struct MutationRoot<P, S, C> {
     clients: ChainClients<P, S>,
-    context: Arc<Mutex<C>>,
+    context: AsyncMutex<C>,
 }
 
 #[derive(Debug, ThisError)]
@@ -684,7 +685,7 @@ pub struct NodeService<P, S, C> {
     port: NonZeroU16,
     default_chain: Option<ChainId>,
     storage: S,
-    context: Arc<Mutex<C>>,
+    context: AsyncMutex<C>,
 }
 
 impl<P, S: Clone, C> Clone for NodeService<P, S, C> {
@@ -721,7 +722,7 @@ where
             port,
             default_chain,
             storage,
-            context: Arc::new(Mutex::new(context)),
+            context: AsyncMutex::new("NodeService's ClientContext", context),
         }
     }
 

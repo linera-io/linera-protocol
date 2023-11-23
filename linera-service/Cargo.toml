@@ -40,7 +40,7 @@ hex = { workspace = true }
 http = { workspace = true }
 k8s-openapi = { workspace = true, optional = true }
 kube = { workspace = true, optional = true }
-linera-base = { workspace = true }
+linera-base = { workspace = true, features = ["locks"] }
 linera-chain = { workspace = true }
 linera-core = { workspace = true }
 linera-execution = { workspace = true }
