@@ -42,6 +42,8 @@ use {
 enum KeyTag {
     /// Prefix for the indices of the view.
     Index = MIN_VIEW_TAG,
+    /// The total stored size
+    TotalSize,
     /// Prefix for the hash.
     Hash,
 }
@@ -68,6 +70,7 @@ pub struct KeyValueStoreView<C> {
     context: C,
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
+    total_size: u64,
     deleted_prefixes: BTreeSet<Vec<u8>>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
@@ -86,10 +89,13 @@ where
     async fn load(context: C) -> Result<Self, ViewError> {
         let key = context.base_tag(KeyTag::Hash as u8);
         let hash = context.read_value(&key).await?;
+        let key = context.base_tag(KeyTag::TotalSize as u8);
+        let total_size = context.read_value(&key).await?.unwrap_or_default();
         Ok(Self {
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
+            total_size,
             deleted_prefixes: BTreeSet::new(),
             stored_hash: hash,
             hash: Mutex::new(hash),
@@ -158,6 +164,22 @@ where
     fn max_key_size(&self) -> usize {
         let prefix_len = self.context.base_key().len();
         C::MAX_KEY_SIZE - 1 - prefix_len
+    }
+
+    /// Getting the total size that will be used when stored
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
+    ///   let total_size = view.total_size();
+    ///   assert_eq!(total_size, 0);
+    /// # })
+    /// ```
+    pub fn total_size(&self) -> u64 {
+        self.total_size
     }
 
     /// Applies the function f over all indices. If the function f returns
