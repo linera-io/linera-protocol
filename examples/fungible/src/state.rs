@@ -4,12 +4,12 @@
 use fungible::{AccountOwner, InitialState};
 use linera_sdk::{
     base::Amount,
-    views::{linera_views, GraphQLView, MapView, RootView, ViewStorageContext},
+    views::{linera_views, MapView, RootView, ViewStorageContext},
 };
 use thiserror::Error;
 
 /// The application state.
-#[derive(RootView, GraphQLView)]
+#[derive(RootView, async_graphql::SimpleObject)]
 #[view(context = "ViewStorageContext")]
 pub struct FungibleToken {
     accounts: MapView<AccountOwner, Amount>,

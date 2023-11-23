@@ -1790,6 +1790,7 @@ name = "linera-views"
 version = "0.6.0"
 dependencies = [
  "anyhow",
+ "async-graphql",
  "async-lock",
  "async-trait",
  "bcs",
@@ -1804,6 +1805,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde",
+ "serde_json",
  "sha3",
  "static_assertions",
  "tempfile",

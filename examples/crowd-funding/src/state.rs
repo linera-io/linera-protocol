@@ -6,7 +6,7 @@ use crowd_funding::InitializationArgument;
 use fungible::AccountOwner;
 use linera_sdk::{
     base::Amount,
-    views::{linera_views, GraphQLView, MapView, RegisterView, RootView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 use serde::{Deserialize, Serialize};
 
@@ -25,7 +25,7 @@ pub enum Status {
 scalar!(Status);
 
 /// The crowd-funding campaign's state.
-#[derive(RootView, GraphQLView)]
+#[derive(RootView, async_graphql::SimpleObject)]
 #[view(context = "ViewStorageContext")]
 pub struct CrowdFunding {
     /// The status of the campaign.
