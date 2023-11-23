@@ -76,7 +76,9 @@ pub trait Storage: Sized {
     fn current_time(&self) -> Timestamp;
 
     /// Loads the view of a chain state.
-    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>;
+    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>
+    where
+        ViewError: From<Self::ContextError>;
 
     /// Reads the value with the given hash.
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError>;
