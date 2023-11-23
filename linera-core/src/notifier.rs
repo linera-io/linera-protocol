@@ -9,7 +9,6 @@ use tracing::trace;
 /// A `Notifier` holds references to clients waiting to receive notifications
 /// from the validator.
 /// Clients will be evicted if their connections are terminated.
-#[derive(Clone)]
 pub struct Notifier<N> {
     inner: DashMap<ChainId, Vec<UnboundedSender<N>>>,
 }

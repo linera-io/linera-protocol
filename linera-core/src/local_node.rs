@@ -30,7 +30,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 /// A local node with a single worker, typically used by clients.
 pub struct LocalNode<S> {
     state: WorkerState<S>,
-    notifier: Notifier<Notification>,
+    notifier: Arc<Notifier<Notification>>,
 }
 
 /// A client to a local node.
@@ -141,7 +141,7 @@ where
 }
 
 impl<S> LocalNodeClient<S> {
-    pub fn new(state: WorkerState<S>, notifier: Notifier<Notification>) -> Self {
+    pub fn new(state: WorkerState<S>, notifier: Arc<Notifier<Notification>>) -> Self {
         let node = LocalNode { state, notifier };
         Self {
             node: Arc::new(Mutex::new(node)),

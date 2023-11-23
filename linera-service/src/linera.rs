@@ -19,7 +19,6 @@ use linera_core::{
     local_node::LocalNodeClient,
     node::ValidatorNodeProvider,
     notifier::Notifier,
-    tracker::NotificationTracker,
     worker::WorkerState,
 };
 use linera_execution::{
@@ -487,7 +486,7 @@ impl ClientContext {
         let worker = WorkerState::new("Temporary client node".to_string(), None, storage)
             .with_allow_inactive_chains(true)
             .with_allow_messages_from_deprecated_epochs(true);
-        let mut node = LocalNodeClient::new(worker, Notifier::default());
+        let mut node = LocalNodeClient::new(worker, Arc::new(Notifier::default()));
         // Second replay the certificates locally.
         for certificate in certificates {
             // No required certificates from other chains: This is only used with benchmark.
@@ -1655,15 +1654,14 @@ impl Runnable for Job {
             }
 
             Watch { chain_id, raw } => {
-                let chain_client = context.make_chain_client(storage, chain_id);
+                let mut chain_client = context.make_chain_client(storage, chain_id);
                 let chain_id = chain_client.chain_id();
                 info!("Watching for notifications for chain {:?}", chain_id);
-                let mut tracker = NotificationTracker::default();
-                let mut notification_stream =
-                    ChainClient::listen(Arc::new(Mutex::new(chain_client))).await?;
+                let mut notification_stream = chain_client.subscribe().await?;
+                ChainClient::listen(Arc::new(Mutex::new(chain_client))).await?;
                 while let Some(notification) = notification_stream.next().await {
-                    if raw || tracker.insert(notification.clone()) {
-                        println!("{:?}", notification);
+                    if raw {
+                        println!("{}", serde_json::to_string(&notification)?);
                     }
                 }
                 info!("Notification stream ended.");
@@ -1921,7 +1919,7 @@ impl Job {
         let state = WorkerState::new("Local node".to_string(), None, storage)
             .with_allow_inactive_chains(true)
             .with_allow_messages_from_deprecated_epochs(true);
-        let mut node_client = LocalNodeClient::new(state, Notifier::default());
+        let mut node_client = LocalNodeClient::new(state, Arc::new(Notifier::default()));
 
         // Take the latest committee we know of.
         let admin_chain_id = context.wallet_state.genesis_admin_chain();

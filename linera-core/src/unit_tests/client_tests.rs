@@ -88,7 +88,8 @@ where
         .await?;
     let sender = Arc::new(Mutex::new(sender));
     // Listen to the notifications on the sender chain.
-    let mut notifications = ChainClient::listen(sender.clone()).await.unwrap();
+    let mut notifications = sender.lock().await.subscribe().await?;
+    ChainClient::listen(sender.clone()).await?;
     {
         let mut sender = sender.lock().await;
         let certificate = sender

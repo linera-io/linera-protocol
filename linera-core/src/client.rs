@@ -13,7 +13,7 @@ use crate::{
     },
 };
 use futures::{
-    channel::mpsc,
+    channel::oneshot,
     future,
     lock::Mutex,
     stream::{self, FuturesUnordered, StreamExt},
@@ -46,6 +46,7 @@ use linera_views::views::ViewError;
 use lru::LruCache;
 use std::{
     collections::{hash_map, BTreeMap, HashMap},
+    convert::Infallible,
     iter,
     num::NonZeroUsize,
     sync::Arc,
@@ -78,7 +79,7 @@ pub struct ChainClientBuilder<ValidatorNodeProvider> {
     /// delivered.
     delivery_notifiers: Arc<tokio::sync::Mutex<DeliveryNotifiers>>,
     /// References to clients waiting for chain notifications.
-    notifier: Notifier<Notification>,
+    notifier: Arc<Notifier<Notification>>,
 }
 
 impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
@@ -99,7 +100,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
             cross_chain_retries,
             recent_values,
             delivery_notifiers: Arc::new(tokio::sync::Mutex::new(DeliveryNotifiers::default())),
-            notifier: Notifier::default(),
+            notifier: Arc::new(Notifier::default()),
         }
     }
 
@@ -237,6 +238,12 @@ pub enum ChainClientError {
 
     #[error("Leader timeout certificate does not match the expected one.")]
     UnexpectedLeaderTimeout,
+}
+
+impl From<Infallible> for ChainClientError {
+    fn from(infallible: Infallible) -> Self {
+        infallible.into()
+    }
 }
 
 impl<P, S> ChainClient<P, S> {
@@ -506,8 +513,7 @@ where
         node: A,
         mut local_node: LocalNodeClient<S>,
         notification: Notification,
-    ) -> bool
-    where
+    ) where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
         match notification.reason {
@@ -516,28 +522,24 @@ where
                     > Some(height)
                 {
                     debug!("Accepting redundant notification for new message");
-                    return true;
                 }
                 if let Err(e) =
                     Self::find_received_certificates_from_validator(this.clone(), name, node).await
                 {
                     error!("Fail to process notification: {e}");
-                    return false;
                 }
                 if Self::local_next_block_height(this, origin.sender, &mut local_node).await
                     <= Some(height)
                 {
                     error!("Fail to synchronize new message after notification");
-                    return false;
                 }
             }
-            Reason::NewBlock { height, hash } => {
+            Reason::NewBlock { height, .. } => {
                 let chain_id = notification.chain_id;
                 if Self::local_next_block_height(this.clone(), chain_id, &mut local_node).await
                     > Some(height)
                 {
                     debug!("Accepting redundant notification for new block");
-                    return true;
                 }
                 match local_node
                     .try_synchronize_chain_state_from(name, node, chain_id)
@@ -548,31 +550,10 @@ where
                             <= Some(height)
                         {
                             error!("Fail to synchronize new block after notification");
-                            return false;
-                        }
-                        // TODO(#940): Avoid reading the block we just stored.
-                        match local_node
-                            .storage_client()
-                            .await
-                            .read_certificate(hash)
-                            .await
-                        {
-                            Ok(certificate)
-                                if certificate.value().chain_id() == chain_id
-                                    && certificate.value().height() == height => {}
-                            Ok(_) => {
-                                error!("Certificate hash in notification doesn't match");
-                                return false;
-                            }
-                            Err(error) => {
-                                error!(%error, "Could not download certificate with hash {hash}.");
-                                return false;
-                            }
                         }
                     }
                     Err(e) => {
                         error!("Fail to process notification: {e}");
-                        return false;
                     }
                 }
             }
@@ -583,7 +564,6 @@ where
                 {
                     if (info.next_block_height, info.manager.current_round) >= (height, round) {
                         debug!("Accepting redundant notification for new round");
-                        return true;
                     }
                 }
                 if let Err(error) = local_node
@@ -591,52 +571,46 @@ where
                     .await
                 {
                     error!("Fail to process notification: {error}");
-                    return false;
                 }
                 let Some(info) =
                     Self::local_chain_info(this.clone(), chain_id, &mut local_node).await
                 else {
                     error!("Fail to read local chain info for {chain_id}");
-                    return false;
+                    return;
                 };
                 if (info.next_block_height, info.manager.current_round) < (height, round) {
                     error!("Fail to synchronize new block after notification");
-                    return false;
                 }
             }
         }
-        // Accept the notification.
-        true
     }
 
-    /// Listens to notifications about the current chain from all validators.
-    pub async fn listen(this: Arc<Mutex<Self>>) -> Result<NotificationStream, ChainClientError>
+    /// Spawns a thread that listens to notifications about the current chain from all validators,
+    /// and synchronizes the local state accordingly.
+    pub async fn listen(this: Arc<Mutex<Self>>) -> Result<(), ChainClientError>
     where
         P: Send + 'static,
     {
-        let mut streams = HashMap::new();
-        if let Err(err) = Self::update_streams(&this, &mut streams).await {
+        let mut senders = HashMap::new(); // Senders to cancel notification streams.
+        let mut notifications = this.lock().await.subscribe().await?;
+        if let Err(err) = Self::update_streams(&this, &mut senders).await {
             error!("Failed to update committee: {}", err);
         }
-        let stream = stream::unfold(streams, move |mut streams| {
-            let this = this.clone();
-            async move {
-                let nexts = streams.values_mut().map(StreamExt::next);
-                let notification = future::select_all(nexts).await.0?;
+        tokio::spawn(async move {
+            while let Some(notification) = notifications.next().await {
                 if matches!(notification.reason, Reason::NewBlock { .. }) {
-                    if let Err(err) = Self::update_streams(&this, &mut streams).await {
+                    if let Err(err) = Self::update_streams(&this, &mut senders).await {
                         error!("Failed to update committee: {}", err);
                     }
                 }
-                Some((notification, streams))
             }
         });
-        Ok(Box::pin(stream))
+        Ok(())
     }
 
     async fn update_streams(
         this: &Arc<Mutex<Self>>,
-        streams: &mut HashMap<ValidatorName, mpsc::UnboundedReceiver<Notification>>,
+        senders: &mut HashMap<ValidatorName, oneshot::Sender<()>>,
     ) -> Result<(), ChainClientError>
     where
         P: Send + 'static,
@@ -647,11 +621,11 @@ where
             let nodes: HashMap<_, _> = guard.validator_node_provider.make_nodes(&committee)?;
             (guard.chain_id, nodes, guard.node_client.clone())
         };
-        // Drop notification streams from removed validators.
-        streams.retain(|name, _| nodes.contains_key(name));
-        // Add notification streams from added validators.
+        // Drop removed validators.
+        senders.retain(|name, _| nodes.contains_key(name));
+        // Add tasks for new validators.
         for (name, mut node) in nodes {
-            let hash_map::Entry::Vacant(entry) = streams.entry(name) else {
+            let hash_map::Entry::Vacant(entry) = senders.entry(name) else {
                 continue;
             };
             let stream = match node.subscribe(vec![chain_id]).await {
@@ -663,22 +637,26 @@ where
             };
             let this = this.clone();
             let local_node = local_node.clone();
-            let (sender, receiver) = mpsc::unbounded();
-            tokio::spawn(
-                stream
-                    .filter(move |notification| {
-                        Self::process_notification(
-                            this.clone(),
-                            name,
-                            node.clone(),
-                            local_node.clone(),
-                            notification.clone(),
-                        )
-                    })
-                    .map(Ok)
-                    .forward(sender),
+            let (sender, receiver) = oneshot::channel();
+            // Calling tokio_stream::StreamExt::merge explicitly because it would conflict with the
+            // the futures_util::StreamExt trait.
+            let mut cancelable_stream = tokio_stream::StreamExt::merge(
+                stream.map(Some),
+                stream::once(receiver).map(|_| None),
             );
-            entry.insert(receiver);
+            tokio::spawn(async move {
+                while let Some(Some(notification)) = cancelable_stream.next().await {
+                    Self::process_notification(
+                        this.clone(),
+                        name,
+                        node.clone(),
+                        local_node.clone(),
+                        notification,
+                    )
+                    .await;
+                }
+            });
+            entry.insert(sender);
         }
         Ok(())
     }
@@ -1712,6 +1690,16 @@ where
             certificates.push(certificate);
         }
         Ok(certificates)
+    }
+
+    /// Creates an empty block to process all incoming messages. This may require several blocks.
+    /// If we are not a chain owner, this doesn't fail, and just returns an empty list.
+    pub async fn process_inbox_if_owned(&mut self) -> Result<Vec<Certificate>, ChainClientError> {
+        match self.process_inbox().await {
+            Ok(certificates) => Ok(certificates),
+            Err(ChainClientError::CannotFindKeyForChain(_)) => Ok(Vec::new()),
+            Err(error) => Err(error),
+        }
     }
 
     /// Starts listening to the admin chain for new committees. (This is only useful for

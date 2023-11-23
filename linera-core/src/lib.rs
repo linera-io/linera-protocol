@@ -9,7 +9,6 @@ pub mod data_types;
 pub mod local_node;
 pub mod node;
 pub mod notifier;
-pub mod tracker;
 pub mod worker;
 
 pub(crate) mod updater;
