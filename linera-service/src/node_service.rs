@@ -15,12 +15,11 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{
     extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router, Server,
 };
-use futures::lock::{Mutex, MutexGuard};
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
     data_types::Amount,
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner},
-    locks::{AsyncMutex, OwnedAsyncMutexGuard},
+    locks::{AsyncMutex, AsyncMutexGuard, OwnedAsyncMutexGuard},
     BcsHexParseError,
 };
 use linera_chain::{data_types::HashedValue, ChainStateView};
@@ -51,7 +50,7 @@ pub struct Chains {
 }
 
 pub type ClientMapInner<P, S> = BTreeMap<ChainId, AsyncMutex<ChainClient<P, S>>>;
-pub(crate) struct ChainClients<P, S>(Arc<Mutex<ClientMapInner<P, S>>>);
+pub(crate) struct ChainClients<P, S>(AsyncMutex<ClientMapInner<P, S>>);
 
 impl<P, S> Clone for ChainClients<P, S> {
     fn clone(&self) -> Self {
@@ -61,7 +60,7 @@ impl<P, S> Clone for ChainClients<P, S> {
 
 impl<P, S> Default for ChainClients<P, S> {
     fn default() -> Self {
-        Self(Arc::new(Mutex::new(BTreeMap::new())))
+        Self(AsyncMutex::new("ChainClients", BTreeMap::new()))
     }
 }
 
@@ -86,7 +85,7 @@ impl<P, S> ChainClients<P, S> {
             .ok_or_else(|| Error::new("Unknown chain ID"))
     }
 
-    pub(crate) async fn map_lock(&self) -> MutexGuard<ClientMapInner<P, S>> {
+    pub(crate) async fn map_lock(&self) -> AsyncMutexGuard<ClientMapInner<P, S>> {
         self.0.lock().await
     }
 }
