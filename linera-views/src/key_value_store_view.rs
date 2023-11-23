@@ -504,7 +504,25 @@ where
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
                     ensure!(key_prefix.len() <= max_key_size, ViewError::KeyTooLong);
-                    self.delete_prefix(key_prefix);
+                    let key_list = self
+                        .updates
+                        .range(get_interval(key_prefix.clone()))
+                        .map(|x| x.0.to_vec())
+                        .collect::<Vec<_>>();
+                    for key in key_list {
+                        self.updates.remove(&key);
+                    }
+                    if !self.was_cleared {
+                        let key_prefix_list = self
+                            .deleted_prefixes
+                            .range(get_interval(key_prefix.clone()))
+                            .map(|x| x.to_vec())
+                            .collect::<Vec<_>>();
+                        for key in key_prefix_list {
+                            self.deleted_prefixes.remove(&key);
+                        }
+                        self.deleted_prefixes.insert(key_prefix);
+                    }
                 }
             }
         }
@@ -549,27 +567,22 @@ where
     }
 
     /// Deletes a key_prefix.
-    fn delete_prefix(&mut self, key_prefix: Vec<u8>) {
-        *self.hash.get_mut() = None;
-        let key_list: Vec<Vec<u8>> = self
-            .updates
-            .range(get_interval(key_prefix.clone()))
-            .map(|x| x.0.to_vec())
-            .collect();
-        for key in key_list {
-            self.updates.remove(&key);
-        }
-        if !self.was_cleared {
-            let key_prefix_list: Vec<Vec<u8>> = self
-                .deleted_prefixes
-                .range(get_interval(key_prefix.clone()))
-                .map(|x| x.to_vec())
-                .collect();
-            for key in key_prefix_list {
-                self.deleted_prefixes.remove(&key);
-            }
-            self.deleted_prefixes.insert(key_prefix);
-        }
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
+    ///   view.insert(vec![0,1], vec![34]).await.unwrap();
+    ///   view.delete_prefix(vec![0]).await.unwrap();
+    ///   assert_eq!(view.get(&[0,1]).await.unwrap(), None);
+    /// # })
+    /// ```
+    pub async fn delete_prefix(&mut self, key_prefix: Vec<u8>) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        batch.delete_key_prefix(key_prefix);
+        self.write_batch(batch).await
     }
 
     /// Iterates over all the keys matching the given prefix. The prefix is not included in the returned keys.
