@@ -117,7 +117,7 @@ APP_ID_0=$(linera --with-wallet 0 project publish-and-create \
            --json-argument '{ "accounts": { "User:'$OWNER_0'": "100", "User:'$OWNER_1'": "200" } }')
 
 # Wait for it to fully complete
-sleep 4
+sleep 8
 ```
 
 We will remember the application ID for the newly created token as `$APP_ID_0`.
