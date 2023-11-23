@@ -73,6 +73,7 @@ pub struct KeyValueStoreView<C> {
     context: C,
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
+    stored_total_size: u64,
     total_size: u64,
     sizes: MapView<C, Vec<u8>, u64>,
     deleted_prefixes: BTreeSet<Vec<u8>>,
@@ -102,6 +103,7 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
+            stored_total_size: total_size,
             total_size,
             sizes,
             deleted_prefixes: BTreeSet::new(),
@@ -114,6 +116,8 @@ where
         self.was_cleared = false;
         self.updates.clear();
         self.deleted_prefixes.clear();
+        self.total_size = self.stored_total_size;
+        self.sizes.rollback();
         *self.hash.get_mut() = self.stored_hash;
     }
 
@@ -160,6 +164,8 @@ where
         self.was_cleared = true;
         self.updates.clear();
         self.deleted_prefixes.clear();
+        self.total_size = 0;
+        self.sizes.clear();
         *self.hash.get_mut() = None;
     }
 }
