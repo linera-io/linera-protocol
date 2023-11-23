@@ -3,7 +3,7 @@
 
 //! Custom synchronization locks with embedded logging.
 
-use async_lock::{Mutex, MutexGuard};
+use async_lock::{Mutex, MutexGuard, MutexGuardArc};
 use std::{
     any::type_name,
     fmt::{self, Debug, Formatter},
@@ -33,6 +33,16 @@ impl<T> AsyncMutex<T> {
         let guard = self.lock.lock().await;
         tracing::trace!(name = %self.name, "Locked");
         AsyncMutexGuard { name, guard }
+    }
+
+    /// Locks the [`AsyncMutex`] and returns an [`OwnedAsyncMutexGuard`] to access the underlying
+    /// data.
+    pub async fn lock_owned(&self) -> OwnedAsyncMutexGuard<T> {
+        let name = self.name.clone();
+        tracing::trace!(name = %self.name, "Locking");
+        let guard = self.lock.clone().lock_arc().await;
+        tracing::trace!(name = %self.name, "Locked");
+        OwnedAsyncMutexGuard { name, guard }
     }
 }
 
@@ -76,6 +86,32 @@ impl<'guard, T> Deref for AsyncMutexGuard<'guard, T> {
 }
 
 impl<'guard, T> DerefMut for AsyncMutexGuard<'guard, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.guard
+    }
+}
+
+/// An owned guard that unlocks its respective [`AsyncMutex`] when dropped.
+pub struct OwnedAsyncMutexGuard<T> {
+    name: Arc<str>,
+    guard: MutexGuardArc<T>,
+}
+
+impl<T> Drop for OwnedAsyncMutexGuard<T> {
+    fn drop(&mut self) {
+        tracing::trace!(name = %self.name, "Unlocking");
+    }
+}
+
+impl<T> Deref for OwnedAsyncMutexGuard<T> {
+    type Target = MutexGuardArc<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.guard
+    }
+}
+
+impl<T> DerefMut for OwnedAsyncMutexGuard<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.guard
     }
