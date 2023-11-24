@@ -1,0 +1,48 @@
+repositories:
+  - name: scylla
+    url: https://scylla-operator-charts.storage.googleapis.com/stable
+  - name: jetstack
+    url: https://charts.jetstack.io
+
+releases:
+  - name: linera-core
+    namespace: default
+    chart: .
+    needs:
+      - scylla/scylla
+    values:
+      - {{ env "LINERA_HELMFILE_VALUES_LINERA_CORE" | default "values-local.yaml" }}
+    set:
+      - name: installCRDs
+        value: "true"
+      - name: validator.serverConfig
+        value: {{ env "LINERA_HELMFILE_SET_SERVER_CONFIG" | default "working/server_1.json" }}
+      - name: validator.genesisConfig
+        value: {{ env "LINERA_HELMFILE_SET_GENESIS_CONFIG" | default "working/genesis.json" }}
+  - name: scylla
+    namespace: scylla
+    chart: scylla/scylla
+    needs:
+      - scylla-manager/scylla-manager
+      - scylla-operator/scylla-operator
+    values:
+      - {{ env "LINERA_HELMFILE_VALUES_SCYLLA" | default "scylla.values.yaml" }}
+  - name: scylla-manager
+    namespace: scylla-manager
+    chart: scylla/scylla-manager
+    needs:
+      - scylla-operator/scylla-operator
+  - name: scylla-operator
+    namespace: scylla-operator
+    chart: scylla/scylla-operator
+    needs:
+      - cert-manager/cert-manager
+    values:
+      - {{ env "LINERA_HELMFILE_VALUES_SCYLLA_OPERATOR" | default "scylla-operator.values.yaml" }}
+  - name: cert-manager
+    namespace: cert-manager
+    chart: jetstack/cert-manager
+    set:
+      - name: installCRDs
+        value: "true"
+
