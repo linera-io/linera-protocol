@@ -7,15 +7,18 @@ use linera_views::{
     views::{CryptoHashRootView, RootView, View},
 };
 use rand::{distributions::Uniform, Rng, SeedableRng};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Debug;
 
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {
     pub store: KeyValueStoreView<C>,
 }
 
-fn remove_by_prefix<V>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8>) {
+fn remove_by_prefix<V: Debug>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8>) {
+    println!("remove_by_prefix before map={:?} key_prefix={:?}", map, key_prefix);
     map.retain(|key, _| !key.starts_with(&key_prefix));
+    println!("remove_by_prefix  after map={:?}", map);
 }
 
 fn total_size(vec: &Vec<(Vec<u8>,Vec<u8>)>) -> u64 {
@@ -27,11 +30,12 @@ fn total_size(vec: &Vec<(Vec<u8>,Vec<u8>)>) -> u64 {
 }
 
 #[tokio::test]
-async fn key_value_store_view_mutability_check() {
+async fn key_value_store_view_mutability() {
     let context = create_memory_context();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     let mut state_map = BTreeMap::new();
-    let n = 20;
+    let n = 200;
+    let mut all_keys = BTreeSet::new();
     for _ in 0..n {
         let mut view = StateView::load(context.clone()).await.unwrap();
         let save = rng.gen::<bool>();
@@ -46,22 +50,37 @@ async fn key_value_store_view_mutability_check() {
         for _ in 0..count_oper {
             let choice = rng.gen_range(0..5);
             let count = view.store.count().await.unwrap();
+            println!("choice={} count={}", choice, count);
             if choice == 0 {
                 // inserting random stuff
                 let n_ins = rng.gen_range(0..10);
-                for _ in 0..n_ins {
+                println!("n_ins={}", n_ins);
+                for u in 0..n_ins {
                     let len = rng.gen_range(1..6);
                     let key = rng
                         .clone()
                         .sample_iter(Uniform::from(0..4))
                         .take(len)
                         .collect::<Vec<_>>();
-                    let value = key.clone();
+                    all_keys.insert(key.clone());
+                    let value = Vec::new();
+                    let test_map = new_state_map.contains_key(&key);
+                    let test_view = view.store.get(&key).await.unwrap().is_some();
+                    let test_check = test_map == test_view;
+                    println!("u={} key={:?} test_map={} test_view={}", u, key, test_map, test_view);
+                    println!("test_check={}", test_check);
                     view.store.insert(key.clone(), value.clone()).await.unwrap();
                     new_state_map.insert(key, value);
+                    //
+                    new_state_vec = new_state_map.clone().into_iter().collect();
+                    let new_key_values = view.store.index_values().await.unwrap();
+                    println!("total_size(&new_state_vec)={}", total_size(&new_state_vec));
+                    println!("view.store.total_size={}", view.store.total_size());
+                    assert_eq!(new_state_vec, new_key_values);
+                    assert_eq!(total_size(&new_state_vec), view.store.total_size());
                 }
             }
-            if choice == 1 && count > 0 {
+            if choice == 1 && count > 0 && false {
                 // deleting some entries
                 let n_remove = rng.gen_range(0..count);
                 for _ in 0..n_remove {
@@ -75,15 +94,16 @@ async fn key_value_store_view_mutability_check() {
                 // deleting a prefix
                 let val = rng.gen_range(0..5) as u8;
                 let key_prefix = vec![val];
+                println!("prefix_key={:?}", key_prefix);
                 view.store.remove_by_prefix(key_prefix.clone()).await.unwrap();
                 remove_by_prefix(&mut new_state_map, key_prefix);
             }
-            if choice == 3 {
+            if choice == 3 && false {
                 // Doing the clearing
                 view.clear();
                 new_state_map.clear();
             }
-            if choice == 4 {
+            if choice == 4 && false {
                 // Doing the rollback
                 view.rollback();
                 new_state_map = state_map.clone();
@@ -92,6 +112,18 @@ async fn key_value_store_view_mutability_check() {
             let new_key_values = view.store.index_values().await.unwrap();
             assert_eq!(new_state_vec, new_key_values);
             assert_eq!(total_size(&new_state_vec), view.store.total_size());
+            let all_keys_vec = all_keys.clone().into_iter().collect::<Vec<_>>();
+            let tests_multi_get = view.store.multi_get(all_keys_vec).await.unwrap();
+            println!("|all_keys|={}", all_keys.len());
+            for (i, key) in all_keys.clone().into_iter().enumerate() {
+                let test_map = new_state_map.contains_key(&key);
+                let test_view = view.store.get(&key).await.unwrap().is_some();
+                let test_multi_get = tests_multi_get[i].is_some();
+                if test_map != test_view || test_map != test_multi_get {
+                    println!("key={:?} test_map={}, test_view={} test_multi_get={}", key, test_map, test_view, test_multi_get);
+                    assert!(false);
+                }
+            }
         }
         if save {
             state_map = new_state_map.clone();

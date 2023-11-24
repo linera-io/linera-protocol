@@ -8,6 +8,7 @@ use linera_views::{
 };
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use std::collections::BTreeMap;
+use rand::RngCore;
 
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {
@@ -18,12 +19,10 @@ fn remove_by_prefix<V>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8>) {
     map.retain(|key, _| !key.starts_with(&key_prefix));
 }
 
-#[tokio::test]
-async fn map_view_mutability_check() {
+async fn map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
     let context = create_memory_context();
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     let mut state_map = BTreeMap::new();
-    let n = 20;
+    let n = 200;
     for _ in 0..n {
         let mut view = StateView::load(context.clone()).await.unwrap();
         let save = rng.gen::<bool>();
@@ -96,5 +95,13 @@ async fn map_view_mutability_check() {
             state_map = new_state_map.clone();
             view.save().await.unwrap();
         }
+    }
+}
+
+#[tokio::test]
+async fn map_view_mutability_iter() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    for _ in 0..10 {
+        map_view_mutability(&mut rng).await;
     }
 }

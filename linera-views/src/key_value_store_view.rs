@@ -583,6 +583,7 @@ where
                 WriteOperation::Delete { key } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     if let Some(size) = self.sizes.get(&key).await? {
+                        println!("Delete sub total_size={} key={:?} size={}", self.total_size, key, size);
                         self.total_size -= size;
                     }
                     self.sizes.remove(key.clone());
@@ -595,8 +596,10 @@ where
                 WriteOperation::Put { key, value } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     let single_size = (key.len() + value.len()) as u64;
+                    println!("Put add total_size={} key={:?} single_size={}", self.total_size, key, single_size);
                     self.total_size += single_size;
                     if let Some(size) = self.sizes.get(&key).await? {
+                        println!("Put sub total_size={} size={}", self.total_size, size);
                         self.total_size -= size;
                     }
                     self.sizes.insert(key.clone(), single_size);
@@ -613,8 +616,11 @@ where
                         self.updates.remove(&key);
                     }
                     let key_values = self.sizes.key_values_by_prefix(key_prefix.clone()).await?;
-                    for (_,value) in key_values {
+                    println!("|key_values|={}", key_values.len());
+                    for (key,value) in key_values {
+                        println!("DeletePrefix sub total_size={} key={:?} value={}", self.total_size, key, value);
                         self.total_size -= value;
+                        self.sizes.remove(key);
                     }
                     self.sizes.remove_by_prefix(key_prefix.clone());
                     if !self.was_cleared {
