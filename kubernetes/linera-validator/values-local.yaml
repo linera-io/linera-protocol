@@ -48,5 +48,5 @@ environment: "kind"
 
 # Validator
 validator:
-  serverConfig: "" # Needs to be set by the CLI `--set validator.serverConfig=server_1.json`
-  genesisConfig: "" # Needs to be set by the CLI `--set validator.genesisConfig=genesis.json`
+  serverConfig: "" # Is set by helmfile.
+  genesisConfig: "" # Is set by helmfile.

@@ -1,0 +1,13 @@
+datacenter: validator
+racks:
+  - name: rack-1
+    members: 1
+    storage:
+      capacity: 10Gi
+    resources:
+      limits:
+        cpu: 1
+        memory: 4Gi
+      requests:
+        cpu: 1
+        memory: 4Gi
