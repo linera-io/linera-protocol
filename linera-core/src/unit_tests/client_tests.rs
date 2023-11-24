@@ -11,7 +11,10 @@ use crate::{
         ChainClient, ChainClientError, CommunicateAction,
     },
     local_node::LocalNodeError,
-    node::NodeError::{self, ClientIoError},
+    node::{
+        CrossChainMessageDelivery,
+        NodeError::{self, ClientIoError},
+    },
     updater::CommunicationError,
     worker::{Notification, Reason, WorkerError},
 };
@@ -1318,7 +1321,10 @@ where
         .communicate_chain_updates(
             &builder.initial_committee,
             client1.chain_id,
-            CommunicateAction::AdvanceToNextBlockHeight(client1.next_block_height),
+            CommunicateAction::AdvanceToNextBlockHeight {
+                height: client1.next_block_height,
+                delivery: CrossChainMessageDelivery::Default,
+            },
         )
         .await
         .unwrap();

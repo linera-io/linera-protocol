@@ -7,7 +7,10 @@ use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCert
 use linera_core::{
     client::ChainClient,
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    node::{NodeError, NotificationStream, ValidatorNode, ValidatorNodeProvider},
+    node::{
+        CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
+        ValidatorNodeProvider,
+    },
 };
 use linera_execution::committee::Committee;
 use linera_service::{
@@ -34,6 +37,7 @@ impl ValidatorNode for DummyValidatorNode {
     async fn handle_lite_certificate(
         &mut self,
         _: LiteCertificate<'_>,
+        _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
@@ -42,6 +46,7 @@ impl ValidatorNode for DummyValidatorNode {
         &mut self,
         _: Certificate,
         _: Vec<HashedValue>,
+        _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }

@@ -3,14 +3,13 @@
 
 use async_trait::async_trait;
 
+use crate::{grpc_network::GrpcClient, simple_network::SimpleClient};
 use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    node::{NodeError, NotificationStream, ValidatorNode},
+    node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
 };
-
-use crate::{grpc_network::GrpcClient, simple_network::SimpleClient};
 
 #[derive(Clone)]
 pub enum Client {
@@ -45,11 +44,18 @@ impl ValidatorNode for Client {
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
+        delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
-            Client::Grpc(grpc_client) => grpc_client.handle_lite_certificate(certificate).await,
+            Client::Grpc(grpc_client) => {
+                grpc_client
+                    .handle_lite_certificate(certificate, delivery)
+                    .await
+            }
             Client::Simple(simple_client) => {
-                simple_client.handle_lite_certificate(certificate).await
+                simple_client
+                    .handle_lite_certificate(certificate, delivery)
+                    .await
             }
         }
     }
@@ -58,11 +64,18 @@ impl ValidatorNode for Client {
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
+        delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
-            Client::Grpc(grpc_client) => grpc_client.handle_certificate(certificate, blobs).await,
+            Client::Grpc(grpc_client) => {
+                grpc_client
+                    .handle_certificate(certificate, blobs, delivery)
+                    .await
+            }
             Client::Simple(simple_client) => {
-                simple_client.handle_certificate(certificate, blobs).await
+                simple_client
+                    .handle_certificate(certificate, blobs, delivery)
+                    .await
             }
         }
     }

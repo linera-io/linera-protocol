@@ -38,7 +38,7 @@ use grpc::{
 use linera_base::identifiers::ChainId;
 use linera_chain::data_types;
 use linera_core::{
-    node::{NodeError, NotificationStream, ValidatorNode},
+    node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     worker::{NetworkActions, Notification, ValidatorWorker, WorkerError, WorkerState},
 };
 use linera_storage::Storage;
@@ -712,10 +712,13 @@ impl ValidatorNode for GrpcClient {
     async fn handle_lite_certificate(
         &mut self,
         certificate: data_types::LiteCertificate<'_>,
+        delivery: CrossChainMessageDelivery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
+        let wait_for_outgoing_messages =
+            delivery.should_wait_for_outgoing_messages(self.wait_for_outgoing_messages);
         let request = HandleLiteCertificateRequest {
             certificate,
-            wait_for_outgoing_messages: self.wait_for_outgoing_messages,
+            wait_for_outgoing_messages,
         };
         client_delegate!(self, handle_lite_certificate, request)
     }
@@ -725,11 +728,14 @@ impl ValidatorNode for GrpcClient {
         &mut self,
         certificate: data_types::Certificate,
         blobs: Vec<data_types::HashedValue>,
+        delivery: CrossChainMessageDelivery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
+        let wait_for_outgoing_messages =
+            delivery.should_wait_for_outgoing_messages(self.wait_for_outgoing_messages);
         let request = HandleCertificateRequest {
             certificate,
             blobs,
-            wait_for_outgoing_messages: self.wait_for_outgoing_messages,
+            wait_for_outgoing_messages,
         };
         client_delegate!(self, handle_certificate, request)
     }

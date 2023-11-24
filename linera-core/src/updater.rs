@@ -4,12 +4,12 @@
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
-    node::{NodeError, ValidatorNode},
+    node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
 };
 use futures::{future, StreamExt};
 use linera_base::{
     data_types::{BlockHeight, Round},
-    identifiers::{ChainDescription, ChainId, MessageId},
+    identifiers::ChainId,
 };
 use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, LiteVote};
 use linera_execution::committee::{Committee, Epoch, ValidatorName};
@@ -36,8 +36,14 @@ const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 #[derive(Clone)]
 pub enum CommunicateAction {
     SubmitBlock(BlockProposal),
-    FinalizeBlock(Certificate),
-    AdvanceToNextBlockHeight(BlockHeight),
+    FinalizeBlock {
+        certificate: Certificate,
+        delivery: CrossChainMessageDelivery,
+    },
+    AdvanceToNextBlockHeight {
+        height: BlockHeight,
+        delivery: CrossChainMessageDelivery,
+    },
     RequestLeaderTimeout {
         height: BlockHeight,
         round: Round,
@@ -165,11 +171,12 @@ where
     async fn send_optimized_certificate(
         &mut self,
         certificate: &Certificate,
+        delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         if certificate.is_signed_by(&self.name) {
             let result = self
                 .node
-                .handle_lite_certificate(certificate.lite_certificate())
+                .handle_lite_certificate(certificate.lite_certificate(), delivery)
                 .await;
             match result {
                 Err(NodeError::MissingCertificateValue) => {
@@ -184,12 +191,18 @@ where
             }
         }
         self.node
-            .handle_certificate(certificate.clone(), vec![])
+            .handle_certificate(certificate.clone(), vec![], delivery)
             .await
     }
 
-    async fn send_certificate(&mut self, certificate: Certificate) -> Result<ChainInfo, NodeError> {
-        let mut result = self.send_optimized_certificate(&certificate).await;
+    async fn send_certificate(
+        &mut self,
+        certificate: Certificate,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<ChainInfo, NodeError> {
+        let mut result = self
+            .send_optimized_certificate(&certificate, delivery)
+            .await;
 
         if let Err(NodeError::ApplicationBytecodesNotFound(locations)) = &result {
             // Find the missing bytecodes locally and retry.
@@ -222,7 +235,7 @@ where
             .collect::<Result<Vec<_>, _>>()?;
             result = self
                 .node
-                .handle_certificate(certificate.clone(), blobs)
+                .handle_certificate(certificate.clone(), blobs, delivery)
                 .await;
         }
 
@@ -306,89 +319,68 @@ where
 
     async fn send_chain_information(
         &mut self,
-        mut chain_id: ChainId,
-        mut target_block_height: BlockHeight,
+        chain_id: ChainId,
+        target_block_height: BlockHeight,
+        delivery: CrossChainMessageDelivery,
     ) -> Result<(), NodeError> {
-        let mut jobs = Vec::new();
-        loop {
-            // Figure out which certificates this validator is missing.
-            let query = ChainInfoQuery::new(chain_id);
-            match self.node.handle_chain_info_query(query).await {
-                Ok(response) if response.info.description.is_some() => {
-                    response.check(self.name)?;
-                    jobs.push((
-                        chain_id,
-                        response.info.next_block_height,
-                        target_block_height,
-                    ));
-                    break;
-                }
-                Ok(response) => {
-                    response.check(self.name)?;
-                    // Obtain the chain description from our local node.
-                    let description = *self
-                        .storage
-                        .load_chain(chain_id)
-                        .await?
-                        .execution_state
-                        .system
-                        .description
-                        .get();
-                    match description {
-                        Some(ChainDescription::Child(MessageId {
-                            chain_id: parent_id,
-                            height,
-                            index: _,
-                        })) => {
-                            jobs.push((chain_id, BlockHeight::ZERO, target_block_height));
-                            chain_id = parent_id;
-                            target_block_height = height.try_add_one()?;
-                        }
-                        _ => {
-                            return Err(NodeError::InactiveLocalChain(chain_id));
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!(
-                        "Failed to query validator {:?} for information about chain {:?}: {}",
-                        self.name, chain_id, e
-                    );
-                    return Err(e);
-                }
+        // Figure out which certificates this validator is missing.
+        let query = ChainInfoQuery::new(chain_id);
+        let initial_block_height = match self.node.handle_chain_info_query(query).await {
+            Ok(response) if response.info.description.is_some() => {
+                response.check(self.name)?;
+                response.info.next_block_height
             }
-        }
-        for (chain_id, initial_block_height, target_block_height) in jobs.into_iter().rev() {
-            // Obtain chain state.
-            let range: Range<usize> =
-                initial_block_height.try_into()?..target_block_height.try_into()?;
-            if !range.is_empty() {
-                let keys = {
-                    let chain = self.storage.load_chain(chain_id).await?;
-                    chain.confirmed_log.read(range).await?
+            Ok(response) => {
+                response.check(self.name)?;
+                BlockHeight::ZERO
+            }
+            Err(e) => {
+                error!(
+                    "Failed to query validator {:?} about missing blocks for chain {:?}: {}",
+                    self.name, chain_id, e
+                );
+                return Err(e);
+            }
+        };
+        // Obtain the missing blocks and the manager state from the local node.
+        let range: Range<usize> =
+            initial_block_height.try_into()?..target_block_height.try_into()?;
+        let (keys, manager) = {
+            let mut chain = self.storage.load_chain(chain_id).await?;
+            (
+                chain.confirmed_log.read(range).await?,
+                std::mem::take(chain.manager.get_mut()),
+            )
+        };
+        if !keys.is_empty() {
+            // Send the requested certificates in order.
+            let certs = self.storage.read_certificates(keys.into_iter()).await?;
+            for cert in certs {
+                let height = cert
+                    .value
+                    .inner()
+                    .height()
+                    .try_add_one()
+                    .expect("adding one to a certified block height should work");
+                let delivery = if height == target_block_height {
+                    // Only the last certificate per range may need to wait for outgoing messages.
+                    delivery
+                } else {
+                    CrossChainMessageDelivery::DoNotWaitForOutgoingMessages
                 };
-                // Send the requested certificates in order.
-                let certs = self.storage.read_certificates(keys.into_iter()).await?;
-                for cert in certs {
-                    self.send_certificate(cert).await?;
-                }
+                self.send_certificate(cert, delivery).await?;
             }
         }
-        let manager = self
-            .storage
-            .load_chain(chain_id)
-            .await?
-            .manager
-            .get()
-            .clone();
         if let Some(cert) = manager.locked {
             if cert.value().is_validated() && cert.value().chain_id() == chain_id {
-                self.send_certificate(cert).await?;
+                self.send_certificate(cert, CrossChainMessageDelivery::Default)
+                    .await?;
             }
         }
         if let Some(cert) = manager.leader_timeout {
             if cert.value().is_timeout() && cert.value().chain_id() == chain_id {
-                self.send_certificate(cert).await?;
+                self.send_certificate(cert, CrossChainMessageDelivery::Default)
+                    .await?;
             }
         }
         Ok(())
@@ -412,7 +404,12 @@ where
             }
         }
         for (sender, next_height) in info {
-            self.send_chain_information(sender, next_height).await?;
+            self.send_chain_information(
+                sender,
+                next_height,
+                CrossChainMessageDelivery::WaitForOutgoingMessages,
+            )
+            .await?;
         }
         Ok(())
     }
@@ -422,14 +419,23 @@ where
         chain_id: ChainId,
         action: CommunicateAction,
     ) -> Result<Option<LiteVote>, NodeError> {
-        let target_block_height = match &action {
-            CommunicateAction::SubmitBlock(proposal) => proposal.content.block.height,
-            CommunicateAction::FinalizeBlock(certificate) => certificate.value().height(),
-            CommunicateAction::AdvanceToNextBlockHeight(height) => *height,
-            CommunicateAction::RequestLeaderTimeout { height, .. } => *height,
+        let (target_block_height, first_delivery) = {
+            use CrossChainMessageDelivery::Default;
+            match &action {
+                CommunicateAction::SubmitBlock(proposal) => {
+                    (proposal.content.block.height, Default)
+                }
+                CommunicateAction::FinalizeBlock { certificate, .. } => {
+                    (certificate.value().height(), Default)
+                }
+                CommunicateAction::AdvanceToNextBlockHeight { height, delivery } => {
+                    (*height, *delivery)
+                }
+                CommunicateAction::RequestLeaderTimeout { height, .. } => (*height, Default),
+            }
         };
         // Update the validator with missing information, if needed.
-        self.send_chain_information(chain_id, target_block_height)
+        self.send_chain_information(chain_id, target_block_height, first_delivery)
             .await?;
         // Send the block proposal (if any) and return a vote.
         match action {
@@ -445,8 +451,11 @@ where
                     }
                 }
             }
-            CommunicateAction::FinalizeBlock(certificate) => {
-                let info = self.send_certificate(certificate).await?;
+            CommunicateAction::FinalizeBlock {
+                certificate,
+                delivery,
+            } => {
+                let info = self.send_certificate(certificate, delivery).await?;
                 match info.manager.pending {
                     Some(vote) if vote.validator == self.name => {
                         vote.check()?;
@@ -470,7 +479,7 @@ where
                     }
                 }
             }
-            CommunicateAction::AdvanceToNextBlockHeight(_) => (),
+            CommunicateAction::AdvanceToNextBlockHeight { .. } => (),
         }
         Ok(None)
     }

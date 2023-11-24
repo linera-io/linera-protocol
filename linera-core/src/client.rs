@@ -5,7 +5,10 @@
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery},
     local_node::{LocalNodeClient, LocalNodeError},
-    node::{NodeError, NotificationStream, ValidatorNode, ValidatorNodeProvider},
+    node::{
+        CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
+        ValidatorNodeProvider,
+    },
     notifier::Notifier,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::{
@@ -740,14 +743,14 @@ where
                 };
                 (value, round)
             }
-            CommunicateAction::FinalizeBlock(validity_certificate) => {
-                let round = validity_certificate.round;
-                let Some(conf_value) = validity_certificate.value.into_confirmed() else {
+            CommunicateAction::FinalizeBlock { certificate, .. } => {
+                let round = certificate.round;
+                let Some(value) = certificate.value.into_confirmed() else {
                     return Err(ChainClientError::ProtocolError(
                         "Unexpected certificate value for finalized block",
                     ));
                 };
-                (conf_value, round)
+                (value, round)
             }
             CommunicateAction::RequestLeaderTimeout {
                 height,
@@ -761,7 +764,7 @@ where
                 });
                 (value, round)
             }
-            CommunicateAction::AdvanceToNextBlockHeight(_) => {
+            CommunicateAction::AdvanceToNextBlockHeight { .. } => {
                 return Ok(None);
             }
         };
@@ -848,7 +851,10 @@ where
         self.communicate_chain_updates(
             &local_committee,
             block.chain_id,
-            CommunicateAction::AdvanceToNextBlockHeight(block.height.try_add_one()?),
+            CommunicateAction::AdvanceToNextBlockHeight {
+                height: block.height.try_add_one()?,
+                delivery: CrossChainMessageDelivery::WaitForOutgoingMessages,
+            },
         )
         .await?;
         Ok(())
@@ -1142,14 +1148,16 @@ where
         self.communicate_chain_updates(
             &committee,
             chain_id,
-            CommunicateAction::AdvanceToNextBlockHeight(height),
+            CommunicateAction::AdvanceToNextBlockHeight {
+                height,
+                delivery: CrossChainMessageDelivery::Default,
+            },
         )
         .await?;
         Ok(certificate)
     }
 
     /// Executes (or retries) a regular block proposal. Updates local balance.
-    /// If `with_confirmation` is false, we stop short of executing the finalized block.
     async fn propose_block(&mut self, block: Block) -> Result<Certificate, ChainClientError> {
         ensure!(
             self.pending_block.is_none() || self.pending_block.as_ref() == Some(&block),
@@ -1228,7 +1236,10 @@ where
                 CertificateValue::ValidatedBlock { executed_block, .. }
                     if executed_block.block == proposal.content.block
             ));
-            let finalize_action = CommunicateAction::FinalizeBlock(certificate);
+            let finalize_action = CommunicateAction::FinalizeBlock {
+                certificate,
+                delivery: CrossChainMessageDelivery::Default,
+            };
             self.communicate_chain_updates(&committee, self.chain_id, finalize_action)
                 .await?
                 .expect("a certificate")
@@ -1252,7 +1263,10 @@ where
         self.communicate_chain_updates(
             &committee,
             self.chain_id,
-            CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
+            CommunicateAction::AdvanceToNextBlockHeight {
+                height: self.next_block_height,
+                delivery: CrossChainMessageDelivery::Default,
+            },
         )
         .await?;
         if let Ok(new_committee) = self.local_committee().await {
@@ -1262,7 +1276,10 @@ where
                 self.communicate_chain_updates(
                     &new_committee,
                     self.chain_id,
-                    CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
+                    CommunicateAction::AdvanceToNextBlockHeight {
+                        height: self.next_block_height,
+                        delivery: CrossChainMessageDelivery::Default,
+                    },
                 )
                 .await?;
             }
@@ -1397,7 +1414,10 @@ where
         self.communicate_chain_updates(
             &committee,
             self.chain_id,
-            CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
+            CommunicateAction::AdvanceToNextBlockHeight {
+                height: self.next_block_height,
+                delivery: CrossChainMessageDelivery::Default,
+            },
         )
         .await?;
         Ok(())

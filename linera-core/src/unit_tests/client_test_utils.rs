@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    client::{ChainClient, ValidatorNodeProvider},
+    client::{ChainClient, ChainClientBuilder, ValidatorNodeProvider},
     data_types::*,
-    node::{NodeError, NotificationStream, ValidatorNode},
+    node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     notifier::Notifier,
     worker::{Notification, ValidatorWorker, WorkerState},
 };
@@ -54,8 +54,6 @@ use {
 #[cfg(any(feature = "aws", feature = "scylladb"))]
 use linera_views::test_utils::get_table_name;
 
-use super::ChainClientBuilder;
-
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum FaultType {
     Honest,
@@ -100,6 +98,7 @@ where
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
+        _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         let certificate = certificate.cloned();
         self.spawn_and_receive(move |validator, sender| {
@@ -112,6 +111,7 @@ where
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
+        _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_handle_certificate(certificate, blobs, sender)

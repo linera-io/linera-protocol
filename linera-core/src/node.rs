@@ -29,6 +29,15 @@ use thiserror::Error;
 /// A pinned [`Stream`] of Notifications.
 pub type NotificationStream = Pin<Box<dyn Stream<Item = Notification> + Send>>;
 
+/// Whether to wait for the delivery of outgoing cross-chain messages.
+#[derive(Debug, Default, Clone, Copy)]
+pub enum CrossChainMessageDelivery {
+    #[default]
+    Default,
+    DoNotWaitForOutgoingMessages,
+    WaitForOutgoingMessages,
+}
+
 /// How to communicate with a validator node.
 #[async_trait]
 pub trait ValidatorNode {
@@ -42,6 +51,7 @@ pub trait ValidatorNode {
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
+        delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Processes a certificate.
@@ -49,6 +59,7 @@ pub trait ValidatorNode {
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
+        delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Handles information queries for this chain.
@@ -172,6 +183,17 @@ pub enum NodeError {
     SubscriptionError { transport: String },
     #[error("Failed to subscribe; tonic status: {status}")]
     SubscriptionFailed { status: String },
+}
+
+impl CrossChainMessageDelivery {
+    pub fn should_wait_for_outgoing_messages(self, default: bool) -> bool {
+        use CrossChainMessageDelivery::*;
+        match self {
+            Default => default,
+            DoNotWaitForOutgoingMessages => false,
+            WaitForOutgoingMessages => true,
+        }
+    }
 }
 
 impl From<ViewError> for NodeError {

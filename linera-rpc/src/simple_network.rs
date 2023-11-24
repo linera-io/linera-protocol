@@ -18,7 +18,7 @@ use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    node::{NodeError, NotificationStream, ValidatorNode},
+    node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     worker::{NetworkActions, ValidatorWorker, WorkerError, WorkerState},
 };
 use linera_storage::Storage;
@@ -415,10 +415,13 @@ impl ValidatorNode for SimpleClient {
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
+        delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
+        let wait_for_outgoing_messages =
+            delivery.should_wait_for_outgoing_messages(self.wait_for_outgoing_messages);
         let request = HandleLiteCertificateRequest {
             certificate: certificate.cloned(),
-            wait_for_outgoing_messages: self.wait_for_outgoing_messages,
+            wait_for_outgoing_messages,
         };
         self.send_recv_info(request.into()).await
     }
@@ -428,11 +431,14 @@ impl ValidatorNode for SimpleClient {
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
+        delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
+        let wait_for_outgoing_messages =
+            delivery.should_wait_for_outgoing_messages(self.wait_for_outgoing_messages);
         let request = HandleCertificateRequest {
             certificate,
             blobs,
-            wait_for_outgoing_messages: self.wait_for_outgoing_messages,
+            wait_for_outgoing_messages,
         };
         self.send_recv_info(request.into()).await
     }
