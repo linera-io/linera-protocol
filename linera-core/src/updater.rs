@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_types::{ChainInfo, ChainInfoQuery},
+    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{NodeError, ValidatorNode},
 };
 use futures::{future, StreamExt};
@@ -162,83 +162,74 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    async fn send_certificate(
+    async fn send_optimized_certificate(
         &mut self,
-        certificate: Certificate,
-        retryable: bool,
-    ) -> Result<ChainInfo, NodeError> {
-        let mut count = 0;
-        loop {
-            let mut result = if certificate.is_signed_by(&self.name) {
-                match self
-                    .node
-                    .handle_lite_certificate(certificate.lite_certificate())
-                    .await
-                {
-                    Ok(response) => Ok(response),
-                    Err(NodeError::MissingCertificateValue) => {
-                        self.node
-                            .handle_certificate(certificate.clone(), vec![])
-                            .await
-                    }
-                    Err(err) => Err(err),
-                }
-            } else {
-                self.node
-                    .handle_certificate(certificate.clone(), vec![])
-                    .await
-            };
-            if let Err(NodeError::ApplicationBytecodesNotFound(locations)) = &result {
-                let required = match certificate.value() {
-                    CertificateValue::ConfirmedBlock { executed_block, .. }
-                    | CertificateValue::ValidatedBlock { executed_block, .. } => {
-                        executed_block.block.bytecode_locations()
-                    }
-                    CertificateValue::LeaderTimeout { .. } => HashMap::new(),
-                };
-                for location in locations {
-                    if !required.contains_key(location) {
-                        let hash = location.certificate_hash;
-                        warn!("validator requested {:?} but it is not required", hash);
-                        return Err(NodeError::InvalidChainInfoResponse);
-                    }
-                }
-                let unique_locations = locations.iter().cloned().collect::<HashSet<_>>();
-                if locations.len() > unique_locations.len() {
-                    warn!("locations requested by validator contain duplicates");
-                    return Err(NodeError::InvalidChainInfoResponse);
-                }
-                let blobs = future::join_all(
-                    unique_locations
-                        .into_iter()
-                        .map(|location| self.storage.read_value(location.certificate_hash)),
-                )
-                .await
-                .into_iter()
-                .collect::<Result<Vec<_>, _>>()?;
-                result = self
-                    .node
-                    .handle_certificate(certificate.clone(), blobs)
-                    .await;
-            }
+        certificate: &Certificate,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        if certificate.is_signed_by(&self.name) {
+            let result = self
+                .node
+                .handle_lite_certificate(certificate.lite_certificate())
+                .await;
             match result {
-                Ok(response) => {
-                    response.check(self.name)?;
-                    // Succeed
-                    return Ok(response.info);
+                Err(NodeError::MissingCertificateValue) => {
+                    warn!(
+                        "Validator {} forgot a certificate value that they signed before",
+                        self.name
+                    );
                 }
-                Err(NodeError::InactiveChain(_)) if retryable && count < self.retries => {
-                    // Retry
-                    tokio::time::sleep(self.delay).await;
-                    count += 1;
-                    continue;
-                }
-                Err(e) => {
-                    // Fail
-                    return Err(e);
+                _ => {
+                    return result;
                 }
             }
         }
+        self.node
+            .handle_certificate(certificate.clone(), vec![])
+            .await
+    }
+
+    async fn send_certificate(&mut self, certificate: Certificate) -> Result<ChainInfo, NodeError> {
+        let mut result = self.send_optimized_certificate(&certificate).await;
+
+        if let Err(NodeError::ApplicationBytecodesNotFound(locations)) = &result {
+            // Find the missing bytecodes locally and retry.
+            let required = match certificate.value() {
+                CertificateValue::ConfirmedBlock { executed_block, .. }
+                | CertificateValue::ValidatedBlock { executed_block, .. } => {
+                    executed_block.block.bytecode_locations()
+                }
+                CertificateValue::LeaderTimeout { .. } => HashMap::new(),
+            };
+            for location in locations {
+                if !required.contains_key(location) {
+                    let hash = location.certificate_hash;
+                    warn!("validator requested {:?} but it is not required", hash);
+                    return Err(NodeError::InvalidChainInfoResponse);
+                }
+            }
+            let unique_locations = locations.iter().cloned().collect::<HashSet<_>>();
+            if locations.len() > unique_locations.len() {
+                warn!("locations requested by validator contain duplicates");
+                return Err(NodeError::InvalidChainInfoResponse);
+            }
+            let blobs = future::join_all(
+                unique_locations
+                    .into_iter()
+                    .map(|location| self.storage.read_value(location.certificate_hash)),
+            )
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
+            result = self
+                .node
+                .handle_certificate(certificate.clone(), blobs)
+                .await;
+        }
+
+        let response = result?;
+        response.check(self.name)?;
+        // Succeed
+        Ok(response.info)
     }
 
     async fn send_block_proposal(
@@ -329,7 +320,6 @@ where
                         chain_id,
                         response.info.next_block_height,
                         target_block_height,
-                        false,
                     ));
                     break;
                 }
@@ -350,7 +340,7 @@ where
                             height,
                             index: _,
                         })) => {
-                            jobs.push((chain_id, BlockHeight::ZERO, target_block_height, true));
+                            jobs.push((chain_id, BlockHeight::ZERO, target_block_height));
                             chain_id = parent_id;
                             target_block_height = height.try_add_one()?;
                         }
@@ -368,9 +358,7 @@ where
                 }
             }
         }
-        for (chain_id, initial_block_height, target_block_height, retryable) in
-            jobs.into_iter().rev()
-        {
+        for (chain_id, initial_block_height, target_block_height) in jobs.into_iter().rev() {
             // Obtain chain state.
             let range: Range<usize> =
                 initial_block_height.try_into()?..target_block_height.try_into()?;
@@ -382,7 +370,7 @@ where
                 // Send the requested certificates in order.
                 let certs = self.storage.read_certificates(keys.into_iter()).await?;
                 for cert in certs {
-                    self.send_certificate(cert, retryable).await?;
+                    self.send_certificate(cert).await?;
                 }
             }
         }
@@ -395,12 +383,12 @@ where
             .clone();
         if let Some(cert) = manager.locked {
             if cert.value().is_validated() && cert.value().chain_id() == chain_id {
-                self.send_certificate(cert, false).await?;
+                self.send_certificate(cert).await?;
             }
         }
         if let Some(cert) = manager.leader_timeout {
             if cert.value().is_timeout() && cert.value().chain_id() == chain_id {
-                self.send_certificate(cert, false).await?;
+                self.send_certificate(cert).await?;
             }
         }
         Ok(())
@@ -458,9 +446,7 @@ where
                 }
             }
             CommunicateAction::FinalizeBlock(certificate) => {
-                // The only cause for a retry here is the first certificate of a newly opened chain.
-                let retryable = target_block_height == BlockHeight::ZERO;
-                let info = self.send_certificate(certificate, retryable).await?;
+                let info = self.send_certificate(certificate).await?;
                 match info.manager.pending {
                     Some(vote) if vote.validator == self.name => {
                         vote.check()?;
