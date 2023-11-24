@@ -9,9 +9,12 @@ use crate::{codec, codec::Codec, RpcMessage};
 use async_trait::async_trait;
 use futures::{future, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, io, net::ToSocketAddrs};
+use std::{collections::HashMap, io, net::ToSocketAddrs, sync::Arc};
 use structopt::clap::arg_enum;
-use tokio::net::{TcpListener, TcpStream, UdpSocket};
+use tokio::{
+    net::{TcpListener, TcpStream, UdpSocket},
+    sync::Mutex,
+};
 use tokio_util::{codec::Framed, udp::UdpFramed};
 use tracing::{error, warn};
 
@@ -185,15 +188,20 @@ impl ConnectionPool for UdpConnectionPool {
 impl TransportProtocol {
     async fn run_udp_server<S>(
         socket: UdpSocket,
-        mut state: S,
+        state: S,
         mut exit_future: futures::channel::oneshot::Receiver<()>,
     ) -> Result<(), std::io::Error>
     where
         S: MessageHandler + Send + 'static,
     {
-        let mut transport = UdpFramed::new(socket, Codec);
+        let (udp_sink, mut udp_stream) = UdpFramed::new(socket, Codec).split();
+        let udp_sink = Arc::new(Mutex::new(udp_sink));
+        // Track the latest tasks for a given peer. This is used to return answers in the
+        // same order as the queries.
+        let mut previous_tasks = HashMap::new();
+
         loop {
-            let (message, peer) = match future::select(exit_future, transport.next()).await {
+            let (message, peer) = match future::select(exit_future, udp_stream.next()).await {
                 future::Either::Left(_) => break,
                 future::Either::Right((value, new_exit_future)) => {
                     exit_future = new_exit_future;
@@ -208,11 +216,27 @@ impl TransportProtocol {
                     }
                 }
             };
-            if let Some(reply) = state.handle_message(message).await {
-                let status = transport.send((reply, peer)).await;
-                if let Err(error) = status {
-                    error!("Failed to send query response: {}", error);
+
+            let previous_task = previous_tasks.remove(&peer);
+            let mut state = state.clone();
+            let udp_sink = udp_sink.clone();
+            let new_task = tokio::spawn(async move {
+                if let Some(reply) = state.handle_message(message).await {
+                    if let Some(task) = previous_task {
+                        if let Err(error) = task.await {
+                            warn!("Previous task cannot be joined: {}", error);
+                        }
+                    }
+                    let status = udp_sink.lock().await.send((reply, peer)).await;
+                    if let Err(error) = status {
+                        error!("Failed to send query response: {}", error);
+                    }
                 }
+            });
+            previous_tasks.insert(peer, new_task);
+            if previous_tasks.len() >= 100 {
+                // Collect finished tasks to avoid leaking memory.
+                previous_tasks.retain(|_, task| !task.is_finished());
             }
         }
         Ok(())

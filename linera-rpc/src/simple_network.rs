@@ -164,9 +164,6 @@ where
         let state = RunningServerState {
             server: self,
             cross_chain_sender,
-            // UDP servers cannot process several requests (e.g. user requests and
-            // cross-chain requests) at the same time.
-            can_wait_for_outgoing_messages: protocol == TransportProtocol::Tcp,
         };
         // Launch server for the appropriate protocol.
         protocol.spawn_server(&address, state).await
@@ -177,7 +174,6 @@ where
 struct RunningServerState<S> {
     server: Server<S>,
     cross_chain_sender: mpsc::Sender<(RpcMessage, ShardId)>,
-    can_wait_for_outgoing_messages: bool,
 }
 
 #[async_trait]
@@ -204,8 +200,8 @@ where
                 }
             }
             RpcMessage::LiteCertificate(request) => {
-                let (sender, receiver) = (self.can_wait_for_outgoing_messages
-                    && request.wait_for_outgoing_messages)
+                let (sender, receiver) = request
+                    .wait_for_outgoing_messages
                     .then(oneshot::channel)
                     .unzip();
                 match self
@@ -236,8 +232,8 @@ where
                 }
             }
             RpcMessage::Certificate(request) => {
-                let (sender, receiver) = (self.can_wait_for_outgoing_messages
-                    && request.wait_for_outgoing_messages)
+                let (sender, receiver) = request
+                    .wait_for_outgoing_messages
                     .then(oneshot::channel)
                     .unzip();
                 match self
