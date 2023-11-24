@@ -31,7 +31,7 @@ impl ValidatorNodeProvider for NodeProvider {
 
     fn make_node(&self, address: &str) -> anyhow::Result<Self::Node, NodeError> {
         let client = match &address.to_lowercase() {
-            address if address.starts_with("tcp") || address.starts_with("upd") => {
+            address if address.starts_with("tcp") || address.starts_with("udp") => {
                 Client::Simple(self.simple.make_node(address)?)
             }
             address if address.starts_with("grpc") => Client::Grpc(self.grpc.make_node(address)?),

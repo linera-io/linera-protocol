@@ -37,9 +37,12 @@ async fn test_resolve_binary() {
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Simple) ; "rocksdb_simple"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Simple) ; "scylladb_simple"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Simple) ; "aws_simple"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Tcp) ; "rocksdb_tcp"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Udp) ; "rocksdb_udp"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -56,7 +59,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
             let node_service_2 = client_2.run_node_service(8081).await.unwrap();
             (Some(node_service_2), chain_2)
         }
-        Network::Simple => {
+        _ => {
             client
                 .transfer(Amount::from_tokens(10), ChainId::root(9), ChainId::root(8))
                 .await
