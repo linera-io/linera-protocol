@@ -409,6 +409,11 @@ where
         if self.was_cleared {
             return Ok(None);
         }
+        let iter = self.deleted_prefixes.iter();
+        let mut lower_bound = GreatestLowerBoundIterator::new(0, iter);
+        if !lower_bound.is_index_absent(index) {
+            return Ok(None);
+        }
         let key = self.context.base_tag_index(KeyTag::Index as u8, index);
         Ok(self.context.read_value_bytes(&key).await?)
     }
@@ -444,9 +449,13 @@ where
                 result.push(value);
             } else {
                 result.push(None);
-                missed_indices.push(i);
-                let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
-                vector_query.push(key);
+                let iter = self.deleted_prefixes.iter();
+                let mut lower_bound = GreatestLowerBoundIterator::new(0, iter);
+                if lower_bound.is_index_absent(&index) {
+                    missed_indices.push(i);
+                    let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
+                    vector_query.push(key);
+                }
             }
         }
         if !self.was_cleared {
