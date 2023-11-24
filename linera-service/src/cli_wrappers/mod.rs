@@ -54,28 +54,32 @@ pub trait LineraNet {
 #[derive(Copy, Clone)]
 pub enum Network {
     Grpc,
-    Simple,
+    Tcp,
+    Udp,
 }
 
 impl Network {
     fn internal(&self) -> &'static str {
         match self {
             Network::Grpc => "{ Grpc = \"ClearText\" }",
-            Network::Simple => "{ Simple = \"Tcp\" }",
+            Network::Tcp => "{ Simple = \"Tcp\" }",
+            Network::Udp => "{ Simple = \"Udp\" }",
         }
     }
 
     fn external(&self) -> &'static str {
         match self {
             Network::Grpc => "{ Grpc = \"ClearText\" }",
-            Network::Simple => "{ Simple = \"Tcp\" }",
+            Network::Tcp => "{ Simple = \"Tcp\" }",
+            Network::Udp => "{ Simple = \"Udp\" }",
         }
     }
 
     fn external_short(&self) -> &'static str {
         match self {
             Network::Grpc => "grpc",
-            Network::Simple => "tcp",
+            Network::Tcp => "tcp",
+            Network::Udp => "udp",
         }
     }
 }

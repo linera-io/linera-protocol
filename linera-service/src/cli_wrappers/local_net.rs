@@ -342,7 +342,7 @@ impl LocalNet {
                 let nickname = format!("validator proxy {i}");
                 Self::ensure_grpc_server_has_started(&nickname, port).await?;
             }
-            Network::Simple => {
+            Network::Tcp | Network::Udp => {
                 info!("Letting validator proxy {i} start");
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
@@ -429,7 +429,7 @@ impl LocalNet {
                 let nickname = format!("validator server {i}:{j}");
                 Self::ensure_grpc_server_has_started(&nickname, port).await?;
             }
-            Network::Simple => {
+            Network::Tcp | Network::Udp => {
                 info!("Letting validator server {i}:{j} start");
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
