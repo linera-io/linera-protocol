@@ -248,6 +248,11 @@ where
         if self.was_cleared {
             return Ok(None);
         }
+        let iter = self.deleted_prefixes.iter();
+        let mut lower_bound = GreatestLowerBoundIterator::new(0, iter);
+        if !lower_bound.is_index_absent(&short_key) {
+            return Ok(None);
+        }
         let key = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
         Ok(self.context.read_value(&key).await?)
     }
