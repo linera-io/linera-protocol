@@ -73,9 +73,9 @@ pub struct KeyValueStoreView<C> {
     context: C,
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
-    stored_total_size: u64,
-    total_size: u64,
-    sizes: ByteMapView<C, u64>,
+    stored_total_size: (u64,u64),
+    total_size: (u64,u64),
+    sizes: ByteMapView<C, (u64,u64)>,
     deleted_prefixes: BTreeSet<Vec<u8>>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
@@ -170,7 +170,7 @@ where
         self.was_cleared = true;
         self.updates.clear();
         self.deleted_prefixes.clear();
-        self.total_size = 0;
+        self.total_size = (0,0);
         self.sizes.clear();
         *self.hash.get_mut() = None;
     }
@@ -195,10 +195,10 @@ where
     /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   let total_size = view.total_size();
-    ///   assert_eq!(total_size, 0);
+    ///   assert_eq!(total_size, (0,0));
     /// # })
     /// ```
-    pub fn total_size(&self) -> u64 {
+    pub fn total_size(&self) -> (u64,u64) {
         self.total_size
     }
 
@@ -583,7 +583,8 @@ where
                 WriteOperation::Delete { key } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     if let Some(size) = self.sizes.get(&key).await? {
-                        self.total_size -= size;
+                        self.total_size.0 -= size.0;
+                        self.total_size.1 -= size.1;
                     }
                     self.sizes.remove(key.clone());
                     if self.was_cleared {
@@ -594,10 +595,12 @@ where
                 }
                 WriteOperation::Put { key, value } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
-                    let single_size = (key.len() + value.len()) as u64;
-                    self.total_size += single_size;
+                    let single_size = (key.len() as u64, value.len() as u64);
+                    self.total_size.0 += single_size.0;
+                    self.total_size.1 += single_size.1;
                     if let Some(size) = self.sizes.get(&key).await? {
-                        self.total_size -= size;
+                        self.total_size.0 -= size.0;
+                        self.total_size.1 -= size.1;
                     }
                     self.sizes.insert(key.clone(), single_size);
                     self.updates.insert(key, Update::Set(value));
@@ -614,7 +617,8 @@ where
                     }
                     let key_values = self.sizes.key_values_by_prefix(key_prefix.clone()).await?;
                     for (key,value) in key_values {
-                        self.total_size -= value;
+                        self.total_size.0 -= value.0;
+                        self.total_size.1 -= value.1;
                         self.sizes.remove(key);
                     }
                     self.sizes.remove_by_prefix(key_prefix.clone());

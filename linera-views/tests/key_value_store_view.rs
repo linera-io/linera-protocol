@@ -19,12 +19,14 @@ fn remove_by_prefix<V: Debug>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8
     map.retain(|key, _| !key.starts_with(&key_prefix));
 }
 
-fn total_size(vec: &Vec<(Vec<u8>,Vec<u8>)>) -> u64 {
-    let mut total_size = 0;
+fn total_size(vec: &Vec<(Vec<u8>,Vec<u8>)>) -> (u64, u64) {
+    let mut total_key_size = 0;
+    let mut total_value_size = 0;
     for (key, value) in vec {
-        total_size += key.len() + value.len();
+        total_key_size += key.len();
+        total_value_size += value.len();
     }
-    total_size as u64
+    (total_key_size as u64, total_value_size as u64)
 }
 
 #[tokio::test]
@@ -45,13 +47,13 @@ async fn key_value_store_view_mutability() {
         let count_oper = rng.gen_range(0..25);
         let mut new_state_map = state_map.clone();
         let mut new_state_vec = state_vec.clone();
-        for i_oper in 0..count_oper {
+        for _ in 0..count_oper {
             let choice = rng.gen_range(0..5);
             let count = view.store.count().await.unwrap();
             if choice == 0 {
                 // inserting random stuff
                 let n_ins = rng.gen_range(0..10);
-                for u in 0..n_ins {
+                for _ in 0..n_ins {
                     let len = rng.gen_range(1..6);
                     let key = rng
                         .clone()
