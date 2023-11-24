@@ -41,6 +41,8 @@ async fn key_value_store_view_mutability() {
         let save = rng.gen::<bool>();
         let read_state = view.store.index_values().await.unwrap();
         let state_vec = state_map.clone().into_iter().collect::<Vec<_>>();
+        println!("read_state={:?}", read_state);
+        println!("state_vec={:?}", state_vec);
         assert_eq!(state_vec, read_state);
         println!("A: total_size(&state_vec)={}", total_size(&state_vec));
         println!("A: view.store.total_size()={}", view.store.total_size());
@@ -49,10 +51,10 @@ async fn key_value_store_view_mutability() {
         let count_oper = rng.gen_range(0..25);
         let mut new_state_map = state_map.clone();
         let mut new_state_vec = state_vec.clone();
-        for _ in 0..count_oper {
+        for i_oper in 0..count_oper {
             let choice = rng.gen_range(0..5);
             let count = view.store.count().await.unwrap();
-            println!("choice={} count={}", choice, count);
+            println!("{} / {}  choice={} count={}", i_oper, count_oper, choice, count);
             if choice == 0 {
                 // inserting random stuff
                 let n_ins = rng.gen_range(0..10);
@@ -112,6 +114,7 @@ async fn key_value_store_view_mutability() {
             }
             println!("save={}", save);
             new_state_vec = new_state_map.clone().into_iter().collect();
+            println!("|new_state_vec|={} |new_state_map|={}", new_state_vec.len(), new_state_map.len());
             let new_key_values = view.store.index_values().await.unwrap();
             assert_eq!(new_state_vec, new_key_values);
             println!("B: total_size(&new_state_vec)={}", total_size(&new_state_vec));

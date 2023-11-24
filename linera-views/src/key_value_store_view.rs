@@ -122,8 +122,9 @@ where
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+        println!("flush was_cleared={}", self.was_cleared);
+        println!("flush |updates|={}", self.updates.len());
         if self.was_cleared {
-            self.was_cleared = false;
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Update::Set(value) = update {
@@ -154,11 +155,14 @@ where
             }
             self.stored_hash = hash;
         }
-        if self.stored_total_size != self.total_size {
+        println!("|total_size|={} |stored_total_size|={}", self.total_size, self.stored_total_size);
+        if self.stored_total_size != self.total_size || self.was_cleared {
+            println!("Not equal, doing the write");
             let key = self.context.base_tag(KeyTag::TotalSize as u8);
             batch.put_key_value(key, &self.total_size)?;
             self.stored_total_size = self.total_size;
         }
+        self.was_cleared = false;
         Ok(())
     }
 
@@ -578,8 +582,8 @@ where
     pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
         *self.hash.get_mut() = None;
         let max_key_size = self.max_key_size();
-        for op in batch.operations {
-            match op {
+        for operation in batch.operations {
+            match operation {
                 WriteOperation::Delete { key } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     if let Some(size) = self.sizes.get(&key).await? {
