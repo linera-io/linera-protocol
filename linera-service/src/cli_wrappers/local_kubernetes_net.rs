@@ -80,6 +80,17 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
     }
 }
 
+impl Drop for LocalKubernetesNet {
+    fn drop(&mut self) {
+        // Block the current runtime to cleanup
+        let handle = tokio::runtime::Handle::current();
+        let _guard = handle.enter();
+        futures::executor::block_on(async move {
+            self.terminate().await.unwrap();
+        });
+    }
+}
+
 #[async_trait]
 impl LineraNet for LocalKubernetesNet {
     async fn ensure_is_running(&mut self) -> Result<()> {
@@ -135,14 +146,15 @@ impl LineraNet for LocalKubernetesNet {
         client
     }
 
-    async fn terminate(mut self) -> Result<()> {
-        for mut port_forward_child in self.kubectl_instance.port_forward_children {
+    async fn terminate(&mut self) -> Result<()> {
+        for port_forward_child in &mut self.kubectl_instance.port_forward_children {
             port_forward_child.kill().await?;
         }
 
-        for kind_cluster in self.kind_clusters {
+        for kind_cluster in &mut self.kind_clusters {
             kind_cluster.delete().await?;
         }
+
         Ok(())
     }
 }
