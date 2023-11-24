@@ -42,6 +42,8 @@ async fn key_value_store_view_mutability() {
         let read_state = view.store.index_values().await.unwrap();
         let state_vec = state_map.clone().into_iter().collect::<Vec<_>>();
         assert_eq!(state_vec, read_state);
+        println!("A: total_size(&state_vec)={}", total_size(&state_vec));
+        println!("A: view.store.total_size()={}", view.store.total_size());
         assert_eq!(total_size(&state_vec), view.store.total_size());
         //
         let count_oper = rng.gen_range(0..25);
@@ -80,7 +82,7 @@ async fn key_value_store_view_mutability() {
                     assert_eq!(total_size(&new_state_vec), view.store.total_size());
                 }
             }
-            if choice == 1 && count > 0 && false {
+            if choice == 1 && count > 0 {
                 // deleting some entries
                 let n_remove = rng.gen_range(0..count);
                 for _ in 0..n_remove {
@@ -98,7 +100,7 @@ async fn key_value_store_view_mutability() {
                 view.store.remove_by_prefix(key_prefix.clone()).await.unwrap();
                 remove_by_prefix(&mut new_state_map, key_prefix);
             }
-            if choice == 3 && false {
+            if choice == 3 {
                 // Doing the clearing
                 view.clear();
                 new_state_map.clear();
@@ -108,9 +110,12 @@ async fn key_value_store_view_mutability() {
                 view.rollback();
                 new_state_map = state_map.clone();
             }
+            println!("save={}", save);
             new_state_vec = new_state_map.clone().into_iter().collect();
             let new_key_values = view.store.index_values().await.unwrap();
             assert_eq!(new_state_vec, new_key_values);
+            println!("B: total_size(&new_state_vec)={}", total_size(&new_state_vec));
+            println!("B: view.store.total_size()={}", view.store.total_size());
             assert_eq!(total_size(&new_state_vec), view.store.total_size());
             let all_keys_vec = all_keys.clone().into_iter().collect::<Vec<_>>();
             let tests_multi_get = view.store.multi_get(all_keys_vec).await.unwrap();
@@ -119,10 +124,8 @@ async fn key_value_store_view_mutability() {
                 let test_map = new_state_map.contains_key(&key);
                 let test_view = view.store.get(&key).await.unwrap().is_some();
                 let test_multi_get = tests_multi_get[i].is_some();
-                if test_map != test_view || test_map != test_multi_get {
-                    println!("key={:?} test_map={}, test_view={} test_multi_get={}", key, test_map, test_view, test_multi_get);
-                    assert!(false);
-                }
+                assert_eq!(test_map, test_view);
+                assert_eq!(test_map, test_multi_get);
             }
         }
         if save {
