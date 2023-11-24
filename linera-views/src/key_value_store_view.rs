@@ -122,8 +122,6 @@ where
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        println!("flush was_cleared={}", self.was_cleared);
-        println!("flush |updates|={}", self.updates.len());
         if self.was_cleared {
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
@@ -155,9 +153,7 @@ where
             }
             self.stored_hash = hash;
         }
-        println!("|total_size|={} |stored_total_size|={}", self.total_size, self.stored_total_size);
         if self.stored_total_size != self.total_size || self.was_cleared {
-            println!("Not equal, doing the write");
             let key = self.context.base_tag(KeyTag::TotalSize as u8);
             batch.put_key_value(key, &self.total_size)?;
             self.stored_total_size = self.total_size;
@@ -587,7 +583,6 @@ where
                 WriteOperation::Delete { key } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     if let Some(size) = self.sizes.get(&key).await? {
-                        println!("Delete sub total_size={} key={:?} size={}", self.total_size, key, size);
                         self.total_size -= size;
                     }
                     self.sizes.remove(key.clone());
@@ -600,10 +595,8 @@ where
                 WriteOperation::Put { key, value } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     let single_size = (key.len() + value.len()) as u64;
-                    println!("Put add total_size={} key={:?} single_size={}", self.total_size, key, single_size);
                     self.total_size += single_size;
                     if let Some(size) = self.sizes.get(&key).await? {
-                        println!("Put sub total_size={} size={}", self.total_size, size);
                         self.total_size -= size;
                     }
                     self.sizes.insert(key.clone(), single_size);
@@ -620,9 +613,7 @@ where
                         self.updates.remove(&key);
                     }
                     let key_values = self.sizes.key_values_by_prefix(key_prefix.clone()).await?;
-                    println!("|key_values|={}", key_values.len());
                     for (key,value) in key_values {
-                        println!("DeletePrefix sub total_size={} key={:?} value={}", self.total_size, key, value);
                         self.total_size -= value;
                         self.sizes.remove(key);
                     }

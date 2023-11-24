@@ -16,9 +16,7 @@ pub struct StateView<C> {
 }
 
 fn remove_by_prefix<V: Debug>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8>) {
-    println!("remove_by_prefix before map={:?} key_prefix={:?}", map, key_prefix);
     map.retain(|key, _| !key.starts_with(&key_prefix));
-    println!("remove_by_prefix  after map={:?}", map);
 }
 
 fn total_size(vec: &Vec<(Vec<u8>,Vec<u8>)>) -> u64 {
@@ -41,11 +39,7 @@ async fn key_value_store_view_mutability() {
         let save = rng.gen::<bool>();
         let read_state = view.store.index_values().await.unwrap();
         let state_vec = state_map.clone().into_iter().collect::<Vec<_>>();
-        println!("read_state={:?}", read_state);
-        println!("state_vec={:?}", state_vec);
         assert_eq!(state_vec, read_state);
-        println!("A: total_size(&state_vec)={}", total_size(&state_vec));
-        println!("A: view.store.total_size()={}", view.store.total_size());
         assert_eq!(total_size(&state_vec), view.store.total_size());
         //
         let count_oper = rng.gen_range(0..25);
@@ -54,11 +48,9 @@ async fn key_value_store_view_mutability() {
         for i_oper in 0..count_oper {
             let choice = rng.gen_range(0..5);
             let count = view.store.count().await.unwrap();
-            println!("{} / {}  choice={} count={}", i_oper, count_oper, choice, count);
             if choice == 0 {
                 // inserting random stuff
                 let n_ins = rng.gen_range(0..10);
-                println!("n_ins={}", n_ins);
                 for u in 0..n_ins {
                     let len = rng.gen_range(1..6);
                     let key = rng
@@ -68,18 +60,11 @@ async fn key_value_store_view_mutability() {
                         .collect::<Vec<_>>();
                     all_keys.insert(key.clone());
                     let value = Vec::new();
-                    let test_map = new_state_map.contains_key(&key);
-                    let test_view = view.store.get(&key).await.unwrap().is_some();
-                    let test_check = test_map == test_view;
-                    println!("u={} key={:?} test_map={} test_view={}", u, key, test_map, test_view);
-                    println!("test_check={}", test_check);
                     view.store.insert(key.clone(), value.clone()).await.unwrap();
                     new_state_map.insert(key, value);
                     //
                     new_state_vec = new_state_map.clone().into_iter().collect();
                     let new_key_values = view.store.index_values().await.unwrap();
-                    println!("total_size(&new_state_vec)={}", total_size(&new_state_vec));
-                    println!("view.store.total_size={}", view.store.total_size());
                     assert_eq!(new_state_vec, new_key_values);
                     assert_eq!(total_size(&new_state_vec), view.store.total_size());
                 }
@@ -98,7 +83,6 @@ async fn key_value_store_view_mutability() {
                 // deleting a prefix
                 let val = rng.gen_range(0..5) as u8;
                 let key_prefix = vec![val];
-                println!("prefix_key={:?}", key_prefix);
                 view.store.remove_by_prefix(key_prefix.clone()).await.unwrap();
                 remove_by_prefix(&mut new_state_map, key_prefix);
             }
@@ -112,17 +96,12 @@ async fn key_value_store_view_mutability() {
                 view.rollback();
                 new_state_map = state_map.clone();
             }
-            println!("save={}", save);
             new_state_vec = new_state_map.clone().into_iter().collect();
-            println!("|new_state_vec|={} |new_state_map|={}", new_state_vec.len(), new_state_map.len());
             let new_key_values = view.store.index_values().await.unwrap();
             assert_eq!(new_state_vec, new_key_values);
-            println!("B: total_size(&new_state_vec)={}", total_size(&new_state_vec));
-            println!("B: view.store.total_size()={}", view.store.total_size());
             assert_eq!(total_size(&new_state_vec), view.store.total_size());
             let all_keys_vec = all_keys.clone().into_iter().collect::<Vec<_>>();
             let tests_multi_get = view.store.multi_get(all_keys_vec).await.unwrap();
-            println!("|all_keys|={}", all_keys.len());
             for (i, key) in all_keys.clone().into_iter().enumerate() {
                 let test_map = new_state_map.contains_key(&key);
                 let test_view = view.store.get(&key).await.unwrap().is_some();
