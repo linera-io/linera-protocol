@@ -6,6 +6,7 @@ use anyhow::Result;
 use rand::Rng;
 use tokio::process::Command;
 
+#[derive(Clone)]
 pub struct KindCluster {
     id: u32,
 }
