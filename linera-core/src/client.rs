@@ -708,7 +708,7 @@ where
         let cross_chain_delay = self.cross_chain_delay;
         let cross_chain_retries = self.cross_chain_retries;
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(committee)?;
-        let result = communicate_with_quorum(
+        let results = communicate_with_quorum(
             &nodes,
             committee,
             |value: &Option<LiteVote>| -> Option<_> {
@@ -728,7 +728,7 @@ where
                 Box::pin(async move { updater.send_chain_update(chain_id, action).await })
             },
         )
-        .await;
+        .await?;
         let (value, round) = match action {
             CommunicateAction::SubmitBlock(proposal) => {
                 let BlockAndRound { block, round } = proposal.content;
@@ -762,18 +762,10 @@ where
                 (value, round)
             }
             CommunicateAction::AdvanceToNextBlockHeight(_) => {
-                return match result {
-                    Ok(_) => Ok(None),
-                    Err(CommunicationError::Trusted(NodeError::InactiveChain(id)))
-                        if id == chain_id =>
-                    {
-                        Ok(None)
-                    }
-                    Err(error) => Err(error.into()),
-                };
+                return Ok(None);
             }
         };
-        let votes = match result? {
+        let votes = match results {
             (Some((votes_hash, votes_round)), votes)
                 if votes_hash == value.hash() && votes_round == round =>
             {
