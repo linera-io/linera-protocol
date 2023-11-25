@@ -7,7 +7,7 @@ use linera_views::{
     views::{CryptoHashRootView, RootView, View},
 };
 use rand::{distributions::Uniform, Rng, SeedableRng};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use rand::RngCore;
 
 #[derive(CryptoHashRootView)]
@@ -22,6 +22,7 @@ fn remove_by_prefix<V>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8>) {
 async fn map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
     let context = create_memory_context();
     let mut state_map = BTreeMap::new();
+    let mut all_keys = BTreeSet::new();
     let n = 200;
     for _ in 0..n {
         let mut view = StateView::load(context.clone()).await.unwrap();
@@ -46,6 +47,7 @@ async fn map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
                         .sample_iter(Uniform::from(0..4))
                         .take(len)
                         .collect::<Vec<_>>();
+                    all_keys.insert(key.clone());
                     let value = rng.gen::<u8>();
                     view.map.insert(key.clone(), value);
                     new_state_map.insert(key, value);
@@ -89,6 +91,11 @@ async fn map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
                     .collect::<Vec<_>>();
                 let part_key_values = view.map.key_values_by_prefix(vec![u]).await.unwrap();
                 assert_eq!(part_state_vec, part_key_values);
+            }
+            for key in &all_keys {
+                let test_map = new_state_map.contains_key(key);
+                let test_view = view.map.get(key).await.unwrap().is_some();
+                assert_eq!(test_map, test_view);
             }
         }
         if save {

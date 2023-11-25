@@ -93,7 +93,7 @@ async fn key_value_store_view_mutability() {
                 view.clear();
                 new_state_map.clear();
             }
-            if choice == 4 && false {
+            if choice == 4 {
                 // Doing the rollback
                 view.rollback();
                 new_state_map = state_map.clone();
