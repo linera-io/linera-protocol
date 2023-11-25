@@ -485,44 +485,26 @@ NodeError:
     11:
       InvalidChainInfoResponse: UNIT
     12:
-      ProposedBlockToInactiveChain:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - retries: U64
-    13:
-      ProposedBlockWithLaggingMessages:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - retries: U64
-    14:
-      ProposedBlockWithLaggingBytecode:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - retries: U64
-    15:
       InvalidDecoding: UNIT
-    16:
+    13:
       UnexpectedMessage: UNIT
-    17:
+    14:
       GrpcError:
         STRUCT:
           - error: STR
-    18:
+    15:
       ClientIoError:
         STRUCT:
           - error: STR
-    19:
+    16:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    20:
+    17:
       SubscriptionError:
         STRUCT:
           - transport: STR
-    21:
+    18:
       SubscriptionFailed:
         STRUCT:
           - status: STR

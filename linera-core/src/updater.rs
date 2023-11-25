@@ -23,7 +23,7 @@ use std::{
     time::{Duration, Instant},
 };
 use thiserror::Error;
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 
 /// The amount of time we wait for additional validators to contribute to the result, as a fraction
 /// of how long it took to reach a quorum.
@@ -250,71 +250,24 @@ where
         proposal: BlockProposal,
     ) -> Result<ChainInfo, NodeError> {
         let chain_id = proposal.content.block.chain_id;
-        let mut count = 0;
-        let mut has_send_chain_information_for_senders = false;
-        loop {
-            match self.node.handle_block_proposal(proposal.clone()).await {
-                Ok(response) => {
-                    response.check(self.name)?;
-                    // Succeed
-                    return Ok(response.info);
-                }
-                Err(NodeError::MissingCrossChainUpdate { .. })
-                | Err(NodeError::ApplicationBytecodesNotFound(_))
-                    if !has_send_chain_information_for_senders =>
-                {
-                    // Some received certificates may be missing for this validator
-                    // (e.g. to make the balance sufficient) so we are going to
-                    // synchronize them now.
-                    self.send_chain_information_for_senders(chain_id).await?;
-                    has_send_chain_information_for_senders = true;
-                }
-                Err(NodeError::InactiveChain(_)) => {
-                    if count < self.retries {
-                        // `send_chain_information` is always called before
-                        // `send_block_proposal` but in the case of new chains, it may
-                        // take some time to receive the missing `OpenChain` message: let's
-                        // retry.
-                        tokio::time::sleep(self.delay).await;
-                        count += 1;
-                    } else {
-                        return Err(NodeError::ProposedBlockToInactiveChain {
-                            chain_id,
-                            retries: self.retries,
-                        });
-                    }
-                }
-                Err(e @ NodeError::MissingCrossChainUpdate { .. }) => {
-                    if count < self.retries {
-                        // We just called `send_chain_information_for_senders` but it may
-                        // take time to receive the missing messages: let's retry.
-                        tokio::time::sleep(self.delay).await;
-                        count += 1;
-                    } else {
-                        info!("Missing cross-chain updates: {:?}", e);
-                        return Err(NodeError::ProposedBlockWithLaggingMessages {
-                            chain_id,
-                            retries: self.retries,
-                        });
-                    }
-                }
-                Err(NodeError::ApplicationBytecodesNotFound(_)) => {
-                    if count < self.retries {
-                        tokio::time::sleep(self.delay).await;
-                        count += 1;
-                    } else {
-                        return Err(NodeError::ProposedBlockWithLaggingBytecode {
-                            chain_id,
-                            retries: self.retries,
-                        });
-                    }
-                }
-                Err(e) => {
-                    // Fail
-                    return Err(e);
-                }
+        let response = match self.node.handle_block_proposal(proposal.clone()).await {
+            Ok(response) => response,
+            Err(NodeError::MissingCrossChainUpdate { .. })
+            | Err(NodeError::InactiveChain(_))
+            | Err(NodeError::ApplicationBytecodesNotFound(_)) => {
+                // Some received certificates may be missing for this validator
+                // (e.g. to create the chain or make the balance sufficient) so we are going to
+                // synchronize them now and retry.
+                self.send_chain_information_for_senders(chain_id).await?;
+                self.node.handle_block_proposal(proposal.clone()).await?
             }
-        }
+            Err(e) => {
+                // Fail immediately on other errors.
+                return Err(e);
+            }
+        };
+        response.check(self.name)?;
+        Ok(response.info)
     }
 
     async fn send_chain_information(
@@ -356,18 +309,6 @@ where
             // Send the requested certificates in order.
             let certs = self.storage.read_certificates(keys.into_iter()).await?;
             for cert in certs {
-                let height = cert
-                    .value
-                    .inner()
-                    .height()
-                    .try_add_one()
-                    .expect("adding one to a certified block height should work");
-                let delivery = if height == target_block_height {
-                    // Only the last certificate per range may need to wait for outgoing messages.
-                    delivery
-                } else {
-                    CrossChainMessageDelivery::DoNotWaitForOutgoingMessages
-                };
                 self.send_certificate(cert, delivery).await?;
             }
         }

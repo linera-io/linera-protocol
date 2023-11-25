@@ -149,24 +149,6 @@ pub enum NodeError {
     #[error("The received chain info response is invalid")]
     InvalidChainInfoResponse,
 
-    #[error(
-        "Failed to submit block proposal: chain {chain_id:?} was still inactive \
-         after validator synchronization and {retries} retries"
-    )]
-    ProposedBlockToInactiveChain { chain_id: ChainId, retries: usize },
-
-    #[error(
-        "Failed to submit block proposal: chain {chain_id:?} was still missing messages \
-         after validator synchronization and {retries} retries"
-    )]
-    ProposedBlockWithLaggingMessages { chain_id: ChainId, retries: usize },
-
-    #[error(
-        "Failed to submit block proposal: chain {chain_id:?} was still missing application bytecodes \
-         after validator synchronization and {retries} retries"
-    )]
-    ProposedBlockWithLaggingBytecode { chain_id: ChainId, retries: usize },
-
     // Networking errors.
     // TODO(#258): These errors should be defined in linera-rpc.
     #[error("Cannot deserialize")]
