@@ -512,8 +512,7 @@ where
             .await;
         self.chain_client_storages.push(storage.clone());
         let provider = self.validator_clients.iter().cloned().collect();
-        let cross_chain_delay = std::time::Duration::from_millis(500);
-        let builder = ChainClientBuilder::new(provider, 10, cross_chain_delay, 10);
+        let builder = ChainClientBuilder::new(provider, 10);
         Ok(builder.build(
             chain_id,
             vec![key_pair],

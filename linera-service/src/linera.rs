@@ -159,7 +159,6 @@ impl ClientContext {
     fn configure(options: &ClientOptions, wallet_state: WalletState) -> Self {
         let send_timeout = Duration::from_micros(options.send_timeout_us);
         let recv_timeout = Duration::from_micros(options.recv_timeout_us);
-        let cross_chain_delay = Duration::from_micros(options.cross_chain_delay_ms);
         let notification_retry_delay = Duration::from_micros(options.notification_retry_delay_us);
         let prng = wallet_state.make_prng();
 
@@ -171,12 +170,8 @@ impl ClientContext {
             wait_for_outgoing_messages: options.wait_for_outgoing_messages,
         };
         let node_provider = NodeProvider::new(node_options);
-        let chain_client_builder = ChainClientBuilder::new(
-            node_provider,
-            options.max_pending_messages,
-            cross_chain_delay,
-            options.cross_chain_retries,
-        );
+        let chain_client_builder =
+            ChainClientBuilder::new(node_provider, options.max_pending_messages);
         ClientContext {
             chain_client_builder,
             wallet_state,
@@ -622,13 +617,6 @@ struct ClientOptions {
     /// Timeout for receiving responses (us)
     #[structopt(long, default_value = "4000000")]
     recv_timeout_us: u64,
-
-    /// Time between attempts while waiting on cross-chain updates (ms)
-    #[structopt(long, default_value = "4000")]
-    cross_chain_delay_ms: u64,
-
-    #[structopt(long, default_value = "10")]
-    cross_chain_retries: usize,
 
     #[structopt(long, default_value = "10")]
     max_pending_messages: usize,

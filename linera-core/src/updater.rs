@@ -55,8 +55,6 @@ pub struct ValidatorUpdater<A, S> {
     pub name: ValidatorName,
     pub node: A,
     pub storage: S,
-    pub delay: Duration,
-    pub retries: usize,
 }
 
 /// An error result for [`communicate_with_quorum`].

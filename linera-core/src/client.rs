@@ -53,7 +53,6 @@ use std::{
     iter,
     num::NonZeroUsize,
     sync::Arc,
-    time::Duration,
 };
 use thiserror::Error;
 use tracing::{debug, error, info};
@@ -72,10 +71,6 @@ pub struct ChainClientBuilder<ValidatorNodeProvider> {
     validator_node_provider: ValidatorNodeProvider,
     /// Maximum number of pending messages processed at a time in a block.
     max_pending_messages: usize,
-    /// How much time to wait between attempts when we wait for a cross-chain update.
-    cross_chain_delay: Duration,
-    /// How many times we are willing to retry a block that depends on cross-chain updates.
-    cross_chain_retries: usize,
     /// Cached values by hash.
     recent_values: Arc<tokio::sync::Mutex<LruCache<CryptoHash, HashedValue>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -90,8 +85,6 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
     pub fn new(
         validator_node_provider: ValidatorNodeProvider,
         max_pending_messages: usize,
-        cross_chain_delay: Duration,
-        cross_chain_retries: usize,
     ) -> Self {
         let recent_values = Arc::new(tokio::sync::Mutex::new(LruCache::new(
             NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap(),
@@ -99,8 +92,6 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
         Self {
             validator_node_provider,
             max_pending_messages,
-            cross_chain_delay,
-            cross_chain_retries,
             recent_values,
             delivery_notifiers: Arc::new(tokio::sync::Mutex::new(DeliveryNotifiers::default())),
             notifier: Arc::new(Notifier::default()),
@@ -144,8 +135,6 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
             timestamp,
             next_block_height,
             pending_block,
-            cross_chain_delay: self.cross_chain_delay,
-            cross_chain_retries: self.cross_chain_retries,
             node_client,
         }
     }
@@ -179,10 +168,6 @@ pub struct ChainClient<ValidatorNodeProvider, Storage> {
     max_pending_messages: usize,
     /// Support synchronization of received certificates.
     received_certificate_trackers: HashMap<ValidatorName, u64>,
-    /// How much time to wait between attempts when we wait for a cross-chain update.
-    cross_chain_delay: Duration,
-    /// How many times we are willing to retry a block that depends on cross-chain updates.
-    cross_chain_retries: usize,
     /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
     node_client: LocalNodeClient<Storage>,
@@ -708,8 +693,6 @@ where
         action: CommunicateAction,
     ) -> Result<Option<Certificate>, ChainClientError> {
         let storage_client = self.storage_client().await;
-        let cross_chain_delay = self.cross_chain_delay;
-        let cross_chain_retries = self.cross_chain_retries;
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(committee)?;
         let results = communicate_with_quorum(
             &nodes,
@@ -724,8 +707,6 @@ where
                     name,
                     node,
                     storage: storage_client.clone(),
-                    delay: cross_chain_delay,
-                    retries: cross_chain_retries,
                 };
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(chain_id, action).await })
