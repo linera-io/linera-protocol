@@ -7,8 +7,10 @@ use linera_views::{
     views::{CryptoHashRootView, RootView, View},
 };
 use rand::{distributions::Uniform, Rng, SeedableRng};
-use std::collections::{BTreeMap, BTreeSet};
-use std::fmt::Debug;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+};
 
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {
@@ -19,7 +21,7 @@ fn remove_by_prefix<V: Debug>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8
     map.retain(|key, _| !key.starts_with(&key_prefix));
 }
 
-fn total_size(vec: &Vec<(Vec<u8>,Vec<u8>)>) -> (u64, u64) {
+fn total_size(vec: &Vec<(Vec<u8>, Vec<u8>)>) -> (u64, u64) {
     let mut total_key_size = 0;
     let mut total_value_size = 0;
     for (key, value) in vec {
@@ -85,7 +87,10 @@ async fn key_value_store_view_mutability() {
                 // deleting a prefix
                 let val = rng.gen_range(0..5) as u8;
                 let key_prefix = vec![val];
-                view.store.remove_by_prefix(key_prefix.clone()).await.unwrap();
+                view.store
+                    .remove_by_prefix(key_prefix.clone())
+                    .await
+                    .unwrap();
                 remove_by_prefix(&mut new_state_map, key_prefix);
             }
             if choice == 3 {

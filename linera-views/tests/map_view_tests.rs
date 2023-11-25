@@ -6,9 +6,8 @@ use linera_views::{
     memory::create_memory_context,
     views::{CryptoHashRootView, RootView, View},
 };
-use rand::{distributions::Uniform, Rng, SeedableRng};
+use rand::{distributions::Uniform, Rng, RngCore, SeedableRng};
 use std::collections::{BTreeMap, BTreeSet};
-use rand::RngCore;
 
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {

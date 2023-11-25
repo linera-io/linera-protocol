@@ -1093,7 +1093,10 @@ async fn check_hash_memoization_persistence<S>(
             view.queue.push_back(pair1_first_u8 as u64);
             view.map.insert(&str0, pair1_first_u8 as usize).unwrap();
             view.map.insert(&str1, pair0_first_u8 as usize).unwrap();
-            view.key_value_store.insert(pair.0.clone(), pair.1.clone()).await.unwrap();
+            view.key_value_store
+                .insert(pair.0.clone(), pair.1.clone())
+                .await
+                .unwrap();
             if choice == 0 {
                 view.rollback();
                 let hash_new = view.hash().await.unwrap();

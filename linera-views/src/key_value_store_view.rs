@@ -73,9 +73,9 @@ pub struct KeyValueStoreView<C> {
     context: C,
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
-    stored_total_size: (u64,u64),
-    total_size: (u64,u64),
-    sizes: ByteMapView<C, (u64,u64)>,
+    stored_total_size: (u64, u64),
+    total_size: (u64, u64),
+    sizes: ByteMapView<C, (u64, u64)>,
     deleted_prefixes: BTreeSet<Vec<u8>>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
@@ -170,7 +170,7 @@ where
         self.was_cleared = true;
         self.updates.clear();
         self.deleted_prefixes.clear();
-        self.total_size = (0,0);
+        self.total_size = (0, 0);
         self.sizes.clear();
         *self.hash.get_mut() = None;
     }
@@ -198,7 +198,7 @@ where
     ///   assert_eq!(total_size, (0,0));
     /// # })
     /// ```
-    pub fn total_size(&self) -> (u64,u64) {
+    pub fn total_size(&self) -> (u64, u64) {
         self.total_size
     }
 
@@ -438,7 +438,7 @@ where
     ///   assert_eq!(key_values, vec![vec![0,1],vec![0,2]]);
     /// # })
     /// ```
-    pub async fn index_values(&self) -> Result<Vec<(Vec<u8>,Vec<u8>)>, ViewError> {
+    pub async fn index_values(&self) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
         let mut index_values = Vec::new();
         self.for_each_index_value(|index, value| {
             index_values.push((index.to_vec(), value.to_vec()));
@@ -616,7 +616,7 @@ where
                         self.updates.remove(&key);
                     }
                     let key_values = self.sizes.key_values_by_prefix(key_prefix.clone()).await?;
-                    for (key,value) in key_values {
+                    for (key, value) in key_values {
                         self.total_size.0 -= value.0;
                         self.total_size.1 -= value.1;
                         self.sizes.remove(key);
