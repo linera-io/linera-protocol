@@ -43,7 +43,7 @@ async fn key_value_store_view_mutability() {
         let save = rng.gen::<bool>();
         let read_state = view.store.index_values().await.unwrap();
         let state_vec = state_map.clone().into_iter().collect::<Vec<_>>();
-        assert_eq!(state_vec, read_state);
+        assert!(read_state.iter().map(|(k, v)| (k, v)).eq(&state_map));
         assert_eq!(total_size(&state_vec), view.store.total_size());
         //
         let count_oper = rng.gen_range(0..25);
@@ -51,14 +51,13 @@ async fn key_value_store_view_mutability() {
         let mut new_state_vec = state_vec.clone();
         for _ in 0..count_oper {
             let choice = rng.gen_range(0..5);
-            let count = view.store.count().await.unwrap();
+            let entry_count = view.store.count().await.unwrap();
             if choice == 0 {
                 // inserting random stuff
                 let n_ins = rng.gen_range(0..10);
                 for _ in 0..n_ins {
                     let len = rng.gen_range(1..6);
-                    let key = rng
-                        .clone()
+                    let key = (&mut rng)
                         .sample_iter(Uniform::from(0..4))
                         .take(len)
                         .collect::<Vec<_>>();
@@ -73,17 +72,17 @@ async fn key_value_store_view_mutability() {
                     assert_eq!(total_size(&new_state_vec), view.store.total_size());
                 }
             }
-            if choice == 1 && count > 0 {
+            if choice == 1 && entry_count > 0 {
                 // deleting some entries
-                let n_remove = rng.gen_range(0..count);
+                let n_remove = rng.gen_range(0..entry_count);
                 for _ in 0..n_remove {
-                    let pos = rng.gen_range(0..count);
-                    let vec = new_state_vec[pos].clone();
-                    view.store.remove(vec.0.clone()).await.unwrap();
-                    new_state_map.remove(&vec.0);
+                    let pos = rng.gen_range(0..entry_count);
+                    let (key, _) = new_state_vec[pos].clone();
+                    new_state_map.remove(&key);
+                    view.store.remove(key).await.unwrap();
                 }
             }
-            if choice == 2 && count > 0 {
+            if choice == 2 && entry_count > 0 {
                 // deleting a prefix
                 let val = rng.gen_range(0..5) as u8;
                 let key_prefix = vec![val];

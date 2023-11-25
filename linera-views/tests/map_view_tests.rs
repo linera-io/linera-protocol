@@ -18,7 +18,7 @@ fn remove_by_prefix<V>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8>) {
     map.retain(|key, _| !key.starts_with(&key_prefix));
 }
 
-async fn map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
+async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
     let context = create_memory_context();
     let mut state_map = BTreeMap::new();
     let mut all_keys = BTreeSet::new();
@@ -105,9 +105,9 @@ async fn map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
 }
 
 #[tokio::test]
-async fn map_view_mutability_iter() {
+async fn map_view_mutability() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     for _ in 0..10 {
-        map_view_mutability(&mut rng).await;
+        run_map_view_mutability(&mut rng).await;
     }
 }

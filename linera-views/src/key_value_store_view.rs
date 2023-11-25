@@ -186,7 +186,7 @@ where
         C::MAX_KEY_SIZE - 1 - prefix_len
     }
 
-    /// Getting the total size that will be used when stored
+    /// Getting the total sizes that will be used for keys and values when stored
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_memory_context;
@@ -448,7 +448,7 @@ where
         Ok(index_values)
     }
 
-    /// Returns the list of indices and values in lexicographic order.
+    /// Returns the number of entries.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_memory_context;
