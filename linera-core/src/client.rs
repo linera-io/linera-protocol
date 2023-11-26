@@ -71,6 +71,8 @@ pub struct ChainClientBuilder<ValidatorNodeProvider> {
     validator_node_provider: ValidatorNodeProvider,
     /// Maximum number of pending messages processed at a time in a block.
     max_pending_messages: usize,
+    /// Whether to block on cross-chain message delivery.
+    cross_chain_message_delivery: CrossChainMessageDelivery,
     /// Cached values by hash.
     recent_values: Arc<tokio::sync::Mutex<LruCache<CryptoHash, HashedValue>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -85,6 +87,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
     pub fn new(
         validator_node_provider: ValidatorNodeProvider,
         max_pending_messages: usize,
+        cross_chain_message_delivery: CrossChainMessageDelivery,
     ) -> Self {
         let recent_values = Arc::new(tokio::sync::Mutex::new(LruCache::new(
             NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap(),
@@ -92,6 +95,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
         Self {
             validator_node_provider,
             max_pending_messages,
+            cross_chain_message_delivery,
             recent_values,
             delivery_notifiers: Arc::new(tokio::sync::Mutex::new(DeliveryNotifiers::default())),
             notifier: Arc::new(Notifier::default()),
@@ -130,6 +134,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
             validator_node_provider: self.validator_node_provider.clone(),
             admin_id,
             max_pending_messages: self.max_pending_messages,
+            cross_chain_message_delivery: self.cross_chain_message_delivery,
             received_certificate_trackers: HashMap::new(),
             block_hash,
             timestamp,
@@ -166,6 +171,8 @@ pub struct ChainClient<ValidatorNodeProvider, Storage> {
 
     /// Maximum number of pending messages processed at a time in a block.
     max_pending_messages: usize,
+    /// Whether to block on cross-chain message delivery.
+    cross_chain_message_delivery: CrossChainMessageDelivery,
     /// Support synchronization of received certificates.
     received_certificate_trackers: HashMap<ValidatorName, u64>,
     /// Local node to manage the execution state and the local storage of the chains that we are
@@ -834,7 +841,7 @@ where
             block.chain_id,
             CommunicateAction::AdvanceToNextBlockHeight {
                 height: block.height.try_add_one()?,
-                delivery: CrossChainMessageDelivery::WaitForOutgoingMessages,
+                delivery: CrossChainMessageDelivery::Blocking,
             },
         )
         .await?;
@@ -1131,7 +1138,7 @@ where
             chain_id,
             CommunicateAction::AdvanceToNextBlockHeight {
                 height,
-                delivery: CrossChainMessageDelivery::Default,
+                delivery: CrossChainMessageDelivery::NonBlocking,
             },
         )
         .await?;
@@ -1219,7 +1226,7 @@ where
             ));
             let finalize_action = CommunicateAction::FinalizeBlock {
                 certificate,
-                delivery: CrossChainMessageDelivery::Default,
+                delivery: CrossChainMessageDelivery::NonBlocking,
             };
             self.communicate_chain_updates(&committee, self.chain_id, finalize_action)
                 .await?
@@ -1246,7 +1253,7 @@ where
             self.chain_id,
             CommunicateAction::AdvanceToNextBlockHeight {
                 height: self.next_block_height,
-                delivery: CrossChainMessageDelivery::Default,
+                delivery: self.cross_chain_message_delivery,
             },
         )
         .await?;
@@ -1259,7 +1266,7 @@ where
                     self.chain_id,
                     CommunicateAction::AdvanceToNextBlockHeight {
                         height: self.next_block_height,
-                        delivery: CrossChainMessageDelivery::Default,
+                        delivery: self.cross_chain_message_delivery,
                     },
                 )
                 .await?;
@@ -1397,7 +1404,7 @@ where
             self.chain_id,
             CommunicateAction::AdvanceToNextBlockHeight {
                 height: self.next_block_height,
-                delivery: CrossChainMessageDelivery::Default,
+                delivery: CrossChainMessageDelivery::NonBlocking,
             },
         )
         .await?;

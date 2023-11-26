@@ -512,7 +512,7 @@ where
             .await;
         self.chain_client_storages.push(storage.clone());
         let provider = self.validator_clients.iter().cloned().collect();
-        let builder = ChainClientBuilder::new(provider, 10);
+        let builder = ChainClientBuilder::new(provider, 10, CrossChainMessageDelivery::NonBlocking);
         Ok(builder.build(
             chain_id,
             vec![key_pair],

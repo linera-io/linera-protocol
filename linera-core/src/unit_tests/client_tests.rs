@@ -1323,7 +1323,7 @@ where
             client1.chain_id,
             CommunicateAction::AdvanceToNextBlockHeight {
                 height: client1.next_block_height,
-                delivery: CrossChainMessageDelivery::Default,
+                delivery: CrossChainMessageDelivery::NonBlocking,
             },
         )
         .await

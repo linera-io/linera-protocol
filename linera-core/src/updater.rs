@@ -312,13 +312,13 @@ where
         }
         if let Some(cert) = manager.locked {
             if cert.value().is_validated() && cert.value().chain_id() == chain_id {
-                self.send_certificate(cert, CrossChainMessageDelivery::Default)
+                self.send_certificate(cert, CrossChainMessageDelivery::NonBlocking)
                     .await?;
             }
         }
         if let Some(cert) = manager.leader_timeout {
             if cert.value().is_timeout() && cert.value().chain_id() == chain_id {
-                self.send_certificate(cert, CrossChainMessageDelivery::Default)
+                self.send_certificate(cert, CrossChainMessageDelivery::NonBlocking)
                     .await?;
             }
         }
@@ -343,12 +343,8 @@ where
             }
         }
         for (sender, next_height) in info {
-            self.send_chain_information(
-                sender,
-                next_height,
-                CrossChainMessageDelivery::WaitForOutgoingMessages,
-            )
-            .await?;
+            self.send_chain_information(sender, next_height, CrossChainMessageDelivery::Blocking)
+                .await?;
         }
         Ok(())
     }
@@ -359,18 +355,18 @@ where
         action: CommunicateAction,
     ) -> Result<Option<LiteVote>, NodeError> {
         let (target_block_height, first_delivery) = {
-            use CrossChainMessageDelivery::Default;
+            use CrossChainMessageDelivery::NonBlocking;
             match &action {
                 CommunicateAction::SubmitBlock(proposal) => {
-                    (proposal.content.block.height, Default)
+                    (proposal.content.block.height, NonBlocking)
                 }
                 CommunicateAction::FinalizeBlock { certificate, .. } => {
-                    (certificate.value().height(), Default)
+                    (certificate.value().height(), NonBlocking)
                 }
                 CommunicateAction::AdvanceToNextBlockHeight { height, delivery } => {
                     (*height, *delivery)
                 }
-                CommunicateAction::RequestLeaderTimeout { height, .. } => (*height, Default),
+                CommunicateAction::RequestLeaderTimeout { height, .. } => (*height, NonBlocking),
             }
         };
         // Update the validator with missing information, if needed.

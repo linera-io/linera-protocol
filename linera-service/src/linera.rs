@@ -17,7 +17,7 @@ use linera_core::{
     client::{ChainClient, ChainClientBuilder},
     data_types::ChainInfoQuery,
     local_node::LocalNodeClient,
-    node::ValidatorNodeProvider,
+    node::{CrossChainMessageDelivery, ValidatorNodeProvider},
     notifier::Notifier,
     worker::WorkerState,
 };
@@ -86,7 +86,6 @@ struct ClientContext {
     recv_timeout: Duration,
     notification_retry_delay: Duration,
     notification_retries: u32,
-    wait_for_outgoing_messages: bool,
     prng: Box<dyn CryptoRng>,
 }
 
@@ -167,11 +166,11 @@ impl ClientContext {
             recv_timeout,
             notification_retry_delay,
             notification_retries: options.notification_retries,
-            wait_for_outgoing_messages: options.wait_for_outgoing_messages,
         };
         let node_provider = NodeProvider::new(node_options);
+        let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
         let chain_client_builder =
-            ChainClientBuilder::new(node_provider, options.max_pending_messages);
+            ChainClientBuilder::new(node_provider, options.max_pending_messages, delivery);
         ClientContext {
             chain_client_builder,
             wallet_state,
@@ -179,7 +178,6 @@ impl ClientContext {
             recv_timeout,
             notification_retry_delay,
             notification_retries: options.notification_retries,
-            wait_for_outgoing_messages: options.wait_for_outgoing_messages,
             prng,
         }
     }
@@ -278,7 +276,6 @@ impl ClientContext {
             recv_timeout: self.recv_timeout,
             notification_retry_delay: self.notification_retry_delay,
             notification_retries: self.notification_retries,
-            wait_for_outgoing_messages: self.wait_for_outgoing_messages,
         }
     }
 

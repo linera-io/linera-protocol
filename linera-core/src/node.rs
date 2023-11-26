@@ -33,9 +33,8 @@ pub type NotificationStream = Pin<Box<dyn Stream<Item = Notification> + Send>>;
 #[derive(Debug, Default, Clone, Copy)]
 pub enum CrossChainMessageDelivery {
     #[default]
-    Default,
-    DoNotWaitForOutgoingMessages,
-    WaitForOutgoingMessages,
+    NonBlocking,
+    Blocking,
 }
 
 /// How to communicate with a validator node.
@@ -168,12 +167,19 @@ pub enum NodeError {
 }
 
 impl CrossChainMessageDelivery {
-    pub fn should_wait_for_outgoing_messages(self, default: bool) -> bool {
+    pub fn new(wait_for_outgoing_messages: bool) -> Self {
+        if wait_for_outgoing_messages {
+            CrossChainMessageDelivery::Blocking
+        } else {
+            CrossChainMessageDelivery::NonBlocking
+        }
+    }
+
+    pub fn wait_for_outgoing_messages(self) -> bool {
         use CrossChainMessageDelivery::*;
         match self {
-            Default => default,
-            DoNotWaitForOutgoingMessages => false,
-            WaitForOutgoingMessages => true,
+            NonBlocking => false,
+            Blocking => true,
         }
     }
 }

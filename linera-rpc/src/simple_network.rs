@@ -344,7 +344,6 @@ pub struct SimpleClient {
     network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
     send_timeout: Duration,
     recv_timeout: Duration,
-    wait_for_outgoing_messages: bool,
 }
 
 impl SimpleClient {
@@ -352,13 +351,11 @@ impl SimpleClient {
         network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
         send_timeout: Duration,
         recv_timeout: Duration,
-        wait_for_outgoing_messages: bool,
     ) -> Self {
         Self {
             network,
             send_timeout,
             recv_timeout,
-            wait_for_outgoing_messages,
         }
     }
 
@@ -417,8 +414,7 @@ impl ValidatorNode for SimpleClient {
         certificate: LiteCertificate<'_>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let wait_for_outgoing_messages =
-            delivery.should_wait_for_outgoing_messages(self.wait_for_outgoing_messages);
+        let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
         let request = HandleLiteCertificateRequest {
             certificate: certificate.cloned(),
             wait_for_outgoing_messages,
@@ -433,8 +429,7 @@ impl ValidatorNode for SimpleClient {
         blobs: Vec<HashedValue>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let wait_for_outgoing_messages =
-            delivery.should_wait_for_outgoing_messages(self.wait_for_outgoing_messages);
+        let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
         let request = HandleCertificateRequest {
             certificate,
             blobs,
