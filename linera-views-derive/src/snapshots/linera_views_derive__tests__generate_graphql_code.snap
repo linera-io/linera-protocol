@@ -16,16 +16,16 @@ pub struct TestViewCollectionMap<'__graphql_map, C>(
 pub struct TestViewCollectionEntry<'a, C>
 where
     C: linera_views::common::Context + Send + Sync + Clone + 'static,
-    linera_views::views::ViewError: From<C::Error>,
+    linera_views::view::ViewError: From<C::Error>,
 {
     key: String,
-    value: linera_views::collection_view::ReadGuardedView<'a, SomeOtherView<C>>,
+    value: linera_views::views::collection_view::ReadGuardedView<'a, SomeOtherView<C>>,
 }
 #[async_graphql::Object]
 impl<'a, C> TestViewCollectionEntry<'a, C>
 where
     C: linera_views::common::Context + Send + Sync + Clone + 'static,
-    linera_views::views::ViewError: From<C::Error>,
+    linera_views::view::ViewError: From<C::Error>,
 {
     async fn string(&self) -> &String {
         &self.key
@@ -38,7 +38,7 @@ where
 impl<'a, C> TestViewCollectionMap<'a, C>
 where
     C: linera_views::common::Context + Send + Sync + Clone + 'static,
-    linera_views::views::ViewError: From<C::Error>,
+    linera_views::view::ViewError: From<C::Error>,
 {
     async fn values(
         &self,
@@ -72,7 +72,7 @@ where
 impl<C> TestView<C>
 where
     C: linera_views::common::Context + Send + Sync + Clone + 'static,
-    linera_views::views::ViewError: From<C::Error>,
+    linera_views::view::ViewError: From<C::Error>,
 {
     async fn raw(&self) -> &String {
         &self.raw

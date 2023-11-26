@@ -3,10 +3,10 @@ source: linera-views-derive/src/lib.rs
 expression: pretty(generate_crypto_hash_code(input))
 ---
 #[async_trait::async_trait]
-impl linera_views::views::CryptoHashView<CustomContext> for TestView {
+impl linera_views::view::CryptoHashView<CustomContext> for TestView {
     async fn crypto_hash(
         &self,
-    ) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
+    ) -> Result<linera_base::crypto::CryptoHash, linera_views::view::ViewError> {
         use linera_base::crypto::{BcsHashable, CryptoHash};
         use linera_views::{
             batch::Batch, generic_array::GenericArray,

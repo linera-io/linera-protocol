@@ -3,16 +3,16 @@ source: linera-views-derive/src/lib.rs
 expression: "pretty(generate_view_code(input, true))"
 ---
 #[async_trait::async_trait]
-impl<C> linera_views::views::View<C> for TestView<C>
+impl<C> linera_views::view::View<C> for TestView<C>
 where
     C: linera_views::common::Context + Send + Sync + Clone + 'static,
-    linera_views::views::ViewError: From<C::Error>,
+    linera_views::view::ViewError: From<C::Error>,
 {
     fn context(&self) -> &C {
-        use linera_views::views::View;
+        use linera_views::view::View;
         self.register.context()
     }
-    async fn load(context: C) -> Result<Self, linera_views::views::ViewError> {
+    async fn load(context: C) -> Result<Self, linera_views::view::ViewError> {
         use linera_views::{futures::join, common::Context};
         linera_views::increment_counter(
             &linera_views::LOAD_VIEW_COUNTER,
@@ -39,14 +39,14 @@ where
     fn flush(
         &mut self,
         batch: &mut linera_views::batch::Batch,
-    ) -> Result<(), linera_views::views::ViewError> {
-        use linera_views::views::View;
+    ) -> Result<(), linera_views::view::ViewError> {
+        use linera_views::view::View;
         self.register.flush(batch)?;
         self.collection.flush(batch)?;
         Ok(())
     }
     fn delete(self, batch: &mut linera_views::batch::Batch) {
-        use linera_views::views::View;
+        use linera_views::view::View;
         self.register.delete(batch);
         self.collection.delete(batch);
     }

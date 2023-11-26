@@ -15,7 +15,7 @@ pub struct TestViewCollectionMap<'__graphql_map>(
 );
 pub struct TestViewCollectionEntry<'a> {
     key: String,
-    value: linera_views::collection_view::ReadGuardedView<
+    value: linera_views::views::collection_view::ReadGuardedView<
         'a,
         SomeOtherView<custom::path::to::ContextType>,
     >,

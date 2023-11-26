@@ -3,13 +3,13 @@ source: linera-views-derive/src/lib.rs
 expression: pretty(generate_save_delete_view_code(input))
 ---
 #[async_trait::async_trait]
-impl<C> linera_views::views::RootView<C> for TestView<C>
+impl<C> linera_views::view::RootView<C> for TestView<C>
 where
     C: linera_views::common::Context + Send + Sync + Clone + 'static,
-    linera_views::views::ViewError: From<C::Error>,
+    linera_views::view::ViewError: From<C::Error>,
 {
-    async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
-        use linera_views::{common::Context, batch::Batch, views::View};
+    async fn save(&mut self) -> Result<(), linera_views::view::ViewError> {
+        use linera_views::{common::Context, batch::Batch, view::View};
         linera_views::increment_counter(
             &linera_views::SAVE_VIEW_COUNTER,
             stringify!(TestView),
@@ -21,7 +21,7 @@ where
         self.context().write_batch(batch).await?;
         Ok(())
     }
-    async fn write_delete(self) -> Result<(), linera_views::views::ViewError> {
+    async fn write_delete(self) -> Result<(), linera_views::view::ViewError> {
         use linera_views::{common::Context, batch::Batch, views::View};
         let context = self.context().clone();
         let batch = Batch::build(move |batch| {

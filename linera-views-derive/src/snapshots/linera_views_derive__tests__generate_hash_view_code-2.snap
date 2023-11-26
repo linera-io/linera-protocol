@@ -3,15 +3,15 @@ source: linera-views-derive/src/lib.rs
 expression: pretty(generate_hash_view_code(input))
 ---
 #[async_trait::async_trait]
-impl linera_views::views::HashableView<CustomContext> for TestView {
+impl linera_views::view::HashableView<CustomContext> for TestView {
     type Hasher = linera_views::sha3::Sha3_256;
     async fn hash_mut(
         &mut self,
     ) -> Result<
-        <Self::Hasher as linera_views::views::Hasher>::Output,
-        linera_views::views::ViewError,
+        <Self::Hasher as linera_views::view::Hasher>::Output,
+        linera_views::view::ViewError,
     > {
-        use linera_views::views::{Hasher, HashableView};
+        use linera_views::view::{Hasher, HashableView};
         use std::io::Write;
         let mut hasher = Self::Hasher::default();
         hasher.write_all(self.register.hash_mut().await?.as_ref())?;
@@ -21,10 +21,10 @@ impl linera_views::views::HashableView<CustomContext> for TestView {
     async fn hash(
         &self,
     ) -> Result<
-        <Self::Hasher as linera_views::views::Hasher>::Output,
-        linera_views::views::ViewError,
+        <Self::Hasher as linera_views::view::Hasher>::Output,
+        linera_views::view::ViewError,
     > {
-        use linera_views::views::{Hasher, HashableView};
+        use linera_views::view::{Hasher, HashableView};
         use std::io::Write;
         let mut hasher = Self::Hasher::default();
         hasher.write_all(self.register.hash().await?.as_ref())?;
