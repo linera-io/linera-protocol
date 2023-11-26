@@ -4,13 +4,13 @@
 use linera_views::{
     batch::{Batch, WriteOperation},
     common::{KeyIterable, KeyValueIterable, KeyValueStore},
-    views::key_value_store_view::ViewContainer,
     store::memory::{create_memory_context, create_memory_store},
     test_utils::{
         get_random_byte_vector, get_random_key_prefix, get_random_key_values_prefix,
         get_small_key_space,
     },
     value_splitting::create_test_memory_store,
+    views::key_value_store_view::ViewContainer,
 };
 use rand::{Rng, RngCore, SeedableRng};
 use std::collections::{BTreeMap, HashSet};

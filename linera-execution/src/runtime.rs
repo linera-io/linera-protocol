@@ -19,9 +19,8 @@ use linera_base::{
 use linera_views::{
     batch::Batch,
     common::Context,
-    views::key_value_store_view::KeyValueStoreView,
-    views::register_view::RegisterView,
     view::{View, ViewError},
+    views::{key_value_store_view::KeyValueStoreView, register_view::RegisterView},
 };
 use std::{
     collections::{btree_map, BTreeMap},

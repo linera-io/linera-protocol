@@ -3,9 +3,8 @@
 
 use linera_views::{
     store::memory::create_memory_context,
-    views::reentrant_collection_view::ReentrantCollectionView,
-    views::register_view::RegisterView,
     view::{CryptoHashRootView, RootView, View},
+    views::{reentrant_collection_view::ReentrantCollectionView, register_view::RegisterView},
 };
 use rand::{Rng, SeedableRng};
 use std::collections::{BTreeMap, BTreeSet};

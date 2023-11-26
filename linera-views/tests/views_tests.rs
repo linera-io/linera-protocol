@@ -8,24 +8,26 @@ use linera_views::{
         Batch, WriteOperation,
         WriteOperation::{Delete, DeletePrefix, Put},
     },
-    views::collection_view::CollectionView,
     common::Context,
-    views::key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
-    views::log_view::LogView,
     lru_caching::LruCachingMemoryContext,
-    views::map_view::MapView,
     store::memory::{
         create_memory_context, MemoryContext, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES,
     },
-    views::queue_view::QueueView,
-    views::reentrant_collection_view::ReentrantCollectionView,
-    views::register_view::RegisterView,
-    views::set_view::SetView,
     test_utils::{
         get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
         random_shuffle, span_random_reordering_put_delete,
     },
     view::{CryptoHashRootView, HashableView, Hasher, RootView, View, ViewError},
+    views::{
+        collection_view::CollectionView,
+        key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
+        log_view::LogView,
+        map_view::MapView,
+        queue_view::QueueView,
+        reentrant_collection_view::ReentrantCollectionView,
+        register_view::RegisterView,
+        set_view::SetView,
+    },
 };
 use rand::{Rng, RngCore, SeedableRng};
 use std::{
@@ -39,7 +41,10 @@ use linera_views::store::rocks_db::{create_rocks_db_test_store, RocksDbContext, 
 #[cfg(feature = "aws")]
 use linera_views::{
     common::CommonStoreConfig,
-    store::dynamo_db::{create_dynamo_db_common_config, DynamoDbContext, DynamoDbStoreConfig, LocalStackTestContext, TableName},
+    store::dynamo_db::{
+        create_dynamo_db_common_config, DynamoDbContext, DynamoDbStoreConfig,
+        LocalStackTestContext, TableName,
+    },
     test_utils::get_table_name,
 };
 

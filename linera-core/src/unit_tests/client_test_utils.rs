@@ -42,7 +42,9 @@ use {
 #[cfg(feature = "aws")]
 use {
     linera_storage::DynamoDbStorage,
-    linera_views::store::dynamo_db::{create_dynamo_db_common_config, DynamoDbStoreConfig, LocalStackTestContext},
+    linera_views::store::dynamo_db::{
+        create_dynamo_db_common_config, DynamoDbStoreConfig, LocalStackTestContext,
+    },
 };
 
 #[cfg(feature = "scylladb")]

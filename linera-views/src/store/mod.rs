@@ -18,4 +18,3 @@ pub mod dynamo_db;
 #[cfg(feature = "scylladb")]
 #[cfg(not(target_arch = "wasm32"))]
 pub mod scylla_db;
-

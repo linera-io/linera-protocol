@@ -7,8 +7,8 @@ use crate::{
         get_interval, get_upper_bound, Context, GreatestLowerBoundIterator, HasherOutput,
         KeyIterable, KeyValueIterable, Update, MIN_VIEW_TAG,
     },
-    views::map_view::ByteMapView,
     view::{HashableView, Hasher, View, ViewError},
+    views::map_view::ByteMapView,
 };
 use async_lock::Mutex;
 use async_trait::async_trait;

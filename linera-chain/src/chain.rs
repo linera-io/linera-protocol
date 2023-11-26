@@ -27,11 +27,11 @@ use linera_execution::{
 };
 use linera_views::{
     common::Context,
-    views::log_view::LogView,
-    views::reentrant_collection_view::ReentrantCollectionView,
-    views::register_view::RegisterView,
-    views::set_view::SetView,
     view::{CryptoHashView, GraphQLView, RootView, View, ViewError},
+    views::{
+        log_view::LogView, reentrant_collection_view::ReentrantCollectionView,
+        register_view::RegisterView, set_view::SetView,
+    },
 };
 use once_cell::sync::Lazy;
 use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};

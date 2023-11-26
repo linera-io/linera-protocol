@@ -10,8 +10,8 @@ use linera_base::{
 };
 use linera_views::{
     common::Context,
-    views::map_view::MapView,
     view::{HashableView, ViewError},
+    views::map_view::MapView,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};

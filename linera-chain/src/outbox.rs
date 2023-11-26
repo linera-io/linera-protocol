@@ -4,9 +4,8 @@
 use linera_base::data_types::{ArithmeticError, BlockHeight};
 use linera_views::{
     common::Context,
-    views::queue_view::QueueView,
-    views::register_view::RegisterView,
     view::{GraphQLView, View, ViewError},
+    views::{queue_view::QueueView, register_view::RegisterView},
 };
 
 #[cfg(any(test, feature = "test"))]

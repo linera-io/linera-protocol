@@ -8,7 +8,7 @@ use linera_sdk::{
     base::Amount,
     views::{MapView, RegisterView, ViewStorageContext},
 };
-use linera_views::views::{GraphQLView, RootView};
+use linera_views::view::{GraphQLView, RootView};
 use serde::{Deserialize, Serialize};
 
 /// The status of a crowd-funding campaign.

@@ -24,8 +24,8 @@ use linera_execution::{
 };
 use linera_storage::Storage;
 use linera_views::{
-    views::log_view::LogView,
     view::{RootView, View, ViewError},
+    views::log_view::LogView,
 };
 use lru::LruCache;
 use once_cell::sync::Lazy;

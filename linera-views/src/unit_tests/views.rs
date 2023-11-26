@@ -5,21 +5,25 @@ use crate::{
     batch::Batch,
     common::Context,
     store::memory::{create_memory_context, MemoryContext},
-    views::queue_view::QueueView,
     view::{View, ViewError},
+    views::queue_view::QueueView,
 };
 use async_trait::async_trait;
 use std::collections::VecDeque;
 
 #[cfg(feature = "rocksdb")]
 use {
-    crate::store::rocks_db::{create_rocks_db_common_config, RocksDbStoreConfig, RocksDbContext, RocksDbStore},
+    crate::store::rocks_db::{
+        create_rocks_db_common_config, RocksDbContext, RocksDbStore, RocksDbStoreConfig,
+    },
     tempfile::TempDir,
 };
 
 #[cfg(feature = "aws")]
 use crate::{
-    store::dynamo_db::{create_dynamo_db_common_config, DynamoDbContext, DynamoDbStoreConfig, LocalStackTestContext},
+    store::dynamo_db::{
+        create_dynamo_db_common_config, DynamoDbContext, DynamoDbStoreConfig, LocalStackTestContext,
+    },
     test_utils::get_table_name,
 };
 

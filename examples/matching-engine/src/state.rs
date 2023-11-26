@@ -7,7 +7,7 @@ use linera_sdk::{
     base::{Amount, ArithmeticError},
     views::{CustomCollectionView, MapView, QueueView, RegisterView, ViewStorageContext},
 };
-use linera_views::views::{RootView, View, ViewError};
+use linera_views::view::{RootView, View, ViewError};
 use matching_engine::{OrderId, OrderNature, Price};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -51,7 +51,7 @@ pub enum MatchingEngineError {
     BcsError(#[from] bcs::Error),
 }
 
-use linera_views::views::GraphQLView;
+use linera_views::view::GraphQLView;
 
 /// The order entry in the order book
 #[derive(Clone, Debug, Deserialize, Serialize, SimpleObject)]

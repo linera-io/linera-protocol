@@ -14,7 +14,7 @@ use linera_sdk::{
     ensure, ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
     OperationContext, OutgoingMessage, SessionCallResult, ViewStateStorage,
 };
-use linera_views::views::View;
+use linera_views::view::View;
 use state::{CrowdFunding, Status};
 use thiserror::Error;
 

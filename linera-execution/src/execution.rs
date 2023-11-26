@@ -16,10 +16,11 @@ use linera_base::{
 };
 use linera_views::{
     common::Context,
-    views::key_value_store_view::KeyValueStoreView,
-    views::reentrant_collection_view::ReentrantCollectionView,
-    views::register_view::RegisterView,
     view::{View, ViewError},
+    views::{
+        key_value_store_view::KeyValueStoreView,
+        reentrant_collection_view::ReentrantCollectionView, register_view::RegisterView,
+    },
 };
 use linera_views_derive::CryptoHashView;
 

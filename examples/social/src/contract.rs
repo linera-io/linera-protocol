@@ -12,7 +12,7 @@ use linera_sdk::{
     ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
     OperationContext, SessionCallResult, ViewStateStorage,
 };
-use linera_views::views::ViewError;
+use linera_views::view::ViewError;
 use social::{Key, Message, Operation, OwnPost};
 use state::Social;
 use thiserror::Error;
