@@ -6,8 +6,8 @@ use linera_views::{
     memory::create_memory_context,
     views::{CryptoHashRootView, RootView, View},
 };
-use rand::{distributions::Uniform, Rng, SeedableRng};
-use std::collections::BTreeMap;
+use rand::{distributions::Uniform, Rng, RngCore, SeedableRng};
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {
@@ -18,12 +18,11 @@ fn remove_by_prefix<V>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8>) {
     map.retain(|key, _| !key.starts_with(&key_prefix));
 }
 
-#[tokio::test]
-async fn map_view_mutability_check() {
+async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
     let context = create_memory_context();
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     let mut state_map = BTreeMap::new();
-    let n = 20;
+    let mut all_keys = BTreeSet::new();
+    let n = 200;
     for _ in 0..n {
         let mut view = StateView::load(context.clone()).await.unwrap();
         let save = rng.gen::<bool>();
@@ -47,6 +46,7 @@ async fn map_view_mutability_check() {
                         .sample_iter(Uniform::from(0..4))
                         .take(len)
                         .collect::<Vec<_>>();
+                    all_keys.insert(key.clone());
                     let value = rng.gen::<u8>();
                     view.map.insert(key.clone(), value);
                     new_state_map.insert(key, value);
@@ -91,10 +91,23 @@ async fn map_view_mutability_check() {
                 let part_key_values = view.map.key_values_by_prefix(vec![u]).await.unwrap();
                 assert_eq!(part_state_vec, part_key_values);
             }
+            for key in &all_keys {
+                let test_map = new_state_map.contains_key(key);
+                let test_view = view.map.get(key).await.unwrap().is_some();
+                assert_eq!(test_map, test_view);
+            }
         }
         if save {
             state_map = new_state_map.clone();
             view.save().await.unwrap();
         }
+    }
+}
+
+#[tokio::test]
+async fn map_view_mutability() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    for _ in 0..10 {
+        run_map_view_mutability(&mut rng).await;
     }
 }
