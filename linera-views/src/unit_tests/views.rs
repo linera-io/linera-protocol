@@ -5,8 +5,8 @@ use crate::{
     batch::Batch,
     common::Context,
     store::memory::{create_memory_context, MemoryContext},
-    queue_view::QueueView,
-    views::{View, ViewError},
+    views::queue_view::QueueView,
+    view::{View, ViewError},
 };
 use async_trait::async_trait;
 use std::collections::VecDeque;

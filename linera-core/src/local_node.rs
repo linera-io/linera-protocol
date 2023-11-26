@@ -21,7 +21,7 @@ use linera_execution::{
     UserApplicationId,
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::view::ViewError;
 use rand::prelude::SliceRandom;
 use std::{borrow::Cow, sync::Arc};
 use thiserror::Error;
@@ -46,7 +46,7 @@ pub enum LocalNodeError {
     ArithmeticError(#[from] ArithmeticError),
 
     #[error(transparent)]
-    ViewError(#[from] linera_views::views::ViewError),
+    ViewError(#[from] linera_views::view::ViewError),
 
     #[error("Local node operation failed: {0}")]
     WorkerError(#[from] WorkerError),

@@ -442,7 +442,7 @@ pub enum RocksDbContextError {
     DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 }
 
-impl From<RocksDbContextError> for crate::views::ViewError {
+impl From<RocksDbContextError> for crate::view::ViewError {
     fn from(error: RocksDbContextError) -> Self {
         Self::ContextError {
             backend: "rocks_db".to_string(),

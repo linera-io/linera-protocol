@@ -14,7 +14,7 @@ use linera_base::{
 use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, LiteVote};
 use linera_execution::committee::{Committee, Epoch, ValidatorName};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::view::ViewError;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt,

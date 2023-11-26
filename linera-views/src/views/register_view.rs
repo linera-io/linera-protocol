@@ -4,7 +4,7 @@
 use crate::{
     batch::Batch,
     common::{from_bytes_opt, Context, HasherOutput, MIN_VIEW_TAG},
-    views::{HashableView, Hasher, View, ViewError},
+    view::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -97,9 +97,9 @@ where
     /// Access the current value in the register.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut register = RegisterView::<_,u32>::load(context).await.unwrap();
     ///   let value = register.get();
@@ -116,9 +116,9 @@ where
     /// Sets the value in the register.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut register = RegisterView::load(context).await.unwrap();
     ///   register.set(5);
@@ -145,9 +145,9 @@ where
     /// Obtains a mutable reference to the value in the register.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut register : RegisterView<_,u32> = RegisterView::load(context).await.unwrap();
     ///   let value = register.get_mut();

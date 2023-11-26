@@ -4,7 +4,7 @@
 use crate::{
     batch::Batch,
     common::{Context, CustomSerialize, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
-    views::{HashableView, Hasher, View, ViewError},
+    view::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -108,8 +108,9 @@ where
     /// Insert a value. If already present then it has no effect.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::{memory::create_memory_context, set_view::ByteSetView};
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::ByteSetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set = ByteSetView::load(context).await.unwrap();
     ///   set.insert(vec![0,1]);
@@ -124,8 +125,9 @@ where
     /// Removes a value from the set. If absent then no effect.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::{memory::create_memory_context, set_view::ByteSetView};
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::ByteSetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set = ByteSetView::load(context).await.unwrap();
     ///   set.remove(vec![0,1]);
@@ -155,8 +157,9 @@ where
     /// Returns true if the given index exists in the set.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::{memory::create_memory_context, set_view::ByteSetView};
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::ByteSetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set = ByteSetView::load(context).await.unwrap();
     ///   set.insert(vec![0,1]);
@@ -191,8 +194,9 @@ where
     /// Returns the list of keys in the set. The order is lexicographic.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::{memory::create_memory_context, set_view::ByteSetView};
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::ByteSetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set = ByteSetView::load(context).await.unwrap();
     ///   set.insert(vec![0,1]);
@@ -215,8 +219,9 @@ where
     /// prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::{memory::create_memory_context, set_view::ByteSetView};
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::ByteSetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set = ByteSetView::load(context).await.unwrap();
     ///   set.insert(vec![0,1]);
@@ -278,8 +283,9 @@ where
     /// lexicographic order.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::{memory::create_memory_context, set_view::ByteSetView};
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::ByteSetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set = ByteSetView::load(context).await.unwrap();
     ///   set.insert(vec![0,1]);
@@ -404,9 +410,9 @@ where
     /// Inserts a value. If already present then no effect.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
-    /// # use linera_views::set_view::SetView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::SetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set = SetView::<_,u32>::load(context).await.unwrap();
     ///   set.insert(&(34 as u32));
@@ -426,8 +432,9 @@ where
     /// Removes a value. If absent then nothing is done.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::{memory::create_memory_context, set_view::SetView};
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::SetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set = SetView::<_,u32>::load(context).await.unwrap();
     ///   set.remove(&(34 as u32));
@@ -459,8 +466,9 @@ where
     /// Returns true if the given index exists in the set.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::{memory::create_memory_context, set_view::SetView};
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::SetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set : SetView<_,u32> = SetView::load(context).await.unwrap();
     ///   set.insert(&(34 as u32));
@@ -487,8 +495,9 @@ where
     /// Returns the list of indices in the set. The order is determined by serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::{memory::create_memory_context, set_view::SetView};
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::SetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set : SetView<_,u32> = SetView::load(context).await.unwrap();
     ///   set.insert(&(34 as u32));
@@ -510,9 +519,9 @@ where
     /// loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
-    /// # use linera_views::set_view::SetView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::SetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set = SetView::<_,u32>::load(context).await.unwrap();
     ///   set.insert(&(34 as u32));
@@ -543,9 +552,9 @@ where
     /// determined by the serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
-    /// # use linera_views::set_view::SetView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::SetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set = SetView::<_,u32>::load(context).await.unwrap();
     ///   set.insert(&(34 as u32));
@@ -643,9 +652,9 @@ where
     /// Inserts a value. If present then it has no effect.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
-    /// # use linera_views::set_view::CustomSetView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::CustomSetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
     ///   set.insert(&(34 as u128));
@@ -665,9 +674,9 @@ where
     /// Removes a value. If absent then nothing is done.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
-    /// # use linera_views::set_view::CustomSetView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::CustomSetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
     ///   set.remove(&(34 as u128));
@@ -699,9 +708,9 @@ where
     /// Returns true if the given index exists in the set.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
-    /// # use linera_views::set_view::CustomSetView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::CustomSetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
     ///   set.insert(&(34 as u128));
@@ -729,9 +738,9 @@ where
     /// serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
-    /// # use linera_views::set_view::CustomSetView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::CustomSetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
     ///   set.insert(&(34 as u128));
@@ -754,9 +763,9 @@ where
     /// false, then the loop prematurely ends.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
-    /// # use linera_views::set_view::CustomSetView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::CustomSetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
     ///   set.insert(&(34 as u128));
@@ -787,9 +796,9 @@ where
     /// determined by the custom serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_memory_context;
-    /// # use linera_views::set_view::CustomSetView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::create_memory_context;
+    /// # use linera_views::views::set_view::CustomSetView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
     ///   set.insert(&(34 as u128));

@@ -5,8 +5,8 @@ use linera_views::{
     common::HasherOutput,
     hashable_wrapper::WrappedHashableContainerView,
     store::memory::create_memory_context,
-    register_view::RegisterView,
-    views::{HashableView, View},
+    views::register_view::RegisterView,
+    view::{HashableView, View},
 };
 use linera_views_derive::CryptoHashRootView;
 

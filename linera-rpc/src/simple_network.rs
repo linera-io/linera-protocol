@@ -22,7 +22,7 @@ use linera_core::{
     worker::{NetworkActions, ValidatorWorker, WorkerError, WorkerState},
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::view::ViewError;
 use rand::Rng;
 use std::{io, time::Duration};
 use tokio::{sync::oneshot, time};

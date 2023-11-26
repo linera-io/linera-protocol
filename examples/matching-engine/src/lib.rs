@@ -7,7 +7,7 @@ use linera_sdk::{
     base::{Amount, ApplicationId, ContractAbi, ServiceAbi},
     graphql::GraphQLMutationRoot,
 };
-use linera_views::{common::CustomSerialize, views::ViewError};
+use linera_views::{common::CustomSerialize, view::ViewError};
 use serde::{Deserialize, Serialize};
 
 pub struct MatchingEngineAbi;

@@ -42,7 +42,7 @@ use linera_execution::{
     SystemResponse, UserApplicationId,
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::view::ViewError;
 use lru::LruCache;
 use std::{
     collections::{hash_map, BTreeMap, HashMap},

@@ -38,18 +38,6 @@
 //! * `clear` for clearing the view, in other words for reverting it to its default state.
 //! * `flush` for persisting the changes to storage.
 //! * `delete` for deleting the changes from the database.
-//!
-//! The following views implement the `View` trait:
-//! * `RegisterView` implements the storing of a single data.
-//! * `LogView` implements a log, which is a list of entries that can be expanded.
-//! * `QueueView` implements a queue, which is a list of entries that can be expanded and reduced.
-//! * `MapView` implements a map with keys and values.
-//! * `SetView` implements a set with keys.
-//! * `CollectionView` implements a map whose values are views themselves.
-//! * `ReentrantCollectionView` implements a map for which different keys can be accessed independently.
-//! * `ViewContainer<C>` implements a `KeyValueStore` and is used internally.
-//!
-//! The `LogView` can be seen as an analog of `VecDeque` while `MapView` is an analog of `BTreeMap`.
 
 #![deny(missing_docs)]
 
@@ -63,36 +51,14 @@ pub mod common;
 pub mod value_splitting;
 
 /// The definition of the `View` and related traits.
+pub mod view;
+
+/// The implementations of `View` that we provide.
 pub mod views;
-
-/// The `RegisterView` implements a register for a single value.
-pub mod register_view;
-
-/// The `LogView` implements a log list that can be pushed.
-pub mod log_view;
-
-/// The `QueueView` implements a queue that can push on the back and delete on the front.
-pub mod queue_view;
-
-/// The `MapView` implements a map with ordered keys.
-pub mod map_view;
-
-/// The `SetView` implements a set with ordered entries.
-pub mod set_view;
-
-/// The `CollectionView` implements a map structure whose keys are ordered and the values are views.
-pub mod collection_view;
 
 /// The LRU (least recently used) caching.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod lru_caching;
-
-/// The `ReentrantCollectionView` implements a map structure whose keys are ordered and the values are views with concurrent access.
-pub mod reentrant_collection_view;
-
-/// The implementation of a key-value store view.
-#[cfg(not(target_arch = "wasm32"))]
-pub mod key_value_store_view;
 
 /// Wrapping a view to compute a hash.
 #[cfg(not(target_arch = "wasm32"))]

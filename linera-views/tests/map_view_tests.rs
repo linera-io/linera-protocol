@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    map_view::ByteMapView,
     store::memory::create_memory_context,
-    views::{CryptoHashRootView, RootView, View},
+    view::{CryptoHashRootView, RootView, View},
+    views::map_view::ByteMapView,
 };
 use rand::{distributions::Uniform, Rng, RngCore, SeedableRng};
 use std::collections::{BTreeMap, BTreeSet};

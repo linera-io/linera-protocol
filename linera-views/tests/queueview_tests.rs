@@ -3,8 +3,8 @@
 
 use linera_views::{
     store::memory::create_memory_context,
-    queue_view::QueueView,
-    views::{CryptoHashRootView, RootView, View},
+    views::queue_view::QueueView,
+    view::{CryptoHashRootView, RootView, View},
 };
 use rand::{Rng, SeedableRng};
 

@@ -163,7 +163,7 @@ use linera_sdk::{
     base::{ChainId, ContractAbi, ServiceAbi, Timestamp},
     graphql::GraphQLMutationRoot,
 };
-use linera_views::{common::CustomSerialize, views};
+use linera_views::{common::CustomSerialize, view::ViewError};
 use serde::{Deserialize, Serialize};
 
 pub struct SocialAbi;
@@ -242,7 +242,7 @@ pub struct Key {
 // Serialize keys so that the lexicographic order of the serialized keys corresponds to reverse
 // chronological order, then sorted by author, then by descending index.
 impl CustomSerialize for Key {
-    fn to_custom_bytes(&self) -> Result<Vec<u8>, views::ViewError> {
+    fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError> {
         let data = (
             (!self.timestamp.micros()).to_be_bytes(),
             &self.author,
@@ -251,7 +251,7 @@ impl CustomSerialize for Key {
         Ok(bcs::to_bytes(&data)?)
     }
 
-    fn from_custom_bytes(short_key: &[u8]) -> Result<Self, views::ViewError> {
+    fn from_custom_bytes(short_key: &[u8]) -> Result<Self, ViewError> {
         let (time_bytes, author, idx_bytes) = (bcs::from_bytes(short_key))?;
         Ok(Self {
             timestamp: Timestamp::from(!u64::from_be_bytes(time_bytes)),

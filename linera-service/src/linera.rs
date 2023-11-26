@@ -45,7 +45,7 @@ use linera_service::{
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfig},
 };
 use linera_storage::Storage;
-use linera_views::{common::CommonStoreConfig, views::ViewError};
+use linera_views::{common::CommonStoreConfig, view::ViewError};
 use rand07::Rng;
 use serde_json::Value;
 use std::{

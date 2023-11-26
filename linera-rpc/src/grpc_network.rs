@@ -42,7 +42,7 @@ use linera_core::{
     worker::{NetworkActions, Notification, ValidatorWorker, WorkerError, WorkerState},
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::view::ViewError;
 use once_cell::sync::Lazy;
 use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
 use rand::Rng;

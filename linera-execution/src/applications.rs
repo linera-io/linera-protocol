@@ -10,8 +10,8 @@ use linera_base::{
 };
 use linera_views::{
     common::Context,
-    map_view::MapView,
-    views::{HashableView, ViewError},
+    views::map_view::MapView,
+    view::{HashableView, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 use {
     async_lock::Mutex,
     linera_views::store::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
-    linera_views::views::View,
+    linera_views::view::View,
     std::collections::BTreeMap,
     std::sync::Arc,
 };

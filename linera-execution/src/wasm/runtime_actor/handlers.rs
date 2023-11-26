@@ -10,7 +10,7 @@ use super::{
 use crate::{BaseRuntime, ContractRuntime, ExecutionError, ServiceRuntime};
 use async_lock::RwLock;
 use async_trait::async_trait;
-use linera_views::views::ViewError;
+use linera_views::view::ViewError;
 
 /// A type that is able to handle incoming `Request`s.
 #[async_trait]

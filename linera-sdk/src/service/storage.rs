@@ -13,7 +13,7 @@ use crate::{
     Service, SimpleStateStorage, ViewStateStorage,
 };
 use async_trait::async_trait;
-use linera_views::views::RootView;
+use linera_views::view::RootView;
 use serde::{de::DeserializeOwned, Serialize};
 use std::sync::Arc;
 

@@ -19,7 +19,7 @@ use linera_chain::data_types::HashedValue;
 use linera_core::worker::Reason;
 use linera_service_graphql_client::{block, chains, notifications, Block, Chains, Notifications};
 use linera_views::{
-    common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
+    common::KeyValueStore, value_splitting::DatabaseConsistencyError, view::ViewError,
 };
 use std::time::Duration;
 use structopt::StructOpt;

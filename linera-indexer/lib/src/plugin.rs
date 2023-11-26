@@ -9,7 +9,7 @@ use axum::Router;
 use linera_chain::data_types::HashedValue;
 use linera_views::{
     common::{ContextFromStore, KeyValueStore},
-    views::{View, ViewError},
+    view::{View, ViewError},
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;

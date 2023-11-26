@@ -8,24 +8,24 @@ use linera_views::{
         Batch, WriteOperation,
         WriteOperation::{Delete, DeletePrefix, Put},
     },
-    collection_view::CollectionView,
+    views::collection_view::CollectionView,
     common::Context,
-    key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
-    log_view::LogView,
+    views::key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
+    views::log_view::LogView,
     lru_caching::LruCachingMemoryContext,
-    map_view::MapView,
+    views::map_view::MapView,
     store::memory::{
         create_memory_context, MemoryContext, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES,
     },
-    queue_view::QueueView,
-    reentrant_collection_view::ReentrantCollectionView,
-    register_view::RegisterView,
-    set_view::SetView,
+    views::queue_view::QueueView,
+    views::reentrant_collection_view::ReentrantCollectionView,
+    views::register_view::RegisterView,
+    views::set_view::SetView,
     test_utils::{
         get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
         random_shuffle, span_random_reordering_put_delete,
     },
-    views::{CryptoHashRootView, HashableView, Hasher, RootView, View, ViewError},
+    view::{CryptoHashRootView, HashableView, Hasher, RootView, View, ViewError},
 };
 use rand::{Rng, RngCore, SeedableRng};
 use std::{

@@ -24,8 +24,8 @@ use linera_execution::{
 };
 use linera_storage::Storage;
 use linera_views::{
-    log_view::LogView,
-    views::{RootView, View, ViewError},
+    views::log_view::LogView,
+    view::{RootView, View, ViewError},
 };
 use lru::LruCache;
 use once_cell::sync::Lazy;
@@ -167,7 +167,7 @@ pub enum WorkerError {
     ArithmeticError(#[from] ArithmeticError),
 
     #[error(transparent)]
-    ViewError(#[from] linera_views::views::ViewError),
+    ViewError(#[from] linera_views::view::ViewError),
 
     #[error(transparent)]
     ChainError(#[from] Box<linera_chain::ChainError>),

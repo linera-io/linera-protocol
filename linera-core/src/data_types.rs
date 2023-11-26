@@ -17,7 +17,7 @@ use linera_execution::{
     ExecutionRuntimeContext,
 };
 use linera_storage::ChainRuntimeContext;
-use linera_views::{common::Context, views::ViewError};
+use linera_views::{common::Context, view::ViewError};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

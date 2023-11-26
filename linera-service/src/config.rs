@@ -21,7 +21,7 @@ use linera_execution::{
 };
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::view::ViewError;
 use rand07::Rng;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{

@@ -18,10 +18,10 @@ use linera_base::{
 };
 use linera_views::{
     common::Context,
-    map_view::MapView,
-    register_view::RegisterView,
-    set_view::SetView,
-    views::{HashableView, View, ViewError},
+    views::map_view::MapView,
+    views::register_view::RegisterView,
+    views::set_view::SetView,
+    view::{HashableView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::{

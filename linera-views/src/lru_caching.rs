@@ -20,7 +20,7 @@ use std::{
 use {
     crate::common::ContextFromStore,
     crate::store::memory::{MemoryStore, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
-    crate::views::ViewError,
+    crate::view::ViewError,
     async_lock::MutexGuardArc,
 };
 

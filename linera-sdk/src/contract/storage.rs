@@ -12,7 +12,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::TryFutureExt;
-use linera_views::views::RootView;
+use linera_views::view::RootView;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{future::Future, mem};
 

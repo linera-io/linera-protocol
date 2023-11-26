@@ -22,7 +22,7 @@ use linera_execution::{
     WasmRuntime,
 };
 use linera_storage::{MemoryStorage, Storage, TestClock};
-use linera_views::{store::memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
+use linera_views::{store::memory::TEST_MEMORY_MAX_STREAM_QUERIES, view::ViewError};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     slice::SliceIndex,

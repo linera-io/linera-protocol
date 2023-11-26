@@ -35,7 +35,7 @@ use linera_execution::{
     UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::view::ViewError;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};

@@ -10,7 +10,7 @@
 //! [trait1]: common::KeyValueStore
 //! [trait2]: common::Context
 
-use crate::{batch::Batch, views::ViewError};
+use crate::{batch::Batch, view::ViewError};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{

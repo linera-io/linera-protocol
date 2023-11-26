@@ -103,7 +103,7 @@ pub enum ScyllaDbContextError {
     DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 }
 
-impl From<ScyllaDbContextError> for crate::views::ViewError {
+impl From<ScyllaDbContextError> for crate::view::ViewError {
     fn from(error: ScyllaDbContextError) -> Self {
         Self::ContextError {
             backend: "scylla_db".to_string(),

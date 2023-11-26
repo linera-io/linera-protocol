@@ -33,7 +33,7 @@ use linera_execution::{
     SystemQuery, SystemResponse,
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::view::ViewError;
 use std::sync::Arc;
 use test_log::test;
 

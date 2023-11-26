@@ -1534,7 +1534,7 @@ impl DynamoDbContextError {
     }
 }
 
-impl From<DynamoDbContextError> for crate::views::ViewError {
+impl From<DynamoDbContextError> for crate::view::ViewError {
     fn from(error: DynamoDbContextError) -> Self {
         Self::ContextError {
             backend: "DynamoDB".to_string(),

@@ -33,7 +33,7 @@ use linera_execution::{
     SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmContract, WasmRuntime,
 };
 use linera_storage::{MemoryStorage, Storage};
-use linera_views::views::{CryptoHashView, ViewError};
+use linera_views::view::{CryptoHashView, ViewError};
 use std::sync::Arc;
 use test_case::test_case;
 

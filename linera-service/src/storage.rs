@@ -6,7 +6,7 @@ use anyhow::{bail, format_err};
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
 use linera_storage::{MemoryStorage, Storage, WallClock};
-use linera_views::{common::CommonStoreConfig, store::memory::MemoryStoreConfig, views::ViewError};
+use linera_views::{common::CommonStoreConfig, store::memory::MemoryStoreConfig, view::ViewError};
 use std::str::FromStr;
 use tracing::error;
 

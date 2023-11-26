@@ -16,7 +16,7 @@ use linera_core::{
 };
 use linera_execution::ChainOwnership;
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::view::ViewError;
 use serde_json::json;
 use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;

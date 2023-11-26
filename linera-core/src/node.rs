@@ -21,7 +21,7 @@ use linera_execution::{
     committee::{Committee, ValidatorName},
     BytecodeLocation,
 };
-use linera_views::views::ViewError;
+use linera_views::view::ViewError;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 use thiserror::Error;

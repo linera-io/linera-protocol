@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    key_value_store_view::{KeyValueStoreView, SizeData},
+    views::key_value_store_view::{KeyValueStoreView, SizeData},
     store::memory::create_memory_context,
-    views::{CryptoHashRootView, RootView, View},
+    view::{CryptoHashRootView, RootView, View},
 };
 use rand::{distributions::Uniform, Rng, SeedableRng};
 use std::{

@@ -20,7 +20,7 @@ use linera_execution::{
     UserApplicationDescription, WasmRuntime,
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::view::ViewError;
 use serde_json::json;
 use std::collections::BTreeMap;
 use test_case::test_case;

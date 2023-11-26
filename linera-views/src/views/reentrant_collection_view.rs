@@ -4,7 +4,7 @@
 use crate::{
     batch::Batch,
     common::{Context, CustomSerialize, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
-    views::{HashableView, Hasher, View, ViewError},
+    view::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::{Mutex, RwLock, RwLockReadGuardArc, RwLockWriteGuardArc};
 use async_trait::async_trait;
@@ -157,10 +157,10 @@ where
     /// was removed before then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
     ///   let subview = view.try_load_entry_mut(vec![0, 1]).await.unwrap();
@@ -220,10 +220,10 @@ where
     /// If an entry was removed before then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
     ///   let subview = view.try_load_entry(vec![0, 1]).await.unwrap();
@@ -281,10 +281,10 @@ where
     /// Removes an entry. If absent then nothing happens.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
     ///   let mut subview = view.try_load_entry_mut(vec![0, 1]).await.unwrap();
@@ -307,10 +307,10 @@ where
     /// Marks the entry so that it is removed in the next flush.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
     ///   {
@@ -350,10 +350,10 @@ where
     /// The entries in short_keys have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
     ///   {
@@ -433,10 +433,10 @@ where
     /// The entries in short_keys have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
     ///   let short_keys = vec![vec![0, 1], vec![2, 3]];
@@ -517,10 +517,10 @@ where
     /// Returns the list of indices in the collection in lexicographic order.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
     ///   view.try_load_entry_mut(vec![0, 1]).await.unwrap();
@@ -544,10 +544,10 @@ where
     /// ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
     ///   view.try_load_entry_mut(vec![0, 1]).await.unwrap();
@@ -609,10 +609,10 @@ where
     /// lexicographic order.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
     ///   view.try_load_entry_mut(vec![0, 1]).await.unwrap();
@@ -746,10 +746,10 @@ where
     /// was removed before then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
     ///   let subview = view.try_load_entry_mut(&23).await.unwrap();
@@ -773,10 +773,10 @@ where
     /// If an entry was removed before then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
     ///   let subview = view.try_load_entry(&23).await.unwrap();
@@ -796,10 +796,10 @@ where
     /// Marks the entry so that it is removed in the next flush.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
     ///   let mut subview = view.try_load_entry_mut(&23).await.unwrap();
@@ -823,10 +823,10 @@ where
     /// Marks the entry so that it is removed in the next flush.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
     ///   {
@@ -866,10 +866,10 @@ where
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
     ///   let indices = vec![23, 42];
@@ -900,10 +900,10 @@ where
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
     ///   let indices = vec![23, 42];
@@ -942,10 +942,10 @@ where
     /// by serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
     ///   view.try_load_entry_mut(&23).await.unwrap();
@@ -969,10 +969,10 @@ where
     /// the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
     ///   view.try_load_entry_mut(&23).await.unwrap();
@@ -1002,10 +1002,10 @@ where
     /// determined by the serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
     ///   view.try_load_entry_mut(&23).await.unwrap();
@@ -1107,10 +1107,10 @@ where
     /// was removed before then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
     ///   let subview = view.try_load_entry_mut(&23).await.unwrap();
@@ -1134,10 +1134,10 @@ where
     /// If an entry was removed before then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
     ///   let subview = view.try_load_entry(&23).await.unwrap();
@@ -1157,10 +1157,10 @@ where
     /// Removes an entry. If absent then nothing happens.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
     ///   let mut subview = view.try_load_entry_mut(&23).await.unwrap();
@@ -1184,10 +1184,10 @@ where
     /// Marks the entry so that it is removed in the next flush.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
     ///   {
@@ -1229,10 +1229,10 @@ where
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
     ///   let indices = vec![23, 42];
@@ -1263,10 +1263,10 @@ where
     /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
     ///   let indices = vec![23, 42];
@@ -1305,10 +1305,10 @@ where
     /// the custom serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
     ///   view.try_load_entry_mut(&23).await.unwrap();
@@ -1332,10 +1332,10 @@ where
     /// then the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
     ///   view.try_load_entry_mut(&28).await.unwrap();
@@ -1366,10 +1366,10 @@ where
     /// determined by the custom serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_memory_context, MemoryContext};
-    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
-    /// # use linera_views::register_view::RegisterView;
-    /// # use crate::linera_views::views::View;
+    /// # use linera_views::store::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::views::register_view::RegisterView;
+    /// # use crate::linera_views::view::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
     ///   view.try_load_entry_mut(&28).await.unwrap();

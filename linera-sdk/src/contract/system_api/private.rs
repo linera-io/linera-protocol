@@ -7,7 +7,7 @@
 use super::super::contract_system_api as wit;
 use crate::{util::yield_once, views::ViewStorageContext};
 use linera_base::identifiers::{ApplicationId, SessionId};
-use linera_views::views::{RootView, View};
+use linera_views::view::{RootView, View};
 use serde::{de::DeserializeOwned, Serialize};
 
 /// Retrieves the current application parameters.

@@ -48,7 +48,7 @@ use linera_base::{
     doc_scalar, hex_debug,
     identifiers::{BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId},
 };
-use linera_views::{batch::Batch, views::ViewError};
+use linera_views::{batch::Batch, view::ViewError};
 use resources::RuntimeCounts;
 use serde::{Deserialize, Serialize};
 use std::{io, path::Path, str::FromStr, sync::Arc};

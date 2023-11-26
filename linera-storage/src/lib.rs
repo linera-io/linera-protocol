@@ -49,7 +49,7 @@ use linera_execution::{
 };
 use linera_views::{
     common::Context,
-    views::{CryptoHashView, RootView, ViewError},
+    view::{CryptoHashView, RootView, ViewError},
 };
 use std::{fmt::Debug, sync::Arc};
 

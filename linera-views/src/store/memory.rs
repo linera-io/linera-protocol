@@ -5,7 +5,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::{get_interval, CommonStoreConfig, ContextFromStore, KeyValueStore},
     value_splitting::DatabaseConsistencyError,
-    views::ViewError,
+    view::ViewError,
 };
 use async_lock::{Mutex, MutexGuardArc, RwLock};
 use async_trait::async_trait;

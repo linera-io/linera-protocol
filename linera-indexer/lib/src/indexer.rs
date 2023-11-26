@@ -15,11 +15,11 @@ use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::Chai
 use linera_chain::data_types::HashedValue;
 use linera_views::{
     common::{Context, ContextFromStore, KeyValueStore},
-    map_view::MapView,
-    register_view::RegisterView,
-    set_view::SetView,
+    views::map_view::MapView,
+    views::register_view::RegisterView,
+    views::set_view::SetView,
     value_splitting::DatabaseConsistencyError,
-    views::{RootView, View, ViewError},
+    view::{RootView, View, ViewError},
 };
 use std::{collections::BTreeMap, sync::Arc};
 use tokio::sync::Mutex;

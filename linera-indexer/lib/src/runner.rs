@@ -7,7 +7,7 @@ use crate::{common::IndexerError, indexer::Indexer, plugin::Plugin, service::Lis
 use axum::Server;
 use linera_base::identifiers::ChainId;
 use linera_views::{
-    common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
+    common::KeyValueStore, value_splitting::DatabaseConsistencyError, view::ViewError,
 };
 use structopt::{StructOpt, StructOptInternal};
 use tokio::select;

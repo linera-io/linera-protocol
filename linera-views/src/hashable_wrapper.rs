@@ -4,7 +4,7 @@
 use crate::{
     batch::Batch,
     common::{Context, MIN_VIEW_TAG},
-    views::{HashableView, Hasher, View, ViewError},
+    view::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
 use async_trait::async_trait;

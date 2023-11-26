@@ -17,7 +17,7 @@ use linera_core::{
 };
 use linera_execution::{Message, SystemMessage};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_views::view::ViewError;
 use std::{collections::btree_map, sync::Arc, time::Duration};
 use structopt::StructOpt;
 use tracing::{error, info, warn};

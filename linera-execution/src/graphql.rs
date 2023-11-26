@@ -13,7 +13,7 @@ use linera_base::{
     doc_scalar,
     identifiers::{ChainDescription, ChainId},
 };
-use linera_views::{common::Context, views::ViewError};
+use linera_views::{common::Context, view::ViewError};
 use std::collections::BTreeMap;
 
 doc_scalar!(

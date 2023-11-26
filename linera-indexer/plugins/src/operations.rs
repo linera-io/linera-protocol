@@ -12,8 +12,8 @@ use linera_indexer::{
 };
 use linera_views::{
     common::{Context, ContextFromStore, KeyValueStore},
-    map_view::MapView,
-    views::{RootView, ViewError},
+    views::map_view::MapView,
+    view::{RootView, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::{

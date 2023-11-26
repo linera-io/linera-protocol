@@ -21,7 +21,7 @@ use linera_base::{
     identifiers::ChainId,
 };
 use linera_execution::{policy::PricingError, ExecutionError};
-use linera_views::views::ViewError;
+use linera_views::view::ViewError;
 use rand_distr::WeightedError;
 use thiserror::Error;
 

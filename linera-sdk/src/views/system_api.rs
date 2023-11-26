@@ -10,7 +10,7 @@ use linera_base::ensure;
 use linera_views::{
     batch::{Batch, WriteOperation},
     common::{ContextFromStore, KeyValueStore},
-    views::ViewError,
+    view::ViewError,
 };
 
 /// We need to have a maximum key size that handles all possible underlying

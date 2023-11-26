@@ -81,7 +81,7 @@ fn context_and_constraints(
         constraints = Some(quote! {
             where
                 #context: linera_views::common::Context + Send + Sync + Clone + 'static,
-                linera_views::views::ViewError: From<#context::Error>,
+                linera_views::view::ViewError: From<#context::Error>,
         });
     }
 
@@ -143,15 +143,15 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
 
     quote! {
         #[async_trait::async_trait]
-        impl #generics linera_views::views::View<#context> for #struct_name #generics
+        impl #generics linera_views::view::View<#context> for #struct_name #generics
         #context_constraints
         {
             fn context(&self) -> &#context {
-                use linera_views::views::View;
+                use linera_views::view::View;
                 self.#first_name_quote.context()
             }
 
-            async fn load(context: #context) -> Result<Self, linera_views::views::ViewError> {
+            async fn load(context: #context) -> Result<Self, linera_views::view::ViewError> {
                 use linera_views::{futures::join, common::Context};
                 #increment_counter
                 #(#load_future_quotes)*
@@ -165,14 +165,14 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 #(#rollback_quotes)*
             }
 
-            fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<(), linera_views::views::ViewError> {
-                use linera_views::views::View;
+            fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<(), linera_views::view::ViewError> {
+                use linera_views::view::View;
                 #(#flush_quotes)*
                 Ok(())
             }
 
             fn delete(self, batch: &mut linera_views::batch::Batch) {
-                use linera_views::views::View;
+                use linera_views::view::View;
                 #(#delete_quotes)*
             }
 
@@ -200,11 +200,11 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
 
     quote! {
         #[async_trait::async_trait]
-        impl #generics linera_views::views::RootView<#context> for #struct_name #generics
+        impl #generics linera_views::view::RootView<#context> for #struct_name #generics
         #context_constraints
         {
-            async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
-                use linera_views::{common::Context, batch::Batch, views::View};
+            async fn save(&mut self) -> Result<(), linera_views::view::ViewError> {
+                use linera_views::{common::Context, batch::Batch, view::View};
                 linera_views::increment_counter(
                     &linera_views::SAVE_VIEW_COUNTER,
                     stringify!(#struct_name),
@@ -216,8 +216,8 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
                 Ok(())
             }
 
-            async fn write_delete(self) -> Result<(), linera_views::views::ViewError> {
-                use linera_views::{common::Context, batch::Batch, views::View};
+            async fn write_delete(self) -> Result<(), linera_views::view::ViewError> {
+                use linera_views::{common::Context, batch::Batch, view::View};
                 let context = self.context().clone();
                 let batch = Batch::build(move |batch| {
                     Box::pin(async move {
@@ -249,21 +249,21 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
 
     quote! {
         #[async_trait::async_trait]
-        impl #generics linera_views::views::HashableView<#context> for #struct_name #generics
+        impl #generics linera_views::view::HashableView<#context> for #struct_name #generics
         #context_constraints
         {
             type Hasher = linera_views::sha3::Sha3_256;
 
-            async fn hash_mut(&mut self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::views::ViewError> {
-                use linera_views::views::{Hasher, HashableView};
+            async fn hash_mut(&mut self) -> Result<<Self::Hasher as linera_views::view::Hasher>::Output, linera_views::view::ViewError> {
+                use linera_views::view::{Hasher, HashableView};
                 use std::io::Write;
                 let mut hasher = Self::Hasher::default();
                 #(#field_hashes_mut)*
                 Ok(hasher.finalize())
             }
 
-            async fn hash(&self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::views::ViewError> {
-                use linera_views::views::{Hasher, HashableView};
+            async fn hash(&self) -> Result<<Self::Hasher as linera_views::view::Hasher>::Output, linera_views::view::ViewError> {
+                use linera_views::view::{Hasher, HashableView};
                 use std::io::Write;
                 let mut hasher = Self::Hasher::default();
                 #(#field_hashes)*
@@ -283,16 +283,16 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
     let hash_type = syn::Ident::new(&format!("{}Hash", struct_name), Span::call_site());
     quote! {
         #[async_trait::async_trait]
-        impl #generics linera_views::views::CryptoHashView<#context> for #struct_name #generics
+        impl #generics linera_views::view::CryptoHashView<#context> for #struct_name #generics
         #context_constraints
         {
-            async fn crypto_hash(&self) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
+            async fn crypto_hash(&self) -> Result<linera_base::crypto::CryptoHash, linera_views::view::ViewError> {
                 use linera_base::crypto::{BcsHashable, CryptoHash};
                 use linera_views::{
                     batch::Batch,
                     generic_array::GenericArray,
                     sha3::{digest::OutputSizeUser, Sha3_256},
-                    views::HashableView,
+                    view::HashableView,
                 };
                 use serde::{Serialize, Deserialize};
                 #[derive(Serialize, Deserialize)]
@@ -430,7 +430,7 @@ fn generate_graphql_code_for_field(
                     quote!(),
                 ),
                 "CollectionView" | "CustomCollectionView" => (
-                    quote!(linera_views::collection_view::ReadGuardedView),
+                    quote!(linera_views::views::collection_view::ReadGuardedView),
                     quote!('a,),
                 ),
                 _ => {

@@ -39,7 +39,7 @@ use linera_views::{
     common::KeyValueStore,
     store::memory::TEST_MEMORY_MAX_STREAM_QUERIES,
     value_splitting::DatabaseConsistencyError,
-    views::{CryptoHashView, ViewError},
+    view::{CryptoHashView, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::{

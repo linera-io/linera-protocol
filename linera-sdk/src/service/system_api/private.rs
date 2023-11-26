@@ -7,7 +7,7 @@
 use super::super::service_system_api as wit;
 use crate::{util::yield_once, views::ViewStorageContext};
 use linera_base::identifiers::ApplicationId;
-use linera_views::views::View;
+use linera_views::view::View;
 use serde::de::DeserializeOwned;
 
 /// Loads the application state, without locking it for writes.

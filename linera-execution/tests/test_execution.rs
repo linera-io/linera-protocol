@@ -13,7 +13,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, Owner, SessionId},
 };
 use linera_execution::{policy::ResourceControlPolicy, *};
-use linera_views::{batch::Batch, common::Context, store::memory::MemoryContext, views::View};
+use linera_views::{batch::Batch, common::Context, store::memory::MemoryContext, view::View};
 use std::sync::Arc;
 
 #[tokio::test]

@@ -25,7 +25,7 @@ use linera_service::{
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfig},
 };
 use linera_storage::Storage;
-use linera_views::{common::CommonStoreConfig, views::ViewError};
+use linera_views::{common::CommonStoreConfig, view::ViewError};
 use serde::Deserialize;
 use std::{net::SocketAddr, path::PathBuf};
 use structopt::StructOpt;

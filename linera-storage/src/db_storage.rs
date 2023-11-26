@@ -14,7 +14,7 @@ use linera_views::{
     batch::Batch,
     common::{ContextFromStore, KeyValueStore},
     value_splitting::DatabaseConsistencyError,
-    views::{View, ViewError},
+    view::{View, ViewError},
 };
 use once_cell::sync::Lazy;
 use prometheus::{register_int_counter_vec, IntCounterVec};
