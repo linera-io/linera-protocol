@@ -4,7 +4,7 @@
 use linera_views::{
     common::HasherOutput,
     hashable_wrapper::WrappedHashableContainerView,
-    memory::create_memory_context,
+    store::memory::create_memory_context,
     register_view::RegisterView,
     views::{HashableView, View},
 };

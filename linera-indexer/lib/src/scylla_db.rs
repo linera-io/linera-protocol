@@ -7,7 +7,7 @@ use crate::{
 };
 use linera_views::{
     common::CommonStoreConfig,
-    scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
+    store::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
 };
 use structopt::StructOpt;
 

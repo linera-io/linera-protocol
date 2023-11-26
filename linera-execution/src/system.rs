@@ -1014,7 +1014,7 @@ mod tests {
         data_types::BlockHeight,
         identifiers::ApplicationId,
     };
-    use linera_views::memory::MemoryContext;
+    use linera_views::store::memory::MemoryContext;
 
     #[derive(Deserialize, Serialize)]
     pub struct Dummy;

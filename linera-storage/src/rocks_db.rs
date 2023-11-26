@@ -5,13 +5,13 @@ use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
 use linera_execution::WasmRuntime;
 use linera_views::{
     common::TableStatus,
-    rocks_db::{RocksDbContextError, RocksDbStore, RocksDbStoreConfig},
+    store::rocks_db::{RocksDbContextError, RocksDbStore, RocksDbStoreConfig},
 };
 use std::sync::Arc;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::db_storage::TestClock, linera_views::rocks_db::create_rocks_db_common_config,
+    crate::db_storage::TestClock, linera_views::store::rocks_db::create_rocks_db_common_config,
     tempfile::TempDir,
 };
 

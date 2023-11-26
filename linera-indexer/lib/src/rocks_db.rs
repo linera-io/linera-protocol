@@ -7,7 +7,7 @@ use crate::{
 };
 use linera_views::{
     common::CommonStoreConfig,
-    rocks_db::{RocksDbStore, RocksDbStoreConfig},
+    store::rocks_db::{RocksDbStore, RocksDbStoreConfig},
 };
 use std::path::PathBuf;
 use structopt::StructOpt;

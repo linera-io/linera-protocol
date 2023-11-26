@@ -1602,7 +1602,7 @@ pub async fn clear_tables(client: &aws_sdk_dynamodb::Client) -> Result<(), Dynam
 mod tests {
     use crate::{
         batch::SimpleUnorderedBatch,
-        dynamo_db::{get_uleb128_size, MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE},
+        store::dynamo_db::{get_uleb128_size, MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE},
     };
     use bcs::serialized_size;
 

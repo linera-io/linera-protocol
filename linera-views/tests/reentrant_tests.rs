@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    memory::create_memory_context,
+    store::memory::create_memory_context,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     views::{CryptoHashRootView, RootView, View},

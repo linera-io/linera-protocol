@@ -17,7 +17,7 @@
 
 use crate::{
     common::{Context, KeyIterable},
-    memory::{MemoryContext, MemoryContextError},
+    store::memory::{MemoryContext, MemoryContextError},
     views::ViewError,
 };
 use async_trait::async_trait;
@@ -377,7 +377,7 @@ mod tests {
     use linera_views::{
         batch::{Batch, SimpleUnorderedBatch, UnorderedBatch},
         common::Context,
-        memory::create_memory_context,
+        store::memory::create_memory_context,
     };
 
     #[test]

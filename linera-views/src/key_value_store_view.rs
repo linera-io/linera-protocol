@@ -24,7 +24,7 @@ use std::{
 #[cfg(any(test, feature = "test"))]
 use {
     crate::common::{ContextFromStore, KeyValueStore},
-    crate::memory::{MemoryContext, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
+    crate::store::memory::{MemoryContext, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
     async_lock::{MutexGuardArc, RwLock},
     std::sync::Arc,
 };

@@ -3,7 +3,7 @@
 
 use linera_views::{
     key_value_store_view::{KeyValueStoreView, SizeData},
-    memory::create_memory_context,
+    store::memory::create_memory_context,
     views::{CryptoHashRootView, RootView, View},
 };
 use rand::{distributions::Uniform, Rng, SeedableRng};

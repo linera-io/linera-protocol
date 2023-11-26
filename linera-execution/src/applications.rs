@@ -19,7 +19,7 @@ use std::collections::{HashMap, HashSet};
 #[cfg(any(test, feature = "test"))]
 use {
     async_lock::Mutex,
-    linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
+    linera_views::store::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
     linera_views::views::View,
     std::collections::BTreeMap,
     std::sync::Arc,

@@ -15,7 +15,7 @@ use linera_execution::{
     Query, QueryContext, RawExecutionResult, ResourceTracker, Response, SystemExecutionState,
     SystemMessage, SystemOperation, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
 };
-use linera_views::memory::MemoryContext;
+use linera_views::store::memory::MemoryContext;
 use serde::{Deserialize, Serialize};
 
 #[tokio::test]

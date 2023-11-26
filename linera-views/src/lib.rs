@@ -83,9 +83,6 @@ pub mod set_view;
 /// The `CollectionView` implements a map structure whose keys are ordered and the values are views.
 pub mod collection_view;
 
-/// Helper definitions for in-memory storage.
-pub mod memory;
-
 /// The LRU (least recently used) caching.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod lru_caching;
@@ -101,20 +98,8 @@ pub mod key_value_store_view;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod hashable_wrapper;
 
-/// A storage backend for views based on ScyllaDB
-#[cfg(feature = "scylladb")]
-#[cfg(not(target_arch = "wasm32"))]
-pub mod scylla_db;
-
-/// A storage backend for views based on RocksDB
-#[cfg(feature = "rocksdb")]
-#[cfg(not(target_arch = "wasm32"))]
-pub mod rocks_db;
-
-/// A storage backend for views based on DynamoDB
-#[cfg(feature = "aws")]
-#[cfg(not(target_arch = "wasm32"))]
-pub mod dynamo_db;
+/// The implemented containers
+pub mod store;
 
 /// Helper types for tests.
 #[cfg(any(test, feature = "test"))]

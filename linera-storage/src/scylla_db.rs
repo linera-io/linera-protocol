@@ -5,13 +5,13 @@ use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
 use linera_execution::WasmRuntime;
 use linera_views::{
     common::TableStatus,
-    scylla_db::{ScyllaDbContextError, ScyllaDbStore, ScyllaDbStoreConfig},
+    store::scylla_db::{ScyllaDbContextError, ScyllaDbStore, ScyllaDbStoreConfig},
 };
 use std::sync::Arc;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::db_storage::TestClock, linera_views::scylla_db::create_scylla_db_common_config,
+    crate::db_storage::TestClock, linera_views::store::scylla_db::create_scylla_db_common_config,
     linera_views::test_utils::get_table_name,
 };
 

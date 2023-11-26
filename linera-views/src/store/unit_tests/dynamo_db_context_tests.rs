@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{DynamoDbContext, TableName, TableStatus};
-use crate::dynamo_db::{
+use crate::store::dynamo_db::{
     clear_tables, create_dynamo_db_common_config, list_tables_from_client, DynamoDbContextError,
     DynamoDbStoreConfig, LocalStackTestContext,
 };

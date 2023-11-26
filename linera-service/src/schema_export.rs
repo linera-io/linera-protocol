@@ -16,7 +16,7 @@ use linera_service::{
     node_service::NodeService,
 };
 use linera_storage::{MemoryStorage, Storage, WallClock};
-use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
+use linera_views::{store::memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
 use structopt::StructOpt;
 
 #[derive(Clone)]

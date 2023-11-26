@@ -37,7 +37,7 @@ use linera_execution::{
 use linera_storage::{DbStorage, MemoryStorage, Storage, TestClock};
 use linera_views::{
     common::KeyValueStore,
-    memory::TEST_MEMORY_MAX_STREAM_QUERIES,
+    store::memory::TEST_MEMORY_MAX_STREAM_QUERIES,
     value_splitting::DatabaseConsistencyError,
     views::{CryptoHashView, ViewError},
 };

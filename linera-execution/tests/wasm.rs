@@ -17,7 +17,7 @@ use linera_execution::{
     Response, SystemExecutionState, TestExecutionRuntimeContext, WasmContract, WasmRuntime,
     WasmService,
 };
-use linera_views::{memory::MemoryContext, views::View};
+use linera_views::{store::memory::MemoryContext, views::View};
 use serde_json::json;
 use std::sync::Arc;
 use test_case::test_case;

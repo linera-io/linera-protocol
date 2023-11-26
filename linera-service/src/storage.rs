@@ -6,28 +6,28 @@ use anyhow::{bail, format_err};
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
 use linera_storage::{MemoryStorage, Storage, WallClock};
-use linera_views::{common::CommonStoreConfig, memory::MemoryStoreConfig, views::ViewError};
+use linera_views::{common::CommonStoreConfig, store::memory::MemoryStoreConfig, views::ViewError};
 use std::str::FromStr;
 use tracing::error;
 
 #[cfg(feature = "rocksdb")]
 use {
     linera_storage::RocksDbStorage,
-    linera_views::rocks_db::{RocksDbStore, RocksDbStoreConfig},
+    linera_views::store::rocks_db::{RocksDbStore, RocksDbStoreConfig},
     std::path::PathBuf,
 };
 
 #[cfg(feature = "aws")]
 use {
     linera_storage::DynamoDbStorage,
-    linera_views::dynamo_db::{get_config, DynamoDbStore, DynamoDbStoreConfig, TableName},
+    linera_views::store::dynamo_db::{get_config, DynamoDbStore, DynamoDbStoreConfig, TableName},
 };
 
 #[cfg(feature = "scylladb")]
 use {
     anyhow::Context,
     linera_storage::ScyllaDbStorage,
-    linera_views::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
+    linera_views::store::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
     std::num::NonZeroU16,
     tracing::debug,
 };

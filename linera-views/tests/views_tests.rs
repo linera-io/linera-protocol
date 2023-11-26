@@ -14,7 +14,7 @@ use linera_views::{
     log_view::LogView,
     lru_caching::LruCachingMemoryContext,
     map_view::MapView,
-    memory::{
+    store::memory::{
         create_memory_context, MemoryContext, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES,
     },
     queue_view::QueueView,
@@ -34,17 +34,17 @@ use std::{
 };
 
 #[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::{create_rocks_db_test_store, RocksDbContext, RocksDbStore};
+use linera_views::store::rocks_db::{create_rocks_db_test_store, RocksDbContext, RocksDbStore};
 
 #[cfg(feature = "aws")]
 use linera_views::{
-    common::CommonStoreConfig, dynamo_db::create_dynamo_db_common_config,
-    dynamo_db::DynamoDbContext, dynamo_db::DynamoDbStoreConfig, dynamo_db::LocalStackTestContext,
-    dynamo_db::TableName, test_utils::get_table_name,
+    common::CommonStoreConfig,
+    store::dynamo_db::{create_dynamo_db_common_config, DynamoDbContext, DynamoDbStoreConfig, LocalStackTestContext, TableName},
+    test_utils::get_table_name,
 };
 
 #[cfg(feature = "scylladb")]
-use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbContext, ScyllaDbStore};
+use linera_views::store::scylla_db::{create_scylla_db_test_store, ScyllaDbContext, ScyllaDbStore};
 
 #[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 use std::collections::BTreeSet;

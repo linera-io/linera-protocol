@@ -3,7 +3,7 @@
 
 use linera_views::{
     map_view::ByteMapView,
-    memory::create_memory_context,
+    store::memory::create_memory_context,
     views::{CryptoHashRootView, RootView, View},
 };
 use rand::{distributions::Uniform, Rng, RngCore, SeedableRng};

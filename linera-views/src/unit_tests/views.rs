@@ -4,7 +4,7 @@
 use crate::{
     batch::Batch,
     common::Context,
-    memory::{create_memory_context, MemoryContext},
+    store::memory::{create_memory_context, MemoryContext},
     queue_view::QueueView,
     views::{View, ViewError},
 };
@@ -13,22 +13,18 @@ use std::collections::VecDeque;
 
 #[cfg(feature = "rocksdb")]
 use {
-    crate::rocks_db::create_rocks_db_common_config,
-    crate::rocks_db::RocksDbStoreConfig,
-    crate::rocks_db::{RocksDbContext, RocksDbStore},
+    crate::store::rocks_db::{create_rocks_db_common_config, RocksDbStoreConfig, RocksDbContext, RocksDbStore},
     tempfile::TempDir,
 };
 
 #[cfg(feature = "aws")]
 use crate::{
-    dynamo_db::DynamoDbStoreConfig,
-    dynamo_db::LocalStackTestContext,
-    dynamo_db::{create_dynamo_db_common_config, DynamoDbContext},
+    store::dynamo_db::{create_dynamo_db_common_config, DynamoDbContext, DynamoDbStoreConfig, LocalStackTestContext},
     test_utils::get_table_name,
 };
 
 #[cfg(feature = "scylladb")]
-use crate::{scylla_db::create_scylla_db_test_store, scylla_db::ScyllaDbContext};
+use crate::store::scylla_db::{create_scylla_db_test_store, ScyllaDbContext};
 
 #[tokio::test]
 async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error> {

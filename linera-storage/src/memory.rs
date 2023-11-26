@@ -3,7 +3,7 @@
 
 use crate::db_storage::{DbStorage, DbStorageInner};
 use linera_execution::WasmRuntime;
-use linera_views::memory::{create_memory_store_stream_queries, MemoryStore};
+use linera_views::store::memory::{create_memory_store_stream_queries, MemoryStore};
 use std::sync::Arc;
 
 type MemoryStorageInner = DbStorageInner<MemoryStore>;
@@ -21,7 +21,7 @@ pub type MemoryStorage<C> = DbStorage<MemoryStore, C>;
 impl MemoryStorage<crate::TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let clock = crate::TestClock::new();
-        let max_stream_queries = linera_views::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
+        let max_stream_queries = linera_views::store::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
         MemoryStorage::new(wasm_runtime, max_stream_queries, clock)
     }
 }

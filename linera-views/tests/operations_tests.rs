@@ -5,7 +5,7 @@ use linera_views::{
     batch::{Batch, WriteOperation},
     common::{KeyIterable, KeyValueIterable, KeyValueStore},
     key_value_store_view::ViewContainer,
-    memory::{create_memory_context, create_memory_store},
+    store::memory::{create_memory_context, create_memory_store},
     test_utils::{
         get_random_byte_vector, get_random_key_prefix, get_random_key_values_prefix,
         get_small_key_space,
@@ -16,13 +16,13 @@ use rand::{Rng, RngCore, SeedableRng};
 use std::collections::{BTreeMap, HashSet};
 
 #[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::create_rocks_db_test_store;
+use linera_views::store::rocks_db::create_rocks_db_test_store;
 
 #[cfg(feature = "aws")]
-use linera_views::dynamo_db::create_dynamo_db_test_store;
+use linera_views::store::dynamo_db::create_dynamo_db_test_store;
 
 #[cfg(feature = "scylladb")]
-use linera_views::scylla_db::create_scylla_db_test_store;
+use linera_views::store::scylla_db::create_scylla_db_test_store;
 
 /// This test starts with a collection of key/values being inserted into the code
 /// which is then followed by a number of reading tests. The functionalities being

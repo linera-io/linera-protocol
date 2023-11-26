@@ -22,7 +22,7 @@ use linera_execution::{
     WasmRuntime,
 };
 use linera_storage::{MemoryStorage, Storage, TestClock};
-use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
+use linera_views::{store::memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     slice::SliceIndex,
@@ -34,21 +34,21 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 #[cfg(feature = "rocksdb")]
 use {
-    linera_storage::RocksDbStorage, linera_views::rocks_db::create_rocks_db_common_config,
-    linera_views::rocks_db::RocksDbStoreConfig, tokio::sync::Semaphore,
+    linera_storage::RocksDbStorage,
+    linera_views::store::rocks_db::{create_rocks_db_common_config, RocksDbStoreConfig},
+    tokio::sync::Semaphore,
 };
 
 #[cfg(feature = "aws")]
 use {
     linera_storage::DynamoDbStorage,
-    linera_views::dynamo_db::DynamoDbStoreConfig,
-    linera_views::dynamo_db::{create_dynamo_db_common_config, LocalStackTestContext},
+    linera_views::store::dynamo_db::{create_dynamo_db_common_config, DynamoDbStoreConfig, LocalStackTestContext},
 };
 
 #[cfg(feature = "scylladb")]
 use {
-    linera_storage::ScyllaDbStorage, linera_views::scylla_db::create_scylla_db_common_config,
-    linera_views::scylla_db::ScyllaDbStoreConfig,
+    linera_storage::ScyllaDbStorage,
+    linera_views::store::scylla_db::{create_scylla_db_common_config, ScyllaDbStoreConfig},
 };
 
 #[cfg(any(feature = "aws", feature = "scylladb"))]
