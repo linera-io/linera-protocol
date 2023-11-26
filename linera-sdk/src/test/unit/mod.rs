@@ -25,7 +25,7 @@ use linera_base::{
 use linera_views::{
     batch::{Batch, WriteOperation},
     common::Context,
-    memory::MemoryContext,
+    store::memory::MemoryContext,
 };
 
 static mut MOCK_CHAIN_ID: Option<ChainId> = None;
@@ -78,7 +78,7 @@ pub fn mock_application_state(state: impl Into<Option<Vec<u8>>>) {
 
 /// Initializes and returns a view context for using as the mocked key-value store.
 pub fn mock_key_value_store() -> MemoryContext<()> {
-    let store = linera_views::memory::create_memory_context();
+    let store = linera_views::store::memory::create_memory_context();
     unsafe { MOCK_KEY_VALUE_STORE = Some(store.clone()) };
     store
 }

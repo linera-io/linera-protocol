@@ -20,7 +20,7 @@ use linera_execution::{
     WasmRuntime,
 };
 use linera_storage::{MemoryStorage, Storage, WallClock};
-use linera_views::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
+use linera_views::store::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
 use std::sync::{
     atomic::{AtomicU32, Ordering},
     Arc,
