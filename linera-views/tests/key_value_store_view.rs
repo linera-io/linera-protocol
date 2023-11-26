@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    key_value_store_view::KeyValueStoreView,
+    key_value_store_view::{KeyValueStoreView, SizeData},
     memory::create_memory_context,
     views::{CryptoHashRootView, RootView, View},
 };
@@ -21,14 +21,17 @@ fn remove_by_prefix<V: Debug>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8
     map.retain(|key, _| !key.starts_with(&key_prefix));
 }
 
-fn total_size(vec: &Vec<(Vec<u8>, Vec<u8>)>) -> (u64, u64) {
+fn total_size(vec: &Vec<(Vec<u8>, Vec<u8>)>) -> SizeData {
     let mut total_key_size = 0;
     let mut total_value_size = 0;
     for (key, value) in vec {
         total_key_size += key.len();
         total_value_size += value.len();
     }
-    (total_key_size as u64, total_value_size as u64)
+    SizeData {
+        key: total_key_size as u32,
+        value: total_value_size as u32,
+    }
 }
 
 #[tokio::test]
@@ -45,7 +48,7 @@ async fn key_value_store_view_mutability() {
         let state_vec = state_map.clone().into_iter().collect::<Vec<_>>();
         assert!(read_state.iter().map(|(k, v)| (k, v)).eq(&state_map));
         assert_eq!(total_size(&state_vec), view.store.total_size());
-        //
+
         let count_oper = rng.gen_range(0..25);
         let mut new_state_map = state_map.clone();
         let mut new_state_vec = state_vec.clone();
@@ -65,7 +68,7 @@ async fn key_value_store_view_mutability() {
                     let value = Vec::new();
                     view.store.insert(key.clone(), value.clone()).await.unwrap();
                     new_state_map.insert(key, value);
-                    //
+
                     new_state_vec = new_state_map.clone().into_iter().collect();
                     let new_key_values = view.store.index_values().await.unwrap();
                     assert_eq!(new_state_vec, new_key_values);

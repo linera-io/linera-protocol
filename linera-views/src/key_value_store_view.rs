@@ -13,6 +13,7 @@ use crate::{
 use async_lock::Mutex;
 use async_trait::async_trait;
 use linera_base::ensure;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
@@ -51,6 +52,28 @@ enum KeyTag {
     Hash,
 }
 
+/// A pair containing the key and value size.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SizeData {
+    /// The size of the key
+    pub key: u32,
+    /// The size of the value
+    pub value: u32,
+}
+
+impl SizeData {
+    /// Add a size to the existing SizeData
+    pub fn add_assign(&mut self, size: SizeData) {
+        self.key += size.key;
+        self.value += size.value;
+    }
+    /// Subtract a size to the existing SizeData
+    pub fn sub_assign(&mut self, size: SizeData) {
+        self.key -= size.key;
+        self.value -= size.value;
+    }
+}
+
 /// A view that represents the functions of KeyValueStore (though not KeyValueStore).
 ///
 /// Comment on the data set:
@@ -73,9 +96,9 @@ pub struct KeyValueStoreView<C> {
     context: C,
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
-    stored_total_size: (u64, u64),
-    total_size: (u64, u64),
-    sizes: ByteMapView<C, (u64, u64)>,
+    stored_total_size: SizeData,
+    total_size: SizeData,
+    sizes: ByteMapView<C, SizeData>,
     deleted_prefixes: BTreeSet<Vec<u8>>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
@@ -170,7 +193,7 @@ where
         self.was_cleared = true;
         self.updates.clear();
         self.deleted_prefixes.clear();
-        self.total_size = (0, 0);
+        self.total_size = SizeData::default();
         self.sizes.clear();
         *self.hash.get_mut() = None;
     }
@@ -190,15 +213,15 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_memory_context;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::{KeyValueStoreView, SizeData};
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   let total_size = view.total_size();
-    ///   assert_eq!(total_size, (0,0));
+    ///   assert_eq!(total_size, SizeData::default());
     /// # })
     /// ```
-    pub fn total_size(&self) -> (u64, u64) {
+    pub fn total_size(&self) -> SizeData {
         self.total_size
     }
 
@@ -583,8 +606,7 @@ where
                 WriteOperation::Delete { key } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     if let Some(size) = self.sizes.get(&key).await? {
-                        self.total_size.0 -= size.0;
-                        self.total_size.1 -= size.1;
+                        self.total_size.sub_assign(size);
                     }
                     self.sizes.remove(key.clone());
                     if self.was_cleared {
@@ -595,12 +617,13 @@ where
                 }
                 WriteOperation::Put { key, value } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
-                    let single_size = (key.len() as u64, value.len() as u64);
-                    self.total_size.0 += single_size.0;
-                    self.total_size.1 += single_size.1;
+                    let single_size = SizeData {
+                        key: key.len() as u32,
+                        value: value.len() as u32,
+                    };
+                    self.total_size.add_assign(single_size);
                     if let Some(size) = self.sizes.get(&key).await? {
-                        self.total_size.0 -= size.0;
-                        self.total_size.1 -= size.1;
+                        self.total_size.sub_assign(size);
                     }
                     self.sizes.insert(key.clone(), single_size);
                     self.updates.insert(key, Update::Set(value));
@@ -617,8 +640,7 @@ where
                     }
                     let key_values = self.sizes.key_values_by_prefix(key_prefix.clone()).await?;
                     for (key, value) in key_values {
-                        self.total_size.0 -= value.0;
-                        self.total_size.1 -= value.1;
+                        self.total_size.sub_assign(value);
                         self.sizes.remove(key);
                     }
                     self.sizes.remove_by_prefix(key_prefix.clone());
