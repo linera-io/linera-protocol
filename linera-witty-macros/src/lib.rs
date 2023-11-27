@@ -14,7 +14,7 @@ mod wit_load;
 mod wit_store;
 mod wit_type;
 
-use self::util::extract_namespace;
+use self::util::{apply_specialization_attribute, extract_namespace, Specializations};
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use proc_macro_error::{abort, proc_macro_error};
@@ -27,9 +27,11 @@ use syn::{parse_macro_input, Data, DeriveInput, Ident, ItemTrait};
 ///
 /// All fields in the type must also implement `WitType`.
 #[proc_macro_error]
-#[proc_macro_derive(WitType)]
+#[proc_macro_derive(WitType, attributes(witty))]
 pub fn derive_wit_type(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
+    let mut input = parse_macro_input!(input as DeriveInput);
+
+    let specializations = apply_specialization_attribute(&mut input);
 
     let body = match &input.data {
         Data::Struct(struct_item) => wit_type::derive_for_struct(&struct_item.fields),
@@ -39,7 +41,12 @@ pub fn derive_wit_type(input: TokenStream) -> TokenStream {
         }
     };
 
-    derive_trait(input, body, Ident::new("WitType", Span::call_site()))
+    derive_trait(
+        input,
+        specializations,
+        body,
+        Ident::new("WitType", Span::call_site()),
+    )
 }
 
 /// Derives `WitLoad` for the Rust type.
@@ -48,7 +55,9 @@ pub fn derive_wit_type(input: TokenStream) -> TokenStream {
 #[proc_macro_error]
 #[proc_macro_derive(WitLoad)]
 pub fn derive_wit_load(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
+    let mut input = parse_macro_input!(input as DeriveInput);
+
+    let specializations = apply_specialization_attribute(&mut input);
 
     let body = match &input.data {
         Data::Struct(struct_item) => wit_load::derive_for_struct(&struct_item.fields),
@@ -58,7 +67,12 @@ pub fn derive_wit_load(input: TokenStream) -> TokenStream {
         }
     };
 
-    derive_trait(input, body, Ident::new("WitLoad", Span::call_site()))
+    derive_trait(
+        input,
+        specializations,
+        body,
+        Ident::new("WitLoad", Span::call_site()),
+    )
 }
 
 /// Derives `WitStore` for the Rust type.
@@ -67,7 +81,9 @@ pub fn derive_wit_load(input: TokenStream) -> TokenStream {
 #[proc_macro_error]
 #[proc_macro_derive(WitStore)]
 pub fn derive_wit_store(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
+    let mut input = parse_macro_input!(input as DeriveInput);
+
+    let specializations = apply_specialization_attribute(&mut input);
 
     let body = match &input.data {
         Data::Struct(struct_item) => wit_store::derive_for_struct(&struct_item.fields),
@@ -79,14 +95,25 @@ pub fn derive_wit_store(input: TokenStream) -> TokenStream {
         }
     };
 
-    derive_trait(input, body, Ident::new("WitStore", Span::call_site()))
+    derive_trait(
+        input,
+        specializations,
+        body,
+        Ident::new("WitStore", Span::call_site()),
+    )
 }
 
 /// Derives a trait named `trait_name` with the specified `body`.
 ///
 /// Contains the common code to extract and apply the type's generics for the trait implementation.
-fn derive_trait(input: DeriveInput, body: impl ToTokens, trait_name: Ident) -> TokenStream {
-    let (generic_parameters, type_generics, where_clause) = input.generics.split_for_impl();
+fn derive_trait(
+    input: DeriveInput,
+    specializations: Specializations,
+    body: impl ToTokens,
+    trait_name: Ident,
+) -> TokenStream {
+    let (generic_parameters, type_generics, where_clause) =
+        specializations.split_generics_from(&input.generics);
     let type_name = &input.ident;
 
     quote! {

@@ -14,7 +14,7 @@ use std::hash::{Hash, Hasher};
 use syn::{
     parse::{self, Parse, ParseStream},
     punctuated::Punctuated,
-    Fields, Ident, Lit, LitStr, MetaNameValue, Token,
+    DeriveInput, Fields, Ident, Lit, LitStr, MetaNameValue, Token,
 };
 
 /// Returns the code with a pattern to match a heterogenous list using the `field_names` as
@@ -63,6 +63,11 @@ pub fn extract_namespace(
         .unwrap_or_else(|| type_name.to_string().to_kebab_case());
 
     LitStr::new(&format!("{package_name}/{interface_name}"), span)
+}
+
+/// Changes the [`DeriveInput`] by replacing some generic type parameters with specialized types.
+pub fn apply_specialization_attribute(input: &mut DeriveInput) -> Specializations {
+    Specializations::new(input)
 }
 
 /// A type representing the parameters for an attribute procedural macro.
