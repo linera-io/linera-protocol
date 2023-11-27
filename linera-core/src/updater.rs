@@ -277,20 +277,15 @@ where
         // Figure out which certificates this validator is missing.
         let query = ChainInfoQuery::new(chain_id);
         let initial_block_height = match self.node.handle_chain_info_query(query).await {
-            Ok(response) if response.info.description.is_some() => {
+            Ok(response) => {
                 response.check(self.name)?;
                 response.info.next_block_height
             }
-            Ok(response) => {
-                response.check(self.name)?;
-                BlockHeight::ZERO
-            }
-            Err(e) => {
+            Err(error) => {
                 error!(
-                    "Failed to query validator {:?} about missing blocks for chain {:?}: {}",
-                    self.name, chain_id, e
+                    name = ?self.name, ?chain_id, %error, "Failed to query validator about missing blocks"
                 );
-                return Err(e);
+                return Err(error);
             }
         };
         // Obtain the missing blocks and the manager state from the local node.
