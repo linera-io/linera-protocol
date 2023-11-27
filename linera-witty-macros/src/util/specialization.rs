@@ -3,19 +3,175 @@
 
 //! Specialization of types before deriving traits for them.
 
+use proc_macro2::{Span, TokenStream};
+use proc_macro_error::abort;
 use quote::ToTokens;
 use std::{
+    collections::HashSet,
     fmt::{self, Debug, Formatter},
     mem,
 };
 use syn::{
-    parse::{self, Parse, ParseStream},
-    AngleBracketedGenericArguments, AssocConst, AssocType, Constraint, Data, DataEnum, DataStruct,
-    DataUnion, DeriveInput, Field, Fields, GenericArgument, Ident, Path, PathArguments,
-    PredicateType, QSelf, ReturnType, Token, Type, TypeArray, TypeBareFn, TypeGroup, TypeImplTrait,
-    TypeParamBound, TypeParen, TypePath, TypePtr, TypeReference, TypeSlice, WhereClause,
-    WherePredicate,
+    parse::{self, Parse, ParseStream, Parser},
+    punctuated::Punctuated,
+    spanned::Spanned,
+    AngleBracketedGenericArguments, AssocConst, AssocType, Attribute, Constraint, Data, DataEnum,
+    DataStruct, DataUnion, DeriveInput, Field, Fields, GenericArgument, GenericParam, Generics,
+    Ident, MacroDelimiter, Meta, MetaList, Path, PathArguments, PredicateType, QSelf, ReturnType,
+    Token, Type, TypeArray, TypeBareFn, TypeGroup, TypeImplTrait, TypeParamBound, TypeParen,
+    TypePath, TypePtr, TypeReference, TypeSlice, WhereClause, WherePredicate,
 };
+
+/// Collected specializations to apply before deriving a trait for a type.
+#[derive(Debug)]
+pub struct Specializations(Vec<Specialization>);
+
+impl Specializations {
+    /// Creates a new [`Specializations`] instance by parsing the `witty_specialize_with`
+    /// attributes from the [`DeriveInput`].
+    ///
+    /// The [`DeriveInput`] is changed so that its `where` clause and field types are specialized.
+    pub fn new(input: &mut DeriveInput) -> Self {
+        let specializations: Vec<_> = Self::parse_specialization_attributes(&input.attrs).collect();
+
+        for specialization in &specializations {
+            specialization.apply_to(input);
+        }
+
+        Specializations(specializations)
+    }
+
+    /// Creates a list of [`Specialization`]s based on the `witty_specialize_with` attributes found
+    /// in the provided `attributes`.
+    fn parse_specialization_attributes(
+        attributes: &[Attribute],
+    ) -> impl Iterator<Item = Specialization> {
+        let mut specializations = Vec::new();
+
+        let abort_with_error = |span: Span| -> ! {
+            abort!(
+                span,
+                "Failed to parse Witty specialization attribute. \
+                Expected: `#[witty_specialize_with(TypeParam = Type, ...))]`."
+            );
+        };
+
+        for attribute in attributes {
+            match &attribute.meta {
+                Meta::List(MetaList {
+                    path,
+                    delimiter,
+                    tokens,
+                }) if path.is_ident("witty_specialize_with")
+                    && matches!(delimiter, MacroDelimiter::Paren(_)) =>
+                {
+                    let parser = Punctuated::<Specialization, Token![,]>::parse_separated_nonempty;
+                    specializations.push(
+                        parser
+                            .parse2(tokens.clone())
+                            .unwrap_or_else(|_| abort_with_error(attribute.span()))
+                            .into_iter(),
+                    );
+                }
+                _ => {}
+            }
+        }
+
+        specializations.into_iter().flatten()
+    }
+
+    /// Retrieves the information related to generics from the provided [`Generics`] after
+    /// applying the specializations from this instance.
+    ///
+    /// Returns the generic parameters for the `impl` block, the generic arguments for the target
+    /// type, and the where clause to use.
+    pub fn split_generics_from<'generics>(
+        &self,
+        generics: &'generics Generics,
+    ) -> (
+        TokenStream,
+        Option<AngleBracketedGenericArguments>,
+        Option<&'generics WhereClause>,
+    ) {
+        let (_original_generic_parameters, original_type_generics, where_clause) =
+            generics.split_for_impl();
+        let type_generics = self.specialize_type_generics(original_type_generics);
+        let generic_parameters = self.clean_generic_parameters(generics.clone());
+
+        (
+            generic_parameters.into_token_stream(),
+            type_generics,
+            where_clause,
+        )
+    }
+
+    /// Specializes the target type's generic parameters.
+    fn specialize_type_generics(
+        &self,
+        type_generics: impl ToTokens,
+    ) -> Option<AngleBracketedGenericArguments> {
+        let mut generic_type = syn::parse_quote!(TheType #type_generics);
+
+        for specialization in &self.0 {
+            specialization.change_types_in_type(&mut generic_type);
+        }
+
+        match generic_type {
+            Type::Path(TypePath {
+                qself: None,
+                path:
+                    Path {
+                        leading_colon: None,
+                        segments,
+                    },
+            }) if segments.len() == 1 => {
+                let segment = segments
+                    .into_iter()
+                    .next()
+                    .expect("Missing custom type's path");
+                assert_eq!(segment.ident, "TheType");
+
+                match segment.arguments {
+                    PathArguments::None => None,
+                    PathArguments::AngleBracketed(arguments) => Some(arguments),
+                    PathArguments::Parenthesized(_) => {
+                        unreachable!("Custom type has unexpected function type parameters")
+                    }
+                }
+            }
+            _ => unreachable!("Parsed custom type literal is incorrect"),
+        }
+    }
+
+    /// Returns the generic parameters from the [`Generics`] information after applying the
+    /// specializations from this instance.
+    fn clean_generic_parameters(&self, mut generics: Generics) -> TokenStream {
+        let original_generic_types = mem::take(&mut generics.params);
+        let parameters_to_remove: HashSet<Ident> = self
+            .0
+            .iter()
+            .map(|specialization| specialization.type_parameter.clone())
+            .collect();
+
+        generics
+            .params
+            .extend(
+                original_generic_types
+                    .into_iter()
+                    .filter(|generic_type| match generic_type {
+                        GenericParam::Lifetime(_) | GenericParam::Const(_) => true,
+                        GenericParam::Type(type_parameter) => {
+                            !parameters_to_remove.contains(&type_parameter.ident)
+                        }
+                    }),
+            );
+
+        let (generic_parameters, _incorrect_type_generics, _unaltered_where_clasue) =
+            generics.split_for_impl();
+
+        generic_parameters.into_token_stream()
+    }
+}
 
 /// A single specialization of a generic type parameter.
 struct Specialization {

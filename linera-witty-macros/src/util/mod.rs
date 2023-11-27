@@ -5,6 +5,7 @@
 
 mod specialization;
 
+pub use self::specialization::Specializations;
 use heck::ToKebabCase;
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::abort;
