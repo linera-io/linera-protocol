@@ -7,7 +7,11 @@
 
 use crate::{codec, codec::Codec, RpcMessage};
 use async_trait::async_trait;
-use futures::{future, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
+use futures::{
+    future,
+    stream::{self, AbortHandle, AbortRegistration, Abortable},
+    Sink, SinkExt, Stream, StreamExt, TryStreamExt,
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, net::ToSocketAddrs, sync::Arc};
 use structopt::clap::arg_enum;
@@ -60,7 +64,7 @@ pub trait MessageHandler: Clone {
 
 /// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
 pub struct ServerHandle {
-    pub complete: futures::channel::oneshot::Sender<()>,
+    pub abort: AbortHandle,
     pub handle: tokio::task::JoinHandle<Result<(), std::io::Error>>,
 }
 
@@ -72,7 +76,7 @@ impl ServerHandle {
     }
 
     pub async fn kill(self) -> Result<(), std::io::Error> {
-        self.complete.send(()).unwrap();
+        self.abort.abort();
         self.handle.await??;
         Ok(())
     }
@@ -141,18 +145,18 @@ impl TransportProtocol {
     where
         S: MessageHandler + Send + 'static,
     {
-        let (complete, receiver) = futures::channel::oneshot::channel();
+        let (abort, registration) = AbortHandle::new_pair();
         let handle = match self {
             Self::Udp => {
                 let socket = UdpSocket::bind(&address).await?;
-                tokio::spawn(Self::run_udp_server(socket, state, receiver))
+                tokio::spawn(Self::run_udp_server(socket, state, registration))
             }
             Self::Tcp => {
                 let listener = TcpListener::bind(address).await?;
-                tokio::spawn(Self::run_tcp_server(listener, state, receiver))
+                tokio::spawn(Self::run_tcp_server(listener, state, registration))
             }
         };
-        Ok(ServerHandle { complete, handle })
+        Ok(ServerHandle { abort, handle })
     }
 }
 
@@ -189,31 +193,25 @@ impl TransportProtocol {
     async fn run_udp_server<S>(
         socket: UdpSocket,
         state: S,
-        mut exit_future: futures::channel::oneshot::Receiver<()>,
+        registration: AbortRegistration,
     ) -> Result<(), std::io::Error>
     where
         S: MessageHandler + Send + 'static,
     {
-        let (udp_sink, mut udp_stream) = UdpFramed::new(socket, Codec).split();
+        let (udp_sink, udp_stream) = UdpFramed::new(socket, Codec).split();
+        let mut udp_stream = Abortable::new(udp_stream, registration);
         let udp_sink = Arc::new(Mutex::new(udp_sink));
         // Track the latest tasks for a given peer. This is used to return answers in the
         // same order as the queries.
         let mut previous_tasks = HashMap::new();
 
-        loop {
-            let (message, peer) = match future::select(exit_future, udp_stream.next()).await {
-                future::Either::Left(_) => break,
-                future::Either::Right((value, new_exit_future)) => {
-                    exit_future = new_exit_future;
-                    match value {
-                        Some(Ok(value)) => value,
-                        Some(Err(codec::Error::Io(io_error))) => return Err(io_error),
-                        Some(Err(other_error)) => {
-                            warn!("Received an invalid message: {other_error}");
-                            continue;
-                        }
-                        None => return Err(std::io::ErrorKind::UnexpectedEof.into()),
-                    }
+        while let Some(value) = udp_stream.next().await {
+            let (message, peer) = match value {
+                Ok(value) => value,
+                Err(codec::Error::Io(io_error)) => return Err(io_error),
+                Err(other_error) => {
+                    warn!("Received an invalid message: {other_error}");
+                    continue;
                 }
             };
 
@@ -296,19 +294,18 @@ impl TransportProtocol {
     async fn run_tcp_server<S>(
         listener: TcpListener,
         state: S,
-        mut exit_future: futures::channel::oneshot::Receiver<()>,
+        registration: AbortRegistration,
     ) -> Result<(), std::io::Error>
     where
         S: MessageHandler + Send + 'static,
     {
-        loop {
-            let (socket, _) = match future::select(exit_future, Box::pin(listener.accept())).await {
-                future::Either::Left(_) => break,
-                future::Either::Right((value, new_exit_future)) => {
-                    exit_future = new_exit_future;
-                    value?
-                }
-            };
+        let accept_stream = stream::try_unfold(listener, |listener| async move {
+            let (socket, _) = listener.accept().await?;
+            Ok::<_, io::Error>(Some((socket, listener)))
+        });
+        let mut accept_stream = Box::pin(Abortable::new(accept_stream, registration));
+        while let Some(value) = accept_stream.next().await {
+            let socket = value?;
             let mut handler = state.clone();
             tokio::spawn(async move {
                 let mut transport = Framed::new(socket, Codec);
