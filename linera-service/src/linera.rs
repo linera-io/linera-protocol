@@ -57,7 +57,7 @@ use std::{
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
-use tokio::signal::unix;
+use tokio::{signal::unix, sync::mpsc};
 use tracing::{debug, info, warn};
 
 #[cfg(feature = "benchmark")]
@@ -2018,9 +2018,42 @@ impl Job {
     }
 }
 
+async fn handle_signals(shutdown_sender: mpsc::Sender<()>) {
+    let mut sigint =
+        unix::signal(unix::SignalKind::interrupt()).expect("Failed to set up SIGINT handler");
+    let mut sigterm =
+        unix::signal(unix::SignalKind::terminate()).expect("Failed to set up SIGTERM handler");
+    let mut sigpipe =
+        unix::signal(unix::SignalKind::pipe()).expect("Failed to set up SIGPIPE handler");
+    let mut sighup =
+        unix::signal(unix::SignalKind::hangup()).expect("Failed to set up SIGHUP handler");
+
+    tokio::select! {
+        _ = sigint.recv() => (),
+        _ = sigterm.recv() => (),
+        _ = sigpipe.recv() => (),
+        _ = sighup.recv() => (),
+    }
+
+    let _ = shutdown_sender.send(()).await;
+}
+
+async fn listen_for_signals(
+    shutdown_receiver: &mut tokio::sync::mpsc::Receiver<()>,
+    net: &mut impl LineraNet,
+) -> anyhow::Result<()> {
+    if shutdown_receiver.recv().await.is_some() {
+        eprintln!("\nTerminating the local test network...");
+        net.terminate().await?;
+        eprintln!("\nDone.");
+    }
+
+    Ok(())
+}
+
 async fn net_up(
     extra_wallets: &Option<usize>,
-    mut net: impl LineraNet,
+    net: &mut impl LineraNet,
     client1: ClientWrapper,
 ) -> Result<(), anyhow::Error> {
     let default_chain = client1
@@ -2100,19 +2133,7 @@ async fn net_up(
     eprintln!(
         "\nREADY!\nPress ^C to terminate the local test network and clean the temporary directory."
     );
-    let mut sigint = unix::signal(unix::SignalKind::interrupt())?;
-    let mut sigterm = unix::signal(unix::SignalKind::terminate())?;
-    let mut sigpipe = unix::signal(unix::SignalKind::pipe())?;
-    let mut sighup = unix::signal(unix::SignalKind::hangup())?;
-    tokio::select! {
-        _ = sigint.recv() => (),
-        _ = sigterm.recv() => (),
-        _ = sigpipe.recv() => (),
-        _ = sighup.recv() => (),
-    }
-    eprintln!("\nTerminating the local test network...");
-    net.terminate().await?;
-    eprintln!("\nDone.");
+
     Ok(())
 }
 
@@ -2266,17 +2287,31 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                     panic!("The local test network must have at least one shard per validator.");
                 }
 
+                let (shutdown_sender, mut shutdown_receiver) = mpsc::channel(1);
+                tokio::spawn(handle_signals(shutdown_sender));
+
                 #[cfg(feature = "kubernetes")]
-                if *kubernetes {
-                    let config = LocalKubernetesNetConfig {
-                        network: Network::Grpc,
-                        testing_prng_seed: *testing_prng_seed,
-                        num_initial_validators: *validators,
-                        num_shards: *shards,
-                        binaries_dir: binaries_dir.clone(),
-                    };
-                    let (net, client1) = config.instantiate().await?;
-                    Ok(net_up(extra_wallets, net, client1).await?)
+                let (kubernetes, binaries_dir) = (*kubernetes, binaries_dir.clone());
+                #[cfg(not(feature = "kubernetes"))]
+                let (kubernetes, _binaries_dir) = (false, PathBuf::default());
+
+                if kubernetes {
+                    #[cfg(feature = "kubernetes")]
+                    {
+                        let config = LocalKubernetesNetConfig {
+                            network: Network::Grpc,
+                            testing_prng_seed: *testing_prng_seed,
+                            num_initial_validators: *validators,
+                            num_shards: *shards,
+                            binaries_dir: binaries_dir.clone(),
+                        };
+                        let (mut net, client1) = config.instantiate().await?;
+                        let result = Ok(net_up(extra_wallets, &mut net, client1).await?);
+                        listen_for_signals(&mut shutdown_receiver, &mut net).await?;
+                        result
+                    }
+                    #[cfg(not(feature = "kubernetes"))]
+                    bail!("Cannot use the kubernetes flag with the kubernetes feature off")
                 } else {
                     let config = LocalNetConfig {
                         network: Network::Grpc,
@@ -2286,21 +2321,10 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                         num_initial_validators: *validators,
                         num_shards: *shards,
                     };
-                    let (net, client1) = config.instantiate().await?;
-                    Ok(net_up(extra_wallets, net, client1).await?)
-                }
-                #[cfg(not(feature = "kubernetes"))]
-                {
-                    let config = LocalNetConfig {
-                        network: Network::Grpc,
-                        database: Database::RocksDb,
-                        testing_prng_seed: *testing_prng_seed,
-                        table_name: table_name.to_string(),
-                        num_initial_validators: *validators,
-                        num_shards: *shards,
-                    };
-                    let (net, client1) = config.instantiate().await?;
-                    Ok(net_up(extra_wallets, net, client1).await?)
+                    let (mut net, client1) = config.instantiate().await?;
+                    let result = Ok(net_up(extra_wallets, &mut net, client1).await?);
+                    listen_for_signals(&mut shutdown_receiver, &mut net).await?;
+                    result
                 }
             }
 

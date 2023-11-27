@@ -147,15 +147,33 @@ impl LineraNet for LocalKubernetesNet {
     }
 
     async fn terminate(&mut self) -> Result<()> {
+        let mut errors = Vec::new();
+
         for port_forward_child in &mut self.kubectl_instance.port_forward_children {
-            port_forward_child.kill().await?;
+            if let Err(e) = port_forward_child.kill().await {
+                errors.push(e.into());
+            }
         }
 
         for kind_cluster in &mut self.kind_clusters {
-            kind_cluster.delete().await?;
+            if let Err(e) = kind_cluster.delete().await {
+                errors.push(e);
+            }
         }
 
-        Ok(())
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            let err_str = if errors.len() > 1 {
+                "Multiple errors"
+            } else {
+                "One error"
+            };
+
+            Err(errors
+                .into_iter()
+                .fold(anyhow!("{err_str} occurred"), |acc, e| acc.context(e)))
+        }
     }
 }
 
