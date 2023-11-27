@@ -31,6 +31,20 @@ spec:
     spec:
       serviceAccountName: linera-admin
       terminationGracePeriodSeconds: 10
+      initContainers:
+        - name: linera-server-initializer
+          image: {{ .Values.lineraImage }}
+          imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
+          command: ["./server-init.sh"]
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.logLevel }}
+            - name: RUST_BACKTRACE
+              value: "1"
+          volumeMounts:
+            - name: config
+              mountPath: "/config"
+              readOnly: true
       containers:
         - name: linera-server
           image: {{ .Values.lineraImage }}
@@ -51,20 +65,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-          volumeMounts:
-            - name: config
-              mountPath: "/config"
-              readOnly: true
-      initContainers:
-        - name: linera-server-initializer
-          image: {{ .Values.lineraImage }}
-          imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
-          command: ["./server-init.sh"]
-          env:
-            - name: RUST_LOG
-              value: {{ .Values.logLevel }}
-            - name: RUST_BACKTRACE
-              value: "1"
           volumeMounts:
             - name: config
               mountPath: "/config"
