@@ -7,9 +7,7 @@ use pathdiff::diff_paths;
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
-pub struct HelmRelease {
-    name: String,
-}
+pub struct HelmRelease;
 
 impl HelmRelease {
     pub async fn install(
@@ -20,7 +18,6 @@ impl HelmRelease {
         num_shards: usize,
         cluster_id: u32,
     ) -> Result<()> {
-        let helm_release = Self { name };
         let execution_dir = format!("{}/kubernetes/linera-validator", github_root.display());
 
         let configs_dir = diff_paths(configs_dir, execution_dir.clone())
@@ -30,7 +27,7 @@ impl HelmRelease {
         Command::new("helm")
             .current_dir(&execution_dir)
             .arg("install")
-            .arg(&helm_release.name)
+            .arg(&name)
             .arg(".")
             .args(["--values", "values-local.yaml"])
             .arg("--wait")

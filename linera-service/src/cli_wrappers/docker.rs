@@ -18,7 +18,7 @@ impl DockerImage {
         Ok(docker_image)
     }
 
-    pub fn get_name(&self) -> &String {
+    pub fn name(&self) -> &String {
         &self.name
     }
 

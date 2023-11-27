@@ -13,6 +13,7 @@ use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use futures::{
     future::{self, join_all},
+    lock::Mutex,
     FutureExt,
 };
 use k8s_openapi::api::core::v1::Pod;
@@ -22,7 +23,7 @@ use kube::{
 };
 use std::{fs, path::PathBuf, sync::Arc};
 use tempfile::{tempdir, TempDir};
-use tokio::process::Command;
+use tokio::{process::Command, sync::Semaphore};
 
 /// The information needed to start a [`LocalKubernetesNet`].
 pub struct LocalKubernetesNetConfig {
@@ -40,7 +41,7 @@ pub struct LocalKubernetesNet {
     next_client_id: usize,
     tmp_dir: Arc<TempDir>,
     binaries_dir: Option<PathBuf>,
-    kubectl_instance: KubectlInstance,
+    kubectl_instance: Arc<Mutex<KubectlInstance>>,
     kind_clusters: Vec<KindCluster>,
     num_initial_validators: usize,
     num_shards: usize,
@@ -58,13 +59,17 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
             KubectlInstance::new(Vec::new()),
             future::ready(
                 (0..self.num_initial_validators)
-                    .map(|_| async { KindCluster::create().await })
+                    .map(|_| async {
+                        KindCluster::create()
+                            .await
+                            .expect("Creating kind cluster should not fail")
+                    })
                     .collect::<Vec<_>>(),
             )
             .then(join_all)
             .await
             .into_iter()
-            .collect::<Result<Vec<_>, _>>()?,
+            .collect::<Vec<_>>(),
             self.num_initial_validators,
             self.num_shards,
         )?;
@@ -147,9 +152,9 @@ impl LineraNet for LocalKubernetesNet {
     }
 
     async fn terminate(&mut self) -> Result<()> {
+        let mut kubectl_instance = self.kubectl_instance.lock().await;
         let mut errors = Vec::new();
-
-        for port_forward_child in &mut self.kubectl_instance.port_forward_children {
+        for port_forward_child in &mut kubectl_instance.port_forward_children {
             if let Err(e) = port_forward_child.kill().await {
                 errors.push(e.into());
             }
@@ -193,7 +198,7 @@ impl LocalKubernetesNet {
             next_client_id: 0,
             tmp_dir: Arc::new(tempdir()?),
             binaries_dir,
-            kubectl_instance,
+            kubectl_instance: Arc::new(Mutex::new(kubectl_instance)),
             kind_clusters,
             num_initial_validators,
             num_shards,
@@ -296,45 +301,73 @@ impl LocalKubernetesNet {
             base_dir.join("genesis.json"),
         )?;
 
-        for i in 0..self.num_initial_validators {
-            let cluster_id = self.kind_clusters[i].id();
-            self.kind_clusters[i]
-                .load_docker_image(docker_image.get_name())
-                .await?;
+        let kubectl_instance_clone = self.kubectl_instance.clone();
+        let tmp_dir_path_clone = self.tmp_dir.path().to_path_buf();
+        let num_shards = self.num_shards;
 
-            let server_config_filename = format!("server_{}.json", i);
-            fs::copy(
-                self.tmp_dir.path().join(&server_config_filename),
-                base_dir.join(&server_config_filename),
-            )?;
+        // Allow just 2 parallel image loading executions, to not overwhelm Docker
+        let load_docker_image_semaphore = Arc::new(Semaphore::new(2));
 
-            HelmRelease::install(
-                String::from("linera-core"),
-                &base_dir,
-                i,
-                &github_root,
-                self.num_shards,
-                cluster_id,
-            )
-            .await?;
+        let mut validators_initialization_futures = Vec::new();
+        for (i, kind_cluster) in self.kind_clusters.iter().cloned().enumerate() {
+            let docker_image_name = docker_image.name().to_string();
+            let base_dir = base_dir.clone();
+            let github_root = github_root.clone();
 
-            // Query the cluster
-            let output = self.kubectl_instance.get_pods(cluster_id).await?;
-            let validator_pod_name = output
-                .split_whitespace()
-                .find(|&t| t.contains("proxy"))
-                .expect("Getting validator pod name should not fail");
+            let kubectl_instance = kubectl_instance_clone.clone();
+            let tmp_dir_path = tmp_dir_path_clone.clone();
 
-            let local_port = 19100 + i;
-            self.kubectl_instance
-                .port_forward(
-                    validator_pod_name,
-                    &format!("{local_port}:{local_port}"),
+            let load_docker_image_semaphore_clone = load_docker_image_semaphore.clone();
+            let future = async move {
+                let _permit = load_docker_image_semaphore_clone
+                    .acquire()
+                    .await
+                    .expect("Failed to acquire semaphore");
+
+                let cluster_id = kind_cluster.id();
+                kind_cluster.load_docker_image(&docker_image_name).await?;
+
+                drop(_permit);
+
+                let server_config_filename = format!("server_{}.json", i);
+                fs::copy(
+                    tmp_dir_path.join(&server_config_filename),
+                    base_dir.join(&server_config_filename),
+                )?;
+
+                HelmRelease::install(
+                    String::from("linera-core"),
+                    &base_dir,
+                    i,
+                    &github_root,
+                    num_shards,
                     cluster_id,
                 )
                 .await?;
+
+                let mut kubectl_instance = kubectl_instance.lock().await;
+                let output = kubectl_instance.get_pods(cluster_id).await?;
+                let validator_pod_name = output
+                    .split_whitespace()
+                    .find(|&t| t.contains("proxy"))
+                    .expect("Getting validator pod name should not fail");
+
+                let local_port = 19100 + i;
+                kubectl_instance
+                    .port_forward(
+                        validator_pod_name,
+                        &format!("{local_port}:{local_port}"),
+                        cluster_id,
+                    )
+                    .await?;
+
+                Result::<(), anyhow::Error>::Ok(())
+            };
+
+            validators_initialization_futures.push(future);
         }
 
+        join_all(validators_initialization_futures).await;
         Ok(())
     }
 }
