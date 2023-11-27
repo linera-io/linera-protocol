@@ -3,6 +3,8 @@
 
 //! Helper types and functions shared between different macro implementations.
 
+mod specialization;
+
 use heck::ToKebabCase;
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::abort;
