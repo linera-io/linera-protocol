@@ -929,15 +929,18 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
 
     let (mut net, client_admin) = config.instantiate().await.unwrap();
 
+    println!("NDR 1");
     let client0 = net.make_client();
     let client1 = net.make_client();
     client0.wallet_init(&[], None).await.unwrap();
     client1.wallet_init(&[], None).await.unwrap();
 
+    println!("NDR 2");
     let (contract_fungible, service_fungible) =
         client_admin.build_example("fungible").await.unwrap();
     let (contract_amm, service_amm) = client_admin.build_example("amm").await.unwrap();
 
+    println!("NDR 3");
     // Admin chain
     let chain_admin = client_admin.get_wallet().unwrap().default_chain().unwrap();
 
@@ -945,6 +948,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     let chain0 = client_admin.open_and_assign(&client0).await.unwrap();
     let chain1 = client_admin.open_and_assign(&client1).await.unwrap();
 
+    println!("NDR 4");
     // Admin user
     let owner_admin = get_fungible_account_owner(&client_admin);
 
@@ -952,10 +956,12 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     let owner0 = get_fungible_account_owner(&client0);
     let owner1 = get_fungible_account_owner(&client1);
 
+    println!("NDR 5");
     let mut node_service_admin = client_admin.run_node_service(8080).await.unwrap();
     let mut node_service0 = client0.run_node_service(8081).await.unwrap();
     let mut node_service1 = client1.run_node_service(8082).await.unwrap();
 
+    println!("NDR 6");
     // Amounts of token0 that will be owned by each user
     let state_fungible0 = InitialState {
         accounts: BTreeMap::from([
@@ -974,6 +980,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
         ]),
     };
 
+    println!("NDR 7");
     // Create fungible applications on the Admin chain, which will hold
     // the token0 and token1 amounts
     let fungible_bytecode_id = node_service_admin
@@ -1002,6 +1009,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
         .await
         .unwrap();
 
+    println!("NDR 8");
     // Create wrappers
     let app_fungible0_admin = FungibleApp(
         node_service_admin
@@ -1016,6 +1024,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
             .unwrap(),
     );
 
+    println!("NDR 9");
     // Check initial balances
     app_fungible0_admin
         .assert_balances([
@@ -1032,6 +1041,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
         ])
         .await;
 
+    println!("NDR 10");
     let parameters = Parameters {
         tokens: [token0, token1],
     };
@@ -1051,6 +1061,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
         )
         .await
         .unwrap();
+    println!("NDR 11");
 
     let owner_amm = fungible::AccountOwner::Application(application_id_amm.forget_abi());
 
@@ -1061,16 +1072,19 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
             .await
             .unwrap(),
     );
+    println!("NDR 12");
     node_service0
         .request_application(&chain0, &application_id_amm)
         .await
         .unwrap();
+    println!("NDR 12.5");
     let app_amm0 = AmmApp(
         node_service0
             .make_application(&chain0, &application_id_amm)
             .await
             .unwrap(),
     );
+    println!("NDR 13");
     node_service1
         .request_application(&chain1, &application_id_amm)
         .await
@@ -1082,6 +1096,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
             .unwrap(),
     );
 
+    println!("NDR 14");
     // Initial balances for both tokens are 0
 
     // Adding liquidity for token0 and token1 by owner0
@@ -1112,6 +1127,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
             (owner_amm, Amount::from_tokens(100)),
         ])
         .await;
+    println!("NDR 15");
 
     // Adding liquidity for token0 and token1 by owner1 now
     app_amm_admin
@@ -1138,6 +1154,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
             (owner_amm, Amount::from_tokens(200)),
         ])
         .await;
+    println!("NDR 16");
 
     app_amm1.swap(owner1, 0, Amount::from_tokens(50)).await;
     node_service_admin
@@ -1161,6 +1178,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
             (owner_amm, Amount::from_tokens(160)),
         ])
         .await;
+    println!("NDR 17");
 
     // Can only remove liquidity from main chain
     app_amm_admin
@@ -1184,6 +1202,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
         ])
         .await;
 
+    println!("NDR 18");
     app_amm1.swap(owner1, 0, Amount::from_tokens(50)).await;
     node_service_admin
         .process_inbox(&chain_admin)
@@ -1206,6 +1225,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
             (owner_amm, Amount::from_atto(95_042689075630252101)),
         ])
         .await;
+    println!("NDR 19");
 
     app_amm0.swap(owner0, 1, Amount::from_tokens(50)).await;
     node_service_admin
@@ -1229,11 +1249,14 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
             (owner_amm, Amount::from_atto(145_042689075630252101)),
         ])
         .await;
+    println!("NDR 20");
 
     node_service_admin.ensure_is_running().unwrap();
     node_service0.ensure_is_running().unwrap();
     node_service1.ensure_is_running().unwrap();
+    println!("NDR 21");
 
     net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
+    println!("NDR 22");
 }

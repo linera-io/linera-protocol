@@ -21,7 +21,6 @@ use kube::{
     api::{Api, ListParams},
     Client,
 };
-use portpicker::pick_unused_port;
 use std::{fs, path::PathBuf, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use tokio::{process::Command, sync::Semaphore};
@@ -364,8 +363,8 @@ impl LocalKubernetesNet {
         let tmp_dir_path_clone = self.tmp_dir.path().to_path_buf();
         let num_shards = self.num_shards;
 
-        // Allow just 2 parallel image loading executions, to not overwhelm Docker
-        let load_docker_image_semaphore = Arc::new(Semaphore::new(2));
+        // Allow just 1 parallel image loading executions, to not overwhelm Docker
+        let load_docker_image_semaphore = Arc::new(Semaphore::new(1));
 
         let mut validators_initialization_futures = Vec::new();
         for (i, kind_cluster) in self.kind_clusters.iter().cloned().enumerate() {
@@ -411,12 +410,11 @@ impl LocalKubernetesNet {
                     .find(|&t| t.contains("proxy"))
                     .expect("Getting validator pod name should not fail");
 
-                let local_port = pick_unused_port().expect("Finding unused port should not fail!");
-                let cluster_port = 19100 + i;
+                let local_port = 19100 + i;
                 kubectl_instance
                     .port_forward(
                         validator_pod_name,
-                        &format!("{local_port}:{cluster_port}"),
+                        &format!("{local_port}:{local_port}"),
                         cluster_id,
                     )
                     .await?;

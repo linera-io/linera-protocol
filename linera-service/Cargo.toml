@@ -50,7 +50,6 @@ linera-views = { workspace = true }
 once_cell = { workspace = true }
 parse_duration = { workspace = true }
 pathdiff = { workspace = true, optional = true }
-portpicker = { workspace = true }
 prometheus = { workspace = true }
 rand = { workspace = true }
 rand07 = { workspace = true }
