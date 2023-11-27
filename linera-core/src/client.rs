@@ -13,10 +13,9 @@ use crate::{
     },
 };
 use futures::{
-    channel::oneshot,
     future,
     lock::Mutex,
-    stream::{self, FuturesUnordered, StreamExt},
+    stream::{self, AbortHandle, FuturesUnordered, StreamExt},
 };
 use linera_base::{
     abi::{Abi, ContractAbi},
@@ -610,7 +609,7 @@ where
 
     async fn update_streams(
         this: &Arc<Mutex<Self>>,
-        senders: &mut HashMap<ValidatorName, oneshot::Sender<()>>,
+        senders: &mut HashMap<ValidatorName, AbortHandle>,
     ) -> Result<(), ChainClientError>
     where
         P: Send + 'static,
@@ -622,30 +621,28 @@ where
             (guard.chain_id, nodes, guard.node_client.clone())
         };
         // Drop removed validators.
-        senders.retain(|name, _| nodes.contains_key(name));
+        senders.retain(|name, abort| {
+            if !nodes.contains_key(name) {
+                abort.abort();
+            }
+            !abort.is_aborted()
+        });
         // Add tasks for new validators.
         for (name, mut node) in nodes {
             let hash_map::Entry::Vacant(entry) = senders.entry(name) else {
                 continue;
             };
-            let stream = match node.subscribe(vec![chain_id]).await {
-                Err(e) => {
-                    info!("Could not connect to validator {name}: {e:?}");
+            let (mut stream, abort) = match node.subscribe(vec![chain_id]).await {
+                Err(error) => {
+                    info!(?error, "Could not connect to validator {name}");
                     continue;
                 }
-                Ok(stream) => stream,
+                Ok(stream) => stream::abortable(stream),
             };
             let this = this.clone();
             let local_node = local_node.clone();
-            let (sender, receiver) = oneshot::channel();
-            // Calling tokio_stream::StreamExt::merge explicitly because it would conflict with the
-            // the futures_util::StreamExt trait.
-            let mut cancelable_stream = tokio_stream::StreamExt::merge(
-                stream.map(Some),
-                stream::once(receiver).map(|_| None),
-            );
             tokio::spawn(async move {
-                while let Some(Some(notification)) = cancelable_stream.next().await {
+                while let Some(notification) = stream.next().await {
                     Self::process_notification(
                         this.clone(),
                         name,
@@ -656,7 +653,7 @@ where
                     .await;
                 }
             });
-            entry.insert(sender);
+            entry.insert(abort);
         }
         Ok(())
     }
