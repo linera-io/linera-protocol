@@ -51,6 +51,7 @@ jobs:
         deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }}
         publish_branch: gh-pages
         publish_dir: ./target/doc
+        force_orphan: true
 
   # TODO(#802): Fix this job.
   # docsrs:
