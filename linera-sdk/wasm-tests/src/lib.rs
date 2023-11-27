@@ -15,9 +15,8 @@ use linera_sdk::{
     ContractLogger, ServiceLogger,
 };
 use linera_views::{
-    map_view::MapView,
-    register_view::RegisterView,
-    views::{HashableView, RootView, View},
+    view::{HashableView, RootView, View},
+    views::{map_view::MapView, register_view::RegisterView},
 };
 use webassembly_test::webassembly_test;
 

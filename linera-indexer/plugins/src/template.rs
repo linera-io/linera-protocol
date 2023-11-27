@@ -3,9 +3,9 @@
 
 use linera_indexer::{plugin, common::IndexerError};
 use linera_views::{
-    map_view::MapView,
-    register_view::RegisterView,
-    views::{RootView, View},
+    views::map_view::MapView,
+    views::register_view::RegisterView,
+    view::{RootView, View},
 };
 
 // A plugin is centered around a RootView

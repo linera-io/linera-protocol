@@ -11,7 +11,7 @@ impl linera_views::view::CryptoHashView<custom::GenericContext<T>> for TestView 
         use linera_views::{
             batch::Batch, generic_array::GenericArray,
             sha3::{digest::OutputSizeUser, Sha3_256},
-            views::HashableView,
+            view::HashableView,
         };
         use serde::{Serialize, Deserialize};
         #[derive(Serialize, Deserialize)]

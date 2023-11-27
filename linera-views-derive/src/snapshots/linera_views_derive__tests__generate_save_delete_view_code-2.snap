@@ -5,7 +5,7 @@ expression: pretty(generate_save_delete_view_code(input))
 #[async_trait::async_trait]
 impl linera_views::view::RootView<CustomContext> for TestView {
     async fn save(&mut self) -> Result<(), linera_views::view::ViewError> {
-        use linera_views::{common::Context, batch::Batch, views::View};
+        use linera_views::{common::Context, batch::Batch, view::View};
         linera_views::increment_counter(
             &linera_views::SAVE_VIEW_COUNTER,
             stringify!(TestView),

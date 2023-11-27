@@ -12,7 +12,7 @@ use linera_storage::{
     Storage, READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
     WRITE_VALUE_COUNTER,
 };
-use linera_views::{views::ViewError, LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER};
+use linera_views::{view::ViewError, LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER};
 use prometheus::core::Collector;
 use recorder::BenchRecorderMeasurement;
 use std::time::Duration;

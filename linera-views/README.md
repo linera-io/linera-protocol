@@ -1,7 +1,7 @@
 <!-- cargo-rdme start -->
 
 This module is used in the Linera protocol to map complex data structures onto a
-key-value store. The central notion is a [`views::View`](https://docs.rs/linera-views/latest/linera_views/views/trait.View.html) which can
+key-value store. The central notion is a [`view::View`](https://docs.rs/linera-views/latest/linera_views/view/trait.View.html) which can
 be loaded from storage, modified in memory, then committed (i.e. the changes are
 atomically persisted in storage).
 
@@ -37,18 +37,6 @@ The specific functionalities of the trait `View` are the following:
 * `clear` for clearing the view, in other words for reverting it to its default state.
 * `flush` for persisting the changes to storage.
 * `delete` for deleting the changes from the database.
-
-The following views implement the `View` trait:
-* `RegisterView` implements the storing of a single data.
-* `LogView` implements a log, which is a list of entries that can be expanded.
-* `QueueView` implements a queue, which is a list of entries that can be expanded and reduced.
-* `MapView` implements a map with keys and values.
-* `SetView` implements a set with keys.
-* `CollectionView` implements a map whose values are views themselves.
-* `ReentrantCollectionView` implements a map for which different keys can be accessed independently.
-* `ViewContainer<C>` implements a `KeyValueStore` and is used internally.
-
-The `LogView` can be seen as an analog of `VecDeque` while `MapView` is an analog of `BTreeMap`.
 
 <!-- cargo-rdme end -->
 

@@ -25,7 +25,7 @@ where
     async fn hash(
         &self,
     ) -> Result<
-        <Self::Hasher as linera_views::views::Hasher>::Output,
+        <Self::Hasher as linera_views::view::Hasher>::Output,
         linera_views::view::ViewError,
     > {
         use linera_views::view::{Hasher, HashableView};

@@ -22,7 +22,7 @@ where
         Ok(())
     }
     async fn write_delete(self) -> Result<(), linera_views::view::ViewError> {
-        use linera_views::{common::Context, batch::Batch, views::View};
+        use linera_views::{common::Context, batch::Batch, view::View};
         let context = self.context().clone();
         let batch = Batch::build(move |batch| {
                 Box::pin(async move {
