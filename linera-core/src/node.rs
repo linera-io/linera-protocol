@@ -29,6 +29,14 @@ use thiserror::Error;
 /// A pinned [`Stream`] of Notifications.
 pub type NotificationStream = Pin<Box<dyn Stream<Item = Notification> + Send>>;
 
+/// Whether to wait for the delivery of outgoing cross-chain messages.
+#[derive(Debug, Default, Clone, Copy)]
+pub enum CrossChainMessageDelivery {
+    #[default]
+    NonBlocking,
+    Blocking,
+}
+
 /// How to communicate with a validator node.
 #[async_trait]
 pub trait ValidatorNode {
@@ -42,6 +50,7 @@ pub trait ValidatorNode {
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
+        delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Processes a certificate.
@@ -49,6 +58,7 @@ pub trait ValidatorNode {
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
+        delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Handles information queries for this chain.
@@ -138,24 +148,6 @@ pub enum NodeError {
     #[error("The received chain info response is invalid")]
     InvalidChainInfoResponse,
 
-    #[error(
-        "Failed to submit block proposal: chain {chain_id:?} was still inactive \
-         after validator synchronization and {retries} retries"
-    )]
-    ProposedBlockToInactiveChain { chain_id: ChainId, retries: usize },
-
-    #[error(
-        "Failed to submit block proposal: chain {chain_id:?} was still missing messages \
-         after validator synchronization and {retries} retries"
-    )]
-    ProposedBlockWithLaggingMessages { chain_id: ChainId, retries: usize },
-
-    #[error(
-        "Failed to submit block proposal: chain {chain_id:?} was still missing application bytecodes \
-         after validator synchronization and {retries} retries"
-    )]
-    ProposedBlockWithLaggingBytecode { chain_id: ChainId, retries: usize },
-
     // Networking errors.
     // TODO(#258): These errors should be defined in linera-rpc.
     #[error("Cannot deserialize")]
@@ -172,6 +164,24 @@ pub enum NodeError {
     SubscriptionError { transport: String },
     #[error("Failed to subscribe; tonic status: {status}")]
     SubscriptionFailed { status: String },
+}
+
+impl CrossChainMessageDelivery {
+    pub fn new(wait_for_outgoing_messages: bool) -> Self {
+        if wait_for_outgoing_messages {
+            CrossChainMessageDelivery::Blocking
+        } else {
+            CrossChainMessageDelivery::NonBlocking
+        }
+    }
+
+    pub fn wait_for_outgoing_messages(self) -> bool {
+        use CrossChainMessageDelivery::*;
+        match self {
+            NonBlocking => false,
+            Blocking => true,
+        }
+    }
 }
 
 impl From<ViewError> for NodeError {

@@ -52,7 +52,6 @@ pub struct NodeOptions {
     pub recv_timeout: Duration,
     pub notification_retry_delay: Duration,
     pub notification_retries: u32,
-    pub wait_for_outgoing_messages: bool,
 }
 
 #[derive(Copy, Clone)]
@@ -104,12 +103,7 @@ impl ValidatorNodeProvider for SimpleNodeProvider {
             }
         })?;
 
-        let client = SimpleClient::new(
-            network,
-            self.0.send_timeout,
-            self.0.recv_timeout,
-            self.0.wait_for_outgoing_messages,
-        );
+        let client = SimpleClient::new(network, self.0.send_timeout, self.0.recv_timeout);
 
         Ok(client)
     }

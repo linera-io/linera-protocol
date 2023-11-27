@@ -17,7 +17,7 @@ use linera_core::{
     client::{ChainClient, ChainClientBuilder},
     data_types::ChainInfoQuery,
     local_node::LocalNodeClient,
-    node::ValidatorNodeProvider,
+    node::{CrossChainMessageDelivery, ValidatorNodeProvider},
     notifier::Notifier,
     worker::WorkerState,
 };
@@ -86,7 +86,6 @@ struct ClientContext {
     recv_timeout: Duration,
     notification_retry_delay: Duration,
     notification_retries: u32,
-    wait_for_outgoing_messages: bool,
     prng: Box<dyn CryptoRng>,
 }
 
@@ -159,7 +158,6 @@ impl ClientContext {
     fn configure(options: &ClientOptions, wallet_state: WalletState) -> Self {
         let send_timeout = Duration::from_micros(options.send_timeout_us);
         let recv_timeout = Duration::from_micros(options.recv_timeout_us);
-        let cross_chain_delay = Duration::from_micros(options.cross_chain_delay_ms);
         let notification_retry_delay = Duration::from_micros(options.notification_retry_delay_us);
         let prng = wallet_state.make_prng();
 
@@ -168,15 +166,11 @@ impl ClientContext {
             recv_timeout,
             notification_retry_delay,
             notification_retries: options.notification_retries,
-            wait_for_outgoing_messages: options.wait_for_outgoing_messages,
         };
         let node_provider = NodeProvider::new(node_options);
-        let chain_client_builder = ChainClientBuilder::new(
-            node_provider,
-            options.max_pending_messages,
-            cross_chain_delay,
-            options.cross_chain_retries,
-        );
+        let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
+        let chain_client_builder =
+            ChainClientBuilder::new(node_provider, options.max_pending_messages, delivery);
         ClientContext {
             chain_client_builder,
             wallet_state,
@@ -184,7 +178,6 @@ impl ClientContext {
             recv_timeout,
             notification_retry_delay,
             notification_retries: options.notification_retries,
-            wait_for_outgoing_messages: options.wait_for_outgoing_messages,
             prng,
         }
     }
@@ -283,7 +276,6 @@ impl ClientContext {
             recv_timeout: self.recv_timeout,
             notification_retry_delay: self.notification_retry_delay,
             notification_retries: self.notification_retries,
-            wait_for_outgoing_messages: self.wait_for_outgoing_messages,
         }
     }
 
@@ -622,13 +614,6 @@ struct ClientOptions {
     /// Timeout for receiving responses (us)
     #[structopt(long, default_value = "4000000")]
     recv_timeout_us: u64,
-
-    /// Time between attempts while waiting on cross-chain updates (ms)
-    #[structopt(long, default_value = "4000")]
-    cross_chain_delay_ms: u64,
-
-    #[structopt(long, default_value = "10")]
-    cross_chain_retries: usize,
 
     #[structopt(long, default_value = "10")]
     max_pending_messages: usize,

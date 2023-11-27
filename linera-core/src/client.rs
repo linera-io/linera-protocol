@@ -5,7 +5,10 @@
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery},
     local_node::{LocalNodeClient, LocalNodeError},
-    node::{NodeError, NotificationStream, ValidatorNode, ValidatorNodeProvider},
+    node::{
+        CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
+        ValidatorNodeProvider,
+    },
     notifier::Notifier,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::{
@@ -50,7 +53,6 @@ use std::{
     iter,
     num::NonZeroUsize,
     sync::Arc,
-    time::Duration,
 };
 use thiserror::Error;
 use tracing::{debug, error, info};
@@ -69,10 +71,8 @@ pub struct ChainClientBuilder<ValidatorNodeProvider> {
     validator_node_provider: ValidatorNodeProvider,
     /// Maximum number of pending messages processed at a time in a block.
     max_pending_messages: usize,
-    /// How much time to wait between attempts when we wait for a cross-chain update.
-    cross_chain_delay: Duration,
-    /// How many times we are willing to retry a block that depends on cross-chain updates.
-    cross_chain_retries: usize,
+    /// Whether to block on cross-chain message delivery.
+    cross_chain_message_delivery: CrossChainMessageDelivery,
     /// Cached values by hash.
     recent_values: Arc<tokio::sync::Mutex<LruCache<CryptoHash, HashedValue>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -87,8 +87,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
     pub fn new(
         validator_node_provider: ValidatorNodeProvider,
         max_pending_messages: usize,
-        cross_chain_delay: Duration,
-        cross_chain_retries: usize,
+        cross_chain_message_delivery: CrossChainMessageDelivery,
     ) -> Self {
         let recent_values = Arc::new(tokio::sync::Mutex::new(LruCache::new(
             NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap(),
@@ -96,8 +95,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
         Self {
             validator_node_provider,
             max_pending_messages,
-            cross_chain_delay,
-            cross_chain_retries,
+            cross_chain_message_delivery,
             recent_values,
             delivery_notifiers: Arc::new(tokio::sync::Mutex::new(DeliveryNotifiers::default())),
             notifier: Arc::new(Notifier::default()),
@@ -136,13 +134,12 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
             validator_node_provider: self.validator_node_provider.clone(),
             admin_id,
             max_pending_messages: self.max_pending_messages,
+            cross_chain_message_delivery: self.cross_chain_message_delivery,
             received_certificate_trackers: HashMap::new(),
             block_hash,
             timestamp,
             next_block_height,
             pending_block,
-            cross_chain_delay: self.cross_chain_delay,
-            cross_chain_retries: self.cross_chain_retries,
             node_client,
         }
     }
@@ -174,12 +171,10 @@ pub struct ChainClient<ValidatorNodeProvider, Storage> {
 
     /// Maximum number of pending messages processed at a time in a block.
     max_pending_messages: usize,
+    /// Whether to block on cross-chain message delivery.
+    cross_chain_message_delivery: CrossChainMessageDelivery,
     /// Support synchronization of received certificates.
     received_certificate_trackers: HashMap<ValidatorName, u64>,
-    /// How much time to wait between attempts when we wait for a cross-chain update.
-    cross_chain_delay: Duration,
-    /// How many times we are willing to retry a block that depends on cross-chain updates.
-    cross_chain_retries: usize,
     /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
     node_client: LocalNodeClient<Storage>,
@@ -705,8 +700,6 @@ where
         action: CommunicateAction,
     ) -> Result<Option<Certificate>, ChainClientError> {
         let storage_client = self.storage_client().await;
-        let cross_chain_delay = self.cross_chain_delay;
-        let cross_chain_retries = self.cross_chain_retries;
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(committee)?;
         let results = communicate_with_quorum(
             &nodes,
@@ -721,8 +714,6 @@ where
                     name,
                     node,
                     storage: storage_client.clone(),
-                    delay: cross_chain_delay,
-                    retries: cross_chain_retries,
                 };
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(chain_id, action).await })
@@ -740,14 +731,14 @@ where
                 };
                 (value, round)
             }
-            CommunicateAction::FinalizeBlock(validity_certificate) => {
-                let round = validity_certificate.round;
-                let Some(conf_value) = validity_certificate.value.into_confirmed() else {
+            CommunicateAction::FinalizeBlock { certificate, .. } => {
+                let round = certificate.round;
+                let Some(value) = certificate.value.into_confirmed() else {
                     return Err(ChainClientError::ProtocolError(
                         "Unexpected certificate value for finalized block",
                     ));
                 };
-                (conf_value, round)
+                (value, round)
             }
             CommunicateAction::RequestLeaderTimeout {
                 height,
@@ -761,7 +752,7 @@ where
                 });
                 (value, round)
             }
-            CommunicateAction::AdvanceToNextBlockHeight(_) => {
+            CommunicateAction::AdvanceToNextBlockHeight { .. } => {
                 return Ok(None);
             }
         };
@@ -848,7 +839,10 @@ where
         self.communicate_chain_updates(
             &local_committee,
             block.chain_id,
-            CommunicateAction::AdvanceToNextBlockHeight(block.height.try_add_one()?),
+            CommunicateAction::AdvanceToNextBlockHeight {
+                height: block.height.try_add_one()?,
+                delivery: CrossChainMessageDelivery::Blocking,
+            },
         )
         .await?;
         Ok(())
@@ -1142,14 +1136,16 @@ where
         self.communicate_chain_updates(
             &committee,
             chain_id,
-            CommunicateAction::AdvanceToNextBlockHeight(height),
+            CommunicateAction::AdvanceToNextBlockHeight {
+                height,
+                delivery: CrossChainMessageDelivery::NonBlocking,
+            },
         )
         .await?;
         Ok(certificate)
     }
 
     /// Executes (or retries) a regular block proposal. Updates local balance.
-    /// If `with_confirmation` is false, we stop short of executing the finalized block.
     async fn propose_block(&mut self, block: Block) -> Result<Certificate, ChainClientError> {
         ensure!(
             self.pending_block.is_none() || self.pending_block.as_ref() == Some(&block),
@@ -1228,7 +1224,10 @@ where
                 CertificateValue::ValidatedBlock { executed_block, .. }
                     if executed_block.block == proposal.content.block
             ));
-            let finalize_action = CommunicateAction::FinalizeBlock(certificate);
+            let finalize_action = CommunicateAction::FinalizeBlock {
+                certificate,
+                delivery: CrossChainMessageDelivery::NonBlocking,
+            };
             self.communicate_chain_updates(&committee, self.chain_id, finalize_action)
                 .await?
                 .expect("a certificate")
@@ -1252,7 +1251,10 @@ where
         self.communicate_chain_updates(
             &committee,
             self.chain_id,
-            CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
+            CommunicateAction::AdvanceToNextBlockHeight {
+                height: self.next_block_height,
+                delivery: self.cross_chain_message_delivery,
+            },
         )
         .await?;
         if let Ok(new_committee) = self.local_committee().await {
@@ -1262,7 +1264,10 @@ where
                 self.communicate_chain_updates(
                     &new_committee,
                     self.chain_id,
-                    CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
+                    CommunicateAction::AdvanceToNextBlockHeight {
+                        height: self.next_block_height,
+                        delivery: self.cross_chain_message_delivery,
+                    },
                 )
                 .await?;
             }
@@ -1397,7 +1402,10 @@ where
         self.communicate_chain_updates(
             &committee,
             self.chain_id,
-            CommunicateAction::AdvanceToNextBlockHeight(self.next_block_height),
+            CommunicateAction::AdvanceToNextBlockHeight {
+                height: self.next_block_height,
+                delivery: CrossChainMessageDelivery::NonBlocking,
+            },
         )
         .await?;
         Ok(())
