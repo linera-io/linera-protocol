@@ -71,11 +71,9 @@ where
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.was_cleared {
-            if self.stored_count > 0 {
-                batch.delete_key_prefix(self.context.base_key());
-                self.stored_count = 0;
-            }
+        if self.was_cleared && self.stored_count > 0 {
+            batch.delete_key_prefix(self.context.base_key());
+            self.stored_count = 0;
         }
         if !self.new_values.is_empty() {
             for value in &self.new_values {

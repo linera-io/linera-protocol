@@ -3,7 +3,7 @@
 
 use crate::{batch::Batch, common::HasherOutput};
 use async_trait::async_trait;
-use linera_base::crypto::CryptoHash;
+use linera_base::{crypto::CryptoHash, data_types::ArithmeticError};
 pub use linera_views_derive::{
     CryptoHashRootView, CryptoHashView, GraphQLView, HashableView, RootView, View,
 };
@@ -60,6 +60,10 @@ pub enum ViewError {
     /// Input output error.
     #[error("IO error")]
     Io(#[from] std::io::Error),
+
+    /// Arithmetic error
+    #[error("Arithmetic error")]
+    ArithmeticError(#[from] ArithmeticError),
 
     /// An error happened while trying to lock.
     #[error("Failed to lock collection entry: {0:?}")]

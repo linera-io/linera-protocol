@@ -12,7 +12,7 @@ use crate::{
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
-use linera_base::ensure;
+use linera_base::{data_types::ArithmeticError, ensure};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -63,9 +63,16 @@ pub struct SizeData {
 
 impl SizeData {
     /// Add a size to the existing SizeData
-    pub fn add_assign(&mut self, size: SizeData) {
-        self.key += size.key;
-        self.value += size.value;
+    pub fn add_assign(&mut self, size: SizeData) -> Result<(), ViewError> {
+        self.key = self
+            .key
+            .checked_add(size.key)
+            .ok_or(ViewError::ArithmeticError(ArithmeticError::Overflow))?;
+        self.value = self
+            .value
+            .checked_add(size.value)
+            .ok_or(ViewError::ArithmeticError(ArithmeticError::Overflow))?;
+        Ok(())
     }
     /// Subtract a size to the existing SizeData
     pub fn sub_assign(&mut self, size: SizeData) {
@@ -613,7 +620,10 @@ where
                 WriteOperation::Delete { key } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     if let Some(value) = self.sizes.get(&key).await? {
-                        let single_size = SizeData { key: key.len() as u32, value };
+                        let single_size = SizeData {
+                            key: key.len() as u32,
+                            value,
+                        };
                         self.total_size.sub_assign(single_size);
                     }
                     self.sizes.remove(key.clone());
@@ -629,9 +639,12 @@ where
                         key: key.len() as u32,
                         value: value.len() as u32,
                     };
-                    self.total_size.add_assign(single_size);
+                    self.total_size.add_assign(single_size)?;
                     if let Some(value) = self.sizes.get(&key).await? {
-                        let single_size = SizeData { key: key.len() as u32, value };
+                        let single_size = SizeData {
+                            key: key.len() as u32,
+                            value,
+                        };
                         self.total_size.sub_assign(single_size);
                     }
                     self.sizes.insert(key.clone(), single_size.value);
@@ -649,7 +662,10 @@ where
                     }
                     let key_values = self.sizes.key_values_by_prefix(key_prefix.clone()).await?;
                     for (key, value) in key_values {
-                        let single_size = SizeData { key: key.len() as u32, value };
+                        let single_size = SizeData {
+                            key: key.len() as u32,
+                            value,
+                        };
                         self.total_size.sub_assign(single_size);
                         self.sizes.remove(key);
                     }
