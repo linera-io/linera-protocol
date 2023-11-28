@@ -13,15 +13,16 @@ use wasmer::{FromToNativeWasmType, Function, FunctionEnvMut, WasmTypeList};
 /// Implements [`ExportFunction`] for [`InstanceBuilder`] using the supported function signatures.
 macro_rules! export_function {
     ($( $names:ident: $types:ident ),*) => {
-        impl<Handler, HandlerError, $( $types, )* FlatResult>
-            ExportFunction<Handler, ($( $types, )*), FlatResult> for InstanceBuilder<()>
+        impl<Handler, HandlerError, $( $types, )* FlatResult, UserData>
+            ExportFunction<Handler, ($( $types, )*), FlatResult> for InstanceBuilder<UserData>
         where
             $( $types: FromToNativeWasmType, )*
             FlatResult: MaybeFlatType + WasmTypeList,
+            UserData: Send + 'static,
             HandlerError: Error + Send + Sync + 'static,
             Handler:
                 Fn(
-                    FunctionEnvMut<'_, InstanceSlot<()>>,
+                    FunctionEnvMut<'_, InstanceSlot<UserData>>,
                     ($( $types, )*),
                 ) -> Result<FlatResult, HandlerError>
                 + Send
@@ -40,7 +41,7 @@ macro_rules! export_function {
                     self,
                     &environment,
                     move |
-                        environment: FunctionEnvMut<'_, InstanceSlot<()>>,
+                        environment: FunctionEnvMut<'_, InstanceSlot<UserData>>,
                         $( $names: $types ),*
                     | -> Result<FlatResult, wasmer::RuntimeError> {
                         handler(environment, ($( $names, )*))
