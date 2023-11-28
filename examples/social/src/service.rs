@@ -9,8 +9,8 @@ use async_graphql::{EmptySubscription, Request, Response, Schema};
 use async_trait::async_trait;
 use linera_sdk::{
     base::WithServiceAbi, graphql::GraphQLMutationRoot, QueryContext, Service, ViewStateStorage,
+    views::ViewError,
 };
-use linera_views::views::ViewError;
 use social::Operation;
 use state::Social;
 use std::sync::Arc;

@@ -11,8 +11,8 @@ use linera_sdk::{
     contract::system_api,
     ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
     OperationContext, SessionCallResult, ViewStateStorage,
+    views::ViewError,
 };
-use linera_views::views::ViewError;
 use social::{Key, Message, Operation, OwnPost};
 use state::Social;
 use thiserror::Error;

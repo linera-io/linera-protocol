@@ -48,7 +48,7 @@ mod tests {
     use linera_sdk::{
         base::ChainId, test, util::BlockingWait, views::ViewStorageContext, QueryContext, Service,
     };
-    use linera_views::views::View;
+    use linera_sdk::views::View;
     use std::sync::Arc;
     use webassembly_test::webassembly_test;
 

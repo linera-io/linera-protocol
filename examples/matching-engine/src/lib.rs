@@ -6,8 +6,8 @@ use fungible::{AccountOwner, FungibleTokenAbi};
 use linera_sdk::{
     base::{Amount, ApplicationId, ContractAbi, ServiceAbi},
     graphql::GraphQLMutationRoot,
+    views::{CustomSerialize, ViewError},
 };
-use linera_views::{common::CustomSerialize, views::ViewError};
 use serde::{Deserialize, Serialize};
 
 pub struct MatchingEngineAbi;

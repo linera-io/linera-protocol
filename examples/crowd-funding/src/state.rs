@@ -7,8 +7,8 @@ use fungible::AccountOwner;
 use linera_sdk::{
     base::Amount,
     views::{MapView, RegisterView, ViewStorageContext},
+    views::{GraphQLView, RootView},
 };
-use linera_views::views::{GraphQLView, RootView};
 use serde::{Deserialize, Serialize};
 
 /// The status of a crowd-funding campaign.

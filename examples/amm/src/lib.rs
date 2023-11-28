@@ -3,7 +3,7 @@ use std::convert::Infallible;
 use async_graphql::{scalar, Request, Response};
 use fungible::AccountOwner;
 use linera_sdk::base::{Amount, ArithmeticError, ContractAbi, ServiceAbi};
-use linera_views::views::ViewError;
+use linera_sdk::views::ViewError;
 pub use matching_engine::Parameters;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
