@@ -18,7 +18,7 @@ use wasmer::{AsStoreRef, Extern, FromToNativeWasmType, TypedFunction};
 macro_rules! impl_instance_with_function {
     ($( $names:ident : $types:ident ),*) => {
         impl_instance_with_function_for!(EntrypointInstance, $( $names: $types ),*);
-        impl_instance_with_function_for!(ReentrantInstance<'_>, $( $names: $types ),*);
+        impl_instance_with_function_for!(ReentrantInstance<'_, ()>, $( $names: $types ),*);
     };
 }
 

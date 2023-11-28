@@ -130,9 +130,12 @@ impl Instance for EntrypointInstance {
 
 /// Alias for the [`Instance`] implementation made available inside host functions called by the
 /// guest.
-pub type ReentrantInstance<'a> = FunctionEnvMut<'a, InstanceSlot<()>>;
+pub type ReentrantInstance<'a, UserData> = FunctionEnvMut<'a, InstanceSlot<UserData>>;
 
-impl Instance for ReentrantInstance<'_> {
+impl<UserData> Instance for ReentrantInstance<'_, UserData>
+where
+    UserData: Send + 'static,
+{
     type Runtime = Wasmer;
 
     fn load_export(&mut self, name: &str) -> Option<Extern> {

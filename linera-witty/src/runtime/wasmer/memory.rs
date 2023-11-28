@@ -51,4 +51,4 @@ macro_rules! impl_memory_traits {
 }
 
 impl_memory_traits!(EntrypointInstance);
-impl_memory_traits!(ReentrantInstance<'_>);
+impl_memory_traits!(ReentrantInstance<'_, ()>);
