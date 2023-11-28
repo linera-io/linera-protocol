@@ -176,6 +176,9 @@ where
             }
             self.stored_hash = hash;
         }
+        // We could have the scenario where was_cleared is called but
+        // stored_total_size = total_size. If the test for was_cleared
+        // were absent then we would be a size of 0 down the line.
         if self.stored_total_size != self.total_size || self.was_cleared {
             let key = self.context.base_tag(KeyTag::TotalSize as u8);
             batch.put_key_value(key, &self.total_size)?;
