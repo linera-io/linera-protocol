@@ -141,7 +141,6 @@ impl Instance for ReentrantInstance<'_> {
 }
 
 /// A slot to store a [`wasmer::Instance`] in a way that can be shared with reentrant calls.
-#[derive(Clone)]
 pub struct InstanceSlot<UserData> {
     instance: Arc<Mutex<Option<wasmer::Instance>>>,
     user_data: Arc<Mutex<UserData>>,
@@ -170,5 +169,14 @@ impl<UserData> InstanceSlot<UserData> {
             .exports
             .get_extern(name)
             .cloned()
+    }
+}
+
+impl<UserData> Clone for InstanceSlot<UserData> {
+    fn clone(&self) -> Self {
+        InstanceSlot {
+            instance: self.instance.clone(),
+            user_data: self.user_data.clone(),
+        }
     }
 }
