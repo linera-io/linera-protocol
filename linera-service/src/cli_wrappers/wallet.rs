@@ -627,12 +627,17 @@ impl NodeService {
         chain_id: &ChainId,
         application_id: &ApplicationId<A>,
     ) -> Result<ApplicationWrapper<A>> {
+        println!("make_application");
         let application_id = application_id.forget_abi().to_string();
         let n_try = 30;
         for i in 0..n_try {
+            println!("Try {}", i);
             tokio::time::sleep(Duration::from_secs(i)).await;
+            println!("A");
             let values = self.try_get_applications_uri(chain_id).await?;
+            println!("B");
             if let Some(link) = values.get(&application_id) {
+                println!("Returning");
                 return Ok(ApplicationWrapper::from(link.to_string()));
             }
             warn!("Waiting for application {application_id:?} to be visible on chain {chain_id:?}");

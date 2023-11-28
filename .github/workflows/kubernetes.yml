@@ -90,3 +90,40 @@ jobs:
         if: always()
         run: |
           kind delete cluster
+
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: Twey/setup-rust-toolchain@v1
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build client binary
+        run: |
+          cargo build --release --locked --bin linera --bin linera-proxy --bin linera-server --bin linera-db --features scylladb,rocksdb,kubernetes
+          strip target/release/linera
+          strip target/release/linera-proxy
+          strip target/release/linera-server
+          strip target/release/linera-db
+      - name: Install Kind
+        run: |
+          curl -sL -o /tmp/kind https://kind.sigs.k8s.io/dl/v0.14.0/kind-linux-amd64
+          chmod +x /tmp/kind
+          mv /tmp/kind /usr/local/bin/
+      - name: Install Kubectl
+        run: |
+          curl -sL -o /tmp/kubectl https://storage.googleapis.com/kubernetes-release/release/v1.24.1/bin/linux/amd64/kubectl
+          chmod +x /tmp/kubectl
+          mv /tmp/kubectl /usr/local/bin/
+      - name: Build example applications
+        run: |
+          cd examples
+          cargo build --locked --release --target wasm32-unknown-unknown
+      - name: Run tests
+        run: |
+          cargo test -p linera-service --features scylladb,kubernetes --test wasm_end_to_end_tests -- test_wasm_end_to_end_amm --nocapture
