@@ -89,7 +89,7 @@ impl<'input> WitExportGenerator<'input> {
     fn generate_for_wasmer(&mut self) -> Option<TokenStream> {
         #[cfg(feature = "wasmer")]
         {
-            let export_target = quote! { linera_witty::wasmer::InstanceBuilder };
+            let export_target = quote! { linera_witty::wasmer::InstanceBuilder<()> };
             let target_caller_type = quote! {
                 linera_witty::wasmer::FunctionEnvMut<'_, linera_witty::wasmer::InstanceSlot<()>>
             };

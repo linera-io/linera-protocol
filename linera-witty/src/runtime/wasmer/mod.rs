@@ -28,19 +28,22 @@ impl Runtime for Wasmer {
 }
 
 /// Helper to create Wasmer [`Instance`] implementations.
-pub struct InstanceBuilder {
+pub struct InstanceBuilder<UserData> {
     store: Store,
     imports: Imports,
-    environment: InstanceSlot<()>,
+    environment: InstanceSlot<UserData>,
 }
 
-impl InstanceBuilder {
+impl<UserData> InstanceBuilder<UserData>
+where
+    UserData: Send + 'static,
+{
     /// Creates a new [`InstanceBuilder`].
-    pub fn new(engine: Engine) -> Self {
+    pub fn new(engine: Engine, user_data: UserData) -> Self {
         InstanceBuilder {
             store: Store::new(engine),
             imports: Imports::default(),
-            environment: InstanceSlot::new(None, ()),
+            environment: InstanceSlot::new(None, user_data),
         }
     }
 
@@ -52,7 +55,7 @@ impl InstanceBuilder {
     /// Creates a [`FunctionEnv`] representing the instance of this [`InstanceBuilder`].
     ///
     /// This can be used when exporting host functions that may perform reentrant calls.
-    pub fn environment(&mut self) -> FunctionEnv<InstanceSlot<()>> {
+    pub fn environment(&mut self) -> FunctionEnv<InstanceSlot<UserData>> {
         FunctionEnv::new(&mut self.store, self.environment.clone())
     }
 
@@ -66,7 +69,7 @@ impl InstanceBuilder {
     pub fn instantiate(
         mut self,
         module: &Module,
-    ) -> Result<EntrypointInstance<()>, InstantiationError> {
+    ) -> Result<EntrypointInstance<UserData>, InstantiationError> {
         let instance = wasmer::Instance::new(&mut self.store, module, &self.imports)?;
 
         *self
@@ -82,13 +85,13 @@ impl InstanceBuilder {
     }
 }
 
-impl AsStoreRef for InstanceBuilder {
+impl<UserData> AsStoreRef for InstanceBuilder<UserData> {
     fn as_store_ref(&self) -> StoreRef<'_> {
         self.store.as_store_ref()
     }
 }
 
-impl AsStoreMut for InstanceBuilder {
+impl<UserData> AsStoreMut for InstanceBuilder<UserData> {
     fn as_store_mut(&mut self) -> StoreMut<'_> {
         self.store.as_store_mut()
     }

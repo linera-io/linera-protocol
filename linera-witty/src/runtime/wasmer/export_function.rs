@@ -14,7 +14,7 @@ use wasmer::{FromToNativeWasmType, Function, FunctionEnvMut, WasmTypeList};
 macro_rules! export_function {
     ($( $names:ident: $types:ident ),*) => {
         impl<Handler, HandlerError, $( $types, )* FlatResult>
-            ExportFunction<Handler, ($( $types, )*), FlatResult> for InstanceBuilder
+            ExportFunction<Handler, ($( $types, )*), FlatResult> for InstanceBuilder<()>
         where
             $( $types: FromToNativeWasmType, )*
             FlatResult: MaybeFlatType + WasmTypeList,

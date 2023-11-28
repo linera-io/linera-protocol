@@ -85,7 +85,7 @@ pub struct WasmerInstanceFactory;
 
 #[cfg(feature = "wasmer")]
 impl TestInstanceFactory for WasmerInstanceFactory {
-    type Builder = wasmer::InstanceBuilder;
+    type Builder = wasmer::InstanceBuilder<()>;
     type Instance = wasmer::EntrypointInstance<()>;
     type Caller<'caller> = ::wasmer::FunctionEnvMut<'caller, wasmer::InstanceSlot<()>>;
 
@@ -100,7 +100,7 @@ impl TestInstanceFactory for WasmerInstanceFactory {
         )
         .expect("Failed to load module");
 
-        let mut builder = wasmer::InstanceBuilder::new(engine);
+        let mut builder = wasmer::InstanceBuilder::new(engine, ());
 
         ExportedFunctions::export_to(&mut builder)
             .expect("Failed to export functions to Wasmer instance builder");
