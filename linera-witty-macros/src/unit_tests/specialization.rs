@@ -3,7 +3,7 @@
 
 //! Unit tests for the `witty_specialize_with` attribute.
 
-use super::{super::apply_specialization_attribute, Specialization};
+use super::{super::apply_specialization_attribute, Specialization, Specializations};
 use proc_macro2::Span;
 use quote::{quote, ToTokens};
 use syn::{parse_quote, DeriveInput, Ident};
@@ -62,6 +62,53 @@ fn derive_input_changes() {
     assert_eq!(
         input.to_token_stream().to_string(),
         expected_changed_input.to_string()
+    );
+}
+
+/// Check that [`Specialization`] generates correctly specialized [`Generics`].
+#[test]
+fn generics_are_specialized() {
+    let specializations = Specializations(vec![
+        Specialization {
+            type_parameter: Ident::new("First", Span::call_site()),
+            specialized_type: parse_quote!(u8),
+        },
+        Specialization {
+            type_parameter: Ident::new("Second", Span::call_site()),
+            specialized_type: parse_quote!(Vec<bool>),
+        },
+        Specialization {
+            type_parameter: Ident::new("Third", Span::call_site()),
+            specialized_type: parse_quote!((String, i32)),
+        },
+    ]);
+
+    let generics_source: DeriveInput = parse_quote! {
+        pub struct Dummy<'lifetime, First, Second, Third, Fourth>
+        where
+            Option<u8>: From<u8>,
+            Box<[bool]>: From<Vec<bool>>;
+    };
+
+    let (impl_generics, type_generics, where_clause) =
+        specializations.split_generics_from(&generics_source.generics);
+
+    let expected_impl_generics = quote! { <'lifetime, Fourth> };
+    let expected_type_generics = quote! { <'lifetime, u8, Vec<bool>, (String, i32), Fourth> };
+    let expected_where_clause =
+        quote! { where Option<u8>: From<u8>, Box<[bool]>: From<Vec<bool> > };
+
+    assert_eq!(
+        impl_generics.to_string(),
+        expected_impl_generics.to_string()
+    );
+    assert_eq!(
+        type_generics.to_token_stream().to_string(),
+        expected_type_generics.to_string()
+    );
+    assert_eq!(
+        where_clause.to_token_stream().to_string(),
+        expected_where_clause.to_string()
     );
 }
 
