@@ -121,10 +121,6 @@ where
         Ok(())
     }
 
-    fn delete(self, batch: &mut Batch) {
-        batch.delete_key_prefix(self.context.base_key());
-    }
-
     fn clear(&mut self) {
         self.was_cleared = true;
         self.updates.clear();
@@ -806,10 +802,6 @@ where
         self.map.flush(batch)
     }
 
-    fn delete(self, batch: &mut Batch) {
-        self.map.delete(batch)
-    }
-
     fn clear(&mut self) {
         self.map.clear()
     }
@@ -1185,10 +1177,6 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         self.map.flush(batch)
-    }
-
-    fn delete(self, batch: &mut Batch) {
-        self.map.delete(batch)
     }
 
     fn clear(&mut self) {

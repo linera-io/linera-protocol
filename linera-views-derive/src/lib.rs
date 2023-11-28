@@ -101,7 +101,6 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let mut load_result_quotes = Vec::new();
     let mut rollback_quotes = Vec::new();
     let mut flush_quotes = Vec::new();
-    let mut delete_quotes = Vec::new();
     let mut clear_quotes = Vec::new();
     for (idx, e) in input.fields.into_iter().enumerate() {
         let name = e.clone().ident.unwrap();
@@ -122,7 +121,6 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         name_quotes.push(quote! { #name });
         rollback_quotes.push(quote! { self.#name.rollback(); });
         flush_quotes.push(quote! { self.#name.flush(batch)?; });
-        delete_quotes.push(quote! { self.#name.delete(batch); });
         clear_quotes.push(quote! { self.#name.clear(); });
     }
     let first_name_quote = name_quotes
@@ -171,11 +169,6 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 Ok(())
             }
 
-            fn delete(self, batch: &mut linera_views::batch::Batch) {
-                use linera_views::views::View;
-                #(#delete_quotes)*
-            }
-
             fn clear(&mut self) {
                 #(#clear_quotes)*
             }
@@ -213,19 +206,6 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
                 let mut batch = Batch::new();
                 #(#flushes)*
                 self.context().write_batch(batch).await?;
-                Ok(())
-            }
-
-            async fn write_delete(self) -> Result<(), linera_views::views::ViewError> {
-                use linera_views::{common::Context, batch::Batch, views::View};
-                let context = self.context().clone();
-                let batch = Batch::build(move |batch| {
-                    Box::pin(async move {
-                        #(#deletes)*
-                        Ok(())
-                    })
-                }).await?;
-                context.write_batch(batch).await?;
                 Ok(())
             }
         }

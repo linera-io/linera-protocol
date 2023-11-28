@@ -38,12 +38,6 @@ pub trait View<C>: Sized {
     /// changes in the `batch` variable first. If the view is dropped without calling `flush`, staged
     /// changes are simply lost.
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError>;
-
-    /// Instead of persisting changes, clears all the data that belong to this view and its
-    /// subviews. Crash-resistant storage implementations are expected to accumulate the
-    /// desired changes into the `batch` variable first.
-    /// No data/metadata at all is left after deletion. The view is consumed by `delete`.
-    fn delete(self, batch: &mut Batch);
 }
 
 /// Main error type for the crate.
@@ -166,9 +160,6 @@ impl Hasher for sha3::Sha3_256 {
 pub trait RootView<C>: View<C> {
     /// Saves the root view to the database context
     async fn save(&mut self) -> Result<(), ViewError>;
-
-    /// Deletes the root view to the database context
-    async fn write_delete(self) -> Result<(), ViewError>;
 }
 
 /// A [`View`] that also supports crypto hash

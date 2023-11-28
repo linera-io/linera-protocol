@@ -74,10 +74,6 @@ where
         Ok(())
     }
 
-    fn delete(self, batch: &mut Batch) {
-        self.inner.delete(batch);
-    }
-
     fn clear(&mut self) {
         self.inner.clear();
         *self.hash.get_mut() = None;
