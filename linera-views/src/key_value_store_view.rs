@@ -98,7 +98,7 @@ pub struct KeyValueStoreView<C> {
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
     stored_total_size: SizeData,
     total_size: SizeData,
-    sizes: ByteMapView<C, SizeData>,
+    sizes: ByteMapView<C, u32>,
     deleted_prefixes: BTreeSet<Vec<u8>>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
@@ -605,8 +605,9 @@ where
             match operation {
                 WriteOperation::Delete { key } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
-                    if let Some(size) = self.sizes.get(&key).await? {
-                        self.total_size.sub_assign(size);
+                    if let Some(value) = self.sizes.get(&key).await? {
+                        let single_size = SizeData { key: key.len() as u32, value };
+                        self.total_size.sub_assign(single_size);
                     }
                     self.sizes.remove(key.clone());
                     if self.was_cleared {
@@ -622,10 +623,11 @@ where
                         value: value.len() as u32,
                     };
                     self.total_size.add_assign(single_size);
-                    if let Some(size) = self.sizes.get(&key).await? {
-                        self.total_size.sub_assign(size);
+                    if let Some(value) = self.sizes.get(&key).await? {
+                        let single_size = SizeData { key: key.len() as u32, value };
+                        self.total_size.sub_assign(single_size);
                     }
-                    self.sizes.insert(key.clone(), single_size);
+                    self.sizes.insert(key.clone(), single_size.value);
                     self.updates.insert(key, Update::Set(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
@@ -640,7 +642,8 @@ where
                     }
                     let key_values = self.sizes.key_values_by_prefix(key_prefix.clone()).await?;
                     for (key, value) in key_values {
-                        self.total_size.sub_assign(value);
+                        let single_size = SizeData { key: key.len() as u32, value };
+                        self.total_size.sub_assign(single_size);
                         self.sizes.remove(key);
                     }
                     self.sizes.remove_by_prefix(key_prefix.clone());
