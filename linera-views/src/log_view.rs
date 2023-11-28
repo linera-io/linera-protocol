@@ -72,7 +72,6 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.was_cleared {
-            self.was_cleared = false;
             if self.stored_count > 0 {
                 batch.delete_key_prefix(self.context.base_key());
                 self.stored_count = 0;
@@ -91,7 +90,11 @@ where
             self.new_values.clear();
         }
         let hash = *self.hash.get_mut();
-        if self.stored_hash != hash {
+        // In tne admittedly rare scenarion that we do a clear
+        // and stored_hash = hash, we need to update the
+        // hash, otherwise, we will recompute it while this
+        // can be avoided.
+        if self.stored_hash != hash || self.was_cleared {
             let key = self.context.base_tag(KeyTag::Hash as u8);
             match hash {
                 None => batch.delete_key(key),
@@ -99,6 +102,7 @@ where
             }
             self.stored_hash = hash;
         }
+        self.was_cleared = false;
         Ok(())
     }
 

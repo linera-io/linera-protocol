@@ -168,7 +168,11 @@ where
         }
         self.sizes.flush(batch)?;
         let hash = *self.hash.get_mut();
-        if self.stored_hash != hash {
+        // In tne admittedly rare scenarion that we do a clear
+        // and stored_hash = hash, we need to update the
+        // hash, otherwise, we will recompute it while this
+        // can be avoided.
+        if self.stored_hash != hash || self.was_cleared {
             let key = self.context.base_tag(KeyTag::Hash as u8);
             match hash {
                 None => batch.delete_key(key),
