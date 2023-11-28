@@ -66,7 +66,7 @@ impl InstanceBuilder {
     pub fn instantiate(
         mut self,
         module: &Module,
-    ) -> Result<EntrypointInstance, InstantiationError> {
+    ) -> Result<EntrypointInstance<()>, InstantiationError> {
         let instance = wasmer::Instance::new(&mut self.store, module, &self.imports)?;
 
         *self
@@ -99,18 +99,18 @@ impl AsStoreMut for InstanceBuilder {
 }
 
 /// Necessary data for implementing an entrypoint [`Instance`].
-pub struct EntrypointInstance {
+pub struct EntrypointInstance<UserData> {
     store: Store,
-    instance: InstanceSlot<()>,
+    instance: InstanceSlot<UserData>,
 }
 
-impl AsStoreRef for EntrypointInstance {
+impl<UserData> AsStoreRef for EntrypointInstance<UserData> {
     fn as_store_ref(&self) -> StoreRef<'_> {
         self.store.as_store_ref()
     }
 }
 
-impl AsStoreMut for EntrypointInstance {
+impl<UserData> AsStoreMut for EntrypointInstance<UserData> {
     fn as_store_mut(&mut self) -> StoreMut<'_> {
         self.store.as_store_mut()
     }
@@ -120,7 +120,7 @@ impl AsStoreMut for EntrypointInstance {
     }
 }
 
-impl Instance for EntrypointInstance {
+impl<UserData> Instance for EntrypointInstance<UserData> {
     type Runtime = Wasmer;
 
     fn load_export(&mut self, name: &str) -> Option<Extern> {

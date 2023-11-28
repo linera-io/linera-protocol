@@ -86,7 +86,7 @@ pub struct WasmerInstanceFactory;
 #[cfg(feature = "wasmer")]
 impl TestInstanceFactory for WasmerInstanceFactory {
     type Builder = wasmer::InstanceBuilder;
-    type Instance = wasmer::EntrypointInstance;
+    type Instance = wasmer::EntrypointInstance<()>;
     type Caller<'caller> = ::wasmer::FunctionEnvMut<'caller, wasmer::InstanceSlot<()>>;
 
     fn load_test_module<ExportedFunctions>(&mut self, group: &str, module: &str) -> Self::Instance
