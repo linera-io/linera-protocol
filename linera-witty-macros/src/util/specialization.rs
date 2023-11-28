@@ -3,6 +3,10 @@
 
 //! Specialization of types before deriving traits for them.
 
+#[cfg(test)]
+#[path = "../unit_tests/specialization.rs"]
+mod tests;
+
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::abort;
 use quote::ToTokens;
