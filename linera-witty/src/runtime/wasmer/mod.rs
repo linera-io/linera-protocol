@@ -31,7 +31,7 @@ impl Runtime for Wasmer {
 pub struct InstanceBuilder {
     store: Store,
     imports: Imports,
-    environment: InstanceSlot,
+    environment: InstanceSlot<()>,
 }
 
 impl InstanceBuilder {
@@ -40,7 +40,7 @@ impl InstanceBuilder {
         InstanceBuilder {
             store: Store::new(engine),
             imports: Imports::default(),
-            environment: InstanceSlot::new(None),
+            environment: InstanceSlot::new(None, ()),
         }
     }
 
@@ -52,7 +52,7 @@ impl InstanceBuilder {
     /// Creates a [`FunctionEnv`] representing the instance of this [`InstanceBuilder`].
     ///
     /// This can be used when exporting host functions that may perform reentrant calls.
-    pub fn environment(&mut self) -> FunctionEnv<InstanceSlot> {
+    pub fn environment(&mut self) -> FunctionEnv<InstanceSlot<()>> {
         FunctionEnv::new(&mut self.store, self.environment.clone())
     }
 
@@ -101,7 +101,7 @@ impl AsStoreMut for InstanceBuilder {
 /// Necessary data for implementing an entrypoint [`Instance`].
 pub struct EntrypointInstance {
     store: Store,
-    instance: InstanceSlot,
+    instance: InstanceSlot<()>,
 }
 
 impl AsStoreRef for EntrypointInstance {
@@ -130,7 +130,7 @@ impl Instance for EntrypointInstance {
 
 /// Alias for the [`Instance`] implementation made available inside host functions called by the
 /// guest.
-pub type ReentrantInstance<'a> = FunctionEnvMut<'a, InstanceSlot>;
+pub type ReentrantInstance<'a> = FunctionEnvMut<'a, InstanceSlot<()>>;
 
 impl Instance for ReentrantInstance<'_> {
     type Runtime = Wasmer;
@@ -142,15 +142,17 @@ impl Instance for ReentrantInstance<'_> {
 
 /// A slot to store a [`wasmer::Instance`] in a way that can be shared with reentrant calls.
 #[derive(Clone)]
-pub struct InstanceSlot {
+pub struct InstanceSlot<UserData> {
     instance: Arc<Mutex<Option<wasmer::Instance>>>,
+    user_data: Arc<Mutex<UserData>>,
 }
 
-impl InstanceSlot {
+impl<UserData> InstanceSlot<UserData> {
     /// Creates a new [`InstanceSlot`] using the optionally provided `instance`.
-    fn new(instance: impl Into<Option<wasmer::Instance>>) -> Self {
+    fn new(instance: impl Into<Option<wasmer::Instance>>, user_data: UserData) -> Self {
         InstanceSlot {
             instance: Arc::new(Mutex::new(instance.into())),
+            user_data: Arc::new(Mutex::new(user_data)),
         }
     }
 

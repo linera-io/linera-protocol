@@ -167,7 +167,7 @@ impl<'input> FunctionInformation<'input> {
     #[cfg(feature = "wasmer")]
     pub fn generate_for_wasmer(&self, namespace: &LitStr, type_name: &Ident) -> TokenStream {
         let caller = quote! {
-            linera_witty::wasmer::FunctionEnvMut<'_, linera_witty::wasmer::InstanceSlot>
+            linera_witty::wasmer::FunctionEnvMut<'_, linera_witty::wasmer::InstanceSlot<()>>
         };
         let input_to_guest_parameters = quote! {
             linera_witty::wasmer::WasmerParameters::from_wasmer(input)

@@ -21,7 +21,7 @@ macro_rules! export_function {
             HandlerError: Error + Send + Sync + 'static,
             Handler:
                 Fn(
-                    FunctionEnvMut<'_, InstanceSlot>,
+                    FunctionEnvMut<'_, InstanceSlot<()>>,
                     ($( $types, )*),
                 ) -> Result<FlatResult, HandlerError>
                 + Send
@@ -40,7 +40,7 @@ macro_rules! export_function {
                     self,
                     &environment,
                     move |
-                        environment: FunctionEnvMut<'_, InstanceSlot>,
+                        environment: FunctionEnvMut<'_, InstanceSlot<()>>,
                         $( $names: $types ),*
                     | -> Result<FlatResult, wasmer::RuntimeError> {
                         handler(environment, ($( $names, )*))

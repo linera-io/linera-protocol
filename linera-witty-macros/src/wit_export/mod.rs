@@ -91,7 +91,7 @@ impl<'input> WitExportGenerator<'input> {
         {
             let export_target = quote! { linera_witty::wasmer::InstanceBuilder };
             let target_caller_type = quote! {
-                linera_witty::wasmer::FunctionEnvMut<'_, linera_witty::wasmer::InstanceSlot>
+                linera_witty::wasmer::FunctionEnvMut<'_, linera_witty::wasmer::InstanceSlot<()>>
             };
             let exported_functions = self
                 .functions
