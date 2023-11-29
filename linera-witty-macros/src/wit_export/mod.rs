@@ -129,8 +129,8 @@ impl<'input> WitExportGenerator<'input> {
     fn generate_for_mock_instance(&mut self) -> Option<TokenStream> {
         #[cfg(feature = "mock-instance")]
         {
-            let export_target = quote! { linera_witty::MockInstance };
-            let target_caller_type = quote! { linera_witty::MockInstance };
+            let export_target = quote! { linera_witty::MockInstance<()> };
+            let target_caller_type = quote! { linera_witty::MockInstance<()> };
             let exported_functions = self.functions.iter().map(|function| {
                 function.generate_for_mock_instance(self.namespace, self.type_name)
             });
