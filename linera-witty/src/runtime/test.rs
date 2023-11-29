@@ -94,7 +94,7 @@ impl<UserData> Clone for MockInstance<UserData> {
     }
 }
 
-impl MockInstance {
+impl<UserData> MockInstance<UserData> {
     /// Adds a mock exported function to this [`MockInstance`].
     ///
     /// The `handler` will be called whenever the exported function is called.
@@ -106,7 +106,7 @@ impl MockInstance {
     where
         Parameters: 'static,
         Results: 'static,
-        Handler: Fn(MockInstance, Parameters) -> Result<Results, RuntimeError> + 'static,
+        Handler: Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError> + 'static,
     {
         self.add_exported_function(name, handler);
         self
@@ -123,7 +123,7 @@ impl MockInstance {
     where
         Parameters: 'static,
         Results: 'static,
-        Handler: Fn(MockInstance, Parameters) -> Result<Results, RuntimeError> + 'static,
+        Handler: Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError> + 'static,
     {
         self.exported_functions.insert(
             name.into(),
