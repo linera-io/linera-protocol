@@ -37,7 +37,6 @@ pub type FunctionHandler =
 /// A fake Wasm instance.
 ///
 /// Only contains exports for the memory and the canonical ABI allocation functions.
-#[derive(Clone)]
 pub struct MockInstance<UserData = ()> {
     memory: Arc<Mutex<Vec<u8>>>,
     exported_functions: HashMap<String, FunctionHandler>,
@@ -81,6 +80,17 @@ impl Default for MockInstance {
                 Ok(hlist![address.0 as i32])
             },
         )
+    }
+}
+
+impl<UserData> Clone for MockInstance<UserData> {
+    fn clone(&self) -> Self {
+        MockInstance {
+            memory: self.memory.clone(),
+            exported_functions: self.exported_functions.clone(),
+            imported_functions: self.imported_functions.clone(),
+            user_data: self.user_data.clone(),
+        }
     }
 }
 
