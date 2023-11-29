@@ -31,16 +31,16 @@ impl Runtime for MockRuntime {
 }
 
 /// A closure for handling calls to mocked functions.
-pub type FunctionHandler =
-    Arc<dyn Fn(MockInstance, Box<dyn Any>) -> Result<Box<dyn Any>, RuntimeError>>;
+pub type FunctionHandler<UserData> =
+    Arc<dyn Fn(MockInstance<UserData>, Box<dyn Any>) -> Result<Box<dyn Any>, RuntimeError>>;
 
 /// A fake Wasm instance.
 ///
 /// Only contains exports for the memory and the canonical ABI allocation functions.
 pub struct MockInstance<UserData = ()> {
     memory: Arc<Mutex<Vec<u8>>>,
-    exported_functions: HashMap<String, FunctionHandler>,
-    imported_functions: HashMap<String, FunctionHandler>,
+    exported_functions: HashMap<String, FunctionHandler<UserData>>,
+    imported_functions: HashMap<String, FunctionHandler<UserData>>,
     user_data: Arc<Mutex<UserData>>,
 }
 
