@@ -175,7 +175,8 @@ impl<UserData> Instance for MockInstance<UserData> {
     }
 }
 
-impl<Parameters, Results> InstanceWithFunction<Parameters, Results> for MockInstance
+impl<Parameters, Results, UserData> InstanceWithFunction<Parameters, Results>
+    for MockInstance<UserData>
 where
     Parameters: FlatLayout + 'static,
     Results: FlatLayout + 'static,
