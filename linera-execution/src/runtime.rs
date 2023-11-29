@@ -597,9 +597,9 @@ where
             .remove(&self.application_id())
         {
             Some(mut view) => {
-                let stored_size = view.total_size().sum() as i32;
+                let stored_size = view.total_size().sum_i32()?;
                 view.write_batch(batch).await?;
-                let new_stored_size = view.total_size().sum() as i32;
+                let new_stored_size = view.total_size().sum_i32()?;
                 let increment = new_stored_size - stored_size;
                 self.change_stored_size
                     .fetch_add(increment, Ordering::Relaxed);

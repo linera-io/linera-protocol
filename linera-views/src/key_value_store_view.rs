@@ -12,7 +12,7 @@ use crate::{
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
-use linera_base::ensure;
+use linera_base::{data_types::ArithmeticError, ensure};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -65,6 +65,12 @@ impl SizeData {
     /// Sums both terms
     pub fn sum(&mut self) -> u32 {
         self.key + self.value
+    }
+
+    /// Sums both terms
+    pub fn sum_i32(&mut self) -> Result<i32, ViewError> {
+        let sum = self.key + self.value;
+        Ok(i32::try_from(sum).map_err(|_| ArithmeticError::Overflow)?)
     }
 
     /// Add a size to the existing SizeData
