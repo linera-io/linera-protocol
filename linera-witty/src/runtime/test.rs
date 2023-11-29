@@ -246,7 +246,7 @@ impl<UserData> RuntimeMemory<MockInstance<UserData>> for Arc<Mutex<Vec<u8>>> {
     }
 }
 
-impl InstanceWithMemory for MockInstance {
+impl<UserData> InstanceWithMemory for MockInstance<UserData> {
     fn memory_from_export(
         &self,
         export: String,
