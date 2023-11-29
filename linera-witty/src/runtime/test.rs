@@ -307,17 +307,18 @@ impl<T> MockResults for T {
 }
 
 /// A helper type to verify how many times an exported function is called.
-pub struct MockExportedFunction<Parameters, Results> {
+pub struct MockExportedFunction<Parameters, Results, UserData> {
     name: String,
     call_counter: Arc<AtomicUsize>,
     expected_calls: usize,
-    handler: Arc<dyn Fn(MockInstance, Parameters) -> Result<Results, RuntimeError>>,
+    handler: Arc<dyn Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError>>,
 }
 
-impl<Parameters, Results> MockExportedFunction<Parameters, Results>
+impl<Parameters, Results, UserData> MockExportedFunction<Parameters, Results, UserData>
 where
     Parameters: 'static,
     Results: 'static,
+    UserData: 'static,
 {
     /// Creates a new [`MockExportedFunction`] for the exported function with the provided `name`.
     ///
@@ -327,7 +328,7 @@ where
     /// times.
     pub fn new(
         name: impl Into<String>,
-        handler: impl Fn(MockInstance, Parameters) -> Result<Results, RuntimeError> + 'static,
+        handler: impl Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError> + 'static,
         expected_calls: usize,
     ) -> Self {
         MockExportedFunction {
@@ -339,7 +340,7 @@ where
     }
 
     /// Registers this [`MockExportedFunction`] with the mock `instance`.
-    pub fn register(&self, instance: &mut MockInstance) {
+    pub fn register(&self, instance: &mut MockInstance<UserData>) {
         let call_counter = self.call_counter.clone();
         let handler = self.handler.clone();
 
@@ -350,7 +351,7 @@ where
     }
 }
 
-impl<Parameters, Results> Drop for MockExportedFunction<Parameters, Results> {
+impl<Parameters, Results, UserData> Drop for MockExportedFunction<Parameters, Results, UserData> {
     fn drop(&mut self) {
         assert_eq!(
             self.call_counter.load(Ordering::Acquire),
