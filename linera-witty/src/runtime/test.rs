@@ -37,14 +37,14 @@ pub type FunctionHandler<UserData> =
 /// A fake Wasm instance.
 ///
 /// Only contains exports for the memory and the canonical ABI allocation functions.
-pub struct MockInstance<UserData = ()> {
+pub struct MockInstance<UserData> {
     memory: Arc<Mutex<Vec<u8>>>,
     exported_functions: HashMap<String, FunctionHandler<UserData>>,
     imported_functions: HashMap<String, FunctionHandler<UserData>>,
     user_data: Arc<Mutex<UserData>>,
 }
 
-impl Default for MockInstance {
+impl Default for MockInstance<()> {
     fn default() -> Self {
         let memory = Arc::new(Mutex::new(Vec::new()));
 
