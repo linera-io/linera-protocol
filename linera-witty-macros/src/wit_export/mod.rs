@@ -28,7 +28,7 @@ pub fn generate(implementation: &ItemImpl, namespace: &LitStr) -> TokenStream {
 /// this type. Then, they are used to generate the final code.
 pub struct WitExportGenerator<'input> {
     type_name: &'input Ident,
-    has_caller_type_parameter: bool,
+    caller_type_parameter: CallerTypeParameter<'input>,
     implementation: &'input ItemImpl,
     functions: Vec<FunctionInformation<'input>>,
     namespace: &'input LitStr,
@@ -38,36 +38,20 @@ impl<'input> WitExportGenerator<'input> {
     /// Collects the pieces necessary for code generation from the inputs.
     pub fn new(implementation: &'input ItemImpl, namespace: &'input LitStr) -> Self {
         let type_name = type_name(implementation);
-        let caller_type_parameter = Self::caller_type_parameter(&implementation.generics);
+        let caller_type_parameter = CallerTypeParameter::new(&implementation.generics);
         let functions = implementation
             .items
             .iter()
-            .map(|item| FunctionInformation::from_item(item, caller_type_parameter))
+            .map(|item| FunctionInformation::from_item(item, caller_type_parameter.caller()))
             .collect();
 
         WitExportGenerator {
             type_name,
-            has_caller_type_parameter: caller_type_parameter.is_some(),
+            caller_type_parameter,
             implementation,
             functions,
             namespace,
         }
-    }
-
-    /// Extracts a generic type parameter for the caller type if available.
-    fn caller_type_parameter(generics: &Generics) -> Option<&Ident> {
-        if generics.type_params().count() > 1 {
-            abort!(
-                generics.params,
-                "`#[wit_export]` supports only one generic type parameter \
-                which is assumed to be the caller instance"
-            );
-        }
-
-        generics
-            .type_params()
-            .next()
-            .map(|parameter| &parameter.ident)
     }
 
     /// Consumes the collected pieces to generate the final code.
@@ -153,8 +137,9 @@ impl<'input> WitExportGenerator<'input> {
     ) -> TokenStream {
         let type_name = &self.type_name;
         let caller_type_parameter = self
-            .has_caller_type_parameter
-            .then(|| quote! { <#target_caller_type> });
+            .caller_type_parameter
+            .caller()
+            .map(|_| quote! { <#target_caller_type> });
 
         quote! {
             impl linera_witty::ExportTo<#export_target> for #type_name #caller_type_parameter {
@@ -189,4 +174,37 @@ pub fn type_name(implementation: &ItemImpl) -> &Ident {
             abort!(implementation.self_ty, "Missing type name identifier",);
         })
         .ident
+}
+
+/// Information on the  generic type parameter to use for the caller parameter, if present.
+#[derive(Clone, Copy, Debug)]
+enum CallerTypeParameter<'input> {
+    NotPresent,
+    WithoutUserData(&'input Ident),
+}
+
+impl<'input> CallerTypeParameter<'input> {
+    /// Parses a type's [`Generics`] to determine if a caller type parameter should be used.
+    pub fn new(generics: &'input Generics) -> Self {
+        if generics.type_params().count() > 1 {
+            abort!(
+                generics.params,
+                "`#[wit_export]` supports only one generic type parameter \
+                which is assumed to be the caller instance"
+            );
+        }
+
+        match generics.type_params().next() {
+            None => CallerTypeParameter::NotPresent,
+            Some(parameter) => CallerTypeParameter::WithoutUserData(&parameter.ident),
+        }
+    }
+
+    /// Returns the [`Ident`]ifier of the generic type parameter used for the caller.
+    pub fn caller(&self) -> Option<&'input Ident> {
+        match self {
+            CallerTypeParameter::NotPresent => None,
+            CallerTypeParameter::WithoutUserData(caller) => Some(caller),
+        }
+    }
 }
