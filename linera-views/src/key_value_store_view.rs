@@ -175,7 +175,7 @@ where
         }
         self.sizes.flush(batch)?;
         let hash = *self.hash.get_mut();
-        // In tne admittedly rare scenarion that we do a clear
+        // In the scenario where we do a clear
         // and stored_hash = hash, we need to update the
         // hash, otherwise, we will recompute it while this
         // can be avoided.
@@ -620,11 +620,11 @@ where
                 WriteOperation::Delete { key } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     if let Some(value) = self.sizes.get(&key).await? {
-                        let single_size = SizeData {
+                        let entry_size = SizeData {
                             key: key.len() as u32,
                             value,
                         };
-                        self.total_size.sub_assign(single_size);
+                        self.total_size.sub_assign(entry_size);
                     }
                     self.sizes.remove(key.clone());
                     if self.was_cleared {
@@ -635,19 +635,19 @@ where
                 }
                 WriteOperation::Put { key, value } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
-                    let single_size = SizeData {
+                    let entry_size = SizeData {
                         key: key.len() as u32,
                         value: value.len() as u32,
                     };
-                    self.total_size.add_assign(single_size)?;
+                    self.total_size.add_assign(entry_size)?;
                     if let Some(value) = self.sizes.get(&key).await? {
-                        let single_size = SizeData {
+                        let entry_size = SizeData {
                             key: key.len() as u32,
                             value,
                         };
-                        self.total_size.sub_assign(single_size);
+                        self.total_size.sub_assign(entry_size);
                     }
-                    self.sizes.insert(key.clone(), single_size.value);
+                    self.sizes.insert(key.clone(), entry_size.value);
                     self.updates.insert(key, Update::Set(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
@@ -662,11 +662,11 @@ where
                     }
                     let key_values = self.sizes.key_values_by_prefix(key_prefix.clone()).await?;
                     for (key, value) in key_values {
-                        let single_size = SizeData {
+                        let entry_size = SizeData {
                             key: key.len() as u32,
                             value,
                         };
-                        self.total_size.sub_assign(single_size);
+                        self.total_size.sub_assign(entry_size);
                         self.sizes.remove(key);
                     }
                     self.sizes.remove_by_prefix(key_prefix.clone());

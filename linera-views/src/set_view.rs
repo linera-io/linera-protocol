@@ -77,7 +77,7 @@ where
             }
         }
         let hash = *self.hash.get_mut();
-        // In tne admittedly rare scenarion that we do a clear
+        // In the scenario where we do a clear
         // and stored_hash = hash, we need to update the
         // hash, otherwise, we will recompute it while this
         // can be avoided.
