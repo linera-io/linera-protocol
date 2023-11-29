@@ -629,7 +629,7 @@ impl NodeService {
     ) -> Result<ApplicationWrapper<A>> {
         println!("make_application");
         let application_id = application_id.forget_abi().to_string();
-        let n_try = 30;
+        let n_try = 5;
         for i in 0..n_try {
             println!("Try {}", i);
             tokio::time::sleep(Duration::from_secs(i)).await;
@@ -650,7 +650,9 @@ impl NodeService {
         chain_id: &ChainId,
     ) -> Result<HashMap<String, String>> {
         let query = format!("query {{ applications(chainId: \"{chain_id}\") {{ id link }}}}");
+        println!("Gonna query the node");
         let data = self.query_node(query).await?;
+        println!("Finished querying the node, result: {:?}", data);
         data["applications"]
             .as_array()
             .context("missing applications in response")?

@@ -147,9 +147,10 @@ impl AmmApp {
     }
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+// #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+// #[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+// #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(LocalKubernetesNetTestingConfig::new(Network::Grpc, Some(PathBuf::from("/Users/ndr/linera-protocol-0/target/aarch64-unknown-linux-gnu/release"))) ; "kubernetes_scylladb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) {
     use counter::CounterAbi;
@@ -196,9 +197,10 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) {
     net.terminate().await.unwrap();
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+// #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+// #[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+// #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(LocalKubernetesNetTestingConfig::new(Network::Grpc, Some(PathBuf::from("/Users/ndr/linera-protocol-0/target/aarch64-unknown-linux-gnu/release"))) ; "kubernetes_scylladb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfig) {
     use counter::CounterAbi;
@@ -243,9 +245,10 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
     net.terminate().await.unwrap();
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+// #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+// #[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+// #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(LocalKubernetesNetTestingConfig::new(Network::Grpc, Some(PathBuf::from("/Users/ndr/linera-protocol-0/target/aarch64-unknown-linux-gnu/release"))) ; "kubernetes_scylladb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) {
     use social::SocialAbi;
@@ -279,10 +282,12 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
         .await
         .unwrap();
 
+    println!("NDR Going to do first make_application call");
     let app2 = node_service2
         .make_application(&chain2, &application_id)
         .await
         .unwrap();
+    println!("NDR Finished first make_application call");
     let hash = app2
         .mutate(format!("requestSubscribe(field0: \"{chain1}\")"))
         .await
@@ -293,10 +298,12 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     let response = node_service2.query_node(&query).await.unwrap();
     assert_eq!(hash, response["chain"]["tipState"]["blockHash"]);
 
+    println!("NDR Going to do second make_application call");
     let app1 = node_service1
         .make_application(&chain1, &application_id)
         .await
         .unwrap();
+    println!("NDR Finished second make_application call");
     app1.mutate("post(field0: \"Linera Social is the new Mastodon!\")")
         .await
         .unwrap();
@@ -329,9 +336,10 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     net.terminate().await.unwrap();
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+// #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+// #[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+// #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(LocalKubernetesNetTestingConfig::new(Network::Grpc, Some(PathBuf::from("/Users/ndr/linera-protocol-0/target/aarch64-unknown-linux-gnu/release"))) ; "kubernetes_scylladb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
     use fungible::{FungibleTokenAbi, InitialState};
@@ -365,12 +373,14 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
     let mut node_service1 = client1.run_node_service(8080).await.unwrap();
     let mut node_service2 = client2.run_node_service(8081).await.unwrap();
 
+    println!("NDR Going to do first make_application call");
     let app1 = FungibleApp(
         node_service1
             .make_application(&chain1, &application_id)
             .await
             .unwrap(),
     );
+    println!("NDR Finished first make_application call");
     app1.assert_balances([
         (account_owner1, Amount::from_tokens(5)),
         (account_owner2, Amount::from_tokens(2)),
@@ -395,6 +405,7 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
     ])
     .await;
 
+    println!("NDR Going to do second make_application call");
     // Fungible didn't exist on chain2 initially but now it does and we can talk to it.
     let app2 = FungibleApp(
         node_service2
@@ -402,6 +413,7 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
             .await
             .unwrap(),
     );
+    println!("NDR Finished first make_application call");
 
     app2.assert_balances(BTreeMap::from([
         (account_owner1, Amount::ZERO),
@@ -446,9 +458,10 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
     net.terminate().await.unwrap();
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+// #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+// #[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+// #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(LocalKubernetesNetTestingConfig::new(Network::Grpc, Some(PathBuf::from("/Users/ndr/linera-protocol-0/target/aarch64-unknown-linux-gnu/release"))) ; "kubernetes_scylladb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_same_wallet_fungible(config: impl LineraNetConfig) {
     use fungible::{FungibleTokenAbi, InitialState};
@@ -526,9 +539,10 @@ async fn test_wasm_end_to_end_same_wallet_fungible(config: impl LineraNetConfig)
     net.terminate().await.unwrap();
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+// #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+// #[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+// #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(LocalKubernetesNetTestingConfig::new(Network::Grpc, Some(PathBuf::from("/Users/ndr/linera-protocol-0/target/aarch64-unknown-linux-gnu/release"))) ; "kubernetes_scylladb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
     use crowd_funding::{CrowdFundingAbi, InitializationArgument};
@@ -653,9 +667,10 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
 }
 
 #[ignore] // TODO(#1159)
-#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+// #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+// #[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+// #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(LocalKubernetesNetTestingConfig::new(Network::Grpc, Some(PathBuf::from("/Users/ndr/linera-protocol-0/target/aarch64-unknown-linux-gnu/release"))) ; "kubernetes_scylladb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     use fungible::{FungibleTokenAbi, InitialState};

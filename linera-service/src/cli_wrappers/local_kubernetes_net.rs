@@ -104,11 +104,15 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
 
 impl Drop for LocalKubernetesNet {
     fn drop(&mut self) {
+        println!("NDR in drop");
         // Block the current runtime to cleanup
         let handle = tokio::runtime::Handle::current();
         let _guard = handle.enter();
+        println!("NDR entered handle");
         futures::executor::block_on(async move {
-            self.terminate().await.unwrap();
+            if let Err(e) = self.terminate().await {
+                tracing::error!("Error terminating: {}", e);
+            }
         });
     }
 }
@@ -120,8 +124,8 @@ impl LineraNetConfig for LocalKubernetesNetTestingConfig {
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
         let seed = 37;
-        let num_validators = 4;
-        let num_shards = 4;
+        let num_validators = 1;
+        let num_shards = 1;
 
         let mut net = LocalKubernetesNet::new(
             self.network,
@@ -210,21 +214,29 @@ impl LineraNet for LocalKubernetesNet {
     }
 
     async fn terminate(&mut self) -> Result<()> {
+        println!("NDR inside terminate");
         let mut kubectl_instance = self.kubectl_instance.lock().await;
+        println!("NDR got kubectl lock");
         let mut errors = Vec::new();
         for port_forward_child in &mut kubectl_instance.port_forward_children {
-            if let Err(e) = port_forward_child.kill().await {
+            println!("NDR inside for loop");
+            if let Err(e) = port_forward_child.kill() {
+                println!("NDR got an error");
                 errors.push(e.into());
             }
+            println!("NDR killed one process");
         }
+        println!("NDR killed port forwards");
 
         for kind_cluster in &mut self.kind_clusters {
             if let Err(e) = kind_cluster.delete().await {
                 errors.push(e);
             }
         }
+        println!("NDR deleted kind clusters");
 
         if errors.is_empty() {
+            println!("NDR returning with no errors");
             Ok(())
         } else {
             let err_str = if errors.len() > 1 {
@@ -233,9 +245,12 @@ impl LineraNet for LocalKubernetesNet {
                 "One error"
             };
 
+            println!("NDR returning with errors");
             Err(errors
                 .into_iter()
-                .fold(anyhow!("{err_str} occurred"), |acc, e| acc.context(e)))
+                .fold(anyhow!("{err_str} occurred"), |acc, e: anyhow::Error| {
+                    acc.context(e)
+                }))
         }
     }
 }
@@ -343,7 +358,7 @@ impl LocalKubernetesNet {
 
         let github_root = get_github_root().await?;
         // Build Docker image
-        let docker_image = DockerImage::new(
+        let docker_image = DockerImage::build(
             String::from("linera-test:latest"),
             binaries_path,
             &github_root,

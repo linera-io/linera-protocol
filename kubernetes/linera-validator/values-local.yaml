@@ -4,6 +4,7 @@
 lineraImage: linera-test:latest
 lineraImagePullPolicy: Never
 logLevel: "debug"
+# logLevel: "trace"
 proxyPort: 19100
 numShards: 10
 

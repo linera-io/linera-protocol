@@ -1,10 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::util::CommandExt;
 use anyhow::Result;
 use rand::Rng;
-use tokio::process::Command;
+use std::process::Command;
 
 #[derive(Clone)]
 pub struct KindCluster {
@@ -21,11 +20,16 @@ impl KindCluster {
             id: Self::get_random_cluster_id(),
         };
 
-        Command::new("kind")
+        let status = Command::new("kind")
             .args(["create", "cluster"])
             .args(["--name", cluster.id().to_string().as_str()])
-            .spawn_and_wait_for_stdout()
-            .await?;
+            .status()
+            .expect("Creating cluster should not fail");
+
+        if !status.success() {
+            return Err(anyhow::anyhow!("Error creating cluster: {}", cluster.id));
+        }
+
         Ok(cluster)
     }
 
@@ -34,20 +38,36 @@ impl KindCluster {
     }
 
     pub async fn delete(&self) -> Result<()> {
-        Command::new("kind")
+        let status = Command::new("kind")
             .args(["delete", "cluster"])
-            .args(["--name", self.id.to_string().as_str()])
-            .spawn_and_wait_for_stdout()
-            .await?;
+            .args(["--name", &self.id.to_string()])
+            .status()
+            .expect("Deleting cluster should not fail");
+
+        if !status.success() {
+            println!("Error in deleting cluster {}", self.id);
+            return Err(anyhow::anyhow!("Error deleting cluster: {}", self.id));
+        }
+
+        println!("Deleted cluster successfully {}", self.id);
         Ok(())
     }
 
     pub async fn load_docker_image(&self, docker_image: &String) -> Result<()> {
-        Command::new("kind")
+        let status = Command::new("kind")
             .args(["load", "docker-image", docker_image])
             .args(["--name", self.id.to_string().as_str()])
-            .spawn_and_wait_for_stdout()
-            .await?;
+            .status()
+            .expect("Loading docker image should not fail");
+
+        if !status.success() {
+            return Err(anyhow::anyhow!(
+                "Error loading docker image {} into cluster {}",
+                docker_image,
+                self.id
+            ));
+        }
+
         Ok(())
     }
 }

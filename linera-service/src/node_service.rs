@@ -501,18 +501,22 @@ where
     }
 
     async fn applications(&self, chain_id: ChainId) -> Result<Vec<ApplicationOverview>, Error> {
+        info!("NDR inside applications");
         let client = self.clients.try_client_lock(&chain_id).await?;
+        info!("NDR got client lock");
         let applications = client
             .chain_state_view()
             .await?
             .execution_state
             .list_applications()
             .await?;
+        info!("NDR listed applications");
 
         let overviews = applications
             .into_iter()
             .map(|(id, description)| ApplicationOverview::new(id, description, self.port, chain_id))
             .collect();
+        info!("NDR got overviews");
 
         Ok(overviews)
     }
