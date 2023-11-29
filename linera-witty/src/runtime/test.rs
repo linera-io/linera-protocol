@@ -208,10 +208,10 @@ where
     }
 }
 
-impl RuntimeMemory<MockInstance> for Arc<Mutex<Vec<u8>>> {
+impl<UserData> RuntimeMemory<MockInstance<UserData>> for Arc<Mutex<Vec<u8>>> {
     fn read<'instance>(
         &self,
-        instance: &'instance MockInstance,
+        instance: &'instance MockInstance<UserData>,
         location: GuestPointer,
         length: u32,
     ) -> Result<Cow<'instance, [u8]>, RuntimeError> {
@@ -228,7 +228,7 @@ impl RuntimeMemory<MockInstance> for Arc<Mutex<Vec<u8>>> {
 
     fn write(
         &mut self,
-        instance: &mut MockInstance,
+        instance: &mut MockInstance<UserData>,
         location: GuestPointer,
         bytes: &[u8],
     ) -> Result<(), RuntimeError> {
