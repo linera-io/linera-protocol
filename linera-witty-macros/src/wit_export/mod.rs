@@ -11,7 +11,10 @@ use self::function_information::FunctionInformation;
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
 use quote::quote;
-use syn::{Generics, Ident, ItemImpl, LitStr, Type, TypePath};
+use syn::{
+    punctuated::Punctuated, token::Paren, Generics, Ident, ItemImpl, LitStr, Type, TypePath,
+    TypeTuple,
+};
 
 /// Returns the code generated for exporting host functions to guest Wasm instances.
 ///
@@ -73,9 +76,13 @@ impl<'input> WitExportGenerator<'input> {
     fn generate_for_wasmer(&mut self) -> Option<TokenStream> {
         #[cfg(feature = "wasmer")]
         {
-            let export_target = quote! { linera_witty::wasmer::InstanceBuilder<()> };
+            let user_data_type = self.user_data_type();
+            let export_target = quote! { linera_witty::wasmer::InstanceBuilder<#user_data_type> };
             let target_caller_type = quote! {
-                linera_witty::wasmer::FunctionEnvMut<'_, linera_witty::wasmer::InstanceSlot<()>>
+                linera_witty::wasmer::FunctionEnvMut<
+                    '_,
+                    linera_witty::wasmer::InstanceSlot<#user_data_type>,
+                >
             };
             let exported_functions = self
                 .functions
@@ -94,8 +101,9 @@ impl<'input> WitExportGenerator<'input> {
     fn generate_for_wasmtime(&mut self) -> Option<TokenStream> {
         #[cfg(feature = "wasmtime")]
         {
-            let export_target = quote! { linera_witty::wasmtime::Linker<()> };
-            let target_caller_type = quote! { linera_witty::wasmtime::Caller<'_, ()> };
+            let user_data_type = self.user_data_type();
+            let export_target = quote! { linera_witty::wasmtime::Linker<#user_data_type> };
+            let target_caller_type = quote! { linera_witty::wasmtime::Caller<'_, #user_data_type> };
             let exported_functions = self
                 .functions
                 .iter()
@@ -113,8 +121,9 @@ impl<'input> WitExportGenerator<'input> {
     fn generate_for_mock_instance(&mut self) -> Option<TokenStream> {
         #[cfg(feature = "mock-instance")]
         {
-            let export_target = quote! { linera_witty::MockInstance<()> };
-            let target_caller_type = quote! { linera_witty::MockInstance<()> };
+            let user_data_type = self.user_data_type();
+            let export_target = quote! { linera_witty::MockInstance<#user_data_type> };
+            let target_caller_type = quote! { linera_witty::MockInstance<#user_data_type> };
             let exported_functions = self.functions.iter().map(|function| {
                 function.generate_for_mock_instance(self.namespace, self.type_name)
             });
@@ -151,6 +160,20 @@ impl<'input> WitExportGenerator<'input> {
                 }
             }
         }
+    }
+
+    /// Returns the type to use for the custom user data.
+    fn user_data_type(&self) -> Type {
+        self.caller_type_parameter
+            .user_data()
+            .cloned()
+            .unwrap_or_else(|| {
+                // Unit type
+                Type::Tuple(TypeTuple {
+                    paren_token: Paren::default(),
+                    elems: Punctuated::new(),
+                })
+            })
     }
 }
 
@@ -205,6 +228,14 @@ impl<'input> CallerTypeParameter<'input> {
         match self {
             CallerTypeParameter::NotPresent => None,
             CallerTypeParameter::WithoutUserData(caller) => Some(caller),
+        }
+    }
+
+    /// Returns the type used for custom user data, if there is a caller type parameter.
+    pub fn user_data(&self) -> Option<&'input Type> {
+        match self {
+            CallerTypeParameter::NotPresent => None,
+            CallerTypeParameter::WithoutUserData(_) => None,
         }
     }
 }
