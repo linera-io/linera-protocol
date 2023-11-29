@@ -264,8 +264,10 @@ impl CustomSerialize for Key {
 #[cfg(test)]
 mod tests {
     use super::Key;
-    use linera_sdk::base::{ChainId, Timestamp};
-    use linera_sdk::common::CustomSerialize;
+    use linera_sdk::{
+        base::{ChainId, Timestamp},
+        common::CustomSerialize,
+    };
     use webassembly_test::webassembly_test;
 
     #[webassembly_test]

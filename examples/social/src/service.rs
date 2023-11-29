@@ -8,8 +8,8 @@ mod state;
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use async_trait::async_trait;
 use linera_sdk::{
-    base::WithServiceAbi, graphql::GraphQLMutationRoot, QueryContext, Service, ViewStateStorage,
-    views::ViewError,
+    base::WithServiceAbi, graphql::GraphQLMutationRoot, views::ViewError, QueryContext, Service,
+    ViewStateStorage,
 };
 use social::Operation;
 use state::Social;

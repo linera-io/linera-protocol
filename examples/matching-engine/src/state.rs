@@ -5,8 +5,10 @@ use async_graphql::SimpleObject;
 use fungible::AccountOwner;
 use linera_sdk::{
     base::{Amount, ArithmeticError},
-    views::{CustomCollectionView, MapView, QueueView, RegisterView, ViewStorageContext},
-    views::{RootView, View, ViewError},
+    views::{
+        CustomCollectionView, MapView, QueueView, RegisterView, RootView, View, ViewError,
+        ViewStorageContext,
+    },
 };
 use matching_engine::{OrderId, OrderNature, Price};
 use serde::{Deserialize, Serialize};

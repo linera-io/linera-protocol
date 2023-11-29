@@ -9,10 +9,11 @@ use async_trait::async_trait;
 use crowd_funding::{ApplicationCall, InitializationArgument, Message, Operation};
 use fungible::{Account, AccountOwner, Destination, FungibleTokenAbi};
 use linera_sdk::{
-    views::View,
     base::{Amount, ApplicationId, SessionId, WithContractAbi},
     contract::system_api,
-    ensure, ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
+    ensure,
+    views::View,
+    ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
     OperationContext, OutgoingMessage, SessionCallResult, ViewStateStorage,
 };
 use state::{CrowdFunding, Status};
