@@ -38,10 +38,11 @@ pub type FunctionHandler =
 ///
 /// Only contains exports for the memory and the canonical ABI allocation functions.
 #[derive(Clone)]
-pub struct MockInstance {
+pub struct MockInstance<UserData = ()> {
     memory: Arc<Mutex<Vec<u8>>>,
     exported_functions: HashMap<String, FunctionHandler>,
     imported_functions: HashMap<String, FunctionHandler>,
+    user_data: Arc<Mutex<UserData>>,
 }
 
 impl Default for MockInstance {
@@ -52,6 +53,7 @@ impl Default for MockInstance {
             memory: memory.clone(),
             exported_functions: HashMap::new(),
             imported_functions: HashMap::new(),
+            user_data: Arc::new(Mutex::new(())),
         }
         .with_exported_function("cabi_free", |_, _: HList![i32]| Ok(hlist![]))
         .with_exported_function(
