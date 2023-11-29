@@ -499,8 +499,16 @@ impl ActiveChain {
     where
         Abi: ServiceAbi<Query = async_graphql::Request, QueryResponse = async_graphql::Response>,
     {
-        self.query(application_id, query.into())
-            .await
+        let query = query.into();
+        let query_str = query.query.clone();
+        let response = self.query(application_id, query).await;
+        if !response.errors.is_empty() {
+            panic!(
+                "GraphQL query:\n{}\nyielded errors:\n{:#?}",
+                query_str, response.errors
+            );
+        }
+        response
             .data
             .into_json()
             .expect("Unexpected non-JSON query response")
