@@ -259,9 +259,10 @@ impl<UserData> InstanceWithMemory for MockInstance<UserData> {
     }
 }
 
-impl<Handler, Parameters, Results> ExportFunction<Handler, Parameters, Results> for MockInstance
+impl<Handler, Parameters, Results, UserData> ExportFunction<Handler, Parameters, Results>
+    for MockInstance<UserData>
 where
-    Handler: Fn(MockInstance, Parameters) -> Result<Results, RuntimeError> + 'static,
+    Handler: Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError> + 'static,
     Parameters: 'static,
     Results: 'static,
 {
