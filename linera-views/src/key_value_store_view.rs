@@ -74,6 +74,7 @@ impl SizeData {
             .ok_or(ViewError::ArithmeticError(ArithmeticError::Overflow))?;
         Ok(())
     }
+
     /// Subtract a size to the existing SizeData
     pub fn sub_assign(&mut self, size: SizeData) {
         self.key -= size.key;
