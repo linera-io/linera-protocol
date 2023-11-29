@@ -9,7 +9,11 @@ import tw from "tailwind-styled-components";
 
 const GET_BALANCE = gql`
   query Accounts($owner: AccountOwner) {
-    accounts(accountOwner: $owner)
+    accounts {
+      entries(inputs: { filters: { keys: [$owner] } }) {
+        value
+      }
+    }
   }
 `;
 

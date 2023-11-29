@@ -102,9 +102,14 @@ Now in both http://localhost:8080 and http://localhost:8081, this should list th
 application and provide a link to its GraphQL API. Remember to use each wallet's chain ID:
 
 ```json
-query { applications(
-    chainId:"1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03"
-) { id link } }
+query {
+    applications(
+        chainId: "1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03"
+    ) {
+        id
+        link
+    }
+}
 ```
 
 Open both URLs under the entry `link`. Now you can use the application on each chain.
@@ -131,7 +136,7 @@ mutation {
 Since 8081 is a subscriber. Let's see if it received any posts:
 
 ```json
-query { receivedPostsKeys { timestamp author index } }
+query { receivedPosts { keys { timestamp author index } } }
 ```
 
 This should now list one entry, with timestamp, author and an index. If we view that
@@ -139,21 +144,26 @@ entry, we can see the posted text:
 
 ```json
 query {
-  receivedPosts(
-    key: {
-      timestamp: 1685626618522492,
-      author: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
-      index: 0
-    }
-  )
+receivedPosts {
+    entry(
+        key: {
+            timestamp: 1685626618522492,
+            author: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+            index: 0
+        }
+    ) { value }
 }
 ```
 
 ```json
 {
-  "data": {
-    "receivedPosts": "Linera Social is the new Mastodon!"
-  }
+    "data": {
+        "receivedPosts": {
+            "entry": {
+                "value": "Linera Social is the new Mastodon!"
+            }
+        }
+    }
 }
 ```
 */
