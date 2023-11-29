@@ -27,7 +27,7 @@ use std::{
     collections::{btree_map, BTreeMap},
     ops::DerefMut,
     sync::{
-        atomic::{AtomicI64, AtomicU64, Ordering},
+        atomic::{AtomicI32, AtomicU64, Ordering},
         Arc,
     },
 };
@@ -60,6 +60,8 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     bytes_read: AtomicU64,
     /// The total size being written
     bytes_written: AtomicU64,
+    /// The total size being written
+    change_stored_size: AtomicI32,
     /// The runtime limits
     runtime_limits: RuntimeLimits,
 }
@@ -127,8 +129,8 @@ where
             num_reads: AtomicU64::new(0),
             bytes_read: AtomicU64::new(0),
             bytes_written: AtomicU64::new(0),
+            change_stored_size: AtomicI32::new(0),
             runtime_limits,
-            change_stored_size,
             chain_id,
         }
     }
@@ -595,9 +597,9 @@ where
             .remove(&self.application_id())
         {
             Some(mut view) => {
-                let stored_size = view.stored_size() as i64;
+                let stored_size = view.total_size().sum() as i32;
                 view.write_batch(batch).await?;
-                let new_stored_size = view.stored_size() as i64;
+                let new_stored_size = view.total_size().sum() as i32;
                 let increment = new_stored_size - stored_size;
                 self.change_stored_size
                     .fetch_add(increment, Ordering::Relaxed);
