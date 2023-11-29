@@ -621,7 +621,7 @@ where
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     if let Some(value) = self.sizes.get(&key).await? {
                         let entry_size = SizeData {
-                            key: key.len() as u32,
+                            key: u32::try_from(key.len()).map_err(|_| ArithmeticError::Overflow)?,
                             value,
                         };
                         self.total_size.sub_assign(entry_size);
