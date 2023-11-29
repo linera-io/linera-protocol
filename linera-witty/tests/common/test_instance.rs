@@ -118,9 +118,9 @@ pub struct MockInstanceFactory {
 }
 
 impl TestInstanceFactory for MockInstanceFactory {
-    type Builder = MockInstance;
-    type Instance = MockInstance;
-    type Caller<'caller> = MockInstance;
+    type Builder = MockInstance<()>;
+    type Instance = MockInstance<()>;
+    type Caller<'caller> = MockInstance<()>;
 
     fn load_test_module<ExportedFunctions>(&mut self, group: &str, module: &str) -> Self::Instance
     where
@@ -156,7 +156,7 @@ impl TestInstanceFactory for MockInstanceFactory {
 
 impl MockInstanceFactory {
     /// Mock the exported functions from the "export-simple-function" module.
-    fn export_simple_function(&mut self, instance: &mut MockInstance) {
+    fn export_simple_function(&mut self, instance: &mut MockInstance<()>) {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/simple-function#simple",
@@ -166,7 +166,7 @@ impl MockInstanceFactory {
     }
 
     /// Mock the exported functions from the "export-getters" module.
-    fn export_getters(&mut self, instance: &mut MockInstance) {
+    fn export_getters(&mut self, instance: &mut MockInstance<()>) {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/getters#get-true",
@@ -242,7 +242,7 @@ impl MockInstanceFactory {
     }
 
     /// Mock the exported functions from the "export-setters" module.
-    fn export_setters(&mut self, instance: &mut MockInstance) {
+    fn export_setters(&mut self, instance: &mut MockInstance<()>) {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/setters#set-bool",
@@ -345,7 +345,7 @@ impl MockInstanceFactory {
     }
 
     /// Mock the exported functions from the "operations" module.
-    fn export_operations(&mut self, instance: &mut MockInstance) {
+    fn export_operations(&mut self, instance: &mut MockInstance<()>) {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/operations#and-bool",
@@ -417,7 +417,7 @@ impl MockInstanceFactory {
     }
 
     /// Mock calling the imported function in the "import-simple-function" module.
-    fn import_simple_function(&mut self, instance: &mut MockInstance) {
+    fn import_simple_function(&mut self, instance: &mut MockInstance<()>) {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/entrypoint#entrypoint",
@@ -433,8 +433,8 @@ impl MockInstanceFactory {
     }
 
     /// Mock calling the imported functions in the "import-getters" module.
-    fn import_getters(&mut self, instance: &mut MockInstance) {
-        fn check_getter<Value>(caller: &MockInstance, name: &str, expected_value: Value)
+    fn import_getters(&mut self, instance: &mut MockInstance<()>) {
+        fn check_getter<Value>(caller: &MockInstance<()>, name: &str, expected_value: Value)
         where
             Value: Debug + PartialEq + WitLoad + 'static,
         {
@@ -473,8 +473,8 @@ impl MockInstanceFactory {
     }
 
     /// Mock calling the imported functions in the "import-setters" module.
-    fn import_setters(&mut self, instance: &mut MockInstance) {
-        fn send_to_setter<Value>(caller: &MockInstance, name: &str, value: Value)
+    fn import_setters(&mut self, instance: &mut MockInstance<()>) {
+        fn send_to_setter<Value>(caller: &MockInstance<()>, name: &str, value: Value)
         where
             Value: WitStore + 'static,
             Value::Layout: Add<HList![]>,
@@ -514,9 +514,9 @@ impl MockInstanceFactory {
     }
 
     /// Mock calling the imported functions in the "import-operations".
-    fn import_operations(&mut self, instance: &mut MockInstance) {
+    fn import_operations(&mut self, instance: &mut MockInstance<()>) {
         fn check_operation<Value>(
-            caller: &MockInstance,
+            caller: &MockInstance<()>,
             name: &str,
             operands: impl WitStore + 'static,
             expected_result: Value,
@@ -573,31 +573,31 @@ impl MockInstanceFactory {
     }
 
     /// Mock the behavior of the "reentrancy-simple-function" module.
-    fn reentrancy_simple_function(&mut self, instance: &mut MockInstance) {
+    fn reentrancy_simple_function(&mut self, instance: &mut MockInstance<()>) {
         self.import_simple_function(instance);
         self.export_simple_function(instance);
     }
 
     /// Mock the behavior of the "reentrancy-getters" module.
-    fn reentrancy_getters(&mut self, instance: &mut MockInstance) {
+    fn reentrancy_getters(&mut self, instance: &mut MockInstance<()>) {
         self.import_getters(instance);
         self.export_getters(instance);
     }
 
     /// Mock the behavior of the "reentrancy-setters" module.
-    fn reentrancy_setters(&mut self, instance: &mut MockInstance) {
+    fn reentrancy_setters(&mut self, instance: &mut MockInstance<()>) {
         self.import_setters(instance);
         self.export_setters(instance);
     }
 
     /// Mock the behavior of the "reentrancy-operations" module.
-    fn reentrancy_operations(&mut self, instance: &mut MockInstance) {
+    fn reentrancy_operations(&mut self, instance: &mut MockInstance<()>) {
         self.import_operations(instance);
         self.export_operations(instance);
     }
 
     /// Mock the behavior of the "reentrancy-global-state" module.
-    fn reentrancy_global_state(&mut self, instance: &mut MockInstance) {
+    fn reentrancy_global_state(&mut self, instance: &mut MockInstance<()>) {
         let global_state_for_entrypoint = Arc::new(AtomicU32::new(0));
         let global_state_for_getter = global_state_for_entrypoint.clone();
 
@@ -637,9 +637,9 @@ impl MockInstanceFactory {
     /// added to the current list of deferred assertions, to be checked when the test finishes.
     fn mock_exported_function<Parameters, Results>(
         &mut self,
-        instance: &mut MockInstance,
+        instance: &mut MockInstance<()>,
         name: &str,
-        handler: impl Fn(MockInstance, Parameters) -> Result<Results, RuntimeError> + 'static,
+        handler: impl Fn(MockInstance<()>, Parameters) -> Result<Results, RuntimeError> + 'static,
         expected_calls: usize,
     ) where
         Parameters: 'static,
