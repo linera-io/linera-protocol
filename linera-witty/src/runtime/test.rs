@@ -163,7 +163,7 @@ impl MockInstance {
     }
 }
 
-impl Instance for MockInstance {
+impl<UserData> Instance for MockInstance<UserData> {
     type Runtime = MockRuntime;
 
     fn load_export(&mut self, name: &str) -> Option<String> {
