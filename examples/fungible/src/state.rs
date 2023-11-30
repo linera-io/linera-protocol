@@ -4,9 +4,8 @@
 use fungible::{AccountOwner, InitialState};
 use linera_sdk::{
     base::Amount,
-    views::{MapView, ViewStorageContext},
+    views::{linera_views, GraphQLView, MapView, RootView, ViewStorageContext},
 };
-use linera_views::views::{GraphQLView, RootView};
 use thiserror::Error;
 
 /// The application state.

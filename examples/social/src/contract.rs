@@ -9,10 +9,10 @@ use async_trait::async_trait;
 use linera_sdk::{
     base::{ChannelName, Destination, SessionId, WithContractAbi},
     contract::system_api,
+    views::ViewError,
     ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
     OperationContext, SessionCallResult, ViewStateStorage,
 };
-use linera_views::views::ViewError;
 use social::{Key, Message, Operation, OwnPost};
 use state::Social;
 use thiserror::Error;

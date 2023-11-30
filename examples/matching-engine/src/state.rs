@@ -5,9 +5,11 @@ use async_graphql::SimpleObject;
 use fungible::AccountOwner;
 use linera_sdk::{
     base::{Amount, ArithmeticError},
-    views::{CustomCollectionView, MapView, QueueView, RegisterView, ViewStorageContext},
+    views::{
+        linera_views, CustomCollectionView, MapView, QueueView, RegisterView, RootView, View,
+        ViewError, ViewStorageContext,
+    },
 };
-use linera_views::views::{RootView, View, ViewError};
 use matching_engine::{OrderId, OrderNature, Price};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -51,7 +53,7 @@ pub enum MatchingEngineError {
     BcsError(#[from] bcs::Error),
 }
 
-use linera_views::views::GraphQLView;
+use linera_sdk::views::GraphQLView;
 
 /// The order entry in the order book
 #[derive(Clone, Debug, Deserialize, Serialize, SimpleObject)]
