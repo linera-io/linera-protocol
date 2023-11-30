@@ -528,7 +528,7 @@ where
             bytes_written: 0,
             maximum_bytes_left_to_read,
             maximum_bytes_left_to_write,
-            change_stored_size: 0,
+            stored_size_delta: 0,
         };
         // The first incoming message of any child chain must be `OpenChain`. A root chain must
         // already be initialized

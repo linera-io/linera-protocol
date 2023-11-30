@@ -35,7 +35,7 @@ pub struct ResourceTracker {
     /// The total number of bytes written
     pub bytes_written: u64,
     /// The change in the total data being stored
-    pub change_stored_size: i32,
+    pub stored_size_delta: i32,
     /// The maximum size of read that remains available for use
     pub maximum_bytes_left_to_read: u64,
     /// The maximum size of write that remains available for use
@@ -50,7 +50,7 @@ impl Default for ResourceTracker {
             num_reads: 0,
             bytes_read: 0,
             bytes_written: 0,
-            change_stored_size: 0,
+            stored_size_delta: 0,
             maximum_bytes_left_to_read: u64::MAX / 2,
             maximum_bytes_left_to_write: u64::MAX / 2,
         }
@@ -140,5 +140,5 @@ pub struct RuntimeCounts {
     /// The bytes that have been written
     pub bytes_written: u64,
     /// The change in the total data stored
-    pub change_stored_size: i32,
+    pub stored_size_delta: i32,
 }

@@ -61,7 +61,7 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     /// The total size being written
     bytes_written: AtomicU64,
     /// The total size being written
-    change_stored_size: AtomicI32,
+    stored_size_delta: AtomicI32,
     /// The runtime limits
     runtime_limits: RuntimeLimits,
 }
@@ -129,7 +129,7 @@ where
             num_reads: AtomicU64::new(0),
             bytes_read: AtomicU64::new(0),
             bytes_written: AtomicU64::new(0),
-            change_stored_size: AtomicI32::new(0),
+            stored_size_delta: AtomicI32::new(0),
             runtime_limits,
             chain_id,
         }
@@ -539,13 +539,13 @@ where
         let num_reads = self.num_reads.load(Ordering::Acquire);
         let bytes_read = self.bytes_read.load(Ordering::Acquire);
         let bytes_written = self.bytes_written.load(Ordering::Acquire);
-        let change_stored_size = self.change_stored_size.load(Ordering::Acquire);
+        let stored_size_delta = self.stored_size_delta.load(Ordering::Acquire);
         RuntimeCounts {
             remaining_fuel,
             num_reads,
             bytes_read,
             bytes_written,
-            change_stored_size,
+            stored_size_delta,
         }
     }
 
@@ -601,7 +601,7 @@ where
                 view.write_batch(batch).await?;
                 let new_stored_size = view.total_size().sum_i32()?;
                 let increment = new_stored_size - stored_size;
-                self.change_stored_size
+                self.stored_size_delta
                     .fetch_add(increment, Ordering::Relaxed);
                 Ok(())
             }
