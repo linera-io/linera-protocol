@@ -69,7 +69,10 @@ impl SizeData {
 
     /// Sums both terms
     pub fn sum_i32(&mut self) -> Result<i32, ViewError> {
-        let sum = self.key + self.value;
+        let sum = self
+            .key
+            .checked_add(self.value)
+            .ok_or(ArithmeticError::Overflow)?;
         Ok(i32::try_from(sum).map_err(|_| ArithmeticError::Overflow)?)
     }
 
