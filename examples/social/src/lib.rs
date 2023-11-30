@@ -266,7 +266,7 @@ mod tests {
     use super::Key;
     use linera_sdk::{
         base::{ChainId, Timestamp},
-        common::CustomSerialize,
+        views::CustomSerialize,
     };
     use webassembly_test::webassembly_test;
 
