@@ -55,7 +55,7 @@ pub type Config = aws_sdk_dynamodb::Config;
 
 /// Gets the AWS configuration from the environment
 pub async fn get_base_config() -> Result<Config, DynamoDbContextError> {
-    let base_config = aws_config::load_from_env().await;
+    let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
     Ok((&base_config).into())
 }
 
@@ -69,7 +69,7 @@ fn get_endpoint_address() -> Option<String> {
 
 /// Gets the localstack config
 pub async fn get_localstack_config() -> Result<Config, DynamoDbContextError> {
-    let base_config = aws_config::load_from_env().await;
+    let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
     let endpoint_address = get_endpoint_address().unwrap();
     let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
         .endpoint_url(endpoint_address)
