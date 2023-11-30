@@ -1,4 +1,4 @@
-use linera_sdk::views::{GraphQLView, RegisterView, RootView, ViewStorageContext};
+use linera_sdk::views::{linera_views, GraphQLView, RegisterView, RootView, ViewStorageContext};
 
 #[derive(RootView, GraphQLView)]
 #[view(context = "ViewStorageContext")]

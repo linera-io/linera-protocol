@@ -6,8 +6,8 @@ use fungible::AccountOwner;
 use linera_sdk::{
     base::{Amount, ArithmeticError},
     views::{
-        CustomCollectionView, MapView, QueueView, RegisterView, RootView, View, ViewError,
-        ViewStorageContext,
+        linera_views, CustomCollectionView, MapView, QueueView, RegisterView, RootView, View,
+        ViewError, ViewStorageContext,
     },
 };
 use matching_engine::{OrderId, OrderNature, Price};

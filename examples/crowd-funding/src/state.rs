@@ -6,7 +6,7 @@ use crowd_funding::InitializationArgument;
 use fungible::AccountOwner;
 use linera_sdk::{
     base::Amount,
-    views::{GraphQLView, MapView, RegisterView, RootView, ViewStorageContext},
+    views::{linera_views, GraphQLView, MapView, RegisterView, RootView, ViewStorageContext},
 };
 use serde::{Deserialize, Serialize};
 
