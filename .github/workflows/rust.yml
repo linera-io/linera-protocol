@@ -23,7 +23,9 @@ env:
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   RUST_BACKTRACE: short
-  RUSTFLAGS: "-D warnings"
+  # We allow redundant explicit links because `cargo rdme` doesn't know how to resolve implicit intra-crate links.
+  RUSTDOCFLAGS: -A rustdoc::redundant_explicit_links -D warnings
+  RUSTFLAGS: -D warnings
   RUSTUP_MAX_RETRIES: 10
   RUST_LOG: warn
 
@@ -143,10 +145,6 @@ jobs:
       run: |
         cargo clippy --all-targets --all-features --tests --locked
     - name: Run cargo doc
-      env:
-        # We allow redundant explicit links because `cargo rdme` doesn't know how to resolve implicit intra-crate links.
-        RUSTDOCFLAGS: -A rustdoc::redundant_explicit_links
-        RUSTFLAGS: -D warnings
       run: |
         cargo doc --locked --all-features
     - name: Run cargo check-all-features
