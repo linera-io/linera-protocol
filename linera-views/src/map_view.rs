@@ -1275,7 +1275,7 @@ where
     pub async fn get<Q>(&self, index: &Q) -> Result<Option<V>, ViewError>
     where
         I: Borrow<Q>,
-        Q: Serialize + ?Sized + CustomSerialize,
+        Q: ?Sized + CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.map.get(&short_key).await
@@ -1298,7 +1298,7 @@ where
     pub async fn get_mut<Q>(&mut self, index: &Q) -> Result<Option<&mut V>, ViewError>
     where
         I: Borrow<Q>,
-        Q: Serialize + ?Sized + CustomSerialize,
+        Q: ?Sized + CustomSerialize,
     {
         let short_key = index.to_custom_bytes()?;
         self.map.get_mut(short_key).await
