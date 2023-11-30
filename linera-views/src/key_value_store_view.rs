@@ -538,9 +538,7 @@ where
     /// # })
     /// ```
     pub async fn get(&self, index: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
-        if index.len() > self.max_key_size() {
-            return Err(ViewError::KeyTooLong);
-        }
+        ensure!(index.len() <= self.max_key_size(), ViewError::KeyTooLong);
         if let Some(update) = self.updates.get(index) {
             let value = match update {
                 Update::Removed => None,
@@ -574,9 +572,7 @@ where
     /// # })
     /// ```
     pub async fn test_existence(&self, index: &[u8]) -> Result<bool, ViewError> {
-        if index.len() > self.max_key_size() {
-            return Err(ViewError::KeyTooLong);
-        }
+        ensure!(index.len() <= self.max_key_size(), ViewError::KeyTooLong);
         if let Some(update) = self.updates.get(index) {
             let test = match update {
                 Update::Removed => false,
