@@ -12,7 +12,7 @@ use crate::{
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
-use linera_base::ensure;
+use linera_base::{data_types::ArithmeticError, ensure};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -63,10 +63,18 @@ pub struct SizeData {
 
 impl SizeData {
     /// Add a size to the existing SizeData
-    pub fn add_assign(&mut self, size: SizeData) {
-        self.key += size.key;
-        self.value += size.value;
+    pub fn add_assign(&mut self, size: SizeData) -> Result<(), ViewError> {
+        self.key = self
+            .key
+            .checked_add(size.key)
+            .ok_or(ViewError::ArithmeticError(ArithmeticError::Overflow))?;
+        self.value = self
+            .value
+            .checked_add(size.value)
+            .ok_or(ViewError::ArithmeticError(ArithmeticError::Overflow))?;
+        Ok(())
     }
+
     /// Subtract a size to the existing SizeData
     pub fn sub_assign(&mut self, size: SizeData) {
         self.key -= size.key;
@@ -98,7 +106,7 @@ pub struct KeyValueStoreView<C> {
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
     stored_total_size: SizeData,
     total_size: SizeData,
-    sizes: ByteMapView<C, SizeData>,
+    sizes: ByteMapView<C, u32>,
     deleted_prefixes: BTreeSet<Vec<u8>>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
@@ -168,7 +176,11 @@ where
         }
         self.sizes.flush(batch)?;
         let hash = *self.hash.get_mut();
-        if self.stored_hash != hash {
+        // In the scenario where we do a clear
+        // and stored_hash = hash, we need to update the
+        // hash, otherwise, we will recompute it while this
+        // can be avoided.
+        if self.stored_hash != hash || self.was_cleared {
             let key = self.context.base_tag(KeyTag::Hash as u8);
             match hash {
                 None => batch.delete_key(key),
@@ -176,6 +188,9 @@ where
             }
             self.stored_hash = hash;
         }
+        // We could have the scenario where was_cleared is called but
+        // stored_total_size = total_size. If the test for was_cleared
+        // were absent then we would be a size of 0 down the line.
         if self.stored_total_size != self.total_size || self.was_cleared {
             let key = self.context.base_tag(KeyTag::TotalSize as u8);
             batch.put_key_value(key, &self.total_size)?;
@@ -605,8 +620,12 @@ where
             match operation {
                 WriteOperation::Delete { key } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
-                    if let Some(size) = self.sizes.get(&key).await? {
-                        self.total_size.sub_assign(size);
+                    if let Some(value) = self.sizes.get(&key).await? {
+                        let entry_size = SizeData {
+                            key: u32::try_from(key.len()).map_err(|_| ArithmeticError::Overflow)?,
+                            value,
+                        };
+                        self.total_size.sub_assign(entry_size);
                     }
                     self.sizes.remove(key.clone());
                     if self.was_cleared {
@@ -617,15 +636,19 @@ where
                 }
                 WriteOperation::Put { key, value } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
-                    let single_size = SizeData {
+                    let entry_size = SizeData {
                         key: key.len() as u32,
                         value: value.len() as u32,
                     };
-                    self.total_size.add_assign(single_size);
-                    if let Some(size) = self.sizes.get(&key).await? {
-                        self.total_size.sub_assign(size);
+                    self.total_size.add_assign(entry_size)?;
+                    if let Some(value) = self.sizes.get(&key).await? {
+                        let entry_size = SizeData {
+                            key: key.len() as u32,
+                            value,
+                        };
+                        self.total_size.sub_assign(entry_size);
                     }
-                    self.sizes.insert(key.clone(), single_size);
+                    self.sizes.insert(key.clone(), entry_size.value);
                     self.updates.insert(key, Update::Set(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
@@ -640,7 +663,11 @@ where
                     }
                     let key_values = self.sizes.key_values_by_prefix(key_prefix.clone()).await?;
                     for (key, value) in key_values {
-                        self.total_size.sub_assign(value);
+                        let entry_size = SizeData {
+                            key: key.len() as u32,
+                            value,
+                        };
+                        self.total_size.sub_assign(entry_size);
                         self.sizes.remove(key);
                     }
                     self.sizes.remove_by_prefix(key_prefix.clone());
