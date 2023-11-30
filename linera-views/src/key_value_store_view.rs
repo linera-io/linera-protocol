@@ -214,10 +214,6 @@ where
         Ok(())
     }
 
-    fn delete(self, batch: &mut Batch) {
-        batch.delete_key_prefix(self.context.base_key());
-    }
-
     fn clear(&mut self) {
         self.was_cleared = true;
         self.updates.clear();
