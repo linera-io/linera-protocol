@@ -60,6 +60,13 @@ impl KeyValueStore for AppStateStore {
         Ok(promise.wait())
     }
 
+    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, Self::Error> {
+        ensure!(key.len() <= Self::MAX_KEY_SIZE, ViewError::KeyTooLong);
+        let promise = wit::ReadValueBytes::new(key);
+        yield_once().await;
+        Ok(promise.wait().is_some())
+    }
+
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,

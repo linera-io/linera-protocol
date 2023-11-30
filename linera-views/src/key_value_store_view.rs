@@ -560,6 +560,42 @@ where
         Ok(self.context.read_value_bytes(&key).await?)
     }
 
+    /// Obtains the value at the given index, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
+    ///   view.insert(vec![0,1], vec![42]).await.unwrap();
+    ///   assert!(view.test_existence(&[0,1]).await.unwrap());
+    ///   assert!(!view.test_existence(&[0,2]).await.unwrap());
+    /// # })
+    /// ```
+    pub async fn test_existence(&self, index: &[u8]) -> Result<bool, ViewError> {
+        if index.len() > self.max_key_size() {
+            return Err(ViewError::KeyTooLong);
+        }
+        if let Some(update) = self.updates.get(index) {
+            let test = match update {
+                Update::Removed => false,
+                Update::Set(_value) => true,
+            };
+            return Ok(test);
+        }
+        if self.was_cleared {
+            return Ok(false);
+        }
+        let iter = self.deleted_prefixes.iter();
+        let mut lower_bound = GreatestLowerBoundIterator::new(0, iter);
+        if !lower_bound.is_index_absent(index) {
+            return Ok(false);
+        }
+        let key = self.context.base_tag_index(KeyTag::Index as u8, index);
+        Ok(self.context.test_existence_value(&key).await?)
+    }
+
     /// Obtains the values of a range of indices
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -977,6 +1013,11 @@ where
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         let view = self.view.read().await;
         view.get(key).await
+    }
+
+    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, ViewError> {
+        let view = self.view.read().await;
+        view.test_existence(key).await
     }
 
     async fn read_multi_values_bytes(
