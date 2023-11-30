@@ -209,6 +209,16 @@ enum CallerTypeParameter<'input> {
 impl<'input> CallerTypeParameter<'input> {
     /// Parses a type's [`Generics`] to determine if a caller type parameter should be used.
     pub fn new(generics: &'input Generics) -> Self {
+        let caller_type_parameter = Self::extract_caller_type_parameter(generics);
+
+        match caller_type_parameter {
+            None => CallerTypeParameter::NotPresent,
+            Some(caller) => CallerTypeParameter::WithoutUserData(caller),
+        }
+    }
+
+    /// Extracts the [`Ident`]ifier used for the caller type parameter, if present.
+    fn extract_caller_type_parameter(generics: &'input Generics) -> Option<&'input Ident> {
         if generics.type_params().count() > 1 {
             abort!(
                 generics.params,
@@ -217,10 +227,10 @@ impl<'input> CallerTypeParameter<'input> {
             );
         }
 
-        match generics.type_params().next() {
-            None => CallerTypeParameter::NotPresent,
-            Some(parameter) => CallerTypeParameter::WithoutUserData(&parameter.ident),
-        }
+        generics
+            .type_params()
+            .next()
+            .map(|parameter| &parameter.ident)
     }
 
     /// Returns the [`Ident`]ifier of the generic type parameter used for the caller.
