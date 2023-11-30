@@ -43,11 +43,6 @@ impl linera_views::views::View<custom::GenericContext<T>> for TestView {
         self.collection.flush(batch)?;
         Ok(())
     }
-    fn delete(self, batch: &mut linera_views::batch::Batch) {
-        use linera_views::views::View;
-        self.register.delete(batch);
-        self.collection.delete(batch);
-    }
     fn clear(&mut self) {
         self.register.clear();
         self.collection.clear();
