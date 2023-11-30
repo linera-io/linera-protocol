@@ -69,6 +69,11 @@ impl KeyValueStore for RocksDbStoreInternal {
         Ok(tokio::task::spawn_blocking(move || client.db.get(&key)).await??)
     }
 
+    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, RocksDbContextError> {
+        let value = self.read_value_bytes(key).await?;
+        Ok(value.is_some())
+    }
+
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
@@ -355,6 +360,10 @@ impl KeyValueStore for RocksDbStore {
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
         self.store.read_value_bytes(key).await
+    }
+
+    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, RocksDbContextError> {
+        self.store.test_existence_value(key).await
     }
 
     async fn read_multi_values_bytes(
