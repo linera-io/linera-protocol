@@ -62,6 +62,20 @@ pub struct SizeData {
 }
 
 impl SizeData {
+    /// Sums both terms
+    pub fn sum(&mut self) -> u32 {
+        self.key + self.value
+    }
+
+    /// Sums both terms
+    pub fn sum_i32(&mut self) -> Result<i32, ViewError> {
+        let sum = self
+            .key
+            .checked_add(self.value)
+            .ok_or(ArithmeticError::Overflow)?;
+        Ok(i32::try_from(sum).map_err(|_| ArithmeticError::Overflow)?)
+    }
+
     /// Add a size to the existing SizeData
     pub fn add_assign(&mut self, size: SizeData) -> Result<(), ViewError> {
         self.key = self

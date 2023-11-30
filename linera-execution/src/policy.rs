@@ -22,6 +22,8 @@ pub struct ResourceControlPolicy {
     pub storage_bytes_read: Amount,
     /// The cost to store data per byte
     pub storage_bytes_written: Amount,
+    /// The cost of the total storage used
+    pub storage_bytes_stored: Amount,
     /// The maximum data to read per block
     pub maximum_bytes_read_per_block: u64,
     /// The maximum data to write per block
@@ -38,6 +40,7 @@ impl Default for ResourceControlPolicy {
             storage_num_reads: Amount::default(),
             storage_bytes_read: Amount::default(),
             storage_bytes_written: Amount::default(),
+            storage_bytes_stored: Amount::default(),
             maximum_bytes_read_per_block: u64::MAX / 2,
             maximum_bytes_written_per_block: u64::MAX / 2,
             messages: Amount::default(),
@@ -56,19 +59,16 @@ impl ResourceControlPolicy {
         Ok(self.messages.try_mul(size)?)
     }
 
-    pub fn storage_num_reads_price(&self, count: &u64) -> Result<Amount, PricingError> {
-        let count = *count as u128;
-        Ok(self.storage_num_reads.try_mul(count)?)
+    pub fn storage_num_reads_price(&self, count: u64) -> Result<Amount, PricingError> {
+        Ok(self.storage_num_reads.try_mul(count as u128)?)
     }
 
-    pub fn storage_bytes_read_price(&self, count: &u64) -> Result<Amount, PricingError> {
-        let count = *count as u128;
-        Ok(self.storage_bytes_read.try_mul(count)?)
+    pub fn storage_bytes_read_price(&self, count: u64) -> Result<Amount, PricingError> {
+        Ok(self.storage_bytes_read.try_mul(count as u128)?)
     }
 
-    pub fn storage_bytes_written_price(&self, count: &u64) -> Result<Amount, PricingError> {
-        let count = *count as u128;
-        Ok(self.storage_bytes_written.try_mul(count)?)
+    pub fn storage_bytes_written_price(&self, count: u64) -> Result<Amount, PricingError> {
+        Ok(self.storage_bytes_written.try_mul(count as u128)?)
     }
 
     pub fn storage_bytes_written_price_raw(
@@ -78,6 +78,10 @@ impl ResourceControlPolicy {
         let size =
             u128::try_from(bcs::serialized_size(data)?).map_err(|_| ArithmeticError::Overflow)?;
         Ok(self.storage_bytes_written.try_mul(size)?)
+    }
+
+    pub fn storage_bytes_stored_price(&self, count: u64) -> Result<Amount, PricingError> {
+        Ok(self.storage_bytes_stored.try_mul(count as u128)?)
     }
 
     pub fn fuel_price(&self, fuel: u64) -> Result<Amount, PricingError> {
@@ -101,6 +105,7 @@ impl ResourceControlPolicy {
             storage_num_reads: Amount::ZERO,
             storage_bytes_read: Amount::ZERO,
             storage_bytes_written: Amount::ZERO,
+            storage_bytes_stored: Amount::ZERO,
             maximum_bytes_read_per_block: u64::MAX / 2,
             maximum_bytes_written_per_block: u64::MAX / 2,
             messages: Amount::ZERO,
@@ -119,6 +124,7 @@ impl ResourceControlPolicy {
             storage_num_reads: Amount::ZERO,
             storage_bytes_read: Amount::ZERO,
             storage_bytes_written: Amount::ZERO,
+            storage_bytes_stored: Amount::ZERO,
             maximum_bytes_read_per_block: u64::MAX,
             maximum_bytes_written_per_block: u64::MAX,
             messages: Amount::ZERO,
@@ -134,6 +140,7 @@ impl ResourceControlPolicy {
             storage_num_reads: Amount::ZERO,
             storage_bytes_read: Amount::from_atto(100),
             storage_bytes_written: Amount::from_atto(1_000),
+            storage_bytes_stored: Amount::ZERO,
             maximum_bytes_read_per_block: u64::MAX,
             maximum_bytes_written_per_block: u64::MAX,
             messages: Amount::from_atto(1),
