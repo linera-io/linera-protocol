@@ -154,14 +154,12 @@ impl Project {
         linera_root: Option<&Path>,
     ) -> Result<()> {
         let toml_path = project_root.join("Cargo.toml");
-        let (linera_sdk_dep, linera_sdk_dev_dep, linera_views_dep) =
-            Self::linera_sdk_dependencies(linera_root);
+        let (linera_sdk_dep, linera_sdk_dev_dep) = Self::linera_sdk_dependencies(linera_root);
         let toml_contents = format!(
             include_str!("../template/Cargo.toml.template"),
             project_name = project_name,
             linera_sdk_dep = linera_sdk_dep,
             linera_sdk_dev_dep = linera_sdk_dev_dep,
-            linera_views_dep = linera_views_dep
         );
         Self::write_string_to_file(&toml_path, &toml_contents)
     }
@@ -220,7 +218,7 @@ impl Project {
     }
 
     /// Resolves ['linera-sdk'] and [`linera-views`] dependencies.
-    fn linera_sdk_dependencies(linera_root: Option<&Path>) -> (String, String, String) {
+    fn linera_sdk_dependencies(linera_root: Option<&Path>) -> (String, String) {
         match linera_root {
             Some(path) => Self::linera_sdk_testing_dependencies(path),
             None => Self::linera_sdk_production_dependencies(),
@@ -228,11 +226,10 @@ impl Project {
     }
 
     /// Resolves ['linera-sdk'] and [`linera-views`] dependencies in testing mode.
-    fn linera_sdk_testing_dependencies(linera_root: &Path) -> (String, String, String) {
+    fn linera_sdk_testing_dependencies(linera_root: &Path) -> (String, String) {
         // We're putting the Cargo.toml file one level above the current directory.
         let linera_root = PathBuf::from("..").join(linera_root);
         let linera_sdk_path = linera_root.join("linera-sdk");
-        let linera_views_path = linera_root.join("linera-views");
         let linera_sdk_dep = format!(
             "linera-sdk = {{ path = \"{}\" }}",
             linera_sdk_path.display()
@@ -241,23 +238,18 @@ impl Project {
             "linera-sdk = {{ path = \"{}\", features = [\"test\"] }}",
             linera_sdk_path.display()
         );
-        let linera_views_dep = format!(
-            "linera-views = {{ path = \"{}\" }}",
-            linera_views_path.display()
-        );
-        (linera_sdk_dep, linera_sdk_dev_dep, linera_views_dep)
+        (linera_sdk_dep, linera_sdk_dev_dep)
     }
 
     /// Adds ['linera-sdk'] dependencies in production mode.
-    fn linera_sdk_production_dependencies() -> (String, String, String) {
+    fn linera_sdk_production_dependencies() -> (String, String) {
         let version = env!("CARGO_PKG_VERSION");
         let linera_sdk_dep = format!("linera-sdk = \"{}\"", version);
         let linera_sdk_dev_dep = format!(
             "linera-sdk = {{ version = \"{}\", features = [\"test\"] }}",
             version
         );
-        let linera_views_dep = format!("linera-views = \"{}\"", version);
-        (linera_sdk_dep, linera_sdk_dev_dep, linera_views_dep)
+        (linera_sdk_dep, linera_sdk_dev_dep)
     }
 
     pub fn build(&self, name: Option<String>) -> Result<(PathBuf, PathBuf), anyhow::Error> {
