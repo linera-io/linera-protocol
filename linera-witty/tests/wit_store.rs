@@ -218,7 +218,7 @@ fn test_store_in_memory<T>(data: &T, expected: &[u8])
 where
     T: WitStore,
 {
-    let mut instance = MockInstance::default();
+    let mut instance = MockInstance::<()>::default();
     let mut memory = instance.memory().unwrap();
 
     let length = expected.len() as u32;
@@ -236,7 +236,7 @@ where
     T: WitStore,
     <T::Layout as Layout>::Flat: Debug + Eq,
 {
-    let mut instance = MockInstance::default();
+    let mut instance = MockInstance::<()>::default();
     let mut memory = instance.memory().unwrap();
 
     assert_eq!(data.lower(&mut memory).unwrap(), expected);

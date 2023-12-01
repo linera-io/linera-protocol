@@ -44,7 +44,10 @@ pub struct MockInstance<UserData> {
     user_data: Arc<Mutex<UserData>>,
 }
 
-impl Default for MockInstance<()> {
+impl<UserData> Default for MockInstance<UserData>
+where
+    UserData: Default,
+{
     fn default() -> Self {
         let memory = Arc::new(Mutex::new(Vec::new()));
 
@@ -52,7 +55,7 @@ impl Default for MockInstance<()> {
             memory: memory.clone(),
             exported_functions: HashMap::new(),
             imported_functions: HashMap::new(),
-            user_data: Arc::new(Mutex::new(())),
+            user_data: Arc::new(Mutex::new(UserData::default())),
         }
         .with_exported_function("cabi_free", |_, _: HList![i32]| Ok(hlist![]))
         .with_exported_function(
