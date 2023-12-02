@@ -49,13 +49,31 @@ where
     UserData: Default,
 {
     fn default() -> Self {
+        MockInstance::new(UserData::default())
+    }
+}
+
+impl<UserData> Clone for MockInstance<UserData> {
+    fn clone(&self) -> Self {
+        MockInstance {
+            memory: self.memory.clone(),
+            exported_functions: self.exported_functions.clone(),
+            imported_functions: self.imported_functions.clone(),
+            user_data: self.user_data.clone(),
+        }
+    }
+}
+
+impl<UserData> MockInstance<UserData> {
+    /// Creates a new [`MockInstance`] using the provided `user_data`.
+    pub fn new(user_data: UserData) -> Self {
         let memory = Arc::new(Mutex::new(Vec::new()));
 
         MockInstance {
             memory: memory.clone(),
             exported_functions: HashMap::new(),
             imported_functions: HashMap::new(),
-            user_data: Arc::new(Mutex::new(UserData::default())),
+            user_data: Arc::new(Mutex::new(user_data)),
         }
         .with_exported_function("cabi_free", |_, _: HList![i32]| Ok(hlist![]))
         .with_exported_function(
@@ -84,20 +102,6 @@ where
             },
         )
     }
-}
-
-impl<UserData> Clone for MockInstance<UserData> {
-    fn clone(&self) -> Self {
-        MockInstance {
-            memory: self.memory.clone(),
-            exported_functions: self.exported_functions.clone(),
-            imported_functions: self.imported_functions.clone(),
-            user_data: self.user_data.clone(),
-        }
-    }
-}
-
-impl<UserData> MockInstance<UserData> {
     /// Adds a mock exported function to this [`MockInstance`].
     ///
     /// The `handler` will be called whenever the exported function is called.
