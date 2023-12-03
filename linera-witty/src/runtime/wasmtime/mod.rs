@@ -24,7 +24,7 @@ impl Runtime for Wasmtime {
 }
 
 /// Necessary data for implementing an entrypoint [`Instance`].
-pub struct EntrypointInstance<UserData = ()> {
+pub struct EntrypointInstance<UserData> {
     instance: wasmtime::Instance,
     store: Store<UserData>,
 }
@@ -61,7 +61,7 @@ impl<UserData> Instance for EntrypointInstance<UserData> {
 
 /// Alias for the [`Instance`] implementation made available inside host functions called by the
 /// guest.
-pub type ReentrantInstance<'a, UserData = ()> = Caller<'a, UserData>;
+pub type ReentrantInstance<'a, UserData> = Caller<'a, UserData>;
 
 impl<UserData> Instance for Caller<'_, UserData> {
     type Runtime = Wasmtime;

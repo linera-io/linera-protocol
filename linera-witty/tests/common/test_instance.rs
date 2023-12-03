@@ -51,7 +51,7 @@ pub struct WasmtimeInstanceFactory;
 #[cfg(feature = "wasmtime")]
 impl TestInstanceFactory for WasmtimeInstanceFactory {
     type Builder = ::wasmtime::Linker<()>;
-    type Instance = wasmtime::EntrypointInstance;
+    type Instance = wasmtime::EntrypointInstance<()>;
     type Caller<'caller> = ::wasmtime::Caller<'caller, ()>;
 
     fn load_test_module<ExportedFunctions>(&mut self, group: &str, module: &str) -> Self::Instance
