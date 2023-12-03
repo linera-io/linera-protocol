@@ -23,9 +23,9 @@ trait SimpleFunction {
 }
 
 /// Test importing a simple function without parameters or return values.
-#[test_case(MockInstanceFactory::default(); "with a mock instance")]
-#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
+#[test_case(MockInstanceFactory::<()>::default(); "with a mock instance")]
+#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
 fn test_simple_function<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -58,9 +58,9 @@ trait Getters {
 }
 
 /// Test importing functions with return values.
-#[test_case(MockInstanceFactory::default(); "with a mock instance")]
-#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
+#[test_case(MockInstanceFactory::<()>::default(); "with a mock instance")]
+#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
 fn test_getters<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -163,9 +163,9 @@ trait Setters {
 }
 
 /// Test importing functions with parameters.
-#[test_case(MockInstanceFactory::default(); "with a mock instance")]
-#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
+#[test_case(MockInstanceFactory::<()>::default(); "with a mock instance")]
+#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
 fn test_setters<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -229,9 +229,9 @@ trait Operations {
 }
 
 /// Test importing functions with multiple parameters and return values.
-#[test_case(MockInstanceFactory::default(); "with a mock instance")]
-#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
+#[test_case(MockInstanceFactory::<()>::default(); "with a mock instance")]
+#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
 fn test_operations<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
