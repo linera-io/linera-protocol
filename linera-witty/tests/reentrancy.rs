@@ -14,7 +14,13 @@ use self::test_instance::{MockInstanceFactory, TestInstanceFactory};
 use linera_witty::{
     wit_export, wit_import, ExportTo, Instance, Runtime, RuntimeError, RuntimeMemory,
 };
-use std::marker::PhantomData;
+use std::{
+    marker::PhantomData,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 use test_case::test_case;
 
 /// An interface to call into the test modules.
@@ -398,4 +404,57 @@ where
         .expect("Failed to call guest's `entrypoint` function");
 
     assert_eq!(result, value);
+}
+
+/// Type to export a simple reentrant function while using custom user data
+pub struct ExportedSimpleFunctionWithUserData<Caller>(PhantomData<Caller>);
+
+#[wit_export(package = "witty-macros:test-modules", interface = "simple-function")]
+impl<Caller> ExportedSimpleFunctionWithUserData<Caller>
+where
+    Caller: Instance<UserData = Arc<AtomicBool>> + InstanceForImportedSimpleFunction,
+    <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
+{
+    fn simple(caller: &mut Caller) -> Result<(), RuntimeError> {
+        tracing::debug!("Before reentrant call");
+        ImportedSimpleFunction::new(&mut *caller).simple()?;
+        tracing::debug!("After reentrant call");
+        caller.user_data().store(true, Ordering::Relaxed);
+        Ok(())
+    }
+}
+
+/// Test global state inside a Wasm guest accessed through reentrant functions.
+///
+/// The host calls the entrypoint passing an integer argument which the guest stores in its global
+/// state. Before returning, the guest calls the host's `get-host-value` function in order to
+/// obtain the value to return. The host function calls the guest back to obtain the return value
+/// from the guest's global state.
+///
+/// The final value returned from the guest must match the initial value the host sent in.
+#[test_case(MockInstanceFactory::default(); "with a mock instance")]
+#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory::default(); "with Wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory::default(); "with Wasmtime"))]
+#[allow(clippy::bool_assert_comparison)]
+fn test_user_data<InstanceFactory>(mut factory: InstanceFactory)
+where
+    InstanceFactory: TestInstanceFactory,
+    InstanceFactory::Instance: Instance<UserData = Arc<AtomicBool>> + InstanceForEntrypoint,
+    <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
+        RuntimeMemory<InstanceFactory::Instance>,
+    ExportedSimpleFunctionWithUserData<InstanceFactory::Caller<'static>>:
+        ExportTo<InstanceFactory::Builder>,
+{
+    let instance = factory
+        .load_test_module::<ExportedSimpleFunctionWithUserData<_>>("reentrancy", "simple-function");
+
+    let user_data = instance.user_data().clone();
+
+    assert_eq!(user_data.load(Ordering::Relaxed), false);
+
+    Entrypoint::new(instance)
+        .entrypoint()
+        .expect("Failed to call guest's `entrypoint` function");
+
+    assert_eq!(user_data.load(Ordering::Relaxed), true);
 }
