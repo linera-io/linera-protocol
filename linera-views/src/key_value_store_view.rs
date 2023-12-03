@@ -4,7 +4,7 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_interval, get_upper_bound, Context, GreatestLowerBoundIterator, HasherOutput,
+        get_interval, get_upper_bound, insert_key_prefix, Context, GreatestLowerBoundIterator, HasherOutput,
         KeyIterable, KeyValueIterable, Update, MIN_VIEW_TAG,
     },
     map_view::ByteMapView,
@@ -682,15 +682,7 @@ where
                     }
                     self.sizes.remove_by_prefix(key_prefix.clone());
                     if !self.was_cleared {
-                        let key_prefix_list = self
-                            .deleted_prefixes
-                            .range(get_interval(key_prefix.clone()))
-                            .map(|x| x.to_vec())
-                            .collect::<Vec<_>>();
-                        for key in key_prefix_list {
-                            self.deleted_prefixes.remove(&key);
-                        }
-                        self.deleted_prefixes.insert(key_prefix);
+                        insert_key_prefix(&mut self.deleted_prefixes, key_prefix);
                     }
                 }
             }

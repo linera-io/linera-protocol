@@ -19,7 +19,7 @@
 use crate::{
     batch::Batch,
     common::{
-        get_interval, Context, CustomSerialize, GreatestLowerBoundIterator, HasherOutput,
+        get_interval, insert_key_prefix, Context, CustomSerialize, GreatestLowerBoundIterator, HasherOutput,
         KeyIterable, KeyValueIterable, Update, MIN_VIEW_TAG,
     },
     views::{HashableView, Hasher, View, ViewError},
@@ -201,15 +201,7 @@ where
             self.updates.remove(&key);
         }
         if !self.was_cleared {
-            let key_prefix_list = self
-                .deleted_prefixes
-                .range(get_interval(key_prefix.clone()))
-                .map(|x| x.to_vec())
-                .collect::<Vec<_>>();
-            for key in key_prefix_list {
-                self.deleted_prefixes.remove(&key);
-            }
-            self.deleted_prefixes.insert(key_prefix);
+            insert_key_prefix(&mut self.deleted_prefixes, key_prefix);
         }
     }
 
