@@ -14,6 +14,7 @@ use crate::{batch::Batch, views::ViewError};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
+    collections::BTreeSet,
     fmt::{Debug, Display},
     future::Future,
     ops::{
@@ -22,9 +23,6 @@ use std::{
     },
     time::{Duration, Instant},
 };
-
-#[cfg(test)]
-use std::collections::BTreeSet;
 
 #[cfg(test)]
 #[path = "unit_tests/common_tests.rs"]
@@ -182,6 +180,25 @@ where
     }
 }
 
+pub(crate) fn is_index_absent(prefixes: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
+    let iter = prefixes.iter();
+    let mut lower_bound = GreatestLowerBoundIterator::new(0, iter);
+    lower_bound.is_index_absent(key)
+}
+
+pub(crate) fn insert_key_prefix(prefixes: &mut BTreeSet<Vec<u8>>, prefix: Vec<u8>) {
+    if is_index_absent(prefixes, &prefix) {
+        let key_prefix_list = prefixes
+            .range(get_interval(prefix.clone()))
+            .map(|x| x.to_vec())
+            .collect::<Vec<_>>();
+        for key in key_prefix_list {
+            prefixes.remove(&key);
+        }
+        prefixes.insert(prefix);
+    }
+}
+
 #[test]
 fn lower_bound_test1_the_lower_bound() {
     let mut set = BTreeSet::<Vec<u8>>::new();
@@ -229,6 +246,16 @@ fn lower_bound_test3_is_index_absent_prefix_len() {
     assert!(!lower_bound.is_index_absent(&[0, 1, 4]));
     assert!(!lower_bound.is_index_absent(&[3]));
     assert!(lower_bound.is_index_absent(&[5]));
+}
+
+#[test]
+fn insert_key_prefix_test1() {
+    let mut set = BTreeSet::<Vec<u8>>::new();
+    set.insert(vec![0, 4]);
+
+    insert_key_prefix(&mut set, vec![0, 4, 5]);
+    let keys = set.iter().map(|x| x.clone()).collect::<Vec<_>>();
+    assert_eq!(keys, vec![vec![0, 4]]);
 }
 
 /// How to iterate over the keys returned by a search query.
