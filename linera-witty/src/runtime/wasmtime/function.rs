@@ -12,7 +12,7 @@ use wasmtime::{AsContext, AsContextMut, Extern, TypedFunc};
 /// Implements [`InstanceWithFunction`] for the Wasmtime [`Instance`] implementations.
 macro_rules! impl_instance_with_function {
     ($instance:ty) => {
-        impl<Parameters, Results> InstanceWithFunction<Parameters, Results> for $instance
+        impl<Parameters, Results, UserData> InstanceWithFunction<Parameters, Results> for $instance
         where
             Parameters: FlatLayout + WasmtimeParameters,
             Results: FlatLayout + WasmtimeResults,
@@ -45,5 +45,5 @@ macro_rules! impl_instance_with_function {
     };
 }
 
-impl_instance_with_function!(EntrypointInstance);
-impl_instance_with_function!(ReentrantInstance<'_>);
+impl_instance_with_function!(EntrypointInstance<UserData>);
+impl_instance_with_function!(ReentrantInstance<'_, UserData>);
