@@ -11,7 +11,7 @@ mod results;
 
 pub use self::{parameters::WasmerParameters, results::WasmerResults};
 use super::traits::{Instance, Runtime};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 pub use wasmer::FunctionEnvMut;
 use wasmer::{
     AsStoreMut, AsStoreRef, Engine, Extern, FunctionEnv, Imports, InstantiationError, Memory,
@@ -125,9 +125,18 @@ impl<UserData> AsStoreMut for EntrypointInstance<UserData> {
 
 impl<UserData> Instance for EntrypointInstance<UserData> {
     type Runtime = Wasmer;
+    type UserData = UserData;
+    type UserDataReference<'a> = MutexGuard<'a, UserData>
+    where
+        Self::UserData: 'a,
+        Self: 'a;
 
     fn load_export(&mut self, name: &str) -> Option<Extern> {
         self.instance.load_export(name)
+    }
+
+    fn user_data(&self) -> Self::UserDataReference<'_> {
+        self.instance.user_data()
     }
 }
 
@@ -140,9 +149,18 @@ where
     UserData: Send + 'static,
 {
     type Runtime = Wasmer;
+    type UserData = UserData;
+    type UserDataReference<'a> = MutexGuard<'a, UserData>
+    where
+        Self::UserData: 'a,
+        Self: 'a;
 
     fn load_export(&mut self, name: &str) -> Option<Extern> {
         self.data_mut().load_export(name)
+    }
+
+    fn user_data(&self) -> Self::UserDataReference<'_> {
+        FunctionEnvMut::data(self).user_data()
     }
 }
 
@@ -175,6 +193,13 @@ impl<UserData> InstanceSlot<UserData> {
             .exports
             .get_extern(name)
             .cloned()
+    }
+
+    /// Returns a reference to the `UserData` stored in this [`InstanceSlot`].
+    fn user_data(&self) -> MutexGuard<'_, UserData> {
+        self.user_data
+            .try_lock()
+            .expect("Unexpected reentrant access to data")
     }
 }
 

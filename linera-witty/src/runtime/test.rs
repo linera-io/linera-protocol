@@ -18,7 +18,7 @@ use std::{
     collections::HashMap,
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, MutexGuard,
     },
 };
 
@@ -172,6 +172,11 @@ impl<UserData> MockInstance<UserData> {
 
 impl<UserData> Instance for MockInstance<UserData> {
     type Runtime = MockRuntime;
+    type UserData = UserData;
+    type UserDataReference<'a> = MutexGuard<'a, UserData>
+    where
+        Self::UserData: 'a,
+        Self: 'a;
 
     fn load_export(&mut self, name: &str) -> Option<String> {
         if name == "memory" || self.exported_functions.contains_key(name) {
@@ -179,6 +184,12 @@ impl<UserData> Instance for MockInstance<UserData> {
         } else {
             None
         }
+    }
+
+    fn user_data(&self) -> Self::UserDataReference<'_> {
+        self.user_data
+            .try_lock()
+            .expect("Unexpected reentrant access to user data in `MockInstance`")
     }
 }
 

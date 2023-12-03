@@ -53,9 +53,18 @@ impl<UserData> AsContextMut for EntrypointInstance<UserData> {
 
 impl<UserData> Instance for EntrypointInstance<UserData> {
     type Runtime = Wasmtime;
+    type UserData = UserData;
+    type UserDataReference<'a> = &'a UserData
+    where
+        Self: 'a,
+        UserData: 'a;
 
     fn load_export(&mut self, name: &str) -> Option<Extern> {
         self.instance.get_export(&mut self.store, name)
+    }
+
+    fn user_data(&self) -> Self::UserDataReference<'_> {
+        self.store.data()
     }
 }
 
@@ -65,8 +74,17 @@ pub type ReentrantInstance<'a, UserData> = Caller<'a, UserData>;
 
 impl<UserData> Instance for Caller<'_, UserData> {
     type Runtime = Wasmtime;
+    type UserData = UserData;
+    type UserDataReference<'a> = &'a UserData
+    where
+        Self: 'a,
+        UserData: 'a;
 
     fn load_export(&mut self, name: &str) -> Option<Extern> {
         Caller::get_export(self, name)
+    }
+
+    fn user_data(&self) -> Self::UserDataReference<'_> {
+        Caller::data(self)
     }
 }
