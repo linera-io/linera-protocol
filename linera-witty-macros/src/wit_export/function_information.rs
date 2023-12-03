@@ -165,10 +165,12 @@ impl<'input> FunctionInformation<'input> {
 
     /// Generates the code to export a host function using the Wasmer runtime.
     #[cfg(feature = "wasmer")]
-    pub fn generate_for_wasmer(&self, namespace: &LitStr, type_name: &Ident) -> TokenStream {
-        let caller = quote! {
-            linera_witty::wasmer::FunctionEnvMut<'_, linera_witty::wasmer::InstanceSlot<()>>
-        };
+    pub fn generate_for_wasmer(
+        &self,
+        namespace: &LitStr,
+        type_name: &Ident,
+        caller: &TokenStream,
+    ) -> TokenStream {
         let input_to_guest_parameters = quote! {
             linera_witty::wasmer::WasmerParameters::from_wasmer(input)
         };
@@ -189,8 +191,12 @@ impl<'input> FunctionInformation<'input> {
 
     /// Generates the code to export a host function using the Wasmtime runtime.
     #[cfg(feature = "wasmtime")]
-    pub fn generate_for_wasmtime(&self, namespace: &LitStr, type_name: &Ident) -> TokenStream {
-        let caller = quote! { linera_witty::wasmtime::Caller<'_, ()> };
+    pub fn generate_for_wasmtime(
+        &self,
+        namespace: &LitStr,
+        type_name: &Ident,
+        caller: &TokenStream,
+    ) -> TokenStream {
         let input_to_guest_parameters = quote! {
             linera_witty::wasmtime::WasmtimeParameters::from_wasmtime(input)
         };
@@ -211,8 +217,12 @@ impl<'input> FunctionInformation<'input> {
 
     /// Generates the code to export a host function using a mock Wasm instance for testing.
     #[cfg(feature = "mock-instance")]
-    pub fn generate_for_mock_instance(&self, namespace: &LitStr, type_name: &Ident) -> TokenStream {
-        let caller = quote! { linera_witty::MockInstance<()> };
+    pub fn generate_for_mock_instance(
+        &self,
+        namespace: &LitStr,
+        type_name: &Ident,
+        caller: &TokenStream,
+    ) -> TokenStream {
         let input_to_guest_parameters = quote! { input };
         let guest_results_to_output = quote! { guest_results };
         let output_results_trait = quote! { linera_witty::MockResults };
@@ -232,7 +242,7 @@ impl<'input> FunctionInformation<'input> {
         &self,
         namespace: &LitStr,
         type_name: &Ident,
-        caller: TokenStream,
+        caller: &TokenStream,
         input_to_guest_parameters: TokenStream,
         guest_results_to_output: TokenStream,
         output_results_trait: TokenStream,

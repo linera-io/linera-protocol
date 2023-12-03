@@ -84,12 +84,11 @@ impl<'input> WitExportGenerator<'input> {
                     linera_witty::wasmer::InstanceSlot<#user_data_type>,
                 >
             };
-            let exported_functions = self
-                .functions
-                .iter()
-                .map(|function| function.generate_for_wasmer(self.namespace, self.type_name));
+            let exported_functions = self.functions.iter().map(|function| {
+                function.generate_for_wasmer(self.namespace, self.type_name, &target_caller_type)
+            });
 
-            Some(self.generate_for(export_target, target_caller_type, exported_functions))
+            Some(self.generate_for(export_target, &target_caller_type, exported_functions))
         }
         #[cfg(not(feature = "wasmer"))]
         {
@@ -104,12 +103,11 @@ impl<'input> WitExportGenerator<'input> {
             let user_data_type = self.user_data_type();
             let export_target = quote! { linera_witty::wasmtime::Linker<#user_data_type> };
             let target_caller_type = quote! { linera_witty::wasmtime::Caller<'_, #user_data_type> };
-            let exported_functions = self
-                .functions
-                .iter()
-                .map(|function| function.generate_for_wasmtime(self.namespace, self.type_name));
+            let exported_functions = self.functions.iter().map(|function| {
+                function.generate_for_wasmtime(self.namespace, self.type_name, &target_caller_type)
+            });
 
-            Some(self.generate_for(export_target, target_caller_type, exported_functions))
+            Some(self.generate_for(export_target, &target_caller_type, exported_functions))
         }
         #[cfg(not(feature = "wasmtime"))]
         {
@@ -125,10 +123,14 @@ impl<'input> WitExportGenerator<'input> {
             let export_target = quote! { linera_witty::MockInstance<#user_data_type> };
             let target_caller_type = quote! { linera_witty::MockInstance<#user_data_type> };
             let exported_functions = self.functions.iter().map(|function| {
-                function.generate_for_mock_instance(self.namespace, self.type_name)
+                function.generate_for_mock_instance(
+                    self.namespace,
+                    self.type_name,
+                    &target_caller_type,
+                )
             });
 
-            Some(self.generate_for(export_target, target_caller_type, exported_functions))
+            Some(self.generate_for(export_target, &target_caller_type, exported_functions))
         }
         #[cfg(not(feature = "mock-instance"))]
         {
@@ -141,7 +143,7 @@ impl<'input> WitExportGenerator<'input> {
     fn generate_for(
         &self,
         export_target: TokenStream,
-        target_caller_type: TokenStream,
+        target_caller_type: &TokenStream,
         exported_functions: impl Iterator<Item = TokenStream>,
     ) -> TokenStream {
         let type_name = &self.type_name;
