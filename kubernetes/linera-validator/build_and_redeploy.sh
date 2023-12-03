@@ -9,6 +9,7 @@ do_build=1
 clean=
 copy=
 linera_bins_dir=../../target/debug
+copy_bins_dir=target/release
 
 # Guard clause check if required binaries are installed
 type -P kind >/dev/null || {
@@ -31,6 +32,7 @@ usage() {
     echo " --clean              Clean up DB state and delete kind cluster before starting a new one. This will guarantee that the Validator state will be clean for the new run"
     echo " --copy               Have the Dockerfile copy over the already built binaries in the target/release directory. Binaries need to be built beforehand. Works only when --cloud is NOT set"
     echo " --linera-bins-dir    The directory that contains the linera-server/linera binaries to generate configs. Defaults to ../../target/debug"
+    echo " --copy-bins-dir      The directory that contains the linera binaries to copy over to the Docker image. Needs to be different than --linera-bins-dir because of users that don't run Linux, which is what the Docker containers run. Path must be a relative path to the root of the repo. Defaults to target/release"
 }
 
 # Function to handle options and arguments
@@ -48,6 +50,10 @@ handle_options() {
         --copy) copy=1 ;;
         --linera-bins-dir)
             linera_bins_dir=$2
+            shift
+            ;;
+        --copy-bins-dir)
+            copy_bins_dir=$2
             shift
             ;;
         *)
@@ -109,7 +115,7 @@ else
         arch="$(uname -m)"
         docker build \
             -f ../../docker/Dockerfile \
-            ${copy:+--build-arg binaries=target/release} \
+            ${copy:+--build-arg binaries="$copy_bins_dir"} \
             --build-arg target="${arch/#arm/aarch}"-unknown-linux-gnu \
             ../../ \
             -t "$docker_image"
