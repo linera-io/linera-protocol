@@ -24,15 +24,15 @@ impl Runtime for Wasmtime {
 }
 
 /// Necessary data for implementing an entrypoint [`Instance`].
-pub struct EntrypointInstance {
+pub struct EntrypointInstance<UserData = ()> {
     instance: wasmtime::Instance,
-    store: Store<()>,
+    store: Store<UserData>,
 }
 
-impl EntrypointInstance {
+impl<UserData> EntrypointInstance<UserData> {
     /// Creates a new [`EntrypointInstance`] with the guest module
     /// [`Instance`][`wasmtime::Instance`] and [`Store`].
-    pub fn new(instance: wasmtime::Instance, store: Store<()>) -> Self {
+    pub fn new(instance: wasmtime::Instance, store: Store<UserData>) -> Self {
         EntrypointInstance { instance, store }
     }
 }
