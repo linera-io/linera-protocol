@@ -61,7 +61,7 @@ impl<UserData> Instance for EntrypointInstance<UserData> {
 
 /// Alias for the [`Instance`] implementation made available inside host functions called by the
 /// guest.
-pub type ReentrantInstance<'a> = Caller<'a, ()>;
+pub type ReentrantInstance<'a, UserData = ()> = Caller<'a, UserData>;
 
 impl Instance for Caller<'_, ()> {
     type Runtime = Wasmtime;
