@@ -4,8 +4,9 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_interval, get_upper_bound, insert_key_prefix, Context, GreatestLowerBoundIterator, HasherOutput,
-        KeyIterable, KeyValueIterable, Update, MIN_VIEW_TAG,
+        get_interval, get_upper_bound, insert_key_prefix, is_index_absent, Context,
+        GreatestLowerBoundIterator, HasherOutput, KeyIterable, KeyValueIterable, Update,
+        MIN_VIEW_TAG,
     },
     map_view::ByteMapView,
     views::{HashableView, Hasher, View, ViewError},
@@ -547,9 +548,7 @@ where
         if self.was_cleared {
             return Ok(None);
         }
-        let iter = self.deleted_prefixes.iter();
-        let mut lower_bound = GreatestLowerBoundIterator::new(0, iter);
-        if !lower_bound.is_index_absent(index) {
+        if !is_index_absent(&self.deleted_prefixes, index) {
             return Ok(None);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, index);
@@ -587,9 +586,7 @@ where
                 result.push(value);
             } else {
                 result.push(None);
-                let iter = self.deleted_prefixes.iter();
-                let mut lower_bound = GreatestLowerBoundIterator::new(0, iter);
-                if lower_bound.is_index_absent(&index) {
+                if is_index_absent(&self.deleted_prefixes, &index) {
                     missed_indices.push(i);
                     let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                     vector_query.push(key);

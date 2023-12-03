@@ -19,8 +19,9 @@
 use crate::{
     batch::Batch,
     common::{
-        get_interval, insert_key_prefix, Context, CustomSerialize, GreatestLowerBoundIterator, HasherOutput,
-        KeyIterable, KeyValueIterable, Update, MIN_VIEW_TAG,
+        get_interval, insert_key_prefix, is_index_absent, Context, CustomSerialize,
+        GreatestLowerBoundIterator, HasherOutput, KeyIterable, KeyValueIterable, Update,
+        MIN_VIEW_TAG,
     },
     views::{HashableView, Hasher, View, ViewError},
 };
@@ -240,9 +241,7 @@ where
         if self.was_cleared {
             return Ok(None);
         }
-        let iter = self.deleted_prefixes.iter();
-        let mut lower_bound = GreatestLowerBoundIterator::new(0, iter);
-        if !lower_bound.is_index_absent(short_key) {
+        if !is_index_absent(&self.deleted_prefixes, short_key) {
             return Ok(None);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);

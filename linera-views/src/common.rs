@@ -254,7 +254,7 @@ fn insert_key_prefix_test1() {
     set.insert(vec![0, 4]);
 
     insert_key_prefix(&mut set, vec![0, 4, 5]);
-    let keys = set.iter().map(|x| x.clone()).collect::<Vec<_>>();
+    let keys = set.iter().cloned().collect::<Vec<_>>();
     assert_eq!(keys, vec![vec![0, 4]]);
 }
 
