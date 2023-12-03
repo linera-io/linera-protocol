@@ -326,7 +326,7 @@ where
         let mut lower_bound = GreatestLowerBoundIterator::new(prefix_len, iter);
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
-        if !self.was_cleared {
+        if !self.was_cleared && is_index_absent(&self.deleted_prefixes, &prefix) {
             let base = self.context.base_tag_index(KeyTag::Index as u8, &prefix);
             for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
                 let index = index?;
@@ -521,7 +521,7 @@ where
         let mut lower_bound = GreatestLowerBoundIterator::new(prefix_len, iter);
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
-        if !self.was_cleared {
+        if !self.was_cleared && is_index_absent(&self.deleted_prefixes, &prefix) {
             let base = self.context.base_tag_index(KeyTag::Index as u8, &prefix);
             for entry in self
                 .context
