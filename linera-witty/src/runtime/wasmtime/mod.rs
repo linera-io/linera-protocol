@@ -63,7 +63,7 @@ impl<UserData> Instance for EntrypointInstance<UserData> {
 /// guest.
 pub type ReentrantInstance<'a, UserData = ()> = Caller<'a, UserData>;
 
-impl Instance for Caller<'_, ()> {
+impl<UserData> Instance for Caller<'_, UserData> {
     type Runtime = Wasmtime;
 
     fn load_export(&mut self, name: &str) -> Option<Extern> {
