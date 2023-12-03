@@ -51,7 +51,7 @@ impl<UserData> AsContextMut for EntrypointInstance<UserData> {
     }
 }
 
-impl Instance for EntrypointInstance {
+impl<UserData> Instance for EntrypointInstance<UserData> {
     type Runtime = Wasmtime;
 
     fn load_export(&mut self, name: &str) -> Option<Extern> {
