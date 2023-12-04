@@ -17,6 +17,23 @@ spec:
 
 ---
 
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy-internal
+  labels:
+    app: proxy-internal
+spec:
+  ports:
+    - port: 20100
+      name: linera-port-int
+      targetPort: 20100
+  selector:
+    app: proxy
+  type: NodePort
+
+---
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -40,6 +57,8 @@ spec:
           ports:
             - containerPort: {{ .Values.proxyPort }}
               name: linera-port
+            - containerPort: 20100
+              name: linera-port-int
           command: ["./linera-proxy"]
           args: ["/config/server.json"]
           env:
