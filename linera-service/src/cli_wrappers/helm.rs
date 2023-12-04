@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::util::CommandExt;
 use anyhow::{Context, Result};
 use pathdiff::diff_paths;
 use std::path::{Path, PathBuf};
@@ -24,7 +23,7 @@ impl HelmRelease {
             .context("Getting relative path failed")?;
         let configs_dir = configs_dir.to_str().expect("Getting str failed");
 
-        Command::new("helm")
+        let status = Command::new("helm")
             .current_dir(&execution_dir)
             .arg("install")
             .arg(&name)
@@ -43,8 +42,17 @@ impl HelmRelease {
             .args(["--set", &format!("numShards={num_shards}")])
             .args(["--kube-context", &format!("kind-{}", cluster_id)])
             .args(["--timeout", "10m"])
-            .spawn_and_wait_for_stdout()
+            .status()
             .await?;
+
+        if !status.success() {
+            return Err(anyhow::anyhow!(
+                "Error Helm installing release {} on cluster {}",
+                name,
+                cluster_id
+            ));
+        }
+
         Ok(())
     }
 }

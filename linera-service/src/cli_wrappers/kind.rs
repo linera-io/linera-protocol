@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::util::CommandExt;
 use anyhow::Result;
 use rand::Rng;
 use tokio::process::Command;
@@ -21,11 +20,16 @@ impl KindCluster {
             id: Self::get_random_cluster_id(),
         };
 
-        Command::new("kind")
+        let status = Command::new("kind")
             .args(["create", "cluster"])
             .args(["--name", cluster.id().to_string().as_str()])
-            .spawn_and_wait_for_stdout()
+            .status()
             .await?;
+
+        if !status.success() {
+            return Err(anyhow::anyhow!("Error creating cluster: {}", cluster.id));
+        }
+
         Ok(cluster)
     }
 
@@ -34,20 +38,35 @@ impl KindCluster {
     }
 
     pub async fn delete(&self) -> Result<()> {
-        Command::new("kind")
+        let status = Command::new("kind")
             .args(["delete", "cluster"])
-            .args(["--name", self.id.to_string().as_str()])
-            .spawn_and_wait_for_stdout()
+            .args(["--name", &self.id.to_string()])
+            .spawn()?
+            .wait()
             .await?;
+
+        if !status.success() {
+            return Err(anyhow::anyhow!("Error deleting cluster: {}", self.id));
+        }
+
         Ok(())
     }
 
     pub async fn load_docker_image(&self, docker_image: &String) -> Result<()> {
-        Command::new("kind")
+        let status = Command::new("kind")
             .args(["load", "docker-image", docker_image])
             .args(["--name", self.id.to_string().as_str()])
-            .spawn_and_wait_for_stdout()
+            .status()
             .await?;
+
+        if !status.success() {
+            return Err(anyhow::anyhow!(
+                "Error loading docker image {} into cluster {}",
+                docker_image,
+                self.id
+            ));
+        }
+
         Ok(())
     }
 }

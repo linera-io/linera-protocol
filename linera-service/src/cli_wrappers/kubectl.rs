@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::util::CommandExt;
 use anyhow::{Context, Result};
 use tokio::process::{Child, Command};
 
@@ -16,12 +15,7 @@ impl KubectlInstance {
         }
     }
 
-    pub async fn port_forward(
-        &mut self,
-        pod_name: &str,
-        ports: &str,
-        cluster_id: u32,
-    ) -> Result<()> {
+    pub fn port_forward(&mut self, pod_name: &str, ports: &str, cluster_id: u32) -> Result<()> {
         let port_forward_child = Command::new("kubectl")
             .arg("port-forward")
             .arg(pod_name)
@@ -35,11 +29,20 @@ impl KubectlInstance {
     }
 
     pub async fn get_pods(&mut self, cluster_id: u32) -> Result<String> {
-        Command::new("kubectl")
+        let output = Command::new("kubectl")
             .arg("get")
             .arg("pods")
             .args(["--context", &format!("kind-{}", cluster_id)])
-            .spawn_and_wait_for_stdout()
-            .await
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            return Err(anyhow::anyhow!(
+                "Error gettings pods from cluster: {}",
+                cluster_id
+            ));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 }
