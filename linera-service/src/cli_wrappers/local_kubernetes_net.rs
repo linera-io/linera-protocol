@@ -23,7 +23,7 @@ use kube::{
 };
 use std::{fs, path::PathBuf, sync::Arc};
 use tempfile::{tempdir, TempDir};
-use tokio::{process::Command, sync::Semaphore};
+use tokio::process::Command;
 
 /// The information needed to start a [`LocalKubernetesNet`].
 pub struct LocalKubernetesNetConfig {
@@ -305,9 +305,6 @@ impl LocalKubernetesNet {
         let tmp_dir_path_clone = self.tmp_dir.path().to_path_buf();
         let num_shards = self.num_shards;
 
-        // Allow just 2 parallel image loading executions, to not overwhelm Docker
-        let load_docker_image_semaphore = Arc::new(Semaphore::new(2));
-
         let mut validators_initialization_futures = Vec::new();
         for (i, kind_cluster) in self.kind_clusters.iter().cloned().enumerate() {
             let docker_image_name = docker_image.name().to_string();
@@ -317,17 +314,9 @@ impl LocalKubernetesNet {
             let kubectl_instance = kubectl_instance_clone.clone();
             let tmp_dir_path = tmp_dir_path_clone.clone();
 
-            let load_docker_image_semaphore_clone = load_docker_image_semaphore.clone();
             let future = async move {
-                let _permit = load_docker_image_semaphore_clone
-                    .acquire()
-                    .await
-                    .expect("Failed to acquire semaphore");
-
                 let cluster_id = kind_cluster.id();
                 kind_cluster.load_docker_image(&docker_image_name).await?;
-
-                drop(_permit);
 
                 let server_config_filename = format!("server_{}.json", i);
                 fs::copy(
