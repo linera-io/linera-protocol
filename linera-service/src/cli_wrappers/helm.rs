@@ -1,11 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::util::CommandExt;
 use anyhow::{Context, Result};
 use pathdiff::diff_paths;
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
+
+use crate::util::CommandExt;
 
 pub struct HelmRelease;
 
@@ -43,8 +44,7 @@ impl HelmRelease {
             .args(["--set", &format!("numShards={num_shards}")])
             .args(["--kube-context", &format!("kind-{}", cluster_id)])
             .args(["--timeout", "10m"])
-            .spawn_and_wait_for_stdout()
-            .await?;
-        Ok(())
+            .spawn_and_wait()
+            .await
     }
 }

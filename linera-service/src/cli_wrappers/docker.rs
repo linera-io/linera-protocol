@@ -1,28 +1,24 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::util::CommandExt;
 use anyhow::{Context, Result};
 use pathdiff::diff_paths;
 use std::path::PathBuf;
 use tokio::process::Command;
+
+use crate::util::CommandExt;
 
 pub struct DockerImage {
     name: String,
 }
 
 impl DockerImage {
-    pub async fn new(name: String, bin_path: &PathBuf, github_root: &PathBuf) -> Result<Self> {
-        let docker_image = Self { name };
-        docker_image.build(bin_path, github_root).await?;
-        Ok(docker_image)
-    }
-
     pub fn name(&self) -> &String {
         &self.name
     }
 
-    async fn build(&self, bin_path: &PathBuf, github_root: &PathBuf) -> Result<()> {
+    pub async fn build(name: String, bin_path: &PathBuf, github_root: &PathBuf) -> Result<Self> {
+        let docker_image = Self { name: name.clone() };
         let bin_path = diff_paths(bin_path, github_root).context("Getting relative path failed")?;
         let binaries_arg = format!(
             "binaries={}",
@@ -35,9 +31,10 @@ impl DockerImage {
             .args(["-f", "docker/Dockerfile"])
             .args(["--build-arg", &binaries_arg])
             .arg(".")
-            .args(["-t", &self.name])
-            .spawn_and_wait_for_stdout()
+            .args(["-t", &name])
+            .spawn_and_wait()
             .await?;
-        Ok(())
+
+        Ok(docker_image)
     }
 }
