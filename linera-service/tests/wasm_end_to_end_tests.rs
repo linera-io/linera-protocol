@@ -11,6 +11,8 @@ use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::ChainId,
 };
+#[cfg(feature = "kubernetes")]
+use linera_service::cli_wrappers::local_kubernetes_net::LocalKubernetesNetTestingConfig;
 use linera_service::cli_wrappers::{
     local_net::{Database, LocalNetTestingConfig},
     ApplicationWrapper, ClientWrapper, LineraNet, LineraNetConfig, Network,
@@ -923,9 +925,10 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     net.terminate().await.unwrap();
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(all(feature = "rocksdb", not(feature = "kubernetes")), test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(all(feature = "scylladb", not(feature = "kubernetes")), test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(all(feature = "aws", not(feature = "kubernetes")), test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(LocalKubernetesNetTestingConfig::new(Network::Grpc, None) ; "kubernetes_scylladb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     use amm::{AmmAbi, Parameters};

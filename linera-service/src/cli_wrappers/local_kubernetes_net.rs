@@ -34,6 +34,13 @@ pub struct LocalKubernetesNetConfig {
     pub binaries_dir: Option<PathBuf>,
 }
 
+/// A simplified version of [`LocalKubernetesNetConfig`]
+#[cfg(any(test, feature = "test"))]
+pub struct LocalKubernetesNetTestingConfig {
+    pub network: Network,
+    pub binaries_dir: Option<PathBuf>,
+}
+
 /// A set of Linera validators running locally as native processes.
 pub struct LocalKubernetesNet {
     network: Network,
@@ -45,6 +52,16 @@ pub struct LocalKubernetesNet {
     kind_clusters: Vec<KindCluster>,
     num_initial_validators: usize,
     num_shards: usize,
+}
+
+#[cfg(any(test, feature = "test"))]
+impl LocalKubernetesNetTestingConfig {
+    pub fn new(network: Network, binaries_dir: Option<PathBuf>) -> Self {
+        Self {
+            network,
+            binaries_dir,
+        }
+    }
 }
 
 #[async_trait]
@@ -85,14 +102,44 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
     }
 }
 
-impl Drop for LocalKubernetesNet {
-    fn drop(&mut self) {
-        // Block the current runtime to cleanup
-        let handle = tokio::runtime::Handle::current();
-        let _guard = handle.enter();
-        futures::executor::block_on(async move {
-            self.terminate().await.unwrap();
-        });
+#[cfg(any(test, feature = "test"))]
+#[async_trait]
+impl LineraNetConfig for LocalKubernetesNetTestingConfig {
+    type Net = LocalKubernetesNet;
+
+    async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
+        let seed = 37;
+        let num_validators = 4;
+        let num_shards = 4;
+
+        let mut net = LocalKubernetesNet::new(
+            self.network,
+            Some(seed),
+            self.binaries_dir,
+            KubectlInstance::new(Vec::new()),
+            future::ready(
+                (0..num_validators)
+                    .map(|_| async {
+                        KindCluster::create()
+                            .await
+                            .expect("Creating kind cluster should not fail")
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .then(join_all)
+            .await
+            .into_iter()
+            .collect::<Vec<_>>(),
+            num_validators,
+            num_shards,
+        )?;
+        let client = net.make_client();
+        if num_validators > 0 {
+            net.generate_initial_validator_config().await.unwrap();
+            client.create_genesis_config().await.unwrap();
+            net.run().await.unwrap();
+        }
+        Ok((net, client))
     }
 }
 
@@ -218,16 +265,16 @@ impl LocalKubernetesNet {
         let n = server_number;
         let path = self.tmp_dir.path().join(format!("validator_{n}.toml"));
         let port = 19100 + server_number;
-        let internal_port = 20100 + server_number;
-        let metrics_port = 21100 + server_number;
+        let internal_port = 20100;
+        let metrics_port = 21100;
         let mut content = format!(
             r#"
                 server_config_path = "server_{n}.json"
                 host = "127.0.0.1"
                 port = {port}
-                internal_host = "127.0.0.1"
+                internal_host = "proxy-internal.default.svc.cluster.local"
                 internal_port = {internal_port}
-                metrics_host = "127.0.0.1"
+                metrics_host = "proxy-internal.default.svc.cluster.local"
                 metrics_port = {metrics_port}
                 [external_protocol]
                 Grpc = "ClearText"
@@ -236,8 +283,8 @@ impl LocalKubernetesNet {
             "#
         );
         for k in 0..self.num_shards {
-            let shard_port = 19100 + server_number;
-            let shard_metrics_port = 21100 + server_number;
+            let shard_port = 19100;
+            let shard_metrics_port = 21100;
             content.push_str(&format!(
                 r#"
 
