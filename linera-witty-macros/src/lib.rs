@@ -27,7 +27,7 @@ use syn::{parse_macro_input, Data, DeriveInput, Ident, ItemTrait};
 ///
 /// All fields in the type must also implement `WitType`.
 #[proc_macro_error]
-#[proc_macro_derive(WitType, attributes(witty))]
+#[proc_macro_derive(WitType, attributes(witty_specialize_with))]
 pub fn derive_wit_type(input: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(input as DeriveInput);
 
@@ -53,7 +53,7 @@ pub fn derive_wit_type(input: TokenStream) -> TokenStream {
 ///
 /// All fields in the type must also implement `WitLoad`.
 #[proc_macro_error]
-#[proc_macro_derive(WitLoad)]
+#[proc_macro_derive(WitLoad, attributes(witty_specialize_with))]
 pub fn derive_wit_load(input: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(input as DeriveInput);
 
@@ -79,7 +79,7 @@ pub fn derive_wit_load(input: TokenStream) -> TokenStream {
 ///
 /// All fields in the type must also implement `WitStore`.
 #[proc_macro_error]
-#[proc_macro_derive(WitStore)]
+#[proc_macro_derive(WitStore, attributes(witty_specialize_with))]
 pub fn derive_wit_store(input: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(input as DeriveInput);
 
