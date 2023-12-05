@@ -58,3 +58,13 @@ pub struct SpecializedGenericStruct<A, B> {
     pub second: B,
     pub both: Vec<(A, B)>,
 }
+
+/// A generic enum with some specialized fields.
+#[derive(Clone, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
+#[witty_specialize_with(A = Option<bool>)]
+#[witty_specialize_with(B = u32)]
+pub enum SpecializedGenericEnum<A, B> {
+    None,
+    First(A),
+    MaybeSecond { maybe: Option<B> },
+}
