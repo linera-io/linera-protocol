@@ -2576,7 +2576,9 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 let genesis_config = match (genesis_config_path, faucet) {
                     (Some(genesis_config_path), None) => GenesisConfig::read(genesis_config_path)?,
                     (None, Some(url)) => cli_wrappers::Faucet::request_genesis_config(url).await?,
-                    (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
+                    (_, _) => {
+                        bail!("Either --faucet or --genesis must be specified, but not both")
+                    }
                 };
                 let timestamp = genesis_config.timestamp;
                 let chains = with_other_chains

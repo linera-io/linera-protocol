@@ -111,3 +111,7 @@ path = "src/proxy.rs"
 [[bin]]
 name = "linera-schema-export"
 path = "src/schema_export.rs"
+
+[[bin]]
+name = "linera-benchmark"
+path = "src/benchmark.rs"

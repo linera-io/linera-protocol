@@ -226,10 +226,12 @@ async fn make_transfer_certificate_for_epoch<S>(
     }
     .with_simple_transfer(recipient, amount);
     let messages = match recipient {
-        Recipient::Account(account) => vec![direct_outgoing_message(
-            account.chain_id,
-            SystemMessage::Credit { account, amount },
-        )],
+        Recipient::Account(account) => {
+            vec![direct_outgoing_message(
+                account.chain_id,
+                SystemMessage::Credit { account, amount },
+            )]
+        }
         Recipient::Burn => Vec::new(),
     };
     let state_hash = make_state_hash(system_state).await;
