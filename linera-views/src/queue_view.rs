@@ -75,16 +75,16 @@ where
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        let mut save_stored_indices = false;
+        if self.was_cleared {
+            batch.delete_key_prefix(self.context.base_key());
+        }
         if self.stored_count() == 0 {
             let key_prefix = self.context.base_tag(KeyTag::Index as u8);
             batch.delete_key_prefix(key_prefix);
             self.stored_indices = Range::default();
-            save_stored_indices = true;
         } else if self.front_delete_count > 0 {
             let deletion_range = self.stored_indices.clone().take(self.front_delete_count);
             self.stored_indices.start += self.front_delete_count;
-            save_stored_indices = true;
             for index in deletion_range {
                 let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
                 batch.delete_key(key);
@@ -98,10 +98,9 @@ where
                 batch.put_key_value(key, value)?;
                 self.stored_indices.end += 1;
             }
-            save_stored_indices = true;
             self.new_back_values.clear();
         }
-        if save_stored_indices {
+        if !self.was_cleared || self.stored_indices.len() > 0 {
             let key = self.context.base_tag(KeyTag::Store as u8);
             batch.put_key_value(key, &self.stored_indices)?;
         }
