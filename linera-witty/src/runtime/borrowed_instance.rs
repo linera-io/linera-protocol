@@ -18,9 +18,18 @@ where
     I: Instance,
 {
     type Runtime = I::Runtime;
+    type UserData = I::UserData;
+    type UserDataReference<'a> = I::UserDataReference<'a>
+    where
+        Self::UserData: 'a,
+        Self: 'a;
 
     fn load_export(&mut self, name: &str) -> Option<<Self::Runtime as Runtime>::Export> {
         I::load_export(*self, name)
+    }
+
+    fn user_data(&self) -> Self::UserDataReference<'_> {
+        I::user_data(*self)
     }
 }
 

@@ -6,6 +6,7 @@
 use super::{memory::Memory, RuntimeError};
 use crate::memory_layout::FlatLayout;
 use frunk::HList;
+use std::ops::Deref;
 
 /// A Wasm runtime.
 ///
@@ -23,8 +24,20 @@ pub trait Instance: Sized {
     /// The runtime this instance is running in.
     type Runtime: Runtime;
 
+    /// Custom user data stored in the instance.
+    type UserData;
+
+    /// A reference to the custom user data stored in the instance.
+    type UserDataReference<'a>: Deref<Target = Self::UserData>
+    where
+        Self::UserData: 'a,
+        Self: 'a;
+
     /// Loads an export from the guest module.
     fn load_export(&mut self, name: &str) -> Option<<Self::Runtime as Runtime>::Export>;
+
+    /// Returns a reference to the custom user data stored in this instance.
+    fn user_data(&self) -> Self::UserDataReference<'_>;
 }
 
 /// How a runtime supports a function signature.

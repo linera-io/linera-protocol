@@ -129,7 +129,7 @@ fn test_memory_roundtrip<T>(input: T, memory_data: &[u8])
 where
     T: Debug + Eq + WitLoad + WitStore,
 {
-    let mut instance = MockInstance::default();
+    let mut instance = MockInstance::<()>::default();
     let mut memory = instance.memory().unwrap();
     let length = memory_data.len() as u32;
 
@@ -150,7 +150,7 @@ where
     T: Debug + Eq + WitLoad + WitStore,
     <T::Layout as Layout>::Flat: Debug + Eq,
 {
-    let mut instance = MockInstance::default();
+    let mut instance = MockInstance::<()>::default();
     let mut memory = instance.memory().unwrap();
 
     let lowered_layout = input.lower(&mut memory).unwrap();

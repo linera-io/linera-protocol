@@ -18,7 +18,7 @@ use std::{
     collections::HashMap,
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, MutexGuard,
     },
 };
 
@@ -31,27 +31,49 @@ impl Runtime for MockRuntime {
 }
 
 /// A closure for handling calls to mocked functions.
-pub type FunctionHandler =
-    Arc<dyn Fn(MockInstance, Box<dyn Any>) -> Result<Box<dyn Any>, RuntimeError>>;
+pub type FunctionHandler<UserData> =
+    Arc<dyn Fn(MockInstance<UserData>, Box<dyn Any>) -> Result<Box<dyn Any>, RuntimeError>>;
 
 /// A fake Wasm instance.
 ///
 /// Only contains exports for the memory and the canonical ABI allocation functions.
-#[derive(Clone)]
-pub struct MockInstance {
+pub struct MockInstance<UserData> {
     memory: Arc<Mutex<Vec<u8>>>,
-    exported_functions: HashMap<String, FunctionHandler>,
-    imported_functions: HashMap<String, FunctionHandler>,
+    exported_functions: HashMap<String, FunctionHandler<UserData>>,
+    imported_functions: HashMap<String, FunctionHandler<UserData>>,
+    user_data: Arc<Mutex<UserData>>,
 }
 
-impl Default for MockInstance {
+impl<UserData> Default for MockInstance<UserData>
+where
+    UserData: Default,
+{
     fn default() -> Self {
+        MockInstance::new(UserData::default())
+    }
+}
+
+impl<UserData> Clone for MockInstance<UserData> {
+    fn clone(&self) -> Self {
+        MockInstance {
+            memory: self.memory.clone(),
+            exported_functions: self.exported_functions.clone(),
+            imported_functions: self.imported_functions.clone(),
+            user_data: self.user_data.clone(),
+        }
+    }
+}
+
+impl<UserData> MockInstance<UserData> {
+    /// Creates a new [`MockInstance`] using the provided `user_data`.
+    pub fn new(user_data: UserData) -> Self {
         let memory = Arc::new(Mutex::new(Vec::new()));
 
         MockInstance {
             memory: memory.clone(),
             exported_functions: HashMap::new(),
             imported_functions: HashMap::new(),
+            user_data: Arc::new(Mutex::new(user_data)),
         }
         .with_exported_function("cabi_free", |_, _: HList![i32]| Ok(hlist![]))
         .with_exported_function(
@@ -80,9 +102,6 @@ impl Default for MockInstance {
             },
         )
     }
-}
-
-impl MockInstance {
     /// Adds a mock exported function to this [`MockInstance`].
     ///
     /// The `handler` will be called whenever the exported function is called.
@@ -94,7 +113,7 @@ impl MockInstance {
     where
         Parameters: 'static,
         Results: 'static,
-        Handler: Fn(MockInstance, Parameters) -> Result<Results, RuntimeError> + 'static,
+        Handler: Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError> + 'static,
     {
         self.add_exported_function(name, handler);
         self
@@ -111,7 +130,7 @@ impl MockInstance {
     where
         Parameters: 'static,
         Results: 'static,
-        Handler: Fn(MockInstance, Parameters) -> Result<Results, RuntimeError> + 'static,
+        Handler: Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError> + 'static,
     {
         self.exported_functions.insert(
             name.into(),
@@ -151,8 +170,13 @@ impl MockInstance {
     }
 }
 
-impl Instance for MockInstance {
+impl<UserData> Instance for MockInstance<UserData> {
     type Runtime = MockRuntime;
+    type UserData = UserData;
+    type UserDataReference<'a> = MutexGuard<'a, UserData>
+    where
+        Self::UserData: 'a,
+        Self: 'a;
 
     fn load_export(&mut self, name: &str) -> Option<String> {
         if name == "memory" || self.exported_functions.contains_key(name) {
@@ -161,9 +185,16 @@ impl Instance for MockInstance {
             None
         }
     }
+
+    fn user_data(&self) -> Self::UserDataReference<'_> {
+        self.user_data
+            .try_lock()
+            .expect("Unexpected reentrant access to user data in `MockInstance`")
+    }
 }
 
-impl<Parameters, Results> InstanceWithFunction<Parameters, Results> for MockInstance
+impl<Parameters, Results, UserData> InstanceWithFunction<Parameters, Results>
+    for MockInstance<UserData>
 where
     Parameters: FlatLayout + 'static,
     Results: FlatLayout + 'static,
@@ -195,10 +226,10 @@ where
     }
 }
 
-impl RuntimeMemory<MockInstance> for Arc<Mutex<Vec<u8>>> {
+impl<UserData> RuntimeMemory<MockInstance<UserData>> for Arc<Mutex<Vec<u8>>> {
     fn read<'instance>(
         &self,
-        instance: &'instance MockInstance,
+        instance: &'instance MockInstance<UserData>,
         location: GuestPointer,
         length: u32,
     ) -> Result<Cow<'instance, [u8]>, RuntimeError> {
@@ -215,7 +246,7 @@ impl RuntimeMemory<MockInstance> for Arc<Mutex<Vec<u8>>> {
 
     fn write(
         &mut self,
-        instance: &mut MockInstance,
+        instance: &mut MockInstance<UserData>,
         location: GuestPointer,
         bytes: &[u8],
     ) -> Result<(), RuntimeError> {
@@ -233,7 +264,7 @@ impl RuntimeMemory<MockInstance> for Arc<Mutex<Vec<u8>>> {
     }
 }
 
-impl InstanceWithMemory for MockInstance {
+impl<UserData> InstanceWithMemory for MockInstance<UserData> {
     fn memory_from_export(
         &self,
         export: String,
@@ -246,9 +277,10 @@ impl InstanceWithMemory for MockInstance {
     }
 }
 
-impl<Handler, Parameters, Results> ExportFunction<Handler, Parameters, Results> for MockInstance
+impl<Handler, Parameters, Results, UserData> ExportFunction<Handler, Parameters, Results>
+    for MockInstance<UserData>
 where
-    Handler: Fn(MockInstance, Parameters) -> Result<Results, RuntimeError> + 'static,
+    Handler: Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError> + 'static,
     Parameters: 'static,
     Results: 'static,
 {
@@ -293,17 +325,18 @@ impl<T> MockResults for T {
 }
 
 /// A helper type to verify how many times an exported function is called.
-pub struct MockExportedFunction<Parameters, Results> {
+pub struct MockExportedFunction<Parameters, Results, UserData> {
     name: String,
     call_counter: Arc<AtomicUsize>,
     expected_calls: usize,
-    handler: Arc<dyn Fn(MockInstance, Parameters) -> Result<Results, RuntimeError>>,
+    handler: Arc<dyn Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError>>,
 }
 
-impl<Parameters, Results> MockExportedFunction<Parameters, Results>
+impl<Parameters, Results, UserData> MockExportedFunction<Parameters, Results, UserData>
 where
     Parameters: 'static,
     Results: 'static,
+    UserData: 'static,
 {
     /// Creates a new [`MockExportedFunction`] for the exported function with the provided `name`.
     ///
@@ -313,7 +346,7 @@ where
     /// times.
     pub fn new(
         name: impl Into<String>,
-        handler: impl Fn(MockInstance, Parameters) -> Result<Results, RuntimeError> + 'static,
+        handler: impl Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError> + 'static,
         expected_calls: usize,
     ) -> Self {
         MockExportedFunction {
@@ -325,7 +358,7 @@ where
     }
 
     /// Registers this [`MockExportedFunction`] with the mock `instance`.
-    pub fn register(&self, instance: &mut MockInstance) {
+    pub fn register(&self, instance: &mut MockInstance<UserData>) {
         let call_counter = self.call_counter.clone();
         let handler = self.handler.clone();
 
@@ -336,7 +369,7 @@ where
     }
 }
 
-impl<Parameters, Results> Drop for MockExportedFunction<Parameters, Results> {
+impl<Parameters, Results, UserData> Drop for MockExportedFunction<Parameters, Results, UserData> {
     fn drop(&mut self) {
         assert_eq!(
             self.call_counter.load(Ordering::Acquire),
