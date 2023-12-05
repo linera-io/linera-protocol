@@ -100,7 +100,7 @@ where
             }
             self.new_back_values.clear();
         }
-        if !self.was_cleared || self.stored_indices.len() > 0 {
+        if !self.was_cleared || !self.stored_indices.is_empty() {
             let key = self.context.base_tag(KeyTag::Store as u8);
             batch.put_key_value(key, &self.stored_indices)?;
         }
