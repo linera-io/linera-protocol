@@ -4,9 +4,9 @@ kind: Service
 metadata:
   annotations:
     cloud.google.com/app-protocols: '{"linera-port":"HTTP2"}'
-  name: proxy
+  name: proxy-external
   labels:
-    app: proxy
+    app: proxy-external
 spec:
   ports:
     - port: {{ .Values.proxyPort }}

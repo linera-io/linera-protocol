@@ -10,7 +10,7 @@ metadata:
 spec:
   defaultBackend:
     service:
-      name: proxy
+      name: proxy-external
       port:
         number: 443
 
