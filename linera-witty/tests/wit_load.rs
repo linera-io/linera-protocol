@@ -19,8 +19,8 @@ fn test_simple_bool_wrapper() {
     test_load_from_memory(&[1], &SimpleWrapper(true));
     test_load_from_memory(&[0], &SimpleWrapper(false));
 
-    test_lift_from_flat_layout(hlist![1], &SimpleWrapper(true));
-    test_lift_from_flat_layout(hlist![0], &SimpleWrapper(false));
+    test_lift_from_flat_layout(hlist![1], &SimpleWrapper(true), &[]);
+    test_lift_from_flat_layout(hlist![0], &SimpleWrapper(false), &[]);
 }
 
 /// Check that a type with multiple fields ordered in a way that doesn't require any padding is
@@ -33,6 +33,7 @@ fn test_tuple_struct_without_padding() {
     test_lift_from_flat_layout(
         hlist![0x0807_0605_0403_0201_i64, 0x0c0b_0a09_i32, 0x0000_0e0d_i32],
         &expected,
+        &[],
     );
 }
 
@@ -49,6 +50,7 @@ fn test_tuple_struct_with_padding() {
     test_lift_from_flat_layout(
         hlist![0x0000_0201_i32, 0x0807_0605_i32, 0x100f_0e0d_0c0b_0a09_i64],
         &expected,
+        &[],
     );
 }
 
@@ -77,6 +79,7 @@ fn test_named_struct_with_double_padding() {
             0x1817_1615_1413_1211_i64,
         ],
         &expected,
+        &[],
     );
 }
 
@@ -115,6 +118,7 @@ fn test_nested_types() {
             0x3837_3635_3433_3231_i64,
         ],
         &expected,
+        &[],
     );
 }
 
@@ -131,6 +135,7 @@ fn test_enum_type() {
     test_lift_from_flat_layout(
         hlist![0_i32, 0_i64, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32],
         &expected,
+        &[],
     );
 
     let expected = Enum::LargeVariantWithLooseAlignment(7, 8, 9, 10, 11, 12, 13, 14, 15, 16);
@@ -142,6 +147,7 @@ fn test_enum_type() {
     test_lift_from_flat_layout(
         hlist![1_i32, 7_i64, 8_i32, 9_i32, 10_i32, 11_i32, 12_i32, 13_i32, 14_i32, 15_i32, 16_i32],
         &expected,
+        &[],
     );
 
     let expected = Enum::SmallerVariantWithStrictAlignment {
@@ -167,6 +173,7 @@ fn test_enum_type() {
             0_i32
         ],
         &expected,
+        &[],
     );
 }
 
@@ -188,12 +195,19 @@ where
 
 /// Tests that the type `T` can be lifted from an `input` flat layout and that it matches the
 /// `expected` value.
-fn test_lift_from_flat_layout<T>(input: <T::Layout as Layout>::Flat, expected: &T)
-where
+fn test_lift_from_flat_layout<T>(
+    input: <T::Layout as Layout>::Flat,
+    expected: &T,
+    initial_memory: &[u8],
+) where
     T: Debug + Eq + WitLoad,
 {
     let mut instance = MockInstance::<()>::default();
-    let memory = instance.memory().unwrap();
+    let mut memory = instance.memory().unwrap();
+
+    let start_address = memory.allocate(initial_memory.len() as u32).unwrap();
+
+    memory.write(start_address, initial_memory).unwrap();
 
     assert_eq!(&T::lift_from(input, &memory).unwrap(), expected);
 }
