@@ -7,8 +7,8 @@
 mod types;
 
 use self::types::{
-    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericStruct,
-    TupleWithPadding, TupleWithoutPadding,
+    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
+    SpecializedGenericStruct, TupleWithPadding, TupleWithoutPadding,
 };
 use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, WitLoad};
 use std::fmt::Debug;
@@ -198,6 +198,43 @@ fn test_specialized_generic_struct() {
         &expected,
         &[1, 0, 255, 255, 2, 0, 254, 255],
     );
+}
+
+/// Check that a generic enum with a specialization request type's variants are properly loaded
+/// from memory and lifted from its flat layout.
+#[test]
+fn test_specialized_generic_enum_type() {
+    let expected = SpecializedGenericEnum::None;
+
+    test_load_from_memory(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], &expected);
+    test_lift_from_flat_layout(hlist![0_i32, 0_i32, 0_i32], &expected, &[]);
+
+    let expected = SpecializedGenericEnum::First(None);
+
+    test_load_from_memory(&[1, 2, 3, 4, 0, 5, 6, 7, 8, 9, 10, 11], &expected);
+    test_lift_from_flat_layout(hlist![1_i32, 0_i32, 0_i32], &expected, &[]);
+
+    let expected = SpecializedGenericEnum::First(Some(false));
+
+    test_load_from_memory(&[1, 2, 3, 4, 1, 0, 6, 7, 8, 9, 10, 11], &expected);
+    test_lift_from_flat_layout(hlist![1_i32, 1_i32, 0_i32], &expected, &[]);
+
+    let expected = SpecializedGenericEnum::First(Some(true));
+
+    test_load_from_memory(&[1, 2, 3, 4, 1, 1, 6, 7, 8, 9, 10, 11], &expected);
+    test_lift_from_flat_layout(hlist![1_i32, 1_i32, 1_i32], &expected, &[]);
+
+    let expected = SpecializedGenericEnum::MaybeSecond { maybe: None };
+
+    test_load_from_memory(&[2, 3, 4, 5, 0, 6, 7, 8, 9, 10, 11, 12], &expected);
+    test_lift_from_flat_layout(hlist![2_i32, 0_i32, 0_i32], &expected, &[]);
+
+    let expected = SpecializedGenericEnum::MaybeSecond {
+        maybe: Some(0x0c0b_0a09),
+    };
+
+    test_load_from_memory(&[2, 3, 4, 5, 1, 6, 7, 8, 9, 10, 11, 12], &expected);
+    test_lift_from_flat_layout(hlist![2_i32, 1_i32, 0x0c0b_0a09_i32], &expected, &[]);
 }
 
 /// Tests that the type `T` can be loaded from an `input` sequence of bytes in memory and that it
