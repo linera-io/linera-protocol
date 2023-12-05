@@ -7,8 +7,8 @@
 mod types;
 
 use self::types::{
-    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, TupleWithPadding,
-    TupleWithoutPadding,
+    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericStruct,
+    TupleWithPadding, TupleWithoutPadding,
 };
 use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, WitLoad};
 use std::fmt::Debug;
@@ -174,6 +174,29 @@ fn test_enum_type() {
         ],
         &expected,
         &[],
+    );
+}
+
+/// Check that a generic type with a specialization request is properly loaded from memory and
+/// lifted from its flat layout.
+#[test]
+fn test_specialized_generic_struct() {
+    let expected = SpecializedGenericStruct {
+        first: 254_u8,
+        second: -10_i16,
+        both: vec![(1, -1), (2, -2)],
+    };
+
+    test_load_from_memory(
+        &[
+            254, 0, 246, 255, 12, 0, 0, 0, 2, 0, 0, 0, 1, 0, 255, 255, 2, 0, 254, 255,
+        ],
+        &expected,
+    );
+    test_lift_from_flat_layout(
+        hlist![0x0000_00fe_i32, -10_i32, 0_i32, 2_i32,],
+        &expected,
+        &[1, 0, 255, 255, 2, 0, 254, 255],
     );
 }
 
