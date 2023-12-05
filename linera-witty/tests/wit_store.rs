@@ -16,11 +16,11 @@ use std::fmt::Debug;
 /// Check that a wrapper type is properly stored in memory and lowered into its flat layout.
 #[test]
 fn test_simple_bool_wrapper() {
-    test_store_in_memory(&SimpleWrapper(true), &[1]);
-    test_store_in_memory(&SimpleWrapper(false), &[0]);
+    test_store_in_memory(&SimpleWrapper(true), &[1], &[]);
+    test_store_in_memory(&SimpleWrapper(false), &[0], &[]);
 
-    test_lower_to_flat_layout(&SimpleWrapper(true), hlist![1]);
-    test_lower_to_flat_layout(&SimpleWrapper(false), hlist![0]);
+    test_lower_to_flat_layout(&SimpleWrapper(true), hlist![1], &[]);
+    test_lower_to_flat_layout(&SimpleWrapper(false), hlist![0], &[]);
 }
 
 /// Check that a type with multiple fields ordered in a way that doesn't require any padding is
@@ -34,10 +34,12 @@ fn test_tuple_struct_without_padding() {
         &[
             0xef, 0xcd, 0xab, 0x89, 0x67, 0x45, 0x23, 0x01, 0x33, 0x22, 0x11, 0x00, 0x55, 0x44,
         ],
+        &[],
     );
     test_lower_to_flat_layout(
         &data,
         hlist![0x0123_4567_89ab_cdef_i64, 0x0011_2233_i32, 0x0000_4455_i32],
+        &[],
     );
 }
 
@@ -53,10 +55,12 @@ fn test_tuple_struct_with_padding() {
             0x23, 0x01, 0, 0, 0xab, 0x89, 0x67, 0x45, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11,
             0x00,
         ],
+        &[],
     );
     test_lower_to_flat_layout(
         &data,
         hlist![0x0000_0123_i32, 0x4567_89ab_i32, 0x0011_2233_4455_6677_i64],
+        &[],
     );
 }
 
@@ -77,6 +81,7 @@ fn test_named_struct_with_double_padding() {
             0x23, 0x01, 0, 0, 0x33, 0x22, 0x11, 0x00, 0x45, 0, 0, 0, 0, 0, 0, 0, 0x66, 0x55, 0x44,
             0xef, 0xcd, 0xab, 0x89, 0x67,
         ],
+        &[],
     );
     test_lower_to_flat_layout(
         &data,
@@ -86,6 +91,7 @@ fn test_named_struct_with_double_padding() {
             0x0000_0045_i32,
             0x6789_abcd_ef44_5566_i64,
         ],
+        &[],
     );
 }
 
@@ -113,6 +119,7 @@ fn test_nested_types() {
             0, 0, 0x96, 0x87, 0x78, 0x69, 0x5a, 0x4b, 0x3c, 0x2d, 0x1e, 0x0f, 0xff, 0xee, 0xdd,
             0xcc, 0xbb, 0xaa,
         ],
+        &[],
     );
     test_lower_to_flat_layout(
         &data,
@@ -125,6 +132,7 @@ fn test_nested_types() {
             0x2d3c_4b5a_6978_8796_i64,
             0xaabb_ccdd_eeff_0f1e_u64 as i64,
         ],
+        &[],
     );
 }
 
@@ -140,6 +148,7 @@ fn test_enum_type() {
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00,
         ],
+        &[],
     );
     test_lower_to_flat_layout(
         &data,
@@ -156,6 +165,7 @@ fn test_enum_type() {
             0x0000_0000_i32,
             0x0000_0000_i32,
         ],
+        &[],
     );
 
     let data = Enum::LargeVariantWithLooseAlignment(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
@@ -166,6 +176,7 @@ fn test_enum_type() {
             0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
             0x06, 0x07, 0x08, 0x09,
         ],
+        &[],
     );
     test_lower_to_flat_layout(
         &data,
@@ -182,6 +193,7 @@ fn test_enum_type() {
             0x0000_0008_i32,
             0x0000_0009_i32,
         ],
+        &[],
     );
 
     let data = Enum::SmallerVariantWithStrictAlignment {
@@ -193,6 +205,7 @@ fn test_enum_type() {
         &[
             0x02, 0, 0, 0, 0, 0, 0, 0, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0, 0,
         ],
+        &[],
     );
     test_lower_to_flat_layout(
         &data,
@@ -209,30 +222,52 @@ fn test_enum_type() {
             0x0000_0000_i32,
             0x0000_0000_i32,
         ],
+        &[],
     );
 }
 
 /// Tests that the `data` of type `T` can be stored as a sequence of bytes in memory and that it
 /// matches the `expected` bytes.
-fn test_store_in_memory<T>(data: &T, expected: &[u8])
-where
+fn test_store_in_memory<T>(
+    data: &T,
+    expected_without_allocation: &[u8],
+    expected_additionally_allocated: &[u8],
+) where
     T: WitStore,
 {
     let mut instance = MockInstance::<()>::default();
     let mut memory = instance.memory().unwrap();
 
-    let length = expected.len() as u32;
+    let length = expected_without_allocation.len() as u32;
     let address = memory.allocate(length).unwrap();
 
     data.store(&mut memory, address).unwrap();
 
-    assert_eq!(memory.read(address, length).unwrap(), expected);
+    let additional_allocations_address = address.after::<T>();
+    let additional_allocations_length = expected_additionally_allocated.len() as u32;
+
+    assert_eq!(
+        memory.read(address, length).unwrap(),
+        expected_without_allocation
+    );
+    assert_eq!(
+        memory
+            .read(
+                additional_allocations_address,
+                additional_allocations_length
+            )
+            .unwrap(),
+        expected_additionally_allocated
+    );
 }
 
 /// Tests that the `data` of type `T` can be lowered to its flat layout and that it matches the
 /// `expected` value.
-fn test_lower_to_flat_layout<T>(data: &T, expected: <T::Layout as Layout>::Flat)
-where
+fn test_lower_to_flat_layout<T>(
+    data: &T,
+    expected: <T::Layout as Layout>::Flat,
+    expected_memory: &[u8],
+) where
     T: WitStore,
     <T::Layout as Layout>::Flat: Debug + Eq,
 {
@@ -240,4 +275,5 @@ where
     let mut memory = instance.memory().unwrap();
 
     assert_eq!(data.lower(&mut memory).unwrap(), expected);
+    assert_eq!(&instance.memory_contents(), expected_memory);
 }
