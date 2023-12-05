@@ -49,3 +49,12 @@ pub enum Enum {
     LargeVariantWithLooseAlignment(i8, i8, i8, i8, i8, i8, i8, i8, i8, i8),
     SmallerVariantWithStrictAlignment { inner: u64 },
 }
+
+/// A generic struct with some specialized fields.
+#[derive(Clone, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
+#[witty_specialize_with(A = u8, B = i16)]
+pub struct SpecializedGenericStruct<A, B> {
+    pub first: A,
+    pub second: B,
+    pub both: Vec<(A, B)>,
+}

@@ -23,7 +23,7 @@ use syn::{
     DataStruct, DataUnion, DeriveInput, Field, Fields, GenericArgument, GenericParam, Generics,
     Ident, MacroDelimiter, Meta, MetaList, Path, PathArguments, PredicateType, QSelf, ReturnType,
     Token, Type, TypeArray, TypeBareFn, TypeGroup, TypeImplTrait, TypeParamBound, TypeParen,
-    TypePath, TypePtr, TypeReference, TypeSlice, WhereClause, WherePredicate,
+    TypePath, TypePtr, TypeReference, TypeSlice, TypeTuple, WhereClause, WherePredicate,
 };
 
 /// Collected specializations to apply before deriving a trait for a type.
@@ -311,6 +311,11 @@ impl Specialization {
                     self.change_types_in_type(ty);
                 }
                 self.change_types_in_path(path);
+            }
+            Type::Tuple(TypeTuple { elems, .. }) => {
+                for element in elems {
+                    self.change_types_in_type(element);
+                }
             }
             _ => {}
         }
