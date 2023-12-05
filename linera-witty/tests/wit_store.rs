@@ -7,8 +7,8 @@
 mod types;
 
 use self::types::{
-    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, TupleWithPadding,
-    TupleWithoutPadding,
+    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericStruct,
+    TupleWithPadding, TupleWithoutPadding,
 };
 use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, WitStore};
 use std::fmt::Debug;
@@ -223,6 +223,34 @@ fn test_enum_type() {
             0x0000_0000_i32,
         ],
         &[],
+    );
+}
+
+/// Check that a generic type with a specialization request is properly stored in memory and
+/// lowered into its flat layout.
+#[test]
+fn test_specialized_generic_struct() {
+    let data = SpecializedGenericStruct {
+        first: 200_u8,
+        second: -200_i16,
+        both: vec![(4, -4), (3, -3), (2, -2), (1, -1)],
+    };
+
+    let expected_heap = [
+        0x04, 0, 0xfc, 0xff, 0x03, 0, 0xfd, 0xff, 0x02, 0, 0xfe, 0xff, 0x01, 0, 0xff, 0xff,
+    ];
+
+    test_store_in_memory(
+        &data,
+        &[
+            0xc8, 0, 0x38, 0xff, 0x0c, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
+        ],
+        &expected_heap,
+    );
+    test_lower_to_flat_layout(
+        &data,
+        hlist![0x0000_00c8_i32, -200_i32, 0x0000_0000_i32, 0x0000_0004_i32],
+        &expected_heap,
     );
 }
 
