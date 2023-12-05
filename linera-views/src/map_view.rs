@@ -19,8 +19,9 @@
 use crate::{
     batch::Batch,
     common::{
-        get_interval, Context, CustomSerialize, GreatestLowerBoundIterator, HasherOutput,
-        KeyIterable, KeyValueIterable, Update, MIN_VIEW_TAG,
+        get_interval, insert_key_prefix, is_index_absent, Context, CustomSerialize,
+        GreatestLowerBoundIterator, HasherOutput, KeyIterable, KeyValueIterable, Update,
+        MIN_VIEW_TAG,
     },
     views::{HashableView, Hasher, View, ViewError},
 };
@@ -201,15 +202,7 @@ where
             self.updates.remove(&key);
         }
         if !self.was_cleared {
-            let key_prefix_list = self
-                .deleted_prefixes
-                .range(get_interval(key_prefix.clone()))
-                .map(|x| x.to_vec())
-                .collect::<Vec<_>>();
-            for key in key_prefix_list {
-                self.deleted_prefixes.remove(&key);
-            }
-            self.deleted_prefixes.insert(key_prefix);
+            insert_key_prefix(&mut self.deleted_prefixes, key_prefix);
         }
     }
 
@@ -248,9 +241,7 @@ where
         if self.was_cleared {
             return Ok(None);
         }
-        let iter = self.deleted_prefixes.iter();
-        let mut lower_bound = GreatestLowerBoundIterator::new(0, iter);
-        if !lower_bound.is_index_absent(short_key) {
+        if !is_index_absent(&self.deleted_prefixes, short_key) {
             return Ok(None);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
@@ -334,7 +325,7 @@ where
         let mut lower_bound = GreatestLowerBoundIterator::new(prefix_len, iter);
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
-        if !self.was_cleared {
+        if !self.was_cleared && is_index_absent(&self.deleted_prefixes, &prefix) {
             let base = self.context.base_tag_index(KeyTag::Index as u8, &prefix);
             for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
                 let index = index?;
@@ -529,7 +520,7 @@ where
         let mut lower_bound = GreatestLowerBoundIterator::new(prefix_len, iter);
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
-        if !self.was_cleared {
+        if !self.was_cleared && is_index_absent(&self.deleted_prefixes, &prefix) {
             let base = self.context.base_tag_index(KeyTag::Index as u8, &prefix);
             for entry in self
                 .context
