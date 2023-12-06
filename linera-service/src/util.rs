@@ -124,6 +124,10 @@ pub trait CommandExt: std::fmt::Debug {
     /// command.
     async fn spawn_and_wait_for_stdout(&mut self) -> anyhow::Result<String>;
 
+    /// Spawns and waits for process to finish executing.
+    /// Will not wait for stdout, use `spawn_and_wait_for_stdout` for that
+    async fn spawn_and_wait(&mut self) -> anyhow::Result<()>;
+
     /// Description used for error reporting.
     fn description(&self) -> String {
         format!("While executing {:?}", self)
@@ -157,6 +161,22 @@ impl CommandExt for tokio::process::Command {
             output.status
         );
         String::from_utf8(output.stdout).with_context(|| self.description())
+    }
+
+    async fn spawn_and_wait(&mut self) -> anyhow::Result<()> {
+        debug!("Spawning and waiting for {:?}", self);
+        self.kill_on_drop(true);
+
+        let mut child = self.spawn().with_context(|| self.description())?;
+        let status = child.wait().await.with_context(|| self.description())?;
+        ensure!(
+            status.success(),
+            "{}: got non-zero error code {}",
+            self.description(),
+            status
+        );
+
+        Ok(())
     }
 }
 

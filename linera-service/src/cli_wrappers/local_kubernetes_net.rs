@@ -177,7 +177,9 @@ impl LineraNet for LocalKubernetesNet {
 
             Err(errors
                 .into_iter()
-                .fold(anyhow!("{err_str} occurred"), |acc, e| acc.context(e)))
+                .fold(anyhow!("{err_str} occurred"), |acc, e: anyhow::Error| {
+                    acc.context(e)
+                }))
         }
     }
 }
@@ -285,7 +287,7 @@ impl LocalKubernetesNet {
 
         let github_root = get_github_root().await?;
         // Build Docker image
-        let docker_image = DockerImage::new(
+        let docker_image = DockerImage::build(
             String::from("linera-test:latest"),
             binaries_path,
             &github_root,
@@ -342,13 +344,11 @@ impl LocalKubernetesNet {
                     .expect("Getting validator pod name should not fail");
 
                 let local_port = 19100 + i;
-                kubectl_instance
-                    .port_forward(
-                        validator_pod_name,
-                        &format!("{local_port}:{local_port}"),
-                        cluster_id,
-                    )
-                    .await?;
+                kubectl_instance.port_forward(
+                    validator_pod_name,
+                    &format!("{local_port}:{local_port}"),
+                    cluster_id,
+                )?;
 
                 Result::<(), anyhow::Error>::Ok(())
             };

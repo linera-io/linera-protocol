@@ -1,10 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::util::CommandExt;
 use anyhow::Result;
 use rand::Rng;
 use tokio::process::Command;
+
+use crate::util::CommandExt;
 
 #[derive(Clone)]
 pub struct KindCluster {
@@ -24,8 +25,9 @@ impl KindCluster {
         Command::new("kind")
             .args(["create", "cluster"])
             .args(["--name", cluster.id().to_string().as_str()])
-            .spawn_and_wait_for_stdout()
+            .spawn_and_wait()
             .await?;
+
         Ok(cluster)
     }
 
@@ -36,18 +38,16 @@ impl KindCluster {
     pub async fn delete(&self) -> Result<()> {
         Command::new("kind")
             .args(["delete", "cluster"])
-            .args(["--name", self.id.to_string().as_str()])
-            .spawn_and_wait_for_stdout()
-            .await?;
-        Ok(())
+            .args(["--name", &self.id.to_string()])
+            .spawn_and_wait()
+            .await
     }
 
     pub async fn load_docker_image(&self, docker_image: &String) -> Result<()> {
         Command::new("kind")
             .args(["load", "docker-image", docker_image])
             .args(["--name", self.id.to_string().as_str()])
-            .spawn_and_wait_for_stdout()
-            .await?;
-        Ok(())
+            .spawn_and_wait()
+            .await
     }
 }
