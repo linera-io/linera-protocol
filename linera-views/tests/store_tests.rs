@@ -32,10 +32,7 @@ use linera_views::scylla_db::create_scylla_db_test_store;
 /// * `find_keys_by_prefix` / `find_key_values_by_prefix`
 /// * The ordering of keys returned by `find_keys_by_prefix` and `find_key_values_by_prefix`
 #[cfg(test)]
-async fn run_reads<C: KeyValueStore + Sync>(
-    key_value_store: C,
-    key_values: Vec<(Vec<u8>, Vec<u8>)>,
-) {
+async fn run_reads<S: KeyValueStore + Sync>(store: S, key_values: Vec<(Vec<u8>, Vec<u8>)>) {
     // We need a nontrivial key_prefix because dynamo requires a non-trivial prefix
     let mut batch = Batch::new();
     let mut keys = Vec::new();
@@ -45,27 +42,21 @@ async fn run_reads<C: KeyValueStore + Sync>(
         set_keys.insert(&key[..]);
         batch.put_key_value_bytes(key.clone(), value.clone());
     }
-    key_value_store.write_batch(batch, &[]).await.unwrap();
+    store.write_batch(batch, &[]).await.unwrap();
     for key_prefix in keys
         .iter()
         .flat_map(|key| (0..key.len()).map(|u| &key[..=u]))
     {
         // Getting the find_keys_by_prefix / find_key_values_by_prefix
         let len_prefix = key_prefix.len();
-        let keys_by_prefix = key_value_store
-            .find_keys_by_prefix(key_prefix)
-            .await
-            .unwrap();
+        let keys_by_prefix = store.find_keys_by_prefix(key_prefix).await.unwrap();
         let keys_request = keys_by_prefix
             .iterator()
             .map(Result::unwrap)
             .collect::<Vec<_>>();
         let mut set_key_value1 = HashSet::new();
         let mut keys_request_deriv = Vec::new();
-        let key_values_by_prefix = key_value_store
-            .find_key_values_by_prefix(key_prefix)
-            .await
-            .unwrap();
+        let key_values_by_prefix = store.find_key_values_by_prefix(key_prefix).await.unwrap();
         for (key, value) in key_values_by_prefix.iterator().map(Result::unwrap) {
             set_key_value1.insert((key, value));
             keys_request_deriv.push(key);
@@ -109,8 +100,14 @@ async fn run_reads<C: KeyValueStore + Sync>(
                 }
             }
         }
-        let values_read = key_value_store.read_multi_values_bytes(keys).await.unwrap();
+        let mut test_exists = Vec::new();
+        for key in &keys {
+            test_exists.push(store.test_existence_value(key).await.unwrap());
+        }
+        let values_read = store.read_multi_values_bytes(keys).await.unwrap();
         assert_eq!(values, values_read);
+        let values_read_stat = values_read.iter().map(|x| x.is_some()).collect::<Vec<_>>();
+        assert_eq!(values_read_stat, test_exists);
     }
 }
 
