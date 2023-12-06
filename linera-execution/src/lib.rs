@@ -11,6 +11,7 @@ mod ownership;
 pub mod policy;
 mod resources;
 mod runtime;
+mod runtime_actor;
 pub mod system;
 mod wasm;
 

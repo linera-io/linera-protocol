@@ -39,10 +39,10 @@ use self::{
 use super::{
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     module_cache::ModuleCache,
-    runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
     WasmContract, WasmExecutionError, WasmService,
 };
 use crate::{
+    runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
     ApplicationCallResult, Bytecode, CalleeContext, ExecutionError, MessageContext,
     OperationContext, QueryContext, RawExecutionResult, SessionCallResult, SessionId,
 };

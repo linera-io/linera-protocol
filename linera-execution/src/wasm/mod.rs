@@ -12,7 +12,6 @@
 
 mod common;
 mod module_cache;
-mod runtime_actor;
 mod sanitizer;
 #[macro_use]
 mod system_api;
@@ -23,11 +22,11 @@ mod wasmer;
 #[path = "wasmtime.rs"]
 mod wasmtime;
 
-use self::{runtime_actor::RuntimeActor, sanitizer::sanitize};
+use self::sanitizer::sanitize;
 use crate::{
-    ApplicationCallResult, Bytecode, CalleeContext, ContractRuntime, ExecutionError,
-    MessageContext, OperationContext, QueryContext, RawExecutionResult, ServiceRuntime,
-    SessionCallResult, SessionId, UserContract, UserService, WasmRuntime,
+    runtime_actor::RuntimeActor, ApplicationCallResult, Bytecode, CalleeContext, ContractRuntime,
+    ExecutionError, MessageContext, OperationContext, QueryContext, RawExecutionResult,
+    ServiceRuntime, SessionCallResult, SessionId, UserContract, UserService, WasmRuntime,
 };
 use async_lock::RwLock;
 use async_trait::async_trait;
