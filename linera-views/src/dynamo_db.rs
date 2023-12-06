@@ -841,13 +841,11 @@ impl DynamoDbStoreInternal {
             .get_item()
             .table_name(self.table.as_ref())
             .set_key(Some(key_db))
+            .projection_expression(PARTITION_ATTRIBUTE)
             .send()
             .await?;
 
-        Ok(match response.item {
-            Some(_) => true,
-            None => false,
-        })
+        Ok(response.item.is_some())
     }
 
     async fn write_single_key_value(
