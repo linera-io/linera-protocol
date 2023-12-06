@@ -340,8 +340,7 @@ where
         for message in requested_pending_messages {
             if pending_messages.len() >= self.max_pending_messages {
                 tracing::warn!(
-                    "Limiting block from {} to {} incoming messages",
-                    pending_messages.len(),
+                    "Limiting block to {} incoming messages",
                     self.max_pending_messages
                 );
                 break;
