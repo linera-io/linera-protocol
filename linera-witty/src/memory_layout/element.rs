@@ -59,26 +59,9 @@ where
 {
 }
 
-impl<R> LayoutElement for Either<(), R>
-where
-    R: LayoutElement,
-{
-    const ALIGNMENT: u32 = R::ALIGNMENT;
-    const IS_EMPTY: bool = R::IS_EMPTY;
-
-    type Flat = R::Flat;
-
-    fn flatten(self) -> Self::Flat {
-        match self {
-            Either::Left(()) => <R::Flat as Default>::default(),
-            Either::Right(value) => value.flatten(),
-        }
-    }
-}
-
 impl<L, R> LayoutElement for Either<L, R>
 where
-    L: SimpleType,
+    L: LayoutElement,
     R: LayoutElement,
     Either<L::Flat, R::Flat>: JoinFlatTypes,
 {

@@ -7,8 +7,8 @@
 mod types;
 
 use self::types::{
-    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericStruct,
-    TupleWithPadding, TupleWithoutPadding,
+    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
+    SpecializedGenericStruct, TupleWithPadding, TupleWithoutPadding,
 };
 use linera_witty::{HList, Layout, WitType};
 
@@ -88,5 +88,19 @@ fn test_specialized_generic_struct() {
     assert_eq!(
         <<SpecializedGenericStruct<u8, i16> as WitType>::Layout as Layout>::Flat::LEN,
         4
+    );
+}
+
+/// Check the memory size and layout derived for a specialized generic `enum` type.
+#[test]
+fn test_specialized_generic_enum_type() {
+    assert_eq!(SpecializedGenericEnum::SIZE, 12);
+    assert_eq!(
+        <SpecializedGenericEnum<Option<bool>, u32> as WitType>::Layout::ALIGNMENT,
+        4
+    );
+    assert_eq!(
+        <<SpecializedGenericEnum<Option<bool>, u32> as WitType>::Layout as Layout>::Flat::LEN,
+        3
     );
 }

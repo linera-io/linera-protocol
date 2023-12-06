@@ -7,8 +7,8 @@
 mod types;
 
 use self::types::{
-    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericStruct,
-    TupleWithPadding, TupleWithoutPadding,
+    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
+    SpecializedGenericStruct, TupleWithPadding, TupleWithoutPadding,
 };
 use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, WitStore};
 use std::fmt::Debug;
@@ -251,6 +251,101 @@ fn test_specialized_generic_struct() {
         &data,
         hlist![0x0000_00c8_i32, -200_i32, 0x0000_0000_i32, 0x0000_0004_i32],
         &expected_heap,
+    );
+}
+
+/// Check that a generic enum with a specialization request type's variants are properly stored in
+/// memory and lowered into its flat layout.
+#[test]
+fn test_specialized_generic_enum_type() {
+    let data = SpecializedGenericEnum::None;
+
+    test_store_in_memory(
+        &data,
+        &[
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ],
+        &[],
+    );
+    test_lower_to_flat_layout(
+        &data,
+        hlist![0x0000_0000_i32, 0x0000_0000_i32, 0x0000_0000_i32],
+        &[],
+    );
+
+    let data = SpecializedGenericEnum::First(None);
+
+    test_store_in_memory(
+        &data,
+        &[
+            0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ],
+        &[],
+    );
+    test_lower_to_flat_layout(
+        &data,
+        hlist![0x0000_0001_i32, 0x0000_0000_i32, 0x0000_0000_i32],
+        &[],
+    );
+
+    let data = SpecializedGenericEnum::First(Some(false));
+
+    test_store_in_memory(
+        &data,
+        &[
+            0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ],
+        &[],
+    );
+    test_lower_to_flat_layout(
+        &data,
+        hlist![0x0000_0001_i32, 0x0000_0001_i32, 0x0000_0000_i32],
+        &[],
+    );
+
+    let data = SpecializedGenericEnum::First(Some(true));
+
+    test_store_in_memory(
+        &data,
+        &[
+            0x01, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ],
+        &[],
+    );
+    test_lower_to_flat_layout(
+        &data,
+        hlist![0x0000_0001_i32, 0x0000_0001_i32, 0x0000_0001_i32],
+        &[],
+    );
+
+    let data = SpecializedGenericEnum::MaybeSecond { maybe: None };
+
+    test_store_in_memory(
+        &data,
+        &[
+            0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ],
+        &[],
+    );
+    test_lower_to_flat_layout(
+        &data,
+        hlist![0x0000_0002_i32, 0x0000_0000_i32, 0x0000_0000_i32],
+        &[],
+    );
+
+    let data = SpecializedGenericEnum::MaybeSecond { maybe: Some(9) };
+
+    test_store_in_memory(
+        &data,
+        &[
+            0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00,
+        ],
+        &[],
+    );
+    test_lower_to_flat_layout(
+        &data,
+        hlist![0x0000_0002_i32, 0x0000_0001_i32, 0x0000_0009_i32],
+        &[],
     );
 }
 
