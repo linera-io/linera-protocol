@@ -53,8 +53,6 @@ pub enum MatchingEngineError {
     BcsError(#[from] bcs::Error),
 }
 
-use linera_sdk::views::GraphQLView;
-
 /// The order entry in the order book
 #[derive(Clone, Debug, Deserialize, Serialize, SimpleObject)]
 pub struct OrderEntry {
@@ -102,14 +100,14 @@ pub struct AccountInfo {
 /// When an order is cancelled it is zero. But if that
 /// cancelled order is not the oldest, then it remains
 /// though with a size zero.
-#[derive(View, GraphQLView)]
+#[derive(View, SimpleObject)]
 #[view(context = "ViewStorageContext")]
 pub struct LevelView {
     pub queue: QueueView<OrderEntry>,
 }
 
 /// The matching engine containing the information.
-#[derive(RootView, GraphQLView)]
+#[derive(RootView, SimpleObject)]
 #[view(context = "ViewStorageContext")]
 pub struct MatchingEngine {
     ///The next_order_number contains the order_id so that

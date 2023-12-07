@@ -470,11 +470,11 @@ impl FungibleTokenAbi {
         account_owner: AccountOwner,
     ) -> Option<Amount> {
         let query = format!(
-            "query {{ accounts(accountOwner: {}) }}",
+            "query {{ accounts {{ entry(key: {}) {{ value }} }} }}",
             account_owner.to_value()
         );
-        let value = chain.graphql_query(application_id, query).await;
-        let balance = value.as_object()?.get("accounts")?.as_str()?;
+        let response = chain.graphql_query(application_id, query).await;
+        let balance = response.pointer("/accounts/entry/value")?.as_str()?;
 
         Some(
             balance

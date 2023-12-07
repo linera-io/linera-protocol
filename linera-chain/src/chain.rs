@@ -31,7 +31,7 @@ use linera_views::{
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     set_view::SetView,
-    views::{CryptoHashView, GraphQLView, RootView, View, ViewError},
+    views::{CryptoHashView, RootView, View, ViewError},
 };
 use once_cell::sync::Lazy;
 use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
@@ -84,8 +84,12 @@ pub static WASM_BYTES_WRITTEN_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
 });
 
 /// A view accessing the state of a chain.
-#[derive(Debug, RootView, GraphQLView)]
-pub struct ChainStateView<C> {
+#[derive(Debug, RootView, SimpleObject)]
+pub struct ChainStateView<C>
+where
+    C: Clone + Context + Send + Sync + 'static,
+    ViewError: From<C::Error>,
+{
     /// Execution state, including system and user applications.
     pub execution_state: ExecutionStateView<C>,
     /// Hash of the execution state.
@@ -160,8 +164,12 @@ impl ChainTipState {
 }
 
 /// The state of a channel followed by subscribers.
-#[derive(Debug, View, GraphQLView)]
-pub struct ChannelStateView<C> {
+#[derive(Debug, View, SimpleObject)]
+pub struct ChannelStateView<C>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+{
     /// The current subscribers.
     pub subscribers: SetView<C, ChainId>,
     /// The latest block height, if any, to be sent to future subscribers.

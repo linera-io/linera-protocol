@@ -8,11 +8,13 @@ query Chains {
 query ChainOutbox($chainId: ChainId!, $target: Target!) {
   chain(chainId: $chainId) {
     outboxes {
-      value(key: $target) {
-        target
-        outboxStateView {
+      entry(key: $target) {
+        key
+        value {
           nextHeightToSchedule
-          queue
+          queue {
+            entries
+          }
         }
       }
     }
@@ -22,9 +24,9 @@ query ChainOutbox($chainId: ChainId!, $target: Target!) {
 query ChainChannel($chainId: ChainId!, $channelFullName: ChannelFullName!) {
   chain(chainId: $chainId) {
     channels {
-      value(key: $channelFullName) {
-        channelFullName
-        channelStateView {
+      entry(key: $channelFullName) {
+        key
+        value {
           subscribers
           blockHeight
         }
@@ -36,9 +38,9 @@ query ChainChannel($chainId: ChainId!, $channelFullName: ChannelFullName!) {
 query ChainInbox($chainId: ChainId!, $origin: Origin!) {
   chain(chainId: $chainId) {
     inboxes {
-      value(key: $origin) {
-        origin
-        inboxStateView {
+      entry(key: $origin) {
+        key
+        value {
           nextCursorToAdd {
             height
             index
@@ -47,8 +49,12 @@ query ChainInbox($chainId: ChainId!, $origin: Origin!) {
             height
             index
           }
-          addedEvents
-          removedEvents
+          addedEvents {
+            entries
+          }
+          removedEvents {
+            entries
+          }
         }
       }
     }
@@ -57,9 +63,9 @@ query ChainInbox($chainId: ChainId!, $origin: Origin!) {
 
 query Chain(
   $chainId: ChainId!,
-  $inboxesInput: ChainStateViewInboxesInput,
-  $outboxesInput: ChainStateViewOutboxesInput,
-  $channelsInput: ChainStateViewChannelsInput,
+  $inboxesInput: MapInput_Origin,
+  $outboxesInput: MapInput_Target,
+  $channelsInput: MapInput_ChannelFullName,
 ) {
   chain(chainId: $chainId) {
     chainId
@@ -83,42 +89,51 @@ query Chain(
       nextBlockHeight
     }
     manager
-    confirmedLog
+    confirmedLog {
+      entries
+    }
     receivedLog {
-      chainId
-      height
+      entries {
+        chainId
+        height
+      }
     }
     inboxes {
-      values(input: $inboxesInput) {
-        origin
-        inboxStateView {
+      keys
+      entries(input: $inboxesInput) {
+        key
+        value {
           nextCursorToAdd {
             height
             index
           }
           nextCursorToRemove {
             height
-	    index
+            index
           }
-          addedEvents
-          removedEvents
+          addedEvents { entries }
+          removedEvents { entries }
         }
       }
     }
     outboxes {
-      values(input: $outboxesInput) {
-        target
-        outboxStateView {
+      keys
+      entries(input: $outboxesInput) {
+        key
+        value {
           nextHeightToSchedule
-          queue
+          queue {
+            entries
+          }
         }
       }
     }
     outboxCounters
     channels {
-      values(input: $channelsInput) {
-        channelFullName
-        channelStateView {
+      keys
+      entries(input: $channelsInput) {
+        key
+        value {
           subscribers
           blockHeight
         }

@@ -691,14 +691,18 @@ where
         .iter()
         .any(|msg| matches!(&msg.event.message, Message::User { .. })));
 
-    let query = async_graphql::Request::new("{ receivedPostsKeys(count: 5) { author, index } }");
+    let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
     let posts = receiver
         .query_user_application(application_id, &query)
         .await?;
     let expected = async_graphql::Response::new(
-        async_graphql::Value::from_json(json!({ "receivedPostsKeys": [
-            { "author": sender.chain_id, "index": 0 }
-        ]}))
+        async_graphql::Value::from_json(json!({
+            "receivedPosts": {
+                "keys": [
+                    { "author": sender.chain_id, "index": 0 }
+                ]
+            }
+        }))
         .unwrap(),
     );
     assert_eq!(posts, expected);
@@ -726,14 +730,16 @@ where
     assert!(certs.is_empty());
 
     // There is still only one post it can see.
-    let query = async_graphql::Request::new("{ receivedPostsKeys { author, index } }");
+    let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
     let posts = receiver
         .query_user_application(application_id, &query)
         .await?;
     let expected = async_graphql::Response::new(
-        async_graphql::Value::from_json(json!({ "receivedPostsKeys": [
-            { "author": sender.chain_id, "index": 0 }
-        ]}))
+        async_graphql::Value::from_json(json!({
+            "receivedPosts": {
+                "keys": [ { "author": sender.chain_id, "index": 0 } ]
+            }
+        }))
         .unwrap(),
     );
     assert_eq!(posts, expected);

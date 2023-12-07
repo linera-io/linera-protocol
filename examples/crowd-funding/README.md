@@ -224,7 +224,7 @@ You can check that the 200 tokens have arrived:
 
 ```gql,ignore
 query {
-    accounts(accountOwner:"User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f")
+    accounts { entry(key: "User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f") { value } }
 }
 ```
 
@@ -248,9 +248,15 @@ In the fungible application on 8080, check that we have received 110 tokens, in 
 70 that we had left after pledging 30:
 
 ```gql,ignore
-query { accounts(
-    accountOwner:"User:445991f46ae490fe207e60c95d0ed95bf4e7ed9c270d4fd4fa555587c2604fe1"
-)}
+query {
+    accounts {
+        entry(
+            key: "User:445991f46ae490fe207e60c95d0ed95bf4e7ed9c270d4fd4fa555587c2604fe1"
+        ) {
+            value
+        }
+    }
+}
 ```
 
 <!-- cargo-rdme end -->

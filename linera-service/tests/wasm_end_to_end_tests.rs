@@ -29,9 +29,13 @@ struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
 
 impl FungibleApp {
     async fn get_amount(&self, account_owner: &fungible::AccountOwner) -> Amount {
-        let query = format!("accounts(accountOwner: {})", account_owner.to_value());
+        let query = format!(
+            "accounts {{ entry(key: {}) {{ value }} }}",
+            account_owner.to_value()
+        );
         let response_body = self.0.query(&query).await.unwrap();
-        serde_json::from_value(response_body["accounts"].clone()).unwrap_or_default()
+        serde_json::from_value(response_body["accounts"]["entry"]["value"].clone())
+            .unwrap_or_default()
     }
 
     async fn assert_balances(
@@ -301,14 +305,18 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
 
     // Instead of retrying, we could call `node_service1.process_inbox(chain1).await` here.
     // However, we prefer to test the notification system for a change.
-    let expected_response = json!({ "receivedPostsKeys": [
-        { "author": chain1, "index": 0 }
-    ]});
+    let expected_response = json!({
+        "receivedPosts": {
+            "keys": [
+                { "author": chain1, "index": 0 }
+            ]
+        }
+    });
     'success: {
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let response = app2
-                .query("receivedPostsKeys(count: 5) { author, index }")
+                .query("receivedPosts { keys { author, index } }")
                 .await
                 .unwrap();
             if response == expected_response {

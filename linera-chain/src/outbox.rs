@@ -6,7 +6,7 @@ use linera_views::{
     common::Context,
     queue_view::QueueView,
     register_view::RegisterView,
-    views::{GraphQLView, View, ViewError},
+    views::{View, ViewError},
 };
 
 #[cfg(any(test, feature = "test"))]
@@ -28,8 +28,12 @@ mod outbox_tests;
 /// we just send the certified blocks over and let the receivers figure out what were the
 /// messages for them.
 /// * When marking block heights as received, messages at lower heights are also marked (ie. dequeued).
-#[derive(Debug, View, GraphQLView)]
-pub struct OutboxStateView<C> {
+#[derive(Debug, View, async_graphql::SimpleObject)]
+pub struct OutboxStateView<C>
+where
+    C: Context + Send + Sync + 'static,
+    ViewError: From<C::Error>,
+{
     /// The minimum block height accepted in the future.
     pub next_height_to_schedule: RegisterView<C, BlockHeight>,
     /// Keep sending these certified blocks of ours until they are acknowledged by
