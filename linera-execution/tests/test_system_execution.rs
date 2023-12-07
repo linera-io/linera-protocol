@@ -42,12 +42,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     let mut tracker = ResourceTracker::default();
     let policy = ResourceControlPolicy::default();
     let results = view
-        .execute_operation(
-            &context,
-            &Operation::System(operation),
-            &policy,
-            &mut tracker,
-        )
+        .execute_operation(context, Operation::System(operation), &policy, &mut tracker)
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::ZERO);
@@ -88,7 +83,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
     let mut tracker = ResourceTracker::default();
     let policy = ResourceControlPolicy::default();
     let results = view
-        .execute_message(&context, &Message::System(message), &policy, &mut tracker)
+        .execute_message(context, Message::System(message), &policy, &mut tracker)
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::from_tokens(4));
@@ -111,7 +106,7 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
     };
     let response = view
-        .query_application(&context, &Query::System(SystemQuery))
+        .query_application(context, Query::System(SystemQuery))
         .await
         .unwrap();
     assert_eq!(

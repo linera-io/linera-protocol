@@ -472,8 +472,8 @@ where
     /// taken.
     pub async fn execute_operation(
         &mut self,
-        context: &OperationContext,
-        operation: &SystemOperation,
+        context: OperationContext,
+        operation: SystemOperation,
     ) -> Result<
         (
             RawExecutionResult<SystemMessage>,
@@ -494,22 +494,22 @@ where
             } => {
                 let child_id = ChainId::child(context.next_message_id());
                 ensure!(
-                    self.admin_id.get().as_ref() == Some(admin_id),
+                    self.admin_id.get().as_ref() == Some(&admin_id),
                     SystemExecutionError::InvalidNewChainAdminId(child_id)
                 );
                 ensure!(
-                    self.committees.get() == committees,
+                    self.committees.get() == &committees,
                     SystemExecutionError::InvalidCommittees
                 );
                 ensure!(
-                    self.epoch.get().as_ref() == Some(epoch),
+                    self.epoch.get().as_ref() == Some(&epoch),
                     SystemExecutionError::InvalidEpoch {
                         chain_id: child_id,
-                        epoch: *epoch
+                        epoch,
                     }
                 );
                 let balance = self.balance.get_mut();
-                balance.try_sub_assign(*new_balance).map_err(|_| {
+                balance.try_sub_assign(new_balance).map_err(|_| {
                     SystemExecutionError::InsufficientFunding {
                         current_balance: *balance,
                     }
@@ -521,17 +521,17 @@ where
                     message: SystemMessage::OpenChain {
                         ownership: ownership.clone(),
                         committees: committees.clone(),
-                        admin_id: *admin_id,
-                        epoch: *epoch,
-                        balance: *new_balance,
+                        admin_id,
+                        epoch,
+                        balance: new_balance,
                     },
                 };
                 let subscription = ChannelSubscription {
-                    chain_id: *admin_id,
+                    chain_id: admin_id,
                     name: SystemChannel::Admin.name(),
                 };
                 let e2 = RawOutgoingMessage {
-                    destination: Destination::Recipient(*admin_id),
+                    destination: Destination::Recipient(admin_id),
                     authenticated: false,
                     is_skippable: false,
                     message: SystemMessage::Subscribe {
@@ -548,16 +548,14 @@ where
             } => {
                 self.ownership.set(ChainOwnership {
                     super_owners: super_owners
-                        .iter()
-                        .map(|public_key| (Owner::from(public_key), *public_key))
+                        .into_iter()
+                        .map(|public_key| (Owner::from(public_key), public_key))
                         .collect(),
                     owners: owners
-                        .iter()
-                        .map(|(public_key, weight)| {
-                            (Owner::from(public_key), (*public_key, *weight))
-                        })
+                        .into_iter()
+                        .map(|(public_key, weight)| (Owner::from(public_key), (public_key, weight)))
                         .collect(),
-                    multi_leader_rounds: *multi_leader_rounds,
+                    multi_leader_rounds,
                 });
             }
             CloseChain => {
@@ -588,12 +586,12 @@ where
             } => {
                 if owner.is_some() {
                     ensure!(
-                        &context.authenticated_signer == owner,
+                        context.authenticated_signer == owner,
                         SystemExecutionError::UnauthenticatedTransferOwner
                     );
                 }
                 ensure!(
-                    *amount > Amount::ZERO,
+                    amount > Amount::ZERO,
                     SystemExecutionError::IncorrectTransferAmount
                 );
                 let balance = match &owner {
@@ -601,21 +599,18 @@ where
                     None => self.balance.get_mut(),
                 };
                 ensure!(
-                    *balance >= *amount,
+                    *balance >= amount,
                     SystemExecutionError::InsufficientFunding {
                         current_balance: *balance
                     }
                 );
-                balance.try_sub_assign(*amount)?;
+                balance.try_sub_assign(amount)?;
                 if let Recipient::Account(account) = recipient {
                     let message = RawOutgoingMessage {
                         destination: Destination::Recipient(account.chain_id),
                         authenticated: false,
                         is_skippable: false,
-                        message: SystemMessage::Credit {
-                            amount: *amount,
-                            account: *account,
-                        },
+                        message: SystemMessage::Credit { amount, account },
                     };
                     result.messages.push(message);
                 }
@@ -628,25 +623,25 @@ where
                 user_data,
             } => {
                 ensure!(
-                    context.authenticated_signer.as_ref() == Some(owner),
+                    context.authenticated_signer.as_ref() == Some(&owner),
                     SystemExecutionError::UnauthenticatedClaimOwner
                 );
                 ensure!(
-                    *amount > Amount::ZERO,
+                    amount > Amount::ZERO,
                     SystemExecutionError::IncorrectClaimAmount
                 );
                 let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(*target),
+                    destination: Destination::Recipient(target),
                     authenticated: true,
                     is_skippable: false,
                     message: SystemMessage::Withdraw {
-                        amount: *amount,
+                        amount,
                         account: Account {
-                            chain_id: *target,
-                            owner: Some(*owner),
+                            chain_id: target,
+                            owner: Some(owner),
                         },
-                        user_data: user_data.clone(),
-                        recipient: *recipient,
+                        user_data,
+                        recipient,
                     },
                 };
                 result.messages.push(message);
@@ -659,17 +654,17 @@ where
                 match admin_operation {
                     AdminOperation::CreateCommittee { epoch, committee } => {
                         ensure!(
-                            *epoch == self.epoch.get().expect("chain is active").try_add_one()?,
+                            epoch == self.epoch.get().expect("chain is active").try_add_one()?,
                             SystemExecutionError::InvalidCommitteeCreation
                         );
-                        self.committees.get_mut().insert(*epoch, committee.clone());
-                        self.epoch.set(Some(*epoch));
+                        self.committees.get_mut().insert(epoch, committee);
+                        self.epoch.set(Some(epoch));
                         let message = RawOutgoingMessage {
                             destination: Destination::Subscribers(SystemChannel::Admin.name()),
                             authenticated: false,
                             is_skippable: false,
                             message: SystemMessage::SetCommittees {
-                                epoch: *epoch,
+                                epoch,
                                 committees: self.committees.get().clone(),
                             },
                         };
@@ -677,7 +672,7 @@ where
                     }
                     AdminOperation::RemoveCommittee { epoch } => {
                         ensure!(
-                            self.committees.get_mut().remove(epoch).is_some(),
+                            self.committees.get_mut().remove(&epoch).is_some(),
                             SystemExecutionError::InvalidCommitteeRemoval
                         );
                         let message = RawOutgoingMessage {
@@ -695,26 +690,26 @@ where
             }
             Subscribe { chain_id, channel } => {
                 ensure!(
-                    context.chain_id != *chain_id,
-                    SystemExecutionError::SelfSubscription(context.chain_id, *channel)
+                    context.chain_id != chain_id,
+                    SystemExecutionError::SelfSubscription(context.chain_id, channel)
                 );
-                if *channel == SystemChannel::Admin {
+                if channel == SystemChannel::Admin {
                     ensure!(
-                        self.admin_id.get().as_ref() == Some(chain_id),
-                        SystemExecutionError::InvalidAdminSubscription(context.chain_id, *channel)
+                        self.admin_id.get().as_ref() == Some(&chain_id),
+                        SystemExecutionError::InvalidAdminSubscription(context.chain_id, channel)
                     );
                 }
                 let subscription = ChannelSubscription {
-                    chain_id: *chain_id,
+                    chain_id,
                     name: channel.name(),
                 };
                 ensure!(
                     !self.subscriptions.contains(&subscription).await?,
-                    SystemExecutionError::NoSuchChannel(context.chain_id, *channel)
+                    SystemExecutionError::NoSuchChannel(context.chain_id, channel)
                 );
                 self.subscriptions.insert(&subscription)?;
                 let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(*chain_id),
+                    destination: Destination::Recipient(chain_id),
                     authenticated: false,
                     is_skippable: false,
                     message: SystemMessage::Subscribe {
@@ -726,16 +721,16 @@ where
             }
             Unsubscribe { chain_id, channel } => {
                 let subscription = ChannelSubscription {
-                    chain_id: *chain_id,
+                    chain_id,
                     name: channel.name(),
                 };
                 ensure!(
                     self.subscriptions.contains(&subscription).await?,
-                    SystemExecutionError::InvalidUnsubscription(context.chain_id, *channel)
+                    SystemExecutionError::InvalidUnsubscription(context.chain_id, channel)
                 );
                 self.subscriptions.remove(&subscription)?;
                 let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(*chain_id),
+                    destination: Destination::Recipient(chain_id),
                     authenticated: false,
                     is_skippable: false,
                     message: SystemMessage::Unsubscribe {
@@ -765,7 +760,7 @@ where
                 required_application_ids,
             } => {
                 let id = UserApplicationId {
-                    bytecode_id: *bytecode_id,
+                    bytecode_id,
                     creation: context.next_message_id(),
                 };
                 self.registry
@@ -790,10 +785,10 @@ where
                 application_id,
             } => {
                 let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(*chain_id),
+                    destination: Destination::Recipient(chain_id),
                     authenticated: false,
                     is_skippable: false,
-                    message: SystemMessage::RequestApplication(*application_id),
+                    message: SystemMessage::RequestApplication(application_id),
                 };
                 result.messages.push(message);
             }
@@ -813,8 +808,8 @@ where
     /// traditional blockchains).
     pub async fn execute_message(
         &mut self,
-        context: &MessageContext,
-        message: &SystemMessage,
+        context: MessageContext,
+        message: SystemMessage,
     ) -> Result<RawExecutionResult<SystemMessage>, SystemExecutionError> {
         let mut result = RawExecutionResult::default();
         use SystemMessage::*;
@@ -822,12 +817,12 @@ where
             Credit { amount, account } if context.chain_id == account.chain_id => {
                 match &account.owner {
                     None => {
-                        let new_balance = self.balance.get().saturating_add(*amount);
+                        let new_balance = self.balance.get().saturating_add(amount);
                         self.balance.set(new_balance);
                     }
                     Some(owner) => {
                         let balance = self.balances.get_mut_or_default(owner).await?;
-                        *balance = balance.saturating_add(*amount);
+                        *balance = balance.saturating_add(amount);
                     }
                 }
             }
@@ -840,20 +835,17 @@ where
                     },
                 user_data: _,
                 recipient,
-            } if chain_id == &context.chain_id
-                && context.authenticated_signer.as_ref() == Some(owner) =>
+            } if chain_id == context.chain_id
+                && context.authenticated_signer.as_ref() == Some(&owner) =>
             {
-                let balance = self.balances.get_mut_or_default(owner).await?;
-                if balance.try_sub_assign(*amount).is_ok() {
+                let balance = self.balances.get_mut_or_default(&owner).await?;
+                if balance.try_sub_assign(amount).is_ok() {
                     if let Recipient::Account(account) = recipient {
                         let message = RawOutgoingMessage {
                             destination: Destination::Recipient(account.chain_id),
                             authenticated: false,
                             is_skippable: false,
-                            message: SystemMessage::Credit {
-                                amount: *amount,
-                                account: *account,
-                            },
+                            message: SystemMessage::Credit { amount, account },
                         };
                         result.messages.push(message);
                     }
@@ -863,39 +855,39 @@ where
             }
             SetCommittees { epoch, committees } => {
                 ensure!(
-                    *epoch >= self.epoch.get().expect("chain is active"),
+                    epoch >= self.epoch.get().expect("chain is active"),
                     SystemExecutionError::CannotRewindEpoch
                 );
-                self.epoch.set(Some(*epoch));
-                self.committees.set(committees.clone());
+                self.epoch.set(Some(epoch));
+                self.committees.set(committees);
             }
             Subscribe { id, subscription } if subscription.chain_id == context.chain_id => {
                 // Notify the subscriber about this block, so that it is included in the
                 // receive_log of the subscriber and correctly synchronized.
                 let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(*id),
+                    destination: Destination::Recipient(id),
                     authenticated: false,
                     is_skippable: false,
-                    message: SystemMessage::Notify { id: *id },
+                    message: SystemMessage::Notify { id },
                 };
                 result.messages.push(message);
-                result.subscribe.push((subscription.name.clone(), *id));
+                result.subscribe.push((subscription.name.clone(), id));
             }
             Unsubscribe { id, subscription } if subscription.chain_id == context.chain_id => {
                 let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(*id),
+                    destination: Destination::Recipient(id),
                     authenticated: false,
                     is_skippable: false,
-                    message: SystemMessage::Notify { id: *id },
+                    message: SystemMessage::Notify { id },
                 };
                 result.messages.push(message);
-                result.unsubscribe.push((subscription.name.clone(), *id));
+                result.unsubscribe.push((subscription.name.clone(), id));
             }
             BytecodePublished { operation_index } => {
                 let bytecode_id = BytecodeId::new(context.message_id);
                 let bytecode_location = BytecodeLocation {
                     certificate_hash: context.certificate_hash,
-                    operation_index: *operation_index,
+                    operation_index,
                 };
                 self.registry
                     .register_published_bytecode(bytecode_id, bytecode_location)?;
@@ -910,7 +902,7 @@ where
             }
             BytecodeLocations { locations } => {
                 for (id, location) in locations {
-                    self.registry.register_published_bytecode(*id, *location)?;
+                    self.registry.register_published_bytecode(id, location)?;
                 }
             }
             ApplicationCreated | Notify { .. } => (),
@@ -928,7 +920,7 @@ where
                 match self
                     .registry
                     .describe_applications_with_dependencies(
-                        vec![*application_id],
+                        vec![application_id],
                         &Default::default(),
                     )
                     .await
@@ -994,8 +986,8 @@ where
 
     pub async fn handle_query(
         &mut self,
-        context: &QueryContext,
-        _query: &SystemQuery,
+        context: QueryContext,
+        _query: SystemQuery,
     ) -> Result<SystemResponse, SystemExecutionError> {
         let response = SystemResponse {
             chain_id: context.chain_id,
@@ -1055,7 +1047,7 @@ mod tests {
         };
         let (result, new_application) = view
             .system
-            .execute_operation(&context, &operation)
+            .execute_operation(context, operation)
             .await
             .unwrap();
         assert_eq!(new_application, None);
@@ -1091,7 +1083,7 @@ mod tests {
         };
         let (result, new_application) = view
             .system
-            .execute_operation(&context, &operation)
+            .execute_operation(context, operation)
             .await
             .unwrap();
         assert_eq!(
@@ -1126,7 +1118,7 @@ mod tests {
         };
         let (result, new_application) = view
             .system
-            .execute_operation(&context, &operation)
+            .execute_operation(context, operation)
             .await
             .unwrap();
         assert_eq!(new_application, None);

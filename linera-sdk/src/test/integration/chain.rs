@@ -472,7 +472,7 @@ impl ActiveChain {
             .await
             .query_application(
                 self.id(),
-                &Query::User {
+                Query::User {
                     application_id: application_id.forget_abi(),
                     bytes: query_bytes,
                 },

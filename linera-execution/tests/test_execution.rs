@@ -53,8 +53,8 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     let policy = ResourceControlPolicy::default();
     let result = view
         .execute_operation(
-            &context,
-            &Operation::User {
+            context,
+            Operation::User {
                 application_id: app_id,
                 bytes: vec![],
             },
@@ -330,8 +330,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     let policy = ResourceControlPolicy::default();
     let result = view
         .execute_operation(
-            &context,
-            &Operation::User {
+            context,
+            Operation::User {
                 application_id: app_id,
                 bytes: vec![1],
             },
@@ -360,8 +360,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     };
     assert_eq!(
         view.query_application(
-            &context,
-            &Query::User {
+            context,
+            Query::User {
                 application_id: app_id,
                 bytes: vec![]
             }
@@ -403,8 +403,8 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
     let policy = ResourceControlPolicy::default();
     let result = view
         .execute_operation(
-            &context,
-            &Operation::User {
+            context,
+            Operation::User {
                 application_id: app_id,
                 bytes: vec![],
             },

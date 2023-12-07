@@ -194,13 +194,13 @@ where
         self.context().extra().chain_id()
     }
 
-    pub async fn query_application(&mut self, query: &Query) -> Result<Response, ChainError> {
+    pub async fn query_application(&mut self, query: Query) -> Result<Response, ChainError> {
         let context = QueryContext {
             chain_id: self.chain_id(),
         };
         let response = self
             .execution_state
-            .query_application(&context, query)
+            .query_application(context, query)
             .await
             .map_err(|error| ChainError::ExecutionError(error, ChainExecutionContext::Query))?;
         Ok(response)
@@ -571,7 +571,12 @@ where
             };
             let results = self
                 .execution_state
-                .execute_message(&context, &message.event.message, &policy, &mut tracker)
+                .execute_message(
+                    context,
+                    message.event.message.clone(),
+                    &policy,
+                    &mut tracker,
+                )
                 .await
                 .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
             let mut messages_out = self
@@ -607,7 +612,7 @@ where
             };
             let results = self
                 .execution_state
-                .execute_operation(&context, operation, &policy, &mut tracker)
+                .execute_operation(context, operation.clone(), &policy, &mut tracker)
                 .await
                 .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
             let mut messages_out = self

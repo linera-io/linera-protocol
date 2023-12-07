@@ -2182,7 +2182,7 @@ where
     .await;
     assert_eq!(
         worker
-            .query_application(ChainId::root(1), &Query::System(SystemQuery))
+            .query_application(ChainId::root(1), Query::System(SystemQuery))
             .await
             .unwrap(),
         Response::System(SystemResponse {
@@ -2192,7 +2192,7 @@ where
     );
     assert_eq!(
         worker
-            .query_application(ChainId::root(2), &Query::System(SystemQuery))
+            .query_application(ChainId::root(2), Query::System(SystemQuery))
             .await
             .unwrap(),
         Response::System(SystemResponse {
@@ -2226,7 +2226,7 @@ where
     assert!(info.manager.pending.is_none());
     assert_eq!(
         worker
-            .query_application(ChainId::root(1), &Query::System(SystemQuery))
+            .query_application(ChainId::root(1), Query::System(SystemQuery))
             .await
             .unwrap(),
         Response::System(SystemResponse {
@@ -2269,7 +2269,7 @@ where
 
     assert_eq!(
         worker
-            .query_application(ChainId::root(2), &Query::System(SystemQuery))
+            .query_application(ChainId::root(2), Query::System(SystemQuery))
             .await
             .unwrap(),
         Response::System(SystemResponse {

@@ -269,8 +269,8 @@ where
 
     pub async fn execute_operation(
         &mut self,
-        context: &OperationContext,
-        operation: &Operation,
+        context: OperationContext,
+        operation: Operation,
         policy: &ResourceControlPolicy,
         tracker: &mut ResourceTracker,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
@@ -282,7 +282,7 @@ where
                 result.authenticated_signer = context.authenticated_signer;
                 let mut results = vec![ExecutionResult::System(result)];
                 if let Some((application_id, argument)) = new_application {
-                    let user_action = UserAction::Initialize(*context, argument);
+                    let user_action = UserAction::Initialize(context, argument);
                     results.extend(
                         self.run_user_action(
                             application_id,
@@ -301,9 +301,9 @@ where
                 bytes,
             } => {
                 self.run_user_action(
-                    *application_id,
+                    application_id,
                     context.chain_id,
-                    UserAction::Operation(*context, bytes.to_vec()),
+                    UserAction::Operation(context, bytes),
                     policy,
                     tracker,
                 )
@@ -314,8 +314,8 @@ where
 
     pub async fn execute_message(
         &mut self,
-        context: &MessageContext,
-        message: &Message,
+        context: MessageContext,
+        message: Message,
         policy: &ResourceControlPolicy,
         tracker: &mut ResourceTracker,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
@@ -330,9 +330,9 @@ where
                 bytes,
             } => {
                 self.run_user_action(
-                    *application_id,
+                    application_id,
                     context.chain_id,
-                    UserAction::Message(*context, bytes.to_vec()),
+                    UserAction::Message(context, bytes),
                     policy,
                     tracker,
                 )
@@ -343,8 +343,8 @@ where
 
     pub async fn query_application(
         &mut self,
-        context: &QueryContext,
-        query: &Query,
+        context: QueryContext,
+        query: Query,
     ) -> Result<Response, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match query {
@@ -360,7 +360,7 @@ where
                 let description = self
                     .system
                     .registry
-                    .describe_application(*application_id)
+                    .describe_application(application_id)
                     .await?;
                 let service = self
                     .context()
@@ -371,7 +371,7 @@ where
                 let mut session_manager = SessionManager::default();
                 let mut results = Vec::new();
                 let mut applications = vec![ApplicationStatus {
-                    id: *application_id,
+                    id: application_id,
                     parameters: description.parameters,
                     signer: None,
                 }];
@@ -388,8 +388,7 @@ where
                 );
                 let (runtime_actor, runtime_sender) = runtime.service_runtime_actor();
                 // Run the query.
-                let response_future =
-                    service.handle_query(*context, runtime_sender, bytes.to_vec());
+                let response_future = service.handle_query(context, runtime_sender, bytes);
                 let (runtime_result, response) =
                     futures::future::join(runtime_actor.run(), response_future).await;
                 runtime_result?;
@@ -397,7 +396,7 @@ where
 
                 // Check that applications were correctly stacked and unstacked.
                 assert_eq!(applications.len(), 1);
-                assert_eq!(&applications[0].id, application_id);
+                assert_eq!(applications[0].id, application_id);
                 Ok(Response::User(response))
             }
         }

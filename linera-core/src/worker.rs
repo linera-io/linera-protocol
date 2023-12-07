@@ -433,7 +433,7 @@ where
     pub async fn query_application(
         &mut self,
         chain_id: ChainId,
-        query: &Query,
+        query: Query,
     ) -> Result<Response, WorkerError> {
         let mut chain = self.storage.load_active_chain(chain_id).await?;
         let response = chain.query_application(query).await?;

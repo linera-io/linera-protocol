@@ -83,8 +83,8 @@ async fn test_fuel_for_counter_wasm_application(
     for increment in &increments {
         let result = view
             .execute_operation(
-                &context,
-                &Operation::user(app_id, increment).unwrap(),
+                context,
+                Operation::user(app_id, increment).unwrap(),
                 &policy,
                 &mut tracker,
             )
@@ -108,7 +108,7 @@ async fn test_fuel_for_counter_wasm_application(
     );
     let request = async_graphql::Request::new("query { value }");
     let Response::User(serialized_value) = view
-        .query_application(&context, &Query::user(app_id, &request).unwrap())
+        .query_application(context, Query::user(app_id, &request).unwrap())
         .await?
     else {
         panic!("unexpected response")
