@@ -472,18 +472,18 @@ pub struct ChainManagerInfo {
     /// The configuration of the chain's owners.
     pub ownership: ChainOwnership,
     /// Latest authenticated block that we have received, if requested.
-    pub requested_proposed: Option<BlockProposal>,
+    pub requested_proposed: Option<Box<BlockProposal>>,
     /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
     /// validator).
-    pub requested_locked: Option<Certificate>,
+    pub requested_locked: Option<Box<Certificate>>,
     /// Latest timeout certificate we have seen.
-    pub leader_timeout: Option<Certificate>,
+    pub leader_timeout: Option<Box<Certificate>>,
     /// Latest vote we cast (either to validate or to confirm a block).
     pub pending: Option<LiteVote>,
     /// Latest timeout vote we cast.
     pub timeout_vote: Option<LiteVote>,
     /// The value we voted for, if requested.
-    pub requested_pending_value: Option<HashedValue>,
+    pub requested_pending_value: Option<Box<HashedValue>>,
     /// The current round, i.e. the lowest round where we can still vote to validate a block.
     pub current_round: Round,
     /// The current leader, who is allowed to propose the next block.
@@ -500,7 +500,7 @@ impl From<&ChainManager> for ChainManagerInfo {
             ownership: manager.ownership.clone(),
             requested_proposed: None,
             requested_locked: None,
-            leader_timeout: manager.leader_timeout.clone(),
+            leader_timeout: manager.leader_timeout.clone().map(Box::new),
             pending: manager.pending.as_ref().map(|vote| vote.lite()),
             timeout_vote: manager.timeout_vote.as_ref().map(Vote::lite),
             requested_pending_value: None,
@@ -513,14 +513,18 @@ impl From<&ChainManager> for ChainManagerInfo {
 
 impl ChainManagerInfo {
     pub fn add_values(&mut self, manager: &ChainManager) {
-        self.requested_proposed = manager.proposed.clone();
-        self.requested_locked = manager.locked.clone();
-        self.requested_pending_value = manager.pending.as_ref().map(|vote| vote.value.clone());
+        self.requested_proposed = manager.proposed.clone().map(Box::new);
+        self.requested_locked = manager.locked.clone().map(Box::new);
+        self.requested_pending_value = manager
+            .pending
+            .as_ref()
+            .map(|vote| Box::new(vote.value.clone()));
     }
 
     pub fn highest_validated(&self) -> Option<&Certificate> {
         self.requested_locked
             .iter()
+            .map(|cert| &**cert)
             .chain(
                 self.requested_proposed
                     .as_ref()

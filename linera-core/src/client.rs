@@ -443,9 +443,10 @@ where
     /// multi-owner chain, we pick one identity for which we know the private key.
     pub async fn identity(&mut self) -> Result<Owner, ChainClientError> {
         let manager = self.chain_info().await?.manager;
-        if !manager.ownership.is_active() {
-            return Err(LocalNodeError::InactiveChain(self.chain_id).into());
-        }
+        ensure!(
+            manager.ownership.is_active(),
+            LocalNodeError::InactiveChain(self.chain_id)
+        );
         let mut identities = manager
             .ownership
             .owners
@@ -963,7 +964,7 @@ where
         // Now we should have a complete view of all committees in the system.
         let (committees, max_epoch) = self.known_committees().await?;
         // Proceed to downloading received certificates.
-        let trackers = self.received_certificate_trackers.clone();
+        let trackers = &self.received_certificate_trackers;
         let result = communicate_with_quorum(
             &nodes,
             &local_committee,
