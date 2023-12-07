@@ -87,10 +87,10 @@ where
         Ok(Some(big_value))
     }
 
-    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, Self::Error> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
         let mut big_key = key.to_vec();
         big_key.extend(&[0, 0, 0, 0]);
-        self.store.test_existence_value(&big_key).await
+        self.store.contains_key(&big_key).await
     }
 
     async fn read_multi_values_bytes(
@@ -301,8 +301,8 @@ impl KeyValueStore for TestMemoryStoreInternal {
         self.store.read_value_bytes(key).await
     }
 
-    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, MemoryContextError> {
-        self.store.test_existence_value(key).await
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryContextError> {
+        self.store.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(
@@ -369,8 +369,8 @@ impl KeyValueStore for TestMemoryStore {
         self.store.read_value_bytes(key).await
     }
 
-    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, MemoryContextError> {
-        self.store.test_existence_value(key).await
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryContextError> {
+        self.store.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(

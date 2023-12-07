@@ -831,7 +831,7 @@ impl DynamoDbStoreInternal {
         }
     }
 
-    async fn test_existence_value_general(
+    async fn contains_key_general(
         &self,
         key_db: HashMap<String, AttributeValue>,
     ) -> Result<bool, DynamoDbContextError> {
@@ -1140,10 +1140,10 @@ impl KeyValueStore for DynamoDbStoreInternal {
         self.read_value_bytes_general(key_db).await
     }
 
-    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, DynamoDbContextError> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, DynamoDbContextError> {
         ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbContextError::KeyTooLong);
         let key_db = build_key(key.to_vec());
-        self.test_existence_value_general(key_db).await
+        self.contains_key_general(key_db).await
     }
 
     async fn read_multi_values_bytes(
@@ -1221,8 +1221,8 @@ impl KeyValueStore for DynamoDbStore {
         self.store.read_value_bytes(key).await
     }
 
-    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, DynamoDbContextError> {
-        self.store.test_existence_value(key).await
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, DynamoDbContextError> {
+        self.store.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(

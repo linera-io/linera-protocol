@@ -567,11 +567,11 @@ where
     /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![42]).await.unwrap();
-    ///   assert!(view.test_existence(&[0,1]).await.unwrap());
-    ///   assert!(!view.test_existence(&[0,2]).await.unwrap());
+    ///   assert!(view.contains_key(&[0,1]).await.unwrap());
+    ///   assert!(!view.contains_key(&[0,2]).await.unwrap());
     /// # })
     /// ```
-    pub async fn test_existence(&self, index: &[u8]) -> Result<bool, ViewError> {
+    pub async fn contains_key(&self, index: &[u8]) -> Result<bool, ViewError> {
         ensure!(index.len() <= self.max_key_size(), ViewError::KeyTooLong);
         if let Some(update) = self.updates.get(index) {
             let test = match update {
@@ -589,7 +589,7 @@ where
             return Ok(false);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, index);
-        Ok(self.context.test_existence_value(&key).await?)
+        Ok(self.context.contains_key(&key).await?)
     }
 
     /// Obtains the values of a range of indices
@@ -1011,9 +1011,9 @@ where
         view.get(key).await
     }
 
-    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, ViewError> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, ViewError> {
         let view = self.view.read().await;
-        view.test_existence(key).await
+        view.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(

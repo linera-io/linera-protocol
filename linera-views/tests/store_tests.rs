@@ -102,7 +102,7 @@ async fn run_reads<S: KeyValueStore + Sync>(store: S, key_values: Vec<(Vec<u8>, 
         }
         let mut test_exists = Vec::new();
         for key in &keys {
-            test_exists.push(store.test_existence_value(key).await.unwrap());
+            test_exists.push(store.contains_key(key).await.unwrap());
         }
         let values_read = store.read_multi_values_bytes(keys).await.unwrap();
         assert_eq!(values, values_read);

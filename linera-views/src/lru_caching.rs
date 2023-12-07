@@ -128,10 +128,10 @@ where
         }
     }
 
-    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, Self::Error> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
         match &self.lru_read_values {
             None => {
-                return self.client.test_existence_value(key).await;
+                return self.client.contains_key(key).await;
             }
             Some(lru_read_values) => {
                 // First inquiring in the read_value_bytes LRU
@@ -140,7 +140,7 @@ where
                     return Ok(value.is_some());
                 }
                 drop(lru_read_values_container);
-                self.client.test_existence_value(key).await
+                self.client.contains_key(key).await
             }
         }
     }

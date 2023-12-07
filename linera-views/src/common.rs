@@ -284,7 +284,7 @@ pub trait KeyValueStore {
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
     /// Test whether a key exists in the database
-    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, Self::Error>;
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error>;
 
     /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
     async fn read_multi_values_bytes(
@@ -441,7 +441,7 @@ pub trait Context {
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
     /// Test whether a key exists in the database
-    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, Self::Error>;
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error>;
 
     /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
     async fn read_multi_values_bytes(
@@ -634,8 +634,8 @@ where
         log_time_async(self.store.read_value_bytes(key), "read_value_bytes").await
     }
 
-    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, Self::Error> {
-        log_time_async(self.store.test_existence_value(key), "test_existence_value").await
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
+        log_time_async(self.store.contains_key(key), "contains_key").await
     }
 
     async fn read_multi_values_bytes(

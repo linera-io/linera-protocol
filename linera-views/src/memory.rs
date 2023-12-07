@@ -50,7 +50,7 @@ impl KeyValueStore for MemoryStore {
         Ok(map.get(key).cloned())
     }
 
-    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, MemoryContextError> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryContextError> {
         let map = self.map.read().await;
         Ok(map.get(key).is_some())
     }

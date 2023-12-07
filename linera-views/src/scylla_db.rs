@@ -130,10 +130,10 @@ impl KeyValueStore for ScyllaDbStoreInternal {
         Self::read_value_internal(store, key.to_vec()).await
     }
 
-    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, Self::Error> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        Self::test_existence_value_internal(store, key.to_vec()).await
+        Self::contains_key_internal(store, key.to_vec()).await
     }
 
     async fn read_multi_values_bytes(
@@ -215,7 +215,7 @@ impl ScyllaDbStoreInternal {
         Ok(None)
     }
 
-    async fn test_existence_value_internal(
+    async fn contains_key_internal(
         store: &ScyllaDbStorePair,
         key: Vec<u8>,
     ) -> Result<bool, ScyllaDbContextError> {
@@ -669,8 +669,8 @@ impl KeyValueStore for ScyllaDbStore {
         self.store.read_value_bytes(key).await
     }
 
-    async fn test_existence_value(&self, key: &[u8]) -> Result<bool, Self::Error> {
-        self.store.test_existence_value(key).await
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
+        self.store.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(
