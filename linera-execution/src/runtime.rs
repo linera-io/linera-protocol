@@ -8,7 +8,7 @@ use crate::{
     ExecutionRuntimeContext, ServiceRuntime, SessionId, UserApplicationDescription,
     UserApplicationId, UserContractCode, UserServiceCode,
 };
-use async_lock::{Mutex, MutexGuard, MutexGuardArc, RwLockWriteGuardArc};
+use async_lock::{Mutex, MutexGuard, MutexGuardArc};
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -20,6 +20,7 @@ use linera_views::{
     batch::Batch,
     common::Context,
     key_value_store_view::KeyValueStoreView,
+    reentrant_collection_view,
     register_view::RegisterView,
     views::{View, ViewError},
 };
@@ -78,9 +79,11 @@ pub(crate) struct ApplicationStatus {
 }
 
 type ActiveViewUserStates<C> =
-    BTreeMap<UserApplicationId, RwLockWriteGuardArc<KeyValueStoreView<C>>>;
-type ActiveSimpleUserStates<C> =
-    BTreeMap<UserApplicationId, RwLockWriteGuardArc<RegisterView<C, Vec<u8>>>>;
+    BTreeMap<UserApplicationId, reentrant_collection_view::WriteGuardedView<KeyValueStoreView<C>>>;
+type ActiveSimpleUserStates<C> = BTreeMap<
+    UserApplicationId,
+    reentrant_collection_view::WriteGuardedView<RegisterView<C, Vec<u8>>>,
+>;
 type ActiveSessions = BTreeMap<SessionId, MutexGuardArc<SessionState>>;
 
 #[derive(Debug, Clone, Default)]
