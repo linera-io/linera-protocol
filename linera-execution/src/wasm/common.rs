@@ -127,12 +127,9 @@ where
     /// ```
     pub fn initialize(
         self,
-        context: &OperationContext,
-        argument: &[u8],
+        context: OperationContext,
+        argument: Vec<u8>,
     ) -> WasmResultFuture<RawExecutionResult<Vec<u8>>> {
-        let context = *context;
-        let argument = argument.to_owned();
-
         self.run_wasm_guest(move |application, store| {
             application.initialize(store, context, argument)
         })
@@ -152,12 +149,9 @@ where
     /// ```
     pub fn execute_operation(
         self,
-        context: &OperationContext,
-        operation: &[u8],
+        context: OperationContext,
+        operation: Vec<u8>,
     ) -> WasmResultFuture<RawExecutionResult<Vec<u8>>> {
-        let context = *context;
-        let operation = operation.to_owned();
-
         self.run_wasm_guest(move |application, store| {
             application.execute_operation(store, context, operation)
         })
@@ -177,12 +171,9 @@ where
     /// ```
     pub fn execute_message(
         self,
-        context: &MessageContext,
-        message: &[u8],
+        context: MessageContext,
+        message: Vec<u8>,
     ) -> WasmResultFuture<RawExecutionResult<Vec<u8>>> {
-        let context = *context;
-        let message = message.to_owned();
-
         self.run_wasm_guest(move |application, store| {
             application.execute_message(store, context, message)
         })
@@ -203,13 +194,10 @@ where
     /// ```
     pub fn handle_application_call(
         self,
-        context: &CalleeContext,
-        argument: &[u8],
+        context: CalleeContext,
+        argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> WasmResultFuture<ApplicationCallResult> {
-        let context = *context;
-        let argument = argument.to_owned();
-
         self.run_wasm_guest(move |application, store| {
             application.handle_application_call(store, context, argument, forwarded_sessions)
         })
@@ -231,15 +219,11 @@ where
     /// ```
     pub fn handle_session_call(
         self,
-        context: &CalleeContext,
-        session_state: &[u8],
-        argument: &[u8],
+        context: CalleeContext,
+        session_state: Vec<u8>,
+        argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> WasmResultFuture<(SessionCallResult, Vec<u8>)> {
-        let context = *context;
-        let session_state = session_state.to_owned();
-        let argument = argument.to_owned();
-
         self.run_wasm_guest(move |application, store| {
             application.handle_session_call(
                 store,
@@ -270,12 +254,9 @@ where
     /// ```
     pub fn handle_query(
         self,
-        context: &QueryContext,
-        argument: &[u8],
+        context: QueryContext,
+        argument: Vec<u8>,
     ) -> WasmResultFuture<Vec<u8>> {
-        let context = *context;
-        let argument = argument.to_owned();
-
         self.run_wasm_guest(move |application, store| {
             application.handle_query(store, context, argument)
         })

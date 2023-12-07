@@ -18,6 +18,9 @@ use futures::{
     stream::{StreamExt, TryStreamExt},
 };
 
+pub type ContractRuntimeSender = mpsc::UnboundedSender<ContractRequest>;
+pub type ServiceRuntimeSender = mpsc::UnboundedSender<ServiceRequest>;
+
 /// A handler of application system APIs that runs as a separate actor.
 ///
 /// Receives `Request`s from the application and handles them using the `Runtime`.
