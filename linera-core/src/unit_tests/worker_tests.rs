@@ -3546,7 +3546,10 @@ where
         .handle_chain_info_query(query_values.clone())
         .await
         .unwrap();
-    assert_eq!(response.info.manager.requested_locked, Some(certificate1));
+    assert_eq!(
+        response.info.manager.requested_locked,
+        Some(Box::new(certificate1))
+    );
 
     // Proposing block2 now would fail.
     let proposal = block2
@@ -3568,7 +3571,10 @@ where
         .handle_chain_info_query(query_values.clone())
         .await
         .unwrap();
-    assert_eq!(response.info.manager.requested_locked, Some(certificate2));
+    assert_eq!(
+        response.info.manager.requested_locked,
+        Some(Box::new(certificate2))
+    );
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
     assert_eq!(vote.round, Round::SingleLeader(5));
@@ -3613,7 +3619,10 @@ where
         .await
         .unwrap();
     let (response, _) = worker.handle_chain_info_query(query_values).await.unwrap();
-    assert_eq!(response.info.manager.requested_locked, Some(certificate));
+    assert_eq!(
+        response.info.manager.requested_locked,
+        Some(Box::new(certificate))
+    );
 }
 
 #[test(tokio::test)]
