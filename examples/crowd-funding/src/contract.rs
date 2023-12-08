@@ -7,7 +7,7 @@ mod state;
 
 use async_trait::async_trait;
 use crowd_funding::{ApplicationCall, InitializationArgument, Message, Operation};
-use fungible::{Account, AccountOwner, Destination, FungibleTokenAbi};
+use fungible::{Account, AccountOwner, Destination, FungibleResponse, FungibleTokenAbi};
 use linera_sdk::{
     base::{Amount, ApplicationId, SessionId, WithContractAbi},
     contract::system_api,
@@ -225,10 +225,13 @@ impl CrowdFunding {
     ) -> Result<Vec<Amount>, Error> {
         let mut balances = Vec::with_capacity(sessions.len());
         for session in sessions {
-            let (balance, _) = self
+            let (response, _) = self
                 .call_session(false, *session, &fungible::SessionCall::Balance, vec![])
                 .await?;
-            balances.push(balance);
+            match response {
+                FungibleResponse::Balance(balance) => balances.push(balance),
+                response => return Err(Error::UnexpectedFungibleResponse(response)),
+            }
         }
         Ok(balances)
     }
@@ -322,7 +325,7 @@ impl CrowdFunding {
     /// Queries the token application to determine the total amount of tokens in custody.
     async fn balance(&mut self) -> Result<Amount, Error> {
         let owner = AccountOwner::Application(system_api::current_application_id());
-        let (amount, _) = self
+        let (response, _) = self
             .call_application(
                 true,
                 Self::fungible_id()?,
@@ -330,7 +333,10 @@ impl CrowdFunding {
                 vec![],
             )
             .await?;
-        Ok(amount)
+        match response {
+            fungible::FungibleResponse::Balance(balance) => Ok(balance),
+            response => Err(Error::UnexpectedFungibleResponse(response)),
+        }
     }
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
@@ -453,4 +459,8 @@ pub enum Error {
     /// Failed to deserialize JSON string
     #[error("Failed to deserialize JSON string")]
     JsonError(#[from] serde_json::Error),
+
+    /// Unexpected response from fungible token application.
+    #[error("Unexpected response from fungible token application: {0:?}")]
+    UnexpectedFungibleResponse(FungibleResponse),
 }

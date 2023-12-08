@@ -428,10 +428,14 @@ impl Amm {
     async fn balance(&mut self, owner: &AccountOwner, token_idx: u32) -> Result<Amount, AmmError> {
         let balance = fungible::ApplicationCall::Balance { owner: *owner };
         let token = Self::fungible_id(token_idx).expect("failed to get the token");
-        Ok(self
+        match self
             .call_application(true, token, &balance, vec![])
             .await?
-            .0)
+            .0
+        {
+            fungible::FungibleResponse::Balance(balance) => Ok(balance),
+            response => Err(AmmError::UnexpectedFungibleResponse(response)),
+        }
     }
 
     async fn receive_from_account(

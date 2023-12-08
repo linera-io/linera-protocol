@@ -464,8 +464,9 @@ where
 
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from_tokens(1_000_000))]);
     let state = fungible::InitialState { accounts };
+    let params = fungible::Parameters::new("FUN");
     let (application_id, _cert) = sender
-        .create_application(bytecode_id, &(), &state, vec![])
+        .create_application(bytecode_id, &params, &state, vec![])
         .await?;
 
     // Make a transfer using the fungible app.

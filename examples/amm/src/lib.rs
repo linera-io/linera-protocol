@@ -1,7 +1,7 @@
 use std::convert::Infallible;
 
 use async_graphql::{scalar, Request, Response};
-use fungible::AccountOwner;
+use fungible::{AccountOwner, FungibleResponse};
 use linera_sdk::{
     base::{Amount, ArithmeticError, ContractAbi, ServiceAbi},
     views::ViewError,
@@ -141,4 +141,8 @@ pub enum AmmError {
 
     #[error(transparent)]
     Infallible(#[from] Infallible),
+
+    /// Unexpected response from fungible token application.
+    #[error("Unexpected response from fungible token application: {0:?}")]
+    UnexpectedFungibleResponse(FungibleResponse),
 }
