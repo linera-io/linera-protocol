@@ -22,7 +22,7 @@ macro_rules! impl_contract_system_api {
                     })?
                     .recv()
                     .map(|chain_id| chain_id.into())
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn application_id(
@@ -34,7 +34,7 @@ macro_rules! impl_contract_system_api {
                     })?
                     .recv()
                     .map(|application_id| application_id.into())
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn application_parameters(&mut self) -> Result<Vec<u8>, Self::Error> {
@@ -45,7 +45,7 @@ macro_rules! impl_contract_system_api {
                         })
                     })?
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn read_system_balance(&mut self) -> Result<contract_system_api::Amount, Self::Error> {
@@ -55,7 +55,7 @@ macro_rules! impl_contract_system_api {
                     })?
                     .recv()
                     .map(|balance| balance.into())
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn read_system_timestamp(
@@ -67,7 +67,7 @@ macro_rules! impl_contract_system_api {
                     })?
                     .recv()
                     .map(|timestamp| timestamp.micros())
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn load(&mut self) -> Result<Vec<u8>, Self::Error> {
@@ -76,7 +76,7 @@ macro_rules! impl_contract_system_api {
                         ContractRequest::Base(BaseRequest::TryReadMyState { response_sender })
                     })?
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn load_and_lock(&mut self) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -112,7 +112,7 @@ macro_rules! impl_contract_system_api {
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
                 receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn try_call_application(
@@ -207,7 +207,7 @@ macro_rules! impl_service_system_api {
                     })?
                     .recv()
                     .map(|chain_id| chain_id.into())
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn application_id(&mut self) -> Result<service_system_api::ApplicationId, Self::Error> {
@@ -217,7 +217,7 @@ macro_rules! impl_service_system_api {
                     })?
                     .recv()
                     .map(|application_id| application_id.into())
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn application_parameters(&mut self) -> Result<Vec<u8>, Self::Error> {
@@ -226,7 +226,7 @@ macro_rules! impl_service_system_api {
                         ServiceRequest::Base(BaseRequest::ApplicationParameters { response_sender })
                     })?
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn read_system_balance(&mut self) -> Result<service_system_api::Amount, Self::Error> {
@@ -236,7 +236,7 @@ macro_rules! impl_service_system_api {
                     })?
                     .recv()
                     .map(|balance| balance.into())
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn read_system_timestamp(
@@ -248,7 +248,7 @@ macro_rules! impl_service_system_api {
                     })?
                     .recv()
                     .map(|timestamp| timestamp.micros())
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn load_new(&mut self) -> Result<Self::Load, Self::Error> {
@@ -271,7 +271,7 @@ macro_rules! impl_service_system_api {
                 receiver
                     .recv()
                     .map(Ok)
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
@@ -294,7 +294,7 @@ macro_rules! impl_service_system_api {
                 receiver
                     .recv()
                     .map(Ok)
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn unlock_new(&mut self) -> Result<Self::Unlock, Self::Error> {
@@ -317,7 +317,7 @@ macro_rules! impl_service_system_api {
                 receiver
                     .recv()
                     .map(Ok)
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn try_query_application_new(
@@ -348,7 +348,7 @@ macro_rules! impl_service_system_api {
                 receiver
                     .recv()
                     .map(Ok)
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn log(
@@ -412,7 +412,7 @@ macro_rules! impl_view_system_api_for_service {
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
                 receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {
@@ -437,7 +437,7 @@ macro_rules! impl_view_system_api_for_service {
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
                 receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn find_key_values_new(
@@ -465,7 +465,7 @@ macro_rules! impl_view_system_api_for_service {
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
                 receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn write_batch(
@@ -520,7 +520,7 @@ macro_rules! impl_view_system_api_for_contract {
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
                 receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {
@@ -545,7 +545,7 @@ macro_rules! impl_view_system_api_for_contract {
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
                 receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn find_key_values_new(
@@ -573,7 +573,7 @@ macro_rules! impl_view_system_api_for_contract {
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
                 receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn write_batch(

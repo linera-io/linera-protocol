@@ -11,6 +11,7 @@ mod ownership;
 pub mod policy;
 mod resources;
 mod runtime;
+pub mod runtime_actor;
 pub mod system;
 mod wasm;
 
@@ -50,6 +51,7 @@ use linera_base::{
 };
 use linera_views::{batch::Batch, views::ViewError};
 use resources::RuntimeCounts;
+use runtime_actor::{ContractRuntimeSender, ServiceRuntimeSender};
 use serde::{Deserialize, Serialize};
 use std::{io, path::Path, str::FromStr, sync::Arc};
 use thiserror::Error;
@@ -102,7 +104,8 @@ pub enum ExecutionError {
     ExcessiveRead,
     #[error("Excessive writings to storage")]
     ExcessiveWrite,
-
+    #[error("Runtime failed to respond to application")]
+    MissingRuntimeResponse,
     #[error("Bytecode ID {0:?} is invalid")]
     InvalidBytecodeId(BytecodeId),
     #[error("Failed to load bytecode from storage {0:?}")]
@@ -124,25 +127,25 @@ pub trait UserContract {
     /// Initializes the application state on the chain that owns the application.
     async fn initialize(
         &self,
-        context: &OperationContext,
-        runtime: &dyn ContractRuntime,
-        argument: &[u8],
+        context: OperationContext,
+        runtime_sender: ContractRuntimeSender,
+        argument: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
     /// Applies an operation from the current block.
     async fn execute_operation(
         &self,
-        context: &OperationContext,
-        runtime: &dyn ContractRuntime,
-        operation: &[u8],
+        context: OperationContext,
+        runtime_sender: ContractRuntimeSender,
+        operation: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
     /// Applies a message originating from a cross-chain message.
     async fn execute_message(
         &self,
-        context: &MessageContext,
-        runtime: &dyn ContractRuntime,
-        message: &[u8],
+        context: MessageContext,
+        runtime_sender: ContractRuntimeSender,
+        message: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
     /// Executes a call from another application.
@@ -151,21 +154,21 @@ pub trait UserContract {
     /// which can in turn call other applications.
     async fn handle_application_call(
         &self,
-        context: &CalleeContext,
-        runtime: &dyn ContractRuntime,
-        argument: &[u8],
+        context: CalleeContext,
+        runtime_sender: ContractRuntimeSender,
+        argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError>;
 
     /// Executes a call from another application into a session created by this application.
     async fn handle_session_call(
         &self,
-        context: &CalleeContext,
-        runtime: &dyn ContractRuntime,
-        session_state: &mut Vec<u8>,
-        argument: &[u8],
+        context: CalleeContext,
+        runtime_sender: ContractRuntimeSender,
+        session_state: Vec<u8>,
+        argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, ExecutionError>;
+    ) -> Result<(SessionCallResult, Vec<u8>), ExecutionError>;
 }
 
 /// The public entry points provided by the service part of an application.
@@ -174,9 +177,9 @@ pub trait UserService {
     /// Executes unmetered read-only queries on the state of this application.
     async fn handle_query(
         &self,
-        context: &QueryContext,
-        runtime: &dyn ServiceRuntime,
-        argument: &[u8],
+        context: QueryContext,
+        runtime_sender: ServiceRuntimeSender,
+        argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 }
 

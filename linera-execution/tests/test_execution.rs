@@ -12,7 +12,14 @@ use linera_base::{
     data_types::BlockHeight,
     identifiers::{ChainDescription, ChainId, Owner, SessionId},
 };
-use linera_execution::{policy::ResourceControlPolicy, *};
+use linera_execution::{
+    policy::ResourceControlPolicy,
+    runtime_actor::{
+        BaseRequest, ContractRequest, ContractRuntimeSender, SendRequestExt, ServiceRequest,
+        ServiceRuntimeSender,
+    },
+    *,
+};
 use linera_views::{batch::Batch, common::Context, memory::MemoryContext, views::View};
 use std::sync::Arc;
 
@@ -46,8 +53,8 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     let policy = ResourceControlPolicy::default();
     let result = view
         .execute_operation(
-            &context,
-            &Operation::User {
+            context,
+            Operation::User {
                 application_id: app_id,
                 bytes: vec![],
             },
@@ -72,9 +79,9 @@ impl UserContract for TestApplication {
     /// Nothing needs to be done during initialization.
     async fn initialize(
         &self,
-        context: &OperationContext,
-        _runtime: &dyn ContractRuntime,
-        _argument: &[u8],
+        context: OperationContext,
+        _runtime_sender: ContractRuntimeSender,
+        _argument: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         assert_eq!(context.authenticated_signer, Some(self.owner));
         Ok(RawExecutionResult::default())
@@ -86,66 +93,135 @@ impl UserContract for TestApplication {
     /// leaked if the operation is empty.
     async fn execute_operation(
         &self,
-        context: &OperationContext,
-        runtime: &dyn ContractRuntime,
-        operation: &[u8],
+        context: OperationContext,
+        runtime_sender: ContractRuntimeSender,
+        operation: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
-        let app_id = runtime.application_id();
-        // Modify our state.
-        let chosen_key = vec![0];
-        runtime.lock_view_user_state().await?;
-        let state = runtime.read_value_bytes(chosen_key.clone()).await?;
-        let mut state = state.unwrap_or_default();
-        state.extend(operation);
-        let mut batch = Batch::new();
-        batch.put_key_value_bytes(chosen_key, state);
-        runtime
-            .write_batch_and_unlock(batch)
-            .await
-            .expect("State is locked at the start of the operation");
-        // Call ourselves after the state => ok.
-        let call_result = runtime
-            .try_call_application(/* authenticate */ true, app_id, &[], vec![])
-            .await?;
-        assert_eq!(call_result.value, Vec::<u8>::new());
-        assert_eq!(call_result.sessions.len(), 1);
-        if !operation.is_empty() {
-            // Call the session to close it.
-            let session_id = call_result.sessions[0];
-            runtime
-                .try_call_session(/* authenticate */ false, session_id, &[], vec![])
-                .await?;
-        }
-        Ok(RawExecutionResult::default())
+        tokio::task::spawn_blocking(move || {
+            let app_id = runtime_sender
+                .send_request(|response_sender| {
+                    ContractRequest::Base(BaseRequest::ApplicationId { response_sender })
+                })?
+                .recv()
+                .unwrap();
+
+            // Modify our state.
+            let chosen_key = vec![0];
+            runtime_sender
+                .send_request(|response_sender| {
+                    ContractRequest::Base(BaseRequest::LockViewUserState { response_sender })
+                })?
+                .recv()
+                .unwrap();
+
+            let state = runtime_sender
+                .send_request(|response_sender| {
+                    ContractRequest::Base(BaseRequest::ReadValueBytes {
+                        key: chosen_key.clone(),
+                        response_sender,
+                    })
+                })?
+                .recv()
+                .unwrap();
+
+            let mut state = state.unwrap_or_default();
+            state.extend(operation.clone());
+            let mut batch = Batch::new();
+            batch.put_key_value_bytes(chosen_key, state);
+
+            runtime_sender
+                .send_sync_request(|response_sender| ContractRequest::WriteBatchAndUnlock {
+                    batch,
+                    response_sender,
+                })
+                .expect("State is locked at the start of the operation");
+
+            // Call ourselves after the state => ok.
+            let call_result = runtime_sender.send_sync_request(|response_sender| {
+                ContractRequest::TryCallApplication {
+                    authenticated: true,
+                    callee_id: app_id,
+                    argument: vec![],
+                    forwarded_sessions: vec![],
+                    response_sender,
+                }
+            })?;
+            assert_eq!(call_result.value, Vec::<u8>::new());
+            assert_eq!(call_result.sessions.len(), 1);
+            if !operation.is_empty() {
+                // Call the session to close it.
+                let session_id = call_result.sessions[0];
+                runtime_sender.send_sync_request(|response_sender| {
+                    ContractRequest::TryCallSession {
+                        authenticated: false,
+                        session_id,
+                        argument: vec![],
+                        forwarded_sessions: vec![],
+                        response_sender,
+                    }
+                })?;
+            }
+            Ok(RawExecutionResult::default())
+        })
+        .await
+        .unwrap()
     }
 
     /// Attempts to call ourself while the state is locked.
     async fn execute_message(
         &self,
-        context: &MessageContext,
-        runtime: &dyn ContractRuntime,
-        _message: &[u8],
+        context: MessageContext,
+        runtime_sender: ContractRuntimeSender,
+        _message: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
-        let app_id = runtime.application_id();
-        runtime.lock_view_user_state().await?;
-        // Call ourselves while the state is locked => not ok.
-        runtime
-            .try_call_application(/* authenticate */ true, app_id, &[], vec![])
-            .await?;
-        runtime.unlock_view_user_state().await?;
-        Ok(RawExecutionResult::default())
+        tokio::task::spawn_blocking(move || {
+            let app_id = runtime_sender
+                .send_request(|response_sender| {
+                    ContractRequest::Base(BaseRequest::ApplicationId { response_sender })
+                })?
+                .recv()
+                .unwrap();
+
+            runtime_sender
+                .send_request(|response_sender| {
+                    ContractRequest::Base(BaseRequest::LockViewUserState { response_sender })
+                })?
+                .recv()
+                .unwrap();
+
+            // Call ourselves while the state is locked => not ok.
+            runtime_sender.send_sync_request(|response_sender| {
+                ContractRequest::TryCallApplication {
+                    authenticated: true,
+                    callee_id: app_id,
+                    argument: vec![],
+                    forwarded_sessions: vec![],
+                    response_sender,
+                }
+            })?;
+
+            runtime_sender
+                .send_request(|response_sender| {
+                    ContractRequest::Base(BaseRequest::UnlockViewUserState { response_sender })
+                })?
+                .recv()
+                .unwrap();
+            Ok(RawExecutionResult::default())
+        })
+        .await
+        .unwrap()
     }
 
     /// Creates a session.
     async fn handle_application_call(
         &self,
-        context: &CalleeContext,
-        _runtime: &dyn ContractRuntime,
-        _argument: &[u8],
+        context: CalleeContext,
+        _runtime_sender: ContractRuntimeSender,
+        _argument: Vec<u8>,
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError> {
         assert_eq!(context.authenticated_signer, Some(self.owner));
@@ -158,17 +234,20 @@ impl UserContract for TestApplication {
     /// Closes the session.
     async fn handle_session_call(
         &self,
-        context: &CalleeContext,
-        _runtime: &dyn ContractRuntime,
-        _session_state: &mut Vec<u8>,
-        _argument: &[u8],
+        context: CalleeContext,
+        _runtime_sender: ContractRuntimeSender,
+        session_state: Vec<u8>,
+        _argument: Vec<u8>,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, ExecutionError> {
+    ) -> Result<(SessionCallResult, Vec<u8>), ExecutionError> {
         assert_eq!(context.authenticated_signer, None);
-        Ok(SessionCallResult {
-            inner: ApplicationCallResult::default(),
-            close_session: true,
-        })
+        Ok((
+            SessionCallResult {
+                inner: ApplicationCallResult::default(),
+                close_session: true,
+            },
+            session_state,
+        ))
     }
 }
 
@@ -177,16 +256,43 @@ impl UserService for TestApplication {
     /// Returns the application state.
     async fn handle_query(
         &self,
-        _context: &QueryContext,
-        runtime: &dyn ServiceRuntime,
-        _argument: &[u8],
+        _context: QueryContext,
+        runtime_sender: ServiceRuntimeSender,
+        _argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let chosen_key = vec![0];
-        runtime.lock_view_user_state().await?;
-        let state = runtime.read_value_bytes(chosen_key).await?;
-        let state = state.unwrap_or_default();
-        runtime.unlock_view_user_state().await?;
-        Ok(state)
+        tokio::task::spawn_blocking(move || {
+            let chosen_key = vec![0];
+
+            runtime_sender
+                .send_request(|response_sender| {
+                    ServiceRequest::Base(BaseRequest::LockViewUserState { response_sender })
+                })?
+                .recv()
+                .unwrap();
+
+            let state = runtime_sender
+                .send_request(|response_sender| {
+                    ServiceRequest::Base(BaseRequest::ReadValueBytes {
+                        key: chosen_key,
+                        response_sender,
+                    })
+                })?
+                .recv()
+                .unwrap();
+
+            let state = state.unwrap_or_default();
+
+            runtime_sender
+                .send_request(|response_sender| {
+                    ServiceRequest::Base(BaseRequest::UnlockViewUserState { response_sender })
+                })?
+                .recv()
+                .unwrap();
+
+            Ok(state)
+        })
+        .await
+        .unwrap()
     }
 }
 
@@ -224,8 +330,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     let policy = ResourceControlPolicy::default();
     let result = view
         .execute_operation(
-            &context,
-            &Operation::User {
+            context,
+            Operation::User {
                 application_id: app_id,
                 bytes: vec![1],
             },
@@ -254,8 +360,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     };
     assert_eq!(
         view.query_application(
-            &context,
-            &Query::User {
+            context,
+            Query::User {
                 application_id: app_id,
                 bytes: vec![]
             }
@@ -297,8 +403,8 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
     let policy = ResourceControlPolicy::default();
     let result = view
         .execute_operation(
-            &context,
-            &Operation::User {
+            context,
+            Operation::User {
                 application_id: app_id,
                 bytes: vec![],
             },

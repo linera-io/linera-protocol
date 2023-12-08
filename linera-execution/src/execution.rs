@@ -117,7 +117,7 @@ where
             next_message_index: 0,
         };
 
-        let action = UserAction::Initialize(&context, initialization_argument);
+        let action = UserAction::Initialize(context, initialization_argument);
 
         let application_id = self
             .system
@@ -139,13 +139,13 @@ where
     }
 }
 
-enum UserAction<'a> {
-    Initialize(&'a OperationContext, Vec<u8>),
-    Operation(&'a OperationContext, &'a [u8]),
-    Message(&'a MessageContext, &'a [u8]),
+enum UserAction {
+    Initialize(OperationContext, Vec<u8>),
+    Operation(OperationContext, Vec<u8>),
+    Message(MessageContext, Vec<u8>),
 }
 
-impl<'a> UserAction<'a> {
+impl UserAction {
     fn signer(&self) -> Option<Owner> {
         use UserAction::*;
         match self {
@@ -166,7 +166,7 @@ where
         &mut self,
         application_id: UserApplicationId,
         chain_id: ChainId,
-        action: UserAction<'_>,
+        action: UserAction,
         policy: &ResourceControlPolicy,
         tracker: &mut ResourceTracker,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
@@ -204,19 +204,22 @@ where
             runtime_limits,
         );
         // Make the call to user code.
-        let call_result = match action {
+        let (runtime_actor, runtime_sender) = runtime.contract_runtime_actor();
+        let call_result_future = match action {
             UserAction::Initialize(context, argument) => {
-                contract.initialize(context, &runtime, &argument).await
+                contract.initialize(context, runtime_sender, argument)
             }
             UserAction::Operation(context, operation) => {
-                contract
-                    .execute_operation(context, &runtime, operation)
-                    .await
+                contract.execute_operation(context, runtime_sender, operation)
             }
             UserAction::Message(context, message) => {
-                contract.execute_message(context, &runtime, message).await
+                contract.execute_message(context, runtime_sender, message)
             }
         };
+        let (runtime_result, call_result) =
+            futures::future::join(runtime_actor.run(), call_result_future).await;
+        runtime_result?;
+
         // TODO(#989): Make user errors fail blocks again.
         let mut result = if let Err(ExecutionError::UserError(message)) = &call_result {
             tracing::error!("Ignoring error reported by user application: {message}");
@@ -266,8 +269,8 @@ where
 
     pub async fn execute_operation(
         &mut self,
-        context: &OperationContext,
-        operation: &Operation,
+        context: OperationContext,
+        operation: Operation,
         policy: &ResourceControlPolicy,
         tracker: &mut ResourceTracker,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
@@ -298,7 +301,7 @@ where
                 bytes,
             } => {
                 self.run_user_action(
-                    *application_id,
+                    application_id,
                     context.chain_id,
                     UserAction::Operation(context, bytes),
                     policy,
@@ -311,8 +314,8 @@ where
 
     pub async fn execute_message(
         &mut self,
-        context: &MessageContext,
-        message: &Message,
+        context: MessageContext,
+        message: Message,
         policy: &ResourceControlPolicy,
         tracker: &mut ResourceTracker,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
@@ -327,7 +330,7 @@ where
                 bytes,
             } => {
                 self.run_user_action(
-                    *application_id,
+                    application_id,
                     context.chain_id,
                     UserAction::Message(context, bytes),
                     policy,
@@ -340,8 +343,8 @@ where
 
     pub async fn query_application(
         &mut self,
-        context: &QueryContext,
-        query: &Query,
+        context: QueryContext,
+        query: Query,
     ) -> Result<Response, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match query {
@@ -357,7 +360,7 @@ where
                 let description = self
                     .system
                     .registry
-                    .describe_application(*application_id)
+                    .describe_application(application_id)
                     .await?;
                 let service = self
                     .context()
@@ -368,7 +371,7 @@ where
                 let mut session_manager = SessionManager::default();
                 let mut results = Vec::new();
                 let mut applications = vec![ApplicationStatus {
-                    id: *application_id,
+                    id: application_id,
                     parameters: description.parameters,
                     signer: None,
                 }];
@@ -383,11 +386,17 @@ where
                     remaining_fuel,
                     runtime_limits,
                 );
+                let (runtime_actor, runtime_sender) = runtime.service_runtime_actor();
                 // Run the query.
-                let response = service.handle_query(context, &runtime, bytes).await?;
+                let response_future = service.handle_query(context, runtime_sender, bytes);
+                let (runtime_result, response) =
+                    futures::future::join(runtime_actor.run(), response_future).await;
+                runtime_result?;
+                let response = response?;
+
                 // Check that applications were correctly stacked and unstacked.
                 assert_eq!(applications.len(), 1);
-                assert_eq!(&applications[0].id, application_id);
+                assert_eq!(applications[0].id, application_id);
                 Ok(Response::User(response))
             }
         }

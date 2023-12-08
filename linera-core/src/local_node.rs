@@ -240,7 +240,7 @@ where
     pub async fn query_application(
         &self,
         chain_id: ChainId,
-        query: &Query,
+        query: Query,
     ) -> Result<Response, LocalNodeError> {
         let mut node = self.node.lock().await;
         let response = node.state.query_application(chain_id, query).await?;

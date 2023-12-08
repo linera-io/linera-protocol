@@ -35,10 +35,10 @@ mod conversions_to_wit;
 use super::{
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     module_cache::ModuleCache,
-    runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
     ApplicationCallResult, SessionCallResult, WasmContract, WasmExecutionError, WasmService,
 };
 use crate::{
+    runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
     Bytecode, CalleeContext, ExecutionError, MessageContext, OperationContext, QueryContext,
     RawExecutionResult,
 };
@@ -86,7 +86,7 @@ impl ApplicationRuntimeContext for Contract {
             .and_then(|response_receiver| {
                 response_receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse)
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             })
             .unwrap_or_else(|_| {
                 tracing::debug!("Failed to read initial fuel for transaction");

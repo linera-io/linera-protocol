@@ -4,6 +4,9 @@
 use crate::{
     execution::ExecutionStateView,
     resources::{RuntimeCounts, RuntimeLimits},
+    runtime_actor::{
+        ContractRequest, ContractRuntimeSender, RuntimeActor, ServiceRequest, ServiceRuntimeSender,
+    },
     BaseRuntime, CallResult, ContractRuntime, ExecutionError, ExecutionResult,
     ExecutionRuntimeContext, ServiceRuntime, SessionId, UserApplicationDescription,
     UserApplicationId, UserContractCode, UserServiceCode,
@@ -214,6 +217,27 @@ where
             .get_user_service(&description)
             .await?;
         Ok((code, description))
+    }
+
+    pub(crate) fn contract_runtime_actor(
+        &self,
+    ) -> (
+        RuntimeActor<async_lock::RwLock<&Self>, ContractRequest>,
+        ContractRuntimeSender,
+    )
+    where
+        Self: ContractRuntime,
+    {
+        RuntimeActor::new(async_lock::RwLock::new(self))
+    }
+
+    pub(crate) fn service_runtime_actor(
+        &self,
+    ) -> (RuntimeActor<&Self, ServiceRequest>, ServiceRuntimeSender)
+    where
+        Self: ServiceRuntime,
+    {
+        RuntimeActor::new(self)
     }
 
     fn forward_sessions(
@@ -520,7 +544,13 @@ where
             parameters: description.parameters,
             signer: None,
         });
-        let value = code.handle_query(&query_context, self, argument).await?;
+
+        let (runtime_actor, runtime_sender) = self.service_runtime_actor();
+        let future = code.handle_query(query_context, runtime_sender, argument.to_vec());
+        let (runtime_result, value) = futures::future::join(runtime_actor.run(), future).await;
+        runtime_result?;
+        let value = value?;
+
         self.applications_mut().pop();
         Ok(value)
     }
@@ -645,9 +675,18 @@ where
             // Allow further nested calls to be authenticated if this one is.
             signer: authenticated_signer,
         });
-        let raw_result = code
-            .handle_application_call(&callee_context, self, argument, forwarded_sessions)
-            .await?;
+        let (runtime_actor, runtime_sender) = self.contract_runtime_actor();
+        let raw_result_future = code.handle_application_call(
+            callee_context,
+            runtime_sender,
+            argument.to_vec(),
+            forwarded_sessions,
+        );
+        let (runtime_result, raw_result) =
+            futures::future::join(runtime_actor.run(), raw_result_future).await;
+        runtime_result?;
+        let raw_result = raw_result?;
+
         self.applications_mut().pop();
         // Interpret the results of the call.
         self.execution_results_mut().push(ExecutionResult::User(
@@ -683,7 +722,7 @@ where
         // Change the owners of forwarded sessions.
         self.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
         // Load the session.
-        let mut session_state = self.try_load_session(session_id, self.application_id())?;
+        let session_state = self.try_load_session(session_id, self.application_id())?;
         // Make the call to user code.
         let authenticated_signer = match caller.signer {
             Some(signer) if authenticated => Some(signer),
@@ -701,15 +740,19 @@ where
             // Allow further nested calls to be authenticated if this one is.
             signer: authenticated_signer,
         });
-        let raw_result = code
-            .handle_session_call(
-                &callee_context,
-                self,
-                &mut session_state,
-                argument,
-                forwarded_sessions,
-            )
-            .await?;
+        let (runtime_actor, runtime_sender) = self.contract_runtime_actor();
+        let raw_result_future = code.handle_session_call(
+            callee_context,
+            runtime_sender,
+            session_state,
+            argument.to_vec(),
+            forwarded_sessions,
+        );
+        let (runtime_result, raw_result) =
+            futures::future::join(runtime_actor.run(), raw_result_future).await;
+        runtime_result?;
+        let (raw_result, session_state) = raw_result?;
+
         self.applications_mut().pop();
         // Interpret the results of the call.
         if raw_result.close_session {

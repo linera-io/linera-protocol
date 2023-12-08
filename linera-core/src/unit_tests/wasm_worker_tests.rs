@@ -420,8 +420,8 @@ where
     let policy = ResourceControlPolicy::default();
     creator_state
         .execute_operation(
-            &operation_context,
-            &Operation::User {
+            operation_context,
+            Operation::User {
                 application_id,
                 bytes: user_operation,
             },

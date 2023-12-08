@@ -3,8 +3,8 @@
 
 //! Types useful for sending synchronous responses from a [`RuntimeActor`]
 
-/// Creates a channel that wraps a [`oneshot`] channel with the [`Sender`] type not implementing
-/// [`Future`][`std::future::Future`].
+/// Creates a channel that wraps a [`oneshot`] channel with the [`Sender`] type not
+/// implementing [`std::future::Future`].
 ///
 /// This forces the channel to be used in a blocking manner.
 pub fn channel<T>() -> (SyncSender<T>, SyncReceiver<T>) {
@@ -25,8 +25,8 @@ impl<T> SyncSender<T> {
 
 /// A wrapper around [`oneshot::Receiver`] that is connected to a synchronous [`SyncSender`].
 ///
-/// This type does not implement [`Future`], so it can't be used to receive messages
-/// asynchronously.
+/// This type does not implement [`std::future::Future`], so it can't be used to receive
+/// messages asynchronously.
 pub struct SyncReceiver<T>(oneshot::Receiver<T>);
 
 impl<T> SyncReceiver<T> {
