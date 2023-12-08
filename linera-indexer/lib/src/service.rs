@@ -22,7 +22,7 @@ use linera_views::{
     common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
 };
 use std::time::Duration;
-use structopt::StructOpt;
+use clap::StructOpt;
 use tokio::runtime::Handle;
 use tracing::error;
 

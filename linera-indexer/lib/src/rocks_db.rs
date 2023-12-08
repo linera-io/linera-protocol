@@ -10,7 +10,7 @@ use linera_views::{
     rocks_db::{RocksDbStore, RocksDbStoreConfig},
 };
 use std::path::PathBuf;
-use structopt::StructOpt;
+use clap::StructOpt;
 
 #[derive(StructOpt, Clone, Debug)]
 pub struct RocksDbConfig {

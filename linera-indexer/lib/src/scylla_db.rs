@@ -9,7 +9,7 @@ use linera_views::{
     common::CommonStoreConfig,
     scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
 };
-use structopt::StructOpt;
+use clap::StructOpt;
 
 #[derive(StructOpt, Clone, Debug)]
 pub struct ScyllaDbConfig {

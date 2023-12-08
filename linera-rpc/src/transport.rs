@@ -14,7 +14,7 @@ use futures::{
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, net::ToSocketAddrs, sync::Arc};
-use structopt::clap::arg_enum;
+use clap::arg_enum;
 use tokio::{
     net::{TcpListener, TcpStream, UdpSocket},
     sync::Mutex,

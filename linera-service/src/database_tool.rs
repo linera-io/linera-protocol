@@ -4,7 +4,7 @@
 use linera_service::storage::StorageConfig;
 use linera_views::common::CommonStoreConfig;
 use std::process;
-use structopt::StructOpt;
+use clap::StructOpt;
 
 #[derive(StructOpt)]
 #[structopt(name = "Clear database", about = "A tool for cleaning up a database")]

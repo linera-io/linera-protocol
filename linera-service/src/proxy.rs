@@ -18,7 +18,7 @@ use linera_service::{
     prometheus_server,
 };
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
-use structopt::StructOpt;
+use clap::StructOpt;
 use tracing::{error, info, instrument};
 
 /// Options for running the proxy.

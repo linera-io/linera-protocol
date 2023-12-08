@@ -4,7 +4,7 @@
 use crate::transport::TransportProtocol;
 use linera_base::identifiers::ChainId;
 use serde::{Deserialize, Serialize};
-use structopt::StructOpt;
+use clap::StructOpt;
 
 #[derive(Clone, Debug, StructOpt)]
 pub struct CrossChainConfig {

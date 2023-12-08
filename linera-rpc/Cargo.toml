@@ -18,6 +18,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bincode = { workspace = true }
 bytes = { workspace = true }
+clap = { workspace = true }
 dashmap = { workspace = true }
 ed25519 = { workspace = true }
 ed25519-dalek = { workspace = true }
@@ -35,7 +36,6 @@ proptest = { workspace = true, optional = true }
 prost = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
-structopt = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true, features = ["codec", "net"] }
@@ -50,7 +50,6 @@ proptest = { workspace = true }
 serde-reflection = { workspace = true }
 serde_yaml = { workspace = true }
 similar-asserts = { workspace = true }
-structopt = { workspace = true }
 test-strategy = { workspace = true }
 
 [build-dependencies]

@@ -39,6 +39,7 @@ wit-bindgen-guest-rust = { workspace = true }
 async-graphql = { workspace = true }
 anyhow = { workspace = true }
 cargo_toml = { workspace = true }
+clap = { workspace = true }
 dashmap = { workspace = true }
 linera-base = { workspace = true }
 linera-chain = { workspace = true }
@@ -46,7 +47,6 @@ linera-core = { workspace = true, features = ["test"] }
 linera-execution = { workspace = true }
 linera-storage = { workspace = true }
 serde_json = { workspace = true }
-structopt = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 wasmtime = { workspace = true }
 wit-bindgen-host-wasmtime-rust = { workspace = true }

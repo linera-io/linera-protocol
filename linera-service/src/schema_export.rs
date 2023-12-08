@@ -20,7 +20,7 @@ use linera_service::{
 };
 use linera_storage::{MemoryStorage, Storage, WallClock};
 use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
-use structopt::StructOpt;
+use clap::StructOpt;
 
 #[derive(Clone)]
 struct DummyValidatorNode;

@@ -28,7 +28,7 @@ use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
 use serde::Deserialize;
 use std::{net::SocketAddr, path::PathBuf};
-use structopt::StructOpt;
+use clap::StructOpt;
 use tokio::fs;
 use tracing::{error, info};
 

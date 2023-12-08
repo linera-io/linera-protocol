@@ -19,17 +19,16 @@ use linera_execution::{Message, SystemMessage};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use std::{collections::btree_map, sync::Arc, time::Duration};
-use structopt::StructOpt;
 use tracing::{error, info, warn};
 
-#[derive(Debug, Clone, StructOpt)]
+#[derive(Debug, Clone, clap::Args)]
 pub struct ChainListenerConfig {
     /// Wait before processing any notification (useful for testing).
-    #[structopt(long = "listener-delay-before-ms", default_value = "0")]
+    #[clap(long = "listener-delay-before-ms", default_value = "0")]
     pub delay_before_ms: u64,
 
     /// Wait after processing any notification (useful for rate limiting).
-    #[structopt(long = "listener-delay-after-ms", default_value = "0")]
+    #[clap(long = "listener-delay-after-ms", default_value = "0")]
     pub delay_after_ms: u64,
 }
 

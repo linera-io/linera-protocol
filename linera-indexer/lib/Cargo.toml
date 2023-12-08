@@ -24,6 +24,7 @@ async-trait = { workspace = true }
 async-tungstenite = { version = "0.22", features = ["tokio-runtime"] }
 axum = { workspace = true, features = ["ws", "headers"] }
 bcs = { workspace = true }
+clap = { workspace = true }
 futures = { workspace = true }
 graphql-ws-client = { version = "0.5", features = ["client-graphql-client"] }
 graphql_client = { version = "0.13", features = [ "reqwest-rustls" ] }
@@ -34,7 +35,6 @@ linera-core = { workspace = true }
 linera-service-graphql-client = { workspace = true }
 linera-views = { workspace = true }
 reqwest = { workspace = true }
-structopt = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tower-http = { workspace = true, features = ["cors"] }

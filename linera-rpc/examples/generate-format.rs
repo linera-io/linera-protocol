@@ -21,7 +21,7 @@ use linera_execution::{
 use linera_rpc::RpcMessage;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
-use structopt::{clap::arg_enum, StructOpt};
+use clap::{arg_enum, StructOpt};
 
 fn get_registry() -> Result<Registry> {
     let mut tracer = Tracer::new(

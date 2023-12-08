@@ -35,7 +35,7 @@ use std::{
     path::{Path, PathBuf},
     process::ExitCode,
 };
-use structopt::StructOpt;
+use clap::StructOpt;
 use wasmtime::*;
 
 #[derive(StructOpt)]
@@ -52,7 +52,7 @@ struct Options {
 /// Prints out a summary of executed tests and their results.
 #[tokio::main]
 async fn main() -> Result<ExitCode> {
-    let options = Options::from_args_safe()?;
+    let options = Options::parse();
 
     let mut report = TestReport::default();
     let mut engine_config = Config::default();

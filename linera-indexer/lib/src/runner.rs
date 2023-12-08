@@ -9,7 +9,7 @@ use linera_base::identifiers::ChainId;
 use linera_views::{
     common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
 };
-use structopt::{StructOpt, StructOptInternal};
+use clap::StructOpt;
 use tokio::select;
 use tracing::{info, warn};
 
@@ -30,14 +30,14 @@ pub enum IndexerCommand {
 }
 
 #[derive(StructOpt, Debug, Clone)]
-pub struct IndexerConfig<Config: StructOpt> {
+pub struct IndexerConfig<Config: clap::Args> {
     #[structopt(flatten)]
     pub client: Config,
     #[structopt(subcommand)]
     pub command: IndexerCommand,
 }
 
-pub struct Runner<DB, Config: StructOpt> {
+pub struct Runner<DB, Config: clap::Args> {
     pub store: DB,
     pub config: IndexerConfig<Config>,
     pub indexer: Indexer<DB>,
@@ -46,7 +46,7 @@ pub struct Runner<DB, Config: StructOpt> {
 impl<DB, Config> Runner<DB, Config>
 where
     Self: Send,
-    Config: Clone + std::fmt::Debug + Send + Sync + StructOptInternal,
+    Config: Clone + std::fmt::Debug + Send + Sync + clap::Parser + clap::Args,
     DB: KeyValueStore + Clone + Send + Sync + 'static,
     DB::Error: From<bcs::Error>
         + From<DatabaseConsistencyError>
