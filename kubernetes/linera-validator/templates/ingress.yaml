@@ -23,4 +23,14 @@ metadata:
 spec:
   domains:
     - {{ .Values.validatorDomainName }}
+
+---
+
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: proxy-backend-config
+spec:
+  timeoutSec: 2147483647  # Maximum possible value
+
 {{- end }}
