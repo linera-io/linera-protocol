@@ -129,20 +129,13 @@ where
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
-        match &self.lru_read_values {
-            None => {
-                return self.client.contains_key(key).await;
-            }
-            Some(lru_read_values) => {
-                // First inquiring in the read_value_bytes LRU
-                let lru_read_values_container = lru_read_values.lock().await;
-                if let Some(value) = lru_read_values_container.query(key) {
-                    return Ok(value.is_some());
-                }
-                drop(lru_read_values_container);
-                self.client.contains_key(key).await
+        if let Some(values) = &self.lru_read_values {
+            let values = values.lock().await;
+            if let Some(value) = values.query(key) {
+                return Ok(value.is_some());
             }
         }
+        self.client.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(
