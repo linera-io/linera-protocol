@@ -3,6 +3,7 @@ kind: Service
 metadata:
   annotations:
     cloud.google.com/app-protocols: '{"linera-port":"HTTP2"}'
+    cloud.google.com/backend-config: '{"default": "proxy-backend-config"}'
   name: proxy
   labels:
     app: proxy
