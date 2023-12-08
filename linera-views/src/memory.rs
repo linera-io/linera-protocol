@@ -50,6 +50,11 @@ impl KeyValueStore for MemoryStore {
         Ok(map.get(key).cloned())
     }
 
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryContextError> {
+        let map = self.map.read().await;
+        Ok(map.contains_key(key))
+    }
+
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,

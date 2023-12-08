@@ -831,6 +831,23 @@ impl DynamoDbStoreInternal {
         }
     }
 
+    async fn contains_key_general(
+        &self,
+        key_db: HashMap<String, AttributeValue>,
+    ) -> Result<bool, DynamoDbContextError> {
+        let _guard = self.acquire().await;
+        let response = self
+            .client
+            .get_item()
+            .table_name(self.table.as_ref())
+            .set_key(Some(key_db))
+            .projection_expression(PARTITION_ATTRIBUTE)
+            .send()
+            .await?;
+
+        Ok(response.item.is_some())
+    }
+
     async fn write_single_key_value(
         &self,
         key: Vec<u8>,
@@ -1123,6 +1140,12 @@ impl KeyValueStore for DynamoDbStoreInternal {
         self.read_value_bytes_general(key_db).await
     }
 
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, DynamoDbContextError> {
+        ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbContextError::KeyTooLong);
+        let key_db = build_key(key.to_vec());
+        self.contains_key_general(key_db).await
+    }
+
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
@@ -1196,6 +1219,10 @@ impl KeyValueStore for DynamoDbStore {
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
         self.store.read_value_bytes(key).await
+    }
+
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, DynamoDbContextError> {
+        self.store.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(

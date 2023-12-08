@@ -87,6 +87,12 @@ where
         Ok(Some(big_value))
     }
 
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
+        let mut big_key = key.to_vec();
+        big_key.extend(&[0, 0, 0, 0]);
+        self.store.contains_key(&big_key).await
+    }
+
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
@@ -295,6 +301,10 @@ impl KeyValueStore for TestMemoryStoreInternal {
         self.store.read_value_bytes(key).await
     }
 
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryContextError> {
+        self.store.contains_key(key).await
+    }
+
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
@@ -357,6 +367,10 @@ impl KeyValueStore for TestMemoryStore {
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
         self.store.read_value_bytes(key).await
+    }
+
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryContextError> {
+        self.store.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(

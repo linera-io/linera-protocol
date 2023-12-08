@@ -128,6 +128,16 @@ where
         }
     }
 
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
+        if let Some(values) = &self.lru_read_values {
+            let values = values.lock().await;
+            if let Some(value) = values.query(key) {
+                return Ok(value.is_some());
+            }
+        }
+        self.client.contains_key(key).await
+    }
+
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,

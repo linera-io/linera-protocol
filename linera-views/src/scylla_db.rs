@@ -130,6 +130,12 @@ impl KeyValueStore for ScyllaDbStoreInternal {
         Self::read_value_internal(store, key.to_vec()).await
     }
 
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
+        let store = self.store.deref();
+        let _guard = self.acquire().await;
+        Self::contains_key_internal(store, key.to_vec()).await
+    }
+
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
@@ -207,6 +213,28 @@ impl ScyllaDbStoreInternal {
             }
         }
         Ok(None)
+    }
+
+    async fn contains_key_internal(
+        store: &ScyllaDbStorePair,
+        key: Vec<u8>,
+    ) -> Result<bool, ScyllaDbContextError> {
+        ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
+        let session = &store.0;
+        let table_name = &store.1;
+        // Read the value of a key
+        let values = (key,);
+        let query = format!(
+            "SELECT dummy FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
+            table_name
+        );
+        let rows = session.query(query, values).await?;
+        if let Some(rows) = rows.rows {
+            if let Some(_row) = rows.into_typed::<(Vec<u8>,)>().next() {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     async fn write_batch_internal(
@@ -639,6 +667,10 @@ impl KeyValueStore for ScyllaDbStore {
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         self.store.read_value_bytes(key).await
+    }
+
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
+        self.store.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(

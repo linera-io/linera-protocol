@@ -60,6 +60,10 @@ impl KeyValueStore for AppStateStore {
         Ok(promise.wait())
     }
 
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
+        Ok(self.read_value_bytes(key).await?.is_some())
+    }
+
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
