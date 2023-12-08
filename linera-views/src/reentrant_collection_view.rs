@@ -181,6 +181,46 @@ where
     ViewError: From<C::Error>,
     W: View<C> + Send + Sync,
 {
+    async fn wrapped_view(
+        context: &C,
+        clear: bool,
+        short_key: &[u8],
+    ) -> Result<Arc<RwLock<W>>, ViewError> {
+        let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
+        let context = context.clone_with_base_key(key);
+        // Obtain a view and set its pending state to the default (e.g. empty) state
+        let mut view = W::load(context).await?;
+        if clear {
+            view.clear();
+        }
+        Ok(Arc::new(RwLock::new(view)))
+    }
+
+    async fn try_load_view(
+        context: &C,
+        updates: &mut BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
+        was_cleared: bool,
+        short_key: &[u8],
+    ) -> Result<Arc<RwLock<W>>, ViewError> {
+        use btree_map::Entry::*;
+
+        Ok(match updates.entry(short_key.to_owned()) {
+            Occupied(mut entry) => match entry.get_mut() {
+                Update::Set(view) => view.clone(),
+                entry @ Update::Removed => {
+                    let wrapped_view = Self::wrapped_view(context, true, short_key).await?;
+                    *entry = Update::Set(wrapped_view.clone());
+                    wrapped_view
+                }
+            },
+            Vacant(entry) => {
+                let wrapped_view = Self::wrapped_view(context, was_cleared, short_key).await?;
+                entry.insert(Update::Set(wrapped_view.clone()));
+                wrapped_view
+            }
+        })
+    }
+
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     /// ```rust
@@ -201,41 +241,14 @@ where
         short_key: Vec<u8>,
     ) -> Result<WriteGuardedView<W>, ViewError> {
         *self.hash.get_mut() = None;
-        let updates = self.updates.get_mut();
         Ok(WriteGuardedView(
-            match updates.entry(short_key.clone()) {
-                btree_map::Entry::Occupied(entry) => {
-                    let entry = entry.into_mut();
-                    match entry {
-                        Update::Set(view) => view.clone(),
-                        Update::Removed => {
-                            let key = self
-                                .context
-                                .base_tag_index(KeyTag::Subview as u8, &short_key);
-                            let context = self.context.clone_with_base_key(key);
-                            // Obtain a view and set its pending state to the default (e.g. empty) state
-                            let mut view = W::load(context).await?;
-                            view.clear();
-                            let wrapped_view = Arc::new(RwLock::new(view));
-                            *entry = Update::Set(wrapped_view.clone());
-                            wrapped_view
-                        }
-                    }
-                }
-                btree_map::Entry::Vacant(entry) => {
-                    let key = self
-                        .context
-                        .base_tag_index(KeyTag::Subview as u8, &short_key);
-                    let context = self.context.clone_with_base_key(key);
-                    let mut view = W::load(context).await?;
-                    if self.was_cleared {
-                        view.clear();
-                    }
-                    let wrapped_view = Arc::new(RwLock::new(view));
-                    entry.insert(Update::Set(wrapped_view.clone()));
-                    wrapped_view
-                }
-            }
+            Self::try_load_view(
+                &self.context,
+                self.updates.get_mut(),
+                self.was_cleared,
+                &short_key,
+            )
+            .await?
             .try_write_arc()
             .ok_or_else(|| ViewError::TryLockError(short_key))?,
         ))
@@ -260,41 +273,14 @@ where
         &self,
         short_key: Vec<u8>,
     ) -> Result<ReadGuardedView<W>, ViewError> {
-        let mut updates = self.updates.lock().await;
         Ok(ReadGuardedView(
-            match updates.entry(short_key.clone()) {
-                btree_map::Entry::Occupied(entry) => {
-                    let entry = entry.into_mut();
-                    match entry {
-                        Update::Set(view) => view.clone(),
-                        Update::Removed => {
-                            let key = self
-                                .context
-                                .base_tag_index(KeyTag::Subview as u8, &short_key);
-                            let context = self.context.clone_with_base_key(key);
-                            // Obtain a view and set its pending state to the default (e.g. empty) state
-                            let mut view = W::load(context).await?;
-                            view.clear();
-                            let wrapped_view = Arc::new(RwLock::new(view));
-                            *entry = Update::Set(wrapped_view.clone());
-                            wrapped_view
-                        }
-                    }
-                }
-                btree_map::Entry::Vacant(entry) => {
-                    let key = self
-                        .context
-                        .base_tag_index(KeyTag::Subview as u8, &short_key);
-                    let context = self.context.clone_with_base_key(key);
-                    let mut view = W::load(context).await?;
-                    if self.was_cleared {
-                        view.clear();
-                    }
-                    let wrapped_view = Arc::new(RwLock::new(view));
-                    entry.insert(Update::Set(wrapped_view.clone()));
-                    wrapped_view
-                }
-            }
+            Self::try_load_view(
+                &self.context,
+                &mut *self.updates.lock().await,
+                self.was_cleared,
+                &short_key,
+            )
+            .await?
             .try_read_arc()
             .ok_or_else(|| ViewError::TryLockError(short_key))?,
         ))
