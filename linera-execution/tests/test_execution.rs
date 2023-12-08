@@ -70,6 +70,14 @@ struct TestApplication {
     owner: Owner,
 }
 
+/// A fake operation for the [`TestApplication`] which can be easily "serialized" into a single
+/// byte.
+#[repr(u8)]
+enum TestOperation {
+    Completely,
+    LeakingSession,
+}
+
 impl UserContract for TestApplication {
     /// Nothing needs to be done during initialization.
     fn initialize(
@@ -85,13 +93,14 @@ impl UserContract for TestApplication {
     /// Extend the application state with the `operation` bytes.
     ///
     /// Calls itself during the operation, opening a session. The session is intentionally
-    /// leaked if the operation is empty.
+    /// leaked if the test operation is [`TestOperation::LeakingSession`].
     fn execute_operation(
         &self,
         context: OperationContext,
         mut runtime_sender: ContractRuntimeSender,
         operation: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+        assert_eq!(operation.len(), 1);
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
         let app_id = runtime_sender.application_id()?;
@@ -116,7 +125,7 @@ impl UserContract for TestApplication {
         )?;
         assert_eq!(call_result.value, Vec::<u8>::new());
         assert_eq!(call_result.sessions.len(), 1);
-        if !operation.is_empty() {
+        if operation[0] != TestOperation::LeakingSession as u8 {
             // Call the session to close it.
             let session_id = call_result.sessions[0];
             runtime_sender.try_call_session(
@@ -246,7 +255,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
             context,
             Operation::User {
                 application_id: app_id,
-                bytes: vec![1],
+                bytes: vec![TestOperation::Completely as u8],
             },
             &policy,
             &mut tracker,
@@ -281,7 +290,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         )
         .await
         .unwrap(),
-        Response::User(vec![1])
+        Response::User(vec![TestOperation::Completely as u8])
     );
     Ok(())
 }
@@ -319,7 +328,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
             context,
             Operation::User {
                 application_id: app_id,
-                bytes: vec![],
+                bytes: vec![TestOperation::LeakingSession as u8],
             },
             &policy,
             &mut tracker,
