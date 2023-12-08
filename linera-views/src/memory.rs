@@ -52,7 +52,7 @@ impl KeyValueStore for MemoryStore {
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryContextError> {
         let map = self.map.read().await;
-        Ok(map.get(key).is_some())
+        Ok(map.contains_key(key))
     }
 
     async fn read_multi_values_bytes(

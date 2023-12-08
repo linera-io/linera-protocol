@@ -558,7 +558,7 @@ where
         Ok(self.context.read_value_bytes(&key).await?)
     }
 
-    /// Obtains the value at the given index, if any.
+    /// Test whether a view contains a specific index.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_memory_context;
