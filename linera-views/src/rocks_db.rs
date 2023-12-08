@@ -70,8 +70,10 @@ impl KeyValueStore for RocksDbStoreInternal {
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, RocksDbContextError> {
-        let value = self.read_value_bytes(key).await?;
-        Ok(value.is_some())
+        ensure!(key.len() <= MAX_KEY_SIZE, RocksDbContextError::KeyTooLong);
+        let client = self.clone();
+        let key = key.to_vec();
+        Ok(tokio::task::spawn_blocking(move || client.db.key_may_exist(&key)).await?)
     }
 
     async fn read_multi_values_bytes(
