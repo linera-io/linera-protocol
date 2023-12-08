@@ -216,8 +216,8 @@ where
                 contract.execute_message(context, runtime_sender, message)
             }
         });
-        let runtime_result = dbg!(runtime_actor.run().await);
-        let call_result = dbg!(call_result_future.await?);
+        let runtime_result = runtime_actor.run().await;
+        let call_result = call_result_future.await?;
 
         // TODO(#989): Make user errors fail blocks again.
         let mut result = match (runtime_result, call_result) {
