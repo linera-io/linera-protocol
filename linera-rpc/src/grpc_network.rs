@@ -748,7 +748,7 @@ impl ValidatorNode for GrpcClient {
     async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
         let notification_retry_delay = self.notification_retry_delay;
         let notification_retries = self.notification_retries;
-        let mut delay = Duration::ZERO;
+        let mut retry_count = 0;
         let subscription_request = SubscriptionRequest {
             chain_ids: chains.into_iter().map(|chain| chain.into()).collect(),
         };
@@ -796,15 +796,14 @@ impl ValidatorNode for GrpcClient {
             })
             .take_while(move |result| {
                 let Err(status) = result else {
-                    delay = Duration::ZERO;
+                    retry_count = 0;
                     return future::Either::Left(future::ready(true));
                 };
-                if !Self::is_retryable(status)
-                    || delay >= notification_retry_delay.saturating_mul(notification_retries)
-                {
+                if !Self::is_retryable(status) || retry_count >= notification_retries {
                     return future::Either::Left(future::ready(false));
                 }
-                delay = delay.saturating_add(notification_retry_delay);
+                let delay = notification_retry_delay.saturating_mul(retry_count);
+                retry_count += 1;
                 future::Either::Right(async move {
                     tokio::time::sleep(delay).await;
                     true
