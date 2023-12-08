@@ -4,7 +4,7 @@
 //! Unit tests for the [`RuntimeActor`].
 
 use super::{RequestHandler, RuntimeActor, SendRequestExt};
-use crate::{ExecutionError, WasmExecutionError};
+use crate::ExecutionError;
 use async_trait::async_trait;
 use std::mem;
 
@@ -17,7 +17,7 @@ fn test_sending_message_to_dropped_runtime_actor_doesnt_panic() {
 
     assert!(matches!(
         sender.send_request(|_: oneshot::Sender<()>| ()),
-        Err(WasmExecutionError::MissingRuntimeResponse)
+        Err(ExecutionError::MissingRuntimeResponse)
     ));
 }
 

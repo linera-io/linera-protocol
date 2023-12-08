@@ -104,7 +104,8 @@ pub enum ExecutionError {
     ExcessiveRead,
     #[error("Excessive writings to storage")]
     ExcessiveWrite,
-
+    #[error("Runtime failed to respond to application")]
+    MissingRuntimeResponse,
     #[error("Bytecode ID {0:?} is invalid")]
     InvalidBytecodeId(BytecodeId),
     #[error("Failed to load bytecode from storage {0:?}")]

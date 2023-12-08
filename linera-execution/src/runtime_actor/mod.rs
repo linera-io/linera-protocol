@@ -12,7 +12,7 @@ pub use self::{
     requests::{BaseRequest, ContractRequest, ServiceRequest},
     sync_response::{SyncReceiver, SyncSender},
 };
-use crate::{ExecutionError, WasmExecutionError};
+use crate::ExecutionError;
 use futures::{
     channel::mpsc,
     stream::{StreamExt, TryStreamExt},
@@ -69,7 +69,7 @@ pub trait SendRequestExt<Request> {
     fn send_request<Response>(
         &self,
         builder: impl FnOnce(oneshot::Sender<Response>) -> Request,
-    ) -> Result<oneshot::Receiver<Response>, WasmExecutionError>
+    ) -> Result<oneshot::Receiver<Response>, ExecutionError>
     where
         Response: Send;
 
@@ -77,7 +77,7 @@ pub trait SendRequestExt<Request> {
     fn send_sync_request<Response>(
         &self,
         builder: impl FnOnce(SyncSender<Response>) -> Request,
-    ) -> Result<Response, WasmExecutionError>
+    ) -> Result<Response, ExecutionError>
     where
         Response: Send;
 }
@@ -89,7 +89,7 @@ where
     fn send_request<Response>(
         &self,
         builder: impl FnOnce(oneshot::Sender<Response>) -> Request,
-    ) -> Result<oneshot::Receiver<Response>, WasmExecutionError>
+    ) -> Result<oneshot::Receiver<Response>, ExecutionError>
     where
         Response: Send,
     {
@@ -101,7 +101,7 @@ where
                 send_error.is_disconnected(),
                 "`send_request` should only be used with unbounded senders"
             );
-            WasmExecutionError::MissingRuntimeResponse
+            ExecutionError::MissingRuntimeResponse
         })?;
 
         Ok(response_receiver)
@@ -110,7 +110,7 @@ where
     fn send_sync_request<Response>(
         &self,
         builder: impl FnOnce(SyncSender<Response>) -> Request,
-    ) -> Result<Response, WasmExecutionError>
+    ) -> Result<Response, ExecutionError>
     where
         Response: Send,
     {
@@ -122,12 +122,12 @@ where
                 send_error.is_disconnected(),
                 "`send_request` should only be used with unbounded senders"
             );
-            WasmExecutionError::MissingRuntimeResponse
+            ExecutionError::MissingRuntimeResponse
         })?;
 
         response_receiver
             .recv()
-            .map_err(|_| WasmExecutionError::MissingRuntimeResponse)
+            .map_err(|_| ExecutionError::MissingRuntimeResponse)
     }
 }
 
