@@ -27,60 +27,6 @@ permissions:
   contents: read
 
 jobs:
-
-  kind-deployment-integration-test:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - uses: Twey/setup-rust-toolchain@v1
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v1
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build client binary
-        run: |
-          cargo build --release --locked --bin linera --bin linera-proxy --bin linera-server --bin linera-db --features scylladb,rocksdb
-          strip target/release/linera
-          strip target/release/linera-proxy
-          strip target/release/linera-server
-          strip target/release/linera-db
-        # Build the docker image copying the already built binaries
-      - name: Build Docker and deploy locally with Kind
-        run: |
-          cd kubernetes/linera-validator
-          ./build_and_redeploy.sh --copy --linera-bins-dir ../../target/release
-      - name: Port Forward
-        run: |
-          kubectl get pods | grep proxy | awk '{ print $1 }' | xargs -I % kubectl port-forward % 19100:19100 &
-      - name: Send sync-balance request
-        run: |
-          cd target/release
-          ./linera --wallet /tmp/wallet.json --storage rocksdb:/tmp/linera.db sync-balance
-      - name: Print client test logs
-        # Always here means that this will run even if previous steps fail, same for the ones below
-        if: always()
-        run: |
-          kubectl logs --tail 500 -l app=linera
-      - name: Print proxy test logs
-        if: always()
-        run: |
-          kubectl logs --tail 500 -l app=proxy
-      - name: Print shards test logs
-        if: always()
-        run: |
-          kubectl logs --tail 500 -l app=shards
-      - name: Stop port forwarding
-        if: always()
-        run: |
-          ps aux | grep port-forward | grep proxy | awk '{ print $2 }' | xargs kill -9
-      - name: Delete cluster
-        if: always()
-        run: |
-          kind delete cluster
-
   kind-deployment-e2e-tests:
     runs-on: ubuntu-latest-16-cores
 

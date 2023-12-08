@@ -23,7 +23,7 @@ The directory is split into a few key parts:
 
 ## Usage
 
-To deploy a Linera validator, you can use the `build_and_redeploy.sh` scripts to
+To deploy a Linera validator, you can use the `linera net up --kubernetes` to
 run a validator locally on `kind`.
 
 This will deploy a network with a single validator - the script also provides
