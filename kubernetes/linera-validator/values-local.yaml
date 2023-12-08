@@ -21,6 +21,18 @@ loki-stack:
       clients:
         - url: http://linera-core-loki:3100/loki/api/v1/push
 
+# Prometheus/Grafana
+kube-prometheus-stack:
+  grafana:
+    sidecar:
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+        labelValue: "1"
+    persistence:
+      enabled: true
+      size: 1Gi
+
 # Environment
 environment: "kind"
 

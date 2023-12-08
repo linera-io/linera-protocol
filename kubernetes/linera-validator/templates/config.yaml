@@ -3,5 +3,5 @@ kind: ConfigMap
 metadata:
   name: validator-config
 data:
-  serverConfig: {{ .Files.Get .Values.validator.serverConfig | quote |indent 4 }}
+  serverConfig: {{ .Files.Get .Values.validator.serverConfig | quote | indent 4 }}
   genesisConfig: {{ .Files.Get .Values.validator.genesisConfig | quote | indent 4 }}
