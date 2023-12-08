@@ -141,7 +141,7 @@ where
 
     pub async fn spawn(self) -> Result<ServerHandle, io::Error> {
         info!(
-            "Listening to {} traffic on {}:{}",
+            "Listening to {:?} traffic on {}:{}",
             self.network.protocol, self.host, self.port
         );
         let address = format!("{}:{}", self.host, self.port);

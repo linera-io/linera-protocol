@@ -28,7 +28,6 @@ use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
 use serde::Deserialize;
 use std::{net::SocketAddr, path::PathBuf};
-use clap::StructOpt;
 use tokio::fs;
 use tracing::{error, info};
 
@@ -210,18 +209,18 @@ impl Runnable for ServerContext {
     }
 }
 
-#[derive(StructOpt)]
-#[structopt(
+#[derive(clap::Parser)]
+#[clap(
     name = "Linera Server",
     about = "A byzantine fault tolerant payments sidechain with low-latency finality and high throughput"
 )]
 struct ServerOptions {
     /// Subcommands. Acceptable values are run and generate.
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     command: ServerCommand,
 
     /// The number of Tokio worker threads to use.
-    #[structopt(long, env = "LINERA_SERVER_TOKIO_THREADS")]
+    #[clap(long, env = "LINERA_SERVER_TOKIO_THREADS")]
     tokio_threads: Option<usize>,
 }
 
@@ -285,95 +284,95 @@ fn make_server_config<R: CryptoRng>(
     }
 }
 
-#[derive(StructOpt)]
+#[derive(clap::Parser)]
 enum ServerCommand {
     /// Runs a service for each shard of the Linera validator")
-    #[structopt(name = "run")]
+    #[clap(name = "run")]
     Run {
         /// Path to the file containing the server configuration of this Linera validator (including its secret key)
-        #[structopt(long = "server")]
+        #[clap(long = "server")]
         server_config_path: PathBuf,
 
         /// Storage configuration for the blockchain history and security states.
-        #[structopt(long = "storage")]
+        #[clap(long = "storage")]
         storage_config: StorageConfig,
 
         /// Configuration for cross-chain requests
-        #[structopt(flatten)]
+        #[clap(flatten)]
         cross_chain_config: CrossChainConfig,
 
         /// Configuration for notifications
-        #[structopt(flatten)]
+        #[clap(flatten)]
         notification_config: NotificationConfig,
 
         /// Path to the file describing the initial user chains (aka genesis state)
-        #[structopt(long = "genesis")]
+        #[clap(long = "genesis")]
         genesis_config_path: PathBuf,
 
         /// Runs a specific shard (from 0 to shards-1)
-        #[structopt(long)]
+        #[clap(long)]
         shard: Option<usize>,
 
         /// Blocks with a timestamp this far in the future will still be accepted, but the validator
         /// will wait until that timestamp before voting.
-        #[structopt(long, default_value = "500ms", parse(try_from_str = parse_duration))]
+        #[clap(long, default_value = "500ms", value_parser = parse_duration)]
         grace_period: u64,
 
         /// The WebAssembly runtime to use.
-        #[structopt(long)]
+        #[clap(long)]
         wasm_runtime: Option<WasmRuntime>,
 
         /// The maximal number of simultaneous queries to the database
-        #[structopt(long)]
+        #[clap(long)]
         max_concurrent_queries: Option<usize>,
 
         /// The maximal number of stream queries to the database
-        #[structopt(long, default_value = "10")]
+        #[clap(long, default_value = "10")]
         max_stream_queries: usize,
 
         /// The maximal number of entries in the storage cache.
-        #[structopt(long, default_value = "1000")]
+        #[clap(long, default_value = "1000")]
         cache_size: usize,
     },
 
     /// Act as a trusted third-party and generate all server configurations
-    #[structopt(name = "generate")]
+    #[clap(name = "generate")]
     Generate {
         /// Configuration file of each validator in the committee
-        #[structopt(long)]
+        #[arg(long, num_args(0..))]
         validators: Vec<PathBuf>,
 
         /// Path where to write the description of the Linera committee
-        #[structopt(long)]
+        #[clap(long)]
         committee: Option<PathBuf>,
 
         /// Force this command to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.
-        #[structopt(long)]
+        #[clap(long)]
         testing_prng_seed: Option<u64>,
     },
 
     /// Initialize the database
-    #[structopt(name = "initialize")]
+    #[clap(name = "initialize")]
     Initialize {
         /// Storage configuration for the blockchain history and security states.
-        #[structopt(long = "storage")]
+        #[clap(long = "storage")]
         storage_config: StorageConfig,
 
         /// Path to the file describing the initial user chains (aka genesis state)
-        #[structopt(long = "genesis")]
+        #[clap(long = "genesis")]
         genesis_config_path: PathBuf,
 
         /// The maximal number of simultaneous queries to the database
-        #[structopt(long)]
+        #[clap(long)]
         max_concurrent_queries: Option<usize>,
 
         /// The maximal number of stream queries to the database
-        #[structopt(long, default_value = "10")]
+        #[clap(long, default_value = "10")]
         max_stream_queries: usize,
 
         /// The maximal number of entries in the storage cache.
-        #[structopt(long, default_value = "1000")]
+        #[clap(long, default_value = "1000")]
         cache_size: usize,
     },
 }
@@ -395,7 +394,7 @@ fn main() {
         .with_env_filter(env_filter)
         .init();
 
-    let options = ServerOptions::from_args();
+    let options = <ServerOptions as clap::Parser>::parse();
 
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()

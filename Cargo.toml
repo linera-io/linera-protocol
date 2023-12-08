@@ -46,7 +46,7 @@ bincode = "1.3.3"
 bytes = "1.5.0"
 cargo_toml = "0.15.3"
 chrono = "0.4.31"
-clap = { version = "3", features = ["derive", "env"] }
+clap = { version = "4", features = ["cargo", "derive", "env"] }
 colored = "2.0.4"
 comfy-table = "6.2.0"
 convert_case = "0.6.0"

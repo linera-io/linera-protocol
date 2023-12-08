@@ -2,9 +2,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Needed for arg_enum!
-#![allow(clippy::useless_vec)]
-
 use crate::{codec, codec::Codec, RpcMessage};
 use async_trait::async_trait;
 use futures::{
@@ -14,7 +11,6 @@ use futures::{
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, net::ToSocketAddrs, sync::Arc};
-use clap::arg_enum;
 use tokio::{
     net::{TcpListener, TcpStream, UdpSocket},
     sync::Mutex,
@@ -26,11 +22,23 @@ use tracing::{error, warn};
 pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";
 
 // Supported transport protocols.
-arg_enum! {
-    #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
-    pub enum TransportProtocol {
-        Udp,
-        Tcp,
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TransportProtocol {
+    Udp,
+    Tcp,
+}
+
+impl std::str::FromStr for TransportProtocol {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        clap::ValueEnum::from_str(s, true)
+    }
+}
+
+impl std::fmt::Display for TransportProtocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 

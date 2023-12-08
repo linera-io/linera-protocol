@@ -9,23 +9,22 @@ use linera_views::{
     common::CommonStoreConfig,
     scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
 };
-use clap::StructOpt;
 
-#[derive(StructOpt, Clone, Debug)]
+#[derive(clap::Parser, Clone, Debug)]
 pub struct ScyllaDbConfig {
     /// ScyllaDB address
-    #[structopt(long, default_value = "localhost:9042")]
+    #[clap(long, default_value = "localhost:9042")]
     pub uri: String,
-    #[structopt(long, default_value = "linera")]
+    #[clap(long, default_value = "linera")]
     pub table: String,
     /// The maximal number of simultaneous queries to the database
-    #[structopt(long)]
+    #[clap(long)]
     max_concurrent_queries: Option<usize>,
     /// The maximal number of simultaneous stream queries to the database
-    #[structopt(long, default_value = "10")]
+    #[clap(long, default_value = "10")]
     pub max_stream_queries: usize,
     /// The maximal number of entries in the storage cache.
-    #[structopt(long, default_value = "1000")]
+    #[clap(long, default_value = "1000")]
     cache_size: usize,
 }
 
@@ -33,7 +32,7 @@ pub type ScyllaDbRunner = Runner<ScyllaDbStore, ScyllaDbConfig>;
 
 impl ScyllaDbRunner {
     pub async fn load() -> Result<Self, IndexerError> {
-        let config = IndexerConfig::<ScyllaDbConfig>::from_args();
+        let config = <IndexerConfig<ScyllaDbConfig> as clap::Parser>::parse();
         let common_config = CommonStoreConfig {
             max_concurrent_queries: config.client.max_concurrent_queries,
             max_stream_queries: config.client.max_stream_queries,

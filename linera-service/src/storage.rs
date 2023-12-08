@@ -49,7 +49,7 @@ pub enum StoreConfig {
 }
 
 /// The description of a storage implementation.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
 pub enum StorageConfig {
     /// The memory description

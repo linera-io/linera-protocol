@@ -56,7 +56,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use clap::StructOpt;
 use tokio::{signal::unix, sync::mpsc};
 use tracing::{debug, info, warn};
 
@@ -590,7 +589,8 @@ fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
 #[derive(clap::Parser)]
 #[clap(
     name = "Linera client tool",
-    about = "A Byzantine-fault tolerant sidechain with low-latency finality and high throughput"
+    version = clap::crate_version!(),
+    about = "A Byzantine-fault tolerant sidechain with low-latency finality and high throughput",
 )]
 struct ClientOptions {
     /// Sets the file storing the private state of user chains (an empty one will be created if missing)
@@ -658,7 +658,7 @@ struct ClientOptions {
 
 impl ClientOptions {
     fn init() -> Result<Self, anyhow::Error> {
-        let mut options = ClientOptions::from_args();
+        let mut options = <ClientOptions as clap::Parser>::parse();
         let suffix = match options.with_wallet {
             None => String::new(),
             Some(n) => format!("_{}", n),
@@ -755,11 +755,11 @@ enum ClientCommand {
         chain_id: Option<ChainId>,
 
         /// Public keys of the new owners
-        #[clap(long = "to-public-keys")]
+        #[arg(long = "to-public-keys", num_args(0..))]
         public_keys: Vec<PublicKey>,
 
         /// Weights for the new owners
-        #[clap(long = "weights")]
+        #[clap(long = "weights", num_args(0..))]
         weights: Vec<u64>,
 
         /// The number of rounds in which every owner can propose blocks, i.e. the first round
@@ -1024,7 +1024,7 @@ enum ClientCommand {
         json_argument_path: Option<PathBuf>,
 
         /// The list of required dependencies of application, if any.
-        #[clap(long)]
+        #[clap(long, num_args(0..))]
         required_application_ids: Option<Vec<UserApplicationId>>,
     },
 
@@ -1057,7 +1057,7 @@ enum ClientCommand {
         json_argument_path: Option<PathBuf>,
 
         /// The list of required dependencies of application, if any.
-        #[clap(long)]
+        #[clap(long, num_args(0..))]
         required_application_ids: Option<Vec<UserApplicationId>>,
     },
 
@@ -1113,7 +1113,7 @@ enum ClientCommand {
     Net(NetCommand),
 }
 
-#[derive(StructOpt)]
+#[derive(clap::Parser)]
 enum NetCommand {
     /// Start a Local Linera Network
     Up {
@@ -1176,7 +1176,7 @@ enum WalletCommand {
         faucet: Option<String>,
 
         /// Other chains to follow.
-        #[clap(long)]
+        #[clap(long, num_args(0..))]
         with_other_chains: Vec<ChainId>,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
@@ -1186,7 +1186,7 @@ enum WalletCommand {
     },
 }
 
-#[derive(StructOpt)]
+#[derive(clap::Parser)]
 enum ProjectCommand {
     /// Create a new Linera project.
     New {
@@ -1237,7 +1237,7 @@ enum ProjectCommand {
         json_argument_path: Option<PathBuf>,
 
         /// The list of required dependencies of application, if any.
-        #[clap(long)]
+        #[clap(long, num_args(0..))]
         required_application_ids: Option<Vec<UserApplicationId>>,
     },
 }

@@ -21,7 +21,6 @@ use linera_execution::{
 use linera_rpc::RpcMessage;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
-use clap::{arg_enum, StructOpt};
 
 fn get_registry() -> Result<Registry> {
     let mut tracer = Tracer::new(
@@ -54,29 +53,27 @@ fn get_registry() -> Result<Registry> {
     tracer.registry()
 }
 
-arg_enum! {
-#[derive(Debug, StructOpt, Clone, Copy)]
+#[derive(clap::ValueEnum, Debug, Clone, Copy)]
 enum Action {
     Print,
     Test,
     Record,
 }
-}
 
-#[derive(Debug, StructOpt)]
-#[structopt(
+#[derive(clap::Parser, Debug)]
+#[clap(
     name = "Format generator",
     about = "Trace serde (de)serialization to generate format descriptions"
 )]
 struct Options {
-    #[structopt(possible_values = &Action::variants(), default_value = "Print", case_insensitive = true)]
+    #[arg(value_enum, default_value_t = Action::Print, ignore_case = true)]
     action: Action,
 }
 
 const FILE_PATH: &str = "linera-rpc/tests/staged/formats.yaml";
 
 fn main() {
-    let options = Options::from_args();
+    let options = <Options as clap::Parser>::parse();
     let registry = get_registry().unwrap();
     match options.action {
         Action::Print => {

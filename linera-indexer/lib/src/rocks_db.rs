@@ -5,26 +5,26 @@ use crate::{
     common::IndexerError,
     runner::{IndexerConfig, Runner},
 };
+use clap::Parser as _;
 use linera_views::{
     common::CommonStoreConfig,
     rocks_db::{RocksDbStore, RocksDbStoreConfig},
 };
 use std::path::PathBuf;
-use clap::StructOpt;
 
-#[derive(StructOpt, Clone, Debug)]
+#[derive(clap::Parser, Clone, Debug)]
 pub struct RocksDbConfig {
     /// RocksDB storage path
-    #[structopt(long, default_value = "./indexer.db")]
+    #[clap(long, default_value = "./indexer.db")]
     pub storage: PathBuf,
     /// The maximal number of simultaneous queries to the database
-    #[structopt(long)]
+    #[clap(long)]
     max_concurrent_queries: Option<usize>,
     /// The maximal number of simultaneous stream queries to the database
-    #[structopt(long, default_value = "10")]
+    #[clap(long, default_value = "10")]
     pub max_stream_queries: usize,
     /// The maximal number of entries in the storage cache.
-    #[structopt(long, default_value = "1000")]
+    #[clap(long, default_value = "1000")]
     cache_size: usize,
 }
 
@@ -32,7 +32,7 @@ pub type RocksDbRunner = Runner<RocksDbStore, RocksDbConfig>;
 
 impl RocksDbRunner {
     pub async fn load() -> Result<Self, IndexerError> {
-        let config = IndexerConfig::<RocksDbConfig>::from_args();
+        let config = IndexerConfig::<RocksDbConfig>::parse();
         let common_config = CommonStoreConfig {
             max_concurrent_queries: config.client.max_concurrent_queries,
             max_stream_queries: config.client.max_stream_queries,

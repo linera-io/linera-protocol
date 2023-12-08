@@ -22,7 +22,6 @@ use linera_views::{
     common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
 };
 use std::time::Duration;
-use clap::StructOpt;
 use tokio::runtime::Handle;
 use tracing::error;
 
@@ -47,16 +46,16 @@ fn reqwest_client() -> reqwest::Client {
         .unwrap()
 }
 
-#[derive(StructOpt, Debug, Clone)]
+#[derive(clap::Parser, Debug, Clone)]
 pub struct Service {
     /// The port of the node service
-    #[structopt(long = "service-port", default_value = "8080")]
+    #[arg(long, default_value = "8080")]
     pub service_port: u16,
     /// The address of the node service
-    #[structopt(long = "service-address", default_value = "localhost")]
+    #[arg(long, default_value = "localhost")]
     pub service_address: String,
     /// Use SSL/TLS
-    #[structopt(long = "tls")]
+    #[arg(long)]
     pub tls: bool,
 }
 
@@ -112,12 +111,12 @@ impl Service {
     }
 }
 
-#[derive(StructOpt, Debug, Clone)]
+#[derive(clap::Parser, Debug, Clone)]
 pub struct Listener {
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub service: Service,
     /// The height at which the indexer should start
-    #[structopt(long = "start", default_value = "0")]
+    #[clap(long = "start", default_value = "0")]
     pub start: BlockHeight,
 }
 

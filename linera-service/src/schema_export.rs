@@ -20,7 +20,6 @@ use linera_service::{
 };
 use linera_storage::{MemoryStorage, Storage, WallClock};
 use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
-use clap::StructOpt;
 
 #[derive(Clone)]
 struct DummyValidatorNode;
@@ -77,8 +76,8 @@ impl ValidatorNodeProvider for DummyValidatorNodeProvider {
     }
 }
 
-#[derive(StructOpt)]
-#[structopt(
+#[derive(clap::Parser)]
+#[clap(
     name = "Linera GraphQL schema exporter",
     about = "Export the GraphQL schema for the core data in a Linera chain"
 )]
@@ -113,7 +112,7 @@ impl ClientContext<DummyValidatorNodeProvider> for DummyContext {
 }
 
 fn main() -> std::io::Result<()> {
-    let _options = Options::from_args();
+    let _options = <Options as clap::Parser>::parse();
 
     let storage = MemoryStorage::new(None, TEST_MEMORY_MAX_STREAM_QUERIES, WallClock);
     let config = ChainListenerConfig {

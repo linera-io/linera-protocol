@@ -9,31 +9,30 @@ use linera_base::identifiers::ChainId;
 use linera_views::{
     common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
 };
-use clap::StructOpt;
 use tokio::select;
 use tracing::{info, warn};
 
-#[derive(StructOpt, Debug, Clone)]
+#[derive(clap::Parser, Debug, Clone)]
 pub enum IndexerCommand {
     Schema {
         plugin: Option<String>,
     },
     Run {
-        #[structopt(flatten)]
+        #[clap(flatten)]
         listener: Listener,
         /// The port of the indexer server
-        #[structopt(long, default_value = "8081")]
+        #[clap(long, default_value = "8081")]
         port: u16,
         /// Chains to index (default: the ones on the service wallet)
         chains: Vec<ChainId>,
     },
 }
 
-#[derive(StructOpt, Debug, Clone)]
+#[derive(clap::Parser, Debug, Clone)]
 pub struct IndexerConfig<Config: clap::Args> {
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub client: Config,
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     pub command: IndexerCommand,
 }
 
