@@ -120,7 +120,7 @@ impl UserContract for TestApplication {
         let call_result = runtime_sender.try_call_application(
             /* authenticated */ true,
             app_id,
-            vec![],
+            operation.clone(),
             vec![],
         )?;
         assert_eq!(call_result.value, Vec::<u8>::new());
@@ -143,8 +143,9 @@ impl UserContract for TestApplication {
         &self,
         context: MessageContext,
         mut runtime_sender: ContractRuntimeSender,
-        _message: Vec<u8>,
+        message: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+        assert_eq!(message.len(), 1);
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
         let app_id = runtime_sender.application_id()?;
@@ -154,7 +155,7 @@ impl UserContract for TestApplication {
         runtime_sender.try_call_application(
             /* authenticated */ true,
             app_id,
-            vec![],
+            message,
             vec![],
         )?;
         runtime_sender.unlock()?;
@@ -167,9 +168,10 @@ impl UserContract for TestApplication {
         &self,
         context: CalleeContext,
         _runtime_sender: ContractRuntimeSender,
-        _argument: Vec<u8>,
+        argument: Vec<u8>,
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError> {
+        assert_eq!(argument.len(), 1);
         assert_eq!(context.authenticated_signer, Some(self.owner));
         Ok(ApplicationCallResult {
             create_sessions: vec![vec![1]],
