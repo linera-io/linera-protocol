@@ -5,11 +5,13 @@
 
 mod handlers;
 mod requests;
+mod senders;
 mod sync_response;
 
 use self::handlers::RequestHandler;
 pub use self::{
     requests::{BaseRequest, ContractRequest, ServiceRequest},
+    senders::{ContractRuntimeSender, ServiceRuntimeSender},
     sync_response::{SyncReceiver, SyncSender},
 };
 use crate::ExecutionError;
@@ -17,9 +19,6 @@ use futures::{
     channel::mpsc,
     stream::{StreamExt, TryStreamExt},
 };
-
-pub type ContractRuntimeSender = mpsc::UnboundedSender<ContractRequest>;
-pub type ServiceRuntimeSender = mpsc::UnboundedSender<ServiceRequest>;
 
 /// A handler of application system APIs that runs as a separate actor.
 ///
@@ -38,15 +37,8 @@ where
     ///
     /// Returns the new [`RuntimeActor`] so that it can be executed later with the
     /// [`RuntimeActor::run`] method and the endpoint to send `Request`s to the actor.
-    pub fn new(runtime: Runtime) -> (Self, mpsc::UnboundedSender<Request>) {
-        let (sender, receiver) = mpsc::unbounded();
-
-        let actor = RuntimeActor {
-            runtime,
-            requests: receiver,
-        };
-
-        (actor, sender)
+    pub fn new(runtime: Runtime, requests: mpsc::UnboundedReceiver<Request>) -> Self {
+        Self { runtime, requests }
     }
 
     /// Runs the [`RuntimeActor`], handling `Request`s until all the sender endpoints are closed.

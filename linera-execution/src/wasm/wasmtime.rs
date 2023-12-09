@@ -43,10 +43,10 @@ use super::{
 };
 use crate::{
     runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
-    ApplicationCallResult, Bytecode, CalleeContext, ExecutionError, MessageContext,
-    OperationContext, QueryContext, RawExecutionResult, SessionCallResult, SessionId,
+    ApplicationCallResult, Bytecode, CalleeContext, ContractRuntimeSender, ExecutionError,
+    MessageContext, OperationContext, QueryContext, RawExecutionResult, ServiceRuntimeSender,
+    SessionCallResult, SessionId,
 };
-use futures::channel::mpsc;
 use linera_views::batch::Batch;
 use once_cell::sync::Lazy;
 use std::error::Error;
@@ -87,7 +87,7 @@ impl ApplicationRuntimeContext for Contract {
     type Extra = ();
 
     fn configure_initial_fuel(context: &mut WasmRuntimeContext<Self>) {
-        let runtime = &context.store.data().system_api.runtime;
+        let runtime = &context.store.data().system_api.inner;
         let fuel = runtime
             .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
             .and_then(|response_receiver| {
@@ -107,7 +107,7 @@ impl ApplicationRuntimeContext for Contract {
     }
 
     fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), ()> {
-        let runtime = &context.store.data().system_api.runtime;
+        let runtime = &context.store.data().system_api.inner;
         let initial_fuel = runtime
             .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
             .and_then(|response_receiver| {
@@ -163,7 +163,7 @@ impl WasmContract {
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare_contract_runtime_with_wasmtime(
         contract_module: &Module,
-        runtime: mpsc::UnboundedSender<ContractRequest>,
+        runtime: ContractRuntimeSender,
     ) -> Result<WasmRuntimeContext<Contract>, WasmExecutionError> {
         let mut linker = Linker::new(&CONTRACT_ENGINE);
 
@@ -207,7 +207,7 @@ impl WasmService {
     /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare_service_runtime_with_wasmtime(
         service_module: &Module,
-        runtime: mpsc::UnboundedSender<ServiceRequest>,
+        runtime: ServiceRuntimeSender,
     ) -> Result<WasmRuntimeContext<Service>, WasmExecutionError> {
         let mut linker = Linker::new(&SERVICE_ENGINE);
 
@@ -238,27 +238,27 @@ impl WasmService {
 /// Data stored by the runtime that's necessary for handling calls to and from the Wasm module.
 pub struct ContractState {
     data: ContractData,
-    system_api: ContractSystemApi,
-    system_tables: ContractSystemApiTables<ContractSystemApi>,
-    views_tables: ViewSystemApiTables<ContractSystemApi>,
+    system_api: ContractRuntimeSender,
+    system_tables: ContractSystemApiTables<ContractRuntimeSender>,
+    views_tables: ViewSystemApiTables<ContractRuntimeSender>,
 }
 
 /// Data stored by the runtime that's necessary for handling queries to and from the Wasm module.
 pub struct ServiceState {
     data: ServiceData,
-    system_api: ServiceSystemApi,
-    system_tables: ServiceSystemApiTables<ServiceSystemApi>,
-    views_tables: ViewSystemApiTables<ServiceSystemApi>,
+    system_api: ServiceRuntimeSender,
+    system_tables: ServiceSystemApiTables<ServiceRuntimeSender>,
+    views_tables: ViewSystemApiTables<ServiceRuntimeSender>,
 }
 
 impl ContractState {
     /// Creates a new instance of [`ContractState`].
     ///
     /// Uses `runtime` to export the system API.
-    pub fn new(runtime: mpsc::UnboundedSender<ContractRequest>) -> Self {
+    pub fn new(system_api: ContractRuntimeSender) -> Self {
         Self {
             data: ContractData::default(),
-            system_api: ContractSystemApi::new(runtime),
+            system_api,
             system_tables: ContractSystemApiTables::default(),
             views_tables: ViewSystemApiTables::default(),
         }
@@ -273,8 +273,8 @@ impl ContractState {
     pub fn system_api(
         &mut self,
     ) -> (
-        &mut ContractSystemApi,
-        &mut ContractSystemApiTables<ContractSystemApi>,
+        &mut ContractRuntimeSender,
+        &mut ContractSystemApiTables<ContractRuntimeSender>,
     ) {
         (&mut self.system_api, &mut self.system_tables)
     }
@@ -283,8 +283,8 @@ impl ContractState {
     pub fn views_api(
         &mut self,
     ) -> (
-        &mut ContractSystemApi,
-        &mut ViewSystemApiTables<ContractSystemApi>,
+        &mut ContractRuntimeSender,
+        &mut ViewSystemApiTables<ContractRuntimeSender>,
     ) {
         (&mut self.system_api, &mut self.views_tables)
     }
@@ -294,10 +294,10 @@ impl ServiceState {
     /// Creates a new instance of [`ServiceState`].
     ///
     /// Uses `runtime` to export the system API.
-    pub fn new(runtime: mpsc::UnboundedSender<ServiceRequest>) -> Self {
+    pub fn new(system_api: ServiceRuntimeSender) -> Self {
         Self {
             data: ServiceData::default(),
-            system_api: ServiceSystemApi::new(runtime),
+            system_api,
             system_tables: ServiceSystemApiTables::default(),
             views_tables: ViewSystemApiTables::default(),
         }
@@ -312,8 +312,8 @@ impl ServiceState {
     pub fn system_api(
         &mut self,
     ) -> (
-        &mut ServiceSystemApi,
-        &mut ServiceSystemApiTables<ServiceSystemApi>,
+        &mut ServiceRuntimeSender,
+        &mut ServiceSystemApiTables<ServiceRuntimeSender>,
     ) {
         (&mut self.system_api, &mut self.system_tables)
     }
@@ -322,8 +322,8 @@ impl ServiceState {
     pub fn views_api(
         &mut self,
     ) -> (
-        &mut ServiceSystemApi,
-        &mut ViewSystemApiTables<ServiceSystemApi>,
+        &mut ServiceRuntimeSender,
+        &mut ViewSystemApiTables<ServiceRuntimeSender>,
     ) {
         (&mut self.system_api, &mut self.views_tables)
     }
@@ -418,37 +418,10 @@ impl common::Service for Service {
     }
 }
 
-/// Implementation to forward contract system calls from the guest Wasm module to the host
-/// implementation.
-pub struct ContractSystemApi {
-    runtime: mpsc::UnboundedSender<ContractRequest>,
-}
-
-impl ContractSystemApi {
-    /// Creates a new [`ContractSystemApi`] instance exporting the API from `runtime`.
-    pub fn new(runtime: mpsc::UnboundedSender<ContractRequest>) -> Self {
-        ContractSystemApi { runtime }
-    }
-}
-
-impl_contract_system_api!(ContractSystemApi, wasmtime::Trap);
-impl_view_system_api_for_contract!(ContractSystemApi, wasmtime::Trap);
-
-/// Implementation to forward service system calls from the guest Wasm module to the host
-/// implementation.
-pub struct ServiceSystemApi {
-    runtime: mpsc::UnboundedSender<ServiceRequest>,
-}
-
-impl ServiceSystemApi {
-    /// Creates a new [`ServiceSystemApi`] instance exporting the API from `runtime`.
-    pub fn new(runtime: mpsc::UnboundedSender<ServiceRequest>) -> Self {
-        ServiceSystemApi { runtime }
-    }
-}
-
-impl_service_system_api!(ServiceSystemApi, wasmtime::Trap);
-impl_view_system_api_for_service!(ServiceSystemApi, wasmtime::Trap);
+impl_contract_system_api!(ContractRuntimeSender, wasmtime::Trap);
+impl_view_system_api_for_contract!(ContractRuntimeSender, wasmtime::Trap);
+impl_service_system_api!(ServiceRuntimeSender, wasmtime::Trap);
+impl_view_system_api_for_service!(ServiceRuntimeSender, wasmtime::Trap);
 
 impl From<ExecutionError> for wasmtime::Trap {
     fn from(error: ExecutionError) -> Self {

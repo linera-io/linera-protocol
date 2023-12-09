@@ -11,8 +11,8 @@ use std::mem;
 /// Test if sending a message to a dropped [`RuntimeActor`] doesn't cause a panic.
 #[test]
 fn test_sending_message_to_dropped_runtime_actor_doesnt_panic() {
-    let (actor, sender) = RuntimeActor::new(());
-
+    let (sender, receiver) = futures::channel::mpsc::unbounded();
+    let actor = RuntimeActor::new((), receiver);
     mem::drop(actor);
 
     assert!(matches!(

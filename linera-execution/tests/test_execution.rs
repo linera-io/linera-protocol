@@ -98,6 +98,7 @@ impl UserContract for TestApplication {
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
         let app_id = runtime_sender
+            .inner
             .send_request(|response_sender| {
                 ContractRequest::Base(BaseRequest::ApplicationId { response_sender })
             })?
@@ -107,6 +108,7 @@ impl UserContract for TestApplication {
         // Modify our state.
         let chosen_key = vec![0];
         runtime_sender
+            .inner
             .send_request(|response_sender| {
                 ContractRequest::Base(BaseRequest::LockViewUserState { response_sender })
             })?
@@ -114,6 +116,7 @@ impl UserContract for TestApplication {
             .unwrap();
 
         let state = runtime_sender
+            .inner
             .send_request(|response_sender| {
                 ContractRequest::Base(BaseRequest::ReadValueBytes {
                     key: chosen_key.clone(),
@@ -129,6 +132,7 @@ impl UserContract for TestApplication {
         batch.put_key_value_bytes(chosen_key, state);
 
         runtime_sender
+            .inner
             .send_sync_request(|response_sender| ContractRequest::WriteBatchAndUnlock {
                 batch,
                 response_sender,
@@ -136,7 +140,7 @@ impl UserContract for TestApplication {
             .expect("State is locked at the start of the operation");
 
         // Call ourselves after the state => ok.
-        let call_result = runtime_sender.send_sync_request(|response_sender| {
+        let call_result = runtime_sender.inner.send_sync_request(|response_sender| {
             ContractRequest::TryCallApplication {
                 authenticated: true,
                 callee_id: app_id,
@@ -150,7 +154,7 @@ impl UserContract for TestApplication {
         if !operation.is_empty() {
             // Call the session to close it.
             let session_id = call_result.sessions[0];
-            runtime_sender.send_sync_request(|response_sender| {
+            runtime_sender.inner.send_sync_request(|response_sender| {
                 ContractRequest::TryCallSession {
                     authenticated: false,
                     session_id,
@@ -173,6 +177,7 @@ impl UserContract for TestApplication {
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
         let app_id = runtime_sender
+            .inner
             .send_request(|response_sender| {
                 ContractRequest::Base(BaseRequest::ApplicationId { response_sender })
             })?
@@ -180,6 +185,7 @@ impl UserContract for TestApplication {
             .unwrap();
 
         runtime_sender
+            .inner
             .send_request(|response_sender| {
                 ContractRequest::Base(BaseRequest::LockViewUserState { response_sender })
             })?
@@ -187,7 +193,7 @@ impl UserContract for TestApplication {
             .unwrap();
 
         // Call ourselves while the state is locked => not ok.
-        runtime_sender.send_sync_request(|response_sender| {
+        runtime_sender.inner.send_sync_request(|response_sender| {
             ContractRequest::TryCallApplication {
                 authenticated: true,
                 callee_id: app_id,
@@ -198,6 +204,7 @@ impl UserContract for TestApplication {
         })?;
 
         runtime_sender
+            .inner
             .send_request(|response_sender| {
                 ContractRequest::Base(BaseRequest::UnlockViewUserState { response_sender })
             })?
@@ -252,6 +259,7 @@ impl UserService for TestApplication {
         let chosen_key = vec![0];
 
         runtime_sender
+            .inner
             .send_request(|response_sender| {
                 ServiceRequest::Base(BaseRequest::LockViewUserState { response_sender })
             })?
@@ -259,6 +267,7 @@ impl UserService for TestApplication {
             .unwrap();
 
         let state = runtime_sender
+            .inner
             .send_request(|response_sender| {
                 ServiceRequest::Base(BaseRequest::ReadValueBytes {
                     key: chosen_key,
@@ -271,6 +280,7 @@ impl UserService for TestApplication {
         let state = state.unwrap_or_default();
 
         runtime_sender
+            .inner
             .send_request(|response_sender| {
                 ServiceRequest::Base(BaseRequest::UnlockViewUserState { response_sender })
             })?

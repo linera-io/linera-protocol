@@ -228,7 +228,10 @@ where
     where
         Self: ContractRuntime,
     {
-        RuntimeActor::new(async_lock::RwLock::new(self))
+        let (sender, receiver) = futures::channel::mpsc::unbounded();
+        let actor = RuntimeActor::new(async_lock::RwLock::new(self), receiver);
+        let sender = ContractRuntimeSender::new(sender);
+        (actor, sender)
     }
 
     pub(crate) fn service_runtime_actor(
@@ -237,7 +240,10 @@ where
     where
         Self: ServiceRuntime,
     {
-        RuntimeActor::new(self)
+        let (sender, receiver) = futures::channel::mpsc::unbounded();
+        let actor = RuntimeActor::new(self, receiver);
+        let sender = ServiceRuntimeSender::new(sender);
+        (actor, sender)
     }
 
     fn forward_sessions(
