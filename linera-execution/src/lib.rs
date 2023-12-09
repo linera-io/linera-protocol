@@ -75,6 +75,8 @@ pub enum ExecutionError {
     #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
     #[error(transparent)]
     WasmError(#[from] WasmExecutionError),
+    #[error(transparent)]
+    JoinError(#[from] tokio::task::JoinError),
 
     #[error("A session is still opened at the end of a transaction")]
     SessionWasNotClosed,
@@ -122,10 +124,9 @@ impl From<ViewError> for ExecutionError {
 }
 
 /// The public entry points provided by the contract part of an application.
-#[async_trait]
 pub trait UserContract {
     /// Initializes the application state on the chain that owns the application.
-    async fn initialize(
+    fn initialize(
         &self,
         context: OperationContext,
         runtime_sender: ContractRuntimeSender,
@@ -133,7 +134,7 @@ pub trait UserContract {
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
     /// Applies an operation from the current block.
-    async fn execute_operation(
+    fn execute_operation(
         &self,
         context: OperationContext,
         runtime_sender: ContractRuntimeSender,
@@ -141,7 +142,7 @@ pub trait UserContract {
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
     /// Applies a message originating from a cross-chain message.
-    async fn execute_message(
+    fn execute_message(
         &self,
         context: MessageContext,
         runtime_sender: ContractRuntimeSender,
@@ -152,7 +153,7 @@ pub trait UserContract {
     ///
     /// When an application is executing an operation or a message it may call other applications,
     /// which can in turn call other applications.
-    async fn handle_application_call(
+    fn handle_application_call(
         &self,
         context: CalleeContext,
         runtime_sender: ContractRuntimeSender,
@@ -161,7 +162,7 @@ pub trait UserContract {
     ) -> Result<ApplicationCallResult, ExecutionError>;
 
     /// Executes a call from another application into a session created by this application.
-    async fn handle_session_call(
+    fn handle_session_call(
         &self,
         context: CalleeContext,
         runtime_sender: ContractRuntimeSender,
@@ -172,10 +173,9 @@ pub trait UserContract {
 }
 
 /// The public entry points provided by the service part of an application.
-#[async_trait]
 pub trait UserService {
     /// Executes unmetered read-only queries on the state of this application.
-    async fn handle_query(
+    fn handle_query(
         &self,
         context: QueryContext,
         runtime_sender: ServiceRuntimeSender,
@@ -318,7 +318,7 @@ pub trait ServiceRuntime: BaseRuntime {
     async fn try_query_application(
         &self,
         queried_id: UserApplicationId,
-        argument: &[u8],
+        argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 }
 
@@ -359,7 +359,7 @@ pub trait ContractRuntime: BaseRuntime {
         &self,
         authenticated: bool,
         callee_id: UserApplicationId,
-        argument: &[u8],
+        argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError>;
 
@@ -369,7 +369,7 @@ pub trait ContractRuntime: BaseRuntime {
         &self,
         authenticated: bool,
         session_id: SessionId,
-        argument: &[u8],
+        argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError>;
 }

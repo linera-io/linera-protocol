@@ -3,13 +3,11 @@
 
 //! Runtime independent code for interfacing with user applications in WebAssembly modules.
 
-use super::{ExecutionError, WasmExecutionError};
+use super::ExecutionError;
 use crate::{
     ApplicationCallResult, CalleeContext, MessageContext, OperationContext, QueryContext,
     RawExecutionResult, SessionCallResult, SessionId,
 };
-use futures::future::{FutureExt, Map, MapErr, TryFutureExt};
-use std::{convert, thread};
 
 /// Types that are specific to the context of an application ready to be executedy by a WebAssembly
 /// runtime.
@@ -104,11 +102,6 @@ where
     pub(crate) extra: A::Extra,
 }
 
-type WasmResultFuture<T> = Map<
-    MapErr<oneshot::Receiver<Result<T, ExecutionError>>, fn(oneshot::RecvError) -> ExecutionError>,
-    fn(Result<Result<T, ExecutionError>, ExecutionError>) -> Result<T, ExecutionError>,
->;
-
 impl<A> WasmRuntimeContext<A>
 where
     A: Contract + Send + Unpin + 'static,
@@ -129,7 +122,7 @@ where
         self,
         context: OperationContext,
         argument: Vec<u8>,
-    ) -> WasmResultFuture<RawExecutionResult<Vec<u8>>> {
+    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         self.run_wasm_guest(move |application, store| {
             application.initialize(store, context, argument)
         })
@@ -151,7 +144,7 @@ where
         self,
         context: OperationContext,
         operation: Vec<u8>,
-    ) -> WasmResultFuture<RawExecutionResult<Vec<u8>>> {
+    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         self.run_wasm_guest(move |application, store| {
             application.execute_operation(store, context, operation)
         })
@@ -173,7 +166,7 @@ where
         self,
         context: MessageContext,
         message: Vec<u8>,
-    ) -> WasmResultFuture<RawExecutionResult<Vec<u8>>> {
+    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         self.run_wasm_guest(move |application, store| {
             application.execute_message(store, context, message)
         })
@@ -197,7 +190,7 @@ where
         context: CalleeContext,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> WasmResultFuture<ApplicationCallResult> {
+    ) -> Result<ApplicationCallResult, ExecutionError> {
         self.run_wasm_guest(move |application, store| {
             application.handle_application_call(store, context, argument, forwarded_sessions)
         })
@@ -223,7 +216,7 @@ where
         session_state: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> WasmResultFuture<(SessionCallResult, Vec<u8>)> {
+    ) -> Result<(SessionCallResult, Vec<u8>), ExecutionError> {
         self.run_wasm_guest(move |application, store| {
             application.handle_session_call(
                 store,
@@ -256,7 +249,7 @@ where
         self,
         context: QueryContext,
         argument: Vec<u8>,
-    ) -> WasmResultFuture<Vec<u8>> {
+    ) -> Result<Vec<u8>, ExecutionError> {
         self.run_wasm_guest(move |application, store| {
             application.handle_query(store, context, argument)
         })
@@ -267,49 +260,23 @@ impl<A> WasmRuntimeContext<A>
 where
     A: ApplicationRuntimeContext + Send + Unpin + 'static,
 {
-    /// Spawns a thread to execute a Wasm guest.
     fn run_wasm_guest<T>(
         mut self,
         guest_operation: impl FnOnce(&A, &mut A::Store) -> Result<Result<T, String>, A::Error>
             + Send
             + 'static,
-    ) -> WasmResultFuture<T>
+    ) -> Result<T, ExecutionError>
     where
         T: Send + 'static,
     {
-        let (result_sender, result_receiver) = oneshot::channel();
+        A::configure_initial_fuel(&mut self);
 
-        // TODO(#1193): Run all guest Wasm applications of a transaction in the same thread.
-        thread::spawn(move || {
-            A::configure_initial_fuel(&mut self);
+        let result = guest_operation(&self.application, &mut self.store)
+            .map_err(|error| error.into())
+            .and_then(|result| result.map_err(ExecutionError::UserError))?;
 
-            let result = guest_operation(&self.application, &mut self.store)
-                .map_err(|error| error.into())
-                .and_then(|result| result.map_err(ExecutionError::UserError));
+        A::persist_remaining_fuel(&mut self).expect("Fuel writing operation should not fail");
 
-            if result_sender.send(result).is_err() {
-                tracing::debug!("Wasm guest operation canceled");
-            }
-        });
-
-        result_receiver
-            .map_err(
-                (|oneshot::RecvError| WasmExecutionError::Aborted.into())
-                    as fn(oneshot::RecvError) -> ExecutionError,
-            )
-            .map(|result| result.and_then(convert::identity))
-    }
-}
-
-impl<A> Drop for WasmRuntimeContext<A>
-where
-    A: ApplicationRuntimeContext,
-{
-    fn drop(&mut self) {
-        if A::persist_remaining_fuel(self).is_err() {
-            tracing::warn!(
-                "Failed to persist remaining fuel. This is okay if the transaction was canceled"
-            );
-        }
+        Ok(result)
     }
 }

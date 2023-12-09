@@ -118,7 +118,7 @@ where
             } => response_sender.respond(
                 self.write()
                     .await
-                    .try_call_application(authenticated, callee_id, &argument, forwarded_sessions)
+                    .try_call_application(authenticated, callee_id, argument, forwarded_sessions)
                     .await?,
             ),
             ContractRequest::TryCallSession {
@@ -130,7 +130,7 @@ where
             } => response_sender.respond(
                 self.write()
                     .await
-                    .try_call_session(authenticated, session_id, &argument, forwarded_sessions)
+                    .try_call_session(authenticated, session_id, argument, forwarded_sessions)
                     .await?,
             ),
         }
@@ -151,7 +151,7 @@ where
                 queried_id,
                 argument,
                 response_sender,
-            } => response_sender.respond(self.try_query_application(queried_id, &argument).await?),
+            } => response_sender.respond(self.try_query_application(queried_id, argument).await?),
         }
 
         Ok(())

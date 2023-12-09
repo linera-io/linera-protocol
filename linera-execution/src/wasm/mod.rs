@@ -29,7 +29,6 @@ use crate::{
     OperationContext, QueryContext, RawExecutionResult, SessionCallResult, SessionId, UserContract,
     UserService, WasmRuntime,
 };
-use async_trait::async_trait;
 use std::{path::Path, sync::Arc};
 use thiserror::Error;
 
@@ -152,9 +151,8 @@ pub enum WasmExecutionError {
     Aborted,
 }
 
-#[async_trait]
 impl UserContract for WasmContract {
-    async fn initialize(
+    fn initialize(
         &self,
         context: OperationContext,
         runtime_sender: ContractRuntimeSender,
@@ -165,18 +163,16 @@ impl UserContract for WasmContract {
             Self::Wasmtime { module } => {
                 Self::prepare_contract_runtime_with_wasmtime(module, runtime_sender)?
                     .initialize(context, argument)
-                    .await
             }
             #[cfg(feature = "wasmer")]
             Self::Wasmer { engine, module } => {
                 Self::prepare_contract_runtime_with_wasmer(engine, module, runtime_sender)?
                     .initialize(context, argument)
-                    .await
             }
         }
     }
 
-    async fn execute_operation(
+    fn execute_operation(
         &self,
         context: OperationContext,
         runtime_sender: ContractRuntimeSender,
@@ -187,18 +183,16 @@ impl UserContract for WasmContract {
             Self::Wasmtime { module } => {
                 Self::prepare_contract_runtime_with_wasmtime(module, runtime_sender)?
                     .execute_operation(context, operation)
-                    .await
             }
             #[cfg(feature = "wasmer")]
             Self::Wasmer { engine, module } => {
                 Self::prepare_contract_runtime_with_wasmer(engine, module, runtime_sender)?
                     .execute_operation(context, operation)
-                    .await
             }
         }
     }
 
-    async fn execute_message(
+    fn execute_message(
         &self,
         context: MessageContext,
         runtime_sender: ContractRuntimeSender,
@@ -209,18 +203,16 @@ impl UserContract for WasmContract {
             Self::Wasmtime { module } => {
                 Self::prepare_contract_runtime_with_wasmtime(module, runtime_sender)?
                     .execute_message(context, message)
-                    .await
             }
             #[cfg(feature = "wasmer")]
             Self::Wasmer { engine, module } => {
                 Self::prepare_contract_runtime_with_wasmer(engine, module, runtime_sender)?
                     .execute_message(context, message)
-                    .await
             }
         }
     }
 
-    async fn handle_application_call(
+    fn handle_application_call(
         &self,
         context: CalleeContext,
         runtime_sender: ContractRuntimeSender,
@@ -232,18 +224,16 @@ impl UserContract for WasmContract {
             Self::Wasmtime { module } => {
                 Self::prepare_contract_runtime_with_wasmtime(module, runtime_sender)?
                     .handle_application_call(context, argument, forwarded_sessions)
-                    .await
             }
             #[cfg(feature = "wasmer")]
             Self::Wasmer { engine, module } => {
                 Self::prepare_contract_runtime_with_wasmer(engine, module, runtime_sender)?
                     .handle_application_call(context, argument, forwarded_sessions)
-                    .await
             }
         }
     }
 
-    async fn handle_session_call(
+    fn handle_session_call(
         &self,
         context: CalleeContext,
         runtime_sender: ContractRuntimeSender,
@@ -256,21 +246,18 @@ impl UserContract for WasmContract {
             Self::Wasmtime { module } => {
                 Self::prepare_contract_runtime_with_wasmtime(module, runtime_sender)?
                     .handle_session_call(context, session_state, argument, forwarded_sessions)
-                    .await
             }
             #[cfg(feature = "wasmer")]
             Self::Wasmer { engine, module } => {
                 Self::prepare_contract_runtime_with_wasmer(engine, module, runtime_sender)?
                     .handle_session_call(context, session_state, argument, forwarded_sessions)
-                    .await
             }
         }
     }
 }
 
-#[async_trait]
 impl UserService for WasmService {
-    async fn handle_query(
+    fn handle_query(
         &self,
         context: QueryContext,
         runtime_sender: ServiceRuntimeSender,
@@ -281,13 +268,11 @@ impl UserService for WasmService {
             Self::Wasmtime { module } => {
                 Self::prepare_service_runtime_with_wasmtime(module, runtime_sender)?
                     .handle_query(context, argument)
-                    .await
             }
             #[cfg(feature = "wasmer")]
             Self::Wasmer { module } => {
                 Self::prepare_service_runtime_with_wasmer(module, runtime_sender)?
                     .handle_query(context, argument)
-                    .await
             }
         }
     }
