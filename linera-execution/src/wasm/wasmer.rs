@@ -38,12 +38,10 @@ use super::{
     ApplicationCallResult, SessionCallResult, WasmContract, WasmExecutionError, WasmService,
 };
 use crate::{
-    runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
     Bytecode, CalleeContext, ContractRuntimeSender, ExecutionError, MessageContext,
     OperationContext, QueryContext, RawExecutionResult, ServiceRuntimeSender,
 };
 use bytes::Bytes;
-use futures::channel::mpsc;
 use linera_base::identifiers::SessionId;
 use linera_views::batch::Batch;
 use once_cell::sync::Lazy;
@@ -78,29 +76,19 @@ impl ApplicationRuntimeContext for Contract {
     type Error = RuntimeError;
     type Extra = WasmerContractExtra;
 
-    fn configure_initial_fuel(context: &mut WasmRuntimeContext<Self>) {
-        let remaining_points = context
-            .extra
-            .runtime
-            .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
-            .and_then(|response_receiver| {
-                response_receiver
-                    .recv()
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
-            })
-            .unwrap_or_else(|_| {
-                tracing::debug!("Failed to read initial fuel for transaction");
-                0
-            });
+    fn configure_initial_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), Self::Error> {
+        let remaining_points = context.extra.runtime_sender.remaining_fuel()?;
 
         metering::set_remaining_points(
             &mut context.store,
             &context.extra.instance,
             remaining_points,
         );
+
+        Ok(())
     }
 
-    fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), ()> {
+    fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), Self::Error> {
         let remaining_fuel =
             match metering::get_remaining_points(&mut context.store, &context.extra.instance) {
                 MeteringPoints::Exhausted => 0,
@@ -109,12 +97,10 @@ impl ApplicationRuntimeContext for Contract {
 
         context
             .extra
-            .runtime
-            .send_sync_request(|response_sender| ContractRequest::SetRemainingFuel {
-                remaining_fuel,
-                response_sender,
-            })
-            .map_err(|_| ())
+            .runtime_sender
+            .set_remaining_fuel(remaining_fuel)?;
+
+        Ok(())
     }
 }
 
@@ -128,9 +114,11 @@ impl ApplicationRuntimeContext for Service {
     type Error = RuntimeError;
     type Extra = ();
 
-    fn configure_initial_fuel(_context: &mut WasmRuntimeContext<Self>) {}
+    fn configure_initial_fuel(_context: &mut WasmRuntimeContext<Self>) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
-    fn persist_remaining_fuel(_context: &mut WasmRuntimeContext<Self>) -> Result<(), ()> {
+    fn persist_remaining_fuel(_context: &mut WasmRuntimeContext<Self>) -> Result<(), Self::Error> {
         Ok(())
     }
 }
@@ -172,7 +160,7 @@ impl WasmContract {
             application,
             store,
             extra: WasmerContractExtra {
-                runtime: runtime_sender.inner,
+                runtime_sender,
                 instance,
             },
         })
@@ -333,7 +321,7 @@ impl_view_system_api_for_service!(ServiceRuntimeSender, wasmer::RuntimeError);
 
 /// Extra parameters necessary when cleaning up after contract execution.
 pub struct WasmerContractExtra {
-    runtime: mpsc::UnboundedSender<ContractRequest>,
+    runtime_sender: ContractRuntimeSender,
     instance: Instance,
 }
 

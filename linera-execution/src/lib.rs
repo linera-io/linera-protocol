@@ -77,6 +77,10 @@ pub enum ExecutionError {
     WasmError(#[from] WasmExecutionError),
     #[error(transparent)]
     JoinError(#[from] tokio::task::JoinError),
+    #[error("Host future was polled after it had finished")]
+    PolledTwice,
+    #[error("Attempt to use a system API to write to read-only storage")]
+    WriteAttemptToReadOnlyStorage,
 
     #[error("A session is still opened at the end of a transaction")]
     SessionWasNotClosed,

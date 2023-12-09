@@ -22,10 +22,10 @@ pub trait ApplicationRuntimeContext: Sized {
     type Extra: Send + Unpin;
 
     /// Configures the fuel available for execution.
-    fn configure_initial_fuel(context: &mut WasmRuntimeContext<Self>);
+    fn configure_initial_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), Self::Error>;
 
     /// Persists the remaining fuel after execution.
-    fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), ()>;
+    fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), Self::Error>;
 }
 
 /// Common interface to calling a user contract in a WebAssembly module.
@@ -269,14 +269,14 @@ where
     where
         T: Send + 'static,
     {
-        A::configure_initial_fuel(&mut self);
+        A::configure_initial_fuel(&mut self).map_err(|error| error.into())?;
 
         let result = guest_operation(&self.application, &mut self.store)
             .map_err(|error| error.into())
             .and_then(|result| result.map_err(ExecutionError::UserError));
 
         // TODO(#989): Eventually, we should exit early again in case of UserError.
-        A::persist_remaining_fuel(&mut self).expect("Fuel writing operation should not fail");
+        A::persist_remaining_fuel(&mut self).map_err(|error| error.into())?;
 
         result
     }

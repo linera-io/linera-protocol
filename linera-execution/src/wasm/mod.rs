@@ -143,12 +143,6 @@ pub enum WasmExecutionError {
     #[cfg(feature = "wasmtime")]
     #[error("Failed to execute Wasm module (Wasmtime)")]
     ExecuteModuleInWasmtime(#[from] ::wasmtime::Trap),
-    #[error("Attempt to use a system API to write to read-only storage")]
-    WriteAttemptToReadOnlyStorage,
-    #[error("Host future was polled after it had finished")]
-    PolledTwice,
-    #[error("Execution of guest future was aborted")]
-    Aborted,
 }
 
 impl UserContract for WasmContract {

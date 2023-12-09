@@ -5,7 +5,7 @@
 
 mod handlers;
 mod requests;
-mod senders;
+pub mod senders;
 mod sync_response;
 
 use self::handlers::RequestHandler;
@@ -55,7 +55,7 @@ where
 /// Extension trait to help with sending requests to [`RuntimeActor`]s.
 ///
 /// Prepares a channel for the actor to send a response back to the sender of the request.
-pub trait SendRequestExt<Request> {
+pub trait UnboundedSenderExt<Request> {
     /// Sends a request built by `builder`, returning a [`oneshot::Receiver`] for receiving the
     /// `Response`.
     fn send_request<Response>(
@@ -74,7 +74,7 @@ pub trait SendRequestExt<Request> {
         Response: Send;
 }
 
-impl<Request> SendRequestExt<Request> for mpsc::UnboundedSender<Request>
+impl<Request> UnboundedSenderExt<Request> for mpsc::UnboundedSender<Request>
 where
     Request: Send,
 {
@@ -120,6 +120,18 @@ where
         response_receiver
             .recv()
             .map_err(|_| ExecutionError::MissingRuntimeResponse)
+    }
+}
+
+/// Extension trait to help with receiving oneshot responses.
+pub trait ReceiverExt<T> {
+    fn recv_response(self) -> Result<T, ExecutionError>;
+}
+
+impl<T> ReceiverExt<T> for oneshot::Receiver<T> {
+    fn recv_response(self) -> Result<T, ExecutionError> {
+        self.recv()
+            .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
     }
 }
 

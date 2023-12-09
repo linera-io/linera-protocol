@@ -3,7 +3,7 @@
 
 //! Unit tests for the [`RuntimeActor`].
 
-use super::{RequestHandler, RuntimeActor, SendRequestExt};
+use super::{RequestHandler, RuntimeActor, UnboundedSenderExt};
 use crate::ExecutionError;
 use async_trait::async_trait;
 use std::mem;

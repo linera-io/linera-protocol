@@ -42,7 +42,6 @@ use super::{
     WasmContract, WasmExecutionError, WasmService,
 };
 use crate::{
-    runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
     ApplicationCallResult, Bytecode, CalleeContext, ContractRuntimeSender, ExecutionError,
     MessageContext, OperationContext, QueryContext, RawExecutionResult, ServiceRuntimeSender,
     SessionCallResult, SessionId,
@@ -86,45 +85,30 @@ impl ApplicationRuntimeContext for Contract {
     type Error = Trap;
     type Extra = ();
 
-    fn configure_initial_fuel(context: &mut WasmRuntimeContext<Self>) {
-        let runtime = &context.store.data().system_api.inner;
-        let fuel = runtime
-            .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
-            .and_then(|response_receiver| {
-                response_receiver
-                    .recv()
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
-            })
-            .unwrap_or_else(|_| {
-                tracing::debug!("Failed to read initial fuel for transaction");
-                0
-            });
+    fn configure_initial_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), Self::Error> {
+        let runtime_sender = &context.store.data().system_api;
+        let fuel = runtime_sender.remaining_fuel()?;
 
         context
             .store
             .add_fuel(fuel)
             .expect("Fuel consumption wasn't properly enabled");
+
+        Ok(())
     }
 
-    fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), ()> {
-        let runtime = &context.store.data().system_api.inner;
-        let initial_fuel = runtime
-            .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
-            .and_then(|response_receiver| {
-                response_receiver
-                    .recv()
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
-            })
-            .map_err(|_| ())?;
-        let consumed_fuel = context.store.fuel_consumed().ok_or(())?;
+    fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), Self::Error> {
+        let runtime_sender = &context.store.data().system_api;
+        let initial_fuel = runtime_sender.remaining_fuel()?;
+        let consumed_fuel = context
+            .store
+            .fuel_consumed()
+            .expect("Failed to read consumed fuel");
         let remaining_fuel = initial_fuel.saturating_sub(consumed_fuel);
 
-        runtime
-            .send_sync_request(|response_sender| ContractRequest::SetRemainingFuel {
-                remaining_fuel,
-                response_sender,
-            })
-            .map_err(|_| ())
+        runtime_sender.set_remaining_fuel(remaining_fuel)?;
+
+        Ok(())
     }
 }
 
@@ -138,9 +122,11 @@ impl ApplicationRuntimeContext for Service {
     type Error = Trap;
     type Extra = ();
 
-    fn configure_initial_fuel(_context: &mut WasmRuntimeContext<Self>) {}
+    fn configure_initial_fuel(_context: &mut WasmRuntimeContext<Self>) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
-    fn persist_remaining_fuel(_context: &mut WasmRuntimeContext<Self>) -> Result<(), ()> {
+    fn persist_remaining_fuel(_context: &mut WasmRuntimeContext<Self>) -> Result<(), Self::Error> {
         Ok(())
     }
 }
