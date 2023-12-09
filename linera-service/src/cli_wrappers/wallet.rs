@@ -30,6 +30,7 @@ use std::{
 };
 use tempfile::TempDir;
 use tokio::process::{Child, Command};
+
 use tracing::{info, warn};
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -89,6 +90,7 @@ impl ClientWrapper {
     }
 
     /// Runs `linera project publish`.
+    /// FIXME!!! (positional arguments)
     pub async fn project_publish<T: Serialize>(
         &self,
         path: PathBuf,
@@ -554,6 +556,8 @@ impl ClientWrapper {
     }
 
     /// Returns the default chain.
+    /// TODO: need to differentiate between no default chain and the wallet
+    /// lock being held by another process.
     pub fn default_chain(&self) -> Option<ChainId> {
         self.get_wallet().ok()?.default_chain()
     }

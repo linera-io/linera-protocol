@@ -596,14 +596,20 @@ impl ClientContext {
         ViewError: From<S::ContextError>,
     {
         info!("Loading bytecode files...");
-        let contract_bytecode = Bytecode::load_from_file(&contract).await.context(format!(
-            "failed to load contract bytecode from {:?}",
-            &contract
-        ))?;
-        let service_bytecode = Bytecode::load_from_file(&service).await.context(format!(
-            "failed to load service bytecode from {:?}",
-            &service
-        ))?;
+        let contract_path = contract.canonicalize().unwrap();
+        let contract_bytecode = Bytecode::load_from_file(&contract_path)
+            .await
+            .context(format!(
+                "failed to load contract bytecode from {:?}",
+                &contract_path
+            ))?;
+        let service_path = service.canonicalize().unwrap();
+        let service_bytecode = Bytecode::load_from_file(&service_path)
+            .await
+            .context(format!(
+                "failed to load service bytecode from {:?}",
+                &service_path
+            ))?;
 
         info!("Publishing bytecode...");
         let bytecode_id = loop {

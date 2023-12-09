@@ -1251,6 +1251,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "concurrent-queue"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d16048cd947b08fa32c24458a22f5dc5e835264f689f4f5653210c69fd107363"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "console"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3419,6 +3428,7 @@ dependencies = [
  "clap-markdown",
  "colored",
  "comfy-table",
+ "concurrent-queue",
  "counter",
  "crowd-funding",
  "current_platform",
@@ -3441,6 +3451,7 @@ dependencies = [
  "matching-engine",
  "parse_duration",
  "pathdiff",
+ "port-selector",
  "prometheus",
  "proptest",
  "rand 0.7.3",
@@ -4444,6 +4455,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "38f6d39893cca0701371e3c27294f09797214b86f1fb951b89ade8ec04e2abab"
 dependencies = [
  "plotters-backend",
+]
+
+[[package]]
+name = "port-selector"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd119ef551a50cd8939f0ff93bd062891f7b0dbb771b4a05df8a9c13aebaff68"
+dependencies = [
+ "rand 0.8.5",
 ]
 
 [[package]]
