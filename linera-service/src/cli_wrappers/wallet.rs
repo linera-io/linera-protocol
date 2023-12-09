@@ -30,6 +30,7 @@ use std::{
 };
 use tempfile::TempDir;
 use tokio::process::{Child, Command};
+
 use tracing::{info, warn};
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -89,6 +90,7 @@ impl ClientWrapper {
     }
 
     /// Runs `linera project publish`.
+    /// FIXME!!! (positional arguments)
     pub async fn project_publish<T: Serialize>(
         &self,
         path: PathBuf,
@@ -265,6 +267,25 @@ impl ClientWrapper {
             .spawn_and_wait_for_stdout()
             .await?;
         Ok(stdout.trim().parse::<ApplicationId>()?.with_abi())
+    }
+
+    /// Runs `linera request-application`
+    pub async fn request_application(
+        &self,
+        application_id: ApplicationId,
+        requester_chain_id: ChainId,
+        target_chain_id: Option<ChainId>,
+    ) -> Result<BytecodeId> {
+        let mut command = self.command().await?;
+        command
+            .arg("request-application")
+            .arg(application_id.to_string())
+            .args(["--requester-chain-id", &requester_chain_id.to_string()]);
+        if let Some(target_chain_id) = target_chain_id {
+            command.args(["target-chain-id", &target_chain_id.to_string()]);
+        }
+        let stdout = command.spawn_and_wait_for_stdout().await?;
+        Ok(stdout.trim().parse()?)
     }
 
     /// Runs `linera service`.
@@ -525,6 +546,8 @@ impl ClientWrapper {
     }
 
     /// Returns the default chain.
+    /// TODO: need to differentiate between no default chain and the wallet
+    /// lock being held by another process.
     pub fn default_chain(&self) -> Option<ChainId> {
         self.get_wallet().ok()?.default_chain()
     }
@@ -560,23 +583,21 @@ impl ClientWrapper {
             .context("error while parsing the result of `linera sync-balance`")?;
         Ok(amount)
     }
-}
 
-#[cfg(any(test, feature = "test"))]
-impl ClientWrapper {
     pub async fn build_application(
         &self,
         path: &Path,
         name: &str,
         is_workspace: bool,
     ) -> Result<(PathBuf, PathBuf)> {
+        println!("{:?}", path.canonicalize().unwrap());
         Command::new("cargo")
             .current_dir(self.tmp_dir.path())
             .arg("build")
             .arg("--release")
             .args(["--target", "wasm32-unknown-unknown"])
             .arg("--manifest-path")
-            .arg(path.join("Cargo.toml"))
+            .arg(path.canonicalize().unwrap().join("Cargo.toml"))
             .spawn_and_wait_for_stdout()
             .await?;
 
@@ -590,7 +611,10 @@ impl ClientWrapper {
 
         Ok((contract, service))
     }
+}
 
+#[cfg(any(test, feature = "test"))]
+impl ClientWrapper {
     pub async fn build_example(&self, name: &str) -> Result<(PathBuf, PathBuf)> {
         self.build_application(Self::example_path(name)?.as_path(), name, true)
             .await
