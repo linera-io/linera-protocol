@@ -7,12 +7,10 @@ use crate::{
     runtime_actor::{
         ContractRequest, ContractRuntimeSender, RuntimeActor, ServiceRequest, ServiceRuntimeSender,
     },
-    BaseRuntime, CallResult, ContractRuntime, ExecutionError, ExecutionResult,
-    ExecutionRuntimeContext, ServiceRuntime, SessionId, UserApplicationDescription,
-    UserApplicationId, UserContractCode, UserServiceCode,
+    CallResult, ExecutionError, ExecutionResult, ExecutionRuntimeContext, SessionId,
+    UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
 };
 use async_lock::{Mutex, MutexGuard, MutexGuardArc};
-use async_trait::async_trait;
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{ArithmeticError, Timestamp},
@@ -219,33 +217,6 @@ where
         Ok((code, description))
     }
 
-    pub(crate) fn contract_runtime_actor(
-        &self,
-    ) -> (
-        RuntimeActor<async_lock::RwLock<&Self>, ContractRequest>,
-        ContractRuntimeSender,
-    )
-    where
-        Self: ContractRuntime,
-    {
-        let (sender, receiver) = futures::channel::mpsc::unbounded();
-        let actor = RuntimeActor::new(async_lock::RwLock::new(self), receiver);
-        let sender = ContractRuntimeSender::new(sender);
-        (actor, sender)
-    }
-
-    pub(crate) fn service_runtime_actor(
-        &self,
-    ) -> (RuntimeActor<&Self, ServiceRequest>, ServiceRuntimeSender)
-    where
-        Self: ServiceRuntime,
-    {
-        let (sender, receiver) = futures::channel::mpsc::unbounded();
-        let actor = RuntimeActor::new(self, receiver);
-        let sender = ServiceRuntimeSender::new(sender);
-        (actor, sender)
-    }
-
     fn forward_sessions(
         &self,
         session_ids: &[SessionId],
@@ -405,25 +376,24 @@ impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W> {
     }
 }
 
-#[async_trait]
-impl<'a, C, const W: bool> BaseRuntime for ExecutionRuntime<'a, C, W>
+impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W>
 where
     C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
-    fn chain_id(&self) -> ChainId {
+    pub(crate) fn chain_id(&self) -> ChainId {
         self.chain_id
     }
 
-    fn application_id(&self) -> UserApplicationId {
+    pub(crate) fn application_id(&self) -> UserApplicationId {
         self.applications_mut()
             .last()
             .expect("at least one application description should be present in the stack")
             .id
     }
 
-    fn application_parameters(&self) -> Vec<u8> {
+    pub(crate) fn application_parameters(&self) -> Vec<u8> {
         self.applications_mut()
             .last()
             .expect("at least one application description should be present in the stack")
@@ -431,15 +401,15 @@ where
             .clone()
     }
 
-    fn read_system_balance(&self) -> linera_base::data_types::Amount {
+    pub(crate) fn read_system_balance(&self) -> linera_base::data_types::Amount {
         *self.execution_state_mut().system.balance.get()
     }
 
-    fn read_system_timestamp(&self) -> Timestamp {
+    pub(crate) fn read_system_timestamp(&self) -> Timestamp {
         *self.execution_state_mut().system.timestamp.get()
     }
 
-    async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
+    pub(crate) async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
         let state = self
             .execution_state_mut()
             .simple_users
@@ -450,7 +420,7 @@ where
         Ok(state)
     }
 
-    async fn lock_view_user_state(&self) -> Result<(), ExecutionError> {
+    pub(crate) async fn lock_view_user_state(&self) -> Result<(), ExecutionError> {
         let view = self
             .execution_state_mut()
             .view_users
@@ -462,7 +432,7 @@ where
         Ok(())
     }
 
-    async fn unlock_view_user_state(&self) -> Result<(), ExecutionError> {
+    pub(crate) async fn unlock_view_user_state(&self) -> Result<(), ExecutionError> {
         // Make the view available again.
         match self
             .active_view_user_states_mut()
@@ -474,7 +444,10 @@ where
         }
     }
 
-    async fn read_value_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError> {
+    pub(crate) async fn read_value_bytes(
+        &self,
+        key: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, ExecutionError> {
         let state = self.active_view_user_states_mut().await;
         let view = state
             .get(&self.application_id())
@@ -487,7 +460,7 @@ where
         Ok(result)
     }
 
-    async fn find_keys_by_prefix(
+    pub(crate) async fn find_keys_by_prefix(
         &self,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, ExecutionError> {
@@ -506,7 +479,7 @@ where
         Ok(keys)
     }
 
-    async fn find_key_values_by_prefix(
+    pub(crate) async fn find_key_values_by_prefix(
         &self,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
@@ -526,15 +499,23 @@ where
     }
 }
 
-#[async_trait]
-impl<'a, C> ServiceRuntime for ExecutionRuntime<'a, C, false>
+impl<'a, C> ExecutionRuntime<'a, C, false>
 where
     C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
+    pub(crate) fn service_runtime_actor(
+        &self,
+    ) -> (RuntimeActor<&Self, ServiceRequest>, ServiceRuntimeSender) {
+        let (sender, receiver) = futures::channel::mpsc::unbounded();
+        let actor = RuntimeActor::new(self, receiver);
+        let sender = ServiceRuntimeSender::new(sender);
+        (actor, sender)
+    }
+
     /// Note that queries are not available from writable contexts.
-    async fn try_query_application(
+    pub(crate) async fn try_query_application(
         &self,
         queried_id: UserApplicationId,
         argument: Vec<u8>,
@@ -563,18 +544,29 @@ where
     }
 }
 
-#[async_trait]
-impl<'a, C> ContractRuntime for ExecutionRuntime<'a, C, true>
+impl<'a, C> ExecutionRuntime<'a, C, true>
 where
     C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
-    fn remaining_fuel(&self) -> u64 {
+    pub(crate) fn contract_runtime_actor(
+        &self,
+    ) -> (
+        RuntimeActor<async_lock::RwLock<&Self>, ContractRequest>,
+        ContractRuntimeSender,
+    ) {
+        let (sender, receiver) = futures::channel::mpsc::unbounded();
+        let actor = RuntimeActor::new(async_lock::RwLock::new(self), receiver);
+        let sender = ContractRuntimeSender::new(sender);
+        (actor, sender)
+    }
+
+    pub(crate) fn remaining_fuel(&self) -> u64 {
         self.remaining_fuel.load(Ordering::Acquire)
     }
 
-    fn runtime_counts(&self) -> RuntimeCounts {
+    pub(crate) fn runtime_counts(&self) -> RuntimeCounts {
         let remaining_fuel = self.remaining_fuel.load(Ordering::Acquire);
         let num_reads = self.num_reads.load(Ordering::Acquire);
         let bytes_read = self.bytes_read.load(Ordering::Acquire);
@@ -589,11 +581,11 @@ where
         }
     }
 
-    fn set_remaining_fuel(&self, remaining_fuel: u64) {
+    pub(crate) fn set_remaining_fuel(&self, remaining_fuel: u64) {
         self.remaining_fuel.store(remaining_fuel, Ordering::Release);
     }
 
-    async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
+    pub(crate) async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
         let view = self
             .execution_state_mut()
             .simple_users
@@ -606,7 +598,7 @@ where
         Ok(state)
     }
 
-    fn save_and_unlock_my_state(&self, state: Vec<u8>) -> Result<(), ExecutionError> {
+    pub(crate) fn save_and_unlock_my_state(&self, state: Vec<u8>) -> Result<(), ExecutionError> {
         // Make the view available again.
         match self
             .active_simple_user_states_mut()
@@ -621,12 +613,12 @@ where
         }
     }
 
-    fn unlock_my_state(&self) {
+    pub(crate) fn unlock_my_state(&self) {
         self.active_simple_user_states_mut()
             .remove(&self.application_id());
     }
 
-    async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {
+    pub(crate) async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {
         // Update the write costs
         let size = batch.size() as u64;
         self.increment_bytes_written(size)?;
@@ -649,7 +641,7 @@ where
         }
     }
 
-    async fn try_call_application(
+    pub(crate) async fn try_call_application(
         &self,
         authenticated: bool,
         callee_id: UserApplicationId,
@@ -711,7 +703,7 @@ where
         Ok(result)
     }
 
-    async fn try_call_session(
+    pub(crate) async fn try_call_session(
         &self,
         authenticated: bool,
         session_id: SessionId,

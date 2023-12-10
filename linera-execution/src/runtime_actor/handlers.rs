@@ -7,10 +7,10 @@ use super::{
     requests::{BaseRequest, ContractRequest, ServiceRequest},
     sync_response::SyncSender,
 };
-use crate::{BaseRuntime, ContractRuntime, ExecutionError, ServiceRuntime};
+use crate::{runtime::ExecutionRuntime, ExecutionError, ExecutionRuntimeContext};
 use async_lock::RwLock;
 use async_trait::async_trait;
-use linera_views::views::ViewError;
+use linera_views::{common::Context, views::ViewError};
 
 /// A type that is able to handle incoming `Request`s.
 #[async_trait]
@@ -23,9 +23,11 @@ pub trait RequestHandler<Request> {
 }
 
 #[async_trait]
-impl<Runtime> RequestHandler<BaseRequest> for &Runtime
+impl<'a, C, const W: bool> RequestHandler<BaseRequest> for &ExecutionRuntime<'a, C, W>
 where
-    Runtime: BaseRuntime + ?Sized,
+    C: Context + Clone + Send + Sync + 'static,
+    ViewError: From<C::Error>,
+    C::Extra: ExecutionRuntimeContext,
 {
     async fn handle_request(&self, request: BaseRequest) -> Result<(), ExecutionError> {
         match request {
@@ -70,9 +72,11 @@ where
 }
 
 #[async_trait]
-impl<Runtime> RequestHandler<ContractRequest> for RwLock<&Runtime>
+impl<'a, C> RequestHandler<ContractRequest> for RwLock<&ExecutionRuntime<'a, C, true>>
 where
-    Runtime: ContractRuntime + ?Sized,
+    C: Context + Clone + Send + Sync + 'static,
+    ViewError: From<C::Error>,
+    C::Extra: ExecutionRuntimeContext,
 {
     async fn handle_request(&self, request: ContractRequest) -> Result<(), ExecutionError> {
         // Use unit arguments in calls to `respond` in order to have compile errors if the return
@@ -140,9 +144,11 @@ where
 }
 
 #[async_trait]
-impl<Runtime> RequestHandler<ServiceRequest> for &Runtime
+impl<'a, C> RequestHandler<ServiceRequest> for &ExecutionRuntime<'a, C, false>
 where
-    Runtime: ServiceRuntime + ?Sized,
+    C: Context + Clone + Send + Sync + 'static,
+    ViewError: From<C::Error>,
+    C::Extra: ExecutionRuntimeContext,
 {
     async fn handle_request(&self, request: ServiceRequest) -> Result<(), ExecutionError> {
         match request {

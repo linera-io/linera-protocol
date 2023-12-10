@@ -28,19 +28,18 @@ pub struct RuntimeActor<Runtime, Request> {
     requests: mpsc::UnboundedReceiver<Request>,
 }
 
+impl<Runtime, Request> RuntimeActor<Runtime, Request> {
+    /// Creates a new [`RuntimeActor`] using the provided `Runtime` to handle `Request`s.
+    pub fn new(runtime: Runtime, requests: mpsc::UnboundedReceiver<Request>) -> Self {
+        Self { runtime, requests }
+    }
+}
+
 impl<Runtime, Request> RuntimeActor<Runtime, Request>
 where
     Runtime: RequestHandler<Request>,
     Request: std::fmt::Debug,
 {
-    /// Creates a new [`RuntimeActor`] using the provided `Runtime` to handle `Request`s.
-    ///
-    /// Returns the new [`RuntimeActor`] so that it can be executed later with the
-    /// [`RuntimeActor::run`] method and the endpoint to send `Request`s to the actor.
-    pub fn new(runtime: Runtime, requests: mpsc::UnboundedReceiver<Request>) -> Self {
-        Self { runtime, requests }
-    }
-
     /// Runs the [`RuntimeActor`], handling `Request`s until all the sender endpoints are closed.
     pub async fn run(self) -> Result<(), ExecutionError> {
         let runtime = self.runtime;

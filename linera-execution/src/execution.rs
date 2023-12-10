@@ -6,9 +6,9 @@ use crate::{
     resources::{ResourceTracker, RuntimeLimits},
     runtime::{ApplicationStatus, ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
-    ContractRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeContext, Message,
-    MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
-    RawOutgoingMessage, Response, SystemMessage, UserApplicationDescription, UserApplicationId,
+    ExecutionError, ExecutionResult, ExecutionRuntimeContext, Message, MessageContext, Operation,
+    OperationContext, Query, QueryContext, RawExecutionResult, RawOutgoingMessage, Response,
+    SystemMessage, UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{
     ensure,
