@@ -108,16 +108,6 @@ where
 {
     /// Calls the guest Wasm module's implementation of
     /// [`UserApplication::initialize`][`linera_execution::UserApplication::initialize`].
-    ///
-    /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
-    ///
-    /// ```ignore
-    /// pub async fn initialize(
-    ///     mut self,
-    ///     context: &OperationContext,
-    ///     argument: &[u8],
-    /// ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>
-    /// ```
     pub fn initialize(
         self,
         context: OperationContext,
@@ -130,16 +120,6 @@ where
 
     /// Calls the guest Wasm module's implementation of
     /// [`UserApplication::execute_operation`][`linera_execution::UserApplication::execute_operation`].
-    ///
-    /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
-    ///
-    /// ```ignore
-    /// pub async fn execute_operation(
-    ///     mut self,
-    ///     context: &OperationContext,
-    ///     operation: &[u8],
-    /// ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>
-    /// ```
     pub fn execute_operation(
         self,
         context: OperationContext,
@@ -152,16 +132,6 @@ where
 
     /// Calls the guest Wasm module's implementation of
     /// [`UserApplication::execute_message`][`linera_execution::UserApplication::execute_message`].
-    ///
-    /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
-    ///
-    /// ```ignore
-    /// pub async fn execute_message(
-    ///     mut self,
-    ///     context: &MessageContext,
-    ///     message: &[u8],
-    /// ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>
-    /// ```
     pub fn execute_message(
         self,
         context: MessageContext,
@@ -174,17 +144,6 @@ where
 
     /// Calls the guest Wasm module's implementation of
     /// [`UserApplication::handle_application_call`][`linera_execution::UserApplication::handle_application_call`].
-    ///
-    /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
-    ///
-    /// ```ignore
-    /// pub async fn handle_application_call(
-    ///     mut self,
-    ///     context: &CalleeContext,
-    ///     argument: &[u8],
-    ///     forwarded_sessions: Vec<SessionId>,
-    /// ) -> Result<ApplicationCallResult, ExecutionError>
-    /// ```
     pub fn handle_application_call(
         self,
         context: CalleeContext,
@@ -198,17 +157,6 @@ where
 
     /// Calls the guest Wasm module's implementation of
     /// [`UserApplication::handle_session_call`][`linera_execution::UserApplication::handle_session_call`].
-    ///
-    /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
-    ///
-    /// ```ignore
-    /// pub async fn handle_session_call(
-    ///     mut self,
-    ///     context: &CalleeContext,
-    ///     session_state: &[u8],
-    ///     argument: &[u8],
-    ///     forwarded_sessions: Vec<SessionId>,
-    /// ) -> Result<(SessionCallResult, Vec<u8>), ExecutionError>
     /// ```
     pub fn handle_session_call(
         self,
@@ -235,16 +183,6 @@ where
 {
     /// Calls the guest Wasm module's implementation of
     /// [`UserApplication::handle_query`][`linera_execution::UserApplication::handle_query`].
-    ///
-    /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
-    ///
-    /// ```ignore
-    /// pub async fn handle_query(
-    ///     mut self,
-    ///     context: &QueryContext,
-    ///     argument: &[u8],
-    /// ) -> Result<Vec<u8>, ExecutionError>
-    /// ```
     pub fn handle_query(
         self,
         context: QueryContext,
