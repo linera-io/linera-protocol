@@ -273,10 +273,11 @@ where
 
         let result = guest_operation(&self.application, &mut self.store)
             .map_err(|error| error.into())
-            .and_then(|result| result.map_err(ExecutionError::UserError))?;
+            .and_then(|result| result.map_err(ExecutionError::UserError));
 
+        // TODO(#989): Eventually, we should exit early again in case of UserError.
         A::persist_remaining_fuel(&mut self).expect("Fuel writing operation should not fail");
 
-        Ok(result)
+        result
     }
 }
