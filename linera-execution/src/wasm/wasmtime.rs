@@ -42,9 +42,9 @@ use super::{
     WasmContract, WasmExecutionError, WasmService,
 };
 use crate::{
-    ApplicationCallResult, Bytecode, CalleeContext, ContractRuntimeSender, ExecutionError,
-    MessageContext, OperationContext, QueryContext, RawExecutionResult, ServiceRuntimeSender,
-    SessionCallResult, SessionId,
+    ApplicationCallResult, BaseRuntime, Bytecode, CalleeContext, ContractRuntime,
+    ContractRuntimeSender, ExecutionError, MessageContext, OperationContext, QueryContext,
+    RawExecutionResult, ServiceRuntime, ServiceRuntimeSender, SessionCallResult, SessionId,
 };
 use linera_views::batch::Batch;
 use once_cell::sync::Lazy;

@@ -9,59 +9,57 @@ macro_rules! impl_contract_system_api {
         impl contract_system_api::ContractSystemApi for $contract_system_api {
             type Error = ExecutionError;
 
-            type Lock = crate::runtime_actor::senders::Lock;
+            type Lock = <Self as BaseRuntime>::Lock;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
             }
 
             fn chain_id(&mut self) -> Result<contract_system_api::ChainId, Self::Error> {
-                self.chain_id().map(|chain_id| chain_id.into())
+                BaseRuntime::chain_id(self).map(|chain_id| chain_id.into())
             }
 
             fn application_id(
                 &mut self,
             ) -> Result<contract_system_api::ApplicationId, Self::Error> {
-                self.application_id()
-                    .map(|application_id| application_id.into())
+                BaseRuntime::application_id(self).map(|application_id| application_id.into())
             }
 
             fn application_parameters(&mut self) -> Result<Vec<u8>, Self::Error> {
-                self.application_parameters()
+                BaseRuntime::application_parameters(self)
             }
 
             fn read_system_balance(&mut self) -> Result<contract_system_api::Amount, Self::Error> {
-                self.read_system_balance().map(|balance| balance.into())
+                BaseRuntime::read_system_balance(self).map(|balance| balance.into())
             }
 
             fn read_system_timestamp(
                 &mut self,
             ) -> Result<contract_system_api::Timestamp, Self::Error> {
-                self.read_system_timestamp()
-                    .map(|timestamp| timestamp.micros())
+                BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
             }
 
-            // TODO(#1152): the wit name is wrong
+            // TODO(#1152): remove
             fn load(&mut self) -> Result<Vec<u8>, Self::Error> {
                 self.try_read_my_state()
             }
 
-            // TODO(#1152): the wit name is wrong
+            // TODO(#1152): remove
             fn load_and_lock(&mut self) -> Result<Option<Vec<u8>>, Self::Error> {
                 self.try_read_and_lock_my_state()
             }
 
-            // TODO(#1152): the wit name is wrong
+            // TODO(#1152): remove
             fn store_and_unlock(&mut self, state: &[u8]) -> Result<bool, Self::Error> {
                 self.save_and_unlock_my_state(state.to_vec())
             }
 
             fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
-                self.lock_new()
+                BaseRuntime::lock_new(self)
             }
 
             fn lock_wait(&mut self, promise: &Self::Lock) -> Result<(), Self::Error> {
-                self.lock_wait(promise)
+                BaseRuntime::lock_wait(self, promise)
             }
 
             fn try_call_application(
@@ -77,7 +75,8 @@ macro_rules! impl_contract_system_api {
                     .map(SessionId::from)
                     .collect();
 
-                self.try_call_application(
+                ContractRuntime::try_call_application(
+                    self,
                     authenticated,
                     application.into(),
                     argument.to_vec(),
@@ -99,7 +98,8 @@ macro_rules! impl_contract_system_api {
                     .map(SessionId::from)
                     .collect();
 
-                self.try_call_session(
+                ContractRuntime::try_call_session(
+                    self,
                     authenticated,
                     session.into(),
                     argument.to_vec(),
@@ -134,72 +134,76 @@ macro_rules! impl_service_system_api {
         impl service_system_api::ServiceSystemApi for $service_system_api {
             type Error = ExecutionError;
 
-            type Load = crate::runtime_actor::senders::Load;
-            type Lock = crate::runtime_actor::senders::Lock;
-            type Unlock = crate::runtime_actor::senders::Unlock;
-            type TryQueryApplication = crate::runtime_actor::senders::TryQueryApplication;
+            type Load = <Self as BaseRuntime>::Read;
+            type Lock = <Self as BaseRuntime>::Lock;
+            type Unlock = <Self as BaseRuntime>::Unlock;
+            type TryQueryApplication = <Self as ServiceRuntime>::TryQueryApplication;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
             }
 
             fn chain_id(&mut self) -> Result<service_system_api::ChainId, Self::Error> {
-                self.chain_id().map(|chain_id| chain_id.into())
+                BaseRuntime::chain_id(self).map(|chain_id| chain_id.into())
             }
 
             fn application_id(&mut self) -> Result<service_system_api::ApplicationId, Self::Error> {
-                self.application_id()
-                    .map(|application_id| application_id.into())
+                BaseRuntime::application_id(self).map(|application_id| application_id.into())
             }
 
             fn application_parameters(&mut self) -> Result<Vec<u8>, Self::Error> {
-                self.application_parameters()
+                BaseRuntime::application_parameters(self)
             }
 
             fn read_system_balance(&mut self) -> Result<service_system_api::Amount, Self::Error> {
-                self.read_system_balance().map(|balance| balance.into())
+                BaseRuntime::read_system_balance(self).map(|balance| balance.into())
             }
 
             fn read_system_timestamp(
                 &mut self,
             ) -> Result<service_system_api::Timestamp, Self::Error> {
-                self.read_system_timestamp()
-                    .map(|timestamp| timestamp.micros())
+                BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
             }
 
-            // TODO(#1152): the wit name is wrong
+            // TODO(#1152): remove
             fn load_new(&mut self) -> Result<Self::Load, Self::Error> {
                 self.try_read_my_state_new()
             }
 
-            // TODO(#1152): the wit name is wrong
+            // TODO(#1152): remove
             fn load_wait(
                 &mut self,
                 promise: &Self::Load,
             ) -> Result<Result<Vec<u8>, String>, Self::Error> {
                 self.try_read_my_state_wait(promise)
+                    // TODO(#1153): remove
+                    .map(Ok)
             }
 
             fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
-                self.lock_new()
+                BaseRuntime::lock_new(self)
             }
 
             fn lock_wait(
                 &mut self,
                 promise: &Self::Lock,
             ) -> Result<Result<(), String>, Self::Error> {
-                self.lock_wait(promise)
+                BaseRuntime::lock_wait(self, promise)
+                    // TODO(#1153): remove
+                    .map(Ok)
             }
 
             fn unlock_new(&mut self) -> Result<Self::Unlock, Self::Error> {
-                self.unlock_new()
+                BaseRuntime::unlock_new(self)
             }
 
             fn unlock_wait(
                 &mut self,
                 promise: &Self::Lock,
             ) -> Result<Result<(), String>, Self::Error> {
-                self.unlock_wait(promise)
+                BaseRuntime::unlock_wait(self, promise)
+                    // TODO(#1153): remove
+                    .map(Ok)
             }
 
             fn try_query_application_new(
@@ -207,14 +211,20 @@ macro_rules! impl_service_system_api {
                 application: service_system_api::ApplicationId,
                 argument: &[u8],
             ) -> Result<Self::TryQueryApplication, Self::Error> {
-                self.try_query_application_new(application.into(), argument.to_vec())
+                ServiceRuntime::try_query_application_new(
+                    self,
+                    application.into(),
+                    argument.to_vec(),
+                )
             }
 
             fn try_query_application_wait(
                 &mut self,
                 promise: &Self::TryQueryApplication,
             ) -> Result<Result<Vec<u8>, String>, Self::Error> {
-                self.try_query_application_wait(promise)
+                ServiceRuntime::try_query_application_wait(self, promise)
+                    // TODO(#1153): remove
+                    .map(Ok)
             }
 
             fn log(
@@ -245,9 +255,9 @@ macro_rules! impl_view_system_api_for_service {
         impl view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
-            type ReadValueBytes = crate::runtime_actor::senders::ReadValueBytes;
-            type FindKeys = crate::runtime_actor::senders::FindKeys;
-            type FindKeyValues = crate::runtime_actor::senders::FindKeyValues;
+            type ReadValueBytes = <Self as BaseRuntime>::ReadValueBytes;
+            type FindKeys = <Self as BaseRuntime>::FindKeysByPrefix;
+            type FindKeyValues = <Self as BaseRuntime>::FindKeyValuesByPrefix;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -257,39 +267,39 @@ macro_rules! impl_view_system_api_for_service {
                 &mut self,
                 key: &[u8],
             ) -> Result<Self::ReadValueBytes, Self::Error> {
-                self.read_value_bytes_new(key.to_vec())
+                BaseRuntime::read_value_bytes_new(self, key.to_vec())
             }
 
             fn read_value_bytes_wait(
                 &mut self,
                 promise: &Self::ReadValueBytes,
             ) -> Result<Option<Vec<u8>>, Self::Error> {
-                self.read_value_bytes_wait(promise)
+                BaseRuntime::read_value_bytes_wait(self, promise)
             }
 
             fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {
-                self.find_keys_new(key_prefix.to_vec())
+                self.find_keys_by_prefix_new(key_prefix.to_vec())
             }
 
             fn find_keys_wait(
                 &mut self,
                 promise: &Self::FindKeys,
             ) -> Result<Vec<Vec<u8>>, Self::Error> {
-                self.find_keys_wait(promise)
+                self.find_keys_by_prefix_wait(promise)
             }
 
             fn find_key_values_new(
                 &mut self,
                 key_prefix: &[u8],
             ) -> Result<Self::FindKeyValues, Self::Error> {
-                self.find_key_values_new(key_prefix.to_vec())
+                self.find_key_values_by_prefix_new(key_prefix.to_vec())
             }
 
             fn find_key_values_wait(
                 &mut self,
                 promise: &Self::FindKeyValues,
             ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
-                self.find_key_values_wait(promise)
+                self.find_key_values_by_prefix_wait(promise)
             }
 
             fn write_batch(
@@ -312,9 +322,9 @@ macro_rules! impl_view_system_api_for_contract {
         impl view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
-            type ReadValueBytes = crate::runtime_actor::senders::ReadValueBytes;
-            type FindKeys = crate::runtime_actor::senders::FindKeys;
-            type FindKeyValues = crate::runtime_actor::senders::FindKeyValues;
+            type ReadValueBytes = <Self as BaseRuntime>::ReadValueBytes;
+            type FindKeys = <Self as BaseRuntime>::FindKeysByPrefix;
+            type FindKeyValues = <Self as BaseRuntime>::FindKeyValuesByPrefix;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -324,42 +334,42 @@ macro_rules! impl_view_system_api_for_contract {
                 &mut self,
                 key: &[u8],
             ) -> Result<Self::ReadValueBytes, Self::Error> {
-                self.read_value_bytes_new(key.to_vec())
+                BaseRuntime::read_value_bytes_new(self, key.to_vec())
             }
 
             fn read_value_bytes_wait(
                 &mut self,
                 promise: &Self::ReadValueBytes,
             ) -> Result<Option<Vec<u8>>, Self::Error> {
-                self.read_value_bytes_wait(promise)
+                BaseRuntime::read_value_bytes_wait(self, promise)
             }
 
             fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {
-                self.find_keys_new(key_prefix.to_vec())
+                self.find_keys_by_prefix_new(key_prefix.to_vec())
             }
 
             fn find_keys_wait(
                 &mut self,
                 promise: &Self::FindKeys,
             ) -> Result<Vec<Vec<u8>>, Self::Error> {
-                self.find_keys_wait(promise)
+                self.find_keys_by_prefix_wait(promise)
             }
 
             fn find_key_values_new(
                 &mut self,
                 key_prefix: &[u8],
             ) -> Result<Self::FindKeyValues, Self::Error> {
-                self.find_key_values_new(key_prefix.to_vec())
+                self.find_key_values_by_prefix_new(key_prefix.to_vec())
             }
 
             fn find_key_values_wait(
                 &mut self,
                 promise: &Self::FindKeyValues,
             ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
-                self.find_key_values_wait(promise)
+                self.find_key_values_by_prefix_wait(promise)
             }
 
-            // TODO: the wit name is wrong
+            // TODO(#1153): the wit name is wrong
             fn write_batch(
                 &mut self,
                 operations: Vec<view_system_api::WriteOperation>,

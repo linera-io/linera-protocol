@@ -196,7 +196,7 @@ impl UserService for TestApplication {
         _argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let chosen_key = vec![0];
-        runtime_sender.lock()?.ok();
+        runtime_sender.lock()?;
 
         let state = runtime_sender
             .read_value_bytes(chosen_key)?

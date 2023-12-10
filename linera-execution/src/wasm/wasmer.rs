@@ -38,8 +38,9 @@ use super::{
     ApplicationCallResult, SessionCallResult, WasmContract, WasmExecutionError, WasmService,
 };
 use crate::{
-    Bytecode, CalleeContext, ContractRuntimeSender, ExecutionError, MessageContext,
-    OperationContext, QueryContext, RawExecutionResult, ServiceRuntimeSender,
+    BaseRuntime, Bytecode, CalleeContext, ContractRuntime, ContractRuntimeSender, ExecutionError,
+    MessageContext, OperationContext, QueryContext, RawExecutionResult, ServiceRuntime,
+    ServiceRuntimeSender,
 };
 use bytes::Bytes;
 use linera_base::identifiers::SessionId;
