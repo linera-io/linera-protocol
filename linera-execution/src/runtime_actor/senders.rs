@@ -261,13 +261,13 @@ impl ContractRuntimeSender {
             })
     }
 
-    pub fn remaining_fuel(&self) -> Result<u64, ExecutionError> {
+    pub fn remaining_fuel(&mut self) -> Result<u64, ExecutionError> {
         self.inner
             .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })?
             .recv_response()
     }
 
-    pub fn set_remaining_fuel(&self, remaining_fuel: u64) -> Result<(), ExecutionError> {
+    pub fn set_remaining_fuel(&mut self, remaining_fuel: u64) -> Result<(), ExecutionError> {
         self.inner
             .send_sync_request(|response_sender| ContractRequest::SetRemainingFuel {
                 remaining_fuel,

@@ -86,7 +86,7 @@ impl ApplicationRuntimeContext for Contract {
     type Extra = ();
 
     fn configure_initial_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), Self::Error> {
-        let runtime_sender = &context.store.data().system_api;
+        let runtime_sender = &mut context.store.data_mut().system_api;
         let fuel = runtime_sender.remaining_fuel()?;
 
         context
@@ -98,12 +98,12 @@ impl ApplicationRuntimeContext for Contract {
     }
 
     fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), Self::Error> {
-        let runtime_sender = &context.store.data().system_api;
-        let initial_fuel = runtime_sender.remaining_fuel()?;
         let consumed_fuel = context
             .store
             .fuel_consumed()
             .expect("Failed to read consumed fuel");
+        let runtime_sender = &mut context.store.data_mut().system_api;
+        let initial_fuel = runtime_sender.remaining_fuel()?;
         let remaining_fuel = initial_fuel.saturating_sub(consumed_fuel);
 
         runtime_sender.set_remaining_fuel(remaining_fuel)?;
