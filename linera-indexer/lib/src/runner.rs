@@ -13,6 +13,7 @@ use tokio::select;
 use tracing::{info, warn};
 
 #[derive(clap::Parser, Debug, Clone)]
+#[command(version = clap::crate_version!())]
 pub enum IndexerCommand {
     Schema {
         plugin: Option<String>,

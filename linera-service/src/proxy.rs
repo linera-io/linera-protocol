@@ -24,7 +24,8 @@ use tracing::{error, info, instrument};
 #[derive(clap::Parser, Debug)]
 #[clap(
     name = "Linera Proxy",
-    about = "A proxy to redirect incoming requests to Linera Server shards"
+    about = "A proxy to redirect incoming requests to Linera Server shards",
+    version = clap::crate_version!(),
 )]
 pub struct ProxyOptions {
     /// Path to server configuration.

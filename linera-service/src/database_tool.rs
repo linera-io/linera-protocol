@@ -6,7 +6,11 @@ use linera_views::common::CommonStoreConfig;
 use std::process;
 
 #[derive(clap::Parser)]
-#[clap(name = "Clear database", about = "A tool for cleaning up a database")]
+#[clap(
+    name = "Clear database",
+    about = "A tool for cleaning up a database",
+    version = clap::crate_version!(),
+)]
 struct DatabaseToolOptions {
     /// Subcommands. Acceptable values are run and generate.
     #[clap(subcommand)]

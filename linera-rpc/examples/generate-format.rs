@@ -63,7 +63,8 @@ enum Action {
 #[derive(clap::Parser, Debug)]
 #[clap(
     name = "Format generator",
-    about = "Trace serde (de)serialization to generate format descriptions"
+    about = "Trace serde (de)serialization to generate format descriptions",
+    version = clap::crate_version!(),
 )]
 struct Options {
     #[arg(value_enum, default_value_t = Action::Print, ignore_case = true)]

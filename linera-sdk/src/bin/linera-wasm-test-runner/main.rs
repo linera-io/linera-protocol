@@ -41,7 +41,8 @@ use wasmtime::*;
 #[derive(clap::Parser)]
 #[clap(
     name = "Linera Wasm test runner",
-    about = "A binary for running unit tests for Linera applications implemented in WebAssembly."
+    about = "A binary for running unit tests for Linera applications implemented in WebAssembly.",
+    version = clap::crate_version!(),
 )]
 struct Options {
     module_path: PathBuf,

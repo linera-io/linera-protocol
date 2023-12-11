@@ -79,7 +79,8 @@ impl ValidatorNodeProvider for DummyValidatorNodeProvider {
 #[derive(clap::Parser)]
 #[clap(
     name = "Linera GraphQL schema exporter",
-    about = "Export the GraphQL schema for the core data in a Linera chain"
+    about = "Export the GraphQL schema for the core data in a Linera chain",
+    version = clap::crate_version!(),
 )]
 struct Options {}
 

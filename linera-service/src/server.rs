@@ -212,7 +212,8 @@ impl Runnable for ServerContext {
 #[derive(clap::Parser)]
 #[clap(
     name = "Linera Server",
-    about = "A byzantine fault tolerant payments sidechain with low-latency finality and high throughput"
+    about = "A byzantine fault tolerant payments sidechain with low-latency finality and high throughput",
+    version = clap::crate_version!(),
 )]
 struct ServerOptions {
     /// Subcommands. Acceptable values are run and generate.

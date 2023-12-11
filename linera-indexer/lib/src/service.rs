@@ -47,6 +47,7 @@ fn reqwest_client() -> reqwest::Client {
 }
 
 #[derive(clap::Parser, Debug, Clone)]
+#[command(version = clap::crate_version!())]
 pub struct Service {
     /// The port of the node service
     #[arg(long, default_value = "8080")]
