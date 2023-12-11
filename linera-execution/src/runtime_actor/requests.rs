@@ -55,6 +55,12 @@ pub enum BaseRequest {
     },
 
     /// Requests to read an entry from the key-value store.
+    ContainsKey {
+        key: Vec<u8>,
+        response_sender: oneshot::Sender<bool>,
+    },
+
+    /// Requests to read an entry from the key-value store.
     ReadValueBytes {
         key: Vec<u8>,
         response_sender: oneshot::Sender<Option<Vec<u8>>>,
@@ -99,6 +105,10 @@ impl Debug for BaseRequest {
                 .finish_non_exhaustive(),
             BaseRequest::UnlockViewUserState { .. } => formatter
                 .debug_struct("BaseRequest::UnlockViewUserState")
+                .finish_non_exhaustive(),
+            BaseRequest::ContainsKey { key, .. } => formatter
+                .debug_struct("BaseRequest::ContainsKey")
+                .field("key", key)
                 .finish_non_exhaustive(),
             BaseRequest::ReadValueBytes { key, .. } => formatter
                 .debug_struct("BaseRequest::ReadValueBytes")

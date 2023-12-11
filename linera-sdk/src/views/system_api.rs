@@ -61,7 +61,10 @@ impl KeyValueStore for AppStateStore {
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
-        Ok(self.read_value_bytes(key).await?.is_some())
+        ensure!(key.len() <= Self::MAX_KEY_SIZE, ViewError::KeyTooLong);
+        let promise = wit::ContainsKey::new(key);
+        yield_once().await;
+        Ok(promise.wait())
     }
 
     async fn read_multi_values_bytes(

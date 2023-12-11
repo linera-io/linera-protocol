@@ -53,6 +53,10 @@ where
             BaseRequest::UnlockViewUserState { response_sender } => {
                 response_sender.respond(self.unlock_view_user_state().await?)
             }
+            BaseRequest::ContainsKey {
+                key,
+                response_sender,
+            } => response_sender.respond(self.contains_key(key).await?),
             BaseRequest::ReadValueBytes {
                 key,
                 response_sender,

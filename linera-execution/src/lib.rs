@@ -331,6 +331,12 @@ pub trait BaseRuntime: Send + Sync {
         self.unlock_wait(&promise)
     }
 
+    /// Tests whether a key exists in the KV store
+    async fn contains_key(&self, key: Vec<u8>) -> Result<bool, ExecutionError>;
+
+    /// Reads the key from the KV store
+    async fn read_value_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError>;
+
     /// Unlocks the view user state and allows reading/loading again (new)
     fn unlock_new(&mut self) -> Result<Self::Unlock, ExecutionError>;
 

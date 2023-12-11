@@ -255,12 +255,41 @@ macro_rules! impl_view_system_api_for_service {
         impl view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
+            type ContainsKey = <Self as BaseRuntime>::ContainsKey;
             type ReadValueBytes = <Self as BaseRuntime>::ReadValueBytes;
             type FindKeys = <Self as BaseRuntime>::FindKeysByPrefix;
             type FindKeyValues = <Self as BaseRuntime>::FindKeyValuesByPrefix;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
+            }
+
+            fn contains_key_new(
+                &mut self,
+                key: &[u8],
+            ) -> Result<Self::ContainsKey, Self::Error> {
+                Ok(Mutex::new(Some(self.runtime.send_request(
+                    |response_sender| {
+                        ServiceRequest::Base(BaseRequest::ContainsKey {
+                            key: key.to_owned(),
+                            response_sender,
+                        })
+                    },
+                )?)))
+            }
+
+            fn contains_key_wait(
+                &mut self,
+                promise: &Self::ContainsKey,
+            ) -> Result<bool, Self::Error> {
+                let receiver = promise
+                    .try_lock()
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+                    .take()
+                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
+                receiver
+                    .recv()
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn read_value_bytes_new(
@@ -322,12 +351,41 @@ macro_rules! impl_view_system_api_for_contract {
         impl view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
+            type ContainsKey = <Self as BaseRuntime>::ContainsKey;
             type ReadValueBytes = <Self as BaseRuntime>::ReadValueBytes;
             type FindKeys = <Self as BaseRuntime>::FindKeysByPrefix;
             type FindKeyValues = <Self as BaseRuntime>::FindKeyValuesByPrefix;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
+            }
+
+            fn contains_key_new(
+                &mut self,
+                key: &[u8],
+            ) -> Result<Self::ContainsKey, Self::Error> {
+                Ok(Mutex::new(Some(self.runtime.send_request(
+                    |response_sender| {
+                        ContractRequest::Base(BaseRequest::ContainsKey {
+                            key: key.to_owned(),
+                            response_sender,
+                        })
+                    },
+                )?)))
+            }
+
+            fn contains_key_wait(
+                &mut self,
+                promise: &Self::ContainsKey,
+            ) -> Result<bool, Self::Error> {
+                let receiver = promise
+                    .try_lock()
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+                    .take()
+                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
+                receiver
+                    .recv()
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
             }
 
             fn read_value_bytes_new(

@@ -444,6 +444,16 @@ where
         }
     }
 
+    pub(crate) async fn contains_key(&self, key: Vec<u8>) -> Result<bool, ExecutionError> {
+        let state = self.active_view_user_states_mut().await;
+        let view = state
+            .get(&self.application_id())
+            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
+        let result = view.contains_key(&key).await?;
+        self.increment_num_reads()?;
+        Ok(result)
+    }
+
     pub(crate) async fn read_value_bytes(
         &self,
         key: Vec<u8>,
