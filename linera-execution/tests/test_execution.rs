@@ -148,6 +148,7 @@ impl UserContract for TestApplication {
             vec![],
             vec![],
         )?;
+        runtime_sender.unlock()?;
 
         Ok(RawExecutionResult::default())
     }
