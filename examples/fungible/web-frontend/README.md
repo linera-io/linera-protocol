@@ -5,15 +5,12 @@ This project was bootstrapped with [Create React App](https://github.com/faceboo
 The application (contract/service) must be deployed on the network, and a Node Service must be running
 on port 8080.
 
-To access the fungible app there are three parameters:
-
-1. application-id: the ApplicationId for your app
-2. owner: see `./linera wallet show`
-3. port: optionally specify a port, if not, it will default to 8080.
-
-```
-http://localhost:3000/<application-id>?owner=<owner>&port=<port>
-```
+Web UIs for specific accounts can be opened by navigating URLs of the form
+`http://localhost:3000/$CHAIN?app=$APP_ID&owner=$OWNER&port=$PORT` where
+- the path is the ID of the chain where the account is located.
+- the argument `app` is the token application ID obtained when creating the token.
+- `owner` is the address of the chosen user account (owner must be have permissions to create blocks in the given chain).
+- `port` is the port of the wallet service (the wallet must know the secret key of `owner`).
 
 ## Available Scripts
 
