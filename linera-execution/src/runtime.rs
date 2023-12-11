@@ -546,12 +546,11 @@ where
         });
 
         let (runtime_actor, runtime_sender) = self.service_runtime_actor();
-        let future = tokio::task::spawn_blocking(move || {
+        let value_future = tokio::task::spawn_blocking(move || {
             code.handle_query(query_context, runtime_sender, argument)
         });
-        let (runtime_result, value) = futures::future::join(runtime_actor.run(), future).await;
-        runtime_result?;
-        let value = value??;
+        runtime_actor.run().await?;
+        let value = value_future.await??;
 
         self.applications_mut().pop();
         Ok(value)
@@ -686,10 +685,8 @@ where
                 forwarded_sessions,
             )
         });
-        let (runtime_result, raw_result) =
-            futures::future::join(runtime_actor.run(), raw_result_future).await;
-        runtime_result?;
-        let raw_result = raw_result??;
+        runtime_actor.run().await?;
+        let raw_result = raw_result_future.await??;
 
         self.applications_mut().pop();
         // Interpret the results of the call.
@@ -754,10 +751,8 @@ where
                 forwarded_sessions,
             )
         });
-        let (runtime_result, raw_result) =
-            futures::future::join(runtime_actor.run(), raw_result_future).await;
-        runtime_result?;
-        let (raw_result, session_state) = raw_result??;
+        runtime_actor.run().await?;
+        let (raw_result, session_state) = raw_result_future.await??;
 
         self.applications_mut().pop();
         // Interpret the results of the call.
