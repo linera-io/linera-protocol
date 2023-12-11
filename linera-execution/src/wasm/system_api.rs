@@ -287,7 +287,7 @@ macro_rules! impl_view_system_api_for_service {
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
                 receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn read_multi_values_bytes_new(
@@ -315,7 +315,7 @@ macro_rules! impl_view_system_api_for_service {
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
                 receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn read_value_bytes_new(
@@ -409,7 +409,7 @@ macro_rules! impl_view_system_api_for_contract {
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
                 receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn read_multi_values_bytes_new(
@@ -437,7 +437,7 @@ macro_rules! impl_view_system_api_for_contract {
                     .ok_or_else(|| WasmExecutionError::PolledTwice)?;
                 receiver
                     .recv()
-                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn read_value_bytes_new(
