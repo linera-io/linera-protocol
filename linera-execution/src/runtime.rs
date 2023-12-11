@@ -470,6 +470,21 @@ where
         Ok(result)
     }
 
+    pub(crate) async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, ExecutionError> {
+        let state = self.active_view_user_states_mut().await;
+        let view = state
+            .get(&self.application_id())
+            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
+        let results = view.multi_get(keys).await?;
+        self.increment_num_reads()?;
+        for result in &results {
+            if let Some(value) = result {
+                self.increment_bytes_read(value.len() as u64)?;
+            }
+        }
+        Ok(results)
+    }
+
     pub(crate) async fn find_keys_by_prefix(
         &self,
         key_prefix: Vec<u8>,

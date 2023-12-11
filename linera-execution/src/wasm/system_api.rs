@@ -256,6 +256,7 @@ macro_rules! impl_view_system_api_for_service {
             type Error = ExecutionError;
 
             type ContainsKey = <Self as BaseRuntime>::ContainsKey;
+            type ReadMultiValuesBytes = <Self as BaseRuntime>::ReadMultiValuesBytes;
             type ReadValueBytes = <Self as BaseRuntime>::ReadValueBytes;
             type FindKeys = <Self as BaseRuntime>::FindKeysByPrefix;
             type FindKeyValues = <Self as BaseRuntime>::FindKeyValuesByPrefix;
@@ -282,6 +283,34 @@ macro_rules! impl_view_system_api_for_service {
                 &mut self,
                 promise: &Self::ContainsKey,
             ) -> Result<bool, Self::Error> {
+                let receiver = promise
+                    .try_lock()
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+                    .take()
+                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
+                receiver
+                    .recv()
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+            }
+
+            fn read_multi_values_bytes_new(
+                &mut self,
+                keys: Vec<&[u8]>,
+            ) -> Result<Self::ReadMultiValuesBytes, Self::Error> {
+                Ok(Mutex::new(Some(self.runtime.send_request(
+                    |response_sender| {
+                        ServiceRequest::Base(BaseRequest::ReadMultiValuesBytes {
+                            keys: keys.iter().map(|x| x.to_vec()).collect::<Vec<_>>(),
+                            response_sender,
+                        })
+                    },
+                )?)))
+            }
+
+            fn read_multi_values_bytes_wait(
+                &mut self,
+                promise: &Self::ReadMultiValuesBytes,
+            ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
                 let receiver = promise
                     .try_lock()
                     .expect("Unexpected reentrant locking of `oneshot::Receiver`")
@@ -352,6 +381,7 @@ macro_rules! impl_view_system_api_for_contract {
             type Error = ExecutionError;
 
             type ContainsKey = <Self as BaseRuntime>::ContainsKey;
+            type ReadMultiValuesBytes = <Self as BaseRuntime>::ReadMultiValuesBytes;
             type ReadValueBytes = <Self as BaseRuntime>::ReadValueBytes;
             type FindKeys = <Self as BaseRuntime>::FindKeysByPrefix;
             type FindKeyValues = <Self as BaseRuntime>::FindKeyValuesByPrefix;
@@ -378,6 +408,34 @@ macro_rules! impl_view_system_api_for_contract {
                 &mut self,
                 promise: &Self::ContainsKey,
             ) -> Result<bool, Self::Error> {
+                let receiver = promise
+                    .try_lock()
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+                    .take()
+                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
+                receiver
+                    .recv()
+                    .map_err(|oneshot::RecvError| WasmExecutionError::MissingRuntimeResponse.into())
+            }
+
+            fn read_multi_values_bytes_new(
+                &mut self,
+                keys: Vec<&[u8]>,
+            ) -> Result<Self::ReadMultiValuesBytes, Self::Error> {
+                Ok(Mutex::new(Some(self.runtime.send_request(
+                    |response_sender| {
+                        ContractRequest::Base(BaseRequest::ReadMultiValuesBytes {
+                            keys: keys.iter().map(|x| x.to_vec()).collect::<Vec<_>>(),
+                            response_sender,
+                        })
+                    },
+                )?)))
+            }
+
+            fn read_multi_values_bytes_wait(
+                &mut self,
+                promise: &Self::ReadMultiValuesBytes,
+            ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
                 let receiver = promise
                     .try_lock()
                     .expect("Unexpected reentrant locking of `oneshot::Receiver`")

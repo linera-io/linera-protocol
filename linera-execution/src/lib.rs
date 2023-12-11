@@ -334,6 +334,9 @@ pub trait BaseRuntime: Send + Sync {
     /// Tests whether a key exists in the KV store
     async fn contains_key(&self, key: Vec<u8>) -> Result<bool, ExecutionError>;
 
+    /// Reads several keys from the KV store
+    async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, ExecutionError>;
+
     /// Reads the key from the KV store
     async fn read_value_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError>;
 

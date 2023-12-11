@@ -60,6 +60,12 @@ pub enum BaseRequest {
         response_sender: oneshot::Sender<bool>,
     },
 
+    /// Requests to read several entries from the key-value store.
+    ReadMultiValuesBytes {
+        keys: Vec<Vec<u8>>,
+        response_sender: oneshot::Sender<Vec<Option<Vec<u8>>>>,
+    },
+
     /// Requests to read an entry from the key-value store.
     ReadValueBytes {
         key: Vec<u8>,
@@ -109,6 +115,10 @@ impl Debug for BaseRequest {
             BaseRequest::ContainsKey { key, .. } => formatter
                 .debug_struct("BaseRequest::ContainsKey")
                 .field("key", key)
+                .finish_non_exhaustive(),
+            BaseRequest::ReadMultiValuesBytes { keys, .. } => formatter
+                .debug_struct("BaseRequest::ReadMultiValuesBytes")
+                .field("keys", keys)
                 .finish_non_exhaustive(),
             BaseRequest::ReadValueBytes { key, .. } => formatter
                 .debug_struct("BaseRequest::ReadValueBytes")

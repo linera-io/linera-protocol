@@ -57,6 +57,10 @@ where
                 key,
                 response_sender,
             } => response_sender.respond(self.contains_key(key).await?),
+            BaseRequest::ReadMultiValuesBytes {
+                keys,
+                response_sender,
+            } => response_sender.respond(self.read_multi_values_bytes(keys).await?),
             BaseRequest::ReadValueBytes {
                 key,
                 response_sender,
