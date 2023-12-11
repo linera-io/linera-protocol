@@ -205,7 +205,7 @@ where
         );
         // Make the call to user code.
         let (runtime_actor, runtime_sender) = runtime.contract_runtime_actor();
-        let call_result_future = match action {
+        let call_result_future = tokio::task::spawn_blocking(move || match action {
             UserAction::Initialize(context, argument) => {
                 contract.initialize(context, runtime_sender, argument)
             }
@@ -215,10 +215,9 @@ where
             UserAction::Message(context, message) => {
                 contract.execute_message(context, runtime_sender, message)
             }
-        };
-        let (runtime_result, call_result) =
-            futures::future::join(runtime_actor.run(), call_result_future).await;
-        runtime_result?;
+        });
+        runtime_actor.run().await?;
+        let call_result = call_result_future.await?;
 
         // TODO(#989): Make user errors fail blocks again.
         let mut result = if let Err(ExecutionError::UserError(message)) = &call_result {
@@ -388,11 +387,11 @@ where
                 );
                 let (runtime_actor, runtime_sender) = runtime.service_runtime_actor();
                 // Run the query.
-                let response_future = service.handle_query(context, runtime_sender, bytes);
-                let (runtime_result, response) =
-                    futures::future::join(runtime_actor.run(), response_future).await;
-                runtime_result?;
-                let response = response?;
+                let response_future = tokio::task::spawn_blocking(move || {
+                    service.handle_query(context, runtime_sender, bytes)
+                });
+                runtime_actor.run().await?;
+                let response = response_future.await??;
 
                 // Check that applications were correctly stacked and unstacked.
                 assert_eq!(applications.len(), 1);

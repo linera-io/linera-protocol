@@ -531,7 +531,7 @@ where
     async fn try_query_application(
         &self,
         queried_id: UserApplicationId,
-        argument: &[u8],
+        argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         // Load the application.
         let (code, description) = self.load_service(queried_id).await?;
@@ -546,10 +546,11 @@ where
         });
 
         let (runtime_actor, runtime_sender) = self.service_runtime_actor();
-        let future = code.handle_query(query_context, runtime_sender, argument.to_vec());
-        let (runtime_result, value) = futures::future::join(runtime_actor.run(), future).await;
-        runtime_result?;
-        let value = value?;
+        let value_future = tokio::task::spawn_blocking(move || {
+            code.handle_query(query_context, runtime_sender, argument)
+        });
+        runtime_actor.run().await?;
+        let value = value_future.await??;
 
         self.applications_mut().pop();
         Ok(value)
@@ -646,7 +647,7 @@ where
         &self,
         authenticated: bool,
         callee_id: UserApplicationId,
-        argument: &[u8],
+        argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError> {
         let caller = self
@@ -676,16 +677,16 @@ where
             signer: authenticated_signer,
         });
         let (runtime_actor, runtime_sender) = self.contract_runtime_actor();
-        let raw_result_future = code.handle_application_call(
-            callee_context,
-            runtime_sender,
-            argument.to_vec(),
-            forwarded_sessions,
-        );
-        let (runtime_result, raw_result) =
-            futures::future::join(runtime_actor.run(), raw_result_future).await;
-        runtime_result?;
-        let raw_result = raw_result?;
+        let raw_result_future = tokio::task::spawn_blocking(move || {
+            code.handle_application_call(
+                callee_context,
+                runtime_sender,
+                argument,
+                forwarded_sessions,
+            )
+        });
+        runtime_actor.run().await?;
+        let raw_result = raw_result_future.await??;
 
         self.applications_mut().pop();
         // Interpret the results of the call.
@@ -708,7 +709,7 @@ where
         &self,
         authenticated: bool,
         session_id: SessionId,
-        argument: &[u8],
+        argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError> {
         let callee_id = session_id.application_id;
@@ -741,17 +742,17 @@ where
             signer: authenticated_signer,
         });
         let (runtime_actor, runtime_sender) = self.contract_runtime_actor();
-        let raw_result_future = code.handle_session_call(
-            callee_context,
-            runtime_sender,
-            session_state,
-            argument.to_vec(),
-            forwarded_sessions,
-        );
-        let (runtime_result, raw_result) =
-            futures::future::join(runtime_actor.run(), raw_result_future).await;
-        runtime_result?;
-        let (raw_result, session_state) = raw_result?;
+        let raw_result_future = tokio::task::spawn_blocking(move || {
+            code.handle_session_call(
+                callee_context,
+                runtime_sender,
+                session_state,
+                argument,
+                forwarded_sessions,
+            )
+        });
+        runtime_actor.run().await?;
+        let (raw_result, session_state) = raw_result_future.await??;
 
         self.applications_mut().pop();
         // Interpret the results of the call.
