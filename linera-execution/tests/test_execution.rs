@@ -12,7 +12,9 @@ use linera_base::{
     ensure,
     identifiers::{ChainDescription, ChainId, Owner, SessionId},
 };
-use linera_execution::{policy::ResourceControlPolicy, *};
+use linera_execution::{
+    policy::ResourceControlPolicy, ContractRuntimeSender, ServiceRuntimeSender, *,
+};
 use linera_views::{batch::Batch, common::Context, memory::MemoryContext, views::View};
 use std::{marker::PhantomData, sync::Arc};
 
@@ -63,15 +65,26 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[derive(Clone)]
+struct TestModule {
+    owner: Owner,
+}
+
 struct TestApplication<Runtime> {
     owner: Owner,
     _runtime_marker: PhantomData<Runtime>,
 }
 
-impl<Runtime> TestApplication<Runtime> {
+impl TestModule {
     fn new(owner: Owner) -> Self {
+        Self { owner }
+    }
+}
+
+impl<Runtime> From<TestModule> for TestApplication<Runtime> {
+    fn from(module: TestModule) -> Self {
         Self {
-            owner,
+            owner: module.owner,
             _runtime_marker: PhantomData,
         }
     }
@@ -84,6 +97,14 @@ enum TestOperation {
     Completely,
     LeakingSession,
     FailingCrossApplicationCall,
+}
+
+impl UserContractModule for TestModule {
+    fn instantiate_with_actor_runtime(
+        &self,
+    ) -> Box<dyn UserContract<ContractRuntimeSender> + Send + Sync + 'static> {
+        Box::new(TestApplication::from(self.clone()))
+    }
 }
 
 impl<Runtime> UserContract<Runtime> for TestApplication<Runtime>
@@ -204,6 +225,14 @@ where
     }
 }
 
+impl UserServiceModule for TestModule {
+    fn instantiate_with_actor_runtime(
+        &self,
+    ) -> Box<dyn UserService<ServiceRuntimeSender> + Send + Sync + 'static> {
+        Box::new(TestApplication::from(self.clone()))
+    }
+}
+
 impl<Runtime> UserService<Runtime> for TestApplication<Runtime>
 where
     Runtime: ServiceRuntime,
@@ -243,11 +272,11 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     view.context()
         .extra()
         .user_contracts()
-        .insert(app_id, Arc::new(TestApplication::new(owner)));
+        .insert(app_id, Arc::new(TestModule::new(owner)));
     view.context()
         .extra()
         .user_services()
-        .insert(app_id, Arc::new(TestApplication::new(owner)));
+        .insert(app_id, Arc::new(TestModule::new(owner)));
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
@@ -320,7 +349,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
     view.context()
         .extra()
         .user_contracts()
-        .insert(app_id, Arc::new(TestApplication::new(owner)));
+        .insert(app_id, Arc::new(TestModule::new(owner)));
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
@@ -369,11 +398,11 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
     view.context()
         .extra()
         .user_contracts()
-        .insert(app_id, Arc::new(TestApplication::new(owner)));
+        .insert(app_id, Arc::new(TestModule::new(owner)));
     view.context()
         .extra()
         .user_services()
-        .insert(app_id, Arc::new(TestApplication::new(owner)));
+        .insert(app_id, Arc::new(TestModule::new(owner)));
 
     let context = OperationContext {
         chain_id: ChainId::root(0),

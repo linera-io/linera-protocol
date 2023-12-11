@@ -14,8 +14,8 @@ use linera_base::{
 use linera_execution::{
     policy::ResourceControlPolicy, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView,
     Operation, OperationContext, Query, QueryContext, RawExecutionResult, ResourceTracker,
-    Response, SystemExecutionState, TestExecutionRuntimeContext, WasmContract, WasmRuntime,
-    WasmService,
+    Response, SystemExecutionState, TestExecutionRuntimeContext, WasmContractModule, WasmRuntime,
+    WasmServiceModule,
 };
 use linera_views::{memory::MemoryContext, views::View};
 use serde_json::json;
@@ -50,14 +50,14 @@ async fn test_fuel_for_counter_wasm_application(
         .await?;
 
     let contract =
-        WasmContract::from_file("tests/fixtures/counter_contract.wasm", wasm_runtime).await?;
+        WasmContractModule::from_file("tests/fixtures/counter_contract.wasm", wasm_runtime).await?;
     view.context()
         .extra
         .user_contracts()
         .insert(app_id, Arc::new(contract));
 
     let service =
-        WasmService::from_file("tests/fixtures/counter_service.wasm", wasm_runtime).await?;
+        WasmServiceModule::from_file("tests/fixtures/counter_service.wasm", wasm_runtime).await?;
     view.context()
         .extra
         .user_services()

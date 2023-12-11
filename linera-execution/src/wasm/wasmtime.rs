@@ -48,7 +48,7 @@ use crate::{
     SessionCallResult, SessionId,
 };
 use once_cell::sync::Lazy;
-use std::{error::Error, marker::PhantomData};
+use std::error::Error;
 use tokio::sync::Mutex;
 use wasmtime::{Config, Engine, Linker, Module, Store, Trap};
 use wit_bindgen_host_wasmtime_rust::Le;
@@ -143,10 +143,7 @@ where
     }
 }
 
-impl<Runtime> WasmContract<Runtime>
-where
-    Runtime: ContractRuntime + Send + Sync + 'static,
-{
+impl WasmContractModule {
     /// Creates a new [`WasmContract`] using Wasmtime with the provided bytecodes.
     pub async fn new_with_wasmtime(
         contract_bytecode: Bytecode,
@@ -157,13 +154,14 @@ where
                 Module::new(&CONTRACT_ENGINE, bytecode)
             })
             .map_err(WasmExecutionError::LoadContractModule)?;
-        let module = WasmContractModule::Wasmtime { module };
-        Ok(WasmContract {
-            module,
-            _marker: PhantomData,
-        })
+        Ok(WasmContractModule::Wasmtime { module })
     }
+}
 
+impl<Runtime> WasmContract<Runtime>
+where
+    Runtime: ContractRuntime + Send + Sync + 'static,
+{
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare_contract_runtime_with_wasmtime(
         contract_module: &Module,
@@ -195,10 +193,7 @@ where
     }
 }
 
-impl<Runtime> WasmService<Runtime>
-where
-    Runtime: ServiceRuntime + Send + Sync + 'static,
-{
+impl WasmServiceModule {
     /// Creates a new [`WasmService`] using Wasmtime with the provided bytecodes.
     pub async fn new_with_wasmtime(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut service_cache = SERVICE_CACHE.lock().await;
@@ -207,13 +202,14 @@ where
                 Module::new(&SERVICE_ENGINE, bytecode)
             })
             .map_err(WasmExecutionError::LoadServiceModule)?;
-        let module = WasmServiceModule::Wasmtime { module };
-        Ok(WasmService {
-            module,
-            _marker: PhantomData,
-        })
+        Ok(WasmServiceModule::Wasmtime { module })
     }
+}
 
+impl<Runtime> WasmService<Runtime>
+where
+    Runtime: ServiceRuntime + Send + Sync + 'static,
+{
     /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare_service_runtime_with_wasmtime(
         service_module: &Module,

@@ -15,6 +15,7 @@ pub mod runtime_actor;
 pub mod system;
 mod wasm;
 
+pub use crate::runtime_actor::{ContractRuntimeSender, ServiceRuntimeSender};
 pub use applications::{
     ApplicationRegistryView, BytecodeLocation, GenericApplicationId, UserApplicationDescription,
     UserApplicationId,
@@ -32,7 +33,7 @@ pub use system::{
 ))]
 pub use wasm::test as wasm_test;
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-pub use wasm::{WasmContract, WasmExecutionError, WasmService};
+pub use wasm::{WasmContractModule, WasmExecutionError, WasmServiceModule};
 #[cfg(any(test, feature = "test"))]
 pub use {applications::ApplicationRegistry, system::SystemExecutionState};
 
@@ -50,17 +51,31 @@ use linera_base::{
     identifiers::{BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId},
 };
 use linera_views::{batch::Batch, views::ViewError};
-use runtime_actor::{ContractRuntimeSender, ServiceRuntimeSender};
 use serde::{Deserialize, Serialize};
 use std::{fmt, io, path::Path, str::FromStr, sync::Arc};
 use thiserror::Error;
 
-/// An implementation of [`UserContract`]
-pub type UserContractCode = Arc<dyn UserContract<ContractRuntimeSender> + Send + Sync + 'static>;
+/// An implementation of [`UserContractModule`]
+pub type UserContractCode = Arc<dyn UserContractModule + Send + Sync + 'static>;
 
-/// An implementation of [`UserService`].
-pub type UserServiceCode = Arc<dyn UserService<ServiceRuntimeSender> + Send + Sync + 'static>;
+/// An implementation of [`UserServiceModule`].
+pub type UserServiceCode = Arc<dyn UserServiceModule + Send + Sync + 'static>;
 
+/// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
+pub trait UserContractModule {
+    fn instantiate_with_actor_runtime(
+        &self,
+    ) -> Box<dyn UserContract<ContractRuntimeSender> + Send + Sync + 'static>;
+}
+
+/// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
+pub trait UserServiceModule {
+    fn instantiate_with_actor_runtime(
+        &self,
+    ) -> Box<dyn UserService<ServiceRuntimeSender> + Send + Sync + 'static>;
+}
+
+/// A type for errors happening during execution.
 #[derive(Error, Debug)]
 pub enum ExecutionError {
     #[error(transparent)]

@@ -10,6 +10,7 @@ mod sync_response;
 
 use self::handlers::RequestHandler;
 pub use self::{
+    handlers::RespondExt,
     requests::{BaseRequest, ContractRequest, ServiceRequest},
     senders::{ContractRuntimeSender, ServiceRuntimeSender},
     sync_response::{SyncReceiver, SyncSender},
