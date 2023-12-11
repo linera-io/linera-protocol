@@ -216,15 +216,28 @@ where
                 contract.execute_message(context, runtime_sender, message)
             }
         });
-        runtime_actor.run().await?;
-        let call_result = call_result_future.await?;
+        let runtime_result = dbg!(runtime_actor.run().await);
+        let call_result = dbg!(call_result_future.await?);
 
         // TODO(#989): Make user errors fail blocks again.
-        let mut result = if let Err(ExecutionError::UserError(message)) = &call_result {
-            tracing::error!("Ignoring error reported by user application: {message}");
-            RawExecutionResult::default()
-        } else {
-            call_result?
+        let mut result = match (runtime_result, call_result) {
+            (Err(ExecutionError::UserError(message)), call_result) => {
+                assert!(matches!(
+                    call_result,
+                    Err(ExecutionError::MissingRuntimeResponse)
+                ));
+                tracing::error!("Ignoring error reported by user application: {message}");
+                RawExecutionResult::default()
+            }
+            (runtime_result, Err(ExecutionError::UserError(message))) => {
+                runtime_result?;
+                tracing::error!("Ignoring error reported by user application: {message}");
+                RawExecutionResult::default()
+            }
+            (runtime_result, call_result) => {
+                runtime_result?;
+                call_result?
+            }
         };
         // Set the authenticated signer to be used in outgoing messages.
         result.authenticated_signer = signer;
