@@ -199,7 +199,7 @@ macro_rules! impl_service_system_api {
 
             fn unlock_wait(
                 &mut self,
-                promise: &Self::Lock,
+                promise: &Self::Unlock,
             ) -> Result<Result<(), String>, Self::Error> {
                 BaseRuntime::unlock_wait(self, promise)
                     // TODO(#1153): remove
