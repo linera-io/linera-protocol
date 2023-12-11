@@ -265,10 +265,7 @@ macro_rules! impl_view_system_api_for_service {
                 error.into()
             }
 
-            fn contains_key_new(
-                &mut self,
-                key: &[u8],
-            ) -> Result<Self::ContainsKey, Self::Error> {
+            fn contains_key_new(&mut self, key: &[u8]) -> Result<Self::ContainsKey, Self::Error> {
                 Ok(Mutex::new(Some(self.runtime.send_request(
                     |response_sender| {
                         ServiceRequest::Base(BaseRequest::ContainsKey {
@@ -390,10 +387,7 @@ macro_rules! impl_view_system_api_for_contract {
                 error.into()
             }
 
-            fn contains_key_new(
-                &mut self,
-                key: &[u8],
-            ) -> Result<Self::ContainsKey, Self::Error> {
+            fn contains_key_new(&mut self, key: &[u8]) -> Result<Self::ContainsKey, Self::Error> {
                 Ok(Mutex::new(Some(self.runtime.send_request(
                     |response_sender| {
                         ContractRequest::Base(BaseRequest::ContainsKey {
