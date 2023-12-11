@@ -63,8 +63,9 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
     let state = InitialState {
         accounts: BTreeMap::new(),
     };
+    let params = fungible::Parameters::new("FUN");
     let application_id = client
-        .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, &[], None)
+        .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
         .await
         .unwrap();
 

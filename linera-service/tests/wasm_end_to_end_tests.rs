@@ -365,8 +365,9 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
     let state = InitialState { accounts };
     // Setting up the application and verifying
     let (contract, service) = client1.build_example("fungible").await.unwrap();
+    let params = fungible::Parameters::new("FUN");
     let application_id = client1
-        .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, &[], None)
+        .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
         .await
         .unwrap();
 
@@ -483,8 +484,9 @@ async fn test_wasm_end_to_end_same_wallet_fungible(config: impl LineraNetConfig)
     let state = InitialState { accounts };
     // Setting up the application and verifying
     let (contract, service) = client1.build_example("fungible").await.unwrap();
+    let params = fungible::Parameters::new("FUN");
     let application_id = client1
-        .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, &[], None)
+        .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
         .await
         .unwrap();
 
@@ -562,11 +564,12 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
 
     // Setting up the application fungible
     let (contract_fungible, service_fungible) = client1.build_example("fungible").await.unwrap();
+    let params = fungible::Parameters::new("FUN");
     let application_id_fungible = client1
         .publish_and_create::<FungibleTokenAbi>(
             contract_fungible,
             service_fungible,
-            &(),
+            &params,
             &state_fungible,
             &[],
             None,
@@ -706,22 +709,24 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     };
 
     // Setting up the application fungible on chain_a and chain_b
+    let params0 = fungible::Parameters::new("ZERO");
     let token0 = client_a
         .publish_and_create::<FungibleTokenAbi>(
             contract_fungible_a,
             service_fungible_a,
-            &(),
+            &params0,
             &state_fungible0,
             &[],
             None,
         )
         .await
         .unwrap();
+    let params1 = fungible::Parameters::new("ONE");
     let token1 = client_b
         .publish_and_create::<FungibleTokenAbi>(
             contract_fungible_b,
             service_fungible_b,
-            &(),
+            &params1,
             &state_fungible1,
             &[],
             None,
@@ -989,21 +994,23 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
         .await
         .unwrap();
 
+    let params0 = fungible::Parameters::new("ZERO");
     let token0 = node_service_admin
         .create_application::<FungibleTokenAbi>(
             &chain_admin,
             &fungible_bytecode_id,
-            &(),
+            &params0,
             &state_fungible0,
             &[],
         )
         .await
         .unwrap();
+    let params1 = fungible::Parameters::new("ONE");
     let token1 = node_service_admin
         .create_application::<FungibleTokenAbi>(
             &chain_admin,
             &fungible_bytecode_id,
-            &(),
+            &params1,
             &state_fungible1,
             &[],
         )

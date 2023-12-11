@@ -8,7 +8,8 @@ mod state;
 use self::state::FungibleToken;
 use async_trait::async_trait;
 use fungible::{
-    Account, AccountOwner, ApplicationCall, Destination, Message, Operation, SessionCall,
+    Account, AccountOwner, ApplicationCall, Destination, FungibleResponse, Message, Operation,
+    SessionCall,
 };
 use linera_sdk::{
     base::{Amount, ApplicationId, Owner, SessionId, WithContractAbi},
@@ -116,7 +117,7 @@ impl Contract for FungibleToken {
             ApplicationCall::Balance { owner } => {
                 let mut result = ApplicationCallResult::default();
                 let balance = self.balance(&owner).await;
-                result.value = balance;
+                result.value = FungibleResponse::Balance(balance);
                 Ok(result)
             }
 
@@ -152,6 +153,13 @@ impl Contract for FungibleToken {
                     ..Default::default()
                 })
             }
+
+            ApplicationCall::TickerSymbol => {
+                let mut result = ApplicationCallResult::default();
+                let params = Self::parameters()?;
+                result.value = FungibleResponse::TickerSymbol(params.ticker_symbol);
+                Ok(result)
+            }
         }
     }
 
@@ -161,7 +169,8 @@ impl Contract for FungibleToken {
         state: Self::SessionState,
         request: SessionCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Message, Amount, Self::SessionState>, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
+    {
         match request {
             SessionCall::Balance => self.handle_session_balance(state),
             SessionCall::Transfer {
@@ -193,9 +202,9 @@ impl FungibleToken {
     fn handle_session_balance(
         &self,
         balance: Amount,
-    ) -> Result<SessionCallResult<Message, Amount, Amount>, Error> {
+    ) -> Result<SessionCallResult<Message, FungibleResponse, Amount>, Error> {
         let application_call_result = ApplicationCallResult {
-            value: balance,
+            value: FungibleResponse::Balance(balance),
             execution_result: ExecutionResult::default(),
             create_sessions: vec![],
         };
@@ -212,7 +221,7 @@ impl FungibleToken {
         mut balance: Amount,
         amount: Amount,
         destination: Destination,
-    ) -> Result<SessionCallResult<Message, Amount, Amount>, Error> {
+    ) -> Result<SessionCallResult<Message, FungibleResponse, Amount>, Error> {
         balance
             .try_sub_assign(amount)
             .map_err(|_| Error::InsufficientSessionBalance)?;
@@ -254,7 +263,7 @@ impl FungibleToken {
         &mut self,
         amount: Amount,
         destination: Destination,
-    ) -> ApplicationCallResult<Message, Amount, Amount> {
+    ) -> ApplicationCallResult<Message, FungibleResponse, Amount> {
         let mut result = ApplicationCallResult::default();
         match destination {
             Destination::Account(account) => {

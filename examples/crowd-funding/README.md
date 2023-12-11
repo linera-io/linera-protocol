@@ -114,7 +114,8 @@ with 100 of them and another with 200 of them:
 ```bash
 APP_ID_0=$(linera --with-wallet 0 project publish-and-create \
            examples/fungible \
-           --json-argument '{ "accounts": { "User:'$OWNER_0'": "100", "User:'$OWNER_1'": "200" } }')
+           --json-argument '{ "accounts": { "User:'$OWNER_0'": "100", "User:'$OWNER_1'": "200" } }' \
+           --json-parameters "{ \"ticker_symbol\": \"FUN\" }")
 
 # Wait for it to fully complete
 sleep 8

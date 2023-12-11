@@ -107,6 +107,7 @@ APP_ID=$(linera create-application $BYTECODE_ID \
     --json-argument "{ \"accounts\": {
         \"User:$OWNER_1\": \"100.\"
     } }" \
+    --json-parameters "{ \"ticker_symbol\": \"FUN\" }" \
 )
 ```
 

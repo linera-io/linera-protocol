@@ -109,6 +109,7 @@ APP_ID=$(linera create-application $BYTECODE_ID \
     --json-argument "{ \"accounts\": {
         \"User:$OWNER_1\": \"100.\"
     } }" \
+    --json-parameters "{ \"ticker_symbol\": \"FUN\" }" \
 )
 ```
 
@@ -177,19 +178,19 @@ pub struct FungibleTokenAbi;
 
 impl ContractAbi for FungibleTokenAbi {
     type InitializationArgument = InitialState;
-    type Parameters = ();
+    type Parameters = Parameters;
     type ApplicationCall = ApplicationCall;
     type Operation = Operation;
     type Message = Message;
     type SessionCall = SessionCall;
-    type Response = Amount;
+    type Response = FungibleResponse;
     type SessionState = Amount;
 }
 
 impl ServiceAbi for FungibleTokenAbi {
     type Query = Request;
     type QueryResponse = Response;
-    type Parameters = ();
+    type Parameters = Parameters;
 }
 
 /// An operation.
@@ -242,6 +243,8 @@ pub enum ApplicationCall {
         amount: Amount,
         target_account: Account,
     },
+    /// A request for this fungible token's ticker symbol.
+    TickerSymbol,
 }
 
 /// A cross-application call into a session.
@@ -344,9 +347,29 @@ where
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Default)]
+pub enum FungibleResponse {
+    #[default]
+    Ok,
+    Balance(Amount),
+    TickerSymbol(String),
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct InitialState {
     pub accounts: BTreeMap<AccountOwner, Amount>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct Parameters {
+    pub ticker_symbol: String,
+}
+
+impl Parameters {
+    pub fn new(ticker_symbol: &str) -> Self {
+        let ticker_symbol = ticker_symbol.to_string();
+        Self { ticker_symbol }
+    }
 }
 
 /// An account.
@@ -417,8 +440,9 @@ impl FungibleTokenAbi {
             initial_state = initial_state.with_account(*account, *initial_amount);
         }
 
+        let params = Parameters::new("FUN");
         let application_id = token_chain
-            .create_application(bytecode_id, (), initial_state.build(), vec![])
+            .create_application(bytecode_id, params, initial_state.build(), vec![])
             .await;
 
         for (chain, account, initial_amount) in &accounts {

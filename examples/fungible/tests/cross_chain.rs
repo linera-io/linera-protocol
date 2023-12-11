@@ -5,7 +5,9 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use fungible::{Account, AccountOwner, FungibleTokenAbi, InitialStateBuilder, Operation};
+use fungible::{
+    Account, AccountOwner, FungibleTokenAbi, InitialStateBuilder, Operation, Parameters,
+};
 use linera_sdk::{base::Amount, test::TestValidator};
 
 /// Test transferring tokens across microchains.
@@ -23,10 +25,11 @@ async fn test_cross_chain_transfer() {
     let sender_account = AccountOwner::from(sender_chain.public_key());
 
     let initial_state = InitialStateBuilder::default().with_account(sender_account, initial_amount);
+    let params = Parameters::new("FUN");
     let application_id = sender_chain
         .create_application::<fungible::FungibleTokenAbi>(
             bytecode_id,
-            (),
+            params,
             initial_state.build(),
             vec![],
         )
