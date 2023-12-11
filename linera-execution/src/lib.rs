@@ -297,7 +297,7 @@ pub trait BaseRuntime: Send + Sync {
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError>;
 
     // TODO(#1152): remove
-    /// Reads the application state (new).
+    /// Reads the application state.
     fn try_read_my_state(&mut self) -> Result<Vec<u8>, ExecutionError> {
         let promise = self.try_read_my_state_new()?;
         self.try_read_my_state_wait(&promise)
@@ -368,7 +368,7 @@ pub trait BaseRuntime: Send + Sync {
         promise: &Self::FindKeysByPrefix,
     ) -> Result<Vec<Vec<u8>>, ExecutionError>;
 
-    /// Reads the data from the key/values having a specific prefix (wait).
+    /// Reads the data from the key/values having a specific prefix.
     #[cfg(feature = "test")]
     #[allow(clippy::type_complexity)]
     fn find_key_values_by_prefix(

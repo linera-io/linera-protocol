@@ -122,8 +122,9 @@ where
     }
 }
 
-/// Extension trait to help with receiving oneshot responses.
+/// Extension trait to help with receiving responses with a [`oneshot::Receiver`].
 pub trait ReceiverExt<T> {
+    /// Receives a response `T`, or returns an [`ExecutionError`] if the sender endpoint is closed.
     fn recv_response(self) -> Result<T, ExecutionError>;
 }
 

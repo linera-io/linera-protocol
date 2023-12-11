@@ -1,6 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
+/// Helper implementations to proxy requests through to [`RuntimeActor`][`super::RuntimeActor`]s.
 use crate::{
     runtime_actor::{
         BaseRequest, ContractRequest, ReceiverExt, ServiceRequest, UnboundedSenderExt,
@@ -128,7 +128,7 @@ impl BaseRuntime for ContractRuntimeSender {
         )?)))
     }
 
-    fn unlock_wait(&mut self, promise: &Self::Lock) -> Result<(), ExecutionError> {
+    fn unlock_wait(&mut self, promise: &Self::Unlock) -> Result<(), ExecutionError> {
         let receiver = promise
             .try_lock()
             .expect("Unexpected reentrant locking of `oneshot::Receiver`")
@@ -396,7 +396,7 @@ impl BaseRuntime for ServiceRuntimeSender {
         )?)))
     }
 
-    fn unlock_wait(&mut self, promise: &Self::Lock) -> Result<(), ExecutionError> {
+    fn unlock_wait(&mut self, promise: &Self::Unlock) -> Result<(), ExecutionError> {
         let receiver = promise
             .try_lock()
             .expect("Unexpected reentrant locking of `oneshot::Receiver`")
