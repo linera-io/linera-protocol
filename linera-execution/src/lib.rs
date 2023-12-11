@@ -50,7 +50,6 @@ use linera_base::{
     identifiers::{BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId},
 };
 use linera_views::{batch::Batch, views::ViewError};
-use resources::RuntimeCounts;
 use runtime_actor::{ContractRuntimeSender, ServiceRuntimeSender};
 use serde::{Deserialize, Serialize};
 use std::{io, path::Path, str::FromStr, sync::Arc};
@@ -77,6 +76,10 @@ pub enum ExecutionError {
     WasmError(#[from] WasmExecutionError),
     #[error(transparent)]
     JoinError(#[from] tokio::task::JoinError),
+    #[error("Host future was polled after it had finished")]
+    PolledTwice,
+    #[error("Attempt to use a system API to write to read-only storage")]
+    WriteAttemptToReadOnlyStorage,
 
     #[error("A session is still opened at the end of a transaction")]
     SessionWasNotClosed,
@@ -270,55 +273,140 @@ pub struct QueryContext {
     pub chain_id: ChainId,
 }
 
-#[async_trait]
 pub trait BaseRuntime: Send + Sync {
+    type Read;
+    type Lock;
+    type Unlock;
+    type ReadValueBytes;
+    type FindKeysByPrefix;
+    type FindKeyValuesByPrefix;
+
     /// The current chain id.
-    fn chain_id(&self) -> ChainId;
+    fn chain_id(&mut self) -> Result<ChainId, ExecutionError>;
 
     /// The current application id.
-    fn application_id(&self) -> UserApplicationId;
+    fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError>;
 
     /// The current application parameters.
-    fn application_parameters(&self) -> Vec<u8>;
+    fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError>;
 
     /// Reads the system balance.
-    fn read_system_balance(&self) -> Amount;
+    fn read_system_balance(&mut self) -> Result<Amount, ExecutionError>;
 
     /// Reads the system timestamp.
-    fn read_system_timestamp(&self) -> Timestamp;
+    fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError>;
 
+    // TODO(#1152): remove
     /// Reads the application state.
-    async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError>;
+    fn try_read_my_state(&mut self) -> Result<Vec<u8>, ExecutionError> {
+        let promise = self.try_read_my_state_new()?;
+        self.try_read_my_state_wait(&promise)
+    }
+
+    // TODO(#1152): remove
+    /// Reads the application state (new).
+    fn try_read_my_state_new(&mut self) -> Result<Self::Read, ExecutionError>;
+
+    // TODO(#1152): remove
+    /// Reads the application state (wait).
+    fn try_read_my_state_wait(&mut self, promise: &Self::Read) -> Result<Vec<u8>, ExecutionError>;
 
     /// Locks the view user state and prevents further reading/loading
-    async fn lock_view_user_state(&self) -> Result<(), ExecutionError>;
+    #[cfg(feature = "test")]
+    fn lock(&mut self) -> Result<(), ExecutionError> {
+        let promise = self.lock_new()?;
+        self.lock_wait(&promise)
+    }
+
+    /// Locks the view user state and prevents further reading/loading (new)
+    fn lock_new(&mut self) -> Result<Self::Lock, ExecutionError>;
+
+    /// Locks the view user state and prevents further reading/loading (wait)
+    fn lock_wait(&mut self, promise: &Self::Lock) -> Result<(), ExecutionError>;
 
     /// Unlocks the view user state and allows reading/loading again
-    async fn unlock_view_user_state(&self) -> Result<(), ExecutionError>;
+    #[cfg(feature = "test")]
+    fn unlock(&mut self) -> Result<(), ExecutionError> {
+        let promise = self.unlock_new()?;
+        self.unlock_wait(&promise)
+    }
 
-    /// Reads the key from the KV store
-    async fn read_value_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError>;
+    /// Unlocks the view user state and allows reading/loading again (new)
+    fn unlock_new(&mut self) -> Result<Self::Unlock, ExecutionError>;
 
-    /// Reads the data from the keys having a specific prefix.
-    async fn find_keys_by_prefix(
-        &self,
+    /// Unlocks the view user state and allows reading/loading again (wait)
+    fn unlock_wait(&mut self, promise: &Self::Unlock) -> Result<(), ExecutionError>;
+
+    /// Reads the key from the key-value store
+    #[cfg(feature = "test")]
+    fn read_value_bytes(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError> {
+        let promise = self.read_value_bytes_new(key)?;
+        self.read_value_bytes_wait(&promise)
+    }
+
+    /// Reads the key from the key-value store (new)
+    fn read_value_bytes_new(
+        &mut self,
+        key: Vec<u8>,
+    ) -> Result<Self::ReadValueBytes, ExecutionError>;
+
+    /// Reads the key from the key-value store (wait)
+    fn read_value_bytes_wait(
+        &mut self,
+        promise: &Self::ReadValueBytes,
+    ) -> Result<Option<Vec<u8>>, ExecutionError>;
+
+    /// Reads the data from the keys having a specific prefix (new).
+    fn find_keys_by_prefix_new(
+        &mut self,
         key_prefix: Vec<u8>,
+    ) -> Result<Self::FindKeysByPrefix, ExecutionError>;
+
+    /// Reads the data from the keys having a specific prefix (wait).
+    fn find_keys_by_prefix_wait(
+        &mut self,
+        promise: &Self::FindKeysByPrefix,
     ) -> Result<Vec<Vec<u8>>, ExecutionError>;
 
     /// Reads the data from the key/values having a specific prefix.
-    async fn find_key_values_by_prefix(
-        &self,
+    #[cfg(feature = "test")]
+    #[allow(clippy::type_complexity)]
+    fn find_key_values_by_prefix(
+        &mut self,
         key_prefix: Vec<u8>,
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
+        let promise = self.find_key_values_by_prefix_new(key_prefix)?;
+        self.find_key_values_by_prefix_wait(&promise)
+    }
+
+    /// Reads the data from the key/values having a specific prefix (new).
+    fn find_key_values_by_prefix_new(
+        &mut self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError>;
+
+    /// Reads the data from the key/values having a specific prefix (wait).
+    #[allow(clippy::type_complexity)]
+    fn find_key_values_by_prefix_wait(
+        &mut self,
+        promise: &Self::FindKeyValuesByPrefix,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>;
 }
 
-#[async_trait]
 pub trait ServiceRuntime: BaseRuntime {
-    /// Queries another application.
-    async fn try_query_application(
-        &self,
+    type TryQueryApplication;
+
+    /// Queries another application (new).
+    fn try_query_application_new(
+        &mut self,
         queried_id: UserApplicationId,
         argument: Vec<u8>,
+    ) -> Result<Self::TryQueryApplication, ExecutionError>;
+
+    /// Queries another application (wait).
+    fn try_query_application_wait(
+        &mut self,
+        promise: &Self::TryQueryApplication,
     ) -> Result<Vec<u8>, ExecutionError>;
 }
 
@@ -330,33 +418,28 @@ pub struct CallResult {
     pub sessions: Vec<SessionId>,
 }
 
-#[async_trait]
 pub trait ContractRuntime: BaseRuntime {
     /// Returns the amount of execution fuel remaining before execution is aborted.
-    fn remaining_fuel(&self) -> u64;
-
-    /// Returns the remaining fuel as well as the storage related information on the state
-    fn runtime_counts(&self) -> RuntimeCounts;
+    fn remaining_fuel(&mut self) -> Result<u64, ExecutionError>;
 
     /// Sets the amount of execution fuel remaining before execution is aborted.
-    fn set_remaining_fuel(&self, remaining_fuel: u64);
+    fn set_remaining_fuel(&mut self, remaining_fuel: u64) -> Result<(), ExecutionError>;
 
+    // TODO(#1152): remove
     /// Reads the application state and prevents further reading/loading until the state is saved.
-    async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError>;
+    fn try_read_and_lock_my_state(&mut self) -> Result<Option<Vec<u8>>, ExecutionError>;
 
+    // TODO(#1152): remove
     /// Saves the application state and allows reading/loading the state again.
-    fn save_and_unlock_my_state(&self, state: Vec<u8>) -> Result<(), ExecutionError>;
+    fn save_and_unlock_my_state(&mut self, state: Vec<u8>) -> Result<bool, ExecutionError>;
 
-    /// Allows reading/loading the state again (without saving anything).
-    fn unlock_my_state(&self);
-
-    /// Writes the batch and then unlock
-    async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError>;
+    /// Writes the batch and then unlock.
+    fn write_batch_and_unlock(&mut self, batch: Batch) -> Result<(), ExecutionError>;
 
     /// Calls another application. Forwarded sessions will now be visible to
     /// `callee_id` (but not to the caller any more).
-    async fn try_call_application(
-        &self,
+    fn try_call_application(
+        &mut self,
         authenticated: bool,
         callee_id: UserApplicationId,
         argument: Vec<u8>,
@@ -365,8 +448,8 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// Calls into a session that is in our scope. Forwarded sessions will be visible to
     /// the application that runs `session_id`.
-    async fn try_call_session(
-        &self,
+    fn try_call_session(
+        &mut self,
         authenticated: bool,
         session_id: SessionId,
         argument: Vec<u8>,

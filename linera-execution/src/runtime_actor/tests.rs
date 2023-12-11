@@ -3,7 +3,7 @@
 
 //! Unit tests for the [`RuntimeActor`].
 
-use super::{RequestHandler, RuntimeActor, SendRequestExt};
+use super::{RequestHandler, RuntimeActor, UnboundedSenderExt};
 use crate::ExecutionError;
 use async_trait::async_trait;
 use std::mem;
@@ -11,8 +11,8 @@ use std::mem;
 /// Test if sending a message to a dropped [`RuntimeActor`] doesn't cause a panic.
 #[test]
 fn test_sending_message_to_dropped_runtime_actor_doesnt_panic() {
-    let (actor, sender) = RuntimeActor::new(());
-
+    let (sender, receiver) = futures::channel::mpsc::unbounded();
+    let actor = RuntimeActor::new((), receiver);
     mem::drop(actor);
 
     assert!(matches!(

@@ -13,10 +13,7 @@ use linera_base::{
 };
 use linera_execution::{
     policy::ResourceControlPolicy,
-    runtime_actor::{
-        BaseRequest, ContractRequest, ContractRuntimeSender, SendRequestExt, ServiceRequest,
-        ServiceRuntimeSender,
-    },
+    runtime_actor::{ContractRuntimeSender, ServiceRuntimeSender},
     *,
 };
 use linera_views::{batch::Batch, common::Context, memory::MemoryContext, views::View};
@@ -92,73 +89,42 @@ impl UserContract for TestApplication {
     fn execute_operation(
         &self,
         context: OperationContext,
-        runtime_sender: ContractRuntimeSender,
+        mut runtime_sender: ContractRuntimeSender,
         operation: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
-        let app_id = runtime_sender
-            .send_request(|response_sender| {
-                ContractRequest::Base(BaseRequest::ApplicationId { response_sender })
-            })?
-            .recv()
-            .unwrap();
+        let app_id = runtime_sender.application_id()?;
 
         // Modify our state.
         let chosen_key = vec![0];
-        runtime_sender
-            .send_request(|response_sender| {
-                ContractRequest::Base(BaseRequest::LockViewUserState { response_sender })
-            })?
-            .recv()
-            .unwrap();
-
-        let state = runtime_sender
-            .send_request(|response_sender| {
-                ContractRequest::Base(BaseRequest::ReadValueBytes {
-                    key: chosen_key.clone(),
-                    response_sender,
-                })
-            })?
-            .recv()
-            .unwrap();
-
-        let mut state = state.unwrap_or_default();
+        runtime_sender.lock()?;
+        let mut state = runtime_sender
+            .read_value_bytes(chosen_key.clone())?
+            .unwrap_or_default();
         state.extend(operation.clone());
         let mut batch = Batch::new();
         batch.put_key_value_bytes(chosen_key, state);
+        runtime_sender.write_batch_and_unlock(batch)?;
 
-        runtime_sender
-            .send_sync_request(|response_sender| ContractRequest::WriteBatchAndUnlock {
-                batch,
-                response_sender,
-            })
-            .expect("State is locked at the start of the operation");
-
-        // Call ourselves after the state => ok.
-        let call_result = runtime_sender.send_sync_request(|response_sender| {
-            ContractRequest::TryCallApplication {
-                authenticated: true,
-                callee_id: app_id,
-                argument: vec![],
-                forwarded_sessions: vec![],
-                response_sender,
-            }
-        })?;
+        // Call ourselves after unlocking the state => ok.
+        let call_result = runtime_sender.try_call_application(
+            /* authenticated */ true,
+            app_id,
+            vec![],
+            vec![],
+        )?;
         assert_eq!(call_result.value, Vec::<u8>::new());
         assert_eq!(call_result.sessions.len(), 1);
         if !operation.is_empty() {
             // Call the session to close it.
             let session_id = call_result.sessions[0];
-            runtime_sender.send_sync_request(|response_sender| {
-                ContractRequest::TryCallSession {
-                    authenticated: false,
-                    session_id,
-                    argument: vec![],
-                    forwarded_sessions: vec![],
-                    response_sender,
-                }
-            })?;
+            runtime_sender.try_call_session(
+                /* authenticated */ false,
+                session_id,
+                vec![],
+                vec![],
+            )?;
         }
         Ok(RawExecutionResult::default())
     }
@@ -167,42 +133,23 @@ impl UserContract for TestApplication {
     fn execute_message(
         &self,
         context: MessageContext,
-        runtime_sender: ContractRuntimeSender,
+        mut runtime_sender: ContractRuntimeSender,
         _message: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
-        let app_id = runtime_sender
-            .send_request(|response_sender| {
-                ContractRequest::Base(BaseRequest::ApplicationId { response_sender })
-            })?
-            .recv()
-            .unwrap();
-
-        runtime_sender
-            .send_request(|response_sender| {
-                ContractRequest::Base(BaseRequest::LockViewUserState { response_sender })
-            })?
-            .recv()
-            .unwrap();
+        let app_id = runtime_sender.application_id()?;
+        runtime_sender.lock()?;
 
         // Call ourselves while the state is locked => not ok.
-        runtime_sender.send_sync_request(|response_sender| {
-            ContractRequest::TryCallApplication {
-                authenticated: true,
-                callee_id: app_id,
-                argument: vec![],
-                forwarded_sessions: vec![],
-                response_sender,
-            }
-        })?;
+        runtime_sender.try_call_application(
+            /* authenticated */ true,
+            app_id,
+            vec![],
+            vec![],
+        )?;
+        runtime_sender.unlock()?;
 
-        runtime_sender
-            .send_request(|response_sender| {
-                ContractRequest::Base(BaseRequest::UnlockViewUserState { response_sender })
-            })?
-            .recv()
-            .unwrap();
         Ok(RawExecutionResult::default())
     }
 
@@ -246,36 +193,17 @@ impl UserService for TestApplication {
     fn handle_query(
         &self,
         _context: QueryContext,
-        runtime_sender: ServiceRuntimeSender,
+        mut runtime_sender: ServiceRuntimeSender,
         _argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let chosen_key = vec![0];
-
-        runtime_sender
-            .send_request(|response_sender| {
-                ServiceRequest::Base(BaseRequest::LockViewUserState { response_sender })
-            })?
-            .recv()
-            .unwrap();
+        runtime_sender.lock()?;
 
         let state = runtime_sender
-            .send_request(|response_sender| {
-                ServiceRequest::Base(BaseRequest::ReadValueBytes {
-                    key: chosen_key,
-                    response_sender,
-                })
-            })?
-            .recv()
-            .unwrap();
+            .read_value_bytes(chosen_key)?
+            .unwrap_or_default();
 
-        let state = state.unwrap_or_default();
-
-        runtime_sender
-            .send_request(|response_sender| {
-                ServiceRequest::Base(BaseRequest::UnlockViewUserState { response_sender })
-            })?
-            .recv()
-            .unwrap();
+        runtime_sender.unlock()?;
 
         Ok(state)
     }

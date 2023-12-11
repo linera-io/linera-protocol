@@ -5,11 +5,13 @@
 
 mod handlers;
 mod requests;
+pub mod senders;
 mod sync_response;
 
 use self::handlers::RequestHandler;
 pub use self::{
     requests::{BaseRequest, ContractRequest, ServiceRequest},
+    senders::{ContractRuntimeSender, ServiceRuntimeSender},
     sync_response::{SyncReceiver, SyncSender},
 };
 use crate::ExecutionError;
@@ -17,9 +19,6 @@ use futures::{
     channel::mpsc,
     stream::{StreamExt, TryStreamExt},
 };
-
-pub type ContractRuntimeSender = mpsc::UnboundedSender<ContractRequest>;
-pub type ServiceRuntimeSender = mpsc::UnboundedSender<ServiceRequest>;
 
 /// A handler of application system APIs that runs as a separate actor.
 ///
@@ -29,26 +28,18 @@ pub struct RuntimeActor<Runtime, Request> {
     requests: mpsc::UnboundedReceiver<Request>,
 }
 
+impl<Runtime, Request> RuntimeActor<Runtime, Request> {
+    /// Creates a new [`RuntimeActor`] using the provided `Runtime` to handle `Request`s.
+    pub fn new(runtime: Runtime, requests: mpsc::UnboundedReceiver<Request>) -> Self {
+        Self { runtime, requests }
+    }
+}
+
 impl<Runtime, Request> RuntimeActor<Runtime, Request>
 where
     Runtime: RequestHandler<Request>,
     Request: std::fmt::Debug,
 {
-    /// Creates a new [`RuntimeActor`] using the provided `Runtime` to handle `Request`s.
-    ///
-    /// Returns the new [`RuntimeActor`] so that it can be executed later with the
-    /// [`RuntimeActor::run`] method and the endpoint to send `Request`s to the actor.
-    pub fn new(runtime: Runtime) -> (Self, mpsc::UnboundedSender<Request>) {
-        let (sender, receiver) = mpsc::unbounded();
-
-        let actor = RuntimeActor {
-            runtime,
-            requests: receiver,
-        };
-
-        (actor, sender)
-    }
-
     /// Runs the [`RuntimeActor`], handling `Request`s until all the sender endpoints are closed.
     pub async fn run(self) -> Result<(), ExecutionError> {
         let runtime = self.runtime;
@@ -63,7 +54,7 @@ where
 /// Extension trait to help with sending requests to [`RuntimeActor`]s.
 ///
 /// Prepares a channel for the actor to send a response back to the sender of the request.
-pub trait SendRequestExt<Request> {
+pub trait UnboundedSenderExt<Request> {
     /// Sends a request built by `builder`, returning a [`oneshot::Receiver`] for receiving the
     /// `Response`.
     fn send_request<Response>(
@@ -82,7 +73,7 @@ pub trait SendRequestExt<Request> {
         Response: Send;
 }
 
-impl<Request> SendRequestExt<Request> for mpsc::UnboundedSender<Request>
+impl<Request> UnboundedSenderExt<Request> for mpsc::UnboundedSender<Request>
 where
     Request: Send,
 {
@@ -128,6 +119,19 @@ where
         response_receiver
             .recv()
             .map_err(|_| ExecutionError::MissingRuntimeResponse)
+    }
+}
+
+/// Extension trait to help with receiving responses with a [`oneshot::Receiver`].
+pub trait ReceiverExt<T> {
+    /// Receives a response `T`, or returns an [`ExecutionError`] if the sender endpoint is closed.
+    fn recv_response(self) -> Result<T, ExecutionError>;
+}
+
+impl<T> ReceiverExt<T> for oneshot::Receiver<T> {
+    fn recv_response(self) -> Result<T, ExecutionError> {
+        self.recv()
+            .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
     }
 }
 

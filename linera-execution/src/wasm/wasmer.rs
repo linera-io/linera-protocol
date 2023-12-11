@@ -38,12 +38,11 @@ use super::{
     ApplicationCallResult, SessionCallResult, WasmContract, WasmExecutionError, WasmService,
 };
 use crate::{
-    runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
-    Bytecode, CalleeContext, ExecutionError, MessageContext, OperationContext, QueryContext,
-    RawExecutionResult,
+    BaseRuntime, Bytecode, CalleeContext, ContractRuntime, ContractRuntimeSender, ExecutionError,
+    MessageContext, OperationContext, QueryContext, RawExecutionResult, ServiceRuntime,
+    ServiceRuntimeSender,
 };
 use bytes::Bytes;
-use futures::channel::mpsc;
 use linera_base::identifiers::SessionId;
 use linera_views::batch::Batch;
 use once_cell::sync::Lazy;
@@ -78,29 +77,19 @@ impl ApplicationRuntimeContext for Contract {
     type Error = RuntimeError;
     type Extra = WasmerContractExtra;
 
-    fn configure_initial_fuel(context: &mut WasmRuntimeContext<Self>) {
-        let remaining_points = context
-            .extra
-            .runtime
-            .send_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
-            .and_then(|response_receiver| {
-                response_receiver
-                    .recv()
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
-            })
-            .unwrap_or_else(|_| {
-                tracing::debug!("Failed to read initial fuel for transaction");
-                0
-            });
+    fn configure_initial_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), Self::Error> {
+        let remaining_points = context.extra.runtime_sender.remaining_fuel()?;
 
         metering::set_remaining_points(
             &mut context.store,
             &context.extra.instance,
             remaining_points,
         );
+
+        Ok(())
     }
 
-    fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), ()> {
+    fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>) -> Result<(), Self::Error> {
         let remaining_fuel =
             match metering::get_remaining_points(&mut context.store, &context.extra.instance) {
                 MeteringPoints::Exhausted => 0,
@@ -109,12 +98,10 @@ impl ApplicationRuntimeContext for Contract {
 
         context
             .extra
-            .runtime
-            .send_sync_request(|response_sender| ContractRequest::SetRemainingFuel {
-                remaining_fuel,
-                response_sender,
-            })
-            .map_err(|_| ())
+            .runtime_sender
+            .set_remaining_fuel(remaining_fuel)?;
+
+        Ok(())
     }
 }
 
@@ -128,9 +115,11 @@ impl ApplicationRuntimeContext for Service {
     type Error = RuntimeError;
     type Extra = ();
 
-    fn configure_initial_fuel(_context: &mut WasmRuntimeContext<Self>) {}
+    fn configure_initial_fuel(_context: &mut WasmRuntimeContext<Self>) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
-    fn persist_remaining_fuel(_context: &mut WasmRuntimeContext<Self>) -> Result<(), ()> {
+    fn persist_remaining_fuel(_context: &mut WasmRuntimeContext<Self>) -> Result<(), Self::Error> {
         Ok(())
     }
 }
@@ -152,16 +141,14 @@ impl WasmContract {
     pub fn prepare_contract_runtime_with_wasmer(
         contract_engine: &Engine,
         contract_module: &Module,
-        runtime: mpsc::UnboundedSender<ContractRequest>,
+        runtime_sender: ContractRuntimeSender,
     ) -> Result<WasmRuntimeContext<Contract>, WasmExecutionError> {
         let mut store = Store::new(contract_engine);
         let mut imports = imports! {};
-        let contract_system_api = ContractSystemApi::new(runtime.clone());
-        let view_system_api = ContractViewSystemApi::new(runtime.clone());
         let system_api_setup =
-            contract_system_api::add_to_imports(&mut store, &mut imports, contract_system_api);
+            contract_system_api::add_to_imports(&mut store, &mut imports, runtime_sender.clone());
         let views_api_setup =
-            view_system_api::add_to_imports(&mut store, &mut imports, view_system_api);
+            view_system_api::add_to_imports(&mut store, &mut imports, runtime_sender.clone());
         let (contract, instance) =
             contract::Contract::instantiate(&mut store, contract_module, &mut imports)
                 .map_err(WasmExecutionError::LoadContractModule)?;
@@ -173,7 +160,10 @@ impl WasmContract {
         Ok(WasmRuntimeContext {
             application,
             store,
-            extra: WasmerContractExtra { runtime, instance },
+            extra: WasmerContractExtra {
+                runtime_sender,
+                instance,
+            },
         })
     }
 
@@ -212,16 +202,14 @@ impl WasmService {
     /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare_service_runtime_with_wasmer(
         service_module: &Module,
-        runtime: mpsc::UnboundedSender<ServiceRequest>,
+        runtime_sender: ServiceRuntimeSender,
     ) -> Result<WasmRuntimeContext<Service>, WasmExecutionError> {
         let mut store = Store::new(&*SERVICE_ENGINE);
         let mut imports = imports! {};
-        let service_system_api = ServiceSystemApi::new(runtime.clone());
-        let view_system_api = ServiceViewSystemApi::new(runtime);
         let system_api_setup =
-            service_system_api::add_to_imports(&mut store, &mut imports, service_system_api);
+            service_system_api::add_to_imports(&mut store, &mut imports, runtime_sender.clone());
         let views_api_setup =
-            view_system_api::add_to_imports(&mut store, &mut imports, view_system_api);
+            view_system_api::add_to_imports(&mut store, &mut imports, runtime_sender);
         let (service, instance) =
             service::Service::instantiate(&mut store, service_module, &mut imports)
                 .map_err(WasmExecutionError::LoadServiceModule)?;
@@ -327,68 +315,14 @@ impl common::Service for Service {
     }
 }
 
-/// Implementation to forward contract system calls from the guest Wasm module to the host
-/// implementation.
-pub struct ContractSystemApi {
-    runtime: mpsc::UnboundedSender<ContractRequest>,
-}
-
-impl ContractSystemApi {
-    /// Creates a new [`ContractSystemApi`] instance.
-    pub fn new(runtime: mpsc::UnboundedSender<ContractRequest>) -> Self {
-        ContractSystemApi { runtime }
-    }
-}
-
-impl_contract_system_api!(ContractSystemApi, wasmer::RuntimeError);
-
-/// Implementation to forward service system calls from the guest Wasm module to the host
-/// implementation.
-pub struct ServiceSystemApi {
-    runtime: mpsc::UnboundedSender<ServiceRequest>,
-}
-
-impl ServiceSystemApi {
-    /// Creates a new [`ServiceSystemApi`] instance.
-    pub fn new(runtime: mpsc::UnboundedSender<ServiceRequest>) -> Self {
-        ServiceSystemApi { runtime }
-    }
-}
-
-impl_service_system_api!(ServiceSystemApi, wasmer::RuntimeError);
-
-/// Implementation to forward view system calls from the contract guest Wasm module to the host
-/// implementation.
-pub struct ContractViewSystemApi {
-    runtime: mpsc::UnboundedSender<ContractRequest>,
-}
-
-impl ContractViewSystemApi {
-    /// Creates a new [`ContractViewSystemApi`] instance.
-    pub fn new(runtime: mpsc::UnboundedSender<ContractRequest>) -> Self {
-        ContractViewSystemApi { runtime }
-    }
-}
-
-/// Implementation to forward view system calls from the guest WASM module to the host
-/// implementation.
-pub struct ServiceViewSystemApi {
-    runtime: mpsc::UnboundedSender<ServiceRequest>,
-}
-
-impl ServiceViewSystemApi {
-    /// Creates a new [`ServiceViewSystemApi`] instance.
-    pub fn new(runtime: mpsc::UnboundedSender<ServiceRequest>) -> Self {
-        ServiceViewSystemApi { runtime }
-    }
-}
-
-impl_view_system_api_for_contract!(ContractViewSystemApi, wasmer::RuntimeError);
-impl_view_system_api_for_service!(ServiceViewSystemApi, wasmer::RuntimeError);
+impl_contract_system_api!(ContractRuntimeSender, wasmer::RuntimeError);
+impl_service_system_api!(ServiceRuntimeSender, wasmer::RuntimeError);
+impl_view_system_api_for_contract!(ContractRuntimeSender, wasmer::RuntimeError);
+impl_view_system_api_for_service!(ServiceRuntimeSender, wasmer::RuntimeError);
 
 /// Extra parameters necessary when cleaning up after contract execution.
 pub struct WasmerContractExtra {
-    runtime: mpsc::UnboundedSender<ContractRequest>,
+    runtime_sender: ContractRuntimeSender,
     instance: Instance,
 }
 

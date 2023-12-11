@@ -9,110 +9,57 @@ macro_rules! impl_contract_system_api {
         impl contract_system_api::ContractSystemApi for $contract_system_api {
             type Error = ExecutionError;
 
-            type Lock = Mutex<Option<oneshot::Receiver<()>>>;
+            type Lock = <Self as BaseRuntime>::Lock;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
             }
 
             fn chain_id(&mut self) -> Result<contract_system_api::ChainId, Self::Error> {
-                self.runtime
-                    .send_request(|response_sender| {
-                        ContractRequest::Base(BaseRequest::ChainId { response_sender })
-                    })?
-                    .recv()
-                    .map(|chain_id| chain_id.into())
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                BaseRuntime::chain_id(self).map(|chain_id| chain_id.into())
             }
 
             fn application_id(
                 &mut self,
             ) -> Result<contract_system_api::ApplicationId, Self::Error> {
-                self.runtime
-                    .send_request(|response_sender| {
-                        ContractRequest::Base(BaseRequest::ApplicationId { response_sender })
-                    })?
-                    .recv()
-                    .map(|application_id| application_id.into())
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                BaseRuntime::application_id(self).map(|application_id| application_id.into())
             }
 
             fn application_parameters(&mut self) -> Result<Vec<u8>, Self::Error> {
-                self.runtime
-                    .send_request(|response_sender| {
-                        ContractRequest::Base(BaseRequest::ApplicationParameters {
-                            response_sender,
-                        })
-                    })?
-                    .recv()
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                BaseRuntime::application_parameters(self)
             }
 
             fn read_system_balance(&mut self) -> Result<contract_system_api::Amount, Self::Error> {
-                self.runtime
-                    .send_request(|response_sender| {
-                        ContractRequest::Base(BaseRequest::ReadSystemBalance { response_sender })
-                    })?
-                    .recv()
-                    .map(|balance| balance.into())
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                BaseRuntime::read_system_balance(self).map(|balance| balance.into())
             }
 
             fn read_system_timestamp(
                 &mut self,
             ) -> Result<contract_system_api::Timestamp, Self::Error> {
-                self.runtime
-                    .send_request(|response_sender| {
-                        ContractRequest::Base(BaseRequest::ReadSystemTimestamp { response_sender })
-                    })?
-                    .recv()
-                    .map(|timestamp| timestamp.micros())
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
             }
 
+            // TODO(#1152): remove
             fn load(&mut self) -> Result<Vec<u8>, Self::Error> {
-                self.runtime
-                    .send_request(|response_sender| {
-                        ContractRequest::Base(BaseRequest::TryReadMyState { response_sender })
-                    })?
-                    .recv()
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                self.try_read_my_state()
             }
 
+            // TODO(#1152): remove
             fn load_and_lock(&mut self) -> Result<Option<Vec<u8>>, Self::Error> {
-                self.runtime
-                    .send_sync_request(|response_sender| ContractRequest::TryReadAndLockMyState {
-                        response_sender,
-                    })
-                    .map_err(|error| error.into())
+                self.try_read_and_lock_my_state()
             }
 
+            // TODO(#1152): remove
             fn store_and_unlock(&mut self, state: &[u8]) -> Result<bool, Self::Error> {
-                self.runtime
-                    .send_sync_request(|response_sender| ContractRequest::SaveAndUnlockMyState {
-                        state: state.to_owned(),
-                        response_sender,
-                    })
-                    .map_err(|error| error.into())
+                self.save_and_unlock_my_state(state.to_vec())
             }
 
             fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
-                Ok(Mutex::new(Some(self.runtime.send_request(
-                    |response_sender| {
-                        ContractRequest::Base(BaseRequest::LockViewUserState { response_sender })
-                    },
-                )?)))
+                BaseRuntime::lock_new(self)
             }
 
             fn lock_wait(&mut self, promise: &Self::Lock) -> Result<(), Self::Error> {
-                let receiver = promise
-                    .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
-                    .take()
-                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                receiver
-                    .recv()
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                BaseRuntime::lock_wait(self, promise)
             }
 
             fn try_call_application(
@@ -128,16 +75,14 @@ macro_rules! impl_contract_system_api {
                     .map(SessionId::from)
                     .collect();
 
-                self.runtime
-                    .send_sync_request(|response_sender| ContractRequest::TryCallApplication {
-                        authenticated,
-                        callee_id: application.into(),
-                        argument: argument.to_owned(),
-                        forwarded_sessions,
-                        response_sender,
-                    })
-                    .map(|call_result| call_result.into())
-                    .map_err(|error| error.into())
+                ContractRuntime::try_call_application(
+                    self,
+                    authenticated,
+                    application.into(),
+                    argument.to_vec(),
+                    forwarded_sessions,
+                )
+                .map(|call_result| call_result.into())
             }
 
             fn try_call_session(
@@ -153,16 +98,14 @@ macro_rules! impl_contract_system_api {
                     .map(SessionId::from)
                     .collect();
 
-                self.runtime
-                    .send_sync_request(|response_sender| ContractRequest::TryCallSession {
-                        authenticated,
-                        session_id: session.into(),
-                        argument: argument.to_owned(),
-                        forwarded_sessions,
-                        response_sender,
-                    })
-                    .map(|call_result| call_result.into())
-                    .map_err(|error| error.into())
+                ContractRuntime::try_call_session(
+                    self,
+                    authenticated,
+                    session.into(),
+                    argument.to_vec(),
+                    forwarded_sessions,
+                )
+                .map(|call_result| call_result.into())
             }
 
             fn log(
@@ -191,133 +134,76 @@ macro_rules! impl_service_system_api {
         impl service_system_api::ServiceSystemApi for $service_system_api {
             type Error = ExecutionError;
 
-            type Load = Mutex<Option<oneshot::Receiver<Vec<u8>>>>;
-            type Lock = Mutex<Option<oneshot::Receiver<()>>>;
-            type Unlock = Mutex<Option<oneshot::Receiver<()>>>;
-            type TryQueryApplication = Mutex<Option<oneshot::Receiver<Vec<u8>>>>;
+            type Load = <Self as BaseRuntime>::Read;
+            type Lock = <Self as BaseRuntime>::Lock;
+            type Unlock = <Self as BaseRuntime>::Unlock;
+            type TryQueryApplication = <Self as ServiceRuntime>::TryQueryApplication;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
             }
 
             fn chain_id(&mut self) -> Result<service_system_api::ChainId, Self::Error> {
-                self.runtime
-                    .send_request(|response_sender| {
-                        ServiceRequest::Base(BaseRequest::ChainId { response_sender })
-                    })?
-                    .recv()
-                    .map(|chain_id| chain_id.into())
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                BaseRuntime::chain_id(self).map(|chain_id| chain_id.into())
             }
 
             fn application_id(&mut self) -> Result<service_system_api::ApplicationId, Self::Error> {
-                self.runtime
-                    .send_request(|response_sender| {
-                        ServiceRequest::Base(BaseRequest::ApplicationId { response_sender })
-                    })?
-                    .recv()
-                    .map(|application_id| application_id.into())
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                BaseRuntime::application_id(self).map(|application_id| application_id.into())
             }
 
             fn application_parameters(&mut self) -> Result<Vec<u8>, Self::Error> {
-                self.runtime
-                    .send_request(|response_sender| {
-                        ServiceRequest::Base(BaseRequest::ApplicationParameters { response_sender })
-                    })?
-                    .recv()
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                BaseRuntime::application_parameters(self)
             }
 
             fn read_system_balance(&mut self) -> Result<service_system_api::Amount, Self::Error> {
-                self.runtime
-                    .send_request(|response_sender| {
-                        ServiceRequest::Base(BaseRequest::ReadSystemBalance { response_sender })
-                    })?
-                    .recv()
-                    .map(|balance| balance.into())
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                BaseRuntime::read_system_balance(self).map(|balance| balance.into())
             }
 
             fn read_system_timestamp(
                 &mut self,
             ) -> Result<service_system_api::Timestamp, Self::Error> {
-                self.runtime
-                    .send_request(|response_sender| {
-                        ServiceRequest::Base(BaseRequest::ReadSystemTimestamp { response_sender })
-                    })?
-                    .recv()
-                    .map(|timestamp| timestamp.micros())
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
             }
 
+            // TODO(#1152): remove
             fn load_new(&mut self) -> Result<Self::Load, Self::Error> {
-                Ok(Mutex::new(Some(self.runtime.send_request(
-                    |response_sender| {
-                        ServiceRequest::Base(BaseRequest::TryReadMyState { response_sender })
-                    },
-                )?)))
+                self.try_read_my_state_new()
             }
 
+            // TODO(#1152): remove
             fn load_wait(
                 &mut self,
                 promise: &Self::Load,
             ) -> Result<Result<Vec<u8>, String>, Self::Error> {
-                let receiver = promise
-                    .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
-                    .take()
-                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                receiver
-                    .recv()
+                self.try_read_my_state_wait(promise)
+                    // TODO(#1153): remove
                     .map(Ok)
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
-                Ok(Mutex::new(Some(self.runtime.send_request(
-                    |response_sender| {
-                        ServiceRequest::Base(BaseRequest::LockViewUserState { response_sender })
-                    },
-                )?)))
+                BaseRuntime::lock_new(self)
             }
 
             fn lock_wait(
                 &mut self,
                 promise: &Self::Lock,
             ) -> Result<Result<(), String>, Self::Error> {
-                let receiver = promise
-                    .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
-                    .take()
-                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                receiver
-                    .recv()
+                BaseRuntime::lock_wait(self, promise)
+                    // TODO(#1153): remove
                     .map(Ok)
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn unlock_new(&mut self) -> Result<Self::Unlock, Self::Error> {
-                Ok(Mutex::new(Some(self.runtime.send_request(
-                    |response_sender| {
-                        ServiceRequest::Base(BaseRequest::UnlockViewUserState { response_sender })
-                    },
-                )?)))
+                BaseRuntime::unlock_new(self)
             }
 
             fn unlock_wait(
                 &mut self,
-                promise: &Self::Lock,
+                promise: &Self::Unlock,
             ) -> Result<Result<(), String>, Self::Error> {
-                let receiver = promise
-                    .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
-                    .take()
-                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                receiver
-                    .recv()
+                BaseRuntime::unlock_wait(self, promise)
+                    // TODO(#1153): remove
                     .map(Ok)
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn try_query_application_new(
@@ -325,30 +211,20 @@ macro_rules! impl_service_system_api {
                 application: service_system_api::ApplicationId,
                 argument: &[u8],
             ) -> Result<Self::TryQueryApplication, Self::Error> {
-                let argument = Vec::from(argument);
-
-                Ok(Mutex::new(Some(self.runtime.send_request(
-                    |response_sender| ServiceRequest::TryQueryApplication {
-                        queried_id: application.into(),
-                        argument: argument.to_owned(),
-                        response_sender,
-                    },
-                )?)))
+                ServiceRuntime::try_query_application_new(
+                    self,
+                    application.into(),
+                    argument.to_vec(),
+                )
             }
 
             fn try_query_application_wait(
                 &mut self,
                 promise: &Self::TryQueryApplication,
             ) -> Result<Result<Vec<u8>, String>, Self::Error> {
-                let receiver = promise
-                    .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
-                    .take()
-                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                receiver
-                    .recv()
+                ServiceRuntime::try_query_application_wait(self, promise)
+                    // TODO(#1153): remove
                     .map(Ok)
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
             }
 
             fn log(
@@ -379,9 +255,9 @@ macro_rules! impl_view_system_api_for_service {
         impl view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
-            type ReadValueBytes = Mutex<Option<oneshot::Receiver<Option<Vec<u8>>>>>;
-            type FindKeys = Mutex<Option<oneshot::Receiver<Vec<Vec<u8>>>>>;
-            type FindKeyValues = Mutex<Option<oneshot::Receiver<Vec<(Vec<u8>, Vec<u8>)>>>>;
+            type ReadValueBytes = <Self as BaseRuntime>::ReadValueBytes;
+            type FindKeys = <Self as BaseRuntime>::FindKeysByPrefix;
+            type FindKeyValues = <Self as BaseRuntime>::FindKeyValuesByPrefix;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -391,88 +267,47 @@ macro_rules! impl_view_system_api_for_service {
                 &mut self,
                 key: &[u8],
             ) -> Result<Self::ReadValueBytes, Self::Error> {
-                Ok(Mutex::new(Some(self.runtime.send_request(
-                    |response_sender| {
-                        ServiceRequest::Base(BaseRequest::ReadValueBytes {
-                            key: key.to_owned(),
-                            response_sender,
-                        })
-                    },
-                )?)))
+                BaseRuntime::read_value_bytes_new(self, key.to_vec())
             }
 
             fn read_value_bytes_wait(
                 &mut self,
                 promise: &Self::ReadValueBytes,
             ) -> Result<Option<Vec<u8>>, Self::Error> {
-                let receiver = promise
-                    .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
-                    .take()
-                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                receiver
-                    .recv()
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                BaseRuntime::read_value_bytes_wait(self, promise)
             }
 
             fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {
-                Ok(Mutex::new(Some(self.runtime.send_request(
-                    |response_sender| {
-                        ServiceRequest::Base(BaseRequest::FindKeysByPrefix {
-                            key_prefix: key_prefix.to_owned(),
-                            response_sender,
-                        })
-                    },
-                )?)))
+                self.find_keys_by_prefix_new(key_prefix.to_vec())
             }
 
             fn find_keys_wait(
                 &mut self,
                 promise: &Self::FindKeys,
             ) -> Result<Vec<Vec<u8>>, Self::Error> {
-                let receiver = promise
-                    .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
-                    .take()
-                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                receiver
-                    .recv()
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                self.find_keys_by_prefix_wait(promise)
             }
 
             fn find_key_values_new(
                 &mut self,
                 key_prefix: &[u8],
             ) -> Result<Self::FindKeyValues, Self::Error> {
-                Ok(Mutex::new(Some(self.runtime.send_request(
-                    |response_sender| {
-                        ServiceRequest::Base(BaseRequest::FindKeyValuesByPrefix {
-                            key_prefix: key_prefix.to_owned(),
-                            response_sender,
-                        })
-                    },
-                )?)))
+                self.find_key_values_by_prefix_new(key_prefix.to_vec())
             }
 
             fn find_key_values_wait(
                 &mut self,
                 promise: &Self::FindKeyValues,
             ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
-                let receiver = promise
-                    .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
-                    .take()
-                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                receiver
-                    .recv()
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                self.find_key_values_by_prefix_wait(promise)
             }
 
             fn write_batch(
                 &mut self,
-                _list_oper: Vec<view_system_api::WriteOperation>,
+                _operations: Vec<view_system_api::WriteOperation>,
             ) -> Result<(), Self::Error> {
-                Err(WasmExecutionError::WriteAttemptToReadOnlyStorage.into())
+                // Not calling the runtime to save time.
+                Err(ExecutionError::WriteAttemptToReadOnlyStorage)
             }
         }
     };
@@ -487,9 +322,9 @@ macro_rules! impl_view_system_api_for_contract {
         impl view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
-            type ReadValueBytes = Mutex<Option<oneshot::Receiver<Option<Vec<u8>>>>>;
-            type FindKeys = Mutex<Option<oneshot::Receiver<Vec<Vec<u8>>>>>;
-            type FindKeyValues = Mutex<Option<oneshot::Receiver<Vec<(Vec<u8>, Vec<u8>)>>>>;
+            type ReadValueBytes = <Self as BaseRuntime>::ReadValueBytes;
+            type FindKeys = <Self as BaseRuntime>::FindKeysByPrefix;
+            type FindKeyValues = <Self as BaseRuntime>::FindKeyValuesByPrefix;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -499,107 +334,61 @@ macro_rules! impl_view_system_api_for_contract {
                 &mut self,
                 key: &[u8],
             ) -> Result<Self::ReadValueBytes, Self::Error> {
-                Ok(Mutex::new(Some(self.runtime.send_request(
-                    |response_sender| {
-                        ContractRequest::Base(BaseRequest::ReadValueBytes {
-                            key: key.to_owned(),
-                            response_sender,
-                        })
-                    },
-                )?)))
+                BaseRuntime::read_value_bytes_new(self, key.to_vec())
             }
 
             fn read_value_bytes_wait(
                 &mut self,
                 promise: &Self::ReadValueBytes,
             ) -> Result<Option<Vec<u8>>, Self::Error> {
-                let receiver = promise
-                    .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
-                    .take()
-                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                receiver
-                    .recv()
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                BaseRuntime::read_value_bytes_wait(self, promise)
             }
 
             fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {
-                Ok(Mutex::new(Some(self.runtime.send_request(
-                    |response_sender| {
-                        ContractRequest::Base(BaseRequest::FindKeysByPrefix {
-                            key_prefix: key_prefix.to_owned(),
-                            response_sender,
-                        })
-                    },
-                )?)))
+                self.find_keys_by_prefix_new(key_prefix.to_vec())
             }
 
             fn find_keys_wait(
                 &mut self,
                 promise: &Self::FindKeys,
             ) -> Result<Vec<Vec<u8>>, Self::Error> {
-                let receiver = promise
-                    .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
-                    .take()
-                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                receiver
-                    .recv()
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                self.find_keys_by_prefix_wait(promise)
             }
 
             fn find_key_values_new(
                 &mut self,
                 key_prefix: &[u8],
             ) -> Result<Self::FindKeyValues, Self::Error> {
-                Ok(Mutex::new(Some(self.runtime.send_request(
-                    |response_sender| {
-                        ContractRequest::Base(BaseRequest::FindKeyValuesByPrefix {
-                            key_prefix: key_prefix.to_owned(),
-                            response_sender,
-                        })
-                    },
-                )?)))
+                self.find_key_values_by_prefix_new(key_prefix.to_vec())
             }
 
             fn find_key_values_wait(
                 &mut self,
                 promise: &Self::FindKeyValues,
             ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
-                let receiver = promise
-                    .try_lock()
-                    .expect("Unexpected reentrant locking of `oneshot::Receiver`")
-                    .take()
-                    .ok_or_else(|| WasmExecutionError::PolledTwice)?;
-                receiver
-                    .recv()
-                    .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+                self.find_key_values_by_prefix_wait(promise)
             }
 
+            // TODO(#1153): the wit name is wrong
             fn write_batch(
                 &mut self,
-                list_oper: Vec<view_system_api::WriteOperation>,
+                operations: Vec<view_system_api::WriteOperation>,
             ) -> Result<(), Self::Error> {
                 let mut batch = Batch::new();
-                for x in list_oper {
-                    match x {
+                for operation in operations {
+                    match operation {
                         view_system_api::WriteOperation::Delete(key) => {
                             batch.delete_key(key.to_vec())
                         }
                         view_system_api::WriteOperation::Deleteprefix(key_prefix) => {
                             batch.delete_key_prefix(key_prefix.to_vec())
                         }
-                        view_system_api::WriteOperation::Put(key_value) => {
-                            batch.put_key_value_bytes(key_value.0.to_vec(), key_value.1.to_vec())
+                        view_system_api::WriteOperation::Put((key, value)) => {
+                            batch.put_key_value_bytes(key.to_vec(), value.to_vec())
                         }
                     }
                 }
-                self.runtime
-                    .send_sync_request(|response_sender| ContractRequest::WriteBatchAndUnlock {
-                        batch,
-                        response_sender,
-                    })
-                    .map_err(|error| error.into())
+                self.write_batch_and_unlock(batch)
             }
         }
     };
