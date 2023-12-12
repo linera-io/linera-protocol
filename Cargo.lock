@@ -3314,6 +3314,7 @@ dependencies = [
  "linera-sdk",
  "linera-views",
  "log",
+ "serde_json",
  "webassembly-test",
 ]
 
