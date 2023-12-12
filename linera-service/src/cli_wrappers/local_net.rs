@@ -8,6 +8,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use async_trait::async_trait;
+use linera_base::data_types::Amount;
 use std::{
     collections::{BTreeMap, HashSet},
     env, fs,
@@ -142,7 +143,10 @@ impl LineraNetConfig for LocalNetConfig {
             "There should be at least one initial validator"
         );
         net.generate_initial_validator_config().await.unwrap();
-        client.create_genesis_config().await.unwrap();
+        client
+            .create_genesis_config(Amount::from_tokens(10))
+            .await
+            .unwrap();
         net.run().await.unwrap();
         Ok((net, client))
     }
@@ -173,7 +177,10 @@ impl LineraNetConfig for LocalNetTestingConfig {
         let client = net.make_client().await;
         if num_validators > 0 {
             net.generate_initial_validator_config().await.unwrap();
-            client.create_genesis_config().await.unwrap();
+            client
+                .create_genesis_config(Amount::from_tokens(10))
+                .await
+                .unwrap();
             net.run().await.unwrap();
         }
         Ok((net, client))

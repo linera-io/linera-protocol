@@ -21,6 +21,7 @@ use kube::{
     api::{Api, ListParams},
     Client,
 };
+use linera_base::data_types::Amount;
 use std::{fs, path::PathBuf, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
@@ -97,7 +98,10 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
             "There should be at least one initial validator"
         );
         net.generate_initial_validator_config().await.unwrap();
-        client.create_genesis_config().await.unwrap();
+        client
+            .create_genesis_config(Amount::from_tokens(10))
+            .await
+            .unwrap();
         net.run().await.unwrap();
 
         Ok((net, client))
@@ -138,7 +142,10 @@ impl LineraNetConfig for LocalKubernetesNetTestingConfig {
         let client = net.make_client().await;
         if num_validators > 0 {
             net.generate_initial_validator_config().await.unwrap();
-            client.create_genesis_config().await.unwrap();
+            client
+                .create_genesis_config(Amount::from_tokens(10))
+                .await
+                .unwrap();
             net.run().await.unwrap();
         }
         Ok((net, client))
