@@ -21,10 +21,11 @@
           clang
           libclang.lib
           libiconv
+          nodejs
           openssl
           protobuf
           pkg-config
-          nodejs
+          rocksdb
         ];
         rustBuildToolchain = (pkgs.rust-bin.fromRustupToolchainFile
           ./toolchains/build/rust-toolchain.toml);
@@ -46,6 +47,7 @@
             export RUST_SRC_PATH=${rustBuildToolchain.availableComponents.rust-src}
             export LIBCLANG_PATH=${pkgs.libclang.lib}/lib
             export PATH=$PWD/target/debug:~/.cargo/bin:$PATH
+            export ROCKSDB_LIB_DIR=${pkgs.rocksdb}/lib
           '';
           buildInputs = nonRustDeps;
           nativeBuildInputs = with pkgs; [
