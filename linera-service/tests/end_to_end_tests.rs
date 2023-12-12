@@ -9,7 +9,7 @@ mod common;
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::{data_types::Amount, identifiers::ChainId};
 #[cfg(feature = "kubernetes")]
-use linera_service::cli_wrappers::local_kubernetes_net::LocalKubernetesNetTestingConfig;
+use linera_service::cli_wrappers::local_kubernetes_net::SharedLocalKubernetesNetTestingConfig;
 use linera_service::{
     cli_wrappers::{
         local_net::{Database, LocalNet, LocalNetConfig, LocalNetTestingConfig},
@@ -342,10 +342,10 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetTestingConfig
     net.terminate().await.unwrap();
 }
 
-#[cfg_attr(all(feature = "rocksdb", not(feature = "kubernetes")), test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
-#[cfg_attr(all(feature = "scylladb", not(feature = "kubernetes")), test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(all(feature = "aws", not(feature = "kubernetes")), test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(LocalKubernetesNetTestingConfig::new(Network::Grpc, None) ; "kubernetes_scylladb_grpc"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, None) ; "kubernetes_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;

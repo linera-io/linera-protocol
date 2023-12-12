@@ -25,6 +25,14 @@ use linera_base::data_types::Amount;
 use std::{fs, path::PathBuf, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
+#[cfg(any(test, feature = "test"))]
+use tokio::sync::OnceCell;
+
+#[cfg(any(test, feature = "test"))]
+static SHARED_LOCAL_KUBERNETES_TESTING_NET: OnceCell<(
+    Arc<Mutex<LocalKubernetesNet>>,
+    ClientWrapper,
+)> = OnceCell::const_new();
 
 /// The information needed to start a [`LocalKubernetesNet`].
 pub struct LocalKubernetesNetConfig {
@@ -37,12 +45,13 @@ pub struct LocalKubernetesNetConfig {
 
 /// A simplified version of [`LocalKubernetesNetConfig`]
 #[cfg(any(test, feature = "test"))]
-pub struct LocalKubernetesNetTestingConfig {
+pub struct SharedLocalKubernetesNetTestingConfig {
     pub network: Network,
     pub binaries_dir: Option<PathBuf>,
 }
 
 /// A set of Linera validators running locally as native processes.
+#[derive(Clone)]
 pub struct LocalKubernetesNet {
     network: Network,
     testing_prng_seed: Option<u64>,
@@ -56,7 +65,7 @@ pub struct LocalKubernetesNet {
 }
 
 #[cfg(any(test, feature = "test"))]
-impl LocalKubernetesNetTestingConfig {
+impl SharedLocalKubernetesNetTestingConfig {
     pub fn new(network: Network, binaries_dir: Option<PathBuf>) -> Self {
         Self {
             network,
@@ -70,6 +79,11 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
     type Net = LocalKubernetesNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
+        ensure!(
+            self.num_initial_validators > 0,
+            "There should be at least one initial validator"
+        );
+
         let mut net = LocalKubernetesNet::new(
             self.network,
             self.testing_prng_seed,
@@ -93,10 +107,6 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
         )?;
 
         let client = net.make_client().await;
-        ensure!(
-            self.num_initial_validators > 0,
-            "There should be at least one initial validator"
-        );
         net.generate_initial_validator_config().await.unwrap();
         client
             .create_genesis_config(Amount::from_tokens(10))
@@ -110,45 +120,87 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
 
 #[cfg(any(test, feature = "test"))]
 #[async_trait]
-impl LineraNetConfig for LocalKubernetesNetTestingConfig {
-    type Net = LocalKubernetesNet;
+impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
+    type Net = Arc<Mutex<LocalKubernetesNet>>;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
         let seed = 37;
-        let num_validators = 4;
-        let num_shards = 4;
+        let (ref net_arc, initial_client) = SHARED_LOCAL_KUBERNETES_TESTING_NET
+            .get_or_init(|| async {
+                let num_validators = 4;
+                let num_shards = 4;
 
-        let mut net = LocalKubernetesNet::new(
-            self.network,
-            Some(seed),
-            self.binaries_dir,
-            KubectlInstance::new(Vec::new()),
-            future::ready(
-                (0..num_validators)
-                    .map(|_| async {
-                        KindCluster::create()
-                            .await
-                            .expect("Creating kind cluster should not fail")
-                    })
+                let mut net = LocalKubernetesNet::new(
+                    self.network,
+                    Some(seed),
+                    self.binaries_dir,
+                    KubectlInstance::new(Vec::new()),
+                    future::ready(
+                        (0..num_validators)
+                            .map(|_| async {
+                                KindCluster::create()
+                                    .await
+                                    .expect("Creating kind cluster should not fail")
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                    .then(join_all)
+                    .await
+                    .into_iter()
                     .collect::<Vec<_>>(),
-            )
-            .then(join_all)
-            .await
-            .into_iter()
-            .collect::<Vec<_>>(),
-            num_validators,
-            num_shards,
-        )?;
-        let client = net.make_client().await;
-        if num_validators > 0 {
-            net.generate_initial_validator_config().await.unwrap();
-            client
-                .create_genesis_config(Amount::from_tokens(10))
+                    num_validators,
+                    num_shards,
+                )
+                .expect("Creating LocalKubernetesNet should not fail");
+
+                let initial_client = net.make_client().await;
+                if num_validators > 0 {
+                    net.generate_initial_validator_config().await.unwrap();
+                    initial_client
+                        .create_genesis_config(Amount::from_tokens(1000))
+                        .await
+                        .unwrap();
+                    net.run().await.unwrap();
+                }
+
+                (Arc::new(Mutex::new(net)), initial_client)
+            })
+            .await;
+
+        let mut net_arc_clone = net_arc.clone();
+        let client = net_arc_clone.make_client().await;
+        client.wallet_init(&[], None).await.unwrap();
+
+        for _ in 0..2 {
+            initial_client
+                .open_and_assign(&client, Amount::from_tokens(10))
                 .await
                 .unwrap();
-            net.run().await.unwrap();
         }
-        Ok((net, client))
+
+        Ok((net_arc_clone, client))
+    }
+}
+
+#[async_trait]
+impl LineraNet for Arc<Mutex<LocalKubernetesNet>> {
+    async fn ensure_is_running(&mut self) -> Result<()> {
+        let self_clone = self.clone();
+        let mut self_lock = self_clone.lock().await;
+
+        self_lock.ensure_is_running().await
+    }
+
+    async fn make_client(&mut self) -> ClientWrapper {
+        let self_clone = self.clone();
+        let mut self_lock = self_clone.lock().await;
+
+        self_lock.make_client().await
+    }
+
+    async fn terminate(&mut self) -> Result<()> {
+        // Users are responsible for killing the clusters if they want to
+        Ok(())
     }
 }
 

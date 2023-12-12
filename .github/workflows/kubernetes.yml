@@ -47,8 +47,28 @@ jobs:
           strip target/release/linera-server
           strip target/release/linera-db
       - name: Run Wasm e2e test
-        run: |
-          cargo test --locked -p linera-service --features scylladb,kubernetes --test wasm_end_to_end_tests -- test_wasm_end_to_end_amm
+        uses: nick-fields/retry@v2
+        with:
+          # Port forwarding sometimes dies, which makes all requests timeout
+          # Which is why we need retries
+          max_attempts: 5
+          timeout_minutes: 45
+          command: kind get clusters | xargs -I {} kind delete cluster --name {} && cargo test --locked -p linera-service --features scylladb,kubernetes --test wasm_end_to_end_tests -- kubernetes
+      - name: Destroy the kind clusters from Wasm e2e
+        if: always()
+        shell: bash
+        run: >-
+          kind get clusters | xargs -I {} kind delete cluster --name {}
       - name: Run e2e test
-        run: |
-          cargo test --locked -p linera-service --features scylladb,kubernetes --test end_to_end_tests -- test_end_to_end_multiple_wallets
+        uses: nick-fields/retry@v2
+        with:
+          # Port forwarding sometimes dies, which makes all requests timeout
+          # Which is why we need retries
+          max_attempts: 5
+          timeout_minutes: 45
+          command: kind get clusters | xargs -I {} kind delete cluster --name {} && cargo test --locked -p linera-service --features scylladb,kubernetes --test end_to_end_tests -- test_end_to_end_multiple_wallets::kubernetes
+      - name: Destroy the kind clusters from e2e
+        if: always()
+        shell: bash
+        run: >-
+          kind get clusters | xargs -I {} kind delete cluster --name {}
