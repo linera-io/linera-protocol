@@ -20,6 +20,7 @@ use linera_service::{
 use linera_views::test_utils::get_table_name;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use test_case::test_case;
+use tokio::sync::Mutex;
 
 #[tokio::test]
 async fn test_resolve_binary() {
@@ -47,7 +48,10 @@ async fn test_resolve_binary() {
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let _guard = INTEGRATION_TEST_GUARD
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .await;
     let network = config.network;
     let (mut net, client) = config.instantiate().await.unwrap();
 
@@ -281,7 +285,10 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_retry_notification_stream(config: LocalNetTestingConfig) {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let _guard = INTEGRATION_TEST_GUARD
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .await;
 
     let (mut net, client1) = config.instantiate().await.unwrap();
 
@@ -342,7 +349,10 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetTestingConfig
 #[cfg_attr(feature = "kubernetes", test_case(LocalKubernetesNetTestingConfig::new(Network::Grpc, None) ; "kubernetes_scylladb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let _guard = INTEGRATION_TEST_GUARD
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .await;
 
     // Create net and two clients.
     let (mut net, client1) = config.instantiate().await.unwrap();
@@ -438,7 +448,10 @@ async fn test_project_test() {
 #[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_project_publish(database: Database, network: Network) {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let _guard = INTEGRATION_TEST_GUARD
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .await;
 
     let table_name = get_table_name();
     let config = LocalNetConfig {
@@ -487,7 +500,10 @@ async fn test_linera_net_up_simple() {
         process::{Command, Stdio},
     };
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let _guard = INTEGRATION_TEST_GUARD
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .await;
 
     let mut command = Command::new(env!("CARGO_BIN_EXE_linera"));
     command.args(["net", "up"]);
@@ -535,7 +551,10 @@ async fn test_linera_net_up_simple() {
 #[cfg_attr(feature = "aws", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_example_publish(database: Database, network: Network) {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let _guard = INTEGRATION_TEST_GUARD
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .await;
 
     let table_name = get_table_name();
     let config = LocalNetConfig {
@@ -575,7 +594,10 @@ async fn test_example_publish(database: Database, network: Network) {
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let _guard = INTEGRATION_TEST_GUARD
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .await;
 
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await.unwrap();
@@ -666,7 +688,10 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConfig) {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let _guard = INTEGRATION_TEST_GUARD
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .await;
 
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await.unwrap();
@@ -721,7 +746,10 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let _guard = INTEGRATION_TEST_GUARD
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .await;
 
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await.unwrap();
@@ -801,7 +829,10 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_retry_pending_block(config: LocalNetTestingConfig) {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let _guard = INTEGRATION_TEST_GUARD
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .await;
     // Create runner and client.
     let (mut net, client) = config.instantiate().await.unwrap();
     let chain_id = client.get_wallet().unwrap().default_chain().unwrap();
