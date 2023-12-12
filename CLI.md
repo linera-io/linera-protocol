@@ -1,48 +1,48 @@
-# Command-Line Help for `Linera client tool`
+# Command-Line Help for `linera`
 
-This document contains the help content for the `Linera client tool` command-line program.
+This document contains the help content for the `linera` command-line program.
 
 **Command Overview:**
 
-* [`Linera client tool`↴](#Linera client tool)
-* [`Linera client tool transfer`↴](#Linera client tool-transfer)
-* [`Linera client tool open-chain`↴](#Linera client tool-open-chain)
-* [`Linera client tool open-multi-owner-chain`↴](#Linera client tool-open-multi-owner-chain)
-* [`Linera client tool close-chain`↴](#Linera client tool-close-chain)
-* [`Linera client tool query-balance`↴](#Linera client tool-query-balance)
-* [`Linera client tool sync-balance`↴](#Linera client tool-sync-balance)
-* [`Linera client tool query-validators`↴](#Linera client tool-query-validators)
-* [`Linera client tool set-validator`↴](#Linera client tool-set-validator)
-* [`Linera client tool remove-validator`↴](#Linera client tool-remove-validator)
-* [`Linera client tool resource-control-policy`↴](#Linera client tool-resource-control-policy)
-* [`Linera client tool create-genesis-config`↴](#Linera client tool-create-genesis-config)
-* [`Linera client tool watch`↴](#Linera client tool-watch)
-* [`Linera client tool service`↴](#Linera client tool-service)
-* [`Linera client tool faucet`↴](#Linera client tool-faucet)
-* [`Linera client tool publish-bytecode`↴](#Linera client tool-publish-bytecode)
-* [`Linera client tool create-application`↴](#Linera client tool-create-application)
-* [`Linera client tool publish-and-create`↴](#Linera client tool-publish-and-create)
-* [`Linera client tool request-application`↴](#Linera client tool-request-application)
-* [`Linera client tool keygen`↴](#Linera client tool-keygen)
-* [`Linera client tool assign`↴](#Linera client tool-assign)
-* [`Linera client tool retry-pending-block`↴](#Linera client tool-retry-pending-block)
-* [`Linera client tool wallet`↴](#Linera client tool-wallet)
-* [`Linera client tool wallet show`↴](#Linera client tool-wallet-show)
-* [`Linera client tool wallet set-default`↴](#Linera client tool-wallet-set-default)
-* [`Linera client tool wallet init`↴](#Linera client tool-wallet-init)
-* [`Linera client tool project`↴](#Linera client tool-project)
-* [`Linera client tool project new`↴](#Linera client tool-project-new)
-* [`Linera client tool project test`↴](#Linera client tool-project-test)
-* [`Linera client tool project publish-and-create`↴](#Linera client tool-project-publish-and-create)
-* [`Linera client tool net`↴](#Linera client tool-net)
-* [`Linera client tool net up`↴](#Linera client tool-net-up)
-* [`Linera client tool net helper`↴](#Linera client tool-net-helper)
+* [`linera`↴](#linera)
+* [`linera transfer`↴](#linera-transfer)
+* [`linera open-chain`↴](#linera-open-chain)
+* [`linera open-multi-owner-chain`↴](#linera-open-multi-owner-chain)
+* [`linera close-chain`↴](#linera-close-chain)
+* [`linera query-balance`↴](#linera-query-balance)
+* [`linera sync-balance`↴](#linera-sync-balance)
+* [`linera query-validators`↴](#linera-query-validators)
+* [`linera set-validator`↴](#linera-set-validator)
+* [`linera remove-validator`↴](#linera-remove-validator)
+* [`linera resource-control-policy`↴](#linera-resource-control-policy)
+* [`linera create-genesis-config`↴](#linera-create-genesis-config)
+* [`linera watch`↴](#linera-watch)
+* [`linera service`↴](#linera-service)
+* [`linera faucet`↴](#linera-faucet)
+* [`linera publish-bytecode`↴](#linera-publish-bytecode)
+* [`linera create-application`↴](#linera-create-application)
+* [`linera publish-and-create`↴](#linera-publish-and-create)
+* [`linera request-application`↴](#linera-request-application)
+* [`linera keygen`↴](#linera-keygen)
+* [`linera assign`↴](#linera-assign)
+* [`linera retry-pending-block`↴](#linera-retry-pending-block)
+* [`linera wallet`↴](#linera-wallet)
+* [`linera wallet show`↴](#linera-wallet-show)
+* [`linera wallet set-default`↴](#linera-wallet-set-default)
+* [`linera wallet init`↴](#linera-wallet-init)
+* [`linera project`↴](#linera-project)
+* [`linera project new`↴](#linera-project-new)
+* [`linera project test`↴](#linera-project-test)
+* [`linera project publish-and-create`↴](#linera-project-publish-and-create)
+* [`linera net`↴](#linera-net)
+* [`linera net up`↴](#linera-net-up)
+* [`linera net helper`↴](#linera-net-helper)
 
-## `Linera client tool`
+## `linera`
 
 A Byzantine-fault tolerant sidechain with low-latency finality and high throughput
 
-**Usage:** `Linera client tool [OPTIONS] <COMMAND>`
+**Usage:** `linera [OPTIONS] <COMMAND>`
 
 ###### **Subcommands:**
 
@@ -104,11 +104,11 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 
 
 
-## `Linera client tool transfer`
+## `linera transfer`
 
 Transfer funds
 
-**Usage:** `Linera client tool transfer --from <SENDER> --to <RECIPIENT> <AMOUNT>`
+**Usage:** `linera transfer --from <SENDER> --to <RECIPIENT> <AMOUNT>`
 
 ###### **Arguments:**
 
@@ -121,11 +121,11 @@ Transfer funds
 
 
 
-## `Linera client tool open-chain`
+## `linera open-chain`
 
 Open (i.e. activate) a new chain deriving the UID from an existing one
 
-**Usage:** `Linera client tool open-chain [OPTIONS]`
+**Usage:** `linera open-chain [OPTIONS]`
 
 ###### **Options:**
 
@@ -137,11 +137,11 @@ Open (i.e. activate) a new chain deriving the UID from an existing one
 
 
 
-## `Linera client tool open-multi-owner-chain`
+## `linera open-multi-owner-chain`
 
 Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
 
-**Usage:** `Linera client tool open-multi-owner-chain [OPTIONS]`
+**Usage:** `linera open-multi-owner-chain [OPTIONS]`
 
 ###### **Options:**
 
@@ -155,11 +155,11 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 
 
 
-## `Linera client tool close-chain`
+## `linera close-chain`
 
 Close (i.e. deactivate) an existing chain
 
-**Usage:** `Linera client tool close-chain --from <CHAIN_ID>`
+**Usage:** `linera close-chain --from <CHAIN_ID>`
 
 ###### **Options:**
 
@@ -167,11 +167,11 @@ Close (i.e. deactivate) an existing chain
 
 
 
-## `Linera client tool query-balance`
+## `linera query-balance`
 
 Read the balance of the chain from the local state of the client
 
-**Usage:** `Linera client tool query-balance [CHAIN_ID]`
+**Usage:** `linera query-balance [CHAIN_ID]`
 
 ###### **Arguments:**
 
@@ -179,11 +179,11 @@ Read the balance of the chain from the local state of the client
 
 
 
-## `Linera client tool sync-balance`
+## `linera sync-balance`
 
 Synchronize the local state of the chain (including a conservative estimation of the available balance) with a quorum validators
 
-**Usage:** `Linera client tool sync-balance [CHAIN_ID]`
+**Usage:** `linera sync-balance [CHAIN_ID]`
 
 ###### **Arguments:**
 
@@ -191,11 +191,11 @@ Synchronize the local state of the chain (including a conservative estimation of
 
 
 
-## `Linera client tool query-validators`
+## `linera query-validators`
 
 Show the current set of validators for a chain
 
-**Usage:** `Linera client tool query-validators [CHAIN_ID]`
+**Usage:** `linera query-validators [CHAIN_ID]`
 
 ###### **Arguments:**
 
@@ -203,11 +203,11 @@ Show the current set of validators for a chain
 
 
 
-## `Linera client tool set-validator`
+## `linera set-validator`
 
 Add or modify a validator (admin only)
 
-**Usage:** `Linera client tool set-validator [OPTIONS] --name <NAME> --address <ADDRESS>`
+**Usage:** `linera set-validator [OPTIONS] --name <NAME> --address <ADDRESS>`
 
 ###### **Options:**
 
@@ -219,11 +219,11 @@ Add or modify a validator (admin only)
 
 
 
-## `Linera client tool remove-validator`
+## `linera remove-validator`
 
 Remove a validator (admin only)
 
-**Usage:** `Linera client tool remove-validator --name <NAME>`
+**Usage:** `linera remove-validator --name <NAME>`
 
 ###### **Options:**
 
@@ -231,11 +231,11 @@ Remove a validator (admin only)
 
 
 
-## `Linera client tool resource-control-policy`
+## `linera resource-control-policy`
 
 View or update the resource control policy
 
-**Usage:** `Linera client tool resource-control-policy [OPTIONS]`
+**Usage:** `linera resource-control-policy [OPTIONS]`
 
 ###### **Options:**
 
@@ -251,11 +251,11 @@ View or update the resource control policy
 
 
 
-## `Linera client tool create-genesis-config`
+## `linera create-genesis-config`
 
 Create genesis configuration for a Linera deployment. Create initial user chains and print information to be used for initialization of validator setup. This will also create an initial wallet for the owner of the initial "root" chains
 
-**Usage:** `Linera client tool create-genesis-config [OPTIONS] --committee <COMMITTEE_CONFIG_PATH> --genesis <GENESIS_CONFIG_PATH> <NUM>`
+**Usage:** `linera create-genesis-config [OPTIONS] --committee <COMMITTEE_CONFIG_PATH> --genesis <GENESIS_CONFIG_PATH> <NUM>`
 
 ###### **Arguments:**
 
@@ -300,11 +300,11 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 
 
 
-## `Linera client tool watch`
+## `linera watch`
 
 Watch the network for notifications
 
-**Usage:** `Linera client tool watch [OPTIONS] [CHAIN_ID]`
+**Usage:** `linera watch [OPTIONS] [CHAIN_ID]`
 
 ###### **Arguments:**
 
@@ -316,11 +316,11 @@ Watch the network for notifications
 
 
 
-## `Linera client tool service`
+## `linera service`
 
 Run a GraphQL service to explore and extend the chains of the wallet
 
-**Usage:** `Linera client tool service [OPTIONS]`
+**Usage:** `linera service [OPTIONS]`
 
 ###### **Options:**
 
@@ -336,11 +336,11 @@ Run a GraphQL service to explore and extend the chains of the wallet
 
 
 
-## `Linera client tool faucet`
+## `linera faucet`
 
 Run a GraphQL service that exposes a faucet where users can claim tokens. This gives away the chain's tokens, and is mainly intended for testing
 
-**Usage:** `Linera client tool faucet [OPTIONS] --amount <AMOUNT> [CHAIN_ID]`
+**Usage:** `linera faucet [OPTIONS] --amount <AMOUNT> [CHAIN_ID]`
 
 ###### **Arguments:**
 
@@ -356,11 +356,11 @@ Run a GraphQL service that exposes a faucet where users can claim tokens. This g
 
 
 
-## `Linera client tool publish-bytecode`
+## `linera publish-bytecode`
 
 Publish bytecode
 
-**Usage:** `Linera client tool publish-bytecode <CONTRACT> <SERVICE> [PUBLISHER]`
+**Usage:** `linera publish-bytecode <CONTRACT> <SERVICE> [PUBLISHER]`
 
 ###### **Arguments:**
 
@@ -370,11 +370,11 @@ Publish bytecode
 
 
 
-## `Linera client tool create-application`
+## `linera create-application`
 
 Create an application
 
-**Usage:** `Linera client tool create-application [OPTIONS] <BYTECODE_ID> [CREATOR]`
+**Usage:** `linera create-application [OPTIONS] <BYTECODE_ID> [CREATOR]`
 
 ###### **Arguments:**
 
@@ -391,11 +391,11 @@ Create an application
 
 
 
-## `Linera client tool publish-and-create`
+## `linera publish-and-create`
 
 Create an application, and publish the required bytecode
 
-**Usage:** `Linera client tool publish-and-create [OPTIONS] <CONTRACT> <SERVICE> [PUBLISHER]`
+**Usage:** `linera publish-and-create [OPTIONS] <CONTRACT> <SERVICE> [PUBLISHER]`
 
 ###### **Arguments:**
 
@@ -413,11 +413,11 @@ Create an application, and publish the required bytecode
 
 
 
-## `Linera client tool request-application`
+## `linera request-application`
 
 Request an application from another chain, so it can be used on this one
 
-**Usage:** `Linera client tool request-application [OPTIONS] <APPLICATION_ID>`
+**Usage:** `linera request-application [OPTIONS] <APPLICATION_ID>`
 
 ###### **Arguments:**
 
@@ -430,19 +430,19 @@ Request an application from another chain, so it can be used on this one
 
 
 
-## `Linera client tool keygen`
+## `linera keygen`
 
 Create an unassigned key-pair
 
-**Usage:** `Linera client tool keygen`
+**Usage:** `linera keygen`
 
 
 
-## `Linera client tool assign`
+## `linera assign`
 
 Link a key owned by the wallet to a chain that was just created for that key
 
-**Usage:** `Linera client tool assign --key <KEY> --message-id <MESSAGE_ID>`
+**Usage:** `linera assign --key <KEY> --message-id <MESSAGE_ID>`
 
 ###### **Options:**
 
@@ -451,13 +451,13 @@ Link a key owned by the wallet to a chain that was just created for that key
 
 
 
-## `Linera client tool retry-pending-block`
+## `linera retry-pending-block`
 
 Retry a block we unsuccessfully tried to propose earlier.
 
 As long as a block is pending most other commands will fail, since it is unsafe to propose multiple blocks at the same height.
 
-**Usage:** `Linera client tool retry-pending-block [CHAIN_ID]`
+**Usage:** `linera retry-pending-block [CHAIN_ID]`
 
 ###### **Arguments:**
 
@@ -465,11 +465,11 @@ As long as a block is pending most other commands will fail, since it is unsafe 
 
 
 
-## `Linera client tool wallet`
+## `linera wallet`
 
 Show the contents of the wallet
 
-**Usage:** `Linera client tool wallet <COMMAND>`
+**Usage:** `linera wallet <COMMAND>`
 
 ###### **Subcommands:**
 
@@ -479,11 +479,11 @@ Show the contents of the wallet
 
 
 
-## `Linera client tool wallet show`
+## `linera wallet show`
 
 Show the contents of the wallet
 
-**Usage:** `Linera client tool wallet show [CHAIN_ID]`
+**Usage:** `linera wallet show [CHAIN_ID]`
 
 ###### **Arguments:**
 
@@ -491,11 +491,11 @@ Show the contents of the wallet
 
 
 
-## `Linera client tool wallet set-default`
+## `linera wallet set-default`
 
 Change the wallet default chain
 
-**Usage:** `Linera client tool wallet set-default <CHAIN_ID>`
+**Usage:** `linera wallet set-default <CHAIN_ID>`
 
 ###### **Arguments:**
 
@@ -503,11 +503,11 @@ Change the wallet default chain
 
 
 
-## `Linera client tool wallet init`
+## `linera wallet init`
 
 Initialize a wallet from the genesis configuration
 
-**Usage:** `Linera client tool wallet init [OPTIONS]`
+**Usage:** `linera wallet init [OPTIONS]`
 
 ###### **Options:**
 
@@ -518,11 +518,11 @@ Initialize a wallet from the genesis configuration
 
 
 
-## `Linera client tool project`
+## `linera project`
 
 Manage Linera projects
 
-**Usage:** `Linera client tool project <COMMAND>`
+**Usage:** `linera project <COMMAND>`
 
 ###### **Subcommands:**
 
@@ -532,11 +532,11 @@ Manage Linera projects
 
 
 
-## `Linera client tool project new`
+## `linera project new`
 
 Create a new Linera project
 
-**Usage:** `Linera client tool project new [OPTIONS] <NAME>`
+**Usage:** `linera project new [OPTIONS] <NAME>`
 
 ###### **Arguments:**
 
@@ -548,13 +548,13 @@ Create a new Linera project
 
 
 
-## `Linera client tool project test`
+## `linera project test`
 
 Test a Linera project.
 
 Equivalent to running `cargo test` with the appropriate test runner.
 
-**Usage:** `Linera client tool project test [PATH]`
+**Usage:** `linera project test [PATH]`
 
 ###### **Arguments:**
 
@@ -562,11 +562,11 @@ Equivalent to running `cargo test` with the appropriate test runner.
 
 
 
-## `Linera client tool project publish-and-create`
+## `linera project publish-and-create`
 
 Build and publish a Linera project
 
-**Usage:** `Linera client tool project publish-and-create [OPTIONS] [PATH] [NAME] [PUBLISHER]`
+**Usage:** `linera project publish-and-create [OPTIONS] [PATH] [NAME] [PUBLISHER]`
 
 ###### **Arguments:**
 
@@ -584,11 +584,11 @@ Build and publish a Linera project
 
 
 
-## `Linera client tool net`
+## `linera net`
 
 Manage a local Linera Network
 
-**Usage:** `Linera client tool net <COMMAND>`
+**Usage:** `linera net <COMMAND>`
 
 ###### **Subcommands:**
 
@@ -597,11 +597,11 @@ Manage a local Linera Network
 
 
 
-## `Linera client tool net up`
+## `linera net up`
 
 Start a Local Linera Network
 
-**Usage:** `Linera client tool net up [OPTIONS]`
+**Usage:** `linera net up [OPTIONS]`
 
 ###### **Options:**
 
@@ -619,11 +619,11 @@ Start a Local Linera Network
 
 
 
-## `Linera client tool net helper`
+## `linera net helper`
 
 Print a bash helper script to make `linera net up` easier to use. The script is meant to be installed in `~/.bash_profile` or sourced when needed
 
-**Usage:** `Linera client tool net helper`
+**Usage:** `linera net helper`
 
 
 

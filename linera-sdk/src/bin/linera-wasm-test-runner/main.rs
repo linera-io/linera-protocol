@@ -40,7 +40,7 @@ use wasmtime::*;
 
 #[derive(clap::Parser)]
 #[command(
-    name = "Linera Wasm test runner",
+    name = "linera-wasm-test-runner",
     about = "A binary for running unit tests for Linera applications implemented in WebAssembly.",
     version = clap::crate_version!(),
 )]

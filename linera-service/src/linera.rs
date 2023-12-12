@@ -588,7 +588,7 @@ fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
 
 #[derive(clap::Parser)]
 #[command(
-    name = "Linera client tool",
+    name = "linera",
     version = clap::crate_version!(),
     about = "A Byzantine-fault tolerant sidechain with low-latency finality and high throughput",
 )]
