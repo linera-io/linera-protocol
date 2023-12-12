@@ -258,7 +258,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
 
     let (mut net, client1) = config.instantiate().await.unwrap();
 
-    let client2 = net.make_client();
+    let client2 = net.make_client().await;
     client2.wallet_init(&[], None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
@@ -349,7 +349,7 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
 
     let (mut net, client1) = config.instantiate().await.unwrap();
 
-    let client2 = net.make_client();
+    let client2 = net.make_client().await;
     client2.wallet_init(&[], None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
@@ -549,7 +549,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
 
     let (mut net, client1) = config.instantiate().await.unwrap();
 
-    let client2 = net.make_client();
+    let client2 = net.make_client().await;
     client2.wallet_init(&[], None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
@@ -677,8 +677,8 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
 
     let (mut net, client_admin) = config.instantiate().await.unwrap();
 
-    let client_a = net.make_client();
-    let client_b = net.make_client();
+    let client_a = net.make_client().await;
+    let client_b = net.make_client().await;
 
     client_a.wallet_init(&[], None).await.unwrap();
     client_b.wallet_init(&[], None).await.unwrap();
@@ -943,8 +943,8 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
 
     let (mut net, client_admin) = config.instantiate().await.unwrap();
 
-    let client0 = net.make_client();
-    let client1 = net.make_client();
+    let client0 = net.make_client().await;
+    let client1 = net.make_client().await;
     client0.wallet_init(&[], None).await.unwrap();
     client1.wallet_init(&[], None).await.unwrap();
 

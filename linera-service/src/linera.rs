@@ -2138,7 +2138,7 @@ async fn net_up(
     // Create the extra wallets.
     if let Some(extra_wallets) = *extra_wallets {
         for wallet in 1..=extra_wallets {
-            let extra_wallet = net.make_client();
+            let extra_wallet = net.make_client().await;
             extra_wallet.wallet_init(&[], None).await?;
             let unassigned_key = extra_wallet.keygen().await?;
             let new_chain_msg_id = client1

@@ -45,7 +45,7 @@ pub trait LineraNetConfig {
 pub trait LineraNet {
     async fn ensure_is_running(&mut self) -> Result<()>;
 
-    fn make_client(&mut self) -> ClientWrapper;
+    async fn make_client(&mut self) -> ClientWrapper;
 
     async fn terminate(&mut self) -> Result<()>;
 }
