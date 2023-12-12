@@ -685,6 +685,32 @@ impl NodeService {
         bytecode_str.parse().context("could not parse bytecode ID")
     }
 
+    pub async fn change_multiple_owners(
+        &self,
+        chain_id: ChainId,
+        new_public_keys: Vec<PublicKey>,
+        new_weights: Vec<u64>,
+        multi_leader_rounds: u32,
+    ) -> Result<CryptoHash> {
+        let query = format!(
+            "mutation {{ changeMultipleOwners(\
+                chainId: {}, \
+                newPublicKeys: {}, \
+                newWeights: {}, \
+                multiLeaderRounds: {}\
+            ) }}",
+            chain_id.to_value(),
+            new_public_keys.to_value(),
+            new_weights.to_value(),
+            multi_leader_rounds,
+        );
+        let data = self.query_node(query).await?;
+        let hash_str = data["changeMultipleOwners"]
+            .as_str()
+            .context("certificate hash not found")?;
+        hash_str.parse().context("could not parse certificate hash")
+    }
+
     pub async fn query_node(&self, query: impl AsRef<str>) -> Result<Value> {
         let n_try = 30;
         let query = query.as_ref();

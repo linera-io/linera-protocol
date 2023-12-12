@@ -730,12 +730,30 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     client2.wallet_init(&[], None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
+    let client1_key = client1.keygen().await.unwrap();
 
     // Generate keys for client 2.
     let client2_key = client2.keygen().await.unwrap();
 
-    let mut faucet = client1
+    // The faucet chain must not have super owners.
+    assert!(client1
         .run_faucet(None, chain1, Amount::from_tokens(2))
+        .await
+        .is_err());
+
+    let (message_id, faucet_chain) = client1
+        .open_multi_owner_chain(chain1, vec![client1_key], vec![1], 5)
+        .await
+        .unwrap();
+    client1.assign(client1_key, message_id).await.unwrap();
+    client1
+        .transfer(Amount::from_tokens(10), chain1, faucet_chain)
+        .await
+        .unwrap();
+    client1.synchronize_balance(faucet_chain).await.unwrap();
+
+    let mut faucet = client1
+        .run_faucet(None, faucet_chain, Amount::from_tokens(2))
         .await
         .unwrap();
     let outcome = faucet.claim(&client2_key).await.unwrap();
@@ -754,10 +772,10 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     faucet.ensure_is_running().unwrap();
     faucet.terminate().await.unwrap();
 
-    // Chain 1 should have transferred four tokens, two to each child. So it should have six left.
-    client1.synchronize_balance(chain1).await.unwrap();
+    // Faucet should have transferred four tokens, two to each child. So it should have six left.
+    client1.synchronize_balance(faucet_chain).await.unwrap();
     assert_eq!(
-        client1.query_balance(chain1).await.unwrap(),
+        client1.query_balance(faucet_chain).await.unwrap(),
         Amount::from_tokens(6)
     );
 
