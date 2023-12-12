@@ -385,10 +385,10 @@ impl LocalNet {
             let mut i_try = 0;
             loop {
                 let mut command = self.command_for_binary("linera-server").await?;
-                command.arg("initialize");
                 if let Ok(var) = env::var(SERVER_ENV) {
                     command.args(var.split_whitespace());
                 }
+                command.arg("initialize");
                 let result = command
                     .args(["--storage", &storage])
                     .args(["--genesis", "genesis.json"])
@@ -412,10 +412,10 @@ impl LocalNet {
         }
 
         let mut command = self.command_for_binary("linera-server").await?;
-        command.arg("run");
         if let Ok(var) = env::var(SERVER_ENV) {
             command.args(var.split_whitespace());
         }
+        command.arg("run");
         let child = command
             .args(["--storage", &storage])
             .args(["--server", &format!("server_{}.json", i)])
