@@ -298,7 +298,7 @@ where
     }
 
     /// Obtains the basic `ChainInfo` data for the local chain.
-    async fn chain_info(&mut self) -> Result<ChainInfo, LocalNodeError> {
+    pub async fn chain_info(&mut self) -> Result<ChainInfo, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id);
         let response = self.node_client.handle_chain_info_query(query).await?;
         Ok(response.info)

@@ -168,6 +168,11 @@ where
         end_timestamp: Timestamp,
         genesis_config: Arc<GenesisConfig>,
     ) -> anyhow::Result<Self> {
+        let info = client.chain_info().await?;
+        anyhow::ensure!(
+            info.manager.ownership.super_owners.is_empty(),
+            "The faucet chain must not have super owners."
+        );
         let start_timestamp = client.storage_client().await.current_time();
         let start_balance = client.local_balance().await?;
         Ok(Self {
