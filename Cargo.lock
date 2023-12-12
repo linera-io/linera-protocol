@@ -1161,6 +1161,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap-markdown"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "325f50228f76921784b6d9f2d62de6778d834483248eefecd27279174797e579"
+dependencies = [
+ "clap 4.4.11",
+]
+
+[[package]]
 name = "clap_builder"
 version = "4.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3401,6 +3410,7 @@ dependencies = [
  "cargo_toml",
  "chrono",
  "clap 4.4.11",
+ "clap-markdown",
  "colored",
  "comfy-table",
  "counter",

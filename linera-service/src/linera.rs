@@ -718,6 +718,10 @@ impl ClientOptions {
 
 #[derive(clap::Subcommand)]
 enum ClientCommand {
+    /// Print CLI help in Markdown format, and exit.
+    #[command(hide = true)]
+    HelpMarkdown,
+
     /// Transfer funds
     Transfer {
         /// Sending chain id (must be one of our chains)
@@ -1901,7 +1905,9 @@ impl Runnable for Job {
                 context.save_wallet();
             }
 
-            CreateGenesisConfig { .. } | Keygen | Net(_) | Wallet(_) => unreachable!(),
+            CreateGenesisConfig { .. } | Keygen | Net(_) | Wallet(_) | HelpMarkdown => {
+                unreachable!()
+            }
         }
         Ok(())
     }
@@ -2183,6 +2189,11 @@ fn main() -> Result<(), anyhow::Error> {
 
 async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
     match &options.command {
+        ClientCommand::HelpMarkdown => {
+            clap_markdown::print_help_markdown::<ClientOptions>();
+            Ok(())
+        }
+
         ClientCommand::CreateGenesisConfig {
             committee_config_path,
             genesis_config_path,
