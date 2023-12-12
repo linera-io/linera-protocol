@@ -191,7 +191,7 @@ impl WasmService {
         let module = service_cache
             .get_or_insert_with(service_bytecode, |bytecode| {
                 Module::new(
-                    &*SERVICE_ENGINE.get_or_init(|| {
+                    SERVICE_ENGINE.get_or_init(|| {
                         let compiler_config = Singlepass::default();
                         EngineBuilder::new(compiler_config).into()
                     }),
@@ -209,7 +209,7 @@ impl WasmService {
         service_module: &Module,
         runtime_sender: ServiceRuntimeSender,
     ) -> Result<WasmRuntimeContext<Service>, WasmExecutionError> {
-        let mut store = Store::new(&*SERVICE_ENGINE.get_or_init(|| {
+        let mut store = Store::new(SERVICE_ENGINE.get_or_init(|| {
             let compiler_config = Singlepass::default();
             EngineBuilder::new(compiler_config).into()
         }));

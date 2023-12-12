@@ -194,7 +194,10 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_open_chain_node_service(config: impl LineraNetConfig) {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let _guard = INTEGRATION_TEST_GUARD
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .await;
     let (mut net, client) = config.instantiate().await.unwrap();
 
     let default_chain = client.get_wallet().unwrap().default_chain().unwrap();
