@@ -2016,19 +2016,16 @@ impl Job {
         let config_hash = CryptoHash::new(context.wallet_state.genesis_config());
         let maybe_epoch = peg_chain.execution_state.system.epoch.get();
         let epoch = maybe_epoch.context("missing epoch in peg chain")?.0;
-        warn!(
-            "Initialized wallet based on data provided by untrusted nodes. \
-            Please verify that the following is correct by comparing with a trusted user \
-            who is already connected to the network, and that {epoch} is the current epoch:\n\
-            genesis config hash: {config_hash}"
+        info!(
+            "Initialized wallet based on data provided by the faucet.\n\
+            The current epoch is {epoch}.\n\
+            The genesis config hash is {config_hash}{}",
+            if let Some(peg_hash) = peg_chain.tip_state.get().block_hash {
+                format!("\nThe latest certificate on chain {peg_chain_id} is {peg_hash}.")
+            } else {
+                "".to_string()
+            }
         );
-        if let Some(peg_hash) = peg_chain.tip_state.get().block_hash {
-            warn!(
-                "In addition, verify that the following certificate exists in the real network:\n\
-                certificate hash: {peg_hash}\n\
-                chain ID:         {peg_chain_id}"
-            );
-        }
         Ok(())
     }
 }
