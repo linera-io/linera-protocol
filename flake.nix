@@ -45,7 +45,7 @@
             # For rust-analyzer 'hover' tooltips to work.
             export RUST_SRC_PATH=${rustBuildToolchain.availableComponents.rust-src}
             export LIBCLANG_PATH=${pkgs.libclang.lib}/lib
-            export PATH=$PWD/target/release:~/.cargo/bin:$PATH
+            export PATH=$PWD/target/debug:~/.cargo/bin:$PATH
           '';
           buildInputs = nonRustDeps;
           nativeBuildInputs = with pkgs; [
