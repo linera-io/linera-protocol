@@ -318,9 +318,10 @@ where
     // Create an application.
     let initial_value = 10_u64;
     let initial_value_bytes = serde_json::to_vec(&initial_value)?;
+    let parameters_bytes = serde_json::to_vec(&())?;
     let create_operation = SystemOperation::CreateApplication {
         bytecode_id,
-        parameters: vec![],
+        parameters: parameters_bytes.clone(),
         initialization_argument: initial_value_bytes.clone(),
         required_application_ids: vec![],
     };
@@ -337,7 +338,7 @@ where
         bytecode_location,
         creation: application_id.creation,
         required_application_ids: vec![],
-        parameters: vec![],
+        parameters: parameters_bytes,
     };
     let publish_admin_channel = ChannelFullName {
         application_id: GenericApplicationId::System,
