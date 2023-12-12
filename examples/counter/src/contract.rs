@@ -107,6 +107,7 @@ mod tests {
     use futures::FutureExt;
     use linera_sdk::{
         base::{BlockHeight, ChainId, MessageId},
+        test::mock_application_parameters,
         ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
         OperationContext,
     };
@@ -183,6 +184,8 @@ mod tests {
 
     fn create_and_initialize_counter(initial_value: u64) -> Counter {
         let mut counter = Counter::default();
+
+        mock_application_parameters(&());
 
         let result = counter
             .initialize(&dummy_operation_context(), initial_value)
