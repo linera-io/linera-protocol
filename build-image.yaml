@@ -1,6 +1,6 @@
 steps:
 - name: 'docker:latest'
   entrypoint: 'docker'
-  args: [ 'build', '-t', 'us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-test-local:latest', '-f', 'docker/Dockerfile', '.' ]
+  args: [ 'build', '-t', '${_IMAGE_NAME}', '-f', 'docker/Dockerfile', '.' ]
 images:
-- 'us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-test-local:latest'
+- '${_IMAGE_NAME}'
