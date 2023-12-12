@@ -31,6 +31,9 @@ impl Contract for Amm {
         _context: &OperationContext,
         _argument: (),
     ) -> Result<ExecutionResult<Self::Message>, AmmError> {
+        // Validate that the application parameters were configured correctly.
+        assert!(Self::parameters().is_ok());
+
         Ok(ExecutionResult::default())
     }
 

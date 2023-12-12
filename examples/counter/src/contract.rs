@@ -30,7 +30,11 @@ impl Contract for Counter {
         _context: &OperationContext,
         value: u64,
     ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+        // Validate that the application parameters were configured correctly.
+        assert!(Self::parameters().is_ok());
+
         self.value = value;
+
         Ok(ExecutionResult::default())
     }
 
