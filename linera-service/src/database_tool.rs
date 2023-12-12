@@ -4,69 +4,72 @@
 use linera_service::storage::StorageConfig;
 use linera_views::common::CommonStoreConfig;
 use std::process;
-use structopt::StructOpt;
 
-#[derive(StructOpt)]
-#[structopt(name = "Clear database", about = "A tool for cleaning up a database")]
+#[derive(clap::Parser)]
+#[command(
+    name = "Clear database",
+    about = "A tool for cleaning up a database",
+    version = clap::crate_version!(),
+)]
 struct DatabaseToolOptions {
     /// Subcommands. Acceptable values are run and generate.
-    #[structopt(subcommand)]
+    #[command(subcommand)]
     command: DatabaseToolCommand,
 
     /// The number of Tokio worker threads to use.
-    #[structopt(long, env = "LINERA_DB_TOOL_TOKIO_THREADS")]
+    #[arg(long, env = "LINERA_DB_TOOL_TOKIO_THREADS")]
     tokio_threads: Option<usize>,
 }
 
-#[derive(StructOpt)]
+#[derive(clap::Parser)]
 enum DatabaseToolCommand {
     /// Subcommands. Acceptable values are delete_all, delete_single, initialize
 
     /// Delete all the entries of the database
-    #[structopt(name = "delete_all")]
+    #[command(name = "delete_all")]
     DeleteAll {
         /// Storage configuration for the blockchain history.
-        #[structopt(long = "storage")]
+        #[arg(long = "storage")]
         storage_config: String,
     },
 
     /// Delete a single table from the database
-    #[structopt(name = "delete_single")]
+    #[command(name = "delete_single")]
     DeleteSingle {
         /// Storage configuration for the blockchain history.
-        #[structopt(long = "storage")]
+        #[arg(long = "storage")]
         storage_config: String,
     },
 
     /// Check existence of a database
-    #[structopt(name = "check_existence")]
+    #[command(name = "check_existence")]
     CheckExistence {
         /// Storage configuration for the blockchain history.
-        #[structopt(long = "storage")]
+        #[arg(long = "storage")]
         storage_config: String,
     },
 
     /// Check absence of a database
-    #[structopt(name = "check_absence")]
+    #[command(name = "check_absence")]
     CheckAbsence {
         /// Storage configuration for the blockchain history.
-        #[structopt(long = "storage")]
+        #[arg(long = "storage")]
         storage_config: String,
     },
 
     /// Initialize a table in the database
-    #[structopt(name = "initialize")]
+    #[command(name = "initialize")]
     Initialize {
         /// Storage configuration for the blockchain history.
-        #[structopt(long = "storage")]
+        #[arg(long = "storage")]
         storage_config: String,
     },
 
     /// List the tables of the database
-    #[structopt(name = "list_tables")]
+    #[command(name = "list_tables")]
     ListTables {
         /// Storage configuration for the blockchain history.
-        #[structopt(long = "storage")]
+        #[arg(long = "storage")]
         storage_config: String,
     },
 }
@@ -133,7 +136,7 @@ fn main() {
         .with_env_filter(env_filter)
         .init();
 
-    let options = DatabaseToolOptions::from_args();
+    let options = <DatabaseToolOptions as clap::Parser>::parse();
 
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()

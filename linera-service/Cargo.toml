@@ -30,6 +30,7 @@ axum = { workspace = true, features = ["ws", "headers"] }
 bcs = { workspace = true }
 cargo_toml = "0.15.3"
 chrono = { workspace = true }
+clap = { workspace = true }
 colored = { workspace = true }
 comfy-table = { workspace = true }
 current_platform = "0.2.0"
@@ -57,7 +58,6 @@ rcgen = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-structopt = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }

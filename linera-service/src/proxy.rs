@@ -18,29 +18,29 @@ use linera_service::{
     prometheus_server,
 };
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
-use structopt::StructOpt;
 use tracing::{error, info, instrument};
 
 /// Options for running the proxy.
-#[derive(Debug, StructOpt)]
-#[structopt(
+#[derive(clap::Parser, Debug)]
+#[command(
     name = "Linera Proxy",
-    about = "A proxy to redirect incoming requests to Linera Server shards"
+    about = "A proxy to redirect incoming requests to Linera Server shards",
+    version = clap::crate_version!(),
 )]
 pub struct ProxyOptions {
     /// Path to server configuration.
     config_path: PathBuf,
 
     /// Timeout for sending queries (us)
-    #[structopt(long, default_value = "4000000")]
+    #[arg(long, default_value = "4000000")]
     send_timeout_us: u64,
 
     /// Timeout for receiving responses (us)
-    #[structopt(long, default_value = "4000000")]
+    #[arg(long, default_value = "4000000")]
     recv_timeout_us: u64,
 
     /// The number of Tokio worker threads to use.
-    #[structopt(long, env = "LINERA_PROXY_TOKIO_THREADS")]
+    #[arg(long, env = "LINERA_PROXY_TOKIO_THREADS")]
     tokio_threads: Option<usize>,
 }
 
@@ -195,7 +195,7 @@ fn main() -> Result<()> {
         .with_env_filter(env_filter)
         .init();
 
-    let options = ProxyOptions::from_args();
+    let options = <ProxyOptions as clap::Parser>::parse();
 
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()

@@ -4,35 +4,34 @@
 use crate::transport::TransportProtocol;
 use linera_base::identifiers::ChainId;
 use serde::{Deserialize, Serialize};
-use structopt::StructOpt;
 
-#[derive(Clone, Debug, StructOpt)]
+#[derive(Clone, Debug, clap::Parser)]
 pub struct CrossChainConfig {
     /// Number of cross-chains messages allowed before dropping them.
-    #[structopt(long = "cross-chain-queue-size", default_value = "1000")]
+    #[arg(long = "cross-chain-queue-size", default_value = "1000")]
     pub(crate) queue_size: usize,
 
     /// Maximum number of retries for a cross-chain message.
-    #[structopt(long = "cross-chain-max-retries", default_value = "10")]
+    #[arg(long = "cross-chain-max-retries", default_value = "10")]
     pub(crate) max_retries: u32,
 
     /// Delay before retrying of cross-chain message.
-    #[structopt(long = "cross-chain-retry-delay-ms", default_value = "2000")]
+    #[arg(long = "cross-chain-retry-delay-ms", default_value = "2000")]
     pub(crate) retry_delay_ms: u64,
 
     /// Introduce a delay before sending every cross-chain message (e.g. for testing purpose).
-    #[structopt(long = "cross-chain-sender-delay-ms", default_value = "0")]
+    #[arg(long = "cross-chain-sender-delay-ms", default_value = "0")]
     pub(crate) sender_delay_ms: u64,
 
     /// Drop cross-chain messages randomly at the given rate (0 <= rate < 1) (meant for testing).
-    #[structopt(long = "cross-chain-sender-failure-rate", default_value = "0.0")]
+    #[arg(long = "cross-chain-sender-failure-rate", default_value = "0.0")]
     pub(crate) sender_failure_rate: f32,
 }
 
-#[derive(Clone, Debug, StructOpt)]
+#[derive(Clone, Debug, clap::Parser)]
 pub struct NotificationConfig {
     /// Number of notifications allowed before blocking the main server loop
-    #[structopt(long = "notification-queue-size", default_value = "1000")]
+    #[arg(long = "notification-queue-size", default_value = "1000")]
     pub(crate) notification_queue_size: usize,
 }
 
@@ -168,7 +167,7 @@ where
 impl std::fmt::Display for NetworkProtocol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NetworkProtocol::Simple(protocol) => write!(f, "{}", protocol),
+            NetworkProtocol::Simple(protocol) => write!(f, "{:?}", protocol),
             NetworkProtocol::Grpc(tls) => match tls {
                 TlsConfig::ClearText => write!(f, "grpc"),
                 TlsConfig::Tls => write!(f, "grpcs"),

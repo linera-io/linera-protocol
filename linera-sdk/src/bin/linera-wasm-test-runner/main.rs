@@ -30,18 +30,19 @@ compile_error!("The test runner is meant to be compiled for the host target");
 mod mock_system_api;
 
 use anyhow::Result;
+use clap::Parser as _;
 use mock_system_api::Resources;
 use std::{
     path::{Path, PathBuf},
     process::ExitCode,
 };
-use structopt::StructOpt;
 use wasmtime::*;
 
-#[derive(StructOpt)]
-#[structopt(
+#[derive(clap::Parser)]
+#[command(
     name = "Linera Wasm test runner",
-    about = "A binary for running unit tests for Linera applications implemented in WebAssembly."
+    about = "A binary for running unit tests for Linera applications implemented in WebAssembly.",
+    version = clap::crate_version!(),
 )]
 struct Options {
     module_path: PathBuf,
@@ -52,7 +53,7 @@ struct Options {
 /// Prints out a summary of executed tests and their results.
 #[tokio::main]
 async fn main() -> Result<ExitCode> {
-    let options = Options::from_args_safe()?;
+    let options = Options::parse();
 
     let mut report = TestReport::default();
     let mut engine_config = Config::default();

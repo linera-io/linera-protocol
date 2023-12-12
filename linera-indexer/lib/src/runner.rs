@@ -9,35 +9,35 @@ use linera_base::identifiers::ChainId;
 use linera_views::{
     common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
 };
-use structopt::{StructOpt, StructOptInternal};
 use tokio::select;
 use tracing::{info, warn};
 
-#[derive(StructOpt, Debug, Clone)]
+#[derive(clap::Parser, Debug, Clone)]
+#[command(version = clap::crate_version!())]
 pub enum IndexerCommand {
     Schema {
         plugin: Option<String>,
     },
     Run {
-        #[structopt(flatten)]
+        #[command(flatten)]
         listener: Listener,
         /// The port of the indexer server
-        #[structopt(long, default_value = "8081")]
+        #[arg(long, default_value = "8081")]
         port: u16,
         /// Chains to index (default: the ones on the service wallet)
         chains: Vec<ChainId>,
     },
 }
 
-#[derive(StructOpt, Debug, Clone)]
-pub struct IndexerConfig<Config: StructOpt> {
-    #[structopt(flatten)]
+#[derive(clap::Parser, Debug, Clone)]
+pub struct IndexerConfig<Config: clap::Args> {
+    #[command(flatten)]
     pub client: Config,
-    #[structopt(subcommand)]
+    #[command(subcommand)]
     pub command: IndexerCommand,
 }
 
-pub struct Runner<DB, Config: StructOpt> {
+pub struct Runner<DB, Config: clap::Args> {
     pub store: DB,
     pub config: IndexerConfig<Config>,
     pub indexer: Indexer<DB>,
@@ -46,7 +46,7 @@ pub struct Runner<DB, Config: StructOpt> {
 impl<DB, Config> Runner<DB, Config>
 where
     Self: Send,
-    Config: Clone + std::fmt::Debug + Send + Sync + StructOptInternal,
+    Config: Clone + std::fmt::Debug + Send + Sync + clap::Parser + clap::Args,
     DB: KeyValueStore + Clone + Send + Sync + 'static,
     DB::Error: From<bcs::Error>
         + From<DatabaseConsistencyError>

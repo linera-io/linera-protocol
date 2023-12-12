@@ -82,8 +82,9 @@ cargo +nightly fmt
 
 ## Command-line tools and services
 
-* All executables should use `StructOpt`. When tools call each other, the `--version` is
-  checked and must match the package version of the caller.
+* All executables should use `clap_derive`. When tools call each other, the `--version` is
+  checked and must match the package version of the caller.  This means that all executables
+  should include a `command(version = clap::crate_version!())` annotation.
 
 * Only structured data should be printed to the standard output, preferably as newline-separated JSON values.
 
