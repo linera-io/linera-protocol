@@ -13,6 +13,7 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId},
 };
 use linera_views::memory::MemoryContext;
+use serde::Serialize;
 
 /// A helpful error message to explain why the mock API isn't available.
 const ERROR_MESSAGE: &str =
@@ -34,7 +35,7 @@ pub fn mock_application_id(_application_id: impl Into<Option<ApplicationId>>) {
 }
 
 /// Sets the mocked application parameters.
-pub fn mock_application_parameters(_application_parameters: impl Into<Option<Vec<u8>>>) {
+pub fn mock_application_parameters(_application_parameters: &impl Serialize) {
     unreachable!("{ERROR_MESSAGE}");
 }
 
