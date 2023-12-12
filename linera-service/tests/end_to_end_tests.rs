@@ -57,7 +57,10 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
 
     let (node_service_2, chain_2) = match network {
         Network::Grpc => {
-            let chain_2 = client.open_and_assign(&client_2).await.unwrap();
+            let chain_2 = client
+                .open_and_assign(&client_2, Amount::ZERO)
+                .await
+                .unwrap();
             let node_service_2 = client_2.run_node_service(8081).await.unwrap();
             (Some(node_service_2), chain_2)
         }
@@ -109,7 +112,10 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
     }
 
     // Create derived chain
-    let (_, chain_3) = client.open_chain(chain_1, None).await.unwrap();
+    let (_, chain_3) = client
+        .open_chain(chain_1, None, Amount::ZERO)
+        .await
+        .unwrap();
 
     // Inspect state of derived chain
     assert!(client.is_chain_present_in_wallet(chain_3).await);
@@ -357,7 +363,10 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
     let client2_key = client2.keygen().await.unwrap();
 
     // Open chain on behalf of Client 2.
-    let (message_id, chain2) = client1.open_chain(chain1, Some(client2_key)).await.unwrap();
+    let (message_id, chain2) = client1
+        .open_chain(chain1, Some(client2_key), Amount::ZERO)
+        .await
+        .unwrap();
 
     // Assign chain2 to client2_key.
     assert_eq!(
@@ -680,9 +689,18 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     let client2_key = client2.keygen().await.unwrap();
 
     // Open a great-grandchild chain on behalf of client 2.
-    let (_, grandparent) = client1.open_chain(chain1, None).await.unwrap();
-    let (_, parent) = client1.open_chain(grandparent, None).await.unwrap();
-    let (message_id, chain2) = client1.open_chain(parent, Some(client2_key)).await.unwrap();
+    let (_, grandparent) = client1
+        .open_chain(chain1, None, Amount::ZERO)
+        .await
+        .unwrap();
+    let (_, parent) = client1
+        .open_chain(grandparent, None, Amount::ZERO)
+        .await
+        .unwrap();
+    let (message_id, chain2) = client1
+        .open_chain(parent, Some(client2_key), Amount::ZERO)
+        .await
+        .unwrap();
     client2.assign(client2_key, message_id).await.unwrap();
 
     // Transfer 6 units from Chain 1 to Chain 2.
