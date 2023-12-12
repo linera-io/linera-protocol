@@ -24,11 +24,11 @@ use tracing::{error, info, warn};
 #[derive(Debug, Clone, clap::Args)]
 pub struct ChainListenerConfig {
     /// Wait before processing any notification (useful for testing).
-    #[clap(long = "listener-delay-before-ms", default_value = "0")]
+    #[arg(long = "listener-delay-before-ms", default_value = "0")]
     pub delay_before_ms: u64,
 
     /// Wait after processing any notification (useful for rate limiting).
-    #[clap(long = "listener-delay-after-ms", default_value = "0")]
+    #[arg(long = "listener-delay-after-ms", default_value = "0")]
     pub delay_after_ms: u64,
 }
 

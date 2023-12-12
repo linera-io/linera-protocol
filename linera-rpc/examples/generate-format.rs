@@ -61,7 +61,7 @@ enum Action {
 }
 
 #[derive(clap::Parser, Debug)]
-#[clap(
+#[command(
     name = "Format generator",
     about = "Trace serde (de)serialization to generate format descriptions",
     version = clap::crate_version!(),

@@ -587,72 +587,72 @@ fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
 }
 
 #[derive(clap::Parser)]
-#[clap(
+#[command(
     name = "Linera client tool",
     version = clap::crate_version!(),
     about = "A Byzantine-fault tolerant sidechain with low-latency finality and high throughput",
 )]
 struct ClientOptions {
     /// Sets the file storing the private state of user chains (an empty one will be created if missing)
-    #[clap(long = "wallet")]
+    #[arg(long = "wallet")]
     wallet_state_path: Option<PathBuf>,
 
     /// Storage configuration for the blockchain history.
-    #[clap(long = "storage")]
+    #[arg(long = "storage")]
     storage_config: Option<String>,
 
     /// Given an integer value N, read the wallet state and the wallet storage config from the
     /// environment variables LINERA_WALLET_{N} and LINERA_STORAGE_{N} instead of
     /// LINERA_WALLET and LINERA_STORAGE.
-    #[clap(long, short = 'w')]
+    #[arg(long, short = 'w')]
     with_wallet: Option<u32>,
 
     /// Timeout for sending queries (us)
-    #[clap(long, default_value = "4000000")]
+    #[arg(long, default_value = "4000000")]
     send_timeout_us: u64,
 
     /// Timeout for receiving responses (us)
-    #[clap(long, default_value = "4000000")]
+    #[arg(long, default_value = "4000000")]
     recv_timeout_us: u64,
 
-    #[clap(long, default_value = "10")]
+    #[arg(long, default_value = "10")]
     max_pending_messages: usize,
 
     /// The WebAssembly runtime to use.
-    #[clap(long)]
+    #[arg(long)]
     wasm_runtime: Option<WasmRuntime>,
 
     /// The maximal number of simultaneous queries to the database
-    #[clap(long)]
+    #[arg(long)]
     max_concurrent_queries: Option<usize>,
 
     /// The maximal number of simultaneous stream queries to the database
-    #[clap(long, default_value = "10")]
+    #[arg(long, default_value = "10")]
     max_stream_queries: usize,
 
     /// The maximal number of entries in the storage cache.
-    #[clap(long, default_value = "1000")]
+    #[arg(long, default_value = "1000")]
     cache_size: usize,
 
     /// Subcommand.
-    #[clap(subcommand)]
+    #[command(subcommand)]
     command: ClientCommand,
 
     /// Delay increment for retrying to connect to a validator for notifications.
-    #[clap(long, default_value = "1000000")]
+    #[arg(long, default_value = "1000000")]
     notification_retry_delay_us: u64,
 
     /// Number of times to retry connecting to a validator for notifications.
-    #[clap(long, default_value = "10")]
+    #[arg(long, default_value = "10")]
     notification_retries: u32,
 
     /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
     /// messages have been delivered.
-    #[clap(long)]
+    #[arg(long)]
     wait_for_outgoing_messages: bool,
 
     /// The number of Tokio worker threads to use.
-    #[clap(long, env = "LINERA_CLIENT_TOKIO_THREADS")]
+    #[arg(long, env = "LINERA_CLIENT_TOKIO_THREADS")]
     tokio_threads: Option<usize>,
 }
 
@@ -721,11 +721,11 @@ enum ClientCommand {
     /// Transfer funds
     Transfer {
         /// Sending chain id (must be one of our chains)
-        #[clap(long = "from")]
+        #[arg(long = "from")]
         sender: Account,
 
         /// Recipient account
-        #[clap(long = "to")]
+        #[arg(long = "to")]
         recipient: Account,
 
         /// Amount to transfer
@@ -735,23 +735,23 @@ enum ClientCommand {
     /// Open (i.e. activate) a new chain deriving the UID from an existing one.
     OpenChain {
         /// Chain id (must be one of our chains).
-        #[clap(long = "from")]
+        #[arg(long = "from")]
         chain_id: Option<ChainId>,
 
         /// Public key of the new owner (otherwise create a key pair and remember it)
-        #[clap(long = "to-public-key")]
+        #[arg(long = "to-public-key")]
         public_key: Option<PublicKey>,
 
         /// The initial balance of the new chain. This is subtracted from the parent chain's
         /// balance.
-        #[clap(long = "initial-balance", default_value = "0")]
+        #[arg(long = "initial-balance", default_value = "0")]
         balance: Amount,
     },
 
     /// Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one.
     OpenMultiOwnerChain {
         /// Chain id (must be one of our chains).
-        #[clap(long = "from")]
+        #[arg(long = "from")]
         chain_id: Option<ChainId>,
 
         /// Public keys of the new owners
@@ -759,24 +759,24 @@ enum ClientCommand {
         public_keys: Vec<PublicKey>,
 
         /// Weights for the new owners
-        #[clap(long = "weights", num_args(0..))]
+        #[arg(long = "weights", num_args(0..))]
         weights: Vec<u64>,
 
         /// The number of rounds in which every owner can propose blocks, i.e. the first round
         /// number in which only a single designated leader is allowed to propose blocks.
-        #[clap(long = "multi-leader-rounds")]
+        #[arg(long = "multi-leader-rounds")]
         multi_leader_rounds: Option<u32>,
 
         /// The initial balance of the new chain. This is subtracted from the parent chain's
         /// balance.
-        #[clap(long = "initial-balance", default_value = "0")]
+        #[arg(long = "initial-balance", default_value = "0")]
         balance: Amount,
     },
 
     /// Close (i.e. deactivate) an existing chain.
     CloseChain {
         /// Chain id (must be one of our chains)
-        #[clap(long = "from")]
+        #[arg(long = "from")]
         chain_id: ChainId,
     },
 
@@ -802,61 +802,61 @@ enum ClientCommand {
     /// Add or modify a validator (admin only)
     SetValidator {
         /// The public key of the validator.
-        #[clap(long)]
+        #[arg(long)]
         name: ValidatorName,
 
         /// Network address
-        #[clap(long)]
+        #[arg(long)]
         address: String,
 
         /// Voting power
-        #[clap(long, default_value = "1")]
+        #[arg(long, default_value = "1")]
         votes: u64,
     },
 
     /// Remove a validator (admin only)
     RemoveValidator {
         /// The public key of the validator.
-        #[clap(long)]
+        #[arg(long)]
         name: ValidatorName,
     },
 
     /// View or update the resource control policy
     ResourceControlPolicy {
         /// Set the base price for each certificate.
-        #[clap(long)]
+        #[arg(long)]
         certificate: Option<Amount>,
 
         /// Set the price per unit of fuel when executing user messages and operations.
-        #[clap(long)]
+        #[arg(long)]
         fuel: Option<Amount>,
 
         /// Set the price per byte to read data per operation
-        #[clap(long)]
+        #[arg(long)]
         storage_num_reads: Option<Amount>,
 
         /// Set the price per byte to read data per byte
-        #[clap(long)]
+        #[arg(long)]
         storage_bytes_read: Option<Amount>,
 
         /// Set the price per byte to write data per byte
-        #[clap(long)]
+        #[arg(long)]
         storage_bytes_written: Option<Amount>,
 
         /// Set the price per byte stored
-        #[clap(long)]
+        #[arg(long)]
         storage_bytes_stored: Option<Amount>,
 
         /// Set the maximum quantity of data to read per block
-        #[clap(long)]
+        #[arg(long)]
         maximum_bytes_read_per_block: Option<u64>,
 
         /// Set the maximum quantity of data to write per block
-        #[clap(long)]
+        #[arg(long)]
         maximum_bytes_written_per_block: Option<u64>,
 
         /// Set the price per byte to store and send outgoing cross-chain messages.
-        #[clap(long)]
+        #[arg(long)]
         messages: Option<Amount>,
     },
 
@@ -864,11 +864,11 @@ enum ClientCommand {
     #[cfg(feature = "benchmark")]
     Benchmark {
         /// Maximum number of blocks in flight
-        #[clap(long, default_value = "200")]
+        #[arg(long, default_value = "200")]
         max_in_flight: u64,
 
         /// Use a subset of the chains to generate N transfers
-        #[clap(long)]
+        #[arg(long)]
         max_proposals: Option<usize>,
     },
 
@@ -877,71 +877,71 @@ enum ClientCommand {
     /// This will also create an initial wallet for the owner of the initial "root" chains.
     CreateGenesisConfig {
         /// Sets the file describing the public configurations of all validators
-        #[clap(long = "committee")]
+        #[arg(long = "committee")]
         committee_config_path: PathBuf,
 
         /// The output config path to be consumed by the server
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis_config_path: PathBuf,
 
         /// Index of the admin chain in the genesis config
-        #[clap(long, default_value = "0")]
+        #[arg(long, default_value = "0")]
         admin_root: u32,
 
         /// Known initial balance of the chain
-        #[clap(long, default_value = "0")]
+        #[arg(long, default_value = "0")]
         initial_funding: Amount,
 
         /// The start timestamp: no blocks can be created before this time.
-        #[clap(long)]
+        #[arg(long)]
         start_timestamp: Option<DateTime<Utc>>,
 
         /// Number of additional chains to create
         num: u32,
 
         /// Set the base price for each certificate.
-        #[clap(long, default_value = "0")]
+        #[arg(long, default_value = "0")]
         certificate_price: Amount,
 
         /// Set the price per unit of fuel when executing user messages and operations.
-        #[clap(long, default_value = "0")]
+        #[arg(long, default_value = "0")]
         fuel_price: Amount,
 
         /// Set the price per operation to read data
-        #[clap(long, default_value = "0")]
+        #[arg(long, default_value = "0")]
         storage_num_reads_price: Amount,
 
         /// Set the price per byte to read data
-        #[clap(long, default_value = "0")]
+        #[arg(long, default_value = "0")]
         storage_bytes_read_price: Amount,
 
         /// Set the price per byte to write data
-        #[clap(long, default_value = "0")]
+        #[arg(long, default_value = "0")]
         storage_bytes_written_price: Amount,
 
         /// Set the price per byte stored
-        #[clap(long, default_value = "0")]
+        #[arg(long, default_value = "0")]
         storage_bytes_stored_price: Amount,
 
         /// Set the maximum read data per block
-        #[clap(long)]
+        #[arg(long)]
         maximum_bytes_read_per_block: Option<u64>,
 
         /// Set the maximum write data per block
-        #[clap(long)]
+        #[arg(long)]
         maximum_bytes_written_per_block: Option<u64>,
 
         /// Set the price per byte to store and send outgoing cross-chain messages.
-        #[clap(long, default_value = "0")]
+        #[arg(long, default_value = "0")]
         messages_price: Amount,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.
-        #[clap(long)]
+        #[arg(long)]
         testing_prng_seed: Option<u64>,
 
         /// A unique name to identify this network.
-        #[clap(long)]
+        #[arg(long)]
         network_name: Option<String>,
     },
 
@@ -951,17 +951,17 @@ enum ClientCommand {
         chain_id: Option<ChainId>,
 
         /// Show all notifications from all validators.
-        #[clap(long)]
+        #[arg(long)]
         raw: bool,
     },
 
     /// Run a GraphQL service to explore and extend the chains of the wallet.
     Service {
-        #[clap(flatten)]
+        #[command(flatten)]
         config: ChainListenerConfig,
 
         /// The port on which to run the server
-        #[clap(long = "port", default_value = "8080")]
+        #[arg(long = "port", default_value = "8080")]
         port: NonZeroU16,
     },
 
@@ -972,16 +972,16 @@ enum ClientCommand {
         chain_id: Option<ChainId>,
 
         /// The port on which to run the server
-        #[clap(long = "port", default_value = "8080")]
+        #[arg(long = "port", default_value = "8080")]
         port: NonZeroU16,
 
         /// The number of tokens to send to each new chain.
-        #[clap(long = "amount")]
+        #[arg(long = "amount")]
         amount: Amount,
 
         /// The end timestamp: The faucet will rate-limit the token supply so it runs out of money
         /// no earlier than this.
-        #[clap(long)]
+        #[arg(long)]
         limit_rate_until: Option<DateTime<Utc>>,
     },
 
@@ -1008,23 +1008,23 @@ enum ClientCommand {
         creator: Option<ChainId>,
 
         /// The shared parameters as JSON string.
-        #[clap(long)]
+        #[arg(long)]
         json_parameters: Option<String>,
 
         /// Path to a JSON file containing the shared parameters.
-        #[clap(long)]
+        #[arg(long)]
         json_parameters_path: Option<PathBuf>,
 
         /// The initialization argument as a JSON string.
-        #[clap(long)]
+        #[arg(long)]
         json_argument: Option<String>,
 
         /// Path to a JSON file containing the initialization argument.
-        #[clap(long)]
+        #[arg(long)]
         json_argument_path: Option<PathBuf>,
 
         /// The list of required dependencies of application, if any.
-        #[clap(long, num_args(0..))]
+        #[arg(long, num_args(0..))]
         required_application_ids: Option<Vec<UserApplicationId>>,
     },
 
@@ -1041,23 +1041,23 @@ enum ClientCommand {
         publisher: Option<ChainId>,
 
         /// The shared parameters as JSON string.
-        #[clap(long)]
+        #[arg(long)]
         json_parameters: Option<String>,
 
         /// Path to a JSON file containing the shared parameters.
-        #[clap(long)]
+        #[arg(long)]
         json_parameters_path: Option<PathBuf>,
 
         /// The initialization argument as a JSON string.
-        #[clap(long)]
+        #[arg(long)]
         json_argument: Option<String>,
 
         /// Path to a JSON file containing the initialization argument.
-        #[clap(long)]
+        #[arg(long)]
         json_argument_path: Option<PathBuf>,
 
         /// The list of required dependencies of application, if any.
-        #[clap(long, num_args(0..))]
+        #[arg(long, num_args(0..))]
         required_application_ids: Option<Vec<UserApplicationId>>,
     },
 
@@ -1068,11 +1068,11 @@ enum ClientCommand {
 
         /// The target chain on which the application is already registered.
         /// If not specified, the chain on which the application was created is used.
-        #[clap(long)]
+        #[arg(long)]
         target_chain_id: Option<ChainId>,
 
         /// The owned chain on which the application is missing.
-        #[clap(long)]
+        #[arg(long)]
         requester_chain_id: Option<ChainId>,
     },
 
@@ -1082,12 +1082,12 @@ enum ClientCommand {
     /// Link a key owned by the wallet to a chain that was just created for that key.
     Assign {
         /// The public key to assign.
-        #[clap(long)]
+        #[arg(long)]
         key: PublicKey,
 
         /// The ID of the message that created the chain. (This uniquely describes the
         /// chain and where it was created.)
-        #[clap(long)]
+        #[arg(long)]
         message_id: MessageId,
     },
 
@@ -1101,15 +1101,15 @@ enum ClientCommand {
     },
 
     /// Show the contents of the wallet.
-    #[clap(subcommand)]
+    #[command(subcommand)]
     Wallet(WalletCommand),
 
     /// Manage Linera projects.
-    #[clap(subcommand)]
+    #[command(subcommand)]
     Project(ProjectCommand),
 
     /// Manage a local Linera Network.
-    #[clap(subcommand)]
+    #[command(subcommand)]
     Net(NetCommand),
 }
 
@@ -1118,35 +1118,35 @@ enum NetCommand {
     /// Start a Local Linera Network
     Up {
         /// The number of extra wallets and user chains to initialise. Default is 0.
-        #[clap(long)]
+        #[arg(long)]
         extra_wallets: Option<usize>,
 
         /// The number of validators in the local test network. Default is 1.
-        #[clap(long, default_value = "1")]
+        #[arg(long, default_value = "1")]
         validators: usize,
 
         /// The number of shards per validator in the local test network. Default is 1.
-        #[clap(long, default_value = "1")]
+        #[arg(long, default_value = "1")]
         shards: usize,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.
-        #[clap(long)]
+        #[arg(long)]
         testing_prng_seed: Option<u64>,
 
         /// The name for the database table to store the chain data in.
-        #[clap(long, default_value = "table_default")]
+        #[arg(long, default_value = "table_default")]
         table_name: String,
 
         /// Start the local network on a local Kubernetes deployment.
         #[cfg(feature = "kubernetes")]
-        #[clap(long)]
+        #[arg(long)]
         kubernetes: bool,
 
         /// Directory where we should grab the binaries to be packaged in the Docker image
         /// and run inside the Kubernetes deployment.
         #[cfg(feature = "kubernetes")]
-        #[clap(long)]
+        #[arg(long)]
         binaries_dir: Option<PathBuf>,
     },
 
@@ -1167,21 +1167,21 @@ enum WalletCommand {
     Init {
         /// The path to the genesis configuration for a Linera deployment. Either this or `--faucet`
         /// must be specified.
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis_config_path: Option<PathBuf>,
 
         /// The address of a faucet. If this is specified, the default chain will be newly created,
         /// and credited with tokens.
-        #[clap(long = "faucet")]
+        #[arg(long = "faucet")]
         faucet: Option<String>,
 
         /// Other chains to follow.
-        #[clap(long, num_args(0..))]
+        #[arg(long, num_args(0..))]
         with_other_chains: Vec<ChainId>,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.
-        #[clap(long)]
+        #[arg(long)]
         testing_prng_seed: Option<u64>,
     },
 }
@@ -1194,7 +1194,7 @@ enum ProjectCommand {
         name: String,
 
         /// Use the given clone of the Linera repository instead of remote crates.
-        #[clap(long)]
+        #[arg(long)]
         linera_root: Option<PathBuf>,
     },
 
@@ -1221,23 +1221,23 @@ enum ProjectCommand {
         publisher: Option<ChainId>,
 
         /// The shared parameters as JSON string.
-        #[clap(long)]
+        #[arg(long)]
         json_parameters: Option<String>,
 
         /// Path to a JSON file containing the shared parameters.
-        #[clap(long)]
+        #[arg(long)]
         json_parameters_path: Option<PathBuf>,
 
         /// The initialization argument as a JSON string.
-        #[clap(long)]
+        #[arg(long)]
         json_argument: Option<String>,
 
         /// Path to a JSON file containing the initialization argument.
-        #[clap(long)]
+        #[arg(long)]
         json_argument_path: Option<PathBuf>,
 
         /// The list of required dependencies of application, if any.
-        #[clap(long, num_args(0..))]
+        #[arg(long, num_args(0..))]
         required_application_ids: Option<Vec<UserApplicationId>>,
     },
 }

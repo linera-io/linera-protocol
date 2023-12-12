@@ -114,10 +114,10 @@ impl Service {
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Listener {
-    #[clap(flatten)]
+    #[command(flatten)]
     pub service: Service,
     /// The height at which the indexer should start
-    #[clap(long = "start", default_value = "0")]
+    #[arg(long = "start", default_value = "0")]
     pub start: BlockHeight,
 }
 

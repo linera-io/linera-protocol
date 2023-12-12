@@ -16,16 +16,16 @@ use std::path::PathBuf;
 #[command(version = clap::crate_version!())]
 pub struct RocksDbConfig {
     /// RocksDB storage path
-    #[clap(long, default_value = "./indexer.db")]
+    #[arg(long, default_value = "./indexer.db")]
     pub storage: PathBuf,
     /// The maximal number of simultaneous queries to the database
-    #[clap(long)]
+    #[arg(long)]
     max_concurrent_queries: Option<usize>,
     /// The maximal number of simultaneous stream queries to the database
-    #[clap(long, default_value = "10")]
+    #[arg(long, default_value = "10")]
     pub max_stream_queries: usize,
     /// The maximal number of entries in the storage cache.
-    #[clap(long, default_value = "1000")]
+    #[arg(long, default_value = "1000")]
     cache_size: usize,
 }
 

@@ -19,10 +19,10 @@ pub enum IndexerCommand {
         plugin: Option<String>,
     },
     Run {
-        #[clap(flatten)]
+        #[command(flatten)]
         listener: Listener,
         /// The port of the indexer server
-        #[clap(long, default_value = "8081")]
+        #[arg(long, default_value = "8081")]
         port: u16,
         /// Chains to index (default: the ones on the service wallet)
         chains: Vec<ChainId>,
@@ -31,9 +31,9 @@ pub enum IndexerCommand {
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct IndexerConfig<Config: clap::Args> {
-    #[clap(flatten)]
+    #[command(flatten)]
     pub client: Config,
-    #[clap(subcommand)]
+    #[command(subcommand)]
     pub command: IndexerCommand,
 }
 

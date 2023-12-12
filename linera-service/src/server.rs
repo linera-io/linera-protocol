@@ -210,18 +210,18 @@ impl Runnable for ServerContext {
 }
 
 #[derive(clap::Parser)]
-#[clap(
+#[command(
     name = "Linera Server",
     about = "A byzantine fault tolerant payments sidechain with low-latency finality and high throughput",
     version = clap::crate_version!(),
 )]
 struct ServerOptions {
     /// Subcommands. Acceptable values are run and generate.
-    #[clap(subcommand)]
+    #[command(subcommand)]
     command: ServerCommand,
 
     /// The number of Tokio worker threads to use.
-    #[clap(long, env = "LINERA_SERVER_TOKIO_THREADS")]
+    #[arg(long, env = "LINERA_SERVER_TOKIO_THREADS")]
     tokio_threads: Option<usize>,
 }
 
@@ -288,92 +288,92 @@ fn make_server_config<R: CryptoRng>(
 #[derive(clap::Parser)]
 enum ServerCommand {
     /// Runs a service for each shard of the Linera validator")
-    #[clap(name = "run")]
+    #[command(name = "run")]
     Run {
         /// Path to the file containing the server configuration of this Linera validator (including its secret key)
-        #[clap(long = "server")]
+        #[arg(long = "server")]
         server_config_path: PathBuf,
 
         /// Storage configuration for the blockchain history and security states.
-        #[clap(long = "storage")]
+        #[arg(long = "storage")]
         storage_config: StorageConfig,
 
         /// Configuration for cross-chain requests
-        #[clap(flatten)]
+        #[command(flatten)]
         cross_chain_config: CrossChainConfig,
 
         /// Configuration for notifications
-        #[clap(flatten)]
+        #[command(flatten)]
         notification_config: NotificationConfig,
 
         /// Path to the file describing the initial user chains (aka genesis state)
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis_config_path: PathBuf,
 
         /// Runs a specific shard (from 0 to shards-1)
-        #[clap(long)]
+        #[arg(long)]
         shard: Option<usize>,
 
         /// Blocks with a timestamp this far in the future will still be accepted, but the validator
         /// will wait until that timestamp before voting.
-        #[clap(long, default_value = "500ms", value_parser = parse_duration)]
+        #[arg(long, default_value = "500ms", value_parser = parse_duration)]
         grace_period: u64,
 
         /// The WebAssembly runtime to use.
-        #[clap(long)]
+        #[arg(long)]
         wasm_runtime: Option<WasmRuntime>,
 
         /// The maximal number of simultaneous queries to the database
-        #[clap(long)]
+        #[arg(long)]
         max_concurrent_queries: Option<usize>,
 
         /// The maximal number of stream queries to the database
-        #[clap(long, default_value = "10")]
+        #[arg(long, default_value = "10")]
         max_stream_queries: usize,
 
         /// The maximal number of entries in the storage cache.
-        #[clap(long, default_value = "1000")]
+        #[arg(long, default_value = "1000")]
         cache_size: usize,
     },
 
     /// Act as a trusted third-party and generate all server configurations
-    #[clap(name = "generate")]
+    #[command(name = "generate")]
     Generate {
         /// Configuration file of each validator in the committee
         #[arg(long, num_args(0..))]
         validators: Vec<PathBuf>,
 
         /// Path where to write the description of the Linera committee
-        #[clap(long)]
+        #[arg(long)]
         committee: Option<PathBuf>,
 
         /// Force this command to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.
-        #[clap(long)]
+        #[arg(long)]
         testing_prng_seed: Option<u64>,
     },
 
     /// Initialize the database
-    #[clap(name = "initialize")]
+    #[command(name = "initialize")]
     Initialize {
         /// Storage configuration for the blockchain history and security states.
-        #[clap(long = "storage")]
+        #[arg(long = "storage")]
         storage_config: StorageConfig,
 
         /// Path to the file describing the initial user chains (aka genesis state)
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis_config_path: PathBuf,
 
         /// The maximal number of simultaneous queries to the database
-        #[clap(long)]
+        #[arg(long)]
         max_concurrent_queries: Option<usize>,
 
         /// The maximal number of stream queries to the database
-        #[clap(long, default_value = "10")]
+        #[arg(long, default_value = "10")]
         max_stream_queries: usize,
 
         /// The maximal number of entries in the storage cache.
-        #[clap(long, default_value = "1000")]
+        #[arg(long, default_value = "1000")]
         cache_size: usize,
     },
 }

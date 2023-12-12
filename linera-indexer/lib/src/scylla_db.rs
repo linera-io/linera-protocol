@@ -14,18 +14,18 @@ use linera_views::{
 #[command(version = clap::crate_version!())]
 pub struct ScyllaDbConfig {
     /// ScyllaDB address
-    #[clap(long, default_value = "localhost:9042")]
+    #[arg(long, default_value = "localhost:9042")]
     pub uri: String,
-    #[clap(long, default_value = "linera")]
+    #[arg(long, default_value = "linera")]
     pub table: String,
     /// The maximal number of simultaneous queries to the database
-    #[clap(long)]
+    #[arg(long)]
     max_concurrent_queries: Option<usize>,
     /// The maximal number of simultaneous stream queries to the database
-    #[clap(long, default_value = "10")]
+    #[arg(long, default_value = "10")]
     pub max_stream_queries: usize,
     /// The maximal number of entries in the storage cache.
-    #[clap(long, default_value = "1000")]
+    #[arg(long, default_value = "1000")]
     cache_size: usize,
 }
 

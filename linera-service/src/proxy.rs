@@ -22,7 +22,7 @@ use tracing::{error, info, instrument};
 
 /// Options for running the proxy.
 #[derive(clap::Parser, Debug)]
-#[clap(
+#[command(
     name = "Linera Proxy",
     about = "A proxy to redirect incoming requests to Linera Server shards",
     version = clap::crate_version!(),
@@ -32,15 +32,15 @@ pub struct ProxyOptions {
     config_path: PathBuf,
 
     /// Timeout for sending queries (us)
-    #[clap(long, default_value = "4000000")]
+    #[arg(long, default_value = "4000000")]
     send_timeout_us: u64,
 
     /// Timeout for receiving responses (us)
-    #[clap(long, default_value = "4000000")]
+    #[arg(long, default_value = "4000000")]
     recv_timeout_us: u64,
 
     /// The number of Tokio worker threads to use.
-    #[clap(long, env = "LINERA_PROXY_TOKIO_THREADS")]
+    #[arg(long, env = "LINERA_PROXY_TOKIO_THREADS")]
     tokio_threads: Option<usize>,
 }
 

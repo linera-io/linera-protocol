@@ -6,18 +6,18 @@ use linera_views::common::CommonStoreConfig;
 use std::process;
 
 #[derive(clap::Parser)]
-#[clap(
+#[command(
     name = "Clear database",
     about = "A tool for cleaning up a database",
     version = clap::crate_version!(),
 )]
 struct DatabaseToolOptions {
     /// Subcommands. Acceptable values are run and generate.
-    #[clap(subcommand)]
+    #[command(subcommand)]
     command: DatabaseToolCommand,
 
     /// The number of Tokio worker threads to use.
-    #[clap(long, env = "LINERA_DB_TOOL_TOKIO_THREADS")]
+    #[arg(long, env = "LINERA_DB_TOOL_TOKIO_THREADS")]
     tokio_threads: Option<usize>,
 }
 
@@ -26,50 +26,50 @@ enum DatabaseToolCommand {
     /// Subcommands. Acceptable values are delete_all, delete_single, initialize
 
     /// Delete all the entries of the database
-    #[clap(name = "delete_all")]
+    #[command(name = "delete_all")]
     DeleteAll {
         /// Storage configuration for the blockchain history.
-        #[clap(long = "storage")]
+        #[arg(long = "storage")]
         storage_config: String,
     },
 
     /// Delete a single table from the database
-    #[clap(name = "delete_single")]
+    #[command(name = "delete_single")]
     DeleteSingle {
         /// Storage configuration for the blockchain history.
-        #[clap(long = "storage")]
+        #[arg(long = "storage")]
         storage_config: String,
     },
 
     /// Check existence of a database
-    #[clap(name = "check_existence")]
+    #[command(name = "check_existence")]
     CheckExistence {
         /// Storage configuration for the blockchain history.
-        #[clap(long = "storage")]
+        #[arg(long = "storage")]
         storage_config: String,
     },
 
     /// Check absence of a database
-    #[clap(name = "check_absence")]
+    #[command(name = "check_absence")]
     CheckAbsence {
         /// Storage configuration for the blockchain history.
-        #[clap(long = "storage")]
+        #[arg(long = "storage")]
         storage_config: String,
     },
 
     /// Initialize a table in the database
-    #[clap(name = "initialize")]
+    #[command(name = "initialize")]
     Initialize {
         /// Storage configuration for the blockchain history.
-        #[clap(long = "storage")]
+        #[arg(long = "storage")]
         storage_config: String,
     },
 
     /// List the tables of the database
-    #[clap(name = "list_tables")]
+    #[command(name = "list_tables")]
     ListTables {
         /// Storage configuration for the blockchain history.
-        #[clap(long = "storage")]
+        #[arg(long = "storage")]
         storage_config: String,
     },
 }
