@@ -80,6 +80,9 @@ pub trait Storage: Sized {
     where
         ViewError: From<Self::ContextError>;
 
+    /// Tests whether the hash is contained in the storage
+    async fn contains_hash(&self, hash: CryptoHash) -> Result<bool, ViewError>;
+
     /// Reads the value with the given hash.
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError>;
 

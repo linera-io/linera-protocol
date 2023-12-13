@@ -22,6 +22,16 @@ use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc};
 
 /// The metric counting how often a value is read from storage.
+pub static CONTAINS_HASH_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "contains_hash",
+        "The metric counting how often a value is tested for existence from storage",
+        &[]
+    )
+    .expect("Counter creation should not fail")
+});
+
+/// The metric counting how often a value is read from storage.
 pub static READ_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
         "read_value",
@@ -179,10 +189,20 @@ where
         ChainStateView::load(context).await
     }
 
+    async fn contains_hash(&self, hash: CryptoHash) -> Result<bool, ViewError> {
+        let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+        let test = self.client.client.contains_key(&value_key).await?;
+        CONTAINS_HASH_COUNTER.with_label_values(&[]).inc();
+        Ok(test)
+    }
+
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
-        let maybe_value: Option<CertificateValue> =
-            self.client.client.read_value(&value_key).await?;
+        let maybe_value = self
+            .client
+            .client
+            .read_value::<CertificateValue>(&value_key)
+            .await?;
         READ_VALUE_COUNTER.with_label_values(&[]).inc();
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         Ok(value.with_hash_unchecked(hash))

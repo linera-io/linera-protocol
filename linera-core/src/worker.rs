@@ -668,15 +668,15 @@ where
             .map(|location| {
                 // TODO(#515): Don't read the value just to check existence.
                 self.storage
-                    .read_value(location.certificate_hash)
+                    .contains_hash(location.certificate_hash)
                     .map(move |result| (location, result))
             })
             .collect::<Vec<_>>();
         let mut locations = vec![];
         for (location, result) in future::join_all(tasks).await {
             match result {
-                Ok(_value) => {} // Value is not missing.
-                Err(ViewError::NotFound(_)) => locations.push(location),
+                Ok(true) => {}
+                Ok(false) => locations.push(location),
                 Err(err) => Err(err)?,
             }
         }
