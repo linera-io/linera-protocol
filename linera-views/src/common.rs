@@ -123,56 +123,56 @@ where
     }
 }
 
-/// `SuffixClosedSet` iterates over the entries of a container ordered
+/// `SuffixClosedSetIterator` iterates over the entries of a container ordered
 /// lexicographically.
 ///
-/// The function call `get_lower_bound(val)` returns a `Some(x)` where `x` is the highest
+/// The function call `find_lower_bound(val)` returns a `Some(x)` where `x` is the highest
 /// entry such that `x <= val` for the lexicographic order. If none exists then None is
 /// returned. The function calls have to be done with increasing `val`.
 ///
-/// The function calls `contains_key(val)` tests whether there exist a prefix p in the
+/// The function call `contains_key(val)` tests whether there exists a prefix p in the
 /// set of vectors such that p is a prefix of val.
-pub(crate) struct SuffixClosedSet<'a, IT> {
+pub(crate) struct SuffixClosedSetIterator<'a, I> {
     prefix_len: usize,
-    prec1: Option<&'a Vec<u8>>,
-    prec2: Option<&'a Vec<u8>>,
-    iter: IT,
+    previous: Option<&'a Vec<u8>>,
+    current: Option<&'a Vec<u8>>,
+    iter: I,
 }
 
-impl<'a, IT> SuffixClosedSet<'a, IT>
+impl<'a, I> SuffixClosedSetIterator<'a, I>
 where
-    IT: Iterator<Item = &'a Vec<u8>>,
+    I: Iterator<Item = &'a Vec<u8>>,
 {
-    pub(crate) fn new(prefix_len: usize, mut iter: IT) -> Self {
-        let prec1 = None;
-        let prec2 = iter.next();
+    pub(crate) fn new(prefix_len: usize, mut iter: I) -> Self {
+        let previous = None;
+        let current = iter.next();
         Self {
             prefix_len,
-            prec1,
-            prec2,
+            previous,
+            current,
             iter,
         }
     }
 
-    pub(crate) fn get_lower_bound(&mut self, val: &[u8]) -> Option<&'a Vec<u8>> {
+    pub(crate) fn find_lower_bound(&mut self, val: &[u8]) -> Option<&'a Vec<u8>> {
         loop {
-            match &self.prec2 {
+            match &self.current {
                 None => {
-                    return self.prec1;
+                    return self.previous;
                 }
                 Some(x) => {
                     if &x[self.prefix_len..] > val {
-                        return self.prec1;
+                        return self.previous;
                     }
                 }
             }
-            let prec2 = self.iter.next();
-            self.prec1 = std::mem::replace(&mut self.prec2, prec2);
+            let current = self.iter.next();
+            self.previous = std::mem::replace(&mut self.current, current);
         }
     }
 
     pub(crate) fn contains_key(&mut self, index: &[u8]) -> bool {
-        let lower_bound = self.get_lower_bound(index);
+        let lower_bound = self.find_lower_bound(index);
         match lower_bound {
             None => false,
             Some(key_prefix) => index.starts_with(&key_prefix[self.prefix_len..]),
@@ -182,7 +182,7 @@ where
 
 pub(crate) fn contains_key(prefixes: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
     let iter = prefixes.iter();
-    let mut suffix_closed_set = SuffixClosedSet::new(0, iter);
+    let mut suffix_closed_set = SuffixClosedSetIterator::new(0, iter);
     suffix_closed_set.contains_key(key)
 }
 
@@ -209,27 +209,27 @@ fn suffix_closed_set_test1_the_lower_bound() {
     set.insert(vec![24]);
     set.insert(vec![40]);
 
-    let mut suffix_closed_set = SuffixClosedSet::new(0, set.iter());
-    assert_eq!(suffix_closed_set.get_lower_bound(&[3]), None);
+    let mut suffix_closed_set = SuffixClosedSetIterator::new(0, set.iter());
+    assert_eq!(suffix_closed_set.find_lower_bound(&[3]), None);
     assert_eq!(
-        suffix_closed_set.get_lower_bound(&[15]),
-        Some(vec!(10)).as_ref()
+        suffix_closed_set.find_lower_bound(&[15]),
+        Some(vec![10]).as_ref()
     );
     assert_eq!(
-        suffix_closed_set.get_lower_bound(&[17]),
-        Some(vec!(10)).as_ref()
+        suffix_closed_set.find_lower_bound(&[17]),
+        Some(vec![10]).as_ref()
     );
     assert_eq!(
-        suffix_closed_set.get_lower_bound(&[25]),
-        Some(vec!(24)).as_ref()
+        suffix_closed_set.find_lower_bound(&[25]),
+        Some(vec![24]).as_ref()
     );
     assert_eq!(
-        suffix_closed_set.get_lower_bound(&[27]),
-        Some(vec!(24)).as_ref()
+        suffix_closed_set.find_lower_bound(&[27]),
+        Some(vec![24]).as_ref()
     );
     assert_eq!(
-        suffix_closed_set.get_lower_bound(&[42]),
-        Some(vec!(40)).as_ref()
+        suffix_closed_set.find_lower_bound(&[42]),
+        Some(vec![40]).as_ref()
     );
 }
 
@@ -240,7 +240,7 @@ fn suffix_closed_set_test2_contains_key() {
     set.insert(vec![0, 3]);
     set.insert(vec![5]);
 
-    let mut suffix_closed_set = SuffixClosedSet::new(0, set.iter());
+    let mut suffix_closed_set = SuffixClosedSetIterator::new(0, set.iter());
     assert!(!suffix_closed_set.contains_key(&[0]));
     assert!(suffix_closed_set.contains_key(&[0, 3]));
     assert!(suffix_closed_set.contains_key(&[0, 3, 4]));
@@ -255,7 +255,7 @@ fn suffix_closed_set_test3_contains_key_prefix_len() {
     set.insert(vec![0, 3]);
     set.insert(vec![0, 0, 1]);
 
-    let mut suffix_closed_set = SuffixClosedSet::new(1, set.iter());
+    let mut suffix_closed_set = SuffixClosedSetIterator::new(1, set.iter());
     assert!(!suffix_closed_set.contains_key(&[0]));
     assert!(suffix_closed_set.contains_key(&[0, 1]));
     assert!(suffix_closed_set.contains_key(&[0, 1, 4]));

@@ -5,7 +5,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::{
         contains_key, get_interval, get_upper_bound, insert_key_prefix, Context, HasherOutput,
-        KeyIterable, KeyValueIterable, SuffixClosedSet, Update, MIN_VIEW_TAG,
+        KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
     },
     map_view::ByteMapView,
     views::{HashableView, Hasher, View, ViewError},
@@ -277,7 +277,7 @@ where
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
-        let mut suffix_closed_set = SuffixClosedSet::new(0, self.deleted_prefixes.iter());
+        let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
         if !self.was_cleared {
             for index in self
                 .context
@@ -376,7 +376,7 @@ where
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
-        let mut suffix_closed_set = SuffixClosedSet::new(0, self.deleted_prefixes.iter());
+        let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
         if !self.was_cleared {
             for entry in self
                 .context
@@ -578,7 +578,7 @@ where
             return Ok(false);
         }
         let iter = self.deleted_prefixes.iter();
-        let mut suffix_closed_set = SuffixClosedSet::new(0, iter);
+        let mut suffix_closed_set = SuffixClosedSetIterator::new(0, iter);
         if suffix_closed_set.contains_key(index) {
             return Ok(false);
         }
@@ -801,7 +801,7 @@ where
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
-        let mut suffix_closed_set = SuffixClosedSet::new(0, self.deleted_prefixes.iter());
+        let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
         if !self.was_cleared {
             for key in self
                 .context
@@ -874,7 +874,7 @@ where
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
-        let mut suffix_closed_set = SuffixClosedSet::new(0, self.deleted_prefixes.iter());
+        let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
         if !self.was_cleared {
             for entry in self
                 .context

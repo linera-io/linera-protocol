@@ -20,7 +20,7 @@ use crate::{
     batch::Batch,
     common::{
         contains_key, get_interval, insert_key_prefix, Context, CustomSerialize, HasherOutput,
-        KeyIterable, KeyValueIterable, SuffixClosedSet, Update, MIN_VIEW_TAG,
+        KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
     },
     views::{HashableView, Hasher, View, ViewError},
 };
@@ -321,7 +321,7 @@ where
     {
         let prefix_len = prefix.len();
         let iter = self.deleted_prefixes.range(get_interval(prefix.clone()));
-        let mut suffix_closed_set = SuffixClosedSet::new(prefix_len, iter);
+        let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
         if !self.was_cleared && !contains_key(&self.deleted_prefixes, &prefix) {
@@ -516,7 +516,7 @@ where
     {
         let prefix_len = prefix.len();
         let iter = self.deleted_prefixes.range(get_interval(prefix.clone()));
-        let mut suffix_closed_set = SuffixClosedSet::new(prefix_len, iter);
+        let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
         if !self.was_cleared && !contains_key(&self.deleted_prefixes, &prefix) {
