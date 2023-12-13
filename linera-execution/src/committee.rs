@@ -350,6 +350,12 @@ impl Committee {
         &self.validators
     }
 
+    pub fn validator_addresses(&self) -> impl Iterator<Item = (ValidatorName, &str)> {
+        self.validators
+            .iter()
+            .map(|(name, validator)| (*name, &*validator.network_address))
+    }
+
     pub fn total_votes(&self) -> u64 {
         self.total_votes
     }

@@ -16,7 +16,7 @@ use linera_base::{
     data_types::Amount,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
-use linera_execution::Bytecode;
+use linera_execution::{committee::ValidatorName, Bytecode};
 use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_json::{json, Value};
 use std::{
@@ -887,6 +887,46 @@ impl Faucet {
             certificate_hash,
         };
         Ok(outcome)
+    }
+
+    pub async fn current_validators(url: &str) -> Result<Vec<(ValidatorName, String)>> {
+        let query = "query { currentValidators { name networkAddress } }";
+        let client = reqwest_client();
+        let response = client
+            .post(url)
+            .json(&json!({ "query": query }))
+            .send()
+            .await
+            .context("failed to post query")?;
+        anyhow::ensure!(
+            response.status().is_success(),
+            "Query \"{}\" failed: {}",
+            query,
+            response
+                .text()
+                .await
+                .unwrap_or_else(|error| format!("Could not get response text: {error}"))
+        );
+        let mut value: Value = response.json().await.context("invalid JSON")?;
+        if let Some(errors) = value.get("errors") {
+            bail!("Query \"{}\" failed: {}", query, errors);
+        }
+        let validators = match value["data"]["currentValidators"].take() {
+            serde_json::Value::Array(validators) => validators,
+            validators => bail!("{validators} is not an array"),
+        };
+        validators
+            .into_iter()
+            .map(|mut validator| {
+                let name = serde_json::from_value::<ValidatorName>(validator["name"].take())
+                    .context("could not parse current validators: invalid name")?;
+                let addr = validator["networkAddress"]
+                    .as_str()
+                    .context("could not parse current validators: invalid address")?
+                    .to_string();
+                Ok((name, addr))
+            })
+            .collect()
     }
 }
 

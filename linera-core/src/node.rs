@@ -82,13 +82,20 @@ pub trait ValidatorNodeProvider {
     where
         I: FromIterator<(ValidatorName, Self::Node)>,
     {
-        committee
-            .validators()
-            .iter()
-            .map(|(name, validator)| {
-                let node = self.make_node(&validator.network_address)?;
-                Ok((*name, node))
-            })
+        self.make_nodes_from_list(committee.validator_addresses())
+    }
+
+    fn make_nodes_from_list<I, A>(
+        &self,
+        validators: impl IntoIterator<Item = (ValidatorName, A)>,
+    ) -> Result<I, NodeError>
+    where
+        I: FromIterator<(ValidatorName, Self::Node)>,
+        A: AsRef<str>,
+    {
+        validators
+            .into_iter()
+            .map(|(name, address)| Ok((name, self.make_node(address.as_ref())?)))
             .collect()
     }
 }

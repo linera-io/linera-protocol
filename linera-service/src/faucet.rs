@@ -14,9 +14,10 @@ use linera_core::{
     client::{ChainClient, ChainClientError},
     node::ValidatorNodeProvider,
 };
-use linera_execution::ChainOwnership;
+use linera_execution::{committee::ValidatorName, ChainOwnership};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
+use serde::Deserialize;
 use serde_json::json;
 use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
@@ -30,8 +31,9 @@ use crate::{config::GenesisConfig, util};
 mod tests;
 
 /// The root GraphQL query type.
-pub struct QueryRoot {
+pub struct QueryRoot<P, S> {
     genesis_config: Arc<GenesisConfig>,
+    client: Arc<Mutex<ChainClient<P, S>>>,
 }
 
 /// The root GraphQL mutation type.
@@ -66,11 +68,36 @@ pub struct ClaimOutcome {
     pub certificate_hash: CryptoHash,
 }
 
+#[derive(Debug, Deserialize, SimpleObject)]
+pub struct Validator {
+    pub name: ValidatorName,
+    pub network_address: String,
+}
+
 #[Object]
-impl QueryRoot {
+impl<P, S> QueryRoot<P, S>
+where
+    P: ValidatorNodeProvider + Send + Sync + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
     /// Returns the genesis config.
     async fn genesis_config(&self) -> Result<serde_json::Value, Error> {
         Ok(serde_json::to_value(&*self.genesis_config)?)
+    }
+
+    /// Returns the current committee's validators.
+    async fn current_validators(&self) -> Result<Vec<Validator>, Error> {
+        let mut client = self.client.lock().await;
+        let committee = client.local_committee().await?;
+        Ok(committee
+            .validators()
+            .iter()
+            .map(|(name, validator)| Validator {
+                name: *name,
+                network_address: validator.network_address.clone(),
+            })
+            .collect())
     }
 }
 
@@ -181,7 +208,7 @@ where
         })
     }
 
-    pub fn schema(&self) -> Schema<QueryRoot, MutationRoot<P, S>, EmptySubscription> {
+    pub fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S>, EmptySubscription> {
         let mutation_root = MutationRoot {
             client: self.client.clone(),
             amount: self.amount,
@@ -191,6 +218,7 @@ where
         };
         let query_root = QueryRoot {
             genesis_config: self.genesis_config.clone(),
+            client: self.client.clone(),
         };
         Schema::build(query_root, mutation_root, EmptySubscription).finish()
     }

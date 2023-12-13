@@ -1807,8 +1807,15 @@ impl Runnable for Job {
 
             Assign { key, message_id } => {
                 let chain_id = ChainId::child(message_id);
-                Self::assign_new_chain_to_key(chain_id, message_id, storage, key, &mut context)
-                    .await?;
+                Self::assign_new_chain_to_key(
+                    chain_id,
+                    message_id,
+                    storage,
+                    key,
+                    None,
+                    &mut context,
+                )
+                .await?;
                 println!("{}", chain_id);
                 context.save_wallet();
             }
@@ -1881,6 +1888,7 @@ impl Runnable for Job {
                 let public_key = key_pair.public();
                 context.wallet_state.add_unassigned_key_pair(key_pair);
                 let outcome = cli_wrappers::Faucet::claim_url(&public_key, &faucet_url).await?;
+                let validators = cli_wrappers::Faucet::current_validators(&faucet_url).await?;
                 println!("{}", outcome.chain_id);
                 println!("{}", outcome.message_id);
                 println!("{}", outcome.certificate_hash);
@@ -1889,6 +1897,7 @@ impl Runnable for Job {
                     outcome.message_id,
                     storage.clone(),
                     public_key,
+                    Some(validators),
                     &mut context,
                 )
                 .await?;
@@ -1913,6 +1922,7 @@ impl Job {
         message_id: MessageId,
         storage: S,
         public_key: PublicKey,
+        validators: Option<Vec<(ValidatorName, String)>>,
         context: &mut ClientContext,
     ) -> anyhow::Result<()>
     where
@@ -1927,11 +1937,17 @@ impl Job {
         // Take the latest committee we know of.
         let admin_chain_id = context.wallet_state.genesis_admin_chain();
         let query = ChainInfoQuery::new(admin_chain_id).with_committees();
-        let info = node_client.handle_chain_info_query(query).await?;
-        let committee = info
-            .latest_committee()
-            .context("Invalid chain info response; missing latest committee")?;
-        let nodes = context.make_node_provider().make_nodes(committee)?;
+        let nodes = if let Some(validators) = validators {
+            context
+                .make_node_provider()
+                .make_nodes_from_list(validators)?
+        } else {
+            let info = node_client.handle_chain_info_query(query).await?;
+            let committee = info
+                .latest_committee()
+                .context("Invalid chain info response; missing latest committee")?;
+            context.make_node_provider().make_nodes(committee)?
+        };
 
         // Download the parent chain.
         let target_height = message_id.height.try_add_one()?;
