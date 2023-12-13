@@ -35,6 +35,9 @@ impl Contract for CrowdFunding {
         _context: &OperationContext,
         argument: InitializationArgument,
     ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+        // Validate that the application parameters were configured correctly.
+        assert!(Self::parameters().is_ok());
+
         self.initialization_argument.set(Some(argument));
 
         ensure!(

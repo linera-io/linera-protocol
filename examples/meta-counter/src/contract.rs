@@ -36,6 +36,9 @@ impl Contract for MetaCounter {
         context: &OperationContext,
         _argument: (),
     ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+        // Validate that the application parameters were configured correctly.
+        assert!(Self::parameters().is_ok());
+
         Self::counter_id()?;
         // Send a no-op message to ourselves. This is only for testing contracts that send messages
         // on initialization. Since the value is 0 it does not change the counter value.

@@ -38,6 +38,9 @@ impl Contract for Social {
         _context: &OperationContext,
         _argument: (),
     ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+        // Validate that the application parameters were configured correctly.
+        assert!(Self::parameters().is_ok());
+
         Ok(ExecutionResult::default())
     }
 

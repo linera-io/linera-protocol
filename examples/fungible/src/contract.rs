@@ -36,6 +36,9 @@ impl Contract for FungibleToken {
         context: &OperationContext,
         mut state: Self::InitializationArgument,
     ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+        // Validate that the application parameters were configured correctly.
+        assert!(Self::parameters().is_ok());
+
         // If initial accounts are empty, creator gets 1M tokens to act like a faucet.
         if state.accounts.is_empty() {
             if let Some(owner) = context.authenticated_signer {
@@ -46,6 +49,7 @@ impl Contract for FungibleToken {
             }
         }
         self.initialize_accounts(state).await;
+
         Ok(ExecutionResult::default())
     }
 

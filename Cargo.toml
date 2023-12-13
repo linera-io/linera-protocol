@@ -121,6 +121,7 @@ wasmer-middlewares = "=3.1.1"
 wasmer-vm = { version = "=3.1.1" }
 wasmparser = "0.101.1"
 wasmtime = "1.0"
+webassembly-test = "0.1.0"
 wit-bindgen-guest-rust = { version = "0.2.0", package = "linera-wit-bindgen-guest-rust" }
 wit-bindgen-host-wasmer-rust = { version = "0.2.0", package = "linera-wit-bindgen-host-wasmer-rust" }
 wit-bindgen-host-wasmtime-rust = { version = "0.2.0", package = "linera-wit-bindgen-host-wasmtime-rust" }
@@ -134,6 +135,7 @@ linera-indexer-example = { path = "./linera-indexer/example" }
 linera-indexer-graphql-client = { path = "./linera-indexer/graphql-client" }
 linera-indexer-plugins = { path = "./linera-indexer/plugins" }
 linera-rpc = { version = "0.6.0", path = "./linera-rpc" }
+linera-sdk = { version = "0.6.0", path = "./linera-sdk" }
 linera-storage = { version = "0.6.0", path = "./linera-storage", default-features = false }
 linera-views = { version = "0.6.0", path = "./linera-views", default-features = false }
 linera-views-derive = { version = "0.6.0", path = "./linera-views-derive" }

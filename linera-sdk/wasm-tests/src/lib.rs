@@ -65,15 +65,18 @@ fn mock_application_id() {
 fn mock_application_parameters() {
     let parameters = vec![0, 1, 2, 3, 4, 5, 6];
 
-    test::mock_application_parameters(parameters.clone());
+    test::mock_application_parameters(&parameters);
+
+    let serialized_parameters =
+        serde_json::to_vec(&parameters).expect("Failed to serialize parameters");
 
     assert_eq!(
         contract::system_api::private::current_application_parameters(),
-        parameters
+        serialized_parameters
     );
     assert_eq!(
         service::system_api::private::current_application_parameters(),
-        parameters
+        serialized_parameters
     );
 }
 

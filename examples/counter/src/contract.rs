@@ -30,7 +30,11 @@ impl Contract for Counter {
         _context: &OperationContext,
         value: u64,
     ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+        // Validate that the application parameters were configured correctly.
+        assert!(Self::parameters().is_ok());
+
         self.value = value;
+
         Ok(ExecutionResult::default())
     }
 
@@ -103,6 +107,7 @@ mod tests {
     use futures::FutureExt;
     use linera_sdk::{
         base::{BlockHeight, ChainId, MessageId},
+        test::mock_application_parameters,
         ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
         OperationContext,
     };
@@ -179,6 +184,8 @@ mod tests {
 
     fn create_and_initialize_counter(initial_value: u64) -> Counter {
         let mut counter = Counter::default();
+
+        mock_application_parameters(&());
 
         let result = counter
             .initialize(&dummy_operation_context(), initial_value)

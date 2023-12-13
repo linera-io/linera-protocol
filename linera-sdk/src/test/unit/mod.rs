@@ -27,6 +27,7 @@ use linera_views::{
     common::Context,
     memory::MemoryContext,
 };
+use serde::Serialize;
 
 static mut MOCK_CHAIN_ID: Option<ChainId> = None;
 static mut MOCK_APPLICATION_ID: Option<ApplicationId> = None;
@@ -52,8 +53,11 @@ pub fn mock_application_id(application_id: impl Into<Option<ApplicationId>>) {
 }
 
 /// Sets the mocked application parameters.
-pub fn mock_application_parameters(application_parameters: impl Into<Option<Vec<u8>>>) {
-    unsafe { MOCK_APPLICATION_PARAMETERS = application_parameters.into() };
+pub fn mock_application_parameters(application_parameters: &impl Serialize) {
+    let serialized_parameters = serde_json::to_vec(application_parameters)
+        .expect("Failed to serialize mock application parameters");
+
+    unsafe { MOCK_APPLICATION_PARAMETERS = Some(serialized_parameters) };
 }
 
 /// Sets the mocked system balance.
