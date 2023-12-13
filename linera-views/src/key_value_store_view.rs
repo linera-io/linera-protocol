@@ -4,7 +4,7 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_interval, get_upper_bound, insert_key_prefix, is_index_absent, Context,
+        get_interval, get_upper_bound, insert_key_prefix, contains_key, Context,
         SuffixClosedSet, HasherOutput, KeyIterable, KeyValueIterable, Update,
         MIN_VIEW_TAG,
     },
@@ -301,7 +301,7 @@ where
                             }
                         }
                         _ => {
-                            if suffix_closed_set.is_index_absent(index) && !f(index)? {
+                            if !suffix_closed_set.contains_key(index) && !f(index)? {
                                 return Ok(());
                             }
                             break;
@@ -400,7 +400,7 @@ where
                             }
                         }
                         _ => {
-                            if suffix_closed_set.is_index_absent(index) && !f(index, index_val)? {
+                            if !suffix_closed_set.contains_key(index) && !f(index, index_val)? {
                                 return Ok(());
                             }
                             break;
@@ -546,7 +546,7 @@ where
         if self.was_cleared {
             return Ok(None);
         }
-        if !is_index_absent(&self.deleted_prefixes, index) {
+        if contains_key(&self.deleted_prefixes, index) {
             return Ok(None);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, index);
@@ -580,7 +580,7 @@ where
         }
         let iter = self.deleted_prefixes.iter();
         let mut suffix_closed_set = SuffixClosedSet::new(0, iter);
-        if !suffix_closed_set.is_index_absent(index) {
+        if suffix_closed_set.contains_key(index) {
             return Ok(false);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, index);
@@ -618,7 +618,7 @@ where
                 result.push(value);
             } else {
                 result.push(None);
-                if is_index_absent(&self.deleted_prefixes, &index) {
+                if !contains_key(&self.deleted_prefixes, &index) {
                     missed_indices.push(i);
                     let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                     vector_query.push(key);
@@ -825,7 +825,7 @@ where
                         _ => {
                             let mut key_with_prefix = key_prefix.to_vec();
                             key_with_prefix.extend_from_slice(key);
-                            if suffix_closed_set.is_index_absent(&key_with_prefix) {
+                            if !suffix_closed_set.contains_key(&key_with_prefix) {
                                 keys.push(key.to_vec());
                             }
                             break;
@@ -899,7 +899,7 @@ where
                         _ => {
                             let mut key_with_prefix = key_prefix.to_vec();
                             key_with_prefix.extend_from_slice(&key);
-                            if suffix_closed_set.is_index_absent(&key_with_prefix) {
+                            if !suffix_closed_set.contains_key(&key_with_prefix) {
                                 key_values.push((key, value));
                             }
                             break;

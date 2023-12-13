@@ -130,7 +130,7 @@ where
 /// entry such that `x <= val` for the lexicographic order. If none exists then None is
 /// returned. The function calls have to be done with increasing `val`.
 ///
-/// The function calls `is_index_absent(val)` tests whether there exist a prefix p in the
+/// The function calls `contains_key(val)` tests whether there exist a prefix p in the
 /// set of vectors such that p is a prefix of val.
 pub(crate) struct SuffixClosedSet<'a, IT> {
     prefix_len: usize,
@@ -171,23 +171,23 @@ where
         }
     }
 
-    pub(crate) fn is_index_absent(&mut self, index: &[u8]) -> bool {
+    pub(crate) fn contains_key(&mut self, index: &[u8]) -> bool {
         let lower_bound = self.get_lower_bound(index);
         match lower_bound {
-            None => true,
-            Some(key_prefix) => !index.starts_with(&key_prefix[self.prefix_len..]),
+            None => false,
+            Some(key_prefix) => index.starts_with(&key_prefix[self.prefix_len..]),
         }
     }
 }
 
-pub(crate) fn is_index_absent(prefixes: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
+pub(crate) fn contains_key(prefixes: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
     let iter = prefixes.iter();
     let mut suffix_closed_set = SuffixClosedSet::new(0, iter);
-    suffix_closed_set.is_index_absent(key)
+    suffix_closed_set.contains_key(key)
 }
 
 pub(crate) fn insert_key_prefix(prefixes: &mut BTreeSet<Vec<u8>>, prefix: Vec<u8>) {
-    if is_index_absent(prefixes, &prefix) {
+    if !contains_key(prefixes, &prefix) {
         let key_prefix_list = prefixes
             .range(get_interval(prefix.clone()))
             .map(|x| x.to_vec())
@@ -219,33 +219,33 @@ fn suffix_closed_set_test1_the_lower_bound() {
 }
 
 #[test]
-fn suffix_closed_set_test2_is_index_absent() {
+fn suffix_closed_set_test2_contains_key() {
     let mut set = BTreeSet::<Vec<u8>>::new();
     set.insert(vec![4]);
     set.insert(vec![0, 3]);
     set.insert(vec![5]);
 
     let mut suffix_closed_set = SuffixClosedSet::new(0, set.iter());
-    assert!(suffix_closed_set.is_index_absent(&[0]));
-    assert!(!suffix_closed_set.is_index_absent(&[0, 3]));
-    assert!(!suffix_closed_set.is_index_absent(&[0, 3, 4]));
-    assert!(suffix_closed_set.is_index_absent(&[1]));
-    assert!(!suffix_closed_set.is_index_absent(&[4]));
+    assert!(!suffix_closed_set.contains_key(&[0]));
+    assert!(suffix_closed_set.contains_key(&[0, 3]));
+    assert!(suffix_closed_set.contains_key(&[0, 3, 4]));
+    assert!(!suffix_closed_set.contains_key(&[1]));
+    assert!(suffix_closed_set.contains_key(&[4]));
 }
 
 #[test]
-fn suffix_closed_set_test3_is_index_absent_prefix_len() {
+fn suffix_closed_set_test3_contains_key_prefix_len() {
     let mut set = BTreeSet::<Vec<u8>>::new();
     set.insert(vec![0, 4]);
     set.insert(vec![0, 3]);
     set.insert(vec![0, 0, 1]);
 
     let mut suffix_closed_set = SuffixClosedSet::new(1, set.iter());
-    assert!(suffix_closed_set.is_index_absent(&[0]));
-    assert!(!suffix_closed_set.is_index_absent(&[0, 1]));
-    assert!(!suffix_closed_set.is_index_absent(&[0, 1, 4]));
-    assert!(!suffix_closed_set.is_index_absent(&[3]));
-    assert!(suffix_closed_set.is_index_absent(&[5]));
+    assert!(!suffix_closed_set.contains_key(&[0]));
+    assert!(suffix_closed_set.contains_key(&[0, 1]));
+    assert!(suffix_closed_set.contains_key(&[0, 1, 4]));
+    assert!(suffix_closed_set.contains_key(&[3]));
+    assert!(!suffix_closed_set.contains_key(&[5]));
 }
 
 #[test]
