@@ -123,23 +123,23 @@ where
     }
 }
 
-/// `GreatestLowerBoundIterator` iterates over the entries of a container ordered
+/// `SuffixClosedSet` iterates over the entries of a container ordered
 /// lexicographically.
 ///
 /// The function call `get_lower_bound(val)` returns a `Some(x)` where `x` is the highest
-/// entry such that `x <= val`. If none exists then None is returned. The function calls
-/// have to be done with increasing `val`.
+/// entry such that `x <= val` for the lexicographic order. If none exists then None is
+/// returned. The function calls have to be done with increasing `val`.
 ///
 /// The function calls `is_index_absent(val)` tests whether there exist a prefix p in the
 /// set of vectors such that p is a prefix of val.
-pub(crate) struct GreatestLowerBoundIterator<'a, IT> {
+pub(crate) struct SuffixClosedSet<'a, IT> {
     prefix_len: usize,
     prec1: Option<&'a Vec<u8>>,
     prec2: Option<&'a Vec<u8>>,
     iter: IT,
 }
 
-impl<'a, IT> GreatestLowerBoundIterator<'a, IT>
+impl<'a, IT> SuffixClosedSet<'a, IT>
 where
     IT: Iterator<Item = &'a Vec<u8>>,
 {
@@ -182,8 +182,8 @@ where
 
 pub(crate) fn is_index_absent(prefixes: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
     let iter = prefixes.iter();
-    let mut lower_bound = GreatestLowerBoundIterator::new(0, iter);
-    lower_bound.is_index_absent(key)
+    let mut suffix_closed_set = SuffixClosedSet::new(0, iter);
+    suffix_closed_set.is_index_absent(key)
 }
 
 pub(crate) fn insert_key_prefix(prefixes: &mut BTreeSet<Vec<u8>>, prefix: Vec<u8>) {
@@ -200,7 +200,7 @@ pub(crate) fn insert_key_prefix(prefixes: &mut BTreeSet<Vec<u8>>, prefix: Vec<u8
 }
 
 #[test]
-fn lower_bound_test1_the_lower_bound() {
+fn suffix_closed_set_test1_the_lower_bound() {
     let mut set = BTreeSet::<Vec<u8>>::new();
     set.insert(vec![4]);
     set.insert(vec![7]);
@@ -209,43 +209,43 @@ fn lower_bound_test1_the_lower_bound() {
     set.insert(vec![24]);
     set.insert(vec![40]);
 
-    let mut lower_bound = GreatestLowerBoundIterator::new(0, set.iter());
-    assert_eq!(lower_bound.get_lower_bound(&[3]), None);
-    assert_eq!(lower_bound.get_lower_bound(&[15]), Some(vec!(10)).as_ref());
-    assert_eq!(lower_bound.get_lower_bound(&[17]), Some(vec!(10)).as_ref());
-    assert_eq!(lower_bound.get_lower_bound(&[25]), Some(vec!(24)).as_ref());
-    assert_eq!(lower_bound.get_lower_bound(&[27]), Some(vec!(24)).as_ref());
-    assert_eq!(lower_bound.get_lower_bound(&[42]), Some(vec!(40)).as_ref());
+    let mut suffix_closed_set = SuffixClosedSet::new(0, set.iter());
+    assert_eq!(suffix_closed_set.get_lower_bound(&[3]), None);
+    assert_eq!(suffix_closed_set.get_lower_bound(&[15]), Some(vec!(10)).as_ref());
+    assert_eq!(suffix_closed_set.get_lower_bound(&[17]), Some(vec!(10)).as_ref());
+    assert_eq!(suffix_closed_set.get_lower_bound(&[25]), Some(vec!(24)).as_ref());
+    assert_eq!(suffix_closed_set.get_lower_bound(&[27]), Some(vec!(24)).as_ref());
+    assert_eq!(suffix_closed_set.get_lower_bound(&[42]), Some(vec!(40)).as_ref());
 }
 
 #[test]
-fn lower_bound_test2_is_index_absent() {
+fn suffix_closed_set_test2_is_index_absent() {
     let mut set = BTreeSet::<Vec<u8>>::new();
     set.insert(vec![4]);
     set.insert(vec![0, 3]);
     set.insert(vec![5]);
 
-    let mut lower_bound = GreatestLowerBoundIterator::new(0, set.iter());
-    assert!(lower_bound.is_index_absent(&[0]));
-    assert!(!lower_bound.is_index_absent(&[0, 3]));
-    assert!(!lower_bound.is_index_absent(&[0, 3, 4]));
-    assert!(lower_bound.is_index_absent(&[1]));
-    assert!(!lower_bound.is_index_absent(&[4]));
+    let mut suffix_closed_set = SuffixClosedSet::new(0, set.iter());
+    assert!(suffix_closed_set.is_index_absent(&[0]));
+    assert!(!suffix_closed_set.is_index_absent(&[0, 3]));
+    assert!(!suffix_closed_set.is_index_absent(&[0, 3, 4]));
+    assert!(suffix_closed_set.is_index_absent(&[1]));
+    assert!(!suffix_closed_set.is_index_absent(&[4]));
 }
 
 #[test]
-fn lower_bound_test3_is_index_absent_prefix_len() {
+fn suffix_closed_set_test3_is_index_absent_prefix_len() {
     let mut set = BTreeSet::<Vec<u8>>::new();
     set.insert(vec![0, 4]);
     set.insert(vec![0, 3]);
     set.insert(vec![0, 0, 1]);
 
-    let mut lower_bound = GreatestLowerBoundIterator::new(1, set.iter());
-    assert!(lower_bound.is_index_absent(&[0]));
-    assert!(!lower_bound.is_index_absent(&[0, 1]));
-    assert!(!lower_bound.is_index_absent(&[0, 1, 4]));
-    assert!(!lower_bound.is_index_absent(&[3]));
-    assert!(lower_bound.is_index_absent(&[5]));
+    let mut suffix_closed_set = SuffixClosedSet::new(1, set.iter());
+    assert!(suffix_closed_set.is_index_absent(&[0]));
+    assert!(!suffix_closed_set.is_index_absent(&[0, 1]));
+    assert!(!suffix_closed_set.is_index_absent(&[0, 1, 4]));
+    assert!(!suffix_closed_set.is_index_absent(&[3]));
+    assert!(suffix_closed_set.is_index_absent(&[5]));
 }
 
 #[test]

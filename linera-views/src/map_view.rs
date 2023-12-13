@@ -20,7 +20,7 @@ use crate::{
     batch::Batch,
     common::{
         get_interval, insert_key_prefix, is_index_absent, Context, CustomSerialize,
-        GreatestLowerBoundIterator, HasherOutput, KeyIterable, KeyValueIterable, Update,
+        SuffixClosedSet, HasherOutput, KeyIterable, KeyValueIterable, Update,
         MIN_VIEW_TAG,
     },
     views::{HashableView, Hasher, View, ViewError},
@@ -322,7 +322,7 @@ where
     {
         let prefix_len = prefix.len();
         let iter = self.deleted_prefixes.range(get_interval(prefix.clone()));
-        let mut lower_bound = GreatestLowerBoundIterator::new(prefix_len, iter);
+        let mut suffix_closed_set = SuffixClosedSet::new(prefix_len, iter);
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
         if !self.was_cleared && is_index_absent(&self.deleted_prefixes, &prefix) {
@@ -343,7 +343,7 @@ where
                             }
                         }
                         _ => {
-                            if lower_bound.is_index_absent(index) && !f(index)? {
+                            if suffix_closed_set.is_index_absent(index) && !f(index)? {
                                 return Ok(());
                             }
                             break;
@@ -517,7 +517,7 @@ where
     {
         let prefix_len = prefix.len();
         let iter = self.deleted_prefixes.range(get_interval(prefix.clone()));
-        let mut lower_bound = GreatestLowerBoundIterator::new(prefix_len, iter);
+        let mut suffix_closed_set = SuffixClosedSet::new(prefix_len, iter);
         let mut updates = self.updates.range(get_interval(prefix.clone()));
         let mut update = updates.next();
         if !self.was_cleared && is_index_absent(&self.deleted_prefixes, &prefix) {
@@ -544,7 +544,7 @@ where
                             }
                         }
                         _ => {
-                            if lower_bound.is_index_absent(index) && !f(index, bytes)? {
+                            if suffix_closed_set.is_index_absent(index) && !f(index, bytes)? {
                                 return Ok(());
                             }
                             break;
