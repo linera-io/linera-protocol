@@ -84,6 +84,14 @@ jobs:
       run: |
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
         cargo test -p linera-witty --features wasmer,wasmtime
+    - name: Check for outdated CLI.md
+      run: |
+        if ! diff CLI.md <(cargo run --bin linera -- help-markdown)
+        then
+          echo '`CLI.md` differs from the output of `linera help-markdown`'
+          echo 'Run `linera help-markdown > CLI.md` to update it.'
+          exit 1
+        fi
 
   lint:
     runs-on: ubuntu-latest

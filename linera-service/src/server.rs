@@ -211,7 +211,7 @@ impl Runnable for ServerContext {
 
 #[derive(clap::Parser)]
 #[command(
-    name = "Linera Server",
+    name = "linera-server",
     about = "A byzantine fault tolerant payments sidechain with low-latency finality and high throughput",
     version = clap::crate_version!(),
 )]
