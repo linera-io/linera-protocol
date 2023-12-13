@@ -89,6 +89,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Install cargo-spellcheck
+      uses: taiki-e/install-action@v2
+      with:
+        tool: cargo-spellcheck
     - uses: actions/checkout@v3
     - name: Clear up some space
       run: |
@@ -161,3 +165,5 @@ jobs:
       if: '!cancelled()'
       run: |
         ln -sf toolchains/build/rust-toolchain.toml
+    - name: Run cargo-spellcheck
+      run: cargo spellcheck --code 1
