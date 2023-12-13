@@ -4,9 +4,8 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_interval, get_upper_bound, insert_key_prefix, contains_key, Context,
-        SuffixClosedSet, HasherOutput, KeyIterable, KeyValueIterable, Update,
-        MIN_VIEW_TAG,
+        contains_key, get_interval, get_upper_bound, insert_key_prefix, Context, HasherOutput,
+        KeyIterable, KeyValueIterable, SuffixClosedSet, Update, MIN_VIEW_TAG,
     },
     map_view::ByteMapView,
     views::{HashableView, Hasher, View, ViewError},

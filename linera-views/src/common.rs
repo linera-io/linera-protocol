@@ -211,11 +211,26 @@ fn suffix_closed_set_test1_the_lower_bound() {
 
     let mut suffix_closed_set = SuffixClosedSet::new(0, set.iter());
     assert_eq!(suffix_closed_set.get_lower_bound(&[3]), None);
-    assert_eq!(suffix_closed_set.get_lower_bound(&[15]), Some(vec!(10)).as_ref());
-    assert_eq!(suffix_closed_set.get_lower_bound(&[17]), Some(vec!(10)).as_ref());
-    assert_eq!(suffix_closed_set.get_lower_bound(&[25]), Some(vec!(24)).as_ref());
-    assert_eq!(suffix_closed_set.get_lower_bound(&[27]), Some(vec!(24)).as_ref());
-    assert_eq!(suffix_closed_set.get_lower_bound(&[42]), Some(vec!(40)).as_ref());
+    assert_eq!(
+        suffix_closed_set.get_lower_bound(&[15]),
+        Some(vec!(10)).as_ref()
+    );
+    assert_eq!(
+        suffix_closed_set.get_lower_bound(&[17]),
+        Some(vec!(10)).as_ref()
+    );
+    assert_eq!(
+        suffix_closed_set.get_lower_bound(&[25]),
+        Some(vec!(24)).as_ref()
+    );
+    assert_eq!(
+        suffix_closed_set.get_lower_bound(&[27]),
+        Some(vec!(24)).as_ref()
+    );
+    assert_eq!(
+        suffix_closed_set.get_lower_bound(&[42]),
+        Some(vec!(40)).as_ref()
+    );
 }
 
 #[test]
