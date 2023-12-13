@@ -930,6 +930,94 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
 
     linker.func_wrap2_async(
         "view_system_api",
+        "read-multi-values-bytes::new: \
+            func(key: list<list<u8>>) -> handle<read-multi-values-bytes>",
+        move |mut caller: Caller<'_, Resources>, key_list_address: i32, key_list_length: i32| {
+            Box::new(async move {
+                let key_list_element_size = 8;
+
+                let keys = (0..key_list_length)
+                    .map(|index| {
+                        load_indirect_bytes(
+                            &mut caller,
+                            key_list_address + index * key_list_element_size,
+                        )
+                    })
+                    .collect::<Vec<Vec<u8>>>();
+
+                let resources = caller.data_mut();
+
+                resources.insert(keys)
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "view_system_api",
+        "read-multi-values-bytes::wait: \
+            func(self: handle<read-multi-values-bytes>) -> list<option<list<u8>>>",
+        move |mut caller: Caller<'_, Resources>, handle: i32, return_offset: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-read-multi-values-bytes: func(\
+                        keys: list<list<u8>>\
+                    ) -> list<option<list<u8>>>",
+                )
+                .expect(
+                    "Missing `mocked-read-multi-values-bytes` function in the module. \
+                    Please ensure `linera_sdk::test::mock_key_value_store` was called",
+                );
+
+                let keys = caller.data_mut().get::<Vec<Vec<u8>>>(handle).clone();
+
+                let alloc_function = get_function(&mut caller, "cabi_realloc")
+                    .expect(
+                        "Missing `cabi_realloc` function in the module. \
+                        Please ensure `linera_sdk` is compiled in with the module",
+                    )
+                    .typed::<(i32, i32, i32, i32), i32, _>(&mut caller)
+                    .expect("Incorrect `cabi_realloc` function signature");
+
+                let key_list_element_size = 8;
+                let key_list_length = keys.len().try_into().expect("Too many keys");
+                let key_list_address = alloc_function
+                    .call_async(
+                        &mut caller,
+                        (0, 0, 1, key_list_length * key_list_element_size),
+                    )
+                    .await
+                    .expect("Failed to call `cabi_realloc` function");
+
+                for (index, key) in keys.into_iter().enumerate() {
+                    let key_length = key.len().try_into().expect("Key is too long");
+                    let key_address = alloc_function
+                        .call_async(&mut caller, (0, 0, 1, key_length))
+                        .await
+                        .expect("Failed to call `cabi_realloc` function");
+
+                    let key_list_offset = key_list_address + index as i32 * key_list_element_size;
+
+                    store_bytes_in_memory(&mut caller, key_address, &key);
+                    store_in_memory(&mut caller, key_list_offset, key_address);
+                    store_in_memory(&mut caller, key_list_offset + 4, key_length);
+                }
+
+                let (result_offset,) = function
+                    .typed::<(i32, i32), (i32,), _>(&mut caller)
+                    .expect("Incorrect `mocked-read-multi-values-bytes` function signature")
+                    .call_async(&mut caller, (key_list_address, key_list_length))
+                    .await
+                    .expect(
+                        "Failed to call `mocked-read-multi-values-bytes` function. \
+                        Please ensure `linera_sdk::test::mock_key_value_store` was called",
+                    );
+
+                copy_memory_slices(&mut caller, result_offset, return_offset, 8);
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "view_system_api",
         "read-value-bytes::new: func(key: list<u8>) -> handle<read-value-bytes>",
         move |mut caller: Caller<'_, Resources>, key_address: i32, key_length: i32| {
             Box::new(async move {
@@ -1216,6 +1304,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     let resource_names = [
         "load",
         "lock",
+        "read-multi-values-bytes",
         "read-value-bytes",
         "find-keys",
         "find-key-values",

@@ -201,6 +201,18 @@ impl wit::MockSystemApi for MockSystemApi {
         }
     }
 
+    fn mocked_read_multi_values_bytes(keys: Vec<Vec<u8>>) -> Vec<Option<Vec<u8>>> {
+        unsafe { MOCK_KEY_VALUE_STORE.as_mut() }
+            .expect(
+                "Unexpected call to `read_multi_values_bytes` system API. \
+                Please call `mock_key_value_store` first.",
+            )
+            .read_multi_values_bytes(keys)
+            .now_or_never()
+            .expect("Attempt to read from key-value store while it is being written to")
+            .expect("Failed to read from memory store")
+    }
+
     fn mocked_read_value_bytes(key: Vec<u8>) -> Option<Vec<u8>> {
         unsafe { MOCK_KEY_VALUE_STORE.as_mut() }
             .expect(

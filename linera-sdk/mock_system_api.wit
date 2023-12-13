@@ -20,6 +20,7 @@ mocked-store-and-unlock: func(value: list<u8>) -> bool
 mocked-lock: func() -> bool
 mocked-unlock: func() -> bool
 
+mocked-read-multi-values-bytes: func(keys: list<list<u8>>) -> list<option<list<u8>>>
 mocked-read-value-bytes: func(key: list<u8>) -> option<list<u8>>
 mocked-find-keys: func(prefix: list<u8>) -> list<list<u8>>
 mocked-find-key-values: func(prefix: list<u8>) -> list<tuple<list<u8>,list<u8>>>
