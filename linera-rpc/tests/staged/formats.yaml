@@ -508,6 +508,10 @@ NodeError:
       SubscriptionFailed:
         STRUCT:
           - status: STR
+    19:
+      LocalNodeQuery:
+        STRUCT:
+          - error: STR
 Operation:
   ENUM:
     0:

@@ -164,6 +164,9 @@ pub enum NodeError {
     SubscriptionError { transport: String },
     #[error("Failed to subscribe; tonic status: {status}")]
     SubscriptionFailed { status: String },
+
+    #[error("Failed to make a chain info query on the local node: {error}")]
+    LocalNodeQuery { error: String },
 }
 
 impl CrossChainMessageDelivery {
