@@ -22,10 +22,20 @@ use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc};
 
 /// The metric counting how often a value is read from storage.
-pub static CONTAINS_HASH_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+pub static CONTAINS_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
-        "contains_hash",
+        "contains_value",
         "The metric counting how often a value is tested for existence from storage",
+        &[]
+    )
+    .expect("Counter creation should not fail")
+});
+
+/// The metric counting how often a value is read from storage.
+pub static CONTAINS_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "contains_certificate",
+        "The metric counting how often a certificate is tested for existence from storage",
         &[]
     )
     .expect("Counter creation should not fail")
@@ -189,10 +199,10 @@ where
         ChainStateView::load(context).await
     }
 
-    async fn contains_hash(&self, hash: CryptoHash) -> Result<bool, ViewError> {
+    async fn contains_value(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let test = self.client.client.contains_key(&value_key).await?;
-        CONTAINS_HASH_COUNTER.with_label_values(&[]).inc();
+        CONTAINS_VALUE_COUNTER.with_label_values(&[]).inc();
         Ok(test)
     }
 
@@ -241,6 +251,17 @@ where
             self.add_value_to_batch(value, &mut batch)?;
         }
         self.write_batch(batch).await
+    }
+
+    async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
+        let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
+        let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+        let (cert_test, value_test) = tokio::join!(
+            self.client.client.contains_key(&cert_key),
+            self.client.client.contains_key(&value_key)
+        );
+        CONTAINS_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
+        Ok(cert_test? && value_test?)
     }
 
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {

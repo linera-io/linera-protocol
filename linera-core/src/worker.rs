@@ -666,9 +666,8 @@ where
                     && !blob_hashes.contains(&location.certificate_hash)
             })
             .map(|location| {
-                // TODO(#515): Don't read the value just to check existence.
                 self.storage
-                    .contains_hash(location.certificate_hash)
+                    .contains_value(location.certificate_hash)
                     .map(move |result| (location, result))
             })
             .collect::<Vec<_>>();
