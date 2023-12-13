@@ -86,11 +86,12 @@ impl MatchingEngineApp {
         account_owner: &fungible::AccountOwner,
     ) -> Vec<matching_engine::OrderId> {
         let query = format!(
-            "accountInfo(accountOwner: {}) {{ orders }}",
+            "accountInfo {{ entry(key: {}) {{ value {{ orders }} }} }}",
             account_owner.to_value()
         );
         let response_body = self.0.query(query).await.unwrap();
-        serde_json::from_value(response_body["accountInfo"]["orders"].clone()).unwrap()
+        serde_json::from_value(response_body["accountInfo"]["entry"]["value"]["orders"].clone())
+            .unwrap()
     }
 
     async fn order(&self, order: matching_engine::Order) -> Value {
