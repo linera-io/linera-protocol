@@ -39,6 +39,12 @@ impl ChainOwnership {
         }
     }
 
+    pub fn with_regular_owner(mut self, public_key: PublicKey, weight: u64) -> Self {
+        self.owners
+            .insert(Owner::from(public_key), (public_key, weight));
+        self
+    }
+
     pub fn is_active(&self) -> bool {
         !self.super_owners.is_empty() || !self.owners.is_empty()
     }
