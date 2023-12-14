@@ -67,7 +67,7 @@ impl KeyValueStore for AppStateStore {
         for key in &keys {
             ensure!(key.len() <= Self::MAX_KEY_SIZE, ViewError::KeyTooLong);
         }
-        let keys = keys.iter().map(|x| x.as_slice()).collect::<Vec<_>>();
+        let keys = keys.iter().map(Vec::as_slice).collect::<Vec<_>>();
         let promise = wit::ReadMultiValuesBytes::new(keys.as_slice());
         yield_once().await;
         Ok(promise.wait())

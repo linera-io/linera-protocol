@@ -280,7 +280,7 @@ macro_rules! impl_view_system_api_for_service {
                 &mut self,
                 keys: Vec<&[u8]>,
             ) -> Result<Self::ReadMultiValuesBytes, Self::Error> {
-                let keys = keys.iter().map(|x| x.to_vec()).collect::<Vec<_>>();
+                let keys = keys.into_iter().map(Vec::from).collect();
                 BaseRuntime::read_multi_values_bytes_new(self, keys)
             }
 
@@ -375,7 +375,7 @@ macro_rules! impl_view_system_api_for_contract {
                 &mut self,
                 keys: Vec<&[u8]>,
             ) -> Result<Self::ReadMultiValuesBytes, Self::Error> {
-                let keys = keys.iter().map(|x| x.to_vec()).collect::<Vec<_>>();
+                let keys = keys.into_iter().map(Vec::from).collect();
                 BaseRuntime::read_multi_values_bytes_new(self, keys)
             }
 

@@ -54,7 +54,7 @@ pub enum BaseRequest {
         response_sender: oneshot::Sender<()>,
     },
 
-    /// Requests to read an entry from the key-value store.
+    /// Requests to check if a key is present in the key-value store.
     ContainsKey {
         key: Vec<u8>,
         response_sender: oneshot::Sender<bool>,
