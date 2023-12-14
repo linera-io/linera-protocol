@@ -52,7 +52,7 @@ use linera_base::{
 use linera_views::{batch::Batch, views::ViewError};
 use runtime_actor::{ContractRuntimeSender, ServiceRuntimeSender};
 use serde::{Deserialize, Serialize};
-use std::{io, path::Path, str::FromStr, sync::Arc};
+use std::{fmt, io, path::Path, str::FromStr, sync::Arc};
 use thiserror::Error;
 
 /// An implementation of [`UserContract`]
@@ -273,15 +273,15 @@ pub struct QueryContext {
     pub chain_id: ChainId,
 }
 
-pub trait BaseRuntime: Send + Sync {
-    type Read;
-    type Lock;
-    type Unlock;
-    type ContainsKey;
-    type ReadMultiValuesBytes;
-    type ReadValueBytes;
-    type FindKeysByPrefix;
-    type FindKeyValuesByPrefix;
+pub trait BaseRuntime: Send + Sync + 'static {
+    type Read: fmt::Debug + Send;
+    type Lock: fmt::Debug + Send;
+    type Unlock: fmt::Debug + Send;
+    type ContainsKey: fmt::Debug + Send;
+    type ReadMultiValuesBytes: fmt::Debug + Send;
+    type ReadValueBytes: fmt::Debug + Send;
+    type FindKeysByPrefix: fmt::Debug + Send;
+    type FindKeyValuesByPrefix: fmt::Debug + Send;
 
     /// The current chain id.
     fn chain_id(&mut self) -> Result<ChainId, ExecutionError>;
@@ -374,6 +374,11 @@ pub trait BaseRuntime: Send + Sync {
     /// Unlocks the view user state and allows reading/loading again (wait)
     fn unlock_wait(&mut self, promise: &Self::Unlock) -> Result<(), ExecutionError>;
 
+    /// Writes the batch and then unlock.
+    ///
+    /// Hack: This fails for services.
+    fn write_batch_and_unlock(&mut self, batch: Batch) -> Result<(), ExecutionError>;
+
     /// Reads the key from the key-value store
     #[cfg(feature = "test")]
     fn read_value_bytes(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError> {
@@ -431,7 +436,7 @@ pub trait BaseRuntime: Send + Sync {
 }
 
 pub trait ServiceRuntime: BaseRuntime {
-    type TryQueryApplication;
+    type TryQueryApplication: fmt::Debug + Send;
 
     /// Queries another application (new).
     fn try_query_application_new(
@@ -469,9 +474,6 @@ pub trait ContractRuntime: BaseRuntime {
     // TODO(#1152): remove
     /// Saves the application state and allows reading/loading the state again.
     fn save_and_unlock_my_state(&mut self, state: Vec<u8>) -> Result<bool, ExecutionError>;
-
-    /// Writes the batch and then unlock.
-    fn write_batch_and_unlock(&mut self, batch: Batch) -> Result<(), ExecutionError>;
 
     /// Calls another application. Forwarded sessions will now be visible to
     /// `callee_id` (but not to the caller any more).

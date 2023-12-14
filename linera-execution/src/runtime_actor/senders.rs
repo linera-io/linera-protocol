@@ -187,6 +187,14 @@ impl BaseRuntime for ContractRuntimeSender {
         receiver.recv_response()
     }
 
+    fn write_batch_and_unlock(&mut self, batch: Batch) -> Result<(), ExecutionError> {
+        self.inner
+            .send_sync_request(|response_sender| ContractRequest::WriteBatchAndUnlock {
+                batch,
+                response_sender,
+            })
+    }
+
     fn read_value_bytes_new(
         &mut self,
         key: Vec<u8>,
@@ -313,14 +321,6 @@ impl ContractRuntime for ContractRuntimeSender {
                 session_id,
                 argument,
                 forwarded_sessions,
-                response_sender,
-            })
-    }
-
-    fn write_batch_and_unlock(&mut self, batch: Batch) -> Result<(), ExecutionError> {
-        self.inner
-            .send_sync_request(|response_sender| ContractRequest::WriteBatchAndUnlock {
-                batch,
                 response_sender,
             })
     }
@@ -501,6 +501,10 @@ impl BaseRuntime for ServiceRuntimeSender {
             .take()
             .ok_or_else(|| ExecutionError::PolledTwice)?;
         receiver.recv_response()
+    }
+
+    fn write_batch_and_unlock(&mut self, _batch: Batch) -> Result<(), ExecutionError> {
+        Err(ExecutionError::WriteAttemptToReadOnlyStorage)
     }
 
     fn read_value_bytes_new(
