@@ -724,32 +724,6 @@ where
     }
 }
 
-/// Sometimes we need a serialization that is different from the usual one and
-/// for example preserves order.
-/// The {to/from}_custom_bytes has to be coherent with the Borrow trait.
-pub trait CustomSerialize: Sized {
-    /// Serializes the value
-    fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError>;
-
-    /// Deserialize the vector
-    fn from_custom_bytes(short_key: &[u8]) -> Result<Self, ViewError>;
-}
-
-impl CustomSerialize for u128 {
-    fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError> {
-        let mut bytes = bcs::to_bytes(&self)?;
-        bytes.reverse();
-        Ok(bytes)
-    }
-
-    fn from_custom_bytes(bytes: &[u8]) -> Result<Self, ViewError> {
-        let mut bytes = bytes.to_vec();
-        bytes.reverse();
-        let value = bcs::from_bytes(&bytes)?;
-        Ok(value)
-    }
-}
-
 #[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Copy)]
 struct ContU128 {
     val: u128,
@@ -793,7 +767,6 @@ impl<'de1> Deserialize<'de1> for ContU128 {
 mod tests {
     use rand::{Rng, SeedableRng};
     use std::collections::BTreeSet;
-    use crate::common::CustomSerialize;
     use crate::common::ContU128;
 
     #[test]
@@ -815,10 +788,7 @@ mod tests {
             let val2 = vec[i];
             assert!(val1 < val2);
             let vec1 = bcs::to_bytes(&val1).unwrap();
-            let vec1_b = bcs::to_bytes(&val1.val).unwrap();
-            let vec1_c = val1.val.to_custom_bytes().unwrap();
             let vec2 = bcs::to_bytes(&val2).unwrap();
-            println!("V: vec1_a={:?}\n   vec1_b={:?}\n   vec1_c={:?}", vec1, vec1_b, vec1_c);
             assert!(vec1 < vec2);
             let val_ret1 = bcs::from_bytes::<ContU128>(&vec1).unwrap();
             let val_ret2 = bcs::from_bytes::<ContU128>(&vec2).unwrap();

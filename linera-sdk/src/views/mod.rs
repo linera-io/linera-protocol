@@ -8,7 +8,6 @@ mod system_api;
 pub use self::system_api::ViewStorageContext;
 pub use linera_views::{
     self,
-    common::CustomSerialize,
     views::{RootView, View, ViewError},
 };
 
