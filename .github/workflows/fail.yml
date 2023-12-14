@@ -1,0 +1,21 @@
+name: Fail
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Fail loudly
+      run: |
+        >&2 echo WORKFLOW INTENTIONALLY FAILING
+        exit 1
