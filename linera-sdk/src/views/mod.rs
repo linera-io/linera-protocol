@@ -42,10 +42,6 @@ pub type CustomCollectionView<K, V> =
 /// specific [`ViewStorageContext`].
 pub type CustomMapView<K, V> = linera_views::map_view::CustomMapView<ViewStorageContext, K, V>;
 
-/// An alias to [`linera_views::set_view::CustomSetView`] that uses the WebAssembly
-/// specific [`ViewStorageContext`].
-pub type CustomSetView<W> = linera_views::set_view::CustomSetView<ViewStorageContext, W>;
-
 /// An alias to [`linera_views::log_view::LogView`] that uses the WebAssembly specific
 /// [`ViewStorageContext`].
 pub type LogView<T> = linera_views::log_view::LogView<ViewStorageContext, T>;
