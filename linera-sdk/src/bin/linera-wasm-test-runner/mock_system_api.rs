@@ -931,7 +931,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     linker.func_wrap2_async(
         "view_system_api",
         "read-multi-values-bytes::new: \
-            func(key: list<list<u8>>) -> handle<read-multi-values-bytes>",
+            func(keys: list<list<u8>>) -> handle<read-multi-values-bytes>",
         move |mut caller: Caller<'_, Resources>, key_list_address: i32, key_list_length: i32| {
             Box::new(async move {
                 let key_list_element_size = 8;
