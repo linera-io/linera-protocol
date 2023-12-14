@@ -12,11 +12,7 @@ use linera_base::{
     ensure,
     identifiers::{ChainDescription, ChainId, Owner, SessionId},
 };
-use linera_execution::{
-    policy::ResourceControlPolicy,
-    runtime_actor::{ContractRuntimeSender, ServiceRuntimeSender},
-    *,
-};
+use linera_execution::{policy::ResourceControlPolicy, *};
 use linera_views::{batch::Batch, common::Context, memory::MemoryContext, views::View};
 use std::sync::Arc;
 
@@ -67,8 +63,18 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     Ok(())
 }
 
-struct TestApplication {
+struct TestApplication<Runtime> {
     owner: Owner,
+    _runtime_marker: std::marker::PhantomData<Runtime>,
+}
+
+impl<Runtime> TestApplication<Runtime> {
+    fn new(owner: Owner) -> Self {
+        Self {
+            owner,
+            _runtime_marker: std::marker::PhantomData,
+        }
+    }
 }
 
 /// A fake operation for the [`TestApplication`] which can be easily "serialized" into a single
@@ -80,12 +86,15 @@ enum TestOperation {
     FailingCrossApplicationCall,
 }
 
-impl UserContract<ContractRuntimeSender> for TestApplication {
+impl<Runtime> UserContract<Runtime> for TestApplication<Runtime>
+where
+    Runtime: ContractRuntime,
+{
     /// Nothing needs to be done during initialization.
     fn initialize(
         &self,
         context: OperationContext,
-        _runtime_sender: ContractRuntimeSender,
+        _runtime: Runtime,
         _argument: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         assert_eq!(context.authenticated_signer, Some(self.owner));
@@ -99,27 +108,27 @@ impl UserContract<ContractRuntimeSender> for TestApplication {
     fn execute_operation(
         &self,
         context: OperationContext,
-        mut runtime_sender: ContractRuntimeSender,
+        mut runtime: Runtime,
         operation: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         assert_eq!(operation.len(), 1);
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
-        let app_id = runtime_sender.application_id()?;
+        let app_id = runtime.application_id()?;
 
         // Modify our state.
         let chosen_key = vec![0];
-        runtime_sender.lock()?;
-        let mut state = runtime_sender
+        runtime.lock()?;
+        let mut state = runtime
             .read_value_bytes(chosen_key.clone())?
             .unwrap_or_default();
         state.extend(operation.clone());
         let mut batch = Batch::new();
         batch.put_key_value_bytes(chosen_key, state);
-        runtime_sender.write_batch_and_unlock(batch)?;
+        runtime.write_batch_and_unlock(batch)?;
 
         // Call ourselves after unlocking the state => ok.
-        let call_result = runtime_sender.try_call_application(
+        let call_result = runtime.try_call_application(
             /* authenticated */ true,
             app_id,
             operation.clone(),
@@ -130,12 +139,7 @@ impl UserContract<ContractRuntimeSender> for TestApplication {
         if operation[0] != TestOperation::LeakingSession as u8 {
             // Call the session to close it.
             let session_id = call_result.sessions[0];
-            runtime_sender.try_call_session(
-                /* authenticated */ false,
-                session_id,
-                vec![],
-                vec![],
-            )?;
+            runtime.try_call_session(/* authenticated */ false, session_id, vec![], vec![])?;
         }
         Ok(RawExecutionResult::default())
     }
@@ -144,23 +148,18 @@ impl UserContract<ContractRuntimeSender> for TestApplication {
     fn execute_message(
         &self,
         context: MessageContext,
-        mut runtime_sender: ContractRuntimeSender,
+        mut runtime: Runtime,
         message: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         assert_eq!(message.len(), 1);
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
-        let app_id = runtime_sender.application_id()?;
-        runtime_sender.lock()?;
+        let app_id = runtime.application_id()?;
+        runtime.lock()?;
 
         // Call ourselves while the state is locked => not ok.
-        runtime_sender.try_call_application(
-            /* authenticated */ true,
-            app_id,
-            message,
-            vec![],
-        )?;
-        runtime_sender.unlock()?;
+        runtime.try_call_application(/* authenticated */ true, app_id, message, vec![])?;
+        runtime.unlock()?;
 
         Ok(RawExecutionResult::default())
     }
@@ -169,7 +168,7 @@ impl UserContract<ContractRuntimeSender> for TestApplication {
     fn handle_application_call(
         &self,
         context: CalleeContext,
-        _runtime_sender: ContractRuntimeSender,
+        _runtime: Runtime,
         argument: Vec<u8>,
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError> {
@@ -189,7 +188,7 @@ impl UserContract<ContractRuntimeSender> for TestApplication {
     fn handle_session_call(
         &self,
         context: CalleeContext,
-        _runtime_sender: ContractRuntimeSender,
+        _runtime: Runtime,
         session_state: Vec<u8>,
         _argument: Vec<u8>,
         _forwarded_sessions: Vec<SessionId>,
@@ -205,22 +204,23 @@ impl UserContract<ContractRuntimeSender> for TestApplication {
     }
 }
 
-impl UserService<ServiceRuntimeSender> for TestApplication {
+impl<Runtime> UserService<Runtime> for TestApplication<Runtime>
+where
+    Runtime: ServiceRuntime,
+{
     /// Returns the application state.
     fn handle_query(
         &self,
         _context: QueryContext,
-        mut runtime_sender: ServiceRuntimeSender,
+        mut runtime: Runtime,
         _argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let chosen_key = vec![0];
-        runtime_sender.lock()?;
+        runtime.lock()?;
 
-        let state = runtime_sender
-            .read_value_bytes(chosen_key)?
-            .unwrap_or_default();
+        let state = runtime.read_value_bytes(chosen_key)?.unwrap_or_default();
 
-        runtime_sender.unlock()?;
+        runtime.unlock()?;
 
         Ok(state)
     }
@@ -243,11 +243,11 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     view.context()
         .extra()
         .user_contracts()
-        .insert(app_id, Arc::new(TestApplication { owner }));
+        .insert(app_id, Arc::new(TestApplication::new(owner)));
     view.context()
         .extra()
         .user_services()
-        .insert(app_id, Arc::new(TestApplication { owner }));
+        .insert(app_id, Arc::new(TestApplication::new(owner)));
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
@@ -320,7 +320,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
     view.context()
         .extra()
         .user_contracts()
-        .insert(app_id, Arc::new(TestApplication { owner }));
+        .insert(app_id, Arc::new(TestApplication::new(owner)));
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
@@ -369,11 +369,11 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
     view.context()
         .extra()
         .user_contracts()
-        .insert(app_id, Arc::new(TestApplication { owner }));
+        .insert(app_id, Arc::new(TestApplication::new(owner)));
     view.context()
         .extra()
         .user_services()
-        .insert(app_id, Arc::new(TestApplication { owner }));
+        .insert(app_id, Arc::new(TestApplication::new(owner)));
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
