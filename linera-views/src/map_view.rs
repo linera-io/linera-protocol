@@ -16,8 +16,8 @@
 use crate::{
     batch::Batch,
     common::{
-        contains_key, get_interval, insert_key_prefix, Context, HasherOutput,
-        KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
+        contains_key, get_interval, insert_key_prefix, Context, HasherOutput, KeyIterable,
+        KeyValueIterable, SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
     },
     views::{HashableView, Hasher, View, ViewError},
 };

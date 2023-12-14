@@ -67,7 +67,9 @@ impl<'de2> serde::de::Visitor<'de2> for VisitorPrice {
 /// ourselves to fractions of the form say x / 100000.
 /// The next problem is that if we do the fractions, then the order can only be filled partially. And
 /// in a mathematical way, Euclidean divisions have to be done.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Serialize, Deserialize, SimpleObject, InputObject)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, PartialOrd, Serialize, Deserialize, SimpleObject, InputObject,
+)]
 #[graphql(input_name = "PriceInput")]
 pub struct Price {
     pub price: u64,
@@ -81,7 +83,6 @@ impl Price {
         PriceAsk { price: self.price }
     }
 }
-
 
 #[derive(Clone, Copy, Debug, SimpleObject, InputObject)]
 #[graphql(input_name = "PriceInput")]
@@ -108,7 +109,7 @@ impl Serialize for PriceAsk {
 impl<'de1> Deserialize<'de1> for PriceAsk {
     fn deserialize<D: serde::Deserializer<'de1>>(deserializer: D) -> Result<Self, D::Error> {
         let result = deserializer.deserialize_byte_buf(VisitorPrice);
-        result.map(|price| { Self { price } })
+        result.map(|price| Self { price })
     }
 }
 
@@ -138,7 +139,9 @@ impl Serialize for PriceBid {
 impl<'de1> Deserialize<'de1> for PriceBid {
     fn deserialize<D: serde::Deserializer<'de1>>(deserializer: D) -> Result<Self, D::Error> {
         let result = deserializer.deserialize_byte_buf(VisitorPrice);
-        result.map(|price| { Self { price: u64::MAX - price } })
+        result.map(|price| Self {
+            price: u64::MAX - price,
+        })
     }
 }
 
@@ -217,12 +220,12 @@ pub enum ApplicationCall {
 
 #[cfg(test)]
 mod tests {
-    use super::{PriceBid, PriceAsk};
+    use super::{PriceAsk, PriceBid};
     use webassembly_test::webassembly_test;
 
     #[webassembly_test]
     fn test_ordering_serialization() {
-	let n = 20;
+        let n = 20;
         let mut vec = Vec::new();
         let mut val = 1;
         for _ in 0..n {
@@ -255,4 +258,3 @@ mod tests {
         }
     }
 }
-
