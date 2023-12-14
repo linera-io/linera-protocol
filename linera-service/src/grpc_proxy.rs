@@ -5,7 +5,7 @@ use crate::prometheus_server;
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt};
-use linera_base::identifiers::ChainId;
+use linera_base::{identifiers::ChainId, sync::Lazy};
 use linera_core::notifier::Notifier;
 use linera_rpc::{
     config::{
@@ -28,7 +28,7 @@ use rcgen::generate_simple_self_signed;
 use std::{
     fmt::Debug,
     net::SocketAddr,
-    sync::{Arc, OnceLock},
+    sync::Arc,
     task::{Context, Poll},
     time::Duration,
 };
@@ -41,13 +41,33 @@ use tonic::{
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument};
 
-pub static PROXY_REQUEST_LATENCY: OnceLock<HistogramVec> = OnceLock::new();
+pub static PROXY_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!("proxy_request_latency", "Proxy request latency", &[])
+        .expect("Counter creation should not fail")
+});
 
-pub static PROXY_REQUEST_COUNT: OnceLock<IntCounterVec> = OnceLock::new();
+pub static PROXY_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!("proxy_request_count", "Proxy request count", &[])
+        .expect("Counter creation should not fail")
+});
 
-pub static PROXY_REQUEST_SUCCESS: OnceLock<IntCounterVec> = OnceLock::new();
+pub static PROXY_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "proxy_request_success",
+        "Proxy request success",
+        &["method_name"]
+    )
+    .expect("Counter creation should not fail")
+});
 
-pub static PROXY_REQUEST_ERROR: OnceLock<IntCounterVec> = OnceLock::new();
+pub static PROXY_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "proxy_request_error",
+        "Proxy request error",
+        &["method_name"]
+    )
+    .expect("Counter creation should not fail")
+});
 
 #[derive(Clone)]
 pub struct PrometheusMetricsMiddlewareLayer;
@@ -84,19 +104,9 @@ where
         async move {
             let response = future.await?;
             PROXY_REQUEST_LATENCY
-                .get_or_init(|| {
-                    register_histogram_vec!("proxy_request_latency", "Proxy request latency", &[])
-                        .expect("Counter creation should not fail")
-                })
                 .with_label_values(&[])
                 .observe(start.elapsed().as_secs_f64());
-            PROXY_REQUEST_COUNT
-                .get_or_init(|| {
-                    register_int_counter_vec!("proxy_request_count", "Proxy request count", &[])
-                        .expect("Counter creation should not fail")
-                })
-                .with_label_values(&[])
-                .inc();
+            PROXY_REQUEST_COUNT.with_label_values(&[]).inc();
             Ok(response)
         }
         .boxed()
@@ -245,30 +255,12 @@ impl GrpcProxy {
         match result {
             Ok(chain_info_result) => {
                 PROXY_REQUEST_SUCCESS
-                    .get_or_init(|| {
-                        register_int_counter_vec!(
-                            "proxy_request_success",
-                            "Proxy request success",
-                            &["method_name"]
-                        )
-                        .expect("Counter creation should not fail")
-                    })
                     .with_label_values(&[method_name])
                     .inc();
                 Ok(chain_info_result)
             }
             Err(status) => {
-                PROXY_REQUEST_ERROR
-                    .get_or_init(|| {
-                        register_int_counter_vec!(
-                            "proxy_request_error",
-                            "Proxy request error",
-                            &["method_name"]
-                        )
-                        .expect("Counter creation should not fail")
-                    })
-                    .with_label_values(&[method_name])
-                    .inc();
+                PROXY_REQUEST_ERROR.with_label_values(&[method_name]).inc();
                 Err(status)
             }
         }

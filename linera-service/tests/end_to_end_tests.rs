@@ -48,10 +48,7 @@ async fn test_resolve_binary() {
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
-    let _guard = INTEGRATION_TEST_GUARD
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .await;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = config.network;
     let (mut net, client) = config.instantiate().await.unwrap();
 

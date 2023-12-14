@@ -3,7 +3,7 @@
 
 #![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 
-use linera_base::{data_types::Amount, identifiers::ChainId};
+use linera_base::{data_types::Amount, identifiers::ChainId, sync::Lazy};
 use linera_indexer_graphql_client::{
     indexer::{plugins, state, Plugins, State},
     operations::{get_operation, GetOperation, OperationKey},
@@ -16,11 +16,7 @@ use linera_service::{
     util::resolve_binary,
 };
 use linera_service_graphql_client::{block, request, transfer, Block, Transfer};
-use std::{
-    str::FromStr,
-    sync::{Arc, OnceLock},
-    time::Duration,
-};
+use std::{str::FromStr, sync::Arc, time::Duration};
 use tempfile::TempDir;
 use test_case::test_case;
 use tokio::{
@@ -30,7 +26,7 @@ use tokio::{
 use tracing::{info, warn};
 
 /// A static lock to prevent integration tests from running in parallel.
-static INTEGRATION_TEST_GUARD: OnceLock<Mutex<()>> = OnceLock::new();
+static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 fn reqwest_client() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
@@ -95,10 +91,7 @@ const TRANSFER_DELAY_MILLIS: u64 = 100;
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
     // launching network, service and indexer
-    let _guard = INTEGRATION_TEST_GUARD
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .await;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client) = config.instantiate().await.unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();

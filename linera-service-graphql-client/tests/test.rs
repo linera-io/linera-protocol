@@ -4,7 +4,7 @@
 #![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 
 use fungible::{FungibleTokenAbi, InitialState};
-use linera_base::{data_types::Amount, identifiers::ChainId};
+use linera_base::{data_types::Amount, identifiers::ChainId, sync::Lazy};
 use linera_service::{
     cli_wrappers::{
         local_net::{Database, LocalNetTestingConfig},
@@ -16,13 +16,13 @@ use linera_service_graphql_client::{
     applications, block, blocks, chains, request, transfer, Applications, Block, Blocks, Chains,
     Transfer,
 };
-use std::{collections::BTreeMap, io::Read, rc::Rc, str::FromStr, sync::OnceLock, time::Duration};
+use std::{collections::BTreeMap, io::Read, rc::Rc, str::FromStr, time::Duration};
 use tempfile::tempdir;
 use test_case::test_case;
 use tokio::{process::Command, sync::Mutex};
 
 /// A static lock to prevent integration tests from running in parallel.
-pub static INTEGRATION_TEST_GUARD: OnceLock<Mutex<()>> = OnceLock::new();
+pub static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 fn reqwest_client() -> reqwest::Client {
     reqwest::ClientBuilder::new()
@@ -47,10 +47,7 @@ async fn transfer(client: &reqwest::Client, url: &str, from: ChainId, to: ChainI
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_queries(config: impl LineraNetConfig) {
-    let _guard = INTEGRATION_TEST_GUARD
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .await;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client) = config.instantiate().await.unwrap();
 

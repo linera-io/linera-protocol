@@ -35,7 +35,7 @@ use grpc::{
     BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
     LiteCertificate, SubscriptionRequest,
 };
-use linera_base::identifiers::ChainId;
+use linera_base::{identifiers::ChainId, sync::Lazy};
 use linera_chain::data_types;
 use linera_core::{
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
@@ -50,7 +50,6 @@ use std::{
     iter,
     net::{AddrParseError, SocketAddr},
     str::FromStr,
-    sync::OnceLock,
     task::{Context, Poll},
     time::{Duration, Instant},
 };
@@ -69,15 +68,42 @@ use tracing::{debug, error, info, instrument, warn};
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
 type NotificationSender = mpsc::Sender<Notification>;
 
-pub static SERVER_REQUEST_LATENCY: OnceLock<HistogramVec> = OnceLock::new();
+pub static SERVER_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!("server_request_latency", "Server request latency", &[])
+        .expect("Counter creation should not fail")
+});
 
-pub static SERVER_REQUEST_COUNT: OnceLock<IntCounterVec> = OnceLock::new();
+pub static SERVER_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!("server_request_count", "Server request count", &[])
+        .expect("Counter creation should not fail")
+});
 
-pub static SERVER_REQUEST_SUCCESS: OnceLock<IntCounterVec> = OnceLock::new();
+pub static SERVER_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "server_request_success",
+        "Server request success",
+        &["method_name"]
+    )
+    .expect("Counter creation should not fail")
+});
 
-pub static SERVER_REQUEST_ERROR: OnceLock<IntCounterVec> = OnceLock::new();
+pub static SERVER_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "server_request_error",
+        "Server request error",
+        &["method_name"]
+    )
+    .expect("Counter creation should not fail")
+});
 
-pub static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: OnceLock<HistogramVec> = OnceLock::new();
+pub static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "server_request_latency_per_request_type",
+        "Server request latency per request type",
+        &["method_name"]
+    )
+    .expect("Counter creation should not fail")
+});
 
 #[derive(Clone)]
 pub struct GrpcServer<S> {
@@ -155,19 +181,9 @@ where
         async move {
             let response = future.await?;
             SERVER_REQUEST_LATENCY
-                .get_or_init(|| {
-                    register_histogram_vec!("server_request_latency", "Server request latency", &[])
-                        .expect("Counter creation should not fail")
-                })
                 .with_label_values(&[])
                 .observe(start.elapsed().as_secs_f64());
-            SERVER_REQUEST_COUNT
-                .get_or_init(|| {
-                    register_int_counter_vec!("server_request_count", "Server request count", &[])
-                        .expect("Counter creation should not fail")
-                })
-                .with_label_values(&[])
-                .inc();
+            SERVER_REQUEST_COUNT.with_label_values(&[]).inc();
             Ok(response)
         }
         .boxed()
@@ -393,25 +409,9 @@ where
 
     fn log_request_success_and_latency(start: Instant, method_name: &str) {
         SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE
-            .get_or_init(|| {
-                register_histogram_vec!(
-                    "server_request_latency_per_request_type",
-                    "Server request latency per request type",
-                    &["method_name"]
-                )
-                .expect("Counter creation should not fail")
-            })
             .with_label_values(&[method_name])
             .observe(start.elapsed().as_secs_f64());
         SERVER_REQUEST_SUCCESS
-            .get_or_init(|| {
-                register_int_counter_vec!(
-                    "server_request_success",
-                    "Server request success",
-                    &["method_name"]
-                )
-                .expect("Counter creation should not fail")
-            })
             .with_label_values(&[method_name])
             .inc();
     }
@@ -440,14 +440,6 @@ where
                 }
                 Err(error) => {
                     SERVER_REQUEST_ERROR
-                        .get_or_init(|| {
-                            register_int_counter_vec!(
-                                "server_request_error",
-                                "Server request error",
-                                &["method_name"]
-                            )
-                            .expect("Counter creation should not fail")
-                        })
                         .with_label_values(&["handle_block_proposal"])
                         .inc();
                     warn!(nickname = self.state.nickname(), %error, "Failed to handle block proposal");
@@ -487,14 +479,6 @@ where
             }
             Err(error) => {
                 SERVER_REQUEST_ERROR
-                    .get_or_init(|| {
-                        register_int_counter_vec!(
-                            "server_request_error",
-                            "Server request error",
-                            &["method_name"]
-                        )
-                        .expect("Counter creation should not fail")
-                    })
                     .with_label_values(&["handle_lite_certificate"])
                     .inc();
                 if let WorkerError::MissingCertificateValue = &error {
@@ -538,14 +522,6 @@ where
             }
             Err(error) => {
                 SERVER_REQUEST_ERROR
-                    .get_or_init(|| {
-                        register_int_counter_vec!(
-                            "server_request_error",
-                            "Server request error",
-                            &["method_name"]
-                        )
-                        .expect("Counter creation should not fail")
-                    })
                     .with_label_values(&["handle_certificate"])
                     .inc();
                 error!(nickname = self.state.nickname(), %error, "Failed to handle certificate");
@@ -570,14 +546,6 @@ where
             }
             Err(error) => {
                 SERVER_REQUEST_ERROR
-                    .get_or_init(|| {
-                        register_int_counter_vec!(
-                            "server_request_error",
-                            "Server request error",
-                            &["method_name"]
-                        )
-                        .expect("Counter creation should not fail")
-                    })
                     .with_label_values(&["handle_chain_info_query"])
                     .inc();
                 error!(nickname = self.state.nickname(), %error, "Failed to handle chain info query");
@@ -601,14 +569,6 @@ where
             }
             Err(error) => {
                 SERVER_REQUEST_ERROR
-                    .get_or_init(|| {
-                        register_int_counter_vec!(
-                            "server_request_error",
-                            "Server request error",
-                            &["method_name"]
-                        )
-                        .expect("Counter creation should not fail")
-                    })
                     .with_label_values(&["handle_cross_chain_request"])
                     .inc();
                 error!(nickname = self.state.nickname(), %error, "Failed to handle cross-chain request");

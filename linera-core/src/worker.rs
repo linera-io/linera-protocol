@@ -10,6 +10,7 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, Round},
     doc_scalar, ensure,
     identifiers::{ChainId, Owner},
+    sync::Lazy,
 };
 use linera_chain::{
     data_types::{
@@ -34,7 +35,7 @@ use std::{
     borrow::Cow,
     collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     num::NonZeroUsize,
-    sync::{Arc, OnceLock},
+    sync::Arc,
     time::Duration,
 };
 use thiserror::Error;
@@ -52,11 +53,28 @@ use {
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
 
-pub static NUM_ROUNDS_IN_CERTIFICATE: OnceLock<HistogramVec> = OnceLock::new();
+pub static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "num_rounds_in_certificate",
+        "Number of rounds in certificate",
+        &["certificate_value", "round_type"]
+    )
+    .expect("Counter creation should not fail")
+});
 
-pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: OnceLock<HistogramVec> = OnceLock::new();
+pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "num_rounds_in_block_proposal",
+        "Number of rounds in block proposal",
+        &["round_type"]
+    )
+    .expect("Counter creation should not fail")
+});
 
-pub static TRANSACTION_COUNT: OnceLock<IntCounterVec> = OnceLock::new();
+pub static TRANSACTION_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!("transaction_count", "Transaction count", &[])
+        .expect("Counter creation should not fail")
+});
 
 /// Interface provided by each physical shard (aka "worker") of a validator or a local node.
 /// * All commands return either the current chain info or an error.
@@ -1058,14 +1076,6 @@ where
         // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
         let actions = self.create_network_actions(&mut chain).await?;
         NUM_ROUNDS_IN_BLOCK_PROPOSAL
-            .get_or_init(|| {
-                register_histogram_vec!(
-                    "num_rounds_in_block_proposal",
-                    "Number of rounds in block proposal",
-                    &["round_type"]
-                )
-                .expect("Counter creation should not fail")
-            })
             .with_label_values(&[round.type_name()])
             .observe(round.number() as f64);
         Ok((info, actions))
@@ -1135,22 +1145,10 @@ where
 
         if !duplicated {
             NUM_ROUNDS_IN_CERTIFICATE
-                .get_or_init(|| {
-                    register_histogram_vec!(
-                        "num_rounds_in_certificate",
-                        "Number of rounds in certificate",
-                        &["certificate_value", "round_type"]
-                    )
-                    .expect("Counter creation should not fail")
-                })
                 .with_label_values(&[log_str, round.type_name()])
                 .observe(round.number() as f64);
             if confirmed_transactions > 0 {
                 TRANSACTION_COUNT
-                    .get_or_init(|| {
-                        register_int_counter_vec!("transaction_count", "Transaction count", &[])
-                            .expect("Counter creation should not fail")
-                    })
                     .with_label_values(&[])
                     .inc_by(confirmed_transactions);
             }

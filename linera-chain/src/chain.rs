@@ -17,6 +17,7 @@ use linera_base::{
     data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     ensure,
     identifiers::{ChainId, Destination, MessageId},
+    sync::Lazy,
 };
 use linera_execution::{
     system::{SystemExecutionError, SystemMessage},
@@ -37,21 +38,50 @@ use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec,
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashSet},
-    sync::OnceLock,
     time::Instant,
 };
 
-pub static NUM_BLOCKS_EXECUTED: OnceLock<IntCounterVec> = OnceLock::new();
+pub static NUM_BLOCKS_EXECUTED: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!("num_blocks_executed", "Number of blocks executed", &[])
+        .expect("Counter creation should not fail")
+});
 
-pub static BLOCK_EXECUTION_LATENCY: OnceLock<HistogramVec> = OnceLock::new();
+pub static BLOCK_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!("block_execution_latency", "Block execution latency", &[])
+        .expect("Counter creation should not fail")
+});
 
-pub static WASM_FUEL_USED_PER_BLOCK: OnceLock<HistogramVec> = OnceLock::new();
+pub static WASM_FUEL_USED_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!("wasm_fuel_used_per_block", "Wasm fuel used per block", &[])
+        .expect("Counter creation should not fail")
+});
 
-pub static WASM_NUM_READS_PER_BLOCK: OnceLock<HistogramVec> = OnceLock::new();
+pub static WASM_NUM_READS_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "wasm_num_reads_per_block",
+        "Wasm number of reads per block",
+        &[]
+    )
+    .expect("Counter can be created")
+});
 
-pub static WASM_BYTES_READ_PER_BLOCK: OnceLock<HistogramVec> = OnceLock::new();
+pub static WASM_BYTES_READ_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "wasm_bytes_read_per_block",
+        "Wasm number of bytes read per block",
+        &[]
+    )
+    .expect("Counter can be created")
+});
 
-pub static WASM_BYTES_WRITTEN_PER_BLOCK: OnceLock<HistogramVec> = OnceLock::new();
+pub static WASM_BYTES_WRITTEN_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "wasm_bytes_written_per_block",
+        "Wasm number of bytes written per block",
+        &[]
+    )
+    .expect("Counter can be created")
+});
 
 /// A view accessing the state of a chain.
 #[derive(Debug, RootView, SimpleObject)]
@@ -629,58 +659,20 @@ where
         )?;
 
         // Log Prometheus metrics
-        NUM_BLOCKS_EXECUTED
-            .get_or_init(|| {
-                register_int_counter_vec!("num_blocks_executed", "Number of blocks executed", &[])
-                    .expect("Counter creation should not fail")
-            })
-            .with_label_values(&[])
-            .inc();
+        NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
         BLOCK_EXECUTION_LATENCY
-            .get_or_init(|| {
-                register_histogram_vec!("block_execution_latency", "Block execution latency", &[])
-                    .expect("Counter creation should not fail")
-            })
             .with_label_values(&[])
             .observe(start_time.elapsed().as_secs_f64());
         WASM_FUEL_USED_PER_BLOCK
-            .get_or_init(|| {
-                register_histogram_vec!("wasm_fuel_used_per_block", "Wasm fuel used per block", &[])
-                    .expect("Counter creation should not fail")
-            })
             .with_label_values(&[])
             .observe(tracker.used_fuel as f64);
         WASM_NUM_READS_PER_BLOCK
-            .get_or_init(|| {
-                register_histogram_vec!(
-                    "wasm_num_reads_per_block",
-                    "Wasm number of reads per block",
-                    &[]
-                )
-                .expect("Counter can be created")
-            })
             .with_label_values(&[])
             .observe(tracker.num_reads as f64);
         WASM_BYTES_READ_PER_BLOCK
-            .get_or_init(|| {
-                register_histogram_vec!(
-                    "wasm_bytes_read_per_block",
-                    "Wasm number of bytes read per block",
-                    &[]
-                )
-                .expect("Counter can be created")
-            })
             .with_label_values(&[])
             .observe(tracker.bytes_read as f64);
         WASM_BYTES_WRITTEN_PER_BLOCK
-            .get_or_init(|| {
-                register_histogram_vec!(
-                    "wasm_bytes_written_per_block",
-                    "Wasm number of bytes written per block",
-                    &[]
-                )
-                .expect("Counter can be created")
-            })
             .with_label_values(&[])
             .observe(tracker.bytes_written as f64);
         Ok(BlockExecutionOutcome {
