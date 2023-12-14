@@ -6,7 +6,7 @@
 mod state;
 
 use self::state::FungibleToken;
-use async_graphql::{EmptySubscription, MergedObject, Object, Request, Response, Schema};
+use async_graphql::{ComplexObject, EmptySubscription, Request, Response, Schema};
 use async_trait::async_trait;
 use fungible::Operation;
 use linera_sdk::{
@@ -31,25 +31,19 @@ impl Service for FungibleToken {
         _context: &QueryContext,
         request: Request,
     ) -> Result<Response, Self::Error> {
-        let query_root = FungibleExtendedView(self.clone(), FungibleViewExtension);
         let schema =
-            Schema::build(query_root, Operation::mutation_root(), EmptySubscription).finish();
+            Schema::build(self.clone(), Operation::mutation_root(), EmptySubscription).finish();
         let response = schema.execute(request).await;
         Ok(response)
     }
 }
 
-struct FungibleViewExtension;
-
-#[Object]
-impl FungibleViewExtension {
+#[ComplexObject]
+impl FungibleToken {
     async fn ticker_symbol(&self) -> Result<String, async_graphql::Error> {
         Ok(FungibleToken::parameters()?.ticker_symbol)
     }
 }
-
-#[derive(MergedObject)]
-struct FungibleExtendedView(Arc<FungibleToken>, FungibleViewExtension);
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]

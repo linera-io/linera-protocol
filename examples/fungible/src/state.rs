@@ -10,6 +10,7 @@ use thiserror::Error;
 
 /// The application state.
 #[derive(RootView, async_graphql::SimpleObject)]
+#[graphql(complex)]
 #[view(context = "ViewStorageContext")]
 pub struct FungibleToken {
     accounts: MapView<AccountOwner, Amount>,
