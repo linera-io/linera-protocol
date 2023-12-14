@@ -38,6 +38,7 @@ impl Service for FungibleToken {
     }
 }
 
+// Implements additional fields not derived from struct members of FungibleToken.
 #[ComplexObject]
 impl FungibleToken {
     async fn ticker_symbol(&self) -> Result<String, async_graphql::Error> {

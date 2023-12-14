@@ -6,7 +6,6 @@
 mod state;
 
 use self::state::FungibleToken;
-use async_graphql::ComplexObject;
 use async_trait::async_trait;
 use fungible::{
     Account, AccountOwner, ApplicationCall, Destination, FungibleResponse, Message, Operation,
@@ -300,7 +299,8 @@ impl FungibleToken {
     }
 }
 
-#[ComplexObject]
+// Dummy ComplexObject implementation, required by the graphql(complex) attribute in state.rs.
+#[async_graphql::ComplexObject]
 impl FungibleToken {}
 
 /// An error that can occur during the contract execution.
