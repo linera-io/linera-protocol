@@ -23,7 +23,6 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use serde::Deserialize;
 
 #[cfg(test)]
 #[path = "unit_tests/common_tests.rs"]
@@ -720,80 +719,6 @@ where
             store: self.store.clone(),
             base_key,
             extra: self.extra.clone(),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Copy)]
-struct ContU128 {
-    val: u128,
-}
-
-impl Serialize for ContU128 {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut short_key = bcs::to_bytes(&self.val).unwrap();
-        short_key.reverse();
-        serializer.serialize_bytes(&short_key)
-    }
-}
-
-impl<'de1> Deserialize<'de1> for ContU128 {
-    fn deserialize<D: serde::Deserializer<'de1>>(deserializer: D) -> Result<Self, D::Error> {
-        struct Visitor;
-        impl<'de2> serde::de::Visitor<'de2> for Visitor {
-            type Value = u128;
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(formatter, "a BCS-encoded 128-bit unsigned integer")
-            }
-
-            fn visit_bytes<E: serde::de::Error>(self, v: &[u8]) -> Result<u128, E> {
-                let mut buf = v.to_vec();
-                buf.reverse();
-                bcs::from_bytes(&buf).map_err(|e| E::custom(e.to_string()))
-            }
-
-            fn visit_byte_buf<E: serde::de::Error>(self, mut buf: Vec<u8>) -> Result<u128, E> {
-                buf.reverse();
-                bcs::from_bytes(&buf).map_err(|e| E::custom(e.to_string()))
-            }
-        }
-
-        let result = deserializer.deserialize_byte_buf(Visitor);
-        result.map(|val| { Self { val } })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use rand::{Rng, SeedableRng};
-    use std::collections::BTreeSet;
-    use crate::common::ContU128;
-
-    #[test]
-    fn test_ordering_serialization() {
-        let mut rng = rand::rngs::StdRng::seed_from_u64(2);
-        let n = 1000;
-        let mut set = BTreeSet::new();
-        for _ in 0..n {
-            let val = rng.gen::<u128>();
-            let val = ContU128 { val };
-            set.insert(val);
-        }
-        let mut vec = Vec::new();
-        for val in set {
-            vec.push(val);
-        }
-        for i in 1..vec.len() {
-            let val1 = vec[i - 1];
-            let val2 = vec[i];
-            assert!(val1 < val2);
-            let vec1 = bcs::to_bytes(&val1).unwrap();
-            let vec2 = bcs::to_bytes(&val2).unwrap();
-            assert!(vec1 < vec2);
-            let val_ret1 = bcs::from_bytes::<ContU128>(&vec1).unwrap();
-            let val_ret2 = bcs::from_bytes::<ContU128>(&vec2).unwrap();
-            assert_eq!(val1, val_ret1);
-            assert_eq!(val2, val_ret2);
         }
     }
 }

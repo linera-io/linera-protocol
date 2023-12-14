@@ -47,10 +47,6 @@ impl<'de2> serde::de::Visitor<'de2> for VisitorPrice {
     }
 }
 
-
-
-
-
 /// The asking or bidding price of token 1 in units of token 0.
 ///
 /// Forgetting about types and units, if `account` is buying `quantity` for a `price`:
@@ -218,3 +214,45 @@ pub enum ApplicationCall {
     /// The order from the application
     ExecuteOrder { order: Order },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{PriceBid, PriceAsk};
+    use webassembly_test::webassembly_test;
+
+    #[webassembly_test]
+    fn test_ordering_serialization() {
+	let n = 20;
+        let mut vec = Vec::new();
+        let mut val = 1;
+        for _ in 0..n {
+            val *= 3;
+            vec.push(val);
+        }
+        for i in 1..vec.len() {
+            let val1 = vec[i - 1];
+            let val2 = vec[i];
+            assert!(val1 < val2);
+            let price_ask1 = PriceAsk { price: val1 };
+            let price_ask2 = PriceAsk { price: val2 };
+            let price_bid1 = PriceBid { price: val1 };
+            let price_bid2 = PriceBid { price: val2 };
+            let ser_ask1 = bcs::to_bytes(&price_ask1).unwrap();
+            let ser_ask2 = bcs::to_bytes(&price_ask2).unwrap();
+            let ser_bid1 = bcs::to_bytes(&price_bid1).unwrap();
+            let ser_bid2 = bcs::to_bytes(&price_bid2).unwrap();
+            assert!(ser_ask1 < ser_ask2);
+            assert!(ser_bid1 > ser_bid2);
+
+            let price_ask1_back = bcs::from_bytes::<PriceAsk>(&ser_ask1).unwrap();
+            let price_ask2_back = bcs::from_bytes::<PriceAsk>(&ser_ask2).unwrap();
+            let price_bid1_back = bcs::from_bytes::<PriceBid>(&ser_bid1).unwrap();
+            let price_bid2_back = bcs::from_bytes::<PriceBid>(&ser_bid2).unwrap();
+            assert_eq!(price_ask1.price, price_ask1_back.price);
+            assert_eq!(price_ask2.price, price_ask2_back.price);
+            assert_eq!(price_bid1.price, price_bid1_back.price);
+            assert_eq!(price_bid2.price, price_bid2_back.price);
+        }
+    }
+}
+
