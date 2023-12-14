@@ -172,7 +172,6 @@ use async_graphql::{InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
     base::{ChainId, ContractAbi, ServiceAbi, Timestamp},
     graphql::GraphQLMutationRoot,
-    views::{CustomSerialize, ViewError},
 };
 use serde::{Deserialize, Serialize};
 
@@ -238,7 +237,7 @@ pub struct Post {
 }
 
 /// A key by which a post is indexed.
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize, SimpleObject, InputObject)]
+#[derive(Clone, PartialEq, Debug, SimpleObject, InputObject)]
 #[graphql(input_name = "KeyInput")]
 pub struct Key {
     /// The timestamp of the block in which the post was included on the author's chain.
@@ -251,33 +250,56 @@ pub struct Key {
 
 // Serialize keys so that the lexicographic order of the serialized keys corresponds to reverse
 // chronological order, then sorted by author, then by descending index.
-impl CustomSerialize for Key {
-    fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError> {
+impl Serialize for Key {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let data = (
             (!self.timestamp.micros()).to_be_bytes(),
             &self.author,
             (!self.index).to_be_bytes(),
         );
-        Ok(bcs::to_bytes(&data)?)
+        let key = bcs::to_bytes(&data).unwrap();
+        serializer.serialize_bytes(&key)
     }
+}
 
-    fn from_custom_bytes(short_key: &[u8]) -> Result<Self, ViewError> {
-        let (time_bytes, author, idx_bytes) = (bcs::from_bytes(short_key))?;
-        Ok(Self {
-            timestamp: Timestamp::from(!u64::from_be_bytes(time_bytes)),
-            author,
-            index: !u64::from_be_bytes(idx_bytes),
-        })
+impl<'de1> Deserialize<'de1> for Key {
+    fn deserialize<D: serde::Deserializer<'de1>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+        impl<'de2> serde::de::Visitor<'de2> for Visitor {
+            type Value = Key;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(formatter, "a serialized key encoded")
+            }
+
+            fn visit_bytes<E: serde::de::Error>(self, v: &[u8]) -> Result<Key, E> {
+                let (time_bytes, author, idx_bytes) =
+                    (bcs::from_bytes(v).map_err(|e| E::custom(format!("{:?}", e))))?;
+                Ok(Key {
+                    timestamp: Timestamp::from(!u64::from_be_bytes(time_bytes)),
+                    author,
+                    index: !u64::from_be_bytes(idx_bytes),
+                })
+            }
+
+            fn visit_byte_buf<E: serde::de::Error>(self, buf: Vec<u8>) -> Result<Key, E> {
+                let (time_bytes, author, idx_bytes) =
+                    (bcs::from_bytes(&buf).map_err(|e| E::custom(format!("{:?}", e))))?;
+                Ok(Key {
+                    timestamp: Timestamp::from(!u64::from_be_bytes(time_bytes)),
+                    author,
+                    index: !u64::from_be_bytes(idx_bytes),
+                })
+            }
+        }
+
+        deserializer.deserialize_byte_buf(Visitor)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::Key;
-    use linera_sdk::{
-        base::{ChainId, Timestamp},
-        views::CustomSerialize,
-    };
+    use linera_sdk::base::{ChainId, Timestamp};
     use webassembly_test::webassembly_test;
 
     #[webassembly_test]
@@ -287,11 +309,8 @@ mod tests {
             author: ChainId([0x12345, 0x6789A, 0xBCDEF, 0x0248A].into()),
             index: 0xFEDCBA9876543210,
         };
-        let ser_key = key
-            .to_custom_bytes()
-            .expect("serialization of Key should succeeed");
-        let deser_key =
-            Key::from_custom_bytes(&ser_key).expect("deserialization of Key should succeed");
+        let ser_key = bcs::to_bytes(&key).unwrap();
+        let deser_key = bcs::from_bytes::<Key>(&ser_key).unwrap();
         assert_eq!(key, deser_key);
     }
 }
