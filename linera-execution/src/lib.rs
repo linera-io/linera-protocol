@@ -359,7 +359,7 @@ pub trait BaseRuntime: Send + Sync {
     /// Reads several keys from the key-value store (new)
     fn read_multi_values_bytes_new(
         &mut self,
-        key: Vec<Vec<u8>>,
+        keys: Vec<Vec<u8>>,
     ) -> Result<Self::ReadMultiValuesBytes, ExecutionError>;
 
     /// Reads several keys from the key-value store (wait)
