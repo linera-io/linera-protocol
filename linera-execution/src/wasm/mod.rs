@@ -145,7 +145,7 @@ pub enum WasmExecutionError {
     ExecuteModuleInWasmtime(#[from] ::wasmtime::Trap),
 }
 
-impl UserContract for WasmContract {
+impl UserContract<ContractRuntimeSender> for WasmContract {
     fn initialize(
         &self,
         context: OperationContext,
@@ -250,7 +250,7 @@ impl UserContract for WasmContract {
     }
 }
 
-impl UserService for WasmService {
+impl UserService<ServiceRuntimeSender> for WasmService {
     fn handle_query(
         &self,
         context: QueryContext,

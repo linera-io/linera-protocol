@@ -80,7 +80,7 @@ enum TestOperation {
     FailingCrossApplicationCall,
 }
 
-impl UserContract for TestApplication {
+impl UserContract<ContractRuntimeSender> for TestApplication {
     /// Nothing needs to be done during initialization.
     fn initialize(
         &self,
@@ -205,7 +205,7 @@ impl UserContract for TestApplication {
     }
 }
 
-impl UserService for TestApplication {
+impl UserService<ServiceRuntimeSender> for TestApplication {
     /// Returns the application state.
     fn handle_query(
         &self,
