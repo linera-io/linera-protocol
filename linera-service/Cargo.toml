@@ -49,7 +49,6 @@ linera-execution = { workspace = true }
 linera-rpc = { workspace = true }
 linera-storage = { workspace = true }
 linera-views = { workspace = true }
-once_cell = { workspace = true }
 parse_duration = { workspace = true }
 pathdiff = { workspace = true, optional = true }
 prometheus = { workspace = true }
