@@ -51,7 +51,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
     let network = config.network;
     let (mut net, client) = config.instantiate().await.unwrap();
 
-    let client_2 = net.make_client();
+    let client_2 = net.make_client().await;
     client_2.wallet_init(&[], None).await.unwrap();
     let chain_1 = client.get_wallet().unwrap().default_chain().unwrap();
 
@@ -285,7 +285,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetTestingConfig
 
     let (mut net, client1) = config.instantiate().await.unwrap();
 
-    let client2 = net.make_client();
+    let client2 = net.make_client().await;
     let chain = ChainId::root(0);
     let mut height = 0;
     client2.wallet_init(&[chain], None).await.unwrap();
@@ -347,7 +347,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
     // Create net and two clients.
     let (mut net, client1) = config.instantiate().await.unwrap();
 
-    let client2 = net.make_client();
+    let client2 = net.make_client().await;
     client2.wallet_init(&[], None).await.unwrap();
 
     // Get some chain owned by Client 1.
@@ -580,7 +580,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await.unwrap();
 
-    let client2 = net.make_client();
+    let client2 = net.make_client().await;
     client2.wallet_init(&[], None).await.unwrap();
 
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
@@ -671,7 +671,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await.unwrap();
 
-    let client2 = net.make_client();
+    let client2 = net.make_client().await;
     client2.wallet_init(&[], None).await.unwrap();
 
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
@@ -726,7 +726,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await.unwrap();
 
-    let client2 = net.make_client();
+    let client2 = net.make_client().await;
     client2.wallet_init(&[], None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
@@ -743,7 +743,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     let message_id = outcome.message_id;
 
     // Use the faucet directly to initialize client 3.
-    let client3 = net.make_client();
+    let client3 = net.make_client().await;
     let outcome = client3.wallet_init(&[], Some(&faucet.url())).await.unwrap();
     let chain3 = outcome.unwrap().chain_id;
     assert_eq!(
