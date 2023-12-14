@@ -2142,7 +2142,7 @@ async fn net_up(
             extra_wallet.wallet_init(&[], None).await?;
             let unassigned_key = extra_wallet.keygen().await?;
             let new_chain_msg_id = client1
-                .open_chain(default_chain, Some(unassigned_key))
+                .open_chain(default_chain, Some(unassigned_key), Amount::ZERO)
                 .await?
                 .0;
             extra_wallet

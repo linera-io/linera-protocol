@@ -262,7 +262,10 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     client2.wallet_init(&[], None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
-    let chain2 = client1.open_and_assign(&client2).await.unwrap();
+    let chain2 = client1
+        .open_and_assign(&client2, Amount::ZERO)
+        .await
+        .unwrap();
     let (contract, service) = client1.build_example("social").await.unwrap();
     let bytecode_id = client1
         .publish_bytecode(contract, service, None)
@@ -353,7 +356,10 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
     client2.wallet_init(&[], None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
-    let chain2 = client1.open_and_assign(&client2).await.unwrap();
+    let chain2 = client1
+        .open_and_assign(&client2, Amount::ZERO)
+        .await
+        .unwrap();
 
     // The players
     let account_owner1 = get_fungible_account_owner(&client1);
@@ -553,7 +559,10 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
     client2.wallet_init(&[], None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
-    let chain2 = client1.open_and_assign(&client2).await.unwrap();
+    let chain2 = client1
+        .open_and_assign(&client2, Amount::ZERO)
+        .await
+        .unwrap();
 
     // The players
     let account_owner1 = get_fungible_account_owner(&client1); // operator
@@ -692,8 +701,14 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
         client_admin.build_example("matching-engine").await.unwrap();
 
     let chain_admin = client_admin.get_wallet().unwrap().default_chain().unwrap();
-    let chain_a = client_admin.open_and_assign(&client_a).await.unwrap();
-    let chain_b = client_admin.open_and_assign(&client_b).await.unwrap();
+    let chain_a = client_admin
+        .open_and_assign(&client_a, Amount::ZERO)
+        .await
+        .unwrap();
+    let chain_b = client_admin
+        .open_and_assign(&client_b, Amount::ZERO)
+        .await
+        .unwrap();
 
     // The players
     let owner_admin = get_fungible_account_owner(&client_admin);
@@ -956,8 +971,14 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     let chain_admin = client_admin.get_wallet().unwrap().default_chain().unwrap();
 
     // User chains
-    let chain0 = client_admin.open_and_assign(&client0).await.unwrap();
-    let chain1 = client_admin.open_and_assign(&client1).await.unwrap();
+    let chain0 = client_admin
+        .open_and_assign(&client0, Amount::ZERO)
+        .await
+        .unwrap();
+    let chain1 = client_admin
+        .open_and_assign(&client1, Amount::ZERO)
+        .await
+        .unwrap();
 
     // Admin user
     let owner_admin = get_fungible_account_owner(&client_admin);

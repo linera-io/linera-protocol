@@ -384,11 +384,13 @@ impl ClientWrapper {
         &self,
         from: ChainId,
         to_public_key: Option<PublicKey>,
+        initial_balance: Amount,
     ) -> Result<(MessageId, ChainId)> {
         let mut command = self.command().await?;
         command
             .arg("open-chain")
-            .args(["--from", &from.to_string()]);
+            .args(["--from", &from.to_string()])
+            .args(["--initial-balance", &initial_balance.to_string()]);
 
         if let Some(public_key) = to_public_key {
             command.args(["--to-public-key", &public_key.to_string()]);
@@ -403,13 +405,19 @@ impl ClientWrapper {
     }
 
     /// Runs `linera open-chain` then `linera assign`.
-    pub async fn open_and_assign(&self, client: &ClientWrapper) -> Result<ChainId> {
+    pub async fn open_and_assign(
+        &self,
+        client: &ClientWrapper,
+        initial_balance: Amount,
+    ) -> Result<ChainId> {
         let our_chain = self
             .get_wallet()?
             .default_chain()
             .context("no default chain found")?;
         let key = client.keygen().await?;
-        let (message_id, new_chain) = self.open_chain(our_chain, Some(key)).await?;
+        let (message_id, new_chain) = self
+            .open_chain(our_chain, Some(key), initial_balance)
+            .await?;
         assert_eq!(new_chain, client.assign(key, message_id).await?);
         Ok(new_chain)
     }
