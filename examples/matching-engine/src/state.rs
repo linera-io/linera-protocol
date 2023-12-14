@@ -6,11 +6,11 @@ use fungible::AccountOwner;
 use linera_sdk::{
     base::{Amount, ArithmeticError},
     views::{
-        linera_views, CustomCollectionView, MapView, QueueView, RegisterView, RootView, View,
+        linera_views, CollectionView, MapView, QueueView, RegisterView, RootView, View,
         ViewError, ViewStorageContext,
     },
 };
-use matching_engine::{OrderId, OrderNature, Price};
+use matching_engine::{OrderId, OrderNature, Price, PriceBid, PriceAsk};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use thiserror::Error;
@@ -116,11 +116,11 @@ pub struct MatchingEngine {
     /// The map of the outstanding bids, by the bitwise complement of
     /// the revert of the price. The order is from the best price
     /// level (highest proposed by buyer) to the worse
-    pub bids: CustomCollectionView<Price, LevelView>,
+    pub bids: CollectionView<PriceBid, LevelView>,
     /// The map of the outstanding asks, by the bitwise complement of
     /// the price. The order is from the best one (smallest asked price
     /// by seller) to the worse.
-    pub asks: CustomCollectionView<Price, LevelView>,
+    pub asks: CollectionView<PriceAsk, LevelView>,
     /// The map with the list of orders giving for each order_id the
     /// fundamental information on the order (nature, owner, amount)
     pub orders: MapView<OrderId, KeyBook>,

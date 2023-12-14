@@ -6,7 +6,6 @@ use fungible::{AccountOwner, FungibleTokenAbi};
 use linera_sdk::{
     base::{Amount, ApplicationId, ContractAbi, ServiceAbi},
     graphql::GraphQLMutationRoot,
-    views::{CustomSerialize, ViewError},
 };
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +28,29 @@ impl ServiceAbi for MatchingEngineAbi {
     type QueryResponse = Response;
 }
 
+struct VisitorPrice;
+impl<'de2> serde::de::Visitor<'de2> for VisitorPrice {
+    type Value = u64;
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(formatter, "a BCS-encoded 64-bit unsigned integer")
+    }
+
+    fn visit_bytes<E: serde::de::Error>(self, v: &[u8]) -> Result<u64, E> {
+        let mut buf = v.to_vec();
+        buf.reverse();
+        bcs::from_bytes(&buf).map_err(|e| E::custom(e.to_string()))
+    }
+
+    fn visit_byte_buf<E: serde::de::Error>(self, mut buf: Vec<u8>) -> Result<u64, E> {
+        buf.reverse();
+        bcs::from_bytes(&buf).map_err(|e| E::custom(e.to_string()))
+    }
+}
+
+
+
+
+
 /// The asking or bidding price of token 1 in units of token 0.
 ///
 /// Forgetting about types and units, if `account` is buying `quantity` for a `price`:
@@ -49,36 +71,78 @@ impl ServiceAbi for MatchingEngineAbi {
 /// ourselves to fractions of the form say x / 100000.
 /// The next problem is that if we do the fractions, then the order can only be filled partially. And
 /// in a mathematical way, Euclidean divisions have to be done.
-#[derive(
-    Clone, Copy, Debug, PartialEq, PartialOrd, Deserialize, Serialize, SimpleObject, InputObject,
-)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Serialize, Deserialize, SimpleObject, InputObject)]
 #[graphql(input_name = "PriceInput")]
 pub struct Price {
     pub price: u64,
 }
 
-/// We use the custom serialization for the Price so that the order of the serialization
-/// corresponds to the order of the Prices.
-impl CustomSerialize for Price {
-    fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError> {
-        let mut short_key = bcs::to_bytes(&self.price)?;
-        short_key.reverse();
-        Ok(short_key)
+impl Price {
+    pub fn to_bid(&self) -> PriceBid {
+        PriceBid { price: self.price }
     }
-
-    fn from_custom_bytes(short_key: &[u8]) -> Result<Self, ViewError> {
-        let mut bytes = short_key.to_vec();
-        bytes.reverse();
-        let value = bcs::from_bytes(&bytes)?;
-        Ok(value)
+    pub fn to_ask(&self) -> PriceAsk {
+        PriceAsk { price: self.price }
     }
 }
 
-impl Price {
-    pub fn revert(&self) -> Self {
-        Price {
-            price: u64::MAX - self.price,
-        }
+
+#[derive(Clone, Copy, Debug, SimpleObject, InputObject)]
+#[graphql(input_name = "PriceInput")]
+pub struct PriceAsk {
+    pub price: u64,
+}
+
+impl PriceAsk {
+    pub fn to_price(&self) -> Price {
+        Price { price: self.price }
+    }
+}
+
+/// We use the custom serialization for the Price so that the smallest ask price shows
+/// up first in the lexicographic order.
+impl Serialize for PriceAsk {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut short_key = bcs::to_bytes(&self.price).unwrap();
+        short_key.reverse();
+        serializer.serialize_bytes(&short_key)
+    }
+}
+
+impl<'de1> Deserialize<'de1> for PriceAsk {
+    fn deserialize<D: serde::Deserializer<'de1>>(deserializer: D) -> Result<Self, D::Error> {
+        let result = deserializer.deserialize_byte_buf(VisitorPrice);
+        result.map(|price| { Self { price } })
+    }
+}
+
+#[derive(Clone, Copy, Debug, SimpleObject, InputObject)]
+#[graphql(input_name = "PriceInput")]
+pub struct PriceBid {
+    pub price: u64,
+}
+
+impl PriceBid {
+    pub fn to_price(&self) -> Price {
+        Price { price: self.price }
+    }
+}
+
+/// We use the custom serialization for the Price so that the highest bid price shows
+/// up first in the lexicographic order.
+impl Serialize for PriceBid {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let price = u64::MAX - self.price;
+        let mut short_key = bcs::to_bytes(&price).unwrap();
+        short_key.reverse();
+        serializer.serialize_bytes(&short_key)
+    }
+}
+
+impl<'de1> Deserialize<'de1> for PriceBid {
+    fn deserialize<D: serde::Deserializer<'de1>>(deserializer: D) -> Result<Self, D::Error> {
+        let result = deserializer.deserialize_byte_buf(VisitorPrice);
+        result.map(|price| { Self { price: u64::MAX - price } })
     }
 }
 
