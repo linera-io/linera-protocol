@@ -420,63 +420,6 @@ where
     }
 }
 
-use crate::collection_view::CustomCollectionView;
-impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
-    async_graphql::TypeName for CustomCollectionView<C, K, V>
-{
-    fn type_name() -> Cow<'static, str> {
-        format!("CustomCollectionView_{}_{}", K::type_name(), V::type_name()).into()
-    }
-}
-#[async_graphql::Object(name_type)]
-impl<C, K, V> CustomCollectionView<C, K, V>
-where
-    C: Send + Sync + Context,
-    K: async_graphql::InputType
-        + async_graphql::OutputType
-        + crate::common::CustomSerialize
-        + std::fmt::Debug,
-    V: View<C> + async_graphql::OutputType,
-    ViewError: From<C::Error>,
-    MapInput<K>: async_graphql::InputType,
-    MapFilters<K>: async_graphql::InputType,
-{
-    async fn keys(&self) -> Result<Vec<K>, async_graphql::Error> {
-        Ok(self.indices().await?)
-    }
-
-    async fn entry(&self, key: K) -> Result<Entry<K, ReadGuardedView<V>>, async_graphql::Error> {
-        Ok(Entry {
-            value: self.try_load_entry(&key).await?,
-            key,
-        })
-    }
-
-    async fn entries(
-        &self,
-        input: Option<MapInput<K>>,
-    ) -> Result<Vec<Entry<K, ReadGuardedView<V>>>, async_graphql::Error> {
-        let keys = if let Some(keys) = input
-            .and_then(|input| input.filters)
-            .and_then(|filters| filters.keys)
-        {
-            keys
-        } else {
-            self.indices().await?
-        };
-
-        let mut values = vec![];
-        for key in keys {
-            values.push(Entry {
-                value: self.try_load_entry(&key).await?,
-                key,
-            })
-        }
-
-        Ok(values)
-    }
-}
-
 use crate::reentrant_collection_view as reentrant;
 #[async_trait::async_trait]
 impl<T: async_graphql::OutputType> async_graphql::OutputType for reentrant::ReadGuardedView<T> {

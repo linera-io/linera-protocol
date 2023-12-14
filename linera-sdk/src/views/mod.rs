@@ -33,11 +33,6 @@ pub type ByteSetView = linera_views::set_view::ByteSetView<ViewStorageContext>;
 pub type CollectionView<K, V> =
     linera_views::collection_view::CollectionView<ViewStorageContext, K, V>;
 
-/// An alias to [`linera_views::collection_view::CustomCollectionView`] that uses the
-/// WebAssembly specific [`ViewStorageContext`].
-pub type CustomCollectionView<K, V> =
-    linera_views::collection_view::CustomCollectionView<ViewStorageContext, K, V>;
-
 /// An alias to [`linera_views::log_view::LogView`] that uses the WebAssembly specific
 /// [`ViewStorageContext`].
 pub type LogView<T> = linera_views::log_view::LogView<ViewStorageContext, T>;
