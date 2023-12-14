@@ -130,7 +130,7 @@ where
 /// entry such that `x <= val` for the lexicographic order. If none exists then None is
 /// returned. The function calls have to be done with increasing `val`.
 ///
-/// The function call `contains_key(val)` tests whether there exists a prefix p in the
+/// The function call `find_key(val)` tests whether there exists a prefix p in the
 /// set of vectors such that p is a prefix of val.
 pub(crate) struct SuffixClosedSetIterator<'a, I> {
     prefix_len: usize,
@@ -171,7 +171,7 @@ where
         }
     }
 
-    pub(crate) fn contains_key(&mut self, index: &[u8]) -> bool {
+    pub(crate) fn find_key(&mut self, index: &[u8]) -> bool {
         let lower_bound = self.find_lower_bound(index);
         match lower_bound {
             None => false,
@@ -183,7 +183,7 @@ where
 pub(crate) fn contains_key(prefixes: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
     let iter = prefixes.iter();
     let mut suffix_closed_set = SuffixClosedSetIterator::new(0, iter);
-    suffix_closed_set.contains_key(key)
+    suffix_closed_set.find_key(key)
 }
 
 pub(crate) fn insert_key_prefix(prefixes: &mut BTreeSet<Vec<u8>>, prefix: Vec<u8>) {
@@ -234,33 +234,33 @@ fn suffix_closed_set_test1_the_lower_bound() {
 }
 
 #[test]
-fn suffix_closed_set_test2_contains_key() {
+fn suffix_closed_set_test2_find_key() {
     let mut set = BTreeSet::<Vec<u8>>::new();
     set.insert(vec![4]);
     set.insert(vec![0, 3]);
     set.insert(vec![5]);
 
     let mut suffix_closed_set = SuffixClosedSetIterator::new(0, set.iter());
-    assert!(!suffix_closed_set.contains_key(&[0]));
-    assert!(suffix_closed_set.contains_key(&[0, 3]));
-    assert!(suffix_closed_set.contains_key(&[0, 3, 4]));
-    assert!(!suffix_closed_set.contains_key(&[1]));
-    assert!(suffix_closed_set.contains_key(&[4]));
+    assert!(!suffix_closed_set.find_key(&[0]));
+    assert!(suffix_closed_set.find_key(&[0, 3]));
+    assert!(suffix_closed_set.find_key(&[0, 3, 4]));
+    assert!(!suffix_closed_set.find_key(&[1]));
+    assert!(suffix_closed_set.find_key(&[4]));
 }
 
 #[test]
-fn suffix_closed_set_test3_contains_key_prefix_len() {
+fn suffix_closed_set_test3_find_key_prefix_len() {
     let mut set = BTreeSet::<Vec<u8>>::new();
     set.insert(vec![0, 4]);
     set.insert(vec![0, 3]);
     set.insert(vec![0, 0, 1]);
 
     let mut suffix_closed_set = SuffixClosedSetIterator::new(1, set.iter());
-    assert!(!suffix_closed_set.contains_key(&[0]));
-    assert!(suffix_closed_set.contains_key(&[0, 1]));
-    assert!(suffix_closed_set.contains_key(&[0, 1, 4]));
-    assert!(suffix_closed_set.contains_key(&[3]));
-    assert!(!suffix_closed_set.contains_key(&[5]));
+    assert!(!suffix_closed_set.find_key(&[0]));
+    assert!(suffix_closed_set.find_key(&[0, 1]));
+    assert!(suffix_closed_set.find_key(&[0, 1, 4]));
+    assert!(suffix_closed_set.find_key(&[3]));
+    assert!(!suffix_closed_set.find_key(&[5]));
 }
 
 #[test]

@@ -300,7 +300,7 @@ where
                             }
                         }
                         _ => {
-                            if !suffix_closed_set.contains_key(index) && !f(index)? {
+                            if !suffix_closed_set.find_key(index) && !f(index)? {
                                 return Ok(());
                             }
                             break;
@@ -399,7 +399,7 @@ where
                             }
                         }
                         _ => {
-                            if !suffix_closed_set.contains_key(index) && !f(index, index_val)? {
+                            if !suffix_closed_set.find_key(index) && !f(index, index_val)? {
                                 return Ok(());
                             }
                             break;
@@ -577,9 +577,7 @@ where
         if self.was_cleared {
             return Ok(false);
         }
-        let iter = self.deleted_prefixes.iter();
-        let mut suffix_closed_set = SuffixClosedSetIterator::new(0, iter);
-        if suffix_closed_set.contains_key(index) {
+        if contains_key(&self.deleted_prefixes, index) {
             return Ok(false);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, index);
@@ -824,7 +822,7 @@ where
                         _ => {
                             let mut key_with_prefix = key_prefix.to_vec();
                             key_with_prefix.extend_from_slice(key);
-                            if !suffix_closed_set.contains_key(&key_with_prefix) {
+                            if !suffix_closed_set.find_key(&key_with_prefix) {
                                 keys.push(key.to_vec());
                             }
                             break;
@@ -898,7 +896,7 @@ where
                         _ => {
                             let mut key_with_prefix = key_prefix.to_vec();
                             key_with_prefix.extend_from_slice(&key);
-                            if !suffix_closed_set.contains_key(&key_with_prefix) {
+                            if !suffix_closed_set.find_key(&key_with_prefix) {
                                 key_values.push((key, value));
                             }
                             break;

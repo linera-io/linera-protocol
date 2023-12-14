@@ -342,7 +342,7 @@ where
                             }
                         }
                         _ => {
-                            if !suffix_closed_set.contains_key(index) && !f(index)? {
+                            if !suffix_closed_set.find_key(index) && !f(index)? {
                                 return Ok(());
                             }
                             break;
@@ -543,7 +543,7 @@ where
                             }
                         }
                         _ => {
-                            if !suffix_closed_set.contains_key(index) && !f(index, bytes)? {
+                            if !suffix_closed_set.find_key(index) && !f(index, bytes)? {
                                 return Ok(());
                             }
                             break;
