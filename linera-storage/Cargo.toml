@@ -34,7 +34,6 @@ linera-base = { workspace = true }
 linera-chain = { workspace = true }
 linera-execution = { workspace = true }
 linera-views = { workspace = true, features = ["metrics"] }
-once_cell = { workspace = true }
 prometheus = { workspace = true }
 serde = { workspace = true }
 tempfile = { workspace = true }
