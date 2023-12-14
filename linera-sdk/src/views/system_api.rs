@@ -53,28 +53,31 @@ impl KeyValueStore for AppStateStore {
         1
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
         ensure!(key.len() <= Self::MAX_KEY_SIZE, ViewError::KeyTooLong);
-        let promise = wit::ReadValueBytes::new(key);
+        let promise = wit::ContainsKey::new(key);
         yield_once().await;
         Ok(promise.wait())
-    }
-
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
-        Ok(self.read_value_bytes(key).await?.is_some())
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        let mut results = Vec::new();
-        for key in keys {
+        for key in &keys {
             ensure!(key.len() <= Self::MAX_KEY_SIZE, ViewError::KeyTooLong);
-            let value = self.read_value_bytes(&key).await?;
-            results.push(value);
         }
-        Ok(results)
+        let keys = keys.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        let promise = wit::ReadMultiValuesBytes::new(keys.as_slice());
+        yield_once().await;
+        Ok(promise.wait())
+    }
+
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        ensure!(key.len() <= Self::MAX_KEY_SIZE, ViewError::KeyTooLong);
+        let promise = wit::ReadValueBytes::new(key);
+        yield_once().await;
+        Ok(promise.wait())
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, ViewError> {

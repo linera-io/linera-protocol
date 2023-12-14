@@ -277,6 +277,8 @@ pub trait BaseRuntime: Send + Sync {
     type Read;
     type Lock;
     type Unlock;
+    type ContainsKey;
+    type ReadMultiValuesBytes;
     type ReadValueBytes;
     type FindKeysByPrefix;
     type FindKeyValuesByPrefix;
@@ -330,6 +332,41 @@ pub trait BaseRuntime: Send + Sync {
         let promise = self.unlock_new()?;
         self.unlock_wait(&promise)
     }
+
+    /// Tests whether a key exists in the key-value store
+    #[cfg(feature = "test")]
+    fn contains_key(&mut self, key: Vec<u8>) -> Result<bool, ExecutionError> {
+        let promise = self.contains_key_new(key)?;
+        self.contains_key_wait(&promise)
+    }
+
+    /// Tests whether a key exists in the key-value store (new)
+    fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError>;
+
+    /// Tests whether a key exists in the key-value store (wait)
+    fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError>;
+
+    /// Reads several keys from the key-value store
+    #[cfg(feature = "test")]
+    fn read_multi_values_bytes(
+        &mut self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError> {
+        let promise = self.read_multi_values_bytes_new(keys)?;
+        self.read_multi_values_bytes_wait(&promise)
+    }
+
+    /// Reads several keys from the key-value store (new)
+    fn read_multi_values_bytes_new(
+        &mut self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Self::ReadMultiValuesBytes, ExecutionError>;
+
+    /// Reads several keys from the key-value store (wait)
+    fn read_multi_values_bytes_wait(
+        &mut self,
+        promise: &Self::ReadMultiValuesBytes,
+    ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError>;
 
     /// Unlocks the view user state and allows reading/loading again (new)
     fn unlock_new(&mut self) -> Result<Self::Unlock, ExecutionError>;

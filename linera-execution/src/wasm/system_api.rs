@@ -255,12 +255,40 @@ macro_rules! impl_view_system_api_for_service {
         impl view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
+            type ContainsKey = <Self as BaseRuntime>::ContainsKey;
+            type ReadMultiValuesBytes = <Self as BaseRuntime>::ReadMultiValuesBytes;
             type ReadValueBytes = <Self as BaseRuntime>::ReadValueBytes;
             type FindKeys = <Self as BaseRuntime>::FindKeysByPrefix;
             type FindKeyValues = <Self as BaseRuntime>::FindKeyValuesByPrefix;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
+            }
+
+            fn contains_key_new(&mut self, key: &[u8]) -> Result<Self::ContainsKey, Self::Error> {
+                BaseRuntime::contains_key_new(self, key.to_vec())
+            }
+
+            fn contains_key_wait(
+                &mut self,
+                promise: &Self::ContainsKey,
+            ) -> Result<bool, Self::Error> {
+                BaseRuntime::contains_key_wait(self, promise)
+            }
+
+            fn read_multi_values_bytes_new(
+                &mut self,
+                keys: Vec<&[u8]>,
+            ) -> Result<Self::ReadMultiValuesBytes, Self::Error> {
+                let keys = keys.into_iter().map(Vec::from).collect();
+                BaseRuntime::read_multi_values_bytes_new(self, keys)
+            }
+
+            fn read_multi_values_bytes_wait(
+                &mut self,
+                promise: &Self::ReadMultiValuesBytes,
+            ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
+                BaseRuntime::read_multi_values_bytes_wait(self, promise)
             }
 
             fn read_value_bytes_new(
@@ -322,12 +350,40 @@ macro_rules! impl_view_system_api_for_contract {
         impl view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
+            type ContainsKey = <Self as BaseRuntime>::ContainsKey;
+            type ReadMultiValuesBytes = <Self as BaseRuntime>::ReadMultiValuesBytes;
             type ReadValueBytes = <Self as BaseRuntime>::ReadValueBytes;
             type FindKeys = <Self as BaseRuntime>::FindKeysByPrefix;
             type FindKeyValues = <Self as BaseRuntime>::FindKeyValuesByPrefix;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
+            }
+
+            fn contains_key_new(&mut self, key: &[u8]) -> Result<Self::ContainsKey, Self::Error> {
+                BaseRuntime::contains_key_new(self, key.to_vec())
+            }
+
+            fn contains_key_wait(
+                &mut self,
+                promise: &Self::ContainsKey,
+            ) -> Result<bool, Self::Error> {
+                BaseRuntime::contains_key_wait(self, promise)
+            }
+
+            fn read_multi_values_bytes_new(
+                &mut self,
+                keys: Vec<&[u8]>,
+            ) -> Result<Self::ReadMultiValuesBytes, Self::Error> {
+                let keys = keys.into_iter().map(Vec::from).collect();
+                BaseRuntime::read_multi_values_bytes_new(self, keys)
+            }
+
+            fn read_multi_values_bytes_wait(
+                &mut self,
+                promise: &Self::ReadMultiValuesBytes,
+            ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
+                BaseRuntime::read_multi_values_bytes_wait(self, promise)
             }
 
             fn read_value_bytes_new(

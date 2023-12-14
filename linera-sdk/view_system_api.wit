@@ -1,3 +1,13 @@
+resource contains-key {
+    static new: func(key: list<u8>) -> contains-key
+    wait: func() -> bool
+}
+
+resource read-multi-values-bytes {
+    static new: func(keys: list<list<u8>>) -> read-multi-values-bytes
+    wait: func() -> list<option<list<u8>>>
+}
+
 resource read-value-bytes {
     static new: func(key: list<u8>) -> read-value-bytes
     wait: func() -> option<list<u8>>

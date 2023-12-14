@@ -444,6 +444,16 @@ where
         }
     }
 
+    pub(crate) async fn contains_key(&self, key: Vec<u8>) -> Result<bool, ExecutionError> {
+        let state = self.active_view_user_states_mut().await;
+        let view = state
+            .get(&self.application_id())
+            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
+        let result = view.contains_key(&key).await?;
+        self.increment_num_reads()?;
+        Ok(result)
+    }
+
     pub(crate) async fn read_value_bytes(
         &self,
         key: Vec<u8>,
@@ -458,6 +468,22 @@ where
             self.increment_bytes_read(value.len() as u64)?;
         }
         Ok(result)
+    }
+
+    pub(crate) async fn read_multi_values_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError> {
+        let state = self.active_view_user_states_mut().await;
+        let view = state
+            .get(&self.application_id())
+            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
+        let results = view.multi_get(keys).await?;
+        self.increment_num_reads()?;
+        for value in results.iter().flatten() {
+            self.increment_bytes_read(value.len() as u64)?;
+        }
+        Ok(results)
     }
 
     pub(crate) async fn find_keys_by_prefix(

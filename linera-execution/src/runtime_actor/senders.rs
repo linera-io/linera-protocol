@@ -44,6 +44,8 @@ impl BaseRuntime for ContractRuntimeSender {
     type Read = Mutex<Option<oneshot::Receiver<Vec<u8>>>>;
     type Lock = Mutex<Option<oneshot::Receiver<()>>>;
     type Unlock = Mutex<Option<oneshot::Receiver<()>>>;
+    type ContainsKey = Mutex<Option<oneshot::Receiver<bool>>>;
+    type ReadMultiValuesBytes = Mutex<Option<oneshot::Receiver<Vec<Option<Vec<u8>>>>>>;
     type ReadValueBytes = Mutex<Option<oneshot::Receiver<Option<Vec<u8>>>>>;
     type FindKeysByPrefix = Mutex<Option<oneshot::Receiver<Vec<Vec<u8>>>>>;
     type FindKeyValuesByPrefix = Mutex<Option<oneshot::Receiver<Vec<(Vec<u8>, Vec<u8>)>>>>;
@@ -131,6 +133,52 @@ impl BaseRuntime for ContractRuntimeSender {
     }
 
     fn unlock_wait(&mut self, promise: &Self::Unlock) -> Result<(), ExecutionError> {
+        let receiver = promise
+            .try_lock()
+            .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+            .take()
+            .ok_or_else(|| ExecutionError::PolledTwice)?;
+        receiver.recv_response()
+    }
+
+    fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
+        Ok(Mutex::new(Some(self.inner.send_request(
+            |response_sender| {
+                ContractRequest::Base(BaseRequest::ContainsKey {
+                    key,
+                    response_sender,
+                })
+            },
+        )?)))
+    }
+
+    fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError> {
+        let receiver = promise
+            .try_lock()
+            .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+            .take()
+            .ok_or_else(|| ExecutionError::PolledTwice)?;
+        receiver.recv_response()
+    }
+
+    fn read_multi_values_bytes_new(
+        &mut self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Self::ReadMultiValuesBytes, ExecutionError> {
+        Ok(Mutex::new(Some(self.inner.send_request(
+            |response_sender| {
+                ContractRequest::Base(BaseRequest::ReadMultiValuesBytes {
+                    keys,
+                    response_sender,
+                })
+            },
+        )?)))
+    }
+
+    fn read_multi_values_bytes_wait(
+        &mut self,
+        promise: &Self::ReadMultiValuesBytes,
+    ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError> {
         let receiver = promise
             .try_lock()
             .expect("Unexpected reentrant locking of `oneshot::Receiver`")
@@ -296,6 +344,8 @@ impl BaseRuntime for ServiceRuntimeSender {
     type Read = Mutex<Option<oneshot::Receiver<Vec<u8>>>>;
     type Lock = Mutex<Option<oneshot::Receiver<()>>>;
     type Unlock = Mutex<Option<oneshot::Receiver<()>>>;
+    type ContainsKey = Mutex<Option<oneshot::Receiver<bool>>>;
+    type ReadMultiValuesBytes = Mutex<Option<oneshot::Receiver<Vec<Option<Vec<u8>>>>>>;
     type ReadValueBytes = Mutex<Option<oneshot::Receiver<Option<Vec<u8>>>>>;
     type FindKeysByPrefix = Mutex<Option<oneshot::Receiver<Vec<Vec<u8>>>>>;
     type FindKeyValuesByPrefix = Mutex<Option<oneshot::Receiver<Vec<(Vec<u8>, Vec<u8>)>>>>;
@@ -399,6 +449,52 @@ impl BaseRuntime for ServiceRuntimeSender {
     }
 
     fn unlock_wait(&mut self, promise: &Self::Unlock) -> Result<(), ExecutionError> {
+        let receiver = promise
+            .try_lock()
+            .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+            .take()
+            .ok_or_else(|| ExecutionError::PolledTwice)?;
+        receiver.recv_response()
+    }
+
+    fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
+        Ok(Mutex::new(Some(self.inner.send_request(
+            |response_sender| {
+                ServiceRequest::Base(BaseRequest::ContainsKey {
+                    key,
+                    response_sender,
+                })
+            },
+        )?)))
+    }
+
+    fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError> {
+        let receiver = promise
+            .try_lock()
+            .expect("Unexpected reentrant locking of `oneshot::Receiver`")
+            .take()
+            .ok_or_else(|| ExecutionError::PolledTwice)?;
+        receiver.recv_response()
+    }
+
+    fn read_multi_values_bytes_new(
+        &mut self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Self::ReadMultiValuesBytes, ExecutionError> {
+        Ok(Mutex::new(Some(self.inner.send_request(
+            |response_sender| {
+                ServiceRequest::Base(BaseRequest::ReadMultiValuesBytes {
+                    keys,
+                    response_sender,
+                })
+            },
+        )?)))
+    }
+
+    fn read_multi_values_bytes_wait(
+        &mut self,
+        promise: &Self::ReadMultiValuesBytes,
+    ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError> {
         let receiver = promise
             .try_lock()
             .expect("Unexpected reentrant locking of `oneshot::Receiver`")
