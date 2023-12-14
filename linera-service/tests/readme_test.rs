@@ -8,7 +8,7 @@ mod common;
 
 use common::INTEGRATION_TEST_GUARD;
 use linera_service::util::QuotedBashScript;
-use tokio::{process::Command, sync::Mutex};
+use tokio::process::Command;
 
 #[test_case::test_case(".." ; "main")]
 #[test_case::test_case("../examples/fungible" ; "fungible")]
@@ -16,10 +16,7 @@ use tokio::{process::Command, sync::Mutex};
 #[test_case::test_case("../examples/social" ; "social")]
 #[test_log::test(tokio::test)]
 async fn test_script_in_readme(path: &str) -> std::io::Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .await;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let script = QuotedBashScript::from_markdown(format!("{path}/README.md"))?;
     let status = Command::new("bash")
         // Run from the root of the repo.

@@ -20,7 +20,6 @@ use linera_service::cli_wrappers::{
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, time::Duration};
 use test_case::test_case;
-use tokio::sync::Mutex;
 use tracing::{info, warn};
 
 fn get_fungible_account_owner(client: &ClientWrapper) -> fungible::AccountOwner {
@@ -159,10 +158,7 @@ impl AmmApp {
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) {
     use counter::CounterAbi;
-    let _guard = INTEGRATION_TEST_GUARD
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .await;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client) = config.instantiate().await.unwrap();
 
@@ -212,10 +208,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) {
 async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfig) {
     use counter::CounterAbi;
 
-    let _guard = INTEGRATION_TEST_GUARD
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .await;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client) = config.instantiate().await.unwrap();
 
@@ -261,10 +254,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) {
     use social::SocialAbi;
-    let _guard = INTEGRATION_TEST_GUARD
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .await;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client1) = config.instantiate().await.unwrap();
 
@@ -355,10 +345,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
 async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
     use fungible::{FungibleTokenAbi, InitialState};
 
-    let _guard = INTEGRATION_TEST_GUARD
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .await;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client1) = config.instantiate().await.unwrap();
 
@@ -476,10 +463,7 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
 async fn test_wasm_end_to_end_same_wallet_fungible(config: impl LineraNetConfig) {
     use fungible::{FungibleTokenAbi, InitialState};
 
-    let _guard = INTEGRATION_TEST_GUARD
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .await;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let (mut net, client1) = config.instantiate().await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
@@ -561,10 +545,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
     use crowd_funding::{CrowdFundingAbi, InitializationArgument};
     use fungible::{FungibleTokenAbi, InitialState};
 
-    let _guard = INTEGRATION_TEST_GUARD
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .await;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client1) = config.instantiate().await.unwrap();
 
@@ -692,10 +673,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     use fungible::{FungibleTokenAbi, InitialState};
     use matching_engine::{MatchingEngineAbi, OrderNature, Parameters, Price};
 
-    let _guard = INTEGRATION_TEST_GUARD
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .await;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client_admin) = config.instantiate().await.unwrap();
 
@@ -961,10 +939,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
 async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     use amm::{AmmAbi, Parameters};
     use fungible::{FungibleTokenAbi, InitialState};
-    let _guard = INTEGRATION_TEST_GUARD
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .await;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client_admin) = config.instantiate().await.unwrap();
 

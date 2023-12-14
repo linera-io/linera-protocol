@@ -129,8 +129,7 @@ pub use {
     async_lock,
     async_trait::async_trait,
     futures, generic_array,
-    linera_base::crypto,
-    once_cell::sync::Lazy,
+    linera_base::{crypto, sync::Lazy},
     prometheus::{register_int_counter_vec, IntCounterVec},
     serde, sha3,
 };
