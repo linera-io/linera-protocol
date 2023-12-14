@@ -859,11 +859,11 @@ where
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
     let new_key_pair = KeyPair::generate();
-    // Open the new chain.
-    let (message_id, creation_certificate) = sender
-        .open_chain(ChainOwnership::single(new_key_pair.public()), Amount::ZERO)
-        .await
-        .unwrap();
+    // Open the new chain. We are both regular and super owner.
+    let ownership = ChainOwnership::single(new_key_pair.public())
+        .with_regular_owner(new_key_pair.public(), 100);
+    let (message_id, creation_certificate) =
+        sender.open_chain(ownership, Amount::ZERO).await.unwrap();
     let new_id = ChainId::child(message_id);
     // Transfer after creating the chain.
     let transfer_certificate = sender

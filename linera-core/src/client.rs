@@ -449,15 +449,13 @@ where
         );
         let mut identities = manager
             .ownership
-            .owners
-            .keys()
-            .chain(manager.ownership.super_owners.keys())
+            .all_owners()
             .filter(|owner| self.known_key_pairs.contains_key(owner));
         let Some(identity) = identities.next() else {
             return Err(ChainClientError::CannotFindKeyForChain(self.chain_id));
         };
         ensure!(
-            identities.next().is_none(),
+            identities.all(|id| id == identity),
             ChainClientError::FoundMultipleKeysForChain(self.chain_id)
         );
         Ok(*identity)
