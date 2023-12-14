@@ -17,6 +17,12 @@ const GET_BALANCE = gql`
   }
 `;
 
+const GET_TICKER_SYMBOL = gql`
+  query TickerSymbol {
+    tickerSymbol
+  }
+`;
+
 const MAKE_PAYMENT = gql`
   mutation Transfer($owner: AccountOwner, $amount: Amount, $targetAccount: Account) {
     transfer(owner: $owner, amount: $amount, targetAccount: $targetAccount)
@@ -97,6 +103,15 @@ function App({ chainId, owner }) {
     setTargetChain(event.target.value);
   };
 
+  let [
+    tickerSymbolQuery,
+    { data: tickerSymbolData, called: tickerSymbolCalled, error: tickerSymbolError },
+  ] = useLazyQuery(GET_TICKER_SYMBOL, { fetchPolicy: "network-only" });
+
+  if (!tickerSymbolCalled) {
+    void tickerSymbolQuery();
+  }
+
   const handleSubmit = (event) => {
     event.preventDefault();
     makePayment({
@@ -123,12 +138,16 @@ function App({ chainId, owner }) {
         {balanceData ? (
           <p className="text-3xl font-bold">
             {parseInt(balanceData.accounts.entry.value ?? '0').toLocaleString()}
+            {tickerSymbolData && ' ' + tickerSymbolData.tickerSymbol}
           </p>
         ) : (
           <p>Loading...</p>
         )}
         {balanceError && (
           <ErrorMessage>Failed to pull balance. Re-trying...</ErrorMessage>
+        )}
+        {tickerSymbolError && (
+          <ErrorMessage>Failed to read ticker symbol. Re-trying...</ErrorMessage>
         )}
       </Card>
 

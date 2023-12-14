@@ -6,7 +6,7 @@
 mod state;
 
 use self::state::FungibleToken;
-use async_graphql::{EmptySubscription, Request, Response, Schema};
+use async_graphql::{ComplexObject, EmptySubscription, Request, Response, Schema};
 use async_trait::async_trait;
 use fungible::Operation;
 use linera_sdk::{
@@ -35,6 +35,14 @@ impl Service for FungibleToken {
             Schema::build(self.clone(), Operation::mutation_root(), EmptySubscription).finish();
         let response = schema.execute(request).await;
         Ok(response)
+    }
+}
+
+// Implements additional fields not derived from struct members of FungibleToken.
+#[ComplexObject]
+impl FungibleToken {
+    async fn ticker_symbol(&self) -> Result<String, async_graphql::Error> {
+        Ok(FungibleToken::parameters()?.ticker_symbol)
     }
 }
 

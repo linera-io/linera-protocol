@@ -299,6 +299,10 @@ impl FungibleToken {
     }
 }
 
+// Dummy ComplexObject implementation, required by the graphql(complex) attribute in state.rs.
+#[async_graphql::ComplexObject]
+impl FungibleToken {}
+
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
