@@ -4,7 +4,7 @@ resource contains-key {
 }
 
 resource read-multi-values-bytes {
-    static new: func(key: list<list<u8>>) -> read-multi-values-bytes
+    static new: func(keys: list<list<u8>>) -> read-multi-values-bytes
     wait: func() -> list<option<list<u8>>>
 }
 
