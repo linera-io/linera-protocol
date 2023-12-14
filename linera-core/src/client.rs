@@ -517,8 +517,13 @@ where
                 {
                     debug!("Accepting redundant notification for new message");
                 }
-                if let Err(e) =
-                    Self::find_received_certificates_from_validator(this.clone(), name, node).await
+                if let Err(e) = Self::find_received_certificates_from_validator(
+                    this.clone(),
+                    name,
+                    node,
+                    local_node.clone(),
+                )
+                .await
                 {
                     error!("Fail to process notification: {e}");
                 }
@@ -852,6 +857,7 @@ where
         committees: BTreeMap<Epoch, Committee>,
         max_epoch: Epoch,
         mut node: A,
+        mut node_client: LocalNodeClient<S>,
     ) -> Result<(ValidatorName, u64, Vec<Certificate>), NodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
@@ -866,6 +872,16 @@ where
         for entry in response.info.requested_received_log {
             let query = ChainInfoQuery::new(entry.chain_id)
                 .with_sent_certificates_in_range(BlockHeightRange::single(entry.height));
+            let local_response = node_client
+                .handle_chain_info_query(query.clone())
+                .await
+                .map_err(|error| NodeError::LocalNodeQuery {
+                    error: error.to_string(),
+                })?;
+            if !local_response.info.requested_sent_certificates.is_empty() {
+                new_tracker += 1;
+                continue;
+            }
 
             let mut response = node.handle_chain_info_query(query).await?;
             let Some(certificate) = response.info.requested_sent_certificates.pop() else {
@@ -961,6 +977,7 @@ where
         self.node_client
             .synchronize_chain_state(nodes.clone(), self.admin_id)
             .await?;
+        let node_client = self.node_client.clone();
         // Now we should have a complete view of all committees in the system.
         let (committees, max_epoch) = self.known_committees().await?;
         // Proceed to downloading received certificates.
@@ -972,8 +989,15 @@ where
             |name, node| {
                 let tracker = *trackers.get(&name).unwrap_or(&0);
                 let committees = committees.clone();
+                let node_client = node_client.clone();
                 Box::pin(Self::synchronize_received_certificates_from_validator(
-                    chain_id, name, tracker, committees, max_epoch, node,
+                    chain_id,
+                    name,
+                    tracker,
+                    committees,
+                    max_epoch,
+                    node,
+                    node_client,
                 ))
             },
         )
@@ -1005,6 +1029,7 @@ where
         this: Arc<Mutex<Self>>,
         name: ValidatorName,
         node: A,
+        node_client: LocalNodeClient<S>,
     ) -> Result<(), ChainClientError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
@@ -1025,6 +1050,7 @@ where
             committees,
             max_epoch,
             node,
+            node_client,
         )
         .await?;
         // Process received certificates. If the client state has changed during the
