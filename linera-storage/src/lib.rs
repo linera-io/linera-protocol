@@ -80,6 +80,9 @@ pub trait Storage: Sized {
     where
         ViewError: From<Self::ContextError>;
 
+    /// Tests existence of a value with the given hash.
+    async fn contains_value(&self, hash: CryptoHash) -> Result<bool, ViewError>;
+
     /// Reads the value with the given hash.
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError>;
 
@@ -95,6 +98,9 @@ pub trait Storage: Sized {
 
     /// Writes several values
     async fn write_values(&self, values: &[HashedValue]) -> Result<(), ViewError>;
+
+    /// Tests existence of the certificate with the given hash.
+    async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError>;
 
     /// Reads the certificate with the given hash.
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError>;

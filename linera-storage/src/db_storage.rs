@@ -22,6 +22,26 @@ use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc};
 
 /// The metric counting how often a value is read from storage.
+pub static CONTAINS_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "contains_value",
+        "The metric counting how often a value is tested for existence from storage",
+        &[]
+    )
+    .expect("Counter creation should not fail")
+});
+
+/// The metric counting how often a value is read from storage.
+pub static CONTAINS_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "contains_certificate",
+        "The metric counting how often a certificate is tested for existence from storage",
+        &[]
+    )
+    .expect("Counter creation should not fail")
+});
+
+/// The metric counting how often a value is read from storage.
 pub static READ_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
         "read_value",
@@ -179,10 +199,20 @@ where
         ChainStateView::load(context).await
     }
 
+    async fn contains_value(&self, hash: CryptoHash) -> Result<bool, ViewError> {
+        let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+        let test = self.client.client.contains_key(&value_key).await?;
+        CONTAINS_VALUE_COUNTER.with_label_values(&[]).inc();
+        Ok(test)
+    }
+
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
-        let maybe_value: Option<CertificateValue> =
-            self.client.client.read_value(&value_key).await?;
+        let maybe_value = self
+            .client
+            .client
+            .read_value::<CertificateValue>(&value_key)
+            .await?;
         READ_VALUE_COUNTER.with_label_values(&[]).inc();
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         Ok(value.with_hash_unchecked(hash))
@@ -221,6 +251,17 @@ where
             self.add_value_to_batch(value, &mut batch)?;
         }
         self.write_batch(batch).await
+    }
+
+    async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
+        let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
+        let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+        let (cert_test, value_test) = tokio::join!(
+            self.client.client.contains_key(&cert_key),
+            self.client.client.contains_key(&value_key)
+        );
+        CONTAINS_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
+        Ok(cert_test? && value_test?)
     }
 
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
