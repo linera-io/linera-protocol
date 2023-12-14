@@ -145,11 +145,11 @@ impl ClientWrapper {
     }
 
     /// Runs `linera create-genesis-config`.
-    pub async fn create_genesis_config(&self) -> Result<()> {
+    pub async fn create_genesis_config(&self, initial_funding: Amount) -> Result<()> {
         let mut command = self.command().await?;
         command
             .args(["create-genesis-config", "10"])
-            .args(["--initial-funding", "10"])
+            .args(["--initial-funding", &initial_funding.to_string()])
             .args(["--committee", "committee.json"])
             .args(["--genesis", "genesis.json"]);
         if let Some(seed) = self.testing_prng_seed {
