@@ -308,31 +308,38 @@ impl ScyllaDbStoreInternal {
         let table_name = &store.1;
         // Read the value of a key
         let len = key_prefix.len();
-        let rows = match get_upper_bound_option(&key_prefix) {
-            None => {
-                let values = (key_prefix,);
-                let query = format!(
-                    "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
-                    table_name
-                );
-                session.query(query, values).await?
-            }
-            Some(upper_bound) => {
-                let values = (key_prefix, upper_bound);
-                let query = format!(
-                    "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
-                    table_name
-                );
-                session.query(query, values).await?
-            }
-        };
         let mut keys = Vec::new();
-        if let Some(rows) = rows.rows {
-            for row in rows.into_typed::<(Vec<u8>,)>() {
-                let key = row.unwrap();
-                let short_key = key.0[len..].to_vec();
-                keys.push(short_key);
+        let mut paging_state = None;
+        loop {
+            let rows = match get_upper_bound_option(&key_prefix) {
+                None => {
+                    let values = (key_prefix.clone(),);
+                    let query = format!(
+                        "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
+                        table_name
+                    );
+                    session.query_paged(query, values, paging_state).await?
+                }
+                Some(upper_bound) => {
+                    let values = (key_prefix.clone(), upper_bound);
+                    let query = format!(
+                        "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
+                        table_name
+                    );
+                    session.query_paged(query, values, paging_state).await?
+                }
+            };
+            if let Some(rows) = rows.rows {
+                for row in rows.into_typed::<(Vec<u8>,)>() {
+                    let key = row.unwrap();
+                    let short_key = key.0[len..].to_vec();
+                    keys.push(short_key);
+                }
             }
+            if rows.paging_state.is_none() {
+                break;
+            }
+            paging_state = rows.paging_state;
         }
         Ok(keys)
     }
@@ -349,31 +356,38 @@ impl ScyllaDbStoreInternal {
         let table_name = &store.1;
         // Read the value of a key
         let len = key_prefix.len();
-        let rows = match get_upper_bound_option(&key_prefix) {
-            None => {
-                let values = (key_prefix,);
-                let query = format!(
-                    "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
-                    table_name
-                );
-                session.query(query, values).await?
-            }
-            Some(upper_bound) => {
-                let values = (key_prefix, upper_bound);
-                let query = format!(
-                    "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
-                    table_name
-                );
-                session.query(query, values).await?
-            }
-        };
         let mut key_values = Vec::new();
-        if let Some(rows) = rows.rows {
-            for row in rows.into_typed::<(Vec<u8>, Vec<u8>)>() {
-                let key = row.unwrap();
-                let short_key = key.0[len..].to_vec();
-                key_values.push((short_key, key.1));
+        let mut paging_state = None;
+        loop {
+            let rows = match get_upper_bound_option(&key_prefix) {
+                None => {
+                    let values = (key_prefix.clone(),);
+                    let query = format!(
+                        "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
+                        table_name
+                    );
+                    session.query_paged(query, values, paging_state).await?
+                }
+                Some(upper_bound) => {
+                    let values = (key_prefix.clone(), upper_bound);
+                    let query = format!(
+                        "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
+                        table_name
+                    );
+                    session.query_paged(query, values, paging_state).await?
+                }
+            };
+            if let Some(rows) = rows.rows {
+                for row in rows.into_typed::<(Vec<u8>, Vec<u8>)>() {
+                    let key = row.unwrap();
+                    let short_key = key.0[len..].to_vec();
+                    key_values.push((short_key, key.1));
+                }
             }
+            if rows.paging_state.is_none() {
+                break;
+            }
+            paging_state = rows.paging_state;
         }
         Ok(key_values)
     }
