@@ -53,7 +53,7 @@ pub struct WasmContract<Runtime> {
 
 impl<Runtime> WasmContract<Runtime>
 where
-    Runtime: ContractRuntime + Clone + Send + Unpin,
+    Runtime: ContractRuntime + Clone + Send + Sync + Unpin + 'static,
 {
     /// Creates a new [`WasmContract`] using the WebAssembly module with the provided bytecodes.
     pub async fn new(
@@ -110,7 +110,7 @@ pub struct WasmService<Runtime> {
 
 impl<Runtime> WasmService<Runtime>
 where
-    Runtime: ServiceRuntime + Clone + Send + Unpin,
+    Runtime: ServiceRuntime + Clone + Send + Sync + Unpin + 'static,
 {
     /// Creates a new [`WasmService`] using the WebAssembly module with the provided bytecodes.
     pub async fn new(
@@ -166,7 +166,7 @@ pub enum WasmExecutionError {
 
 impl<Runtime> UserContract<Runtime> for WasmContract<Runtime>
 where
-    Runtime: ContractRuntime + Clone + Unpin,
+    Runtime: ContractRuntime + Clone + Send + Sync + Unpin + 'static,
 {
     fn initialize(
         &self,
@@ -278,7 +278,7 @@ where
 
 impl<Runtime> UserService<Runtime> for WasmService<Runtime>
 where
-    Runtime: ServiceRuntime + Clone + Unpin,
+    Runtime: ServiceRuntime + Clone + Send + Sync + Unpin + 'static,
 {
     fn handle_query(
         &self,
@@ -340,8 +340,8 @@ pub mod test {
         wasm_runtime: impl Into<Option<WasmRuntime>>,
     ) -> Result<(WasmContract<C>, WasmService<S>), anyhow::Error>
     where
-        C: crate::ContractRuntime + Clone + Send + Unpin,
-        S: crate::ServiceRuntime + Clone + Send + Unpin,
+        C: crate::ContractRuntime + Clone + Send + Sync + Unpin + 'static,
+        S: crate::ServiceRuntime + Clone + Send + Sync + Unpin + 'static,
     {
         let (contract_path, service_path) = get_example_bytecode_paths(name)?;
         let wasm_runtime = wasm_runtime.into().unwrap_or_default();

@@ -128,7 +128,7 @@ impl ApplicationRuntimeContext for Service {
 
 impl<Runtime> WasmContract<Runtime>
 where
-    Runtime: ContractRuntime + Clone + Send + Unpin,
+    Runtime: ContractRuntime + Clone + Send + Sync + Unpin + 'static,
 {
     /// Creates a new [`WasmContract`] using Wasmer with the provided bytecodes.
     pub async fn new_with_wasmer(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
@@ -197,7 +197,7 @@ impl WasmContractModule {
 
 impl<Runtime> WasmService<Runtime>
 where
-    Runtime: ServiceRuntime + Clone + Send + Unpin,
+    Runtime: ServiceRuntime + Clone + Send + Sync + Unpin + 'static,
 {
     /// Creates a new [`WasmService`] using Wasmer with the provided bytecodes.
     pub async fn new_with_wasmer(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {

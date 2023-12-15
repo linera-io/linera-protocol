@@ -273,7 +273,7 @@ pub struct QueryContext {
     pub chain_id: ChainId,
 }
 
-pub trait BaseRuntime: Send + Sync + 'static {
+pub trait BaseRuntime {
     type Read: fmt::Debug + Send;
     type Lock: fmt::Debug + Send;
     type Unlock: fmt::Debug + Send;

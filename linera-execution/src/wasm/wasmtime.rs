@@ -78,14 +78,14 @@ static SERVICE_CACHE: Lazy<Mutex<ModuleCache<Module>>> = Lazy::new(Mutex::defaul
 /// system API.
 pub struct Contract<Runtime>
 where
-    Runtime: ContractRuntime,
+    Runtime: ContractRuntime + Send + Sync + 'static,
 {
     contract: contract::Contract<ContractState<Runtime>>,
 }
 
 impl<Runtime> ApplicationRuntimeContext for Contract<Runtime>
 where
-    Runtime: ContractRuntime + Send,
+    Runtime: ContractRuntime + Send + Sync,
 {
     type Store = Store<ContractState<Runtime>>;
     type Error = Trap;
@@ -121,14 +121,14 @@ where
 /// Type representing the [Wasmtime](https://wasmtime.dev/) runtime for services.
 pub struct Service<Runtime>
 where
-    Runtime: ServiceRuntime,
+    Runtime: ServiceRuntime + Send + Sync + 'static,
 {
     service: service::Service<ServiceState<Runtime>>,
 }
 
 impl<Runtime> ApplicationRuntimeContext for Service<Runtime>
 where
-    Runtime: ServiceRuntime + Send,
+    Runtime: ServiceRuntime + Send + Sync,
 {
     type Store = Store<ServiceState<Runtime>>;
     type Error = Trap;
@@ -145,7 +145,7 @@ where
 
 impl<Runtime> WasmContract<Runtime>
 where
-    Runtime: ContractRuntime + Send,
+    Runtime: ContractRuntime + Send + Sync + 'static,
 {
     /// Creates a new [`WasmContract`] using Wasmtime with the provided bytecodes.
     pub async fn new_with_wasmtime(
@@ -197,7 +197,7 @@ where
 
 impl<Runtime> WasmService<Runtime>
 where
-    Runtime: ServiceRuntime + Send,
+    Runtime: ServiceRuntime + Send + Sync + 'static,
 {
     /// Creates a new [`WasmService`] using Wasmtime with the provided bytecodes.
     pub async fn new_with_wasmtime(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
@@ -248,7 +248,7 @@ where
 /// Data stored by the runtime that's necessary for handling calls to and from the Wasm module.
 pub struct ContractState<Runtime>
 where
-    Runtime: ContractRuntime,
+    Runtime: ContractRuntime + Send + Sync + 'static,
 {
     data: ContractData,
     system_api: Runtime,
@@ -259,7 +259,7 @@ where
 /// Data stored by the runtime that's necessary for handling queries to and from the Wasm module.
 pub struct ServiceState<Runtime>
 where
-    Runtime: ServiceRuntime,
+    Runtime: ServiceRuntime + Send + Sync + 'static,
 {
     data: ServiceData,
     system_api: Runtime,
@@ -269,7 +269,7 @@ where
 
 impl<Runtime> ContractState<Runtime>
 where
-    Runtime: ContractRuntime,
+    Runtime: ContractRuntime + Send + Sync + 'static,
 {
     /// Creates a new instance of [`ContractState`].
     ///
@@ -301,7 +301,7 @@ where
 
 impl<Runtime> ServiceState<Runtime>
 where
-    Runtime: ServiceRuntime,
+    Runtime: ServiceRuntime + Send + Sync + 'static,
 {
     /// Creates a new instance of [`ServiceState`].
     ///
@@ -333,7 +333,7 @@ where
 
 impl<Runtime> common::Contract for Contract<Runtime>
 where
-    Runtime: ContractRuntime + Send,
+    Runtime: ContractRuntime + Send + Sync + 'static,
 {
     fn initialize(
         &self,
@@ -414,7 +414,7 @@ where
 
 impl<Runtime> common::Service for Service<Runtime>
 where
-    Runtime: ServiceRuntime + Send,
+    Runtime: ServiceRuntime + Send + Sync + 'static,
 {
     fn handle_query(
         &self,
