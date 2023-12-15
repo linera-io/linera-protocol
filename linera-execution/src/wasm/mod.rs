@@ -28,7 +28,11 @@ use crate::{
     MessageContext, OperationContext, QueryContext, RawExecutionResult, ServiceRuntime,
     SessionCallResult, SessionId, UserContract, UserService, WasmRuntime,
 };
-use std::{path::Path, sync::Arc};
+use std::{
+    marker::{PhantomData, Unpin},
+    path::Path,
+    sync::Arc,
+};
 use thiserror::Error;
 
 /// A user contract in a compiled WebAssembly module.
@@ -44,12 +48,12 @@ pub enum WasmContractModule {
 
 pub struct WasmContract<Runtime> {
     module: WasmContractModule,
-    _marker: std::marker::PhantomData<Runtime>,
+    _marker: PhantomData<Runtime>,
 }
 
 impl<Runtime> WasmContract<Runtime>
 where
-    Runtime: ContractRuntime + Clone + Send + std::marker::Unpin,
+    Runtime: ContractRuntime + Clone + Send + Unpin,
 {
     /// Creates a new [`WasmContract`] using the WebAssembly module with the provided bytecodes.
     pub async fn new(
@@ -101,12 +105,12 @@ pub enum WasmServiceModule {
 
 pub struct WasmService<Runtime> {
     module: WasmServiceModule,
-    _marker: std::marker::PhantomData<Runtime>,
+    _marker: PhantomData<Runtime>,
 }
 
 impl<Runtime> WasmService<Runtime>
 where
-    Runtime: ServiceRuntime + Clone + Send + std::marker::Unpin,
+    Runtime: ServiceRuntime + Clone + Send + Unpin,
 {
     /// Creates a new [`WasmService`] using the WebAssembly module with the provided bytecodes.
     pub async fn new(
@@ -162,7 +166,7 @@ pub enum WasmExecutionError {
 
 impl<Runtime> UserContract<Runtime> for WasmContract<Runtime>
 where
-    Runtime: ContractRuntime + Clone + std::marker::Unpin,
+    Runtime: ContractRuntime + Clone + Unpin,
 {
     fn initialize(
         &self,
@@ -274,7 +278,7 @@ where
 
 impl<Runtime> UserService<Runtime> for WasmService<Runtime>
 where
-    Runtime: ServiceRuntime + Clone + std::marker::Unpin,
+    Runtime: ServiceRuntime + Clone + Unpin,
 {
     fn handle_query(
         &self,
@@ -336,8 +340,8 @@ pub mod test {
         wasm_runtime: impl Into<Option<WasmRuntime>>,
     ) -> Result<(WasmContract<C>, WasmService<S>), anyhow::Error>
     where
-        C: crate::ContractRuntime + Clone + Send + std::marker::Unpin,
-        S: crate::ServiceRuntime + Clone + Send + std::marker::Unpin,
+        C: crate::ContractRuntime + Clone + Send + Unpin,
+        S: crate::ServiceRuntime + Clone + Send + Unpin,
     {
         let (contract_path, service_path) = get_example_bytecode_paths(name)?;
         let wasm_runtime = wasm_runtime.into().unwrap_or_default();

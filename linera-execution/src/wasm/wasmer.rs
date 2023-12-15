@@ -44,7 +44,10 @@ use crate::{
 };
 use bytes::Bytes;
 use linera_base::{identifiers::SessionId, sync::Lazy};
-use std::{marker::PhantomData, sync::Arc};
+use std::{
+    marker::{PhantomData, Unpin},
+    sync::Arc,
+};
 use tokio::sync::Mutex;
 use wasmer::{
     imports, wasmparser::Operator, CompilerConfig, Engine, EngineBuilder, Instance, Module,
@@ -68,12 +71,12 @@ static SERVICE_CACHE: Lazy<Mutex<ModuleCache<Module>>> = Lazy::new(Mutex::defaul
 /// Type representing the [Wasmer](https://wasmer.io/) contract runtime.
 pub struct Contract<Runtime> {
     contract: contract::Contract,
-    _marker: std::marker::PhantomData<Runtime>,
+    _marker: PhantomData<Runtime>,
 }
 
 impl<Runtime> ApplicationRuntimeContext for Contract<Runtime>
 where
-    Runtime: ContractRuntime + Send + std::marker::Unpin,
+    Runtime: ContractRuntime + Send + Unpin,
 {
     type Store = Store;
     type Error = RuntimeError;
@@ -125,7 +128,7 @@ impl ApplicationRuntimeContext for Service {
 
 impl<Runtime> WasmContract<Runtime>
 where
-    Runtime: ContractRuntime + Clone + Send + std::marker::Unpin,
+    Runtime: ContractRuntime + Clone + Send + Unpin,
 {
     /// Creates a new [`WasmContract`] using Wasmer with the provided bytecodes.
     pub async fn new_with_wasmer(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
@@ -138,7 +141,7 @@ where
         let module = WasmContractModule::Wasmer { engine, module };
         Ok(WasmContract {
             module,
-            _marker: std::marker::PhantomData,
+            _marker: PhantomData,
         })
     }
 
@@ -159,7 +162,7 @@ where
                 .map_err(WasmExecutionError::LoadContractModule)?;
         let application = Contract {
             contract,
-            _marker: std::marker::PhantomData,
+            _marker: PhantomData,
         };
 
         system_api_setup(&instance, &store).map_err(WasmExecutionError::LoadContractModule)?;
@@ -194,7 +197,7 @@ impl WasmContractModule {
 
 impl<Runtime> WasmService<Runtime>
 where
-    Runtime: ServiceRuntime + Clone + Send + std::marker::Unpin,
+    Runtime: ServiceRuntime + Clone + Send + Unpin,
 {
     /// Creates a new [`WasmService`] using Wasmer with the provided bytecodes.
     pub async fn new_with_wasmer(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
@@ -208,7 +211,7 @@ where
         let module = WasmServiceModule::Wasmer { module };
         Ok(WasmService {
             module,
-            _marker: std::marker::PhantomData,
+            _marker: PhantomData,
         })
     }
 
@@ -240,7 +243,7 @@ where
 
 impl<Runtime> common::Contract for Contract<Runtime>
 where
-    Runtime: ContractRuntime + Send + std::marker::Unpin,
+    Runtime: ContractRuntime + Send + Unpin,
 {
     fn initialize(
         &self,

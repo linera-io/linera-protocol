@@ -48,7 +48,7 @@ use crate::{
     SessionCallResult, SessionId,
 };
 use once_cell::sync::Lazy;
-use std::error::Error;
+use std::{error::Error, marker::PhantomData};
 use tokio::sync::Mutex;
 use wasmtime::{Config, Engine, Linker, Module, Store, Trap};
 use wit_bindgen_host_wasmtime_rust::Le;
@@ -160,7 +160,7 @@ where
         let module = WasmContractModule::Wasmtime { module };
         Ok(WasmContract {
             module,
-            _marker: std::marker::PhantomData,
+            _marker: PhantomData,
         })
     }
 
@@ -210,7 +210,7 @@ where
         let module = WasmServiceModule::Wasmtime { module };
         Ok(WasmService {
             module,
-            _marker: std::marker::PhantomData,
+            _marker: PhantomData,
         })
     }
 

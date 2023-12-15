@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_execution::{policy::ResourceControlPolicy, *};
 use linera_views::{batch::Batch, common::Context, memory::MemoryContext, views::View};
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 #[tokio::test]
 async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
@@ -65,14 +65,14 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
 
 struct TestApplication<Runtime> {
     owner: Owner,
-    _runtime_marker: std::marker::PhantomData<Runtime>,
+    _runtime_marker: PhantomData<Runtime>,
 }
 
 impl<Runtime> TestApplication<Runtime> {
     fn new(owner: Owner) -> Self {
         Self {
             owner,
-            _runtime_marker: std::marker::PhantomData,
+            _runtime_marker: PhantomData,
         }
     }
 }
