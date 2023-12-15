@@ -43,9 +43,8 @@ use crate::{
     ServiceRuntimeSender,
 };
 use bytes::Bytes;
-use linera_base::identifiers::SessionId;
+use linera_base::{identifiers::SessionId, sync::Lazy};
 use linera_views::batch::Batch;
-use once_cell::sync::Lazy;
 use std::{marker::PhantomData, sync::Arc};
 use tokio::sync::Mutex;
 use wasmer::{

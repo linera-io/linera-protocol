@@ -35,7 +35,7 @@ use grpc::{
     BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
     LiteCertificate, SubscriptionRequest,
 };
-use linera_base::identifiers::ChainId;
+use linera_base::{identifiers::ChainId, sync::Lazy};
 use linera_chain::data_types;
 use linera_core::{
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
@@ -43,7 +43,6 @@ use linera_core::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use once_cell::sync::Lazy;
 use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
 use rand::Rng;
 use std::{

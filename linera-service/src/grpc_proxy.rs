@@ -5,7 +5,7 @@ use crate::prometheus_server;
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt};
-use linera_base::identifiers::ChainId;
+use linera_base::{identifiers::ChainId, sync::Lazy};
 use linera_core::notifier::Notifier;
 use linera_rpc::{
     config::{
@@ -23,7 +23,6 @@ use linera_rpc::{
     },
     grpc_pool::ConnectionPool,
 };
-use once_cell::sync::Lazy;
 use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
 use rcgen::generate_simple_self_signed;
 use std::{

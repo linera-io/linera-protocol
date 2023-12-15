@@ -10,6 +10,7 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, Round},
     doc_scalar, ensure,
     identifiers::{ChainId, Owner},
+    sync::Lazy,
 };
 use linera_chain::{
     data_types::{
@@ -28,7 +29,6 @@ use linera_views::{
     views::{RootView, View, ViewError},
 };
 use lru::LruCache;
-use once_cell::sync::Lazy;
 use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
 use serde::{Deserialize, Serialize};
 use std::{

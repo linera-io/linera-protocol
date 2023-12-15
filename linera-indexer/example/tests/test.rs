@@ -3,7 +3,7 @@
 
 #![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 
-use linera_base::{data_types::Amount, identifiers::ChainId};
+use linera_base::{data_types::Amount, identifiers::ChainId, sync::Lazy};
 use linera_indexer_graphql_client::{
     indexer::{plugins, state, Plugins, State},
     operations::{get_operation, GetOperation, OperationKey},
@@ -16,7 +16,6 @@ use linera_service::{
     util::resolve_binary,
 };
 use linera_service_graphql_client::{block, request, transfer, Block, Transfer};
-use once_cell::sync::Lazy;
 use std::{str::FromStr, sync::Arc, time::Duration};
 use tempfile::TempDir;
 use test_case::test_case;

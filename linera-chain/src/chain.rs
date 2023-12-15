@@ -17,6 +17,7 @@ use linera_base::{
     data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     ensure,
     identifiers::{ChainId, Destination, MessageId},
+    sync::Lazy,
 };
 use linera_execution::{
     system::{SystemExecutionError, SystemMessage},
@@ -33,7 +34,6 @@ use linera_views::{
     set_view::SetView,
     views::{CryptoHashView, RootView, View, ViewError},
 };
-use once_cell::sync::Lazy;
 use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
 use serde::{Deserialize, Serialize};
 use std::{

@@ -4,7 +4,7 @@
 use crate::{chain_guards::ChainGuards, ChainRuntimeContext, Storage};
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::{crypto::CryptoHash, data_types::Timestamp, identifiers::ChainId};
+use linera_base::{crypto::CryptoHash, data_types::Timestamp, identifiers::ChainId, sync::Lazy};
 use linera_chain::{
     data_types::{Certificate, CertificateValue, HashedValue, LiteCertificate},
     ChainStateView,
@@ -16,7 +16,6 @@ use linera_views::{
     value_splitting::DatabaseConsistencyError,
     views::{View, ViewError},
 };
-use once_cell::sync::Lazy;
 use prometheus::{register_int_counter_vec, IntCounterVec};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc};

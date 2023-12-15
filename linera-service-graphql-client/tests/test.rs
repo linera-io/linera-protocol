@@ -4,7 +4,7 @@
 #![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 
 use fungible::{FungibleTokenAbi, InitialState};
-use linera_base::{data_types::Amount, identifiers::ChainId};
+use linera_base::{data_types::Amount, identifiers::ChainId, sync::Lazy};
 use linera_service::{
     cli_wrappers::{
         local_net::{Database, LocalNetTestingConfig},
@@ -16,7 +16,6 @@ use linera_service_graphql_client::{
     applications, block, blocks, chains, request, transfer, Applications, Block, Blocks, Chains,
     Transfer,
 };
-use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, io::Read, rc::Rc, str::FromStr, time::Duration};
 use tempfile::tempdir;
 use test_case::test_case;

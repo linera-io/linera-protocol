@@ -35,7 +35,6 @@ linera-execution = { workspace = true }
 linera-storage = { workspace = true }
 linera-views = { workspace = true }
 lru = { workspace = true }
-once_cell = { workspace = true }
 prometheus = { workspace = true }
 proptest = { workspace = true, optional = true }
 rand = { workspace = true }
