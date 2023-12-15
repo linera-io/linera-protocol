@@ -52,14 +52,14 @@ use linera_base::{
 use linera_views::{batch::Batch, views::ViewError};
 use runtime_actor::{ContractRuntimeSender, ServiceRuntimeSender};
 use serde::{Deserialize, Serialize};
-use std::{io, path::Path, str::FromStr, sync::Arc};
+use std::{fmt, io, path::Path, str::FromStr, sync::Arc};
 use thiserror::Error;
 
 /// An implementation of [`UserContract`]
-pub type UserContractCode = Arc<dyn UserContract + Send + Sync + 'static>;
+pub type UserContractCode = Arc<dyn UserContract<ContractRuntimeSender> + Send + Sync + 'static>;
 
 /// An implementation of [`UserService`].
-pub type UserServiceCode = Arc<dyn UserService + Send + Sync + 'static>;
+pub type UserServiceCode = Arc<dyn UserService<ServiceRuntimeSender> + Send + Sync + 'static>;
 
 #[derive(Error, Debug)]
 pub enum ExecutionError {
@@ -127,12 +127,12 @@ impl From<ViewError> for ExecutionError {
 }
 
 /// The public entry points provided by the contract part of an application.
-pub trait UserContract {
+pub trait UserContract<Runtime> {
     /// Initializes the application state on the chain that owns the application.
     fn initialize(
         &self,
         context: OperationContext,
-        runtime_sender: ContractRuntimeSender,
+        runtime: Runtime,
         argument: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
@@ -140,7 +140,7 @@ pub trait UserContract {
     fn execute_operation(
         &self,
         context: OperationContext,
-        runtime_sender: ContractRuntimeSender,
+        runtime: Runtime,
         operation: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
@@ -148,7 +148,7 @@ pub trait UserContract {
     fn execute_message(
         &self,
         context: MessageContext,
-        runtime_sender: ContractRuntimeSender,
+        runtime: Runtime,
         message: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
@@ -159,7 +159,7 @@ pub trait UserContract {
     fn handle_application_call(
         &self,
         context: CalleeContext,
-        runtime_sender: ContractRuntimeSender,
+        runtime: Runtime,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError>;
@@ -168,7 +168,7 @@ pub trait UserContract {
     fn handle_session_call(
         &self,
         context: CalleeContext,
-        runtime_sender: ContractRuntimeSender,
+        runtime: Runtime,
         session_state: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
@@ -176,12 +176,12 @@ pub trait UserContract {
 }
 
 /// The public entry points provided by the service part of an application.
-pub trait UserService {
+pub trait UserService<Runtime> {
     /// Executes unmetered read-only queries on the state of this application.
     fn handle_query(
         &self,
         context: QueryContext,
-        runtime_sender: ServiceRuntimeSender,
+        runtime: Runtime,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 }
@@ -273,15 +273,15 @@ pub struct QueryContext {
     pub chain_id: ChainId,
 }
 
-pub trait BaseRuntime: Send + Sync {
-    type Read;
-    type Lock;
-    type Unlock;
-    type ContainsKey;
-    type ReadMultiValuesBytes;
-    type ReadValueBytes;
-    type FindKeysByPrefix;
-    type FindKeyValuesByPrefix;
+pub trait BaseRuntime: Send + Sync + 'static {
+    type Read: fmt::Debug + Send;
+    type Lock: fmt::Debug + Send;
+    type Unlock: fmt::Debug + Send;
+    type ContainsKey: fmt::Debug + Send;
+    type ReadMultiValuesBytes: fmt::Debug + Send;
+    type ReadValueBytes: fmt::Debug + Send;
+    type FindKeysByPrefix: fmt::Debug + Send;
+    type FindKeyValuesByPrefix: fmt::Debug + Send;
 
     /// The current chain id.
     fn chain_id(&mut self) -> Result<ChainId, ExecutionError>;
@@ -374,6 +374,11 @@ pub trait BaseRuntime: Send + Sync {
     /// Unlocks the view user state and allows reading/loading again (wait)
     fn unlock_wait(&mut self, promise: &Self::Unlock) -> Result<(), ExecutionError>;
 
+    /// Writes the batch and then unlock.
+    ///
+    /// Hack: This fails for services.
+    fn write_batch_and_unlock(&mut self, batch: Batch) -> Result<(), ExecutionError>;
+
     /// Reads the key from the key-value store
     #[cfg(feature = "test")]
     fn read_value_bytes(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError> {
@@ -431,7 +436,7 @@ pub trait BaseRuntime: Send + Sync {
 }
 
 pub trait ServiceRuntime: BaseRuntime {
-    type TryQueryApplication;
+    type TryQueryApplication: fmt::Debug + Send;
 
     /// Queries another application (new).
     fn try_query_application_new(
@@ -469,9 +474,6 @@ pub trait ContractRuntime: BaseRuntime {
     // TODO(#1152): remove
     /// Saves the application state and allows reading/loading the state again.
     fn save_and_unlock_my_state(&mut self, state: Vec<u8>) -> Result<bool, ExecutionError>;
-
-    /// Writes the batch and then unlock.
-    fn write_batch_and_unlock(&mut self, batch: Batch) -> Result<(), ExecutionError>;
 
     /// Calls another application. Forwarded sessions will now be visible to
     /// `callee_id` (but not to the caller any more).
