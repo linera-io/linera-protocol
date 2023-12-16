@@ -2056,6 +2056,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+ "webassembly-test",
 ]
 
 [[package]]
