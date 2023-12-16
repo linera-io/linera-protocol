@@ -200,7 +200,7 @@ where
     Runtime: ContractRuntime + Clone + Send + Sync + Unpin + 'static,
 {
     fn initialize(
-        &self,
+        &mut self,
         context: OperationContext,
         runtime: Runtime,
         argument: Vec<u8>,
@@ -220,7 +220,7 @@ where
     }
 
     fn execute_operation(
-        &self,
+        &mut self,
         context: OperationContext,
         runtime: Runtime,
         operation: Vec<u8>,
@@ -240,7 +240,7 @@ where
     }
 
     fn execute_message(
-        &self,
+        &mut self,
         context: MessageContext,
         runtime: Runtime,
         message: Vec<u8>,
@@ -260,7 +260,7 @@ where
     }
 
     fn handle_application_call(
-        &self,
+        &mut self,
         context: CalleeContext,
         runtime: Runtime,
         argument: Vec<u8>,
@@ -281,7 +281,7 @@ where
     }
 
     fn handle_session_call(
-        &self,
+        &mut self,
         context: CalleeContext,
         runtime: Runtime,
         session_state: Vec<u8>,
@@ -312,7 +312,7 @@ where
     Runtime: ServiceRuntime + Clone + Send + Sync + Unpin + 'static,
 {
     fn handle_query(
-        &self,
+        &mut self,
         context: QueryContext,
         runtime: Runtime,
         argument: Vec<u8>,

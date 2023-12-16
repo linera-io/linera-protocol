@@ -548,7 +548,7 @@ where
     ) -> Result<Vec<u8>, ExecutionError> {
         // Load the application.
         let (code, description) = self.load_service(queried_id).await?;
-        let code = code.instantiate_with_actor_runtime();
+        let mut code = code.instantiate_with_actor_runtime();
         // Make the call to user code.
         let query_context = crate::QueryContext {
             chain_id: self.chain_id,
@@ -684,7 +684,7 @@ where
             .clone();
         // Load the application.
         let (code, description) = self.load_contract(callee_id).await?;
-        let code = code.instantiate_with_actor_runtime();
+        let mut code = code.instantiate_with_actor_runtime();
         // Change the owners of forwarded sessions.
         self.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
         // Make the call to user code.
@@ -751,7 +751,7 @@ where
             .clone();
         // Load the application.
         let (code, description) = self.load_contract(callee_id).await?;
-        let code = code.instantiate_with_actor_runtime();
+        let mut code = code.instantiate_with_actor_runtime();
         // Change the owners of forwarded sessions.
         self.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
         // Load the session.

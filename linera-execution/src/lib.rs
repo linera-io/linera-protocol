@@ -145,7 +145,7 @@ impl From<ViewError> for ExecutionError {
 pub trait UserContract<Runtime> {
     /// Initializes the application state on the chain that owns the application.
     fn initialize(
-        &self,
+        &mut self,
         context: OperationContext,
         runtime: Runtime,
         argument: Vec<u8>,
@@ -153,7 +153,7 @@ pub trait UserContract<Runtime> {
 
     /// Applies an operation from the current block.
     fn execute_operation(
-        &self,
+        &mut self,
         context: OperationContext,
         runtime: Runtime,
         operation: Vec<u8>,
@@ -161,7 +161,7 @@ pub trait UserContract<Runtime> {
 
     /// Applies a message originating from a cross-chain message.
     fn execute_message(
-        &self,
+        &mut self,
         context: MessageContext,
         runtime: Runtime,
         message: Vec<u8>,
@@ -172,7 +172,7 @@ pub trait UserContract<Runtime> {
     /// When an application is executing an operation or a message it may call other applications,
     /// which can in turn call other applications.
     fn handle_application_call(
-        &self,
+        &mut self,
         context: CalleeContext,
         runtime: Runtime,
         argument: Vec<u8>,
@@ -181,7 +181,7 @@ pub trait UserContract<Runtime> {
 
     /// Executes a call from another application into a session created by this application.
     fn handle_session_call(
-        &self,
+        &mut self,
         context: CalleeContext,
         runtime: Runtime,
         session_state: Vec<u8>,
@@ -194,7 +194,7 @@ pub trait UserContract<Runtime> {
 pub trait UserService<Runtime> {
     /// Executes unmetered read-only queries on the state of this application.
     fn handle_query(
-        &self,
+        &mut self,
         context: QueryContext,
         runtime: Runtime,
         argument: Vec<u8>,

@@ -185,7 +185,7 @@ where
             .extra()
             .get_user_contract(&description)
             .await?;
-        let contract = contract.instantiate_with_actor_runtime();
+        let mut contract = contract.instantiate_with_actor_runtime();
         let signer = action.signer();
         // Create the execution runtime for this transaction.
         let mut session_manager = SessionManager::default();
@@ -380,7 +380,7 @@ where
                     .extra()
                     .get_user_service(&description)
                     .await?;
-                let service = service.instantiate_with_actor_runtime();
+                let mut service = service.instantiate_with_actor_runtime();
                 // Create the execution runtime for this transaction.
                 let mut session_manager = SessionManager::default();
                 let mut results = Vec::new();

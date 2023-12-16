@@ -113,7 +113,7 @@ where
 {
     /// Nothing needs to be done during initialization.
     fn initialize(
-        &self,
+        &mut self,
         context: OperationContext,
         _runtime: Runtime,
         _argument: Vec<u8>,
@@ -127,7 +127,7 @@ where
     /// Calls itself during the operation, opening a session. The session is intentionally
     /// leaked if the test operation is [`TestOperation::LeakingSession`].
     fn execute_operation(
-        &self,
+        &mut self,
         context: OperationContext,
         mut runtime: Runtime,
         operation: Vec<u8>,
@@ -167,7 +167,7 @@ where
 
     /// Attempts to call ourself while the state is locked.
     fn execute_message(
-        &self,
+        &mut self,
         context: MessageContext,
         mut runtime: Runtime,
         message: Vec<u8>,
@@ -187,7 +187,7 @@ where
 
     /// Creates a session.
     fn handle_application_call(
-        &self,
+        &mut self,
         context: CalleeContext,
         _runtime: Runtime,
         argument: Vec<u8>,
@@ -207,7 +207,7 @@ where
 
     /// Closes the session.
     fn handle_session_call(
-        &self,
+        &mut self,
         context: CalleeContext,
         _runtime: Runtime,
         session_state: Vec<u8>,
@@ -239,7 +239,7 @@ where
 {
     /// Returns the application state.
     fn handle_query(
-        &self,
+        &mut self,
         _context: QueryContext,
         mut runtime: Runtime,
         _argument: Vec<u8>,
