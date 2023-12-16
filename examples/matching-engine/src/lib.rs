@@ -57,9 +57,30 @@ pub struct Price {
     pub price: u64,
 }
 
-/// We use the custom serialization for the Price so that the order of the serialization
+impl Price {
+    pub fn to_bid(&self) -> PriceBid {
+        PriceBid { price: self.price }
+    }
+    pub fn to_ask(&self) -> PriceAsk {
+        PriceAsk { price: self.price }
+    }
+}
+
+#[derive(Clone, Copy, Debug, SimpleObject, InputObject)]
+#[graphql(input_name = "PriceInput")]
+pub struct PriceAsk {
+    pub price: u64,
+}
+
+impl PriceAsk {
+    pub fn to_price(&self) -> Price {
+        Price { price: self.price }
+    }
+}
+
+/// We use the custom serialization for the PriceAsk so that the order of the serialization
 /// corresponds to the order of the Prices.
-impl CustomSerialize for Price {
+impl CustomSerialize for PriceAsk {
     fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError> {
         let mut short_key = bcs::to_bytes(&self.price)?;
         short_key.reverse();
@@ -69,16 +90,39 @@ impl CustomSerialize for Price {
     fn from_custom_bytes(short_key: &[u8]) -> Result<Self, ViewError> {
         let mut bytes = short_key.to_vec();
         bytes.reverse();
-        let value = bcs::from_bytes(&bytes)?;
-        Ok(value)
+        let price = bcs::from_bytes(&bytes)?;
+        Ok(PriceAsk { price })
     }
 }
 
-impl Price {
-    pub fn revert(&self) -> Self {
-        Price {
-            price: u64::MAX - self.price,
-        }
+#[derive(Clone, Copy, Debug, SimpleObject, InputObject)]
+#[graphql(input_name = "PriceInput")]
+pub struct PriceBid {
+    pub price: u64,
+}
+
+impl PriceBid {
+    pub fn to_price(&self) -> Price {
+        Price { price: self.price }
+    }
+}
+
+/// We use the custom serialization for the PriceAsk so that the order of the serialization
+/// corresponds to the order of the Prices.
+impl CustomSerialize for PriceBid {
+    fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError> {
+        let price_rev = u64::MAX - self.price;
+        let mut short_key = bcs::to_bytes(&price_rev)?;
+        short_key.reverse();
+        Ok(short_key)
+    }
+
+    fn from_custom_bytes(short_key: &[u8]) -> Result<Self, ViewError> {
+        let mut bytes = short_key.to_vec();
+        bytes.reverse();
+        let price_rev = bcs::from_bytes::<u64>(&bytes)?;
+        let price = u64::MAX - price_rev;
+        Ok(PriceBid { price })
     }
 }
 

@@ -365,7 +365,7 @@ impl MatchingEngine {
         if let Some(key_book) = key_book {
             match key_book.nature {
                 OrderNature::Bid => {
-                    let view = self.bids.load_entry_mut(&key_book.price.revert()).await?;
+                    let view = self.bids.load_entry_mut(&key_book.price.to_bid()).await?;
                     let (cancel_amount, remove_order_id) =
                         Self::modify_order_level(view, order_id, cancel_amount).await?;
                     if remove_order_id {
@@ -380,7 +380,7 @@ impl MatchingEngine {
                     Ok(transfer)
                 }
                 OrderNature::Ask => {
-                    let view = self.asks.load_entry_mut(&key_book.price).await?;
+                    let view = self.asks.load_entry_mut(&key_book.price.to_ask()).await?;
                     let (cancel_count, remove_order_id) =
                         Self::modify_order_level(view, order_id, cancel_amount).await?;
                     if remove_order_id {
@@ -616,7 +616,7 @@ impl MatchingEngine {
                 let mut matching_price_asks = Vec::new();
                 self.asks
                     .for_each_index_while(|price_ask| {
-                        let matches = price_ask <= *price;
+                        let matches = price_ask.to_price() <= *price;
                         if matches {
                             matching_price_asks.push(price_ask);
                         }
@@ -631,7 +631,7 @@ impl MatchingEngine {
                         &mut final_amount,
                         &mut transfers,
                         &nature,
-                        price_ask,
+                        price_ask.to_price(),
                         *price,
                     )
                     .await?;
@@ -643,9 +643,8 @@ impl MatchingEngine {
                         break;
                     }
                 }
-                let price_revert = price.revert();
                 if final_amount != Amount::ZERO {
-                    let view = self.bids.load_entry_mut(&price_revert).await?;
+                    let view = self.bids.load_entry_mut(&price.to_bid()).await?;
                     let order = OrderEntry {
                         amount: final_amount,
                         owner: *owner,
@@ -657,32 +656,30 @@ impl MatchingEngine {
                 }
             }
             OrderNature::Ask => {
-                let price_revert = price.revert();
                 let mut matching_price_bids = Vec::new();
                 self.bids
                     .for_each_index_while(|price_bid| {
-                        let matches = price_bid <= price_revert;
+                        let matches = price_bid.to_price() >= *price;
                         if matches {
-                            let price_bid = price_bid.revert();
                             matching_price_bids.push(price_bid);
                         }
                         Ok(matches)
                     })
                     .await?;
                 for price_bid in matching_price_bids {
-                    let view = self.bids.load_entry_mut(&price_bid.revert()).await?;
+                    let view = self.bids.load_entry_mut(&price_bid).await?;
                     let remove_entry = Self::level_clearing(
                         view,
                         owner,
                         &mut final_amount,
                         &mut transfers,
                         &nature,
-                        price_bid,
+                        price_bid.to_price(),
                         *price,
                     )
                     .await?;
                     if view.queue.count() == 0 {
-                        self.bids.remove_entry(&price_bid.revert())?;
+                        self.bids.remove_entry(&price_bid)?;
                     }
                     self.remove_order_ids(remove_entry).await?;
                     if final_amount == Amount::ZERO {
@@ -690,7 +687,7 @@ impl MatchingEngine {
                     }
                 }
                 if final_amount != Amount::ZERO {
-                    let view = self.asks.load_entry_mut(price).await?;
+                    let view = self.asks.load_entry_mut(&price.to_ask()).await?;
                     let order = OrderEntry {
                         amount: final_amount,
                         owner: *owner,
