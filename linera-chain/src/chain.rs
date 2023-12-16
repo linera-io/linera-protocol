@@ -125,11 +125,11 @@ pub struct ChainTipState {
     pub block_hash: Option<CryptoHash>,
     /// Sequence number tracking blocks.
     pub next_block_height: BlockHeight,
-    /// Number of incoming messages
+    /// Number of incoming messages.
     pub num_incoming_messages: u32,
-    /// Number of operations
+    /// Number of operations.
     pub num_operations: u32,
-    /// Number of outgoing messages
+    /// Number of outgoing messages.
     pub num_outgoing_messages: u32,
 }
 
