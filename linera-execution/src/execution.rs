@@ -218,7 +218,7 @@ where
 
         // Set the authenticated signer to be used in outgoing messages.
         call_result.authenticated_signer = signer;
-        let runtime_counts = runtime.runtime_counts();
+        let runtime_counts = runtime.runtime_counts().await;
         let balance = self.system.balance.get_mut();
         tracker.update_limits(balance, policy, runtime_counts)?;
 

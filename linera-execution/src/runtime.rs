@@ -13,7 +13,7 @@ use crate::{
 use async_lock::{Mutex, MutexGuard, MutexGuardArc};
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{ArithmeticError, Timestamp},
+    data_types::Timestamp,
     ensure, hex_debug,
     identifiers::{ChainId, Owner},
 };
@@ -28,10 +28,7 @@ use linera_views::{
 use std::{
     collections::{btree_map, BTreeMap},
     ops::DerefMut,
-    sync::{
-        atomic::{AtomicI32, AtomicU64, Ordering},
-        Arc,
-    },
+    sync::Arc,
 };
 
 /// Runtime data tracked during the execution of a transaction.
@@ -54,16 +51,8 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
     execution_results: Mutex<&'a mut Vec<ExecutionResult>>,
 
-    /// The amount of fuel available for executing the application.
-    remaining_fuel: AtomicU64,
-    /// The number of reads
-    num_reads: AtomicU64,
-    /// the total size being read
-    bytes_read: AtomicU64,
-    /// The total size being written
-    bytes_written: AtomicU64,
-    /// The total size being written
-    stored_size_delta: AtomicI32,
+    /// The runtime counters.
+    runtime_counts: Mutex<RuntimeCounts>,
     /// The runtime limits
     runtime_limits: RuntimeLimits,
 }
@@ -117,7 +106,7 @@ where
         execution_state: &'a mut ExecutionStateView<C>,
         session_manager: &'a mut SessionManager,
         execution_results: &'a mut Vec<ExecutionResult>,
-        fuel: u64,
+        remaining_fuel: u64,
         runtime_limits: RuntimeLimits,
     ) -> Self {
         assert_eq!(chain_id, execution_state.context().extra().chain_id());
@@ -129,11 +118,10 @@ where
             active_view_user_states: Mutex::default(),
             active_sessions: Mutex::default(),
             execution_results: Mutex::new(execution_results),
-            remaining_fuel: AtomicU64::new(fuel),
-            num_reads: AtomicU64::new(0),
-            bytes_read: AtomicU64::new(0),
-            bytes_written: AtomicU64::new(0),
-            stored_size_delta: AtomicI32::new(0),
+            runtime_counts: Mutex::new(RuntimeCounts {
+                remaining_fuel,
+                ..Default::default()
+            }),
             runtime_limits,
             chain_id,
         }
@@ -336,43 +324,24 @@ where
 }
 
 impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W> {
-    fn increment_num_reads(&self) -> Result<(), ExecutionError> {
-        self.num_reads.fetch_add(1, Ordering::Relaxed);
-        let bytes = self.num_reads.load(Ordering::Acquire);
-        if bytes >= self.runtime_limits.max_budget_num_reads {
-            return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
-        }
-        Ok(())
+    async fn increment_num_reads(&self) -> Result<(), ExecutionError> {
+        let mut counts = self.runtime_counts.lock().await;
+        counts.increment_num_reads(&self.runtime_limits)
     }
 
-    fn increment_bytes_read(&self, increment: u64) -> Result<(), ExecutionError> {
-        if increment >= u64::MAX / 2 {
-            return Err(ExecutionError::ExcessiveRead);
-        }
-        self.bytes_read.fetch_add(increment, Ordering::Relaxed);
-        let bytes = self.bytes_read.load(Ordering::Acquire);
-        if bytes >= self.runtime_limits.max_budget_bytes_read {
-            return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
-        }
-        if bytes >= self.runtime_limits.maximum_bytes_left_to_read {
-            return Err(ExecutionError::ExcessiveRead);
-        }
-        Ok(())
+    async fn increment_bytes_read(&self, increment: u64) -> Result<(), ExecutionError> {
+        let mut counts = self.runtime_counts.lock().await;
+        counts.increment_bytes_read(&self.runtime_limits, increment)
     }
 
-    fn increment_bytes_written(&self, increment: u64) -> Result<(), ExecutionError> {
-        if increment >= u64::MAX / 2 {
-            return Err(ExecutionError::ExcessiveWrite);
-        }
-        self.bytes_written.fetch_add(increment, Ordering::Relaxed);
-        let bytes = self.bytes_written.load(Ordering::Acquire);
-        if bytes >= self.runtime_limits.max_budget_bytes_written {
-            return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
-        }
-        if bytes >= self.runtime_limits.maximum_bytes_left_to_write {
-            return Err(ExecutionError::ExcessiveWrite);
-        }
-        Ok(())
+    async fn increment_bytes_written(&self, increment: u64) -> Result<(), ExecutionError> {
+        let mut counts = self.runtime_counts.lock().await;
+        counts.increment_bytes_written(&self.runtime_limits, increment)
+    }
+
+    async fn update_stored_size(&self, delta: i32) -> Result<(), ExecutionError> {
+        let mut counts = self.runtime_counts.lock().await;
+        counts.update_stored_size(delta)
     }
 }
 
@@ -450,7 +419,7 @@ where
             .get(&self.application_id())
             .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
         let result = view.contains_key(&key).await?;
-        self.increment_num_reads()?;
+        self.increment_num_reads().await?;
         Ok(result)
     }
 
@@ -463,9 +432,9 @@ where
             .get(&self.application_id())
             .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
         let result = view.get(&key).await?;
-        self.increment_num_reads()?;
+        self.increment_num_reads().await?;
         if let Some(value) = &result {
-            self.increment_bytes_read(value.len() as u64)?;
+            self.increment_bytes_read(value.len() as u64).await?;
         }
         Ok(result)
     }
@@ -479,9 +448,9 @@ where
             .get(&self.application_id())
             .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
         let results = view.multi_get(keys).await?;
-        self.increment_num_reads()?;
+        self.increment_num_reads().await?;
         for value in results.iter().flatten() {
-            self.increment_bytes_read(value.len() as u64)?;
+            self.increment_bytes_read(value.len() as u64).await?;
         }
         Ok(results)
     }
@@ -496,12 +465,12 @@ where
             .get(&self.application_id())
             .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
         let keys = view.find_keys_by_prefix(&key_prefix).await?;
-        self.increment_num_reads()?;
+        self.increment_num_reads().await?;
         let mut read_size = 0;
         for key in &keys {
             read_size += key.len();
         }
-        self.increment_bytes_read(read_size as u64)?;
+        self.increment_bytes_read(read_size as u64).await?;
         Ok(keys)
     }
 
@@ -515,12 +484,12 @@ where
             .get(&self.application_id())
             .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
         let key_values = view.find_key_values_by_prefix(&key_prefix).await?;
-        self.increment_num_reads()?;
+        self.increment_num_reads().await?;
         let mut read_size = 0;
         for (key, value) in &key_values {
             read_size += key.len() + value.len();
         }
-        self.increment_bytes_read(read_size as u64)?;
+        self.increment_bytes_read(read_size as u64).await?;
         Ok(key_values)
     }
 }
@@ -587,27 +556,16 @@ where
         (actor, sender)
     }
 
-    pub(crate) fn remaining_fuel(&self) -> u64 {
-        self.remaining_fuel.load(Ordering::Acquire)
+    pub(crate) async fn remaining_fuel(&self) -> u64 {
+        self.runtime_counts.lock().await.remaining_fuel
     }
 
-    pub(crate) fn runtime_counts(&self) -> RuntimeCounts {
-        let remaining_fuel = self.remaining_fuel.load(Ordering::Acquire);
-        let num_reads = self.num_reads.load(Ordering::Acquire);
-        let bytes_read = self.bytes_read.load(Ordering::Acquire);
-        let bytes_written = self.bytes_written.load(Ordering::Acquire);
-        let stored_size_delta = self.stored_size_delta.load(Ordering::Acquire);
-        RuntimeCounts {
-            remaining_fuel,
-            num_reads,
-            bytes_read,
-            bytes_written,
-            stored_size_delta,
-        }
+    pub(crate) async fn runtime_counts(&self) -> RuntimeCounts {
+        *self.runtime_counts.lock().await
     }
 
-    pub(crate) fn set_remaining_fuel(&self, remaining_fuel: u64) {
-        self.remaining_fuel.store(remaining_fuel, Ordering::Release);
+    pub(crate) async fn set_remaining_fuel(&self, remaining_fuel: u64) {
+        self.runtime_counts.lock().await.remaining_fuel = remaining_fuel;
     }
 
     pub(crate) async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
@@ -646,7 +604,7 @@ where
     pub(crate) async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {
         // Update the write costs
         let size = batch.size() as u64;
-        self.increment_bytes_written(size)?;
+        self.increment_bytes_written(size).await?;
         // Write the batch and make the view available again.
         match self
             .active_view_user_states_mut()
@@ -658,8 +616,7 @@ where
                 view.write_batch(batch).await?;
                 let new_stored_size = view.total_size().sum_i32()?;
                 let increment = new_stored_size - stored_size;
-                self.stored_size_delta
-                    .fetch_add(increment, Ordering::Relaxed);
+                self.update_stored_size(increment).await?;
                 Ok(())
             }
             None => Err(ExecutionError::ApplicationStateNotLocked),

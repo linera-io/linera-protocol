@@ -6,7 +6,7 @@
 use crate::{policy::ResourceControlPolicy, system::SystemExecutionError, ExecutionError};
 
 use custom_debug_derive::Debug;
-use linera_base::data_types::Amount;
+use linera_base::data_types::{Amount, ArithmeticError};
 
 /// The entries of the runtime related to storage
 #[derive(Copy, Debug, Clone)]
@@ -129,7 +129,7 @@ impl ResourceTracker {
 }
 
 /// The entries of the runtime related to fuel and storage
-#[derive(Copy, Debug, Clone)]
+#[derive(Copy, Debug, Clone, Default)]
 pub struct RuntimeCounts {
     /// The remaining fuel available
     pub remaining_fuel: u64,
@@ -141,4 +141,55 @@ pub struct RuntimeCounts {
     pub bytes_written: u64,
     /// The change in the total data stored
     pub stored_size_delta: i32,
+}
+
+impl RuntimeCounts {
+    pub fn increment_num_reads(&mut self, limits: &RuntimeLimits) -> Result<(), ExecutionError> {
+        self.num_reads += 1;
+        if self.num_reads >= limits.max_budget_num_reads {
+            return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
+        }
+        Ok(())
+    }
+
+    pub fn increment_bytes_read(
+        &mut self,
+        limits: &RuntimeLimits,
+        increment: u64,
+    ) -> Result<(), ExecutionError> {
+        if increment >= u64::MAX / 2 {
+            return Err(ExecutionError::ExcessiveRead);
+        }
+        self.bytes_read += increment;
+        if self.bytes_read >= limits.max_budget_bytes_read {
+            return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
+        }
+        if self.bytes_read >= limits.maximum_bytes_left_to_read {
+            return Err(ExecutionError::ExcessiveRead);
+        }
+        Ok(())
+    }
+
+    pub fn increment_bytes_written(
+        &mut self,
+        limits: &RuntimeLimits,
+        increment: u64,
+    ) -> Result<(), ExecutionError> {
+        if increment >= u64::MAX / 2 {
+            return Err(ExecutionError::ExcessiveWrite);
+        }
+        self.bytes_written += increment;
+        if self.bytes_written >= limits.max_budget_bytes_written {
+            return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
+        }
+        if self.bytes_written >= limits.maximum_bytes_left_to_write {
+            return Err(ExecutionError::ExcessiveWrite);
+        }
+        Ok(())
+    }
+
+    pub fn update_stored_size(&mut self, delta: i32) -> Result<(), ExecutionError> {
+        self.stored_size_delta += delta;
+        Ok(())
+    }
 }
