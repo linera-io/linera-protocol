@@ -81,6 +81,7 @@ impl ScyllaDbStorage<TestClock> {
         let storage = ScyllaDbStorage {
             client: Arc::new(storage),
             clock,
+            execution_runtime_config: Default::default(),
         };
         Ok((storage, table_status))
     }
@@ -95,6 +96,7 @@ impl ScyllaDbStorage<WallClock> {
         let storage = ScyllaDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
+            execution_runtime_config: Default::default(),
         };
         Ok(storage)
     }
@@ -108,6 +110,7 @@ impl ScyllaDbStorage<WallClock> {
         let storage = ScyllaDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
+            execution_runtime_config: Default::default(),
         };
         Ok((storage, table_status))
     }

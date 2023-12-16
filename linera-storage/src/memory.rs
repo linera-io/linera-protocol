@@ -31,6 +31,7 @@ impl<C> MemoryStorage<C> {
         Self {
             client: Arc::new(MemoryStorageInner::make(wasm_runtime, max_stream_queries)),
             clock,
+            execution_runtime_config: Default::default(),
         }
     }
 }

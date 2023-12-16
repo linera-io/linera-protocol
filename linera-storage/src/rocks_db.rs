@@ -80,6 +80,7 @@ impl RocksDbStorage<TestClock> {
         let storage = RocksDbStorage {
             client: Arc::new(storage),
             clock,
+            execution_runtime_config: Default::default(),
         };
         Ok((storage, table_status))
     }
@@ -94,6 +95,7 @@ impl RocksDbStorage<WallClock> {
         let storage = RocksDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
+            execution_runtime_config: Default::default(),
         };
         Ok(storage)
     }
@@ -106,6 +108,7 @@ impl RocksDbStorage<WallClock> {
         let storage = RocksDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
+            execution_runtime_config: Default::default(),
         };
         Ok((storage, table_status))
     }

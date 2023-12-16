@@ -23,8 +23,11 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
-            .await;
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            Default::default(),
+        )
+        .await;
 
     let app_desc = create_dummy_user_application_description();
     let app_id = view
@@ -268,8 +271,11 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
-            .await;
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            Default::default(),
+        )
+        .await;
     let app_desc = create_dummy_user_application_description();
     let app_id = view
         .system
@@ -345,8 +351,11 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
-            .await;
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            Default::default(),
+        )
+        .await;
     let app_desc = create_dummy_user_application_description();
     let app_id = view
         .system
@@ -394,8 +403,11 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
-            .await;
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            Default::default(),
+        )
+        .await;
     let app_desc = create_dummy_user_application_description();
     let app_id = view
         .system

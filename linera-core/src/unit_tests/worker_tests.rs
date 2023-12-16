@@ -63,7 +63,7 @@ struct Dummy;
 impl BcsSignable for Dummy {}
 
 async fn make_state_hash(state: SystemExecutionState) -> CryptoHash {
-    ExecutionStateView::from_system_state(state)
+    ExecutionStateView::from_system_state(state, Default::default())
         .await
         .crypto_hash()
         .await

@@ -85,6 +85,7 @@ impl DynamoDbStorage<TestClock> {
         let storage = DynamoDbStorage {
             client: Arc::new(storage),
             clock,
+            execution_runtime_config: Default::default(),
         };
         Ok((storage, table_status))
     }
@@ -99,6 +100,7 @@ impl DynamoDbStorage<WallClock> {
         let storage = DynamoDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
+            execution_runtime_config: Default::default(),
         };
         Ok(storage)
     }
@@ -112,6 +114,7 @@ impl DynamoDbStorage<WallClock> {
         let storage = DynamoDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
+            execution_runtime_config: Default::default(),
         };
         Ok((storage, table_status))
     }

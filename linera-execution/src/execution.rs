@@ -6,9 +6,9 @@ use crate::{
     resources::{ResourceTracker, RuntimeLimits},
     runtime::{ApplicationStatus, ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
-    ExecutionError, ExecutionResult, ExecutionRuntimeContext, Message, MessageContext, Operation,
-    OperationContext, Query, QueryContext, RawExecutionResult, RawOutgoingMessage, Response,
-    SystemMessage, UserApplicationDescription, UserApplicationId,
+    ExecutionError, ExecutionResult, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
+    MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
+    RawOutgoingMessage, Response, SystemMessage, UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{
     ensure,
@@ -52,7 +52,10 @@ where
 {
     /// Creates an in-memory view where the system state is set. This is used notably to
     /// generate state hashes in tests.
-    pub async fn from_system_state(state: SystemExecutionState) -> Self {
+    pub async fn from_system_state(
+        state: SystemExecutionState,
+        execution_runtime_config: ExecutionRuntimeConfig,
+    ) -> Self {
         // Destructure, to make sure we don't miss any fields.
         let SystemExecutionState {
             description,
@@ -69,6 +72,7 @@ where
         let guard = Arc::new(Mutex::new(BTreeMap::new())).lock_arc().await;
         let extra = TestExecutionRuntimeContext::new(
             description.expect("Chain description should be set").into(),
+            execution_runtime_config,
         );
         let context = MemoryContext::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES, extra);
         let mut view = Self::load(context)

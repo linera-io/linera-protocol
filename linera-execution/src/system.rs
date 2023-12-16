@@ -1029,7 +1029,7 @@ mod tests {
             committees: BTreeMap::new(),
             ..SystemExecutionState::default()
         };
-        let view = ExecutionStateView::from_system_state(state).await;
+        let view = ExecutionStateView::from_system_state(state, Default::default()).await;
         (view, context)
     }
 

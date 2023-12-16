@@ -40,8 +40,11 @@ async fn test_fuel_for_counter_wasm_application(
         ..Default::default()
     };
     let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
-            .await;
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            Default::default(),
+        )
+        .await;
     let app_desc = create_dummy_user_application_description();
     let app_id = view
         .system
