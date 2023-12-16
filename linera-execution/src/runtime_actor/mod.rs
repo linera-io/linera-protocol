@@ -12,7 +12,7 @@ use self::handlers::RequestHandler;
 pub use self::{
     handlers::RespondExt,
     requests::{BaseRequest, ContractRequest, ServiceRequest},
-    senders::{ContractRuntimeSender, ServiceRuntimeSender},
+    senders::{ContractActorRuntime, ServiceActorRuntime},
     sync_response::{SyncReceiver, SyncSender},
 };
 use crate::ExecutionError;

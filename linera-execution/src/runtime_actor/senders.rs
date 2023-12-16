@@ -22,11 +22,11 @@ pub struct RuntimeSender<Request> {
     inner: mpsc::UnboundedSender<Request>,
 }
 
-pub type ContractRuntimeSender = RuntimeSender<ContractRequest>;
-pub type ServiceRuntimeSender = RuntimeSender<ServiceRequest>;
+pub type ContractActorRuntime = RuntimeSender<ContractRequest>;
+pub type ServiceActorRuntime = RuntimeSender<ServiceRequest>;
 
 impl<Request> RuntimeSender<Request> {
-    /// Creates a new [`ContractRuntimeSender`] instance.
+    /// Creates a new [`ContractActorRuntime`] instance.
     pub(crate) fn new(inner: mpsc::UnboundedSender<Request>) -> Self {
         Self { inner }
     }
@@ -40,7 +40,7 @@ impl<Request> Clone for RuntimeSender<Request> {
     }
 }
 
-impl BaseRuntime for ContractRuntimeSender {
+impl BaseRuntime for ContractActorRuntime {
     type Read = Mutex<Option<oneshot::Receiver<Vec<u8>>>>;
     type Lock = Mutex<Option<oneshot::Receiver<()>>>;
     type Unlock = Mutex<Option<oneshot::Receiver<()>>>;
@@ -275,7 +275,7 @@ impl BaseRuntime for ContractRuntimeSender {
     }
 }
 
-impl ContractRuntime for ContractRuntimeSender {
+impl ContractRuntime for ContractActorRuntime {
     fn try_read_and_lock_my_state(&mut self) -> Result<Option<Vec<u8>>, ExecutionError> {
         self.inner
             .send_sync_request(|response_sender| ContractRequest::TryReadAndLockMyState {
@@ -340,7 +340,7 @@ impl ContractRuntime for ContractRuntimeSender {
     }
 }
 
-impl BaseRuntime for ServiceRuntimeSender {
+impl BaseRuntime for ServiceActorRuntime {
     type Read = Mutex<Option<oneshot::Receiver<Vec<u8>>>>;
     type Lock = Mutex<Option<oneshot::Receiver<()>>>;
     type Unlock = Mutex<Option<oneshot::Receiver<()>>>;
@@ -587,7 +587,7 @@ impl BaseRuntime for ServiceRuntimeSender {
     }
 }
 
-impl ServiceRuntime for ServiceRuntimeSender {
+impl ServiceRuntime for ServiceActorRuntime {
     type TryQueryApplication = Mutex<Option<oneshot::Receiver<Vec<u8>>>>;
 
     fn try_query_application_new(

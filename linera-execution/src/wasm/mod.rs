@@ -24,9 +24,9 @@ mod wasmtime;
 
 use self::sanitizer::sanitize;
 use crate::{
-    ApplicationCallResult, Bytecode, CalleeContext, ContractRuntime, ContractRuntimeSender,
+    ApplicationCallResult, Bytecode, CalleeContext, ContractActorRuntime, ContractRuntime,
     ExecutionError, MessageContext, OperationContext, QueryContext, RawExecutionResult,
-    ServiceRuntime, ServiceRuntimeSender, SessionCallResult, SessionId, UserContract,
+    ServiceActorRuntime, ServiceRuntime, SessionCallResult, SessionId, UserContract,
     UserContractModule, UserService, UserServiceModule, WasmRuntime,
 };
 use std::{
@@ -106,7 +106,7 @@ impl<Runtime> From<WasmContractModule> for WasmContract<Runtime> {
 impl UserContractModule for WasmContractModule {
     fn instantiate_with_actor_runtime(
         &self,
-    ) -> Box<dyn UserContract<ContractRuntimeSender> + Send + Sync + 'static> {
+    ) -> Box<dyn UserContract<ContractActorRuntime> + Send + Sync + 'static> {
         Box::new(WasmContract::from(self.clone()))
     }
 }
@@ -171,7 +171,7 @@ impl<Runtime> From<WasmServiceModule> for WasmService<Runtime> {
 impl UserServiceModule for WasmServiceModule {
     fn instantiate_with_actor_runtime(
         &self,
-    ) -> Box<dyn UserService<ServiceRuntimeSender> + Send + Sync + 'static> {
+    ) -> Box<dyn UserService<ServiceActorRuntime> + Send + Sync + 'static> {
         Box::new(WasmService::from(self.clone()))
     }
 }

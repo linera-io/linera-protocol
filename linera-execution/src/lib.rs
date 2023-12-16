@@ -15,7 +15,7 @@ pub mod runtime_actor;
 pub mod system;
 mod wasm;
 
-pub use crate::runtime_actor::{ContractRuntimeSender, ServiceRuntimeSender};
+pub use crate::runtime_actor::{ContractActorRuntime, ServiceActorRuntime};
 pub use applications::{
     ApplicationRegistryView, BytecodeLocation, GenericApplicationId, UserApplicationDescription,
     UserApplicationId,
@@ -65,14 +65,14 @@ pub type UserServiceCode = Arc<dyn UserServiceModule + Send + Sync + 'static>;
 pub trait UserContractModule {
     fn instantiate_with_actor_runtime(
         &self,
-    ) -> Box<dyn UserContract<ContractRuntimeSender> + Send + Sync + 'static>;
+    ) -> Box<dyn UserContract<ContractActorRuntime> + Send + Sync + 'static>;
 }
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
 pub trait UserServiceModule {
     fn instantiate_with_actor_runtime(
         &self,
-    ) -> Box<dyn UserService<ServiceRuntimeSender> + Send + Sync + 'static>;
+    ) -> Box<dyn UserService<ServiceActorRuntime> + Send + Sync + 'static>;
 }
 
 /// A type for errors happening during execution.

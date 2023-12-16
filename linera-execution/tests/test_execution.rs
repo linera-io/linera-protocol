@@ -13,7 +13,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, Owner, SessionId},
 };
 use linera_execution::{
-    policy::ResourceControlPolicy, ContractRuntimeSender, ServiceRuntimeSender, *,
+    policy::ResourceControlPolicy, ContractActorRuntime, ServiceActorRuntime, *,
 };
 use linera_views::{batch::Batch, common::Context, memory::MemoryContext, views::View};
 use std::{marker::PhantomData, sync::Arc};
@@ -102,7 +102,7 @@ enum TestOperation {
 impl UserContractModule for TestModule {
     fn instantiate_with_actor_runtime(
         &self,
-    ) -> Box<dyn UserContract<ContractRuntimeSender> + Send + Sync + 'static> {
+    ) -> Box<dyn UserContract<ContractActorRuntime> + Send + Sync + 'static> {
         Box::new(TestApplication::from(self.clone()))
     }
 }
@@ -228,7 +228,7 @@ where
 impl UserServiceModule for TestModule {
     fn instantiate_with_actor_runtime(
         &self,
-    ) -> Box<dyn UserService<ServiceRuntimeSender> + Send + Sync + 'static> {
+    ) -> Box<dyn UserService<ServiceActorRuntime> + Send + Sync + 'static> {
         Box::new(TestApplication::from(self.clone()))
     }
 }

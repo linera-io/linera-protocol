@@ -5,7 +5,7 @@ use crate::{
     execution::ExecutionStateView,
     resources::{RuntimeCounts, RuntimeLimits},
     runtime_actor::{
-        ContractRequest, ContractRuntimeSender, RuntimeActor, ServiceRequest, ServiceRuntimeSender,
+        ContractActorRuntime, ContractRequest, RuntimeActor, ServiceActorRuntime, ServiceRequest,
     },
     CallResult, ExecutionError, ExecutionResult, ExecutionRuntimeContext, SessionId,
     UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
@@ -533,10 +533,10 @@ where
 {
     pub(crate) fn service_runtime_actor(
         &self,
-    ) -> (RuntimeActor<&Self, ServiceRequest>, ServiceRuntimeSender) {
+    ) -> (RuntimeActor<&Self, ServiceRequest>, ServiceActorRuntime) {
         let (sender, receiver) = futures::channel::mpsc::unbounded();
         let actor = RuntimeActor::new(self, receiver);
-        let sender = ServiceRuntimeSender::new(sender);
+        let sender = ServiceActorRuntime::new(sender);
         (actor, sender)
     }
 
@@ -583,11 +583,11 @@ where
         &self,
     ) -> (
         RuntimeActor<async_lock::RwLock<&Self>, ContractRequest>,
-        ContractRuntimeSender,
+        ContractActorRuntime,
     ) {
         let (sender, receiver) = futures::channel::mpsc::unbounded();
         let actor = RuntimeActor::new(async_lock::RwLock::new(self), receiver);
-        let sender = ContractRuntimeSender::new(sender);
+        let sender = ContractActorRuntime::new(sender);
         (actor, sender)
     }
 
