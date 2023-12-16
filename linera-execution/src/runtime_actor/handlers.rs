@@ -173,7 +173,7 @@ where
 }
 
 /// Helper trait to send a response and log on failure.
-trait RespondExt {
+pub trait RespondExt {
     type Response;
 
     /// Responds to a request using the `response_sender` channel endpoint.

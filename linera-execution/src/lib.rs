@@ -15,6 +15,7 @@ pub mod runtime_actor;
 pub mod system;
 mod wasm;
 
+pub use crate::runtime_actor::{ContractActorRuntime, ServiceActorRuntime};
 pub use applications::{
     ApplicationRegistryView, BytecodeLocation, GenericApplicationId, UserApplicationDescription,
     UserApplicationId,
@@ -32,7 +33,7 @@ pub use system::{
 ))]
 pub use wasm::test as wasm_test;
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-pub use wasm::{WasmContract, WasmExecutionError, WasmService};
+pub use wasm::{WasmContractModule, WasmExecutionError, WasmServiceModule};
 #[cfg(any(test, feature = "test"))]
 pub use {applications::ApplicationRegistry, system::SystemExecutionState};
 
@@ -50,17 +51,33 @@ use linera_base::{
     identifiers::{BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId},
 };
 use linera_views::{batch::Batch, views::ViewError};
-use runtime_actor::{ContractRuntimeSender, ServiceRuntimeSender};
 use serde::{Deserialize, Serialize};
 use std::{fmt, io, path::Path, str::FromStr, sync::Arc};
 use thiserror::Error;
 
-/// An implementation of [`UserContract`]
-pub type UserContractCode = Arc<dyn UserContract<ContractRuntimeSender> + Send + Sync + 'static>;
+/// An implementation of [`UserContractModule`]
+pub type UserContractCode = Arc<dyn UserContractModule + Send + Sync + 'static>;
 
-/// An implementation of [`UserService`].
-pub type UserServiceCode = Arc<dyn UserService<ServiceRuntimeSender> + Send + Sync + 'static>;
+/// An implementation of [`UserServiceModule`].
+pub type UserServiceCode = Arc<dyn UserServiceModule + Send + Sync + 'static>;
 
+/// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
+pub trait UserContractModule {
+    fn instantiate_with_actor_runtime(
+        &self,
+        runtime: ContractActorRuntime,
+    ) -> Box<dyn UserContract + Send + Sync + 'static>;
+}
+
+/// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
+pub trait UserServiceModule {
+    fn instantiate_with_actor_runtime(
+        &self,
+        runtime: ServiceActorRuntime,
+    ) -> Box<dyn UserService + Send + Sync + 'static>;
+}
+
+/// A type for errors happening during execution.
 #[derive(Error, Debug)]
 pub enum ExecutionError {
     #[error(transparent)]
@@ -127,28 +144,25 @@ impl From<ViewError> for ExecutionError {
 }
 
 /// The public entry points provided by the contract part of an application.
-pub trait UserContract<Runtime> {
+pub trait UserContract {
     /// Initializes the application state on the chain that owns the application.
     fn initialize(
-        &self,
+        &mut self,
         context: OperationContext,
-        runtime: Runtime,
         argument: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
     /// Applies an operation from the current block.
     fn execute_operation(
-        &self,
+        &mut self,
         context: OperationContext,
-        runtime: Runtime,
         operation: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
     /// Applies a message originating from a cross-chain message.
     fn execute_message(
-        &self,
+        &mut self,
         context: MessageContext,
-        runtime: Runtime,
         message: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
@@ -157,18 +171,16 @@ pub trait UserContract<Runtime> {
     /// When an application is executing an operation or a message it may call other applications,
     /// which can in turn call other applications.
     fn handle_application_call(
-        &self,
+        &mut self,
         context: CalleeContext,
-        runtime: Runtime,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError>;
 
     /// Executes a call from another application into a session created by this application.
     fn handle_session_call(
-        &self,
+        &mut self,
         context: CalleeContext,
-        runtime: Runtime,
         session_state: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
@@ -176,12 +188,11 @@ pub trait UserContract<Runtime> {
 }
 
 /// The public entry points provided by the service part of an application.
-pub trait UserService<Runtime> {
+pub trait UserService {
     /// Executes unmetered read-only queries on the state of this application.
     fn handle_query(
-        &self,
+        &mut self,
         context: QueryContext,
-        runtime: Runtime,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 }
@@ -273,7 +284,7 @@ pub struct QueryContext {
     pub chain_id: ChainId,
 }
 
-pub trait BaseRuntime: Send + Sync + 'static {
+pub trait BaseRuntime {
     type Read: fmt::Debug + Send;
     type Lock: fmt::Debug + Send;
     type Unlock: fmt::Debug + Send;

@@ -48,7 +48,7 @@ use crate::{
     SessionCallResult, SessionId,
 };
 use once_cell::sync::Lazy;
-use std::{error::Error, marker::PhantomData};
+use std::error::Error;
 use tokio::sync::Mutex;
 use wasmtime::{Config, Engine, Linker, Module, Store, Trap};
 use wit_bindgen_host_wasmtime_rust::Le;
@@ -78,14 +78,14 @@ static SERVICE_CACHE: Lazy<Mutex<ModuleCache<Module>>> = Lazy::new(Mutex::defaul
 /// system API.
 pub struct Contract<Runtime>
 where
-    Runtime: ContractRuntime,
+    Runtime: ContractRuntime + Send + Sync + 'static,
 {
     contract: contract::Contract<ContractState<Runtime>>,
 }
 
 impl<Runtime> ApplicationRuntimeContext for Contract<Runtime>
 where
-    Runtime: ContractRuntime + Send,
+    Runtime: ContractRuntime + Send + Sync,
 {
     type Store = Store<ContractState<Runtime>>;
     type Error = Trap;
@@ -121,14 +121,14 @@ where
 /// Type representing the [Wasmtime](https://wasmtime.dev/) runtime for services.
 pub struct Service<Runtime>
 where
-    Runtime: ServiceRuntime,
+    Runtime: ServiceRuntime + Send + Sync + 'static,
 {
     service: service::Service<ServiceState<Runtime>>,
 }
 
 impl<Runtime> ApplicationRuntimeContext for Service<Runtime>
 where
-    Runtime: ServiceRuntime + Send,
+    Runtime: ServiceRuntime + Send + Sync,
 {
     type Store = Store<ServiceState<Runtime>>;
     type Error = Trap;
@@ -143,11 +143,8 @@ where
     }
 }
 
-impl<Runtime> WasmContract<Runtime>
-where
-    Runtime: ContractRuntime + Send,
-{
-    /// Creates a new [`WasmContract`] using Wasmtime with the provided bytecodes.
+impl WasmContractModule {
+    /// Creates a new [`WasmContractModule`] using Wasmtime with the provided bytecodes.
     pub async fn new_with_wasmtime(
         contract_bytecode: Bytecode,
     ) -> Result<Self, WasmExecutionError> {
@@ -157,13 +154,14 @@ where
                 Module::new(&CONTRACT_ENGINE, bytecode)
             })
             .map_err(WasmExecutionError::LoadContractModule)?;
-        let module = WasmContractModule::Wasmtime { module };
-        Ok(WasmContract {
-            module,
-            _marker: PhantomData,
-        })
+        Ok(WasmContractModule::Wasmtime { module })
     }
+}
 
+impl<Runtime> WasmContract<Runtime>
+where
+    Runtime: ContractRuntime + Send + Sync + 'static,
+{
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare_contract_runtime_with_wasmtime(
         contract_module: &Module,
@@ -195,11 +193,8 @@ where
     }
 }
 
-impl<Runtime> WasmService<Runtime>
-where
-    Runtime: ServiceRuntime + Send,
-{
-    /// Creates a new [`WasmService`] using Wasmtime with the provided bytecodes.
+impl WasmServiceModule {
+    /// Creates a new [`WasmServiceModule`] using Wasmtime with the provided bytecodes.
     pub async fn new_with_wasmtime(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut service_cache = SERVICE_CACHE.lock().await;
         let module = service_cache
@@ -207,13 +202,14 @@ where
                 Module::new(&SERVICE_ENGINE, bytecode)
             })
             .map_err(WasmExecutionError::LoadServiceModule)?;
-        let module = WasmServiceModule::Wasmtime { module };
-        Ok(WasmService {
-            module,
-            _marker: PhantomData,
-        })
+        Ok(WasmServiceModule::Wasmtime { module })
     }
+}
 
+impl<Runtime> WasmService<Runtime>
+where
+    Runtime: ServiceRuntime + Send + Sync + 'static,
+{
     /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare_service_runtime_with_wasmtime(
         service_module: &Module,
@@ -248,7 +244,7 @@ where
 /// Data stored by the runtime that's necessary for handling calls to and from the Wasm module.
 pub struct ContractState<Runtime>
 where
-    Runtime: ContractRuntime,
+    Runtime: ContractRuntime + Send + Sync + 'static,
 {
     data: ContractData,
     system_api: Runtime,
@@ -259,7 +255,7 @@ where
 /// Data stored by the runtime that's necessary for handling queries to and from the Wasm module.
 pub struct ServiceState<Runtime>
 where
-    Runtime: ServiceRuntime,
+    Runtime: ServiceRuntime + Send + Sync + 'static,
 {
     data: ServiceData,
     system_api: Runtime,
@@ -269,7 +265,7 @@ where
 
 impl<Runtime> ContractState<Runtime>
 where
-    Runtime: ContractRuntime,
+    Runtime: ContractRuntime + Send + Sync + 'static,
 {
     /// Creates a new instance of [`ContractState`].
     ///
@@ -301,7 +297,7 @@ where
 
 impl<Runtime> ServiceState<Runtime>
 where
-    Runtime: ServiceRuntime,
+    Runtime: ServiceRuntime + Send + Sync + 'static,
 {
     /// Creates a new instance of [`ServiceState`].
     ///
@@ -333,7 +329,7 @@ where
 
 impl<Runtime> common::Contract for Contract<Runtime>
 where
-    Runtime: ContractRuntime + Send,
+    Runtime: ContractRuntime + Send + Sync + 'static,
 {
     fn initialize(
         &self,
@@ -414,7 +410,7 @@ where
 
 impl<Runtime> common::Service for Service<Runtime>
 where
-    Runtime: ServiceRuntime + Send,
+    Runtime: ServiceRuntime + Send + Sync + 'static,
 {
     fn handle_query(
         &self,

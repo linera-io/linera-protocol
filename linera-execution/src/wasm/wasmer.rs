@@ -126,11 +126,8 @@ impl ApplicationRuntimeContext for Service {
     }
 }
 
-impl<Runtime> WasmContract<Runtime>
-where
-    Runtime: ContractRuntime + Clone + Send + Unpin,
-{
-    /// Creates a new [`WasmContract`] using Wasmer with the provided bytecodes.
+impl WasmContractModule {
+    /// Creates a new [`WasmContractModule`] using Wasmer with the provided bytecodes.
     pub async fn new_with_wasmer(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
         let (engine, module) = contract_cache
@@ -138,13 +135,14 @@ where
             .map_err(WasmExecutionError::LoadContractModule)?
             .create_execution_instance()
             .map_err(WasmExecutionError::LoadContractModule)?;
-        let module = WasmContractModule::Wasmer { engine, module };
-        Ok(WasmContract {
-            module,
-            _marker: PhantomData,
-        })
+        Ok(WasmContractModule::Wasmer { engine, module })
     }
+}
 
+impl<Runtime> WasmContract<Runtime>
+where
+    Runtime: ContractRuntime + Clone + Send + Sync + Unpin + 'static,
+{
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare_contract_runtime_with_wasmer(
         contract_engine: &Engine,
@@ -195,11 +193,8 @@ impl WasmContractModule {
     }
 }
 
-impl<Runtime> WasmService<Runtime>
-where
-    Runtime: ServiceRuntime + Clone + Send + Unpin,
-{
-    /// Creates a new [`WasmService`] using Wasmer with the provided bytecodes.
+impl WasmServiceModule {
+    /// Creates a new [`WasmServiceModule`] using Wasmer with the provided bytecodes.
     pub async fn new_with_wasmer(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut service_cache = SERVICE_CACHE.lock().await;
         let module = service_cache
@@ -208,13 +203,14 @@ where
                     .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)
             })
             .map_err(WasmExecutionError::LoadServiceModule)?;
-        let module = WasmServiceModule::Wasmer { module };
-        Ok(WasmService {
-            module,
-            _marker: PhantomData,
-        })
+        Ok(WasmServiceModule::Wasmer { module })
     }
+}
 
+impl<Runtime> WasmService<Runtime>
+where
+    Runtime: ServiceRuntime + Clone + Send + Sync + Unpin + 'static,
+{
     /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare_service_runtime_with_wasmer(
         service_module: &Module,

@@ -6,7 +6,9 @@
 /// Generates the common code for contract system API types for all Wasm runtimes.
 macro_rules! impl_contract_system_api {
     ($trap:ty) => {
-        impl<T: crate::ContractRuntime> contract_system_api::ContractSystemApi for T {
+        impl<T: crate::ContractRuntime + Send + Sync + 'static>
+            contract_system_api::ContractSystemApi for T
+        {
             type Error = ExecutionError;
 
             type Lock = <Self as BaseRuntime>::Lock;
@@ -131,7 +133,9 @@ macro_rules! impl_contract_system_api {
 /// Generates the common code for service system API types for all Wasm runtimes.
 macro_rules! impl_service_system_api {
     ($trap:ty) => {
-        impl<T: crate::ServiceRuntime> service_system_api::ServiceSystemApi for T {
+        impl<T: crate::ServiceRuntime + Send + Sync + 'static> service_system_api::ServiceSystemApi
+            for T
+        {
             type Error = ExecutionError;
 
             type Load = <Self as BaseRuntime>::Read;
@@ -252,7 +256,7 @@ macro_rules! impl_service_system_api {
 /// Generates the common code for view system API types for all WASM runtimes.
 macro_rules! impl_view_system_api {
     ($trap:ty) => {
-        impl<T: crate::BaseRuntime> view_system_api::ViewSystemApi for T {
+        impl<T: crate::BaseRuntime + Send + Sync + 'static> view_system_api::ViewSystemApi for T {
             type Error = ExecutionError;
 
             type ContainsKey = <Self as BaseRuntime>::ContainsKey;

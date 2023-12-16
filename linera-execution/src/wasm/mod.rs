@@ -24,18 +24,16 @@ mod wasmtime;
 
 use self::sanitizer::sanitize;
 use crate::{
-    ApplicationCallResult, Bytecode, CalleeContext, ContractRuntime, ExecutionError,
-    MessageContext, OperationContext, QueryContext, RawExecutionResult, ServiceRuntime,
-    SessionCallResult, SessionId, UserContract, UserService, WasmRuntime,
+    ApplicationCallResult, Bytecode, CalleeContext, ContractActorRuntime, ContractRuntime,
+    ExecutionError, MessageContext, OperationContext, QueryContext, RawExecutionResult,
+    ServiceActorRuntime, ServiceRuntime, SessionCallResult, SessionId, UserContract,
+    UserContractModule, UserService, UserServiceModule, WasmRuntime,
 };
-use std::{
-    marker::{PhantomData, Unpin},
-    path::Path,
-    sync::Arc,
-};
+use std::{marker::Unpin, path::Path, sync::Arc};
 use thiserror::Error;
 
 /// A user contract in a compiled WebAssembly module.
+#[derive(Clone)]
 pub enum WasmContractModule {
     #[cfg(feature = "wasmer")]
     Wasmer {
@@ -48,14 +46,11 @@ pub enum WasmContractModule {
 
 pub struct WasmContract<Runtime> {
     module: WasmContractModule,
-    _marker: PhantomData<Runtime>,
+    runtime: Runtime,
 }
 
-impl<Runtime> WasmContract<Runtime>
-where
-    Runtime: ContractRuntime + Clone + Send + Unpin,
-{
-    /// Creates a new [`WasmContract`] using the WebAssembly module with the provided bytecodes.
+impl WasmContractModule {
+    /// Creates a new [`WasmContractModule`] using the WebAssembly module with the provided bytecodes.
     pub async fn new(
         contract_bytecode: Bytecode,
         runtime: WasmRuntime,
@@ -79,7 +74,7 @@ where
         }
     }
 
-    /// Creates a new [`WasmContract`] using the WebAssembly module in `bytecode_file`.
+    /// Creates a new [`WasmContractModule`] using the WebAssembly module in `bytecode_file`.
     pub async fn from_file(
         contract_bytecode_file: impl AsRef<Path>,
         runtime: WasmRuntime,
@@ -95,7 +90,20 @@ where
     }
 }
 
+impl UserContractModule for WasmContractModule {
+    fn instantiate_with_actor_runtime(
+        &self,
+        runtime: ContractActorRuntime,
+    ) -> Box<dyn UserContract + Send + Sync + 'static> {
+        Box::new(WasmContract {
+            module: self.clone(),
+            runtime,
+        })
+    }
+}
+
 /// A user service in a compiled WebAssembly module.
+#[derive(Clone)]
 pub enum WasmServiceModule {
     #[cfg(feature = "wasmer")]
     Wasmer { module: Arc<::wasmer::Module> },
@@ -105,14 +113,11 @@ pub enum WasmServiceModule {
 
 pub struct WasmService<Runtime> {
     module: WasmServiceModule,
-    _marker: PhantomData<Runtime>,
+    runtime: Runtime,
 }
 
-impl<Runtime> WasmService<Runtime>
-where
-    Runtime: ServiceRuntime + Clone + Send + Unpin,
-{
-    /// Creates a new [`WasmService`] using the WebAssembly module with the provided bytecodes.
+impl WasmServiceModule {
+    /// Creates a new [`WasmServiceModule`] using the WebAssembly module with the provided bytecodes.
     pub async fn new(
         service_bytecode: Bytecode,
         runtime: WasmRuntime,
@@ -129,7 +134,7 @@ where
         }
     }
 
-    /// Creates a new [`WasmService`] using the WebAssembly module in `bytecode_file`.
+    /// Creates a new [`WasmServiceModule`] using the WebAssembly module in `bytecode_file`.
     pub async fn from_file(
         service_bytecode_file: impl AsRef<Path>,
         runtime: WasmRuntime,
@@ -142,6 +147,18 @@ where
             runtime,
         )
         .await
+    }
+}
+
+impl UserServiceModule for WasmServiceModule {
+    fn instantiate_with_actor_runtime(
+        &self,
+        runtime: ServiceActorRuntime,
+    ) -> Box<dyn UserService + Send + Sync + 'static> {
+        Box::new(WasmService {
+            module: self.clone(),
+            runtime,
+        })
     }
 }
 
@@ -164,16 +181,16 @@ pub enum WasmExecutionError {
     ExecuteModuleInWasmtime(#[from] ::wasmtime::Trap),
 }
 
-impl<Runtime> UserContract<Runtime> for WasmContract<Runtime>
+impl<Runtime> UserContract for WasmContract<Runtime>
 where
-    Runtime: ContractRuntime + Clone + Unpin,
+    Runtime: ContractRuntime + Clone + Send + Sync + Unpin + 'static,
 {
     fn initialize(
-        &self,
+        &mut self,
         context: OperationContext,
-        runtime: Runtime,
         argument: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+        let runtime = self.runtime.clone();
         match &self.module {
             #[cfg(feature = "wasmtime")]
             WasmContractModule::Wasmtime { module } => {
@@ -189,11 +206,11 @@ where
     }
 
     fn execute_operation(
-        &self,
+        &mut self,
         context: OperationContext,
-        runtime: Runtime,
         operation: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+        let runtime = self.runtime.clone();
         match &self.module {
             #[cfg(feature = "wasmtime")]
             WasmContractModule::Wasmtime { module } => {
@@ -209,11 +226,11 @@ where
     }
 
     fn execute_message(
-        &self,
+        &mut self,
         context: MessageContext,
-        runtime: Runtime,
         message: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+        let runtime = self.runtime.clone();
         match &self.module {
             #[cfg(feature = "wasmtime")]
             WasmContractModule::Wasmtime { module } => {
@@ -229,12 +246,12 @@ where
     }
 
     fn handle_application_call(
-        &self,
+        &mut self,
         context: CalleeContext,
-        runtime: Runtime,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError> {
+        let runtime = self.runtime.clone();
         match &self.module {
             #[cfg(feature = "wasmtime")]
             WasmContractModule::Wasmtime { module } => {
@@ -250,13 +267,13 @@ where
     }
 
     fn handle_session_call(
-        &self,
+        &mut self,
         context: CalleeContext,
-        runtime: Runtime,
         session_state: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<(SessionCallResult, Vec<u8>), ExecutionError> {
+        let runtime = self.runtime.clone();
         match &self.module {
             #[cfg(feature = "wasmtime")]
             WasmContractModule::Wasmtime { module } => {
@@ -276,16 +293,16 @@ where
     }
 }
 
-impl<Runtime> UserService<Runtime> for WasmService<Runtime>
+impl<Runtime> UserService for WasmService<Runtime>
 where
-    Runtime: ServiceRuntime + Clone + Unpin,
+    Runtime: ServiceRuntime + Clone + Send + Sync + Unpin + 'static,
 {
     fn handle_query(
-        &self,
+        &mut self,
         context: QueryContext,
-        runtime: Runtime,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
+        let runtime = self.runtime.clone();
         match &self.module {
             #[cfg(feature = "wasmtime")]
             WasmServiceModule::Wasmtime { module } => {
@@ -304,7 +321,7 @@ where
 /// This assumes that the current directory is one of the crates.
 #[cfg(any(test, feature = "test"))]
 pub mod test {
-    use crate::{WasmContract, WasmRuntime, WasmService};
+    use super::{WasmContractModule, WasmRuntime, WasmServiceModule};
     use once_cell::sync::OnceCell;
 
     fn build_applications() -> Result<(), std::io::Error> {
@@ -335,18 +352,14 @@ pub mod test {
         ))
     }
 
-    pub async fn build_example_application<C, S>(
+    pub async fn build_example_application(
         name: &str,
         wasm_runtime: impl Into<Option<WasmRuntime>>,
-    ) -> Result<(WasmContract<C>, WasmService<S>), anyhow::Error>
-    where
-        C: crate::ContractRuntime + Clone + Send + Unpin,
-        S: crate::ServiceRuntime + Clone + Send + Unpin,
-    {
+    ) -> Result<(WasmContractModule, WasmServiceModule), anyhow::Error> {
         let (contract_path, service_path) = get_example_bytecode_paths(name)?;
         let wasm_runtime = wasm_runtime.into().unwrap_or_default();
-        let contract = WasmContract::from_file(&contract_path, wasm_runtime).await?;
-        let service = WasmService::from_file(&service_path, wasm_runtime).await?;
+        let contract = WasmContractModule::from_file(&contract_path, wasm_runtime).await?;
+        let service = WasmServiceModule::from_file(&service_path, wasm_runtime).await?;
         Ok((contract, service))
     }
 }

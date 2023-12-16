@@ -5,7 +5,7 @@ use crate::{
     execution::ExecutionStateView,
     resources::{RuntimeCounts, RuntimeLimits},
     runtime_actor::{
-        ContractRequest, ContractRuntimeSender, RuntimeActor, ServiceRequest, ServiceRuntimeSender,
+        ContractActorRuntime, ContractRequest, RuntimeActor, ServiceActorRuntime, ServiceRequest,
     },
     CallResult, ExecutionError, ExecutionResult, ExecutionRuntimeContext, SessionId,
     UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
@@ -533,10 +533,10 @@ where
 {
     pub(crate) fn service_runtime_actor(
         &self,
-    ) -> (RuntimeActor<&Self, ServiceRequest>, ServiceRuntimeSender) {
+    ) -> (RuntimeActor<&Self, ServiceRequest>, ServiceActorRuntime) {
         let (sender, receiver) = futures::channel::mpsc::unbounded();
         let actor = RuntimeActor::new(self, receiver);
-        let sender = ServiceRuntimeSender::new(sender);
+        let sender = ServiceActorRuntime::new(sender);
         (actor, sender)
     }
 
@@ -559,9 +559,9 @@ where
         });
 
         let (runtime_actor, runtime_sender) = self.service_runtime_actor();
-        let value_future = tokio::task::spawn_blocking(move || {
-            code.handle_query(query_context, runtime_sender, argument)
-        });
+        let mut code = code.instantiate_with_actor_runtime(runtime_sender);
+        let value_future =
+            tokio::task::spawn_blocking(move || code.handle_query(query_context, argument));
         // TODO(#989): Simplify after message failures are not ignored.
         let runtime_result = runtime_actor.run().await;
         let value = value_future.await;
@@ -582,11 +582,11 @@ where
         &self,
     ) -> (
         RuntimeActor<async_lock::RwLock<&Self>, ContractRequest>,
-        ContractRuntimeSender,
+        ContractActorRuntime,
     ) {
         let (sender, receiver) = futures::channel::mpsc::unbounded();
         let actor = RuntimeActor::new(async_lock::RwLock::new(self), receiver);
-        let sender = ContractRuntimeSender::new(sender);
+        let sender = ContractActorRuntime::new(sender);
         (actor, sender)
     }
 
@@ -703,13 +703,9 @@ where
             signer: authenticated_signer,
         });
         let (runtime_actor, runtime_sender) = self.contract_runtime_actor();
+        let mut code = code.instantiate_with_actor_runtime(runtime_sender);
         let raw_result_future = tokio::task::spawn_blocking(move || {
-            code.handle_application_call(
-                callee_context,
-                runtime_sender,
-                argument,
-                forwarded_sessions,
-            )
+            code.handle_application_call(callee_context, argument, forwarded_sessions)
         });
         // TODO(#989): Simplify after message failures are not ignored.
         let runtime_result = runtime_actor.run().await;
@@ -771,14 +767,9 @@ where
             signer: authenticated_signer,
         });
         let (runtime_actor, runtime_sender) = self.contract_runtime_actor();
+        let mut code = code.instantiate_with_actor_runtime(runtime_sender);
         let raw_result_future = tokio::task::spawn_blocking(move || {
-            code.handle_session_call(
-                callee_context,
-                runtime_sender,
-                session_state,
-                argument,
-                forwarded_sessions,
-            )
+            code.handle_session_call(callee_context, session_state, argument, forwarded_sessions)
         });
         // TODO(#989): Simplify after message failures are not ignored.
         let runtime_result = runtime_actor.run().await;

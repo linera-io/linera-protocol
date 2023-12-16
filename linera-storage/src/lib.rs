@@ -56,7 +56,7 @@ use std::{fmt::Debug, sync::Arc};
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 use {
     linera_chain::data_types::CertificateValue,
-    linera_execution::{Operation, SystemOperation, WasmContract, WasmService},
+    linera_execution::{Operation, SystemOperation, WasmContractModule, WasmServiceModule},
 };
 
 /// Communicate with a persistent storage using the "views" abstraction.
@@ -208,7 +208,9 @@ pub trait Storage: Sized {
         else {
             unreachable!();
         };
-        Ok(Arc::new(WasmContract::new(contract, wasm_runtime).await?))
+        Ok(Arc::new(
+            WasmContractModule::new(contract, wasm_runtime).await?,
+        ))
     }
 
     #[cfg(not(any(feature = "wasmer", feature = "wasmtime")))]
@@ -239,7 +241,9 @@ pub trait Storage: Sized {
         else {
             unreachable!();
         };
-        Ok(Arc::new(WasmService::new(service, wasm_runtime).await?))
+        Ok(Arc::new(
+            WasmServiceModule::new(service, wasm_runtime).await?,
+        ))
     }
 
     #[cfg(not(any(feature = "wasmer", feature = "wasmtime")))]
