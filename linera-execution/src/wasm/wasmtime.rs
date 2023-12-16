@@ -144,7 +144,7 @@ where
 }
 
 impl WasmContractModule {
-    /// Creates a new [`WasmContract`] using Wasmtime with the provided bytecodes.
+    /// Creates a new [`WasmContractModule`] using Wasmtime with the provided bytecodes.
     pub async fn new_with_wasmtime(
         contract_bytecode: Bytecode,
     ) -> Result<Self, WasmExecutionError> {
@@ -194,7 +194,7 @@ where
 }
 
 impl WasmServiceModule {
-    /// Creates a new [`WasmService`] using Wasmtime with the provided bytecodes.
+    /// Creates a new [`WasmServiceModule`] using Wasmtime with the provided bytecodes.
     pub async fn new_with_wasmtime(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut service_cache = SERVICE_CACHE.lock().await;
         let module = service_cache

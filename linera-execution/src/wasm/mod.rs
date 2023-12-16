@@ -54,7 +54,7 @@ pub struct WasmContract<Runtime> {
 }
 
 impl WasmContractModule {
-    /// Creates a new [`WasmContract`] using the WebAssembly module with the provided bytecodes.
+    /// Creates a new [`WasmContractModule`] using the WebAssembly module with the provided bytecodes.
     pub async fn new(
         contract_bytecode: Bytecode,
         runtime: WasmRuntime,
@@ -78,7 +78,7 @@ impl WasmContractModule {
         }
     }
 
-    /// Creates a new [`WasmContract`] using the WebAssembly module in `bytecode_file`.
+    /// Creates a new [`WasmContractModule`] using the WebAssembly module in `bytecode_file`.
     pub async fn from_file(
         contract_bytecode_file: impl AsRef<Path>,
         runtime: WasmRuntime,
@@ -126,7 +126,7 @@ pub struct WasmService<Runtime> {
 }
 
 impl WasmServiceModule {
-    /// Creates a new [`WasmService`] using the WebAssembly module with the provided bytecodes.
+    /// Creates a new [`WasmServiceModule`] using the WebAssembly module with the provided bytecodes.
     pub async fn new(
         service_bytecode: Bytecode,
         runtime: WasmRuntime,
@@ -143,7 +143,7 @@ impl WasmServiceModule {
         }
     }
 
-    /// Creates a new [`WasmService`] using the WebAssembly module in `bytecode_file`.
+    /// Creates a new [`WasmServiceModule`] using the WebAssembly module in `bytecode_file`.
     pub async fn from_file(
         service_bytecode_file: impl AsRef<Path>,
         runtime: WasmRuntime,

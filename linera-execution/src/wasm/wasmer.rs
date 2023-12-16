@@ -127,7 +127,7 @@ impl ApplicationRuntimeContext for Service {
 }
 
 impl WasmContractModule {
-    /// Creates a new [`WasmContract`] using Wasmer with the provided bytecodes.
+    /// Creates a new [`WasmContractModule`] using Wasmer with the provided bytecodes.
     pub async fn new_with_wasmer(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
         let (engine, module) = contract_cache
@@ -194,7 +194,7 @@ impl WasmContractModule {
 }
 
 impl WasmServiceModule {
-    /// Creates a new [`WasmService`] using Wasmer with the provided bytecodes.
+    /// Creates a new [`WasmServiceModule`] using Wasmer with the provided bytecodes.
     pub async fn new_with_wasmer(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut service_cache = SERVICE_CACHE.lock().await;
         let module = service_cache
