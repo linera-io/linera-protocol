@@ -65,14 +65,16 @@ pub type UserServiceCode = Arc<dyn UserServiceModule + Send + Sync + 'static>;
 pub trait UserContractModule {
     fn instantiate_with_actor_runtime(
         &self,
-    ) -> Box<dyn UserContract<ContractActorRuntime> + Send + Sync + 'static>;
+        runtime: ContractActorRuntime,
+    ) -> Box<dyn UserContract + Send + Sync + 'static>;
 }
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
 pub trait UserServiceModule {
     fn instantiate_with_actor_runtime(
         &self,
-    ) -> Box<dyn UserService<ServiceActorRuntime> + Send + Sync + 'static>;
+        runtime: ServiceActorRuntime,
+    ) -> Box<dyn UserService + Send + Sync + 'static>;
 }
 
 /// A type for errors happening during execution.
@@ -142,12 +144,11 @@ impl From<ViewError> for ExecutionError {
 }
 
 /// The public entry points provided by the contract part of an application.
-pub trait UserContract<Runtime> {
+pub trait UserContract {
     /// Initializes the application state on the chain that owns the application.
     fn initialize(
         &mut self,
         context: OperationContext,
-        runtime: Runtime,
         argument: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
@@ -155,7 +156,6 @@ pub trait UserContract<Runtime> {
     fn execute_operation(
         &mut self,
         context: OperationContext,
-        runtime: Runtime,
         operation: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
@@ -163,7 +163,6 @@ pub trait UserContract<Runtime> {
     fn execute_message(
         &mut self,
         context: MessageContext,
-        runtime: Runtime,
         message: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
@@ -174,7 +173,6 @@ pub trait UserContract<Runtime> {
     fn handle_application_call(
         &mut self,
         context: CalleeContext,
-        runtime: Runtime,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError>;
@@ -183,7 +181,6 @@ pub trait UserContract<Runtime> {
     fn handle_session_call(
         &mut self,
         context: CalleeContext,
-        runtime: Runtime,
         session_state: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
@@ -191,12 +188,11 @@ pub trait UserContract<Runtime> {
 }
 
 /// The public entry points provided by the service part of an application.
-pub trait UserService<Runtime> {
+pub trait UserService {
     /// Executes unmetered read-only queries on the state of this application.
     fn handle_query(
         &mut self,
         context: QueryContext,
-        runtime: Runtime,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 }

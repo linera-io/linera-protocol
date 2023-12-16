@@ -185,7 +185,6 @@ where
             .extra()
             .get_user_contract(&description)
             .await?;
-        let mut contract = contract.instantiate_with_actor_runtime();
         let signer = action.signer();
         // Create the execution runtime for this transaction.
         let mut session_manager = SessionManager::default();
@@ -206,16 +205,13 @@ where
         );
         // Make the call to user code.
         let (runtime_actor, runtime_sender) = runtime.contract_runtime_actor();
+        let mut contract = contract.instantiate_with_actor_runtime(runtime_sender);
         let call_result_future = tokio::task::spawn_blocking(move || match action {
-            UserAction::Initialize(context, argument) => {
-                contract.initialize(context, runtime_sender, argument)
-            }
+            UserAction::Initialize(context, argument) => contract.initialize(context, argument),
             UserAction::Operation(context, operation) => {
-                contract.execute_operation(context, runtime_sender, operation)
+                contract.execute_operation(context, operation)
             }
-            UserAction::Message(context, message) => {
-                contract.execute_message(context, runtime_sender, message)
-            }
+            UserAction::Message(context, message) => contract.execute_message(context, message),
         });
         let runtime_result = runtime_actor.run().await;
         let call_result = call_result_future.await?;
@@ -380,7 +376,6 @@ where
                     .extra()
                     .get_user_service(&description)
                     .await?;
-                let mut service = service.instantiate_with_actor_runtime();
                 // Create the execution runtime for this transaction.
                 let mut session_manager = SessionManager::default();
                 let mut results = Vec::new();
@@ -401,10 +396,10 @@ where
                     runtime_limits,
                 );
                 let (runtime_actor, runtime_sender) = runtime.service_runtime_actor();
+                let mut service = service.instantiate_with_actor_runtime(runtime_sender);
                 // Run the query.
-                let response_future = tokio::task::spawn_blocking(move || {
-                    service.handle_query(context, runtime_sender, bytes)
-                });
+                let response_future =
+                    tokio::task::spawn_blocking(move || service.handle_query(context, bytes));
                 runtime_actor.run().await?;
                 let response = response_future.await??;
 

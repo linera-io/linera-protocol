@@ -16,7 +16,7 @@ use linera_execution::{
     policy::ResourceControlPolicy, ContractActorRuntime, ServiceActorRuntime, *,
 };
 use linera_views::{batch::Batch, common::Context, memory::MemoryContext, views::View};
-use std::{marker::PhantomData, sync::Arc};
+use std::sync::Arc;
 
 #[tokio::test]
 async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
@@ -72,21 +72,12 @@ struct TestModule {
 
 struct TestApplication<Runtime> {
     owner: Owner,
-    _runtime_marker: PhantomData<Runtime>,
+    runtime: Runtime,
 }
 
 impl TestModule {
     fn new(owner: Owner) -> Self {
         Self { owner }
-    }
-}
-
-impl<Runtime> From<TestModule> for TestApplication<Runtime> {
-    fn from(module: TestModule) -> Self {
-        Self {
-            owner: module.owner,
-            _runtime_marker: PhantomData,
-        }
     }
 }
 
@@ -102,12 +93,16 @@ enum TestOperation {
 impl UserContractModule for TestModule {
     fn instantiate_with_actor_runtime(
         &self,
-    ) -> Box<dyn UserContract<ContractActorRuntime> + Send + Sync + 'static> {
-        Box::new(TestApplication::from(self.clone()))
+        runtime: ContractActorRuntime,
+    ) -> Box<dyn UserContract + Send + Sync + 'static> {
+        Box::new(TestApplication {
+            owner: self.owner,
+            runtime,
+        })
     }
 }
 
-impl<Runtime> UserContract<Runtime> for TestApplication<Runtime>
+impl<Runtime> UserContract for TestApplication<Runtime>
 where
     Runtime: ContractRuntime,
 {
@@ -115,7 +110,6 @@ where
     fn initialize(
         &mut self,
         context: OperationContext,
-        _runtime: Runtime,
         _argument: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         assert_eq!(context.authenticated_signer, Some(self.owner));
@@ -129,27 +123,27 @@ where
     fn execute_operation(
         &mut self,
         context: OperationContext,
-        mut runtime: Runtime,
         operation: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         assert_eq!(operation.len(), 1);
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
-        let app_id = runtime.application_id()?;
+        let app_id = self.runtime.application_id()?;
 
         // Modify our state.
         let chosen_key = vec![0];
-        runtime.lock()?;
-        let mut state = runtime
+        self.runtime.lock()?;
+        let mut state = self
+            .runtime
             .read_value_bytes(chosen_key.clone())?
             .unwrap_or_default();
         state.extend(operation.clone());
         let mut batch = Batch::new();
         batch.put_key_value_bytes(chosen_key, state);
-        runtime.write_batch_and_unlock(batch)?;
+        self.runtime.write_batch_and_unlock(batch)?;
 
         // Call ourselves after unlocking the state => ok.
-        let call_result = runtime.try_call_application(
+        let call_result = self.runtime.try_call_application(
             /* authenticated */ true,
             app_id,
             operation.clone(),
@@ -160,7 +154,12 @@ where
         if operation[0] != TestOperation::LeakingSession as u8 {
             // Call the session to close it.
             let session_id = call_result.sessions[0];
-            runtime.try_call_session(/* authenticated */ false, session_id, vec![], vec![])?;
+            self.runtime.try_call_session(
+                /* authenticated */ false,
+                session_id,
+                vec![],
+                vec![],
+            )?;
         }
         Ok(RawExecutionResult::default())
     }
@@ -169,18 +168,22 @@ where
     fn execute_message(
         &mut self,
         context: MessageContext,
-        mut runtime: Runtime,
         message: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         assert_eq!(message.len(), 1);
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
-        let app_id = runtime.application_id()?;
-        runtime.lock()?;
+        let app_id = self.runtime.application_id()?;
+        self.runtime.lock()?;
 
         // Call ourselves while the state is locked => not ok.
-        runtime.try_call_application(/* authenticated */ true, app_id, message, vec![])?;
-        runtime.unlock()?;
+        self.runtime.try_call_application(
+            /* authenticated */ true,
+            app_id,
+            message,
+            vec![],
+        )?;
+        self.runtime.unlock()?;
 
         Ok(RawExecutionResult::default())
     }
@@ -189,7 +192,6 @@ where
     fn handle_application_call(
         &mut self,
         context: CalleeContext,
-        _runtime: Runtime,
         argument: Vec<u8>,
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError> {
@@ -209,7 +211,6 @@ where
     fn handle_session_call(
         &mut self,
         context: CalleeContext,
-        _runtime: Runtime,
         session_state: Vec<u8>,
         _argument: Vec<u8>,
         _forwarded_sessions: Vec<SessionId>,
@@ -228,12 +229,16 @@ where
 impl UserServiceModule for TestModule {
     fn instantiate_with_actor_runtime(
         &self,
-    ) -> Box<dyn UserService<ServiceActorRuntime> + Send + Sync + 'static> {
-        Box::new(TestApplication::from(self.clone()))
+        runtime: ServiceActorRuntime,
+    ) -> Box<dyn UserService + Send + Sync + 'static> {
+        Box::new(TestApplication {
+            owner: self.owner,
+            runtime,
+        })
     }
 }
 
-impl<Runtime> UserService<Runtime> for TestApplication<Runtime>
+impl<Runtime> UserService for TestApplication<Runtime>
 where
     Runtime: ServiceRuntime,
 {
@@ -241,15 +246,17 @@ where
     fn handle_query(
         &mut self,
         _context: QueryContext,
-        mut runtime: Runtime,
         _argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let chosen_key = vec![0];
-        runtime.lock()?;
+        self.runtime.lock()?;
 
-        let state = runtime.read_value_bytes(chosen_key)?.unwrap_or_default();
+        let state = self
+            .runtime
+            .read_value_bytes(chosen_key)?
+            .unwrap_or_default();
 
-        runtime.unlock()?;
+        self.runtime.unlock()?;
 
         Ok(state)
     }

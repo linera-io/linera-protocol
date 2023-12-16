@@ -548,7 +548,6 @@ where
     ) -> Result<Vec<u8>, ExecutionError> {
         // Load the application.
         let (code, description) = self.load_service(queried_id).await?;
-        let mut code = code.instantiate_with_actor_runtime();
         // Make the call to user code.
         let query_context = crate::QueryContext {
             chain_id: self.chain_id,
@@ -560,9 +559,9 @@ where
         });
 
         let (runtime_actor, runtime_sender) = self.service_runtime_actor();
-        let value_future = tokio::task::spawn_blocking(move || {
-            code.handle_query(query_context, runtime_sender, argument)
-        });
+        let mut code = code.instantiate_with_actor_runtime(runtime_sender);
+        let value_future =
+            tokio::task::spawn_blocking(move || code.handle_query(query_context, argument));
         // TODO(#989): Simplify after message failures are not ignored.
         let runtime_result = runtime_actor.run().await;
         let value = value_future.await;
@@ -684,7 +683,6 @@ where
             .clone();
         // Load the application.
         let (code, description) = self.load_contract(callee_id).await?;
-        let mut code = code.instantiate_with_actor_runtime();
         // Change the owners of forwarded sessions.
         self.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
         // Make the call to user code.
@@ -705,13 +703,9 @@ where
             signer: authenticated_signer,
         });
         let (runtime_actor, runtime_sender) = self.contract_runtime_actor();
+        let mut code = code.instantiate_with_actor_runtime(runtime_sender);
         let raw_result_future = tokio::task::spawn_blocking(move || {
-            code.handle_application_call(
-                callee_context,
-                runtime_sender,
-                argument,
-                forwarded_sessions,
-            )
+            code.handle_application_call(callee_context, argument, forwarded_sessions)
         });
         // TODO(#989): Simplify after message failures are not ignored.
         let runtime_result = runtime_actor.run().await;
@@ -751,7 +745,6 @@ where
             .clone();
         // Load the application.
         let (code, description) = self.load_contract(callee_id).await?;
-        let mut code = code.instantiate_with_actor_runtime();
         // Change the owners of forwarded sessions.
         self.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
         // Load the session.
@@ -774,14 +767,9 @@ where
             signer: authenticated_signer,
         });
         let (runtime_actor, runtime_sender) = self.contract_runtime_actor();
+        let mut code = code.instantiate_with_actor_runtime(runtime_sender);
         let raw_result_future = tokio::task::spawn_blocking(move || {
-            code.handle_session_call(
-                callee_context,
-                runtime_sender,
-                session_state,
-                argument,
-                forwarded_sessions,
-            )
+            code.handle_session_call(callee_context, session_state, argument, forwarded_sessions)
         });
         // TODO(#989): Simplify after message failures are not ignored.
         let runtime_result = runtime_actor.run().await;

@@ -29,11 +29,7 @@ use crate::{
     ServiceActorRuntime, ServiceRuntime, SessionCallResult, SessionId, UserContract,
     UserContractModule, UserService, UserServiceModule, WasmRuntime,
 };
-use std::{
-    marker::{PhantomData, Unpin},
-    path::Path,
-    sync::Arc,
-};
+use std::{marker::Unpin, path::Path, sync::Arc};
 use thiserror::Error;
 
 /// A user contract in a compiled WebAssembly module.
@@ -50,7 +46,7 @@ pub enum WasmContractModule {
 
 pub struct WasmContract<Runtime> {
     module: WasmContractModule,
-    _marker: PhantomData<Runtime>,
+    runtime: Runtime,
 }
 
 impl WasmContractModule {
@@ -94,20 +90,15 @@ impl WasmContractModule {
     }
 }
 
-impl<Runtime> From<WasmContractModule> for WasmContract<Runtime> {
-    fn from(module: WasmContractModule) -> Self {
-        WasmContract {
-            module,
-            _marker: PhantomData,
-        }
-    }
-}
-
 impl UserContractModule for WasmContractModule {
     fn instantiate_with_actor_runtime(
         &self,
-    ) -> Box<dyn UserContract<ContractActorRuntime> + Send + Sync + 'static> {
-        Box::new(WasmContract::from(self.clone()))
+        runtime: ContractActorRuntime,
+    ) -> Box<dyn UserContract + Send + Sync + 'static> {
+        Box::new(WasmContract {
+            module: self.clone(),
+            runtime,
+        })
     }
 }
 
@@ -122,7 +113,7 @@ pub enum WasmServiceModule {
 
 pub struct WasmService<Runtime> {
     module: WasmServiceModule,
-    _marker: PhantomData<Runtime>,
+    runtime: Runtime,
 }
 
 impl WasmServiceModule {
@@ -159,20 +150,15 @@ impl WasmServiceModule {
     }
 }
 
-impl<Runtime> From<WasmServiceModule> for WasmService<Runtime> {
-    fn from(module: WasmServiceModule) -> Self {
-        WasmService {
-            module,
-            _marker: PhantomData,
-        }
-    }
-}
-
 impl UserServiceModule for WasmServiceModule {
     fn instantiate_with_actor_runtime(
         &self,
-    ) -> Box<dyn UserService<ServiceActorRuntime> + Send + Sync + 'static> {
-        Box::new(WasmService::from(self.clone()))
+        runtime: ServiceActorRuntime,
+    ) -> Box<dyn UserService + Send + Sync + 'static> {
+        Box::new(WasmService {
+            module: self.clone(),
+            runtime,
+        })
     }
 }
 
@@ -195,16 +181,16 @@ pub enum WasmExecutionError {
     ExecuteModuleInWasmtime(#[from] ::wasmtime::Trap),
 }
 
-impl<Runtime> UserContract<Runtime> for WasmContract<Runtime>
+impl<Runtime> UserContract for WasmContract<Runtime>
 where
     Runtime: ContractRuntime + Clone + Send + Sync + Unpin + 'static,
 {
     fn initialize(
         &mut self,
         context: OperationContext,
-        runtime: Runtime,
         argument: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+        let runtime = self.runtime.clone();
         match &self.module {
             #[cfg(feature = "wasmtime")]
             WasmContractModule::Wasmtime { module } => {
@@ -222,9 +208,9 @@ where
     fn execute_operation(
         &mut self,
         context: OperationContext,
-        runtime: Runtime,
         operation: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+        let runtime = self.runtime.clone();
         match &self.module {
             #[cfg(feature = "wasmtime")]
             WasmContractModule::Wasmtime { module } => {
@@ -242,9 +228,9 @@ where
     fn execute_message(
         &mut self,
         context: MessageContext,
-        runtime: Runtime,
         message: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+        let runtime = self.runtime.clone();
         match &self.module {
             #[cfg(feature = "wasmtime")]
             WasmContractModule::Wasmtime { module } => {
@@ -262,10 +248,10 @@ where
     fn handle_application_call(
         &mut self,
         context: CalleeContext,
-        runtime: Runtime,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError> {
+        let runtime = self.runtime.clone();
         match &self.module {
             #[cfg(feature = "wasmtime")]
             WasmContractModule::Wasmtime { module } => {
@@ -283,11 +269,11 @@ where
     fn handle_session_call(
         &mut self,
         context: CalleeContext,
-        runtime: Runtime,
         session_state: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<(SessionCallResult, Vec<u8>), ExecutionError> {
+        let runtime = self.runtime.clone();
         match &self.module {
             #[cfg(feature = "wasmtime")]
             WasmContractModule::Wasmtime { module } => {
@@ -307,16 +293,16 @@ where
     }
 }
 
-impl<Runtime> UserService<Runtime> for WasmService<Runtime>
+impl<Runtime> UserService for WasmService<Runtime>
 where
     Runtime: ServiceRuntime + Clone + Send + Sync + Unpin + 'static,
 {
     fn handle_query(
         &mut self,
         context: QueryContext,
-        runtime: Runtime,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
+        let runtime = self.runtime.clone();
         match &self.module {
             #[cfg(feature = "wasmtime")]
             WasmServiceModule::Wasmtime { module } => {
