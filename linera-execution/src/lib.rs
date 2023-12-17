@@ -245,8 +245,8 @@ pub struct SessionCallResult {
 /// System runtime implementation in use.
 #[derive(Default, Clone, Copy)]
 pub enum ExecutionRuntimeConfig {
-    #[default]
     Actor,
+    #[default]
     Synchronous,
 }
 
