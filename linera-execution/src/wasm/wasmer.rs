@@ -82,7 +82,7 @@ impl<Runtime> WasmerContractInstance<Runtime>
 where
     Runtime: ContractRuntime + Send + Unpin,
 {
-    pub(crate) fn configure_initial_fuel(&mut self) -> Result<(), ExecutionError> {
+    fn configure_initial_fuel(&mut self) -> Result<(), ExecutionError> {
         let remaining_points = self.runtime.remaining_fuel()?;
 
         metering::set_remaining_points(&mut self.store, &self.instance, remaining_points);
@@ -90,7 +90,7 @@ where
         Ok(())
     }
 
-    pub(crate) fn persist_remaining_fuel(&mut self) -> Result<(), ExecutionError> {
+    fn persist_remaining_fuel(&mut self) -> Result<(), ExecutionError> {
         let remaining_fuel = match metering::get_remaining_points(&mut self.store, &self.instance) {
             MeteringPoints::Exhausted => 0,
             MeteringPoints::Remaining(fuel) => fuel,
@@ -221,14 +221,16 @@ where
         context: OperationContext,
         argument: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        contract::Contract::initialize(
+        self.configure_initial_fuel()?;
+        let result = contract::Contract::initialize(
             &self.application,
             &mut self.store,
             context.into(),
             &argument,
         )
-        .map(|inner| inner.map(RawExecutionResult::from))?
-        .map_err(ExecutionError::UserError)
+        .map(|inner| inner.map(RawExecutionResult::from));
+        self.persist_remaining_fuel()?;
+        result?.map_err(ExecutionError::UserError)
     }
 
     fn execute_operation(
@@ -236,14 +238,16 @@ where
         context: OperationContext,
         operation: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        contract::Contract::execute_operation(
+        self.configure_initial_fuel()?;
+        let result = contract::Contract::execute_operation(
             &self.application,
             &mut self.store,
             context.into(),
             &operation,
         )
-        .map(|inner| inner.map(RawExecutionResult::from))?
-        .map_err(ExecutionError::UserError)
+        .map(|inner| inner.map(RawExecutionResult::from));
+        self.persist_remaining_fuel()?;
+        result?.map_err(ExecutionError::UserError)
     }
 
     fn execute_message(
@@ -251,14 +255,16 @@ where
         context: MessageContext,
         message: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        contract::Contract::execute_message(
+        self.configure_initial_fuel()?;
+        let result = contract::Contract::execute_message(
             &self.application,
             &mut self.store,
             context.into(),
             &message,
         )
-        .map(|inner| inner.map(RawExecutionResult::from))?
-        .map_err(ExecutionError::UserError)
+        .map(|inner| inner.map(RawExecutionResult::from));
+        self.persist_remaining_fuel()?;
+        result?.map_err(ExecutionError::UserError)
     }
 
     fn handle_application_call(
@@ -272,15 +278,17 @@ where
             .map(contract::SessionId::from)
             .collect::<Vec<_>>();
 
-        contract::Contract::handle_application_call(
+        self.configure_initial_fuel()?;
+        let result = contract::Contract::handle_application_call(
             &self.application,
             &mut self.store,
             context.into(),
             &argument,
             &forwarded_sessions,
         )
-        .map(|inner| inner.map(ApplicationCallResult::from))?
-        .map_err(ExecutionError::UserError)
+        .map(|inner| inner.map(ApplicationCallResult::from));
+        self.persist_remaining_fuel()?;
+        result?.map_err(ExecutionError::UserError)
     }
 
     fn handle_session_call(
@@ -295,7 +303,8 @@ where
             .map(contract::SessionId::from)
             .collect::<Vec<_>>();
 
-        contract::Contract::handle_session_call(
+        self.configure_initial_fuel()?;
+        let result = contract::Contract::handle_session_call(
             &self.application,
             &mut self.store,
             context.into(),
@@ -303,8 +312,9 @@ where
             &argument,
             &forwarded_sessions,
         )
-        .map(|inner| inner.map(<(SessionCallResult, Vec<u8>)>::from))?
-        .map_err(ExecutionError::UserError)
+        .map(|inner| inner.map(<(SessionCallResult, Vec<u8>)>::from));
+        self.persist_remaining_fuel()?;
+        result?.map_err(ExecutionError::UserError)
     }
 }
 

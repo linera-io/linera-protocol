@@ -199,18 +199,12 @@ where
             #[cfg(feature = "wasmtime")]
             WasmContractModule::Wasmtime { module } => {
                 let mut instance = WasmtimeContractInstance::prepare(module, runtime)?;
-                instance.configure_initial_fuel()?;
-                let result = instance.initialize(context, argument);
-                instance.persist_remaining_fuel()?;
-                result
+                instance.initialize(context, argument)
             }
             #[cfg(feature = "wasmer")]
             WasmContractModule::Wasmer { engine, module } => {
                 let mut instance = WasmerContractInstance::prepare(engine, module, runtime)?;
-                instance.configure_initial_fuel()?;
-                let result = instance.initialize(context, argument);
-                instance.persist_remaining_fuel()?;
-                result
+                instance.initialize(context, argument)
             }
         }
     }
@@ -225,18 +219,12 @@ where
             #[cfg(feature = "wasmtime")]
             WasmContractModule::Wasmtime { module } => {
                 let mut instance = WasmtimeContractInstance::prepare(module, runtime)?;
-                instance.configure_initial_fuel()?;
-                let result = instance.execute_operation(context, operation);
-                instance.persist_remaining_fuel()?;
-                result
+                instance.execute_operation(context, operation)
             }
             #[cfg(feature = "wasmer")]
             WasmContractModule::Wasmer { engine, module } => {
                 let mut instance = WasmerContractInstance::prepare(engine, module, runtime)?;
-                instance.configure_initial_fuel()?;
-                let result = instance.execute_operation(context, operation);
-                instance.persist_remaining_fuel()?;
-                result
+                instance.execute_operation(context, operation)
             }
         }
     }
@@ -251,18 +239,12 @@ where
             #[cfg(feature = "wasmtime")]
             WasmContractModule::Wasmtime { module } => {
                 let mut instance = WasmtimeContractInstance::prepare(module, runtime)?;
-                instance.configure_initial_fuel()?;
-                let result = instance.execute_message(context, message);
-                instance.persist_remaining_fuel()?;
-                result
+                instance.execute_message(context, message)
             }
             #[cfg(feature = "wasmer")]
             WasmContractModule::Wasmer { engine, module } => {
                 let mut instance = WasmerContractInstance::prepare(engine, module, runtime)?;
-                instance.configure_initial_fuel()?;
-                let result = instance.execute_message(context, message);
-                instance.persist_remaining_fuel()?;
-                result
+                instance.execute_message(context, message)
             }
         }
     }
@@ -278,20 +260,12 @@ where
             #[cfg(feature = "wasmtime")]
             WasmContractModule::Wasmtime { module } => {
                 let mut instance = WasmtimeContractInstance::prepare(module, runtime)?;
-                instance.configure_initial_fuel()?;
-                let result =
-                    instance.handle_application_call(context, argument, forwarded_sessions);
-                instance.persist_remaining_fuel()?;
-                result
+                instance.handle_application_call(context, argument, forwarded_sessions)
             }
             #[cfg(feature = "wasmer")]
             WasmContractModule::Wasmer { engine, module } => {
                 let mut instance = WasmerContractInstance::prepare(engine, module, runtime)?;
-                instance.configure_initial_fuel()?;
-                let result =
-                    instance.handle_application_call(context, argument, forwarded_sessions);
-                instance.persist_remaining_fuel()?;
-                result
+                instance.handle_application_call(context, argument, forwarded_sessions)
             }
         }
     }
@@ -308,28 +282,12 @@ where
             #[cfg(feature = "wasmtime")]
             WasmContractModule::Wasmtime { module } => {
                 let mut instance = WasmtimeContractInstance::prepare(module, runtime)?;
-                instance.configure_initial_fuel()?;
-                let result = instance.handle_session_call(
-                    context,
-                    session_state,
-                    argument,
-                    forwarded_sessions,
-                );
-                instance.persist_remaining_fuel()?;
-                result
+                instance.handle_session_call(context, session_state, argument, forwarded_sessions)
             }
             #[cfg(feature = "wasmer")]
             WasmContractModule::Wasmer { engine, module } => {
                 let mut instance = WasmerContractInstance::prepare(engine, module, runtime)?;
-                instance.configure_initial_fuel()?;
-                let result = instance.handle_session_call(
-                    context,
-                    session_state,
-                    argument,
-                    forwarded_sessions,
-                );
-                instance.persist_remaining_fuel()?;
-                result
+                instance.handle_session_call(context, session_state, argument, forwarded_sessions)
             }
         }
     }
