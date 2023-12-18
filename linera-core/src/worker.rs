@@ -1036,7 +1036,6 @@ where
         }
         // Check if the chain is ready for this new block proposal.
         // This should always pass for nodes without voting key.
-        chain.tip_state.get().verify_block_chaining(block)?;
         if chain.manager.get().check_proposed_block(&proposal)? == ChainManagerOutcome::Skip {
             // If we just processed the same pending block, return the chain info unchanged.
             return Ok((
@@ -1062,6 +1061,11 @@ where
         }
         let local_time = self.storage.current_time();
         let outcome = chain.execute_block(block, local_time).await?;
+        // Check if tip_state would be valid.
+        chain
+            .tip_state
+            .get()
+            .verify_block_chaining(block, &outcome)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
         chain.validate_incoming_messages().await?;
         // Reset all the staged changes as we were only validating things.

@@ -136,7 +136,11 @@ pub struct ChainTipState {
 impl ChainTipState {
     /// Checks that the proposed block is suitable, i.e. at the expected height and with the
     /// expected parent.
-    pub fn verify_block_chaining(&self, new_block: &Block) -> Result<(), ChainError> {
+    pub fn verify_block_chaining(
+        &self,
+        new_block: &Block,
+        outcome: &BlockExecutionOutcome,
+    ) -> Result<(), ChainError> {
         ensure!(
             new_block.height == self.next_block_height,
             ChainError::UnexpectedBlockHeight {
@@ -159,6 +163,12 @@ impl ChainTipState {
             u32::try_from(new_block.operations.len()).map_err(|_| ArithmeticError::Overflow)?;
         self.num_operations
             .checked_add(num_operations)
+            .ok_or(ArithmeticError::Overflow)?;
+
+        let num_outgoing_messages =
+            u32::try_from(outcome.messages.len()).map_err(|_| ArithmeticError::Overflow)?;
+        self.num_outgoing_messages
+            .checked_add(num_outgoing_messages)
             .ok_or(ArithmeticError::Overflow)?;
 
         Ok(())
