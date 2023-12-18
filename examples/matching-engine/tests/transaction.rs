@@ -27,40 +27,26 @@ pub async fn get_orders(
     chain: &ActiveChain,
     account_owner: AccountOwner,
 ) -> Option<Vec<OrderId>> {
-    println!("get_orders, step 1");
     let query = format!(
         "query {{ accountInfo {{ entry(key: {}) {{ value {{ orders }} }} }} }}",
         account_owner.to_value()
     );
-    println!("get_orders, step 2");
     let value: serde_json::Value = chain.graphql_query(application_id, query).await;
-    println!("get_orders, step 3 value={:?}", value);
     let value: serde_json::Map<String,serde_json::Value> = value.as_object()?.clone();
-    println!("get_orders, step 4 value={:?}", value);
     let value: serde_json::Value = value.get("accountInfo")?.clone();
-    println!("get_orders, step 5 value={:?}", value);
     let value: serde_json::Map<String,serde_json::Value> = value.as_object()?.clone();
-    println!("get_orders, step 6 value={:?}", value);
     let value: serde_json::Value = value.get("entry")?.clone();
-    println!("get_orders, step 7 value={:?}", value);
     let value: serde_json::Map<String,serde_json::Value> = value.as_object()?.clone();
-    println!("get_orders, step 8 value={:?}", value);
     let value: serde_json::Value = value.get("value")?.clone();
-    println!("get_orders, step 9 value={:?}", value);
     let value: serde_json::Map<String,serde_json::Value> = value.as_object()?.clone();
-    println!("get_orders, step 10 value={:?}", value);
     let value: serde_json::Value = value.get("orders")?.clone();
-    println!("get_orders, step 11 value={:?}", value);
     let value: Vec<serde_json::Value> = value.as_array()?.clone();
-    println!("get_orders, step 12 value={:?}", value);
     let mut value_ret: Vec<OrderId> = Vec::new();
-    println!("get_orders, step 13");
     for sing_value in value {
         let sing_value: Option<u64> = sing_value.as_u64();
         let sing_value: OrderId = sing_value.unwrap();
         value_ret.push(sing_value);
     }
-    println!("get_orders, step 14");
     Some(value_ret)
 }
 
@@ -68,8 +54,8 @@ pub async fn get_orders(
 /// Test creating a matching engine, pushing some orders, canceling some and
 /// seeing how the transactions went.
 ///
-/// The operation is done in exactly the same way as the corresponding end
-/// to end test.
+/// The operation is done in exactly the same way with the same amounts
+/// and quantities as the corresponding end to end test.
 #[tokio::test]
 async fn single_transaction() {
     let (validator, bytecode_id) = TestValidator::with_current_bytecode().await;
@@ -109,10 +95,8 @@ async fn single_transaction() {
         )
         .await;
 
-//    fungible_chain_a.register_application(token_id_a).await;
     fungible_chain_a.register_application(token_id_b).await;
     fungible_chain_b.register_application(token_id_a).await;
-//    fungible_chain_b.register_application(token_id_b).await;
 
     for (owner, amount) in [(admin_account, None), (owner_a, Some(Amount::from_tokens(10))), (owner_b, None)] {
         let value = FungibleTokenAbi::query_account(token_id_a, &fungible_chain_a, owner).await;
@@ -180,29 +164,22 @@ async fn single_transaction() {
 
 
     // Checking the values for token_a
-    println!("Check 1");
     for (owner, amount) in [(admin_account, None), (owner_a, Some(Amount::from_tokens(1))), (owner_b, None)] {
         let value = FungibleTokenAbi::query_account(token_id_a, &fungible_chain_a, owner).await;
         assert_eq!(value, amount);
     }
-    println!("Check 2");
     for (owner, amount) in [(admin_account, None), (owner_a, None), (owner_b, None)] {
         assert_eq!(
             FungibleTokenAbi::query_account(token_id_a, &fungible_chain_b, owner).await,
             amount
         );
     }
-    println!("Check 3");
     for (owner, amount) in [(admin_account, None), (owner_a, Some(Amount::ZERO)), (owner_b, None)] {
         assert_eq!(
             FungibleTokenAbi::query_account(token_id_a, &matching_chain, owner).await,
             amount
         );
     }
-    println!("Check 4");
-
-
-
 
     let mut orders_asks = Vec::new();
     for price in [4, 2] {
@@ -223,27 +200,22 @@ async fn single_transaction() {
         assert_eq!(order_messages.len(), 3);
         orders_asks.extend(order_messages);
     }
-    println!("Check 5");
 
     matching_chain
         .add_block(|block| {
             block.with_incoming_messages(orders_asks);
         })
         .await;
-    println!("Check 6");
 
     fungible_chain_a.handle_received_messages().await;
     fungible_chain_b.handle_received_messages().await;
     matching_chain.handle_received_messages().await;
-    println!("Check 7");
-
 
     // Now querying the matching
     let order_ids_a = get_orders(matching_id, &matching_chain, owner_a).await.expect("order_ids_a");
     assert_eq!(order_ids_a.len(), 1);
     let order_ids_b = get_orders(matching_id, &matching_chain, owner_b).await.expect("order_ids_b");
     assert_eq!(order_ids_b.len(), 2);
-    println!("Check 8");
 
     // Cancelling the remaining orders
     let mut orders_cancels = Vec::new();
@@ -260,18 +232,15 @@ async fn single_transaction() {
             orders_cancels.extend(order_messages);
         }
     }
-    println!("Check 9");
 
     matching_chain
         .add_block(|block| {
             block.with_incoming_messages(orders_cancels);
         })
         .await;
-    println!("Check 10");
 
     fungible_chain_a.handle_received_messages().await;
     fungible_chain_b.handle_received_messages().await;
-    println!("Check 11");
 
     // Check balances
     for (owner, amount) in [(owner_a, Amount::from_tokens(3)), (owner_b, Amount::from_tokens(6))] {
@@ -280,12 +249,10 @@ async fn single_transaction() {
             Some(amount)
         );
     }
-    println!("Check 12");
     for (owner, amount) in [(owner_a, Amount::from_tokens(3)), (owner_b, Amount::from_tokens(5))] {
         assert_eq!(
             FungibleTokenAbi::query_account(token_id_b, &matching_chain, owner).await,
             Some(amount)
         );
     }
-    println!("Check 13");
 }
