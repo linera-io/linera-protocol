@@ -164,7 +164,7 @@ pub struct ChainInfo {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ChainInfoResponse {
-    pub info: ChainInfo,
+    pub info: Box<ChainInfo>,
     pub signature: Option<Signature>,
 }
 
@@ -243,15 +243,15 @@ where
 
 impl ChainInfoResponse {
     pub fn new(info: impl Into<ChainInfo>, key_pair: Option<&KeyPair>) -> Self {
-        let info = info.into();
-        let signature = key_pair.map(|kp| Signature::new(&info, kp));
+        let info = Box::new(info.into());
+        let signature = key_pair.map(|kp| Signature::new(&*info, kp));
         Self { info, signature }
     }
 
     #[allow(clippy::result_large_err)]
     pub fn check(&self, name: ValidatorName) -> Result<(), NodeError> {
         match self.signature {
-            Some(sig) => Ok(sig.check(&self.info, name.0)?),
+            Some(sig) => Ok(sig.check(&*self.info, name.0)?),
             None => Err(NodeError::InvalidChainInfoResponse),
         }
     }

@@ -545,7 +545,7 @@ where
                     let ChainInfo {
                         mut requested_sent_certificates,
                         ..
-                    } = response.info;
+                    } = *response.info;
                     if let Some(cert) = requested_sent_certificates.pop() {
                         if cert.value().is_confirmed()
                             && cert.value().chain_id() == chain_id

@@ -179,7 +179,7 @@ where
         node: &mut A,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
-    ) -> Option<ChainInfo>
+    ) -> Option<Box<ChainInfo>>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
@@ -232,7 +232,7 @@ where
     pub(crate) async fn local_chain_info(
         &mut self,
         chain_id: ChainId,
-    ) -> Result<ChainInfo, LocalNodeError> {
+    ) -> Result<Box<ChainInfo>, LocalNodeError> {
         let query = ChainInfoQuery::new(chain_id);
         Ok(self.handle_chain_info_query(query).await?.info)
     }
@@ -265,7 +265,7 @@ where
         mut validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
-    ) -> Result<ChainInfo, LocalNodeError>
+    ) -> Result<Box<ChainInfo>, LocalNodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
@@ -401,7 +401,7 @@ where
                 let ChainInfo {
                     requested_sent_certificates,
                     ..
-                } = response.info;
+                } = *response.info;
                 self.try_process_certificates(
                     name,
                     &mut node,
@@ -418,7 +418,7 @@ where
         &mut self,
         validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
-    ) -> Result<ChainInfo, LocalNodeError>
+    ) -> Result<Box<ChainInfo>, LocalNodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {

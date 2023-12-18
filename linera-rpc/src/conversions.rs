@@ -524,7 +524,7 @@ pub mod tests {
 
     #[test]
     pub fn test_chain_info_response() {
-        let chain_info = ChainInfo {
+        let chain_info = Box::new(ChainInfo {
             chain_id: ChainId::root(0),
             epoch: None,
             description: None,
@@ -540,7 +540,7 @@ pub mod tests {
             count_received_log: 0,
             requested_received_log: vec![],
             requested_blob: None,
-        };
+        });
 
         let chain_info_response_none = ChainInfoResponse {
             // `info` is bincode so no need to test conversions extensively

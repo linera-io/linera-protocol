@@ -197,7 +197,7 @@ where
         &mut self,
         certificate: Certificate,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<ChainInfo, NodeError> {
+    ) -> Result<Box<ChainInfo>, NodeError> {
         let mut result = self
             .send_optimized_certificate(&certificate, delivery)
             .await;
@@ -246,7 +246,7 @@ where
     async fn send_block_proposal(
         &mut self,
         proposal: BlockProposal,
-    ) -> Result<ChainInfo, NodeError> {
+    ) -> Result<Box<ChainInfo>, NodeError> {
         let chain_id = proposal.content.block.chain_id;
         let response = match self.node.handle_block_proposal(proposal.clone()).await {
             Ok(response) => response,
