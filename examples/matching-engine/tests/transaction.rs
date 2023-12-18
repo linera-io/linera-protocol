@@ -103,14 +103,13 @@ async fn single_transaction() {
         assert_eq!(value, amount);
     }
 
-    let matching_initial = ();
     let tokens = [token_id_a, token_id_b];
     let matching_parameter = Parameters { tokens };
     let matching_id = matching_chain
         .create_application::<MatchingEngineAbi>(
             bytecode_id,
             matching_parameter,
-            matching_initial,
+            (),
             vec![token_id_a.forget_abi(), token_id_b.forget_abi()],
         )
         .await;
