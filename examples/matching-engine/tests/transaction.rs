@@ -5,22 +5,15 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use matching_engine::Order;
-use matching_engine::Operation;
-use fungible::{AccountOwner, FungibleTokenAbi};
-use linera_sdk::{
-    base::Amount,
-    test::TestValidator,
-};
-use matching_engine::OrderNature;
-use matching_engine::Price;
-use matching_engine::Parameters;
-use matching_engine::MatchingEngineAbi;
-use matching_engine::OrderId;
-use linera_sdk::test::ActiveChain;
-use linera_sdk::base::ApplicationId;
 use async_graphql::InputType;
-use fungible::InitialStateBuilder;
+use fungible::{AccountOwner, FungibleTokenAbi, InitialStateBuilder};
+use linera_sdk::{
+    base::{Amount, ApplicationId},
+    test::{ActiveChain, TestValidator},
+};
+use matching_engine::{
+    MatchingEngineAbi, Operation, Order, OrderId, OrderNature, Parameters, Price,
+};
 
 pub async fn get_orders(
     application_id: ApplicationId<MatchingEngineAbi>,
@@ -31,25 +24,22 @@ pub async fn get_orders(
         "query {{ accountInfo {{ entry(key: {}) {{ value {{ orders }} }} }} }}",
         account_owner.to_value()
     );
-    let value: serde_json::Value = chain.graphql_query(application_id, query).await;
-    let value: serde_json::Map<String,serde_json::Value> = value.as_object()?.clone();
-    let value: serde_json::Value = value.get("accountInfo")?.clone();
-    let value: serde_json::Map<String,serde_json::Value> = value.as_object()?.clone();
-    let value: serde_json::Value = value.get("entry")?.clone();
-    let value: serde_json::Map<String,serde_json::Value> = value.as_object()?.clone();
-    let value: serde_json::Value = value.get("value")?.clone();
-    let value: serde_json::Map<String,serde_json::Value> = value.as_object()?.clone();
-    let value: serde_json::Value = value.get("orders")?.clone();
-    let value: Vec<serde_json::Value> = value.as_array()?.clone();
-    let mut value_ret: Vec<OrderId> = Vec::new();
+    let value = chain
+        .graphql_query(application_id, query)
+        .await
+        .as_object()?
+        .clone();
+    let value = value.get("accountInfo")?.as_object()?.clone();
+    let value = value.get("entry")?.as_object()?.clone();
+    let value = value.get("value")?.as_object()?.clone();
+    let value = value.get("orders")?.as_array()?.clone();
+    let mut values = Vec::new();
     for sing_value in value {
-        let sing_value: Option<u64> = sing_value.as_u64();
-        let sing_value: OrderId = sing_value.unwrap();
-        value_ret.push(sing_value);
+        let value = sing_value.as_u64().unwrap();
+        values.push(value);
     }
-    Some(value_ret)
+    Some(values)
 }
-
 
 /// Test creating a matching engine, pushing some orders, canceling some and
 /// seeing how the transactions went.
@@ -67,14 +57,11 @@ async fn single_transaction() {
     let mut matching_chain = validator.new_chain().await;
     let admin_account = AccountOwner::from(matching_chain.public_key());
 
-    let fungible_bytecode_id_a = fungible_chain_a
-        .publish_bytecodes_in("../fungible")
-        .await;
-    let fungible_bytecode_id_b = fungible_chain_b
-        .publish_bytecodes_in("../fungible")
-        .await;
+    let fungible_bytecode_id_a = fungible_chain_a.publish_bytecodes_in("../fungible").await;
+    let fungible_bytecode_id_b = fungible_chain_b.publish_bytecodes_in("../fungible").await;
 
-    let initial_state_a = InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(10));
+    let initial_state_a =
+        InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(10));
     let params_a = fungible::Parameters::new("A");
     let token_id_a = fungible_chain_a
         .create_application::<FungibleTokenAbi>(
@@ -84,7 +71,8 @@ async fn single_transaction() {
             vec![],
         )
         .await;
-    let initial_state_b = InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(9));
+    let initial_state_b =
+        InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(9));
     let params_b = fungible::Parameters::new("B");
     let token_id_b = fungible_chain_b
         .create_application::<FungibleTokenAbi>(
@@ -98,16 +86,22 @@ async fn single_transaction() {
     fungible_chain_a.register_application(token_id_b).await;
     fungible_chain_b.register_application(token_id_a).await;
 
-    for (owner, amount) in [(admin_account, None), (owner_a, Some(Amount::from_tokens(10))), (owner_b, None)] {
+    for (owner, amount) in [
+        (admin_account, None),
+        (owner_a, Some(Amount::from_tokens(10))),
+        (owner_b, None),
+    ] {
         let value = FungibleTokenAbi::query_account(token_id_a, &fungible_chain_a, owner).await;
         assert_eq!(value, amount);
     }
-    for (owner, amount) in [(admin_account, None), (owner_a, None), (owner_b, Some(Amount::from_tokens(9)))] {
+    for (owner, amount) in [
+        (admin_account, None),
+        (owner_a, None),
+        (owner_b, Some(Amount::from_tokens(9))),
+    ] {
         let value = FungibleTokenAbi::query_account(token_id_b, &fungible_chain_b, owner).await;
         assert_eq!(value, amount);
     }
-
-
 
     let matching_initial = ();
     let tokens = [token_id_a, token_id_b];
@@ -126,7 +120,6 @@ async fn single_transaction() {
     fungible_chain_a.register_application(matching_id).await;
     fungible_chain_b.register_application(matching_id).await;
 
-
     // Creating the bid orders
     let mut orders_bids = Vec::new();
     for price in [1, 2] {
@@ -140,17 +133,13 @@ async fn single_transaction() {
         let operation = Operation::ExecuteOrder { order };
         let order_messages = fungible_chain_a
             .add_block(|block| {
-                block.with_operation(
-                    matching_id,
-                    operation,
-                );
+                block.with_operation(matching_id, operation);
             })
             .await;
 
         assert_eq!(order_messages.len(), 3);
         orders_bids.extend(order_messages);
     }
-
 
     matching_chain
         .add_block(|block| {
@@ -162,9 +151,12 @@ async fn single_transaction() {
     fungible_chain_b.handle_received_messages().await;
     matching_chain.handle_received_messages().await;
 
-
     // Checking the values for token_a
-    for (owner, amount) in [(admin_account, None), (owner_a, Some(Amount::from_tokens(1))), (owner_b, None)] {
+    for (owner, amount) in [
+        (admin_account, None),
+        (owner_a, Some(Amount::from_tokens(1))),
+        (owner_b, None),
+    ] {
         let value = FungibleTokenAbi::query_account(token_id_a, &fungible_chain_a, owner).await;
         assert_eq!(value, amount);
     }
@@ -174,7 +166,11 @@ async fn single_transaction() {
             amount
         );
     }
-    for (owner, amount) in [(admin_account, None), (owner_a, Some(Amount::ZERO)), (owner_b, None)] {
+    for (owner, amount) in [
+        (admin_account, None),
+        (owner_a, Some(Amount::ZERO)),
+        (owner_b, None),
+    ] {
         assert_eq!(
             FungibleTokenAbi::query_account(token_id_a, &matching_chain, owner).await,
             amount
@@ -212,9 +208,13 @@ async fn single_transaction() {
     matching_chain.handle_received_messages().await;
 
     // Now querying the matching
-    let order_ids_a = get_orders(matching_id, &matching_chain, owner_a).await.expect("order_ids_a");
+    let order_ids_a = get_orders(matching_id, &matching_chain, owner_a)
+        .await
+        .expect("order_ids_a");
     assert_eq!(order_ids_a.len(), 1);
-    let order_ids_b = get_orders(matching_id, &matching_chain, owner_b).await.expect("order_ids_b");
+    let order_ids_b = get_orders(matching_id, &matching_chain, owner_b)
+        .await
+        .expect("order_ids_b");
     assert_eq!(order_ids_b.len(), 2);
 
     // Cancelling the remaining orders
@@ -243,13 +243,19 @@ async fn single_transaction() {
     fungible_chain_b.handle_received_messages().await;
 
     // Check balances
-    for (owner, amount) in [(owner_a, Amount::from_tokens(3)), (owner_b, Amount::from_tokens(6))] {
+    for (owner, amount) in [
+        (owner_a, Amount::from_tokens(3)),
+        (owner_b, Amount::from_tokens(6)),
+    ] {
         assert_eq!(
             FungibleTokenAbi::query_account(token_id_a, &matching_chain, owner).await,
             Some(amount)
         );
     }
-    for (owner, amount) in [(owner_a, Amount::from_tokens(3)), (owner_b, Amount::from_tokens(5))] {
+    for (owner, amount) in [
+        (owner_a, Amount::from_tokens(3)),
+        (owner_b, Amount::from_tokens(5)),
+    ] {
         assert_eq!(
             FungibleTokenAbi::query_account(token_id_b, &matching_chain, owner).await,
             Some(amount)
