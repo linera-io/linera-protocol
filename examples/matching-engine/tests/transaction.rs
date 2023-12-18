@@ -27,22 +27,40 @@ pub async fn get_orders(
     chain: &ActiveChain,
     account_owner: AccountOwner,
 ) -> Option<Vec<OrderId>> {
+    println!("get_orders, step 1");
     let query = format!(
-        "query {{ accountInfo(accountOwner: {}) {{ orders }} }}",
+        "query {{ accountInfo {{ entry(key: {}) {{ value {{ orders }} }} }} }}",
         account_owner.to_value()
     );
+    println!("get_orders, step 2");
     let value: serde_json::Value = chain.graphql_query(application_id, query).await;
+    println!("get_orders, step 3 value={:?}", value);
     let value: serde_json::Map<String,serde_json::Value> = value.as_object()?.clone();
+    println!("get_orders, step 4 value={:?}", value);
     let value: serde_json::Value = value.get("accountInfo")?.clone();
+    println!("get_orders, step 5 value={:?}", value);
     let value: serde_json::Map<String,serde_json::Value> = value.as_object()?.clone();
+    println!("get_orders, step 6 value={:?}", value);
+    let value: serde_json::Value = value.get("entry")?.clone();
+    println!("get_orders, step 7 value={:?}", value);
+    let value: serde_json::Map<String,serde_json::Value> = value.as_object()?.clone();
+    println!("get_orders, step 8 value={:?}", value);
+    let value: serde_json::Value = value.get("value")?.clone();
+    println!("get_orders, step 9 value={:?}", value);
+    let value: serde_json::Map<String,serde_json::Value> = value.as_object()?.clone();
+    println!("get_orders, step 10 value={:?}", value);
     let value: serde_json::Value = value.get("orders")?.clone();
+    println!("get_orders, step 11 value={:?}", value);
     let value: Vec<serde_json::Value> = value.as_array()?.clone();
+    println!("get_orders, step 12 value={:?}", value);
     let mut value_ret: Vec<OrderId> = Vec::new();
+    println!("get_orders, step 13");
     for sing_value in value {
         let sing_value: Option<u64> = sing_value.as_u64();
         let sing_value: OrderId = sing_value.unwrap();
         value_ret.push(sing_value);
     }
+    println!("get_orders, step 14");
     Some(value_ret)
 }
 
