@@ -721,15 +721,12 @@ where
         )
         .await?;
         let (value, round) = match action {
-            CommunicateAction::SubmitBlock(proposal) => {
-                let BlockAndRound { block, round } = proposal.content;
-                let (executed_block, _) = self.node_client.stage_block_execution(block).await?;
-                let value = if round.is_fast() {
-                    HashedValue::new_confirmed(executed_block)
-                } else {
-                    HashedValue::new_validated(executed_block)
-                };
-                (value, round)
+            CommunicateAction::SubmitBlock {
+                proposal,
+                hashed_value,
+            } => {
+                let round = proposal.content.round;
+                (hashed_value, round)
             }
             CommunicateAction::FinalizeBlock { certificate, .. } => {
                 let round = certificate.round;
@@ -1227,10 +1224,24 @@ where
         self.node_client
             .handle_block_proposal(proposal.clone())
             .await?;
+        // Sadly, we have to execute the block again for the expected hashed value. This
+        // should be fine after #1401.
+        let (executed_block, _) = self
+            .node_client
+            .stage_block_execution(block.clone())
+            .await?;
+        let hashed_value = if proposal.content.round.is_fast() {
+            HashedValue::new_confirmed(executed_block)
+        } else {
+            HashedValue::new_validated(executed_block)
+        };
         // Remember what we are trying to do before sending the proposal to the validators.
         self.pending_block = Some(block);
         // Send the query to validators.
-        let submit_action = CommunicateAction::SubmitBlock(proposal.clone());
+        let submit_action = CommunicateAction::SubmitBlock {
+            proposal: proposal.clone(),
+            hashed_value,
+        };
         let certificate = self
             .communicate_chain_updates(&committee, self.chain_id, submit_action)
             .await?

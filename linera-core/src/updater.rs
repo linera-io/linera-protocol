@@ -11,7 +11,9 @@ use linera_base::{
     data_types::{BlockHeight, Round},
     identifiers::ChainId,
 };
-use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, LiteVote};
+use linera_chain::data_types::{
+    BlockProposal, Certificate, CertificateValue, HashedValue, LiteVote,
+};
 use linera_execution::committee::{Committee, Epoch, ValidatorName};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -35,7 +37,10 @@ const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 pub enum CommunicateAction {
-    SubmitBlock(BlockProposal),
+    SubmitBlock {
+        proposal: BlockProposal,
+        hashed_value: HashedValue,
+    },
     FinalizeBlock {
         certificate: Certificate,
         delivery: CrossChainMessageDelivery,
@@ -352,7 +357,7 @@ where
         let (target_block_height, first_delivery) = {
             use CrossChainMessageDelivery::NonBlocking;
             match &action {
-                CommunicateAction::SubmitBlock(proposal) => {
+                CommunicateAction::SubmitBlock { proposal, .. } => {
                     (proposal.content.block.height, NonBlocking)
                 }
                 CommunicateAction::FinalizeBlock { certificate, .. } => {
@@ -369,7 +374,7 @@ where
             .await?;
         // Send the block proposal (if any) and return a vote.
         match action {
-            CommunicateAction::SubmitBlock(proposal) => {
+            CommunicateAction::SubmitBlock { proposal, .. } => {
                 let info = self.send_block_proposal(proposal.clone()).await?;
                 match info.manager.pending {
                     Some(vote) if vote.validator == self.name => {
