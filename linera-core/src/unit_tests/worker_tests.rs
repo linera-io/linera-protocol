@@ -1287,8 +1287,8 @@ where
     let (replay_response, _actions) = worker.handle_block_proposal(block_proposal).await.unwrap();
     // Workaround lack of equality.
     assert_eq!(
-        CryptoHash::new(&response.info),
-        CryptoHash::new(&replay_response.info)
+        CryptoHash::new(&*response.info),
+        CryptoHash::new(&*replay_response.info)
     );
 }
 

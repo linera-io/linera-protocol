@@ -298,7 +298,7 @@ where
     }
 
     /// Obtains the basic `ChainInfo` data for the local chain.
-    async fn chain_info(&mut self) -> Result<ChainInfo, LocalNodeError> {
+    async fn chain_info(&mut self) -> Result<Box<ChainInfo>, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id);
         let response = self.node_client.handle_chain_info_query(query).await?;
         Ok(response.info)
@@ -479,7 +479,7 @@ where
         this: Arc<Mutex<Self>>,
         chain_id: ChainId,
         local_node: &mut LocalNodeClient<S>,
-    ) -> Option<ChainInfo> {
+    ) -> Option<Box<ChainInfo>> {
         let mut guard = this.lock().await;
         let Ok(info) = local_node.local_chain_info(chain_id).await else {
             error!("Fail to read local chain info for {chain_id}");
@@ -657,7 +657,7 @@ where
     }
 
     /// Prepares the chain for the next operation.
-    async fn prepare_chain(&mut self) -> Result<ChainInfo, ChainClientError> {
+    async fn prepare_chain(&mut self) -> Result<Box<ChainInfo>, ChainClientError> {
         // Verify that our local storage contains enough history compared to the
         // expected block height. Otherwise, download the missing history from the
         // network.
