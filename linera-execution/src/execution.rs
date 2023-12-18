@@ -205,7 +205,7 @@ where
         );
         // Make the call to user code.
         let (runtime_actor, runtime_sender) = runtime.contract_runtime_actor();
-        let mut contract = contract.instantiate_with_actor_runtime(runtime_sender);
+        let mut contract = contract.instantiate_with_actor_runtime(runtime_sender)?;
         let call_result_future = tokio::task::spawn_blocking(move || match action {
             UserAction::Initialize(context, argument) => contract.initialize(context, argument),
             UserAction::Operation(context, operation) => {
@@ -396,7 +396,7 @@ where
                     runtime_limits,
                 );
                 let (runtime_actor, runtime_sender) = runtime.service_runtime_actor();
-                let mut service = service.instantiate_with_actor_runtime(runtime_sender);
+                let mut service = service.instantiate_with_actor_runtime(runtime_sender)?;
                 // Run the query.
                 let response_future =
                     tokio::task::spawn_blocking(move || service.handle_query(context, bytes));

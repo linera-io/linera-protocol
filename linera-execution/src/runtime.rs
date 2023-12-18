@@ -559,7 +559,7 @@ where
         });
 
         let (runtime_actor, runtime_sender) = self.service_runtime_actor();
-        let mut code = code.instantiate_with_actor_runtime(runtime_sender);
+        let mut code = code.instantiate_with_actor_runtime(runtime_sender)?;
         let value_future =
             tokio::task::spawn_blocking(move || code.handle_query(query_context, argument));
         // TODO(#989): Simplify after message failures are not ignored.
@@ -703,7 +703,7 @@ where
             signer: authenticated_signer,
         });
         let (runtime_actor, runtime_sender) = self.contract_runtime_actor();
-        let mut code = code.instantiate_with_actor_runtime(runtime_sender);
+        let mut code = code.instantiate_with_actor_runtime(runtime_sender)?;
         let raw_result_future = tokio::task::spawn_blocking(move || {
             code.handle_application_call(callee_context, argument, forwarded_sessions)
         });
@@ -767,7 +767,7 @@ where
             signer: authenticated_signer,
         });
         let (runtime_actor, runtime_sender) = self.contract_runtime_actor();
-        let mut code = code.instantiate_with_actor_runtime(runtime_sender);
+        let mut code = code.instantiate_with_actor_runtime(runtime_sender)?;
         let raw_result_future = tokio::task::spawn_blocking(move || {
             code.handle_session_call(callee_context, session_state, argument, forwarded_sessions)
         });

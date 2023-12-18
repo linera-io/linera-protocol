@@ -94,11 +94,11 @@ impl UserContractModule for TestModule {
     fn instantiate_with_actor_runtime(
         &self,
         runtime: ContractActorRuntime,
-    ) -> Box<dyn UserContract + Send + Sync + 'static> {
-        Box::new(TestApplication {
+    ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError> {
+        Ok(Box::new(TestApplication {
             owner: self.owner,
             runtime,
-        })
+        }))
     }
 }
 
@@ -230,11 +230,11 @@ impl UserServiceModule for TestModule {
     fn instantiate_with_actor_runtime(
         &self,
         runtime: ServiceActorRuntime,
-    ) -> Box<dyn UserService + Send + Sync + 'static> {
-        Box::new(TestApplication {
+    ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError> {
+        Ok(Box::new(TestApplication {
             owner: self.owner,
             runtime,
-        })
+        }))
     }
 }
 
