@@ -66,7 +66,7 @@ pub trait UserContractModule {
     fn instantiate_with_actor_runtime(
         &self,
         runtime: ContractActorRuntime,
-    ) -> Box<dyn UserContract + Send + Sync + 'static>;
+    ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError>;
 }
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
@@ -74,7 +74,7 @@ pub trait UserServiceModule {
     fn instantiate_with_actor_runtime(
         &self,
         runtime: ServiceActorRuntime,
-    ) -> Box<dyn UserService + Send + Sync + 'static>;
+    ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError>;
 }
 
 /// A type for errors happening during execution.

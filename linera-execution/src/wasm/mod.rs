@@ -10,7 +10,6 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-mod common;
 mod module_cache;
 mod sanitizer;
 #[macro_use]
@@ -24,13 +23,16 @@ mod wasmtime;
 
 use self::sanitizer::sanitize;
 use crate::{
-    ApplicationCallResult, Bytecode, CalleeContext, ContractActorRuntime, ContractRuntime,
-    ExecutionError, MessageContext, OperationContext, QueryContext, RawExecutionResult,
-    ServiceActorRuntime, ServiceRuntime, SessionCallResult, SessionId, UserContract,
+    Bytecode, ContractActorRuntime, ExecutionError, ServiceActorRuntime, UserContract,
     UserContractModule, UserService, UserServiceModule, WasmRuntime,
 };
-use std::{marker::Unpin, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 use thiserror::Error;
+
+#[cfg(feature = "wasmer")]
+use wasmer::{WasmerContractInstance, WasmerServiceInstance};
+#[cfg(feature = "wasmtime")]
+use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
 
 /// A user contract in a compiled WebAssembly module.
 #[derive(Clone)]
@@ -42,11 +44,6 @@ pub enum WasmContractModule {
     },
     #[cfg(feature = "wasmtime")]
     Wasmtime { module: Arc<::wasmtime::Module> },
-}
-
-pub struct WasmContract<Runtime> {
-    module: WasmContractModule,
-    runtime: Runtime,
 }
 
 impl WasmContractModule {
@@ -65,11 +62,11 @@ impl WasmContractModule {
         match runtime {
             #[cfg(feature = "wasmer")]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                Self::new_with_wasmer(contract_bytecode).await
+                Self::from_wasmer(contract_bytecode).await
             }
             #[cfg(feature = "wasmtime")]
             WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                Self::new_with_wasmtime(contract_bytecode).await
+                Self::from_wasmtime(contract_bytecode).await
             }
         }
     }
@@ -94,11 +91,17 @@ impl UserContractModule for WasmContractModule {
     fn instantiate_with_actor_runtime(
         &self,
         runtime: ContractActorRuntime,
-    ) -> Box<dyn UserContract + Send + Sync + 'static> {
-        Box::new(WasmContract {
-            module: self.clone(),
-            runtime,
-        })
+    ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError> {
+        match self {
+            #[cfg(feature = "wasmtime")]
+            WasmContractModule::Wasmtime { module } => Ok(Box::new(
+                WasmtimeContractInstance::prepare(module, runtime)?,
+            )),
+            #[cfg(feature = "wasmer")]
+            WasmContractModule::Wasmer { engine, module } => Ok(Box::new(
+                WasmerContractInstance::prepare(engine, module, runtime)?,
+            )),
+        }
     }
 }
 
@@ -111,11 +114,6 @@ pub enum WasmServiceModule {
     Wasmtime { module: Arc<::wasmtime::Module> },
 }
 
-pub struct WasmService<Runtime> {
-    module: WasmServiceModule,
-    runtime: Runtime,
-}
-
 impl WasmServiceModule {
     /// Creates a new [`WasmServiceModule`] using the WebAssembly module with the provided bytecodes.
     pub async fn new(
@@ -125,11 +123,11 @@ impl WasmServiceModule {
         match runtime {
             #[cfg(feature = "wasmer")]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                Self::new_with_wasmer(service_bytecode).await
+                Self::from_wasmer(service_bytecode).await
             }
             #[cfg(feature = "wasmtime")]
             WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                Self::new_with_wasmtime(service_bytecode).await
+                Self::from_wasmtime(service_bytecode).await
             }
         }
     }
@@ -154,11 +152,17 @@ impl UserServiceModule for WasmServiceModule {
     fn instantiate_with_actor_runtime(
         &self,
         runtime: ServiceActorRuntime,
-    ) -> Box<dyn UserService + Send + Sync + 'static> {
-        Box::new(WasmService {
-            module: self.clone(),
-            runtime,
-        })
+    ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError> {
+        match self {
+            #[cfg(feature = "wasmtime")]
+            WasmServiceModule::Wasmtime { module } => {
+                Ok(Box::new(WasmtimeServiceInstance::prepare(module, runtime)?))
+            }
+            #[cfg(feature = "wasmer")]
+            WasmServiceModule::Wasmer { module } => {
+                Ok(Box::new(WasmerServiceInstance::prepare(module, runtime)?))
+            }
+        }
     }
 }
 
@@ -179,143 +183,6 @@ pub enum WasmExecutionError {
     #[cfg(feature = "wasmtime")]
     #[error("Failed to execute Wasm module (Wasmtime)")]
     ExecuteModuleInWasmtime(#[from] ::wasmtime::Trap),
-}
-
-impl<Runtime> UserContract for WasmContract<Runtime>
-where
-    Runtime: ContractRuntime + Clone + Send + Sync + Unpin + 'static,
-{
-    fn initialize(
-        &mut self,
-        context: OperationContext,
-        argument: Vec<u8>,
-    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        let runtime = self.runtime.clone();
-        match &self.module {
-            #[cfg(feature = "wasmtime")]
-            WasmContractModule::Wasmtime { module } => {
-                Self::prepare_contract_runtime_with_wasmtime(module, runtime)?
-                    .initialize(context, argument)
-            }
-            #[cfg(feature = "wasmer")]
-            WasmContractModule::Wasmer { engine, module } => {
-                Self::prepare_contract_runtime_with_wasmer(engine, module, runtime)?
-                    .initialize(context, argument)
-            }
-        }
-    }
-
-    fn execute_operation(
-        &mut self,
-        context: OperationContext,
-        operation: Vec<u8>,
-    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        let runtime = self.runtime.clone();
-        match &self.module {
-            #[cfg(feature = "wasmtime")]
-            WasmContractModule::Wasmtime { module } => {
-                Self::prepare_contract_runtime_with_wasmtime(module, runtime)?
-                    .execute_operation(context, operation)
-            }
-            #[cfg(feature = "wasmer")]
-            WasmContractModule::Wasmer { engine, module } => {
-                Self::prepare_contract_runtime_with_wasmer(engine, module, runtime)?
-                    .execute_operation(context, operation)
-            }
-        }
-    }
-
-    fn execute_message(
-        &mut self,
-        context: MessageContext,
-        message: Vec<u8>,
-    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        let runtime = self.runtime.clone();
-        match &self.module {
-            #[cfg(feature = "wasmtime")]
-            WasmContractModule::Wasmtime { module } => {
-                Self::prepare_contract_runtime_with_wasmtime(module, runtime)?
-                    .execute_message(context, message)
-            }
-            #[cfg(feature = "wasmer")]
-            WasmContractModule::Wasmer { engine, module } => {
-                Self::prepare_contract_runtime_with_wasmer(engine, module, runtime)?
-                    .execute_message(context, message)
-            }
-        }
-    }
-
-    fn handle_application_call(
-        &mut self,
-        context: CalleeContext,
-        argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, ExecutionError> {
-        let runtime = self.runtime.clone();
-        match &self.module {
-            #[cfg(feature = "wasmtime")]
-            WasmContractModule::Wasmtime { module } => {
-                Self::prepare_contract_runtime_with_wasmtime(module, runtime)?
-                    .handle_application_call(context, argument, forwarded_sessions)
-            }
-            #[cfg(feature = "wasmer")]
-            WasmContractModule::Wasmer { engine, module } => {
-                Self::prepare_contract_runtime_with_wasmer(engine, module, runtime)?
-                    .handle_application_call(context, argument, forwarded_sessions)
-            }
-        }
-    }
-
-    fn handle_session_call(
-        &mut self,
-        context: CalleeContext,
-        session_state: Vec<u8>,
-        argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
-    ) -> Result<(SessionCallResult, Vec<u8>), ExecutionError> {
-        let runtime = self.runtime.clone();
-        match &self.module {
-            #[cfg(feature = "wasmtime")]
-            WasmContractModule::Wasmtime { module } => {
-                Self::prepare_contract_runtime_with_wasmtime(module, runtime)?.handle_session_call(
-                    context,
-                    session_state,
-                    argument,
-                    forwarded_sessions,
-                )
-            }
-            #[cfg(feature = "wasmer")]
-            WasmContractModule::Wasmer { engine, module } => {
-                Self::prepare_contract_runtime_with_wasmer(engine, module, runtime)?
-                    .handle_session_call(context, session_state, argument, forwarded_sessions)
-            }
-        }
-    }
-}
-
-impl<Runtime> UserService for WasmService<Runtime>
-where
-    Runtime: ServiceRuntime + Clone + Send + Sync + Unpin + 'static,
-{
-    fn handle_query(
-        &mut self,
-        context: QueryContext,
-        argument: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        let runtime = self.runtime.clone();
-        match &self.module {
-            #[cfg(feature = "wasmtime")]
-            WasmServiceModule::Wasmtime { module } => {
-                Self::prepare_service_runtime_with_wasmtime(module, runtime)?
-                    .handle_query(context, argument)
-            }
-            #[cfg(feature = "wasmer")]
-            WasmServiceModule::Wasmer { module } => {
-                Self::prepare_service_runtime_with_wasmer(module, runtime)?
-                    .handle_query(context, argument)
-            }
-        }
-    }
 }
 
 /// This assumes that the current directory is one of the crates.
