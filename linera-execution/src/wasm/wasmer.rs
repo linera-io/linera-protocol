@@ -110,7 +110,7 @@ pub struct WasmerServiceInstance {
 
 impl WasmContractModule {
     /// Creates a new [`WasmContractModule`] using Wasmer with the provided bytecodes.
-    pub async fn new_with_wasmer(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
+    pub async fn from_wasmer(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
         let (engine, module) = contract_cache
             .get_or_insert_with(contract_bytecode, CachedContractModule::new)
@@ -174,7 +174,7 @@ impl WasmContractModule {
 
 impl WasmServiceModule {
     /// Creates a new [`WasmServiceModule`] using Wasmer with the provided bytecodes.
-    pub async fn new_with_wasmer(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
+    pub async fn from_wasmer(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut service_cache = SERVICE_CACHE.lock().await;
         let module = service_cache
             .get_or_insert_with(service_bytecode, |bytecode| {

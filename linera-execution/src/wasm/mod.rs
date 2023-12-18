@@ -62,11 +62,11 @@ impl WasmContractModule {
         match runtime {
             #[cfg(feature = "wasmer")]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                Self::new_with_wasmer(contract_bytecode).await
+                Self::from_wasmer(contract_bytecode).await
             }
             #[cfg(feature = "wasmtime")]
             WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                Self::new_with_wasmtime(contract_bytecode).await
+                Self::from_wasmtime(contract_bytecode).await
             }
         }
     }
@@ -123,11 +123,11 @@ impl WasmServiceModule {
         match runtime {
             #[cfg(feature = "wasmer")]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                Self::new_with_wasmer(service_bytecode).await
+                Self::from_wasmer(service_bytecode).await
             }
             #[cfg(feature = "wasmtime")]
             WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                Self::new_with_wasmtime(service_bytecode).await
+                Self::from_wasmtime(service_bytecode).await
             }
         }
     }

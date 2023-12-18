@@ -125,9 +125,7 @@ where
 
 impl WasmContractModule {
     /// Creates a new [`WasmContractModule`] using Wasmtime with the provided bytecodes.
-    pub async fn new_with_wasmtime(
-        contract_bytecode: Bytecode,
-    ) -> Result<Self, WasmExecutionError> {
+    pub async fn from_wasmtime(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
         let module = contract_cache
             .get_or_insert_with(contract_bytecode, |bytecode| {
@@ -167,7 +165,7 @@ where
 
 impl WasmServiceModule {
     /// Creates a new [`WasmServiceModule`] using Wasmtime with the provided bytecodes.
-    pub async fn new_with_wasmtime(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
+    pub async fn from_wasmtime(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
         let mut service_cache = SERVICE_CACHE.lock().await;
         let module = service_cache
             .get_or_insert_with(service_bytecode, |bytecode| {
