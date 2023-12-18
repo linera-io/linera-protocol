@@ -169,6 +169,18 @@ type ChainTipState {
 	Sequence number tracking blocks.
 	"""
 	nextBlockHeight: BlockHeight!
+	"""
+	Number of incoming messages.
+	"""
+	numIncomingMessages: Int!
+	"""
+	Number of operations.
+	"""
+	numOperations: Int!
+	"""
+	Number of outgoing messages.
+	"""
+	numOutgoingMessages: Int!
 }
 
 type Chains {

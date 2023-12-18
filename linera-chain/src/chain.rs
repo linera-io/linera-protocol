@@ -125,6 +125,12 @@ pub struct ChainTipState {
     pub block_hash: Option<CryptoHash>,
     /// Sequence number tracking blocks.
     pub next_block_height: BlockHeight,
+    /// Number of incoming messages.
+    pub num_incoming_messages: u32,
+    /// Number of operations.
+    pub num_operations: u32,
+    /// Number of outgoing messages.
+    pub num_outgoing_messages: u32,
 }
 
 impl ChainTipState {
@@ -160,6 +166,33 @@ impl ChainTipState {
     /// Returns `true` if the next block will be the first, i.e. the chain doesn't have any blocks.
     pub fn is_first_block(&self) -> bool {
         self.next_block_height == BlockHeight::ZERO
+    }
+
+    /// Checks if the measurement counters would be valid.
+    pub fn verify_counters(
+        &self,
+        new_block: &Block,
+        outcome: &BlockExecutionOutcome,
+    ) -> Result<(), ChainError> {
+        let num_incoming_messages = u32::try_from(new_block.incoming_messages.len())
+            .map_err(|_| ArithmeticError::Overflow)?;
+        self.num_incoming_messages
+            .checked_add(num_incoming_messages)
+            .ok_or(ArithmeticError::Overflow)?;
+
+        let num_operations =
+            u32::try_from(new_block.operations.len()).map_err(|_| ArithmeticError::Overflow)?;
+        self.num_operations
+            .checked_add(num_operations)
+            .ok_or(ArithmeticError::Overflow)?;
+
+        let num_outgoing_messages =
+            u32::try_from(outcome.messages.len()).map_err(|_| ArithmeticError::Overflow)?;
+        self.num_outgoing_messages
+            .checked_add(num_outgoing_messages)
+            .ok_or(ArithmeticError::Overflow)?;
+
+        Ok(())
     }
 }
 

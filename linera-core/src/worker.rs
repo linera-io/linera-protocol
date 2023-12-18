@@ -613,6 +613,9 @@ where
         let tip = chain.tip_state.get_mut();
         tip.block_hash = Some(certificate.hash());
         tip.next_block_height.try_add_assign_one()?;
+        tip.num_incoming_messages += block.incoming_messages.len() as u32;
+        tip.num_operations += block.operations.len() as u32;
+        tip.num_outgoing_messages += messages.len() as u32;
         chain.confirmed_log.push(certificate.hash());
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         let mut actions = self.create_network_actions(&mut chain).await?;
@@ -1059,6 +1062,8 @@ where
         }
         let local_time = self.storage.current_time();
         let outcome = chain.execute_block(block, local_time).await?;
+        // Check if the counters of tip_state would be valid.
+        chain.tip_state.get().verify_counters(block, &outcome)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
         chain.validate_incoming_messages().await?;
         // Reset all the staged changes as we were only validating things.
