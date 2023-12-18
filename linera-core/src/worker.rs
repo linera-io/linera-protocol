@@ -1062,30 +1062,8 @@ where
         }
         let local_time = self.storage.current_time();
         let outcome = chain.execute_block(block, local_time).await?;
-        // Check if tip_state would be valid.
-        {
-            let tip_state = chain.tip_state.get();
-            let num_incoming_messages = u32::try_from(block.incoming_messages.len())
-                .map_err(|_| ArithmeticError::Overflow)?;
-            tip_state
-                .num_incoming_messages
-                .checked_add(num_incoming_messages)
-                .ok_or(ArithmeticError::Overflow)?;
-
-            let num_operations =
-                u32::try_from(block.operations.len()).map_err(|_| ArithmeticError::Overflow)?;
-            tip_state
-                .num_operations
-                .checked_add(num_operations)
-                .ok_or(ArithmeticError::Overflow)?;
-
-            let num_outgoing_messages =
-                u32::try_from(outcome.messages.len()).map_err(|_| ArithmeticError::Overflow)?;
-            tip_state
-                .num_outgoing_messages
-                .checked_add(num_outgoing_messages)
-                .ok_or(ArithmeticError::Overflow)?;
-        }
+        // Check if the counters of tip_state would be valid.
+        chain.tip_state.get().verify_counters(block, &outcome)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
         chain.validate_incoming_messages().await?;
         // Reset all the staged changes as we were only validating things.

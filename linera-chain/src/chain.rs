@@ -167,6 +167,33 @@ impl ChainTipState {
     pub fn is_first_block(&self) -> bool {
         self.next_block_height == BlockHeight::ZERO
     }
+
+    /// Checks if the measurement counters would be valid.
+    pub fn verify_counters(
+        &self,
+        new_block: &Block,
+        outcome: &BlockExecutionOutcome,
+    ) -> Result<(), ChainError> {
+        let num_incoming_messages = u32::try_from(new_block.incoming_messages.len())
+            .map_err(|_| ArithmeticError::Overflow)?;
+        self.num_incoming_messages
+            .checked_add(num_incoming_messages)
+            .ok_or(ArithmeticError::Overflow)?;
+
+        let num_operations =
+            u32::try_from(new_block.operations.len()).map_err(|_| ArithmeticError::Overflow)?;
+        self.num_operations
+            .checked_add(num_operations)
+            .ok_or(ArithmeticError::Overflow)?;
+
+        let num_outgoing_messages =
+            u32::try_from(outcome.messages.len()).map_err(|_| ArithmeticError::Overflow)?;
+        self.num_outgoing_messages
+            .checked_add(num_outgoing_messages)
+            .ok_or(ArithmeticError::Overflow)?;
+
+        Ok(())
+    }
 }
 
 /// The state of a channel followed by subscribers.
