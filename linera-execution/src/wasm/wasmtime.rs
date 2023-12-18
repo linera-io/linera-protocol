@@ -88,7 +88,7 @@ where
     Runtime: ContractRuntime + Send + Sync,
 {
     fn configure_initial_fuel(&mut self) -> Result<(), ExecutionError> {
-        let runtime = &mut self.store.data_mut().system_api;
+        let runtime = &mut self.store.data_mut().runtime;
         let fuel = runtime.remaining_fuel()?;
 
         self.store
@@ -103,7 +103,7 @@ where
             .store
             .fuel_consumed()
             .expect("Failed to read consumed fuel");
-        let runtime = &mut self.store.data_mut().system_api;
+        let runtime = &mut self.store.data_mut().runtime;
         let initial_fuel = runtime.remaining_fuel()?;
         let remaining_fuel = initial_fuel.saturating_sub(consumed_fuel);
 
@@ -211,7 +211,7 @@ where
     Runtime: ContractRuntime + Send + Sync + 'static,
 {
     data: ContractData,
-    system_api: Runtime,
+    runtime: Runtime,
     system_tables: ContractSystemApiTables<Runtime>,
     views_tables: ViewSystemApiTables<Runtime>,
 }
@@ -222,7 +222,7 @@ where
     Runtime: ServiceRuntime + Send + Sync + 'static,
 {
     data: ServiceData,
-    system_api: Runtime,
+    runtime: Runtime,
     system_tables: ServiceSystemApiTables<Runtime>,
     views_tables: ViewSystemApiTables<Runtime>,
 }
@@ -234,10 +234,10 @@ where
     /// Creates a new instance of [`ContractState`].
     ///
     /// Uses `runtime` to export the system API.
-    pub fn new(system_api: Runtime) -> Self {
+    pub fn new(runtime: Runtime) -> Self {
         Self {
             data: ContractData::default(),
-            system_api,
+            runtime,
             system_tables: ContractSystemApiTables::default(),
             views_tables: ViewSystemApiTables::default(),
         }
@@ -250,12 +250,12 @@ where
 
     /// Obtains the data required by the runtime to export the system API.
     pub fn system_api(&mut self) -> (&mut Runtime, &mut ContractSystemApiTables<Runtime>) {
-        (&mut self.system_api, &mut self.system_tables)
+        (&mut self.runtime, &mut self.system_tables)
     }
 
     /// Obtains the data required by the runtime to export the views API.
     pub fn views_api(&mut self) -> (&mut Runtime, &mut ViewSystemApiTables<Runtime>) {
-        (&mut self.system_api, &mut self.views_tables)
+        (&mut self.runtime, &mut self.views_tables)
     }
 }
 
@@ -266,10 +266,10 @@ where
     /// Creates a new instance of [`ServiceState`].
     ///
     /// Uses `runtime` to export the system API.
-    pub fn new(system_api: Runtime) -> Self {
+    pub fn new(runtime: Runtime) -> Self {
         Self {
             data: ServiceData::default(),
-            system_api,
+            runtime,
             system_tables: ServiceSystemApiTables::default(),
             views_tables: ViewSystemApiTables::default(),
         }
@@ -282,12 +282,12 @@ where
 
     /// Obtains the data required by the runtime to export the system API.
     pub fn system_api(&mut self) -> (&mut Runtime, &mut ServiceSystemApiTables<Runtime>) {
-        (&mut self.system_api, &mut self.system_tables)
+        (&mut self.runtime, &mut self.system_tables)
     }
 
     /// Obtains the data required by the runtime to export the views API.
     pub fn views_api(&mut self) -> (&mut Runtime, &mut ViewSystemApiTables<Runtime>) {
-        (&mut self.system_api, &mut self.views_tables)
+        (&mut self.runtime, &mut self.views_tables)
     }
 }
 
