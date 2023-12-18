@@ -256,7 +256,7 @@ async fn single_transaction() {
                     block.with_operation(matching_id, operation);
                 })
                 .await;
-            assert_eq!(order_messages.len(), 3);
+            assert_eq!(order_messages.len(), 2);
             orders_cancels.extend(order_messages);
         }
     }
@@ -274,14 +274,14 @@ async fn single_transaction() {
     println!("Check 11");
 
     // Check balances
-    for (owner, amount) in [(owner_a, Amount::from_tokens(1)), (owner_b, Amount::from_tokens(0))] {
+    for (owner, amount) in [(owner_a, Amount::from_tokens(3)), (owner_b, Amount::from_tokens(6))] {
         assert_eq!(
             FungibleTokenAbi::query_account(token_id_a, &matching_chain, owner).await,
             Some(amount)
         );
     }
     println!("Check 12");
-    for (owner, amount) in [(owner_a, Amount::from_tokens(0)), (owner_b, Amount::from_tokens(1))] {
+    for (owner, amount) in [(owner_a, Amount::from_tokens(3)), (owner_b, Amount::from_tokens(5))] {
         assert_eq!(
             FungibleTokenAbi::query_account(token_id_b, &matching_chain, owner).await,
             Some(amount)
