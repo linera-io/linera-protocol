@@ -32,13 +32,12 @@ mod conversions_from_wit;
 #[path = "conversions_to_wit.rs"]
 mod conversions_to_wit;
 
-use super::{
-    module_cache::ModuleCache, ApplicationCallResult, SessionCallResult, WasmExecutionError,
-};
+use super::{module_cache::ModuleCache, WasmExecutionError};
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
-    BaseRuntime, Bytecode, CalleeContext, ContractRuntime, ExecutionError, MessageContext,
-    OperationContext, QueryContext, RawExecutionResult, ServiceRuntime,
+    ApplicationCallResult, BaseRuntime, Bytecode, CalleeContext, ContractRuntime, ExecutionError,
+    MessageContext, OperationContext, QueryContext, RawExecutionResult, ServiceRuntime,
+    SessionCallResult,
 };
 use bytes::Bytes;
 use linera_base::{identifiers::SessionId, sync::Lazy};

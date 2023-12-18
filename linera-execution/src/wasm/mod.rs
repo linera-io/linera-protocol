@@ -23,9 +23,8 @@ mod wasmtime;
 
 use self::sanitizer::sanitize;
 use crate::{
-    ApplicationCallResult, Bytecode, ContractActorRuntime, ExecutionError, ServiceActorRuntime,
-    SessionCallResult, UserContract, UserContractModule, UserService, UserServiceModule,
-    WasmRuntime,
+    Bytecode, ContractActorRuntime, ExecutionError, ServiceActorRuntime, UserContract,
+    UserContractModule, UserService, UserServiceModule, WasmRuntime,
 };
 use std::{path::Path, sync::Arc};
 use thiserror::Error;
