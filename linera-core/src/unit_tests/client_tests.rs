@@ -210,6 +210,15 @@ where
     receiver.receive_certificate(cert).await?;
     let cert = receiver.process_inbox().await?.pop().unwrap();
 
+    // The first `Claim` message was not selected by the receiver.
+    assert_eq!(cert.value().block().unwrap().incoming_messages.len(), 1);
+    assert_eq!(
+        cert.value().block().unwrap().incoming_messages[0]
+            .event
+            .height,
+        BlockHeight::from(2)
+    );
+
     sender.receive_certificate(cert).await?;
     sender.process_inbox().await?;
     assert_eq!(
