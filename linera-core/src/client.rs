@@ -29,10 +29,10 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, HashedValue,
-        IncomingMessage, LiteCertificate, LiteVote,
+        Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
+        HashedValue, IncomingMessage, LiteCertificate, LiteVote,
     },
-    ChainError, ChainStateView,
+    ChainError, ChainExecutionContext, ChainStateView,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
@@ -1180,6 +1180,31 @@ where
         Ok(certificate)
     }
 
+    async fn stage_block_execution_and_discard_failing_messages(
+        &mut self,
+        mut block: Block,
+    ) -> Result<ExecutedBlock, ChainClientError> {
+        loop {
+            let result = self.node_client.stage_block_execution(block.clone()).await;
+            if let Err(LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))) = &result
+            {
+                if let ChainError::ExecutionError(
+                    _,
+                    ChainExecutionContext::IncomingMessage(index),
+                ) = **chain_error
+                {
+                    // Remove the faulty message from the block.
+                    // TODO(#990): To optimize receiver's liveness and sender's
+                    // experience, we probably don't want to this message to stay pending and be
+                    // selected again next time we create a block.
+                    block.incoming_messages.remove(index as usize);
+                    continue;
+                }
+            }
+            return Ok(result?.0);
+        }
+    }
+
     /// Executes (or retries) a regular block proposal. Updates local balance.
     async fn propose_block(&mut self, block: Block) -> Result<Certificate, ChainClientError> {
         ensure!(
@@ -1197,14 +1222,7 @@ where
             block.previous_block_hash == self.block_hash,
             ChainClientError::BlockProposalError("Unexpected previous block hash")
         );
-        // Collect blobs required for execution.
-        let committee = self.local_committee().await?;
-        let nodes = self.validator_node_provider.make_nodes(&committee)?;
-        let blobs = self
-            .node_client
-            .read_or_download_blobs(nodes, block.bytecode_locations())
-            .await?;
-        // Build the initial query.
+        // Gather information on the current local state.
         let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
         let response = self.node_client.handle_chain_info_query(query).await?;
         let manager = response.info.manager;
@@ -1217,9 +1235,8 @@ where
                 "Cannot propose a block; there is already a proposal in the current round",
             ));
         };
-        let key_pair = self.key_pair().await?;
+        // Make sure that we follow the steps in the multi-round protocol.
         let validated = manager.highest_validated().cloned();
-        // TODO(#66): return the block that should be proposed instead
         if let Some(validated) = &validated {
             ensure!(
                 validated.value().block() == Some(&block),
@@ -1228,6 +1245,26 @@ where
                 )
             );
         }
+        // Make sure every incoming message succeeds and otherwise remove them.
+        // Also, compute the final certified hash while we're at it.
+        let executed_block = self
+            .stage_block_execution_and_discard_failing_messages(block)
+            .await?;
+        let block = executed_block.block.clone();
+        let hashed_value = if next_round.is_fast() {
+            HashedValue::new_confirmed(executed_block)
+        } else {
+            HashedValue::new_validated(executed_block)
+        };
+        // Collect the blobs required for execution.
+        let committee = self.local_committee().await?;
+        let nodes = self.validator_node_provider.make_nodes(&committee)?;
+        let blobs = self
+            .node_client
+            .read_or_download_blobs(nodes, block.bytecode_locations())
+            .await?;
+        // Create the final block proposal.
+        let key_pair = self.key_pair().await?;
         let proposal = BlockProposal::new(
             BlockAndRound {
                 block: block.clone(),
@@ -1237,21 +1274,10 @@ where
             blobs,
             validated,
         );
-        // Try to execute the block locally first.
+        // Check the final block proposal. This will be cheaper after #1401.
         self.node_client
             .handle_block_proposal(proposal.clone())
             .await?;
-        // Sadly, we have to execute the block again for the expected hashed value. This
-        // should be fine after #1401.
-        let (executed_block, _) = self
-            .node_client
-            .stage_block_execution(block.clone())
-            .await?;
-        let hashed_value = if proposal.content.round.is_fast() {
-            HashedValue::new_confirmed(executed_block)
-        } else {
-            HashedValue::new_validated(executed_block)
-        };
         // Remember what we are trying to do before sending the proposal to the validators.
         self.pending_block = Some(block);
         // Send the query to validators.
