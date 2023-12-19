@@ -205,10 +205,10 @@ impl ScyllaDbStoreInternal {
             "SELECT v FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
             table_name
         );
-        let rows = session.query(query, values).await?;
-        if let Some(rows) = rows.rows {
+        let result = session.query(query, values).await?;
+        if let Some(rows) = result.rows {
             if let Some(row) = rows.into_typed::<(Vec<u8>,)>().next() {
-                let value = row.unwrap();
+                let value = row.expect("failed to parse the row result");
                 return Ok(Some(value.0));
             }
         }
@@ -228,8 +228,8 @@ impl ScyllaDbStoreInternal {
             "SELECT dummy FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
             table_name
         );
-        let rows = session.query(query, values).await?;
-        if let Some(rows) = rows.rows {
+        let result = session.query(query, values).await?;
+        if let Some(rows) = result.rows {
             if let Some(_row) = rows.into_typed::<(Vec<u8>,)>().next() {
                 return Ok(true);
             }
@@ -311,7 +311,7 @@ impl ScyllaDbStoreInternal {
         let mut keys = Vec::new();
         let mut paging_state = None;
         loop {
-            let rows = match get_upper_bound_option(&key_prefix) {
+            let result = match get_upper_bound_option(&key_prefix) {
                 None => {
                     let values = (key_prefix.clone(),);
                     let query = format!(
@@ -329,19 +329,18 @@ impl ScyllaDbStoreInternal {
                     session.query_paged(query, values, paging_state).await?
                 }
             };
-            if let Some(rows) = rows.rows {
+            if let Some(rows) = result.rows {
                 for row in rows.into_typed::<(Vec<u8>,)>() {
-                    let key = row.unwrap();
+                    let key = row.expect("failed to parse the row result");
                     let short_key = key.0[len..].to_vec();
                     keys.push(short_key);
                 }
             }
-            if rows.paging_state.is_none() {
-                break;
+            if result.paging_state.is_none() {
+                return Ok(keys);
             }
-            paging_state = rows.paging_state;
+            paging_state = result.paging_state;
         }
-        Ok(keys)
     }
 
     async fn find_key_values_by_prefix_internal(
@@ -359,7 +358,7 @@ impl ScyllaDbStoreInternal {
         let mut key_values = Vec::new();
         let mut paging_state = None;
         loop {
-            let rows = match get_upper_bound_option(&key_prefix) {
+            let result = match get_upper_bound_option(&key_prefix) {
                 None => {
                     let values = (key_prefix.clone(),);
                     let query = format!(
@@ -377,19 +376,18 @@ impl ScyllaDbStoreInternal {
                     session.query_paged(query, values, paging_state).await?
                 }
             };
-            if let Some(rows) = rows.rows {
+            if let Some(rows) = result.rows {
                 for row in rows.into_typed::<(Vec<u8>, Vec<u8>)>() {
-                    let key = row.unwrap();
+                    let key = row.expect("failed to parse the row result");
                     let short_key = key.0[len..].to_vec();
                     key_values.push((short_key, key.1));
                 }
             }
-            if rows.paging_state.is_none() {
-                break;
+            if result.paging_state.is_none() {
+                return Ok(key_values);
             }
-            paging_state = rows.paging_state;
+            paging_state = result.paging_state;
         }
-        Ok(key_values)
     }
 
     /// Retrieves the table_name from the store
@@ -558,11 +556,11 @@ impl ScyllaDbStoreInternal {
             .known_node(store_config.uri.as_str())
             .build()
             .await?;
-        let rows = session.query("DESCRIBE KEYSPACE kv", &[]).await?;
+        let result = session.query("DESCRIBE KEYSPACE kv", &[]).await?;
         let mut tables = Vec::new();
-        if let Some(rows) = rows.rows {
+        if let Some(rows) = result.rows {
             for row in rows.into_typed::<(String, String, String, String)>() {
-                let value = row.unwrap();
+                let value = row.expect("failed to parse the row result");
                 if value.1 == "table" {
                     tables.push(value.2);
                 }
