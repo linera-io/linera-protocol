@@ -78,6 +78,10 @@ pub enum ScyllaDbContextError {
     #[error("The key must have at most 1M")]
     KeyTooLong,
 
+    /// A row error in ScyllaDB
+    #[error(transparent)]
+    ScyllaDbRowError(#[from] scylla::cql_to_rust::FromRowError),
+
     /// A query error in ScyllaDB
     #[error(transparent)]
     ScyllaDbQueryError(#[from] scylla::transport::errors::QueryError),
@@ -205,10 +209,10 @@ impl ScyllaDbStoreInternal {
             "SELECT v FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
             table_name
         );
-        let rows = session.query(query, values).await?;
-        if let Some(rows) = rows.rows {
+        let result = session.query(query, values).await?;
+        if let Some(rows) = result.rows {
             if let Some(row) = rows.into_typed::<(Vec<u8>,)>().next() {
-                let value = row.unwrap();
+                let value = row?;
                 return Ok(Some(value.0));
             }
         }
@@ -228,8 +232,8 @@ impl ScyllaDbStoreInternal {
             "SELECT dummy FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
             table_name
         );
-        let rows = session.query(query, values).await?;
-        if let Some(rows) = rows.rows {
+        let result = session.query(query, values).await?;
+        if let Some(rows) = result.rows {
             if let Some(_row) = rows.into_typed::<(Vec<u8>,)>().next() {
                 return Ok(true);
             }
@@ -308,33 +312,39 @@ impl ScyllaDbStoreInternal {
         let table_name = &store.1;
         // Read the value of a key
         let len = key_prefix.len();
-        let rows = match get_upper_bound_option(&key_prefix) {
-            None => {
-                let values = (key_prefix,);
-                let query = format!(
-                    "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
-                    table_name
-                );
-                session.query(query, values).await?
-            }
-            Some(upper_bound) => {
-                let values = (key_prefix, upper_bound);
-                let query = format!(
-                    "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
-                    table_name
-                );
-                session.query(query, values).await?
-            }
-        };
         let mut keys = Vec::new();
-        if let Some(rows) = rows.rows {
-            for row in rows.into_typed::<(Vec<u8>,)>() {
-                let key = row.unwrap();
-                let short_key = key.0[len..].to_vec();
-                keys.push(short_key);
+        let mut paging_state = None;
+        loop {
+            let result = match get_upper_bound_option(&key_prefix) {
+                None => {
+                    let values = (key_prefix.clone(),);
+                    let query = format!(
+                        "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
+                        table_name
+                    );
+                    session.query_paged(query, values, paging_state).await?
+                }
+                Some(upper_bound) => {
+                    let values = (key_prefix.clone(), upper_bound);
+                    let query = format!(
+                        "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
+                        table_name
+                    );
+                    session.query_paged(query, values, paging_state).await?
+                }
+            };
+            if let Some(rows) = result.rows {
+                for row in rows.into_typed::<(Vec<u8>,)>() {
+                    let key = row?;
+                    let short_key = key.0[len..].to_vec();
+                    keys.push(short_key);
+                }
             }
+            if result.paging_state.is_none() {
+                return Ok(keys);
+            }
+            paging_state = result.paging_state;
         }
-        Ok(keys)
     }
 
     async fn find_key_values_by_prefix_internal(
@@ -349,33 +359,39 @@ impl ScyllaDbStoreInternal {
         let table_name = &store.1;
         // Read the value of a key
         let len = key_prefix.len();
-        let rows = match get_upper_bound_option(&key_prefix) {
-            None => {
-                let values = (key_prefix,);
-                let query = format!(
-                    "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
-                    table_name
-                );
-                session.query(query, values).await?
-            }
-            Some(upper_bound) => {
-                let values = (key_prefix, upper_bound);
-                let query = format!(
-                    "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
-                    table_name
-                );
-                session.query(query, values).await?
-            }
-        };
         let mut key_values = Vec::new();
-        if let Some(rows) = rows.rows {
-            for row in rows.into_typed::<(Vec<u8>, Vec<u8>)>() {
-                let key = row.unwrap();
-                let short_key = key.0[len..].to_vec();
-                key_values.push((short_key, key.1));
+        let mut paging_state = None;
+        loop {
+            let result = match get_upper_bound_option(&key_prefix) {
+                None => {
+                    let values = (key_prefix.clone(),);
+                    let query = format!(
+                        "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
+                        table_name
+                    );
+                    session.query_paged(query, values, paging_state).await?
+                }
+                Some(upper_bound) => {
+                    let values = (key_prefix.clone(), upper_bound);
+                    let query = format!(
+                        "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
+                        table_name
+                    );
+                    session.query_paged(query, values, paging_state).await?
+                }
+            };
+            if let Some(rows) = result.rows {
+                for row in rows.into_typed::<(Vec<u8>, Vec<u8>)>() {
+                    let key = row?;
+                    let short_key = key.0[len..].to_vec();
+                    key_values.push((short_key, key.1));
+                }
             }
+            if result.paging_state.is_none() {
+                return Ok(key_values);
+            }
+            paging_state = result.paging_state;
         }
-        Ok(key_values)
     }
 
     /// Retrieves the table_name from the store
@@ -544,11 +560,11 @@ impl ScyllaDbStoreInternal {
             .known_node(store_config.uri.as_str())
             .build()
             .await?;
-        let rows = session.query("DESCRIBE KEYSPACE kv", &[]).await?;
+        let result = session.query("DESCRIBE KEYSPACE kv", &[]).await?;
         let mut tables = Vec::new();
-        if let Some(rows) = rows.rows {
+        if let Some(rows) = result.rows {
             for row in rows.into_typed::<(String, String, String, String)>() {
-                let value = row.unwrap();
+                let value = row?;
                 if value.1 == "table" {
                     tables.push(value.2);
                 }
