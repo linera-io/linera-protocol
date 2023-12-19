@@ -633,7 +633,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(target),
                     authenticated: true,
-                    is_skippable: false,
+                    is_skippable: true, // because it can fail
                     message: SystemMessage::Withdraw {
                         amount,
                         account: Account {
@@ -787,7 +787,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(chain_id),
                     authenticated: false,
-                    is_skippable: false,
+                    is_skippable: true, // because it can fail
                     message: SystemMessage::RequestApplication(application_id),
                 };
                 result.messages.push(message);
@@ -906,7 +906,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Subscribers(SystemChannel::PublishedBytecodes.name()),
                     authenticated: false,
-                    is_skippable: false,
+                    is_skippable: true,
                     message: SystemMessage::BytecodeLocations { locations },
                 };
                 result.messages.push(message);
