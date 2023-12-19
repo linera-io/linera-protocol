@@ -23,6 +23,10 @@ where
     where
         Self::UserData: 'a,
         Self: 'a;
+    type UserDataMutReference<'a> = I::UserDataMutReference<'a>
+    where
+        Self::UserData: 'a,
+        Self: 'a;
 
     fn load_export(&mut self, name: &str) -> Option<<Self::Runtime as Runtime>::Export> {
         I::load_export(*self, name)
@@ -30,6 +34,10 @@ where
 
     fn user_data(&self) -> Self::UserDataReference<'_> {
         I::user_data(*self)
+    }
+
+    fn user_data_mut(&mut self) -> Self::UserDataMutReference<'_> {
+        I::user_data_mut(*self)
     }
 }
 

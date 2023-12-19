@@ -182,6 +182,10 @@ impl<UserData> Instance for MockInstance<UserData> {
     where
         Self::UserData: 'a,
         Self: 'a;
+    type UserDataMutReference<'a> = MutexGuard<'a, UserData>
+    where
+        Self::UserData: 'a,
+        Self: 'a;
 
     fn load_export(&mut self, name: &str) -> Option<String> {
         if name == "memory" || self.exported_functions.contains_key(name) {
@@ -192,6 +196,12 @@ impl<UserData> Instance for MockInstance<UserData> {
     }
 
     fn user_data(&self) -> Self::UserDataReference<'_> {
+        self.user_data
+            .try_lock()
+            .expect("Unexpected reentrant access to user data in `MockInstance`")
+    }
+
+    fn user_data_mut(&mut self) -> Self::UserDataMutReference<'_> {
         self.user_data
             .try_lock()
             .expect("Unexpected reentrant access to user data in `MockInstance`")
