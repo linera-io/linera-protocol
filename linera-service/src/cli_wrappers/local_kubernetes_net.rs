@@ -464,7 +464,9 @@ impl LocalKubernetesNet {
             validators_initialization_futures.push(future);
         }
 
-        join_all(validators_initialization_futures).await;
-        Ok(())
+        future::join_all(validators_initialization_futures)
+            .await
+            .into_iter()
+            .collect()
     }
 }
