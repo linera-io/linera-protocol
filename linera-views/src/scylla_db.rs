@@ -78,6 +78,10 @@ pub enum ScyllaDbContextError {
     #[error("The key must have at most 1M")]
     KeyTooLong,
 
+    /// A row error in ScyllaDB
+    #[error(transparent)]
+    ScyllaDbRowError(#[from] scylla::cql_to_rust::FromRowError),
+
     /// A query error in ScyllaDB
     #[error(transparent)]
     ScyllaDbQueryError(#[from] scylla::transport::errors::QueryError),
@@ -208,7 +212,7 @@ impl ScyllaDbStoreInternal {
         let result = session.query(query, values).await?;
         if let Some(rows) = result.rows {
             if let Some(row) = rows.into_typed::<(Vec<u8>,)>().next() {
-                let value = row.expect("failed to parse the row result");
+                let value = row?;
                 return Ok(Some(value.0));
             }
         }
@@ -331,7 +335,7 @@ impl ScyllaDbStoreInternal {
             };
             if let Some(rows) = result.rows {
                 for row in rows.into_typed::<(Vec<u8>,)>() {
-                    let key = row.expect("failed to parse the row result");
+                    let key = row?;
                     let short_key = key.0[len..].to_vec();
                     keys.push(short_key);
                 }
@@ -378,7 +382,7 @@ impl ScyllaDbStoreInternal {
             };
             if let Some(rows) = result.rows {
                 for row in rows.into_typed::<(Vec<u8>, Vec<u8>)>() {
-                    let key = row.expect("failed to parse the row result");
+                    let key = row?;
                     let short_key = key.0[len..].to_vec();
                     key_values.push((short_key, key.1));
                 }
@@ -560,7 +564,7 @@ impl ScyllaDbStoreInternal {
         let mut tables = Vec::new();
         if let Some(rows) = result.rows {
             for row in rows.into_typed::<(String, String, String, String)>() {
-                let value = row.expect("failed to parse the row result");
+                let value = row?;
                 if value.1 == "table" {
                     tables.push(value.2);
                 }
