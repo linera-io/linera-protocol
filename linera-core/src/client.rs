@@ -309,6 +309,20 @@ where
     /// Messages known to be redundant are filtered out: A `RegisterApplications` message whose
     /// entries are already known never needs to be included in a block.
     async fn pending_messages(&mut self) -> Result<Vec<IncomingMessage>, LocalNodeError> {
+        self.pending_messages_internal(|_| true).await
+    }
+
+    async fn pending_system_messages(&mut self) -> Result<Vec<IncomingMessage>, LocalNodeError> {
+        self.pending_messages_internal(|message| {
+            matches!(message.event.message, Message::System(_))
+        })
+        .await
+    }
+
+    async fn pending_messages_internal<F: Fn(&IncomingMessage) -> bool>(
+        &mut self,
+        filter: F,
+    ) -> Result<Vec<IncomingMessage>, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
         let response = self.node_client.handle_chain_info_query(query).await?;
         let mut requested_pending_messages = response.info.requested_pending_messages;
@@ -344,6 +358,9 @@ where
                     self.max_pending_messages
                 );
                 break;
+            }
+            if !filter(&message) {
+                continue;
             }
             if let Message::System(SystemMessage::RegisterApplications { applications }) =
                 &message.event.message
@@ -1412,7 +1429,7 @@ where
             self.chain_info().await?.next_block_height == self.next_block_height,
             ChainClientError::WalletSynchronizationError
         );
-        let incoming_messages = self.pending_messages().await?;
+        let incoming_messages = self.pending_system_messages().await?;
         let timestamp = self.next_timestamp(&incoming_messages).await;
         let block = Block {
             epoch: self.epoch().await?,
