@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Integration tests for the Fungible Token application.
+//! Integration tests for the Matching Engine application
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -24,20 +24,13 @@ pub async fn get_orders(
         "query {{ accountInfo {{ entry(key: {}) {{ value {{ orders }} }} }} }}",
         account_owner.to_value()
     );
-    let value = chain
-        .graphql_query(application_id, query)
-        .await
-        .as_object()?
-        .clone();
-    let value = value.get("accountInfo")?.as_object()?.clone();
-    let value = value.get("entry")?.as_object()?.clone();
-    let value = value.get("value")?.as_object()?.clone();
-    let value = value.get("orders")?.as_array()?.clone();
-    let mut values = Vec::new();
-    for sing_value in value {
-        let value = sing_value.as_u64().unwrap();
-        values.push(value);
-    }
+    let value = chain.graphql_query(application_id, query).await;
+    let orders = &value["accountInfo"]["entry"]["value"]["orders"];
+    let values = orders
+        .as_array()?
+        .into_iter()
+        .map(|order| order.as_u64().unwrap())
+        .collect();
     Some(values)
 }
 
@@ -139,8 +132,6 @@ async fn single_transaction() {
         )
         .await;
     // Doing the registrations
-    matching_chain.register_application(token_id_a).await;
-    matching_chain.register_application(token_id_b).await;
     fungible_chain_a.register_application(matching_id).await;
     fungible_chain_b.register_application(matching_id).await;
 
@@ -241,20 +232,14 @@ async fn single_transaction() {
     assert_eq!(order_ids_b.len(), 2);
 
     // Checking the balances on chain A
-    for (owner, amount) in [
-        (owner_a, Some(Amount::from_tokens(1))),
-        (owner_b, None),
-    ] {
+    for (owner, amount) in [(owner_a, Some(Amount::from_tokens(1))), (owner_b, None)] {
         assert_eq!(
             FungibleTokenAbi::query_account(token_id_a, &fungible_chain_a, owner).await,
             amount
         );
     }
     // Checking the balances on chain B
-    for (owner, amount) in [
-        (owner_a, None),
-        (owner_b, Some(Amount::from_tokens(1))),
-    ] {
+    for (owner, amount) in [(owner_a, None), (owner_b, Some(Amount::from_tokens(1)))] {
         assert_eq!(
             FungibleTokenAbi::query_account(token_id_b, &fungible_chain_b, owner).await,
             amount

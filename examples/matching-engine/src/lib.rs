@@ -9,6 +9,7 @@ use linera_sdk::{
     views::{CustomSerialize, ViewError},
 };
 use serde::{Deserialize, Serialize};
+
 pub struct MatchingEngineAbi;
 
 impl ContractAbi for MatchingEngineAbi {
