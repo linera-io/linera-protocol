@@ -19,6 +19,9 @@
         cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         nonRustDeps = with pkgs; [
           clang
+          kubernetes-helm
+          kind
+          kubectl
           libclang.lib
           libiconv
           nodejs
