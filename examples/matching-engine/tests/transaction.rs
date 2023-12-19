@@ -46,6 +46,29 @@ pub async fn get_orders(
 ///
 /// The operation is done in exactly the same way with the same amounts
 /// and quantities as the corresponding end to end test.
+///
+/// We have 3 chains:
+/// --- The chain A of User_a for tokens A
+/// --- The chain B of User_b for tokens B
+/// --- The admin chain of the matching engine.
+///
+/// The following operations are done:
+/// --- We create users and assign them their initial positions:
+///    --- user_a with 10 tokens A.
+///    --- user_b with 9 tokens B.
+/// --- Then we create the following orders:
+///    --- User_a: Offer to buy token B in exchenge of token A for a price of 1 (or 2) with a quantity of 3 token B
+///    User_a thus commits 3 * 1 + 3 * 2 = 9 token A to the matching engine chain and is left with 1 token A
+///    on chain A
+///    --- User_b: Offer to sell token B in exchange of token A for a pice of 2 (or 4) with a quantity of 4 token B
+///    User_b thus commits 4 + 4 = 8 token B on the matching engine chain and is left with 1 token B.
+/// --- The price that is matching is 2 where a transaction can actually occur
+///    --- Only 3 token B can be exhanged against 6 tokens A.
+///    --- So, the order from user_b is only partially filled.
+/// --- Then the orders are cancelled and the user get back their tokens.
+///    --- After the exchange we have
+///       --- User_a: It has 9 - 6 = 3 token A and the newly acquired 3 token B.
+///       --- User_b: It has 8 - 3 = 5 token B and the newly acquired 6 token A
 #[tokio::test]
 async fn single_transaction() {
     let (validator, bytecode_id) = TestValidator::with_current_bytecode().await;
@@ -86,6 +109,7 @@ async fn single_transaction() {
     fungible_chain_a.register_application(token_id_b).await;
     fungible_chain_b.register_application(token_id_a).await;
 
+    // Check the initial starting amounts for chain a and chain b
     for (owner, amount) in [
         (admin_account, None),
         (owner_a, Some(Amount::from_tokens(10))),
@@ -103,6 +127,7 @@ async fn single_transaction() {
         assert_eq!(value, amount);
     }
 
+    // Creating the matching engine chain
     let tokens = [token_id_a, token_id_b];
     let matching_parameter = Parameters { tokens };
     let matching_id = matching_chain
@@ -135,7 +160,6 @@ async fn single_transaction() {
                 block.with_operation(matching_id, operation);
             })
             .await;
-
         assert_eq!(order_messages.len(), 3);
         orders_bids.extend(order_messages);
     }
@@ -216,6 +240,27 @@ async fn single_transaction() {
         .expect("order_ids_b");
     assert_eq!(order_ids_b.len(), 2);
 
+    // Checking the balances on chain A
+    for (owner, amount) in [
+        (owner_a, Some(Amount::from_tokens(1))),
+        (owner_b, None),
+    ] {
+        assert_eq!(
+            FungibleTokenAbi::query_account(token_id_a, &fungible_chain_a, owner).await,
+            amount
+        );
+    }
+    // Checking the balances on chain B
+    for (owner, amount) in [
+        (owner_a, None),
+        (owner_b, Some(Amount::from_tokens(1))),
+    ] {
+        assert_eq!(
+            FungibleTokenAbi::query_account(token_id_b, &fungible_chain_b, owner).await,
+            amount
+        );
+    }
+
     // Cancelling the remaining orders
     let mut orders_cancels = Vec::new();
     for (owner, order_ids) in [(owner_a, order_ids_a), (owner_b, order_ids_b)] {
@@ -241,7 +286,7 @@ async fn single_transaction() {
     fungible_chain_a.handle_received_messages().await;
     fungible_chain_b.handle_received_messages().await;
 
-    // Check balances
+    // Check balances on tha matching engine chain
     for (owner, amount) in [
         (owner_a, Amount::from_tokens(3)),
         (owner_b, Amount::from_tokens(6)),
