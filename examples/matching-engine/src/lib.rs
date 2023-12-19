@@ -57,9 +57,30 @@ pub struct Price {
     pub price: u64,
 }
 
-/// We use the custom serialization for the Price so that the order of the serialization
+impl Price {
+    pub fn to_bid(&self) -> PriceBid {
+        PriceBid { price: self.price }
+    }
+    pub fn to_ask(&self) -> PriceAsk {
+        PriceAsk { price: self.price }
+    }
+}
+
+#[derive(Clone, Copy, Debug, SimpleObject, InputObject)]
+#[graphql(input_name = "PriceInput")]
+pub struct PriceAsk {
+    pub price: u64,
+}
+
+impl PriceAsk {
+    pub fn to_price(&self) -> Price {
+        Price { price: self.price }
+    }
+}
+
+/// We use the custom serialization for the PriceAsk so that the order of the serialization
 /// corresponds to the order of the Prices.
-impl CustomSerialize for Price {
+impl CustomSerialize for PriceAsk {
     fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError> {
         let mut short_key = bcs::to_bytes(&self.price)?;
         short_key.reverse();
@@ -69,16 +90,39 @@ impl CustomSerialize for Price {
     fn from_custom_bytes(short_key: &[u8]) -> Result<Self, ViewError> {
         let mut bytes = short_key.to_vec();
         bytes.reverse();
-        let value = bcs::from_bytes(&bytes)?;
-        Ok(value)
+        let price = bcs::from_bytes(&bytes)?;
+        Ok(PriceAsk { price })
     }
 }
 
-impl Price {
-    pub fn revert(&self) -> Self {
-        Price {
-            price: u64::MAX - self.price,
-        }
+#[derive(Clone, Copy, Debug, SimpleObject, InputObject)]
+#[graphql(input_name = "PriceInput")]
+pub struct PriceBid {
+    pub price: u64,
+}
+
+impl PriceBid {
+    pub fn to_price(&self) -> Price {
+        Price { price: self.price }
+    }
+}
+
+/// We use the custom serialization for the PriceAsk so that the order of the serialization
+/// corresponds to the order of the Prices.
+impl CustomSerialize for PriceBid {
+    fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError> {
+        let price_rev = u64::MAX - self.price;
+        let mut short_key = bcs::to_bytes(&price_rev)?;
+        short_key.reverse();
+        Ok(short_key)
+    }
+
+    fn from_custom_bytes(short_key: &[u8]) -> Result<Self, ViewError> {
+        let mut bytes = short_key.to_vec();
+        bytes.reverse();
+        let price_rev = bcs::from_bytes::<u64>(&bytes)?;
+        let price = u64::MAX - price_rev;
+        Ok(PriceBid { price })
     }
 }
 
@@ -153,4 +197,46 @@ pub enum Message {
 pub enum ApplicationCall {
     /// The order from the application
     ExecuteOrder { order: Order },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PriceAsk, PriceBid};
+    use linera_sdk::views::CustomSerialize;
+    use webassembly_test::webassembly_test;
+
+    #[webassembly_test]
+    fn test_ordering_serialization() {
+        let n = 20;
+        let mut vec = Vec::new();
+        let mut val = 1;
+        for _ in 0..n {
+            val *= 3;
+            vec.push(val);
+        }
+        for i in 1..vec.len() {
+            let val1 = vec[i - 1];
+            let val2 = vec[i];
+            assert!(val1 < val2);
+            let price_ask1 = PriceAsk { price: val1 };
+            let price_ask2 = PriceAsk { price: val2 };
+            let price_bid1 = PriceBid { price: val1 };
+            let price_bid2 = PriceBid { price: val2 };
+            let ser_ask1 = price_ask1.to_custom_bytes().unwrap();
+            let ser_ask2 = price_ask2.to_custom_bytes().unwrap();
+            let ser_bid1 = price_bid1.to_custom_bytes().unwrap();
+            let ser_bid2 = price_bid2.to_custom_bytes().unwrap();
+            assert!(ser_ask1 < ser_ask2);
+            assert!(ser_bid1 > ser_bid2);
+
+            let price_ask1_back = PriceAsk::from_custom_bytes(&ser_ask1).unwrap();
+            let price_ask2_back = PriceAsk::from_custom_bytes(&ser_ask2).unwrap();
+            let price_bid1_back = PriceBid::from_custom_bytes(&ser_bid1).unwrap();
+            let price_bid2_back = PriceBid::from_custom_bytes(&ser_bid2).unwrap();
+            assert_eq!(price_ask1.price, price_ask1_back.price);
+            assert_eq!(price_ask2.price, price_ask2_back.price);
+            assert_eq!(price_bid1.price, price_bid1_back.price);
+            assert_eq!(price_bid2.price, price_bid2_back.price);
+        }
+    }
 }

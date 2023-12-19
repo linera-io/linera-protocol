@@ -19,6 +19,9 @@ fungible = { workspace = true, features = ["test"] }
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 tokio = { workspace = true }
 
+[dev-dependencies]
+webassembly-test = { workspace = true }
+
 [[bin]]
 name = "matching_engine_contract"
 path = "src/contract.rs"
