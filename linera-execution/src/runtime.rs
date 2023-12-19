@@ -562,13 +562,10 @@ where
         let mut code = code.instantiate_with_actor_runtime(runtime_sender)?;
         let value_future =
             tokio::task::spawn_blocking(move || code.handle_query(query_context, argument));
-        // TODO(#989): Simplify after message failures are not ignored.
-        let runtime_result = runtime_actor.run().await;
-        let value = value_future.await;
+        runtime_actor.run().await?;
+        let value = value_future.await??;
         self.applications_mut().pop();
-
-        runtime_result?;
-        value?
+        Ok(value)
     }
 }
 
@@ -707,12 +704,9 @@ where
         let raw_result_future = tokio::task::spawn_blocking(move || {
             code.handle_application_call(callee_context, argument, forwarded_sessions)
         });
-        // TODO(#989): Simplify after message failures are not ignored.
-        let runtime_result = runtime_actor.run().await;
-        let raw_result = raw_result_future.await;
+        runtime_actor.run().await?;
+        let raw_result = raw_result_future.await??;
         self.applications_mut().pop();
-        runtime_result?;
-        let raw_result = raw_result??;
 
         // Interpret the results of the call.
         self.execution_results_mut().push(ExecutionResult::User(
@@ -771,12 +765,9 @@ where
         let raw_result_future = tokio::task::spawn_blocking(move || {
             code.handle_session_call(callee_context, session_state, argument, forwarded_sessions)
         });
-        // TODO(#989): Simplify after message failures are not ignored.
-        let runtime_result = runtime_actor.run().await;
-        let raw_result = raw_result_future.await;
+        runtime_actor.run().await?;
+        let (raw_result, session_state) = raw_result_future.await??;
         self.applications_mut().pop();
-        runtime_result?;
-        let (raw_result, session_state) = raw_result??;
 
         // Interpret the results of the call.
         if raw_result.close_session {

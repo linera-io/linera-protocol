@@ -559,11 +559,10 @@ where
             owner: sender_owner,
         },
     };
-    // TODO(#989): Make user errors fail blocks again.
-    receiver
+    assert!(receiver
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await
-        .unwrap();
+        .is_err());
     receiver.clear_pending_block().await;
 
     // Try another transfer in the other direction with the correct amount.
