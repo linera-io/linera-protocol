@@ -58,6 +58,10 @@ impl<UserData> Instance for EntrypointInstance<UserData> {
     where
         Self: 'a,
         UserData: 'a;
+    type UserDataMutReference<'a> = &'a mut UserData
+    where
+        Self: 'a,
+        UserData: 'a;
 
     fn load_export(&mut self, name: &str) -> Option<Extern> {
         self.instance.get_export(&mut self.store, name)
@@ -65,6 +69,10 @@ impl<UserData> Instance for EntrypointInstance<UserData> {
 
     fn user_data(&self) -> Self::UserDataReference<'_> {
         self.store.data()
+    }
+
+    fn user_data_mut(&mut self) -> Self::UserDataMutReference<'_> {
+        self.store.data_mut()
     }
 }
 
@@ -79,6 +87,10 @@ impl<UserData> Instance for Caller<'_, UserData> {
     where
         Self: 'a,
         UserData: 'a;
+    type UserDataMutReference<'a> = &'a mut UserData
+    where
+        Self: 'a,
+        UserData: 'a;
 
     fn load_export(&mut self, name: &str) -> Option<Extern> {
         Caller::get_export(self, name)
@@ -86,5 +98,9 @@ impl<UserData> Instance for Caller<'_, UserData> {
 
     fn user_data(&self) -> Self::UserDataReference<'_> {
         Caller::data(self)
+    }
+
+    fn user_data_mut(&mut self) -> Self::UserDataMutReference<'_> {
+        Caller::data_mut(self)
     }
 }

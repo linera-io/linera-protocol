@@ -130,12 +130,20 @@ impl<UserData> Instance for EntrypointInstance<UserData> {
     where
         Self::UserData: 'a,
         Self: 'a;
+    type UserDataMutReference<'a> = MutexGuard<'a, UserData>
+    where
+        Self::UserData: 'a,
+        Self: 'a;
 
     fn load_export(&mut self, name: &str) -> Option<Extern> {
         self.instance.load_export(name)
     }
 
     fn user_data(&self) -> Self::UserDataReference<'_> {
+        self.instance.user_data()
+    }
+
+    fn user_data_mut(&mut self) -> Self::UserDataMutReference<'_> {
         self.instance.user_data()
     }
 }
@@ -154,6 +162,10 @@ where
     where
         Self::UserData: 'a,
         Self: 'a;
+    type UserDataMutReference<'a> = MutexGuard<'a, UserData>
+    where
+        Self::UserData: 'a,
+        Self: 'a;
 
     fn load_export(&mut self, name: &str) -> Option<Extern> {
         self.data_mut().load_export(name)
@@ -161,6 +173,10 @@ where
 
     fn user_data(&self) -> Self::UserDataReference<'_> {
         FunctionEnvMut::data(self).user_data()
+    }
+
+    fn user_data_mut(&mut self) -> Self::UserDataMutReference<'_> {
+        FunctionEnvMut::data_mut(self).user_data()
     }
 }
 
