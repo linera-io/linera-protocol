@@ -26,9 +26,8 @@ pub trait View<C>: Sized {
     /// Discards all pending changes. After that `flush` should have no effect to storage.
     fn rollback(&mut self);
 
-    /// Clears the view. That can be seen as resetting to default. In the case of a RegisterView
-    /// this means setting the value to T::default(). For LogView, QueueView, this leaves
-    /// the range data to be left in the database.
+    /// Clears the view. That can be seen as resetting to default. If the clear is followed
+    /// by a flush then all the relevant data is removed on the storage.
     fn clear(&mut self);
 
     /// Persists changes to storage. This leaves the view still usable and is essentially neutral to the
