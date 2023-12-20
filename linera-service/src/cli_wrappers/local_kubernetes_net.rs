@@ -11,11 +11,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
-use futures::{
-    future::{self, join_all},
-    lock::Mutex,
-    FutureExt,
-};
+use futures::{future, lock::Mutex};
 use k8s_openapi::api::core::v1::Pod;
 use kube::{
     api::{Api, ListParams},
@@ -84,24 +80,19 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
             "There should be at least one initial validator"
         );
 
+        let clusters = future::join_all((0..self.num_initial_validators).map(|_| async {
+            KindCluster::create()
+                .await
+                .expect("Creating kind cluster should not fail")
+        }))
+        .await;
+
         let mut net = LocalKubernetesNet::new(
             self.network,
             self.testing_prng_seed,
             self.binaries_dir,
             KubectlInstance::new(Vec::new()),
-            future::ready(
-                (0..self.num_initial_validators)
-                    .map(|_| async {
-                        KindCluster::create()
-                            .await
-                            .expect("Creating kind cluster should not fail")
-                    })
-                    .collect::<Vec<_>>(),
-            )
-            .then(join_all)
-            .await
-            .into_iter()
-            .collect::<Vec<_>>(),
+            clusters,
             self.num_initial_validators,
             self.num_shards,
         )?;
@@ -130,24 +121,19 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
                 let num_validators = 4;
                 let num_shards = 4;
 
+                let clusters = future::join_all((0..num_validators).map(|_| async {
+                    KindCluster::create()
+                        .await
+                        .expect("Creating kind cluster should not fail")
+                }))
+                .await;
+
                 let mut net = LocalKubernetesNet::new(
                     self.network,
                     Some(seed),
                     self.binaries_dir,
                     KubectlInstance::new(Vec::new()),
-                    future::ready(
-                        (0..num_validators)
-                            .map(|_| async {
-                                KindCluster::create()
-                                    .await
-                                    .expect("Creating kind cluster should not fail")
-                            })
-                            .collect::<Vec<_>>(),
-                    )
-                    .then(join_all)
-                    .await
-                    .into_iter()
-                    .collect::<Vec<_>>(),
+                    clusters,
                     num_validators,
                     num_shards,
                 )
