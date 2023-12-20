@@ -28,7 +28,7 @@ pub async fn get_orders(
     let orders = &value["accountInfo"]["entry"]["value"]["orders"];
     let values = orders
         .as_array()?
-        .into_iter()
+        .iter()
         .map(|order| order.as_u64().unwrap())
         .collect();
     Some(values)
