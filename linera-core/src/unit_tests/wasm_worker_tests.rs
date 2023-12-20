@@ -202,7 +202,7 @@ where
         messages: vec![OutgoingMessage {
             destination: broadcast_channel,
             authenticated_signer: None,
-            is_skippable: false,
+            is_skippable: true,
             message: Message::System(broadcast_message.clone()),
         }],
         message_counts: vec![1],
@@ -356,7 +356,7 @@ where
                 height: broadcast_block_height,
                 index: 0,
                 authenticated_signer: None,
-                is_skippable: false,
+                is_skippable: true,
                 timestamp: Timestamp::from(1),
                 message: Message::System(broadcast_message),
             },

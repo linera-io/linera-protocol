@@ -387,7 +387,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
 ///
 /// Sends an operation to the [`TestApplication`] requesting it to fail a cross-application call.
 /// It is then forwarded to the reentrant call, where the cross-application call handler fails and
-/// the execution error should be handled correctly.
+/// the execution error should be handled correctly (without panicking).
 #[tokio::test]
 async fn test_cross_application_error() -> anyhow::Result<()> {
     let owner = Owner::from(PublicKey::debug(0));
@@ -420,8 +420,8 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
     };
     let mut tracker = ResourceTracker::default();
     let policy = ResourceControlPolicy::default();
-    let result = view
-        .execute_operation(
+    assert!(matches!(
+        view.execute_operation(
             context,
             Operation::User {
                 application_id: app_id,
@@ -430,15 +430,9 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
             &policy,
             &mut tracker,
         )
-        .await
-        .unwrap();
-    assert_eq!(
-        result,
-        vec![ExecutionResult::User(
-            app_id,
-            RawExecutionResult::default().with_authenticated_signer(Some(owner))
-        ),]
-    );
+        .await,
+        Err(ExecutionError::UserError(_))
+    ));
 
     Ok(())
 }

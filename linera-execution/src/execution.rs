@@ -213,31 +213,11 @@ where
             }
             UserAction::Message(context, message) => contract.execute_message(context, message),
         });
-        let runtime_result = runtime_actor.run().await;
-        let call_result = call_result_future.await?;
+        runtime_actor.run().await?;
+        let mut call_result = call_result_future.await??;
 
-        // TODO(#989): Make user errors fail blocks again.
-        let mut result = match (runtime_result, call_result) {
-            (Err(ExecutionError::UserError(message)), call_result) => {
-                assert!(matches!(
-                    call_result,
-                    Err(ExecutionError::MissingRuntimeResponse)
-                ));
-                tracing::error!("Ignoring error reported by user application: {message}");
-                RawExecutionResult::default()
-            }
-            (runtime_result, Err(ExecutionError::UserError(message))) => {
-                runtime_result?;
-                tracing::error!("Ignoring error reported by user application: {message}");
-                RawExecutionResult::default()
-            }
-            (runtime_result, call_result) => {
-                runtime_result?;
-                call_result?
-            }
-        };
         // Set the authenticated signer to be used in outgoing messages.
-        result.authenticated_signer = signer;
+        call_result.authenticated_signer = signer;
         let runtime_counts = runtime.runtime_counts();
         let balance = self.system.balance.get_mut();
         tracker.update_limits(balance, policy, runtime_counts)?;
@@ -253,7 +233,7 @@ where
             .registry
             .describe_applications_with_dependencies(vec![application_id], &Default::default())
             .await?;
-        for message in &result.messages {
+        for message in &call_result.messages {
             system_result.messages.push(RawOutgoingMessage {
                 destination: message.destination.clone(),
                 authenticated: false,
@@ -267,7 +247,7 @@ where
             results.push(ExecutionResult::System(system_result));
         }
         // Update externally-visible results.
-        results.push(ExecutionResult::User(application_id, result));
+        results.push(ExecutionResult::User(application_id, call_result));
         // Check that all sessions were properly closed.
         ensure!(
             session_manager.states.is_empty(),
