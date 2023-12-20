@@ -168,6 +168,7 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.was_cleared {
+            self.stored_total_size = SizeData::default();
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Update::Set(value) = update {
@@ -205,13 +206,10 @@ where
         // We could have the scenario where was_cleared is called but
         // stored_total_size = total_size. If the test for was_cleared
         // were absent then we would be a size of 0 down the line.
-        if self.stored_total_size != self.total_size || self.was_cleared {
-            // If the value is 0 and it is cleared then no need to save total_size
-            if self.total_size.sum() > 0 || !self.was_cleared {
-                let key = self.context.base_tag(KeyTag::TotalSize as u8);
-                batch.put_key_value(key, &self.total_size)?;
-                self.stored_total_size = self.total_size;
-            }
+        if self.stored_total_size != self.total_size {
+            let key = self.context.base_tag(KeyTag::TotalSize as u8);
+            batch.put_key_value(key, &self.total_size)?;
+            self.stored_total_size = self.total_size;
         }
         self.was_cleared = false;
         Ok(())
