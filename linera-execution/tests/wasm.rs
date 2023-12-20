@@ -12,10 +12,10 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId},
 };
 use linera_execution::{
-    policy::ResourceControlPolicy, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView,
-    Operation, OperationContext, Query, QueryContext, RawExecutionResult, ResourceTracker,
-    Response, SystemExecutionState, TestExecutionRuntimeContext, WasmContractModule, WasmRuntime,
-    WasmServiceModule,
+    policy::ResourceControlPolicy, ExecutionResult, ExecutionRuntimeConfig,
+    ExecutionRuntimeContext, ExecutionStateView, Operation, OperationContext, Query, QueryContext,
+    RawExecutionResult, ResourceTracker, Response, SystemExecutionState,
+    TestExecutionRuntimeContext, WasmContractModule, WasmRuntime, WasmServiceModule,
 };
 use linera_views::{memory::MemoryContext, views::View};
 use serde_json::json;
@@ -26,14 +26,19 @@ use test_case::test_case;
 /// called correctly and consume the expected amount of fuel.
 ///
 /// To update the bytecode files, run `linera-execution/update_wasm_fixtures.sh`.
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, 29_152; "wasmer"))]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, 29_457; "wasmer_with_sanitizer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, 29_457; "wasmtime"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer, 29_457; "wasmtime_with_sanitizer"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, 29_152, ExecutionRuntimeConfig::Actor; "wasmer_actor"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, 29_457, ExecutionRuntimeConfig::Actor; "wasmer_with_sanitizer_actor"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, 29_457, ExecutionRuntimeConfig::Actor; "wasmtime_actor"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer, 29_457, ExecutionRuntimeConfig::Actor; "wasmtime_with_sanitizer_actor"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, 29_152, ExecutionRuntimeConfig::Synchronous; "wasmer_synchronous"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, 29_457, ExecutionRuntimeConfig::Synchronous; "wasmer_with_sanitizer_synchronous"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, 29_457, ExecutionRuntimeConfig::Synchronous; "wasmtime_synchronous"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer, 29_457, ExecutionRuntimeConfig::Synchronous; "wasmtime_with_sanitizer_synchronous"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_fuel_for_counter_wasm_application(
     wasm_runtime: WasmRuntime,
     expected_fuel: u64,
+    execution_runtime_config: ExecutionRuntimeConfig,
 ) -> anyhow::Result<()> {
     let state = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
@@ -42,7 +47,7 @@ async fn test_fuel_for_counter_wasm_application(
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
             state,
-            Default::default(),
+            execution_runtime_config,
         )
         .await;
     let app_desc = create_dummy_user_application_description();

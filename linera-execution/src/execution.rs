@@ -6,10 +6,12 @@ use crate::{
     resources::{ResourceTracker, RuntimeLimits},
     runtime::{ApplicationStatus, ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
-    ExecutionError, ExecutionResult, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
-    MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
-    RawOutgoingMessage, Response, SystemMessage, UserApplicationDescription, UserApplicationId,
+    ContractSyncRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeConfig,
+    ExecutionRuntimeContext, Message, MessageContext, Operation, OperationContext, Query,
+    QueryContext, RawExecutionResult, RawOutgoingMessage, Response, ServiceSyncRuntime,
+    SystemMessage, UserApplicationDescription, UserApplicationId,
 };
+use futures::StreamExt;
 use linera_base::{
     ensure,
     identifiers::{ChainId, Owner},
@@ -143,14 +145,14 @@ where
     }
 }
 
-enum UserAction {
+pub enum UserAction {
     Initialize(OperationContext, Vec<u8>),
     Operation(OperationContext, Vec<u8>),
     Message(MessageContext, Vec<u8>),
 }
 
 impl UserAction {
-    fn signer(&self) -> Option<Owner> {
+    pub(crate) fn signer(&self) -> Option<Owner> {
         use UserAction::*;
         match self {
             Initialize(context, _) => context.authenticated_signer,
@@ -167,6 +169,40 @@ where
     C::Extra: ExecutionRuntimeContext,
 {
     async fn run_user_action(
+        &mut self,
+        application_id: UserApplicationId,
+        chain_id: ChainId,
+        action: UserAction,
+        policy: &ResourceControlPolicy,
+        tracker: &mut ResourceTracker,
+    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
+        let execution_results = match self.context().extra().execution_runtime_config() {
+            ExecutionRuntimeConfig::Actor => {
+                self.run_user_action_with_actor_runtime(
+                    application_id,
+                    chain_id,
+                    action,
+                    policy,
+                    tracker,
+                )
+                .await?
+            }
+            ExecutionRuntimeConfig::Synchronous => {
+                self.run_user_action_with_synchronous_runtime(
+                    application_id,
+                    chain_id,
+                    action,
+                    policy,
+                    tracker,
+                )
+                .await?
+            }
+        };
+        self.update_execution_results_with_app_registrations(execution_results)
+            .await
+    }
+
+    async fn run_user_action_with_actor_runtime(
         &mut self,
         application_id: UserApplicationId,
         chain_id: ChainId,
@@ -210,7 +246,7 @@ where
         // Make the call to user code.
         let (runtime_actor, runtime_sender) = runtime.contract_runtime_actor();
         let mut contract = contract.instantiate_with_actor_runtime(runtime_sender)?;
-        let call_result_future = tokio::task::spawn_blocking(move || match action {
+        let execution_result_future = tokio::task::spawn_blocking(move || match action {
             UserAction::Initialize(context, argument) => contract.initialize(context, argument),
             UserAction::Operation(context, operation) => {
                 contract.execute_operation(context, operation)
@@ -218,10 +254,10 @@ where
             UserAction::Message(context, message) => contract.execute_message(context, message),
         });
         runtime_actor.run().await?;
-        let mut call_result = call_result_future.await??;
+        let mut execution_result = execution_result_future.await??;
 
         // Set the authenticated signer to be used in outgoing messages.
-        call_result.authenticated_signer = signer;
+        execution_result.authenticated_signer = signer;
         let runtime_counts = runtime.runtime_counts().await;
         let balance = self.system.balance.get_mut();
         tracker.update_limits(balance, policy, runtime_counts)?;
@@ -229,15 +265,66 @@ where
         // Check that applications were correctly stacked and unstacked.
         assert_eq!(applications.len(), 1);
         assert_eq!(applications[0].id, application_id);
-        // Make sure to declare the application first for all recipients of the user
-        // execution result.
+
+        // Update externally-visible results.
+        results.push(ExecutionResult::User(application_id, execution_result));
+        // Check that all sessions were properly closed.
+        ensure!(
+            session_manager.states.is_empty(),
+            ExecutionError::SessionWasNotClosed
+        );
+        Ok(results)
+    }
+
+    async fn run_user_action_with_synchronous_runtime(
+        &mut self,
+        application_id: UserApplicationId,
+        chain_id: ChainId,
+        action: UserAction,
+        policy: &ResourceControlPolicy,
+        tracker: &mut ResourceTracker,
+    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
+        let balance = self.system.balance.get();
+        let runtime_limits = tracker.limits(policy, balance);
+        let initial_remaining_fuel = policy.remaining_fuel(*balance);
+        let (execution_state_sender, mut execution_state_receiver) =
+            futures::channel::mpsc::unbounded();
+        let execution_results_future = tokio::task::spawn_blocking(move || {
+            ContractSyncRuntime::run_action(
+                execution_state_sender,
+                application_id,
+                chain_id,
+                runtime_limits,
+                initial_remaining_fuel,
+                action,
+            )
+        });
+        while let Some(request) = execution_state_receiver.next().await {
+            self.handle_request(request).await?;
+        }
+        let (execution_results, runtime_counts) = execution_results_future.await??;
+        let balance = self.system.balance.get_mut();
+        tracker.update_limits(balance, policy, runtime_counts)?;
+        Ok(execution_results)
+    }
+
+    async fn update_execution_results_with_app_registrations(
+        &self,
+        mut results: Vec<ExecutionResult>,
+    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
+        // TODO: It looks like we are forgetting about messages by early entries in `results`.
+        let Some(ExecutionResult::User(application_id, result)) = results.last() else {
+            return Ok(results);
+        };
+        // Make sure to declare applications before recipients execute messages produced
+        // by the user execution results.
         let mut system_result = RawExecutionResult::default();
         let applications = self
             .system
             .registry
-            .describe_applications_with_dependencies(vec![application_id], &Default::default())
+            .describe_applications_with_dependencies(vec![*application_id], &Default::default())
             .await?;
-        for message in &call_result.messages {
+        for message in &result.messages {
             system_result.messages.push(RawOutgoingMessage {
                 destination: message.destination.clone(),
                 authenticated: false,
@@ -248,15 +335,8 @@ where
             });
         }
         if !system_result.messages.is_empty() {
-            results.push(ExecutionResult::System(system_result));
+            results.insert(0, ExecutionResult::System(system_result));
         }
-        // Update externally-visible results.
-        results.push(ExecutionResult::User(application_id, call_result));
-        // Check that all sessions were properly closed.
-        ensure!(
-            session_manager.states.is_empty(),
-            ExecutionError::SessionWasNotClosed
-        );
         Ok(results)
     }
 
@@ -349,50 +429,86 @@ where
                 application_id,
                 bytes,
             } => {
-                // Load the service.
-                let description = self
-                    .system
-                    .registry
-                    .describe_application(application_id)
-                    .await?;
-                let service = self
-                    .context()
-                    .extra()
-                    .get_user_service(&description)
-                    .await?;
-                // Create the execution runtime for this transaction.
-                let mut session_manager = SessionManager::default();
-                let mut results = Vec::new();
-                let mut applications = vec![ApplicationStatus {
-                    id: application_id,
-                    parameters: description.parameters,
-                    signer: None,
-                }];
-                let runtime_limits = RuntimeLimits::default();
-                let remaining_fuel = 0;
-                let runtime = ExecutionRuntime::new(
-                    context.chain_id,
-                    &mut applications,
-                    self,
-                    &mut session_manager,
-                    &mut results,
-                    remaining_fuel,
-                    runtime_limits,
-                );
-                let (runtime_actor, runtime_sender) = runtime.service_runtime_actor();
-                let mut service = service.instantiate_with_actor_runtime(runtime_sender)?;
-                // Run the query.
-                let response_future =
-                    tokio::task::spawn_blocking(move || service.handle_query(context, bytes));
-                runtime_actor.run().await?;
-                let response = response_future.await??;
-
-                // Check that applications were correctly stacked and unstacked.
-                assert_eq!(applications.len(), 1);
-                assert_eq!(applications[0].id, application_id);
+                let response = match self.context().extra().execution_runtime_config() {
+                    ExecutionRuntimeConfig::Actor => {
+                        self.query_application_with_actor_runtime(application_id, context, bytes)
+                            .await?
+                    }
+                    ExecutionRuntimeConfig::Synchronous => {
+                        self.query_application_with_sync_runtime(application_id, context, bytes)
+                            .await?
+                    }
+                };
                 Ok(Response::User(response))
             }
         }
+    }
+
+    async fn query_application_with_actor_runtime(
+        &mut self,
+        application_id: UserApplicationId,
+        context: QueryContext,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        // Load the service.
+        let description = self
+            .system
+            .registry
+            .describe_application(application_id)
+            .await?;
+        let service = self
+            .context()
+            .extra()
+            .get_user_service(&description)
+            .await?;
+        // Create the execution runtime for this transaction.
+        let mut session_manager = SessionManager::default();
+        let mut results = Vec::new();
+        let mut applications = vec![ApplicationStatus {
+            id: application_id,
+            parameters: description.parameters,
+            signer: None,
+        }];
+        let runtime_limits = RuntimeLimits::default();
+        let remaining_fuel = 0;
+        let runtime = ExecutionRuntime::new(
+            context.chain_id,
+            &mut applications,
+            self,
+            &mut session_manager,
+            &mut results,
+            remaining_fuel,
+            runtime_limits,
+        );
+        let (runtime_actor, runtime_sender) = runtime.service_runtime_actor();
+        let mut service = service.instantiate_with_actor_runtime(runtime_sender)?;
+        // Run the query.
+        let response_future =
+            tokio::task::spawn_blocking(move || service.handle_query(context, query));
+        runtime_actor.run().await?;
+        let response = response_future.await??;
+
+        // Check that applications were correctly stacked and unstacked.
+        assert_eq!(applications.len(), 1);
+        assert_eq!(applications[0].id, application_id);
+        Ok(response)
+    }
+
+    async fn query_application_with_sync_runtime(
+        &mut self,
+        application_id: UserApplicationId,
+        context: QueryContext,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        let (execution_state_sender, mut execution_state_receiver) =
+            futures::channel::mpsc::unbounded();
+        let query_result_future = tokio::task::spawn_blocking(move || {
+            ServiceSyncRuntime::run_query(execution_state_sender, application_id, context, query)
+        });
+        while let Some(request) = execution_state_receiver.next().await {
+            self.handle_request(request).await?;
+        }
+        query_result_future.await?
     }
 
     pub async fn list_applications(

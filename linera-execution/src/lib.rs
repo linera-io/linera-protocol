@@ -6,16 +6,21 @@
 mod applications;
 pub mod committee;
 mod execution;
+mod execution_state_actor;
 mod graphql;
 mod ownership;
 pub mod policy;
 mod resources;
 mod runtime;
 pub mod runtime_actor;
+mod sync_runtime;
 pub mod system;
 mod wasm;
 
-pub use crate::runtime_actor::{ContractActorRuntime, ServiceActorRuntime};
+pub use crate::{
+    runtime_actor::{ContractActorRuntime, ServiceActorRuntime},
+    sync_runtime::{ContractSyncRuntime, ServiceSyncRuntime},
+};
 pub use applications::{
     ApplicationRegistryView, BytecodeLocation, GenericApplicationId, UserApplicationDescription,
     UserApplicationId,
@@ -67,6 +72,11 @@ pub trait UserContractModule {
         &self,
         runtime: ContractActorRuntime,
     ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError>;
+
+    fn instantiate_with_sync_runtime(
+        &self,
+        runtime: ContractSyncRuntime,
+    ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError>;
 }
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
@@ -74,6 +84,11 @@ pub trait UserServiceModule {
     fn instantiate_with_actor_runtime(
         &self,
         runtime: ServiceActorRuntime,
+    ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError>;
+
+    fn instantiate_with_sync_runtime(
+        &self,
+        runtime: ServiceSyncRuntime,
     ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError>;
 }
 
@@ -114,11 +129,13 @@ pub enum ExecutionError {
     InvalidSession,
     #[error("Attempted to call or forward an active session")]
     SessionIsInUse,
+    #[error("Attempted to get a session that is not locked")]
+    SessionStateNotLocked,
     #[error("Session is not accessible by this owner")]
     InvalidSessionOwner,
     #[error("Attempted to call an application while the state is locked")]
     ApplicationIsInUse,
-    #[error("Attempted to get an entry that is not locked")]
+    #[error("Attempted to read an application state that is not locked")]
     ApplicationStateNotLocked,
     #[error("Pricing error: {0}")]
     PricingError(#[from] PricingError),
@@ -458,6 +475,16 @@ pub trait BaseRuntime {
 
 pub trait ServiceRuntime: BaseRuntime {
     type TryQueryApplication: fmt::Debug + Send;
+
+    /// Queries another application.
+    fn try_query_application(
+        &mut self,
+        queried_id: UserApplicationId,
+        argument: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        let promise = self.try_query_application_new(queried_id, argument)?;
+        self.try_query_application_wait(&promise)
+    }
 
     /// Queries another application (new).
     fn try_query_application_new(
