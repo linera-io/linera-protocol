@@ -107,7 +107,11 @@ impl Contract for MatchingEngine {
         match argument {
             ApplicationCall::ExecuteOrder { order } => {
                 let owner = Self::get_owner(&order);
-                Self::check_account_authentication(context.authenticated_caller_id, context.authenticated_signer, owner)?;
+                Self::check_account_authentication(
+                    context.authenticated_caller_id,
+                    context.authenticated_signer,
+                    owner,
+                )?;
                 if context.chain_id == system_api::current_application_id().creation.chain_id {
                     self.execute_order_local(order).await?;
                 } else {
@@ -135,9 +139,18 @@ impl MatchingEngine {
     /// Get the owner from the order
     fn get_owner(order: &Order) -> AccountOwner {
         match order {
-            Order::Insert { owner, amount: _, nature: _, price: _ } => owner.clone(),
-            Order::Cancel { owner, order_id: _ } => owner.clone(),
-            Order::Modify { owner, order_id: _, cancel_amount: _ } => owner.clone(),
+            Order::Insert {
+                owner,
+                amount: _,
+                nature: _,
+                price: _,
+            } => *owner,
+            Order::Cancel { owner, order_id: _ } => *owner,
+            Order::Modify {
+                owner,
+                order_id: _,
+                cancel_amount: _,
+            } => *owner,
         }
     }
 

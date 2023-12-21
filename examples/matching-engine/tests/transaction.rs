@@ -248,7 +248,10 @@ async fn single_transaction() {
 
     // Cancelling the remaining orders
     let mut orders_cancels = Vec::new();
-    for (owner, user_chain, order_ids) in [(owner_a, &user_chain_a, order_ids_a), (owner_b, &user_chain_b, order_ids_b)] {
+    for (owner, user_chain, order_ids) in [
+        (owner_a, &user_chain_a, order_ids_a),
+        (owner_b, &user_chain_b, order_ids_b),
+    ] {
         for order_id in order_ids {
             let order = Order::Cancel { owner, order_id };
             let operation = Operation::ExecuteOrder { order };
