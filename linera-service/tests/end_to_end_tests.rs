@@ -921,12 +921,18 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     // Now cancelling all the orders
     for order_id in order_ids_a {
         app_matching_a
-            .order(matching_engine::Order::Cancel { owner: owner_a, order_id })
+            .order(matching_engine::Order::Cancel {
+                owner: owner_a,
+                order_id,
+            })
             .await;
     }
     for order_id in order_ids_b {
         app_matching_b
-            .order(matching_engine::Order::Cancel { owner: owner_b, order_id })
+            .order(matching_engine::Order::Cancel {
+                owner: owner_b,
+                order_id,
+            })
             .await;
     }
     node_service_admin
