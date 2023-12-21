@@ -919,12 +919,15 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     assert_eq!(order_ids_b.len(), 2); // The order of price 2 is partially filled.
 
     // Now cancelling all the orders
-    for (owner, order_ids) in [(owner_a, order_ids_a), (owner_b, order_ids_b)] {
-        for order_id in order_ids {
-            app_matching_admin
-                .order(matching_engine::Order::Cancel { owner, order_id })
-                .await;
-        }
+    for order_id in order_ids_a {
+        app_matching_a
+            .order(matching_engine::Order::Cancel { owner: owner_a, order_id })
+            .await;
+    }
+    for order_id in order_ids_b {
+        app_matching_b
+            .order(matching_engine::Order::Cancel { owner: owner_b, order_id })
+            .await;
     }
     node_service_admin
         .process_inbox(&chain_admin)
