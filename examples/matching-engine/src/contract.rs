@@ -14,7 +14,7 @@ use std::cmp::min;
 use async_trait::async_trait;
 use fungible::{Account, AccountOwner, Destination, FungibleTokenAbi};
 use linera_sdk::{
-    base::{Amount, ApplicationId, SessionId, WithContractAbi},
+    base::{Amount, ApplicationId, Owner, SessionId, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
     OperationContext, OutgoingMessage, SessionCallResult, ViewStateStorage,
@@ -62,6 +62,8 @@ impl Contract for MatchingEngine {
         let mut result = ExecutionResult::default();
         match operation {
             Operation::ExecuteOrder { order } => {
+                let owner = Self::get_owner(&order);
+                Self::check_account_authentication(None, context.authenticated_signer, owner)?;
                 if context.chain_id == system_api::current_application_id().creation.chain_id {
                     self.execute_order_local(order).await?;
                 } else {
@@ -84,6 +86,8 @@ impl Contract for MatchingEngine {
         );
         match message {
             Message::ExecuteOrder { order } => {
+                let owner = Self::get_owner(&order);
+                Self::check_account_authentication(None, context.authenticated_signer, owner)?;
                 self.execute_order_local(order).await?;
             }
         }
@@ -102,6 +106,12 @@ impl Contract for MatchingEngine {
         let mut result = ApplicationCallResult::default();
         match argument {
             ApplicationCall::ExecuteOrder { order } => {
+                let owner = Self::get_owner(&order);
+                Self::check_account_authentication(
+                    context.authenticated_caller_id,
+                    context.authenticated_signer,
+                    owner,
+                )?;
                 if context.chain_id == system_api::current_application_id().creation.chain_id {
                     self.execute_order_local(order).await?;
                 } else {
@@ -126,6 +136,37 @@ impl Contract for MatchingEngine {
 }
 
 impl MatchingEngine {
+    /// Get the owner from the order
+    fn get_owner(order: &Order) -> AccountOwner {
+        match order {
+            Order::Insert {
+                owner,
+                amount: _,
+                nature: _,
+                price: _,
+            } => *owner,
+            Order::Cancel { owner, order_id: _ } => *owner,
+            Order::Modify {
+                owner,
+                order_id: _,
+                cancel_amount: _,
+            } => *owner,
+        }
+    }
+
+    /// authenticate the originator of the message
+    fn check_account_authentication(
+        authenticated_application_id: Option<ApplicationId>,
+        authenticated_signer: Option<Owner>,
+        owner: AccountOwner,
+    ) -> Result<(), MatchingEngineError> {
+        match owner {
+            AccountOwner::User(address) if authenticated_signer == Some(address) => Ok(()),
+            AccountOwner::Application(id) if authenticated_application_id == Some(id) => Ok(()),
+            _ => Err(MatchingEngineError::IncorrectAuthentication),
+        }
+    }
+
     /// The application engine is trading between two tokens. Those tokens are the parameters of the
     /// construction of the exchange and are accessed by index in the system.
     fn fungible_id(token_idx: u32) -> Result<ApplicationId<FungibleTokenAbi>, MatchingEngineError> {
