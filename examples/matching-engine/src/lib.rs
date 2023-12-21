@@ -67,7 +67,7 @@ impl Price {
 }
 
 #[derive(Clone, Copy, Debug, SimpleObject, InputObject)]
-#[graphql(input_name = "PriceInput")]
+#[graphql(input_name = "PriceAskInput")]
 pub struct PriceAsk {
     pub price: u64,
 }
@@ -96,7 +96,7 @@ impl CustomSerialize for PriceAsk {
 }
 
 #[derive(Clone, Copy, Debug, SimpleObject, InputObject)]
-#[graphql(input_name = "PriceInput")]
+#[graphql(input_name = "PriceBidInput")]
 pub struct PriceBid {
     pub price: u64,
 }
