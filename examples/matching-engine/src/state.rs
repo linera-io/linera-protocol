@@ -23,6 +23,10 @@ pub enum MatchingEngineError {
     #[error("Invalid query")]
     InvalidQuery(#[from] serde_json::Error),
 
+    /// Failed authentication
+    #[error("failed authentication")]
+    IncorrectAuthentication,
+
     /// Action can only be executed on the chain that created the matching engine.
     #[error("Action can only be executed on the chain that created the matching engine")]
     MatchingEngineChainOnly,
