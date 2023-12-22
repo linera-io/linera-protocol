@@ -8,7 +8,7 @@ mod wasm;
 use crate::{
     client::{
         client_test_utils::{FaultType, MakeMemoryStorage, StorageBuilder, TestBuilder},
-        ChainClient, ChainClientError, CommunicateAction, MessageAction,
+        ChainClient, ChainClientError, ClientOutcome, CommunicateAction, MessageAction,
     },
     local_node::LocalNodeError,
     node::{
@@ -1645,13 +1645,74 @@ where
     );
     assert_eq!(certificate.round, Round::SingleLeader(0));
 
+    let expected_round = Round::SingleLeader(1);
     builder
-        .check_that_validators_are_in_round(
-            chain_id,
-            BlockHeight::from(1),
-            Round::SingleLeader(1),
-            3,
+        .check_that_validators_are_in_round(chain_id, BlockHeight::from(1), expected_round, 3)
+        .await;
+
+    let round = loop {
+        let manager = client.chain_info().await.unwrap().manager;
+        if manager.leader == Some(Owner::from(pub_key1)) {
+            break manager.current_round;
+        }
+        clock.set(manager.round_timeout);
+        assert!(client.request_leader_timeout().await.is_ok());
+    };
+    let round_number = match round {
+        Round::SingleLeader(round_number) => round_number,
+        round => panic!("Unexpected round {:?}", round),
+    };
+
+    // The other owner is leader now. Trying to submit a block should return `WaitForTimeout`.
+    let result = client
+        .transfer(
+            None,
+            Amount::from(1),
+            Recipient::root(2),
+            UserData::default(),
         )
+        .await
+        .unwrap();
+    let timeout = match result {
+        ClientOutcome::Committed(_) => panic!("Committed a block where we aren't the leader."),
+        ClientOutcome::WaitForTimeout(timeout) => timeout,
+    };
+    assert!(client.request_leader_timeout().await.is_err());
+    clock.set(timeout.timestamp);
+    client.request_leader_timeout().await.unwrap();
+    let expected_round = Round::SingleLeader(round_number + 1);
+    builder
+        .check_that_validators_are_in_round(chain_id, BlockHeight::from(1), expected_round, 3)
+        .await;
+
+    loop {
+        let manager = client.chain_info().await.unwrap().manager;
+        if manager.leader == Some(Owner::from(pub_key0)) {
+            break;
+        }
+        clock.set(manager.round_timeout);
+        assert!(client.request_leader_timeout().await.is_ok());
+    }
+
+    // Now we are the leader, and the transfer should succeed.
+    let _certificate = client
+        .transfer(
+            None,
+            Amount::from_tokens(1),
+            Recipient::root(2),
+            UserData::default(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        client.local_balance().await.unwrap(),
+        Amount::from_tokens(2)
+    );
+
+    let expected_round = Round::SingleLeader(0);
+    builder
+        .check_that_validators_are_in_round(chain_id, BlockHeight::from(2), expected_round, 3)
         .await;
 
     Ok(())
