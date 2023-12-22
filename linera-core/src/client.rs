@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery},
+    data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
     local_node::{LocalNodeClient, LocalNodeError},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
@@ -2129,60 +2129,6 @@ where
             .await
             .read_values_downward(from, limit)
             .await
-    }
-}
-
-/// The outcome of trying to commit a list of operations to the chain.
-#[derive(Debug)]
-pub enum ClientOutcome<T> {
-    /// The operations were committed successfully.
-    Committed(T),
-    /// We are not the round leader and cannot do anything. Try again at the specified time or
-    /// or whenever the round or block height changes.
-    WaitForTimeout(RoundTimeout),
-}
-
-#[derive(Debug)]
-pub struct RoundTimeout {
-    pub timestamp: Timestamp,
-    pub current_round: Round,
-    pub next_block_height: BlockHeight,
-}
-
-impl<T> ClientOutcome<T> {
-    pub fn unwrap(self) -> T {
-        match self {
-            ClientOutcome::Committed(t) => t,
-            ClientOutcome::WaitForTimeout(_) => panic!(),
-        }
-    }
-
-    pub fn expect(self, msg: &'static str) -> T {
-        match self {
-            ClientOutcome::Committed(t) => t,
-            ClientOutcome::WaitForTimeout(_) => panic!("{}", msg),
-        }
-    }
-
-    pub fn map<F, S>(self, f: F) -> ClientOutcome<S>
-    where
-        F: FnOnce(T) -> S,
-    {
-        match self {
-            ClientOutcome::Committed(t) => ClientOutcome::Committed(f(t)),
-            ClientOutcome::WaitForTimeout(timeout) => ClientOutcome::WaitForTimeout(timeout),
-        }
-    }
-
-    #[allow(clippy::result_large_err)]
-    fn try_map<F, S>(self, f: F) -> Result<ClientOutcome<S>, ChainClientError>
-    where
-        F: FnOnce(T) -> Result<S, ChainClientError>,
-    {
-        match self {
-            ClientOutcome::Committed(t) => Ok(ClientOutcome::Committed(f(t)?)),
-            ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
-        }
     }
 }
 

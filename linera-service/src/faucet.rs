@@ -11,7 +11,8 @@ use linera_base::{
     identifiers::{ChainId, MessageId},
 };
 use linera_core::{
-    client::{ChainClient, ChainClientError, ClientOutcome},
+    client::{ChainClient, ChainClientError},
+    data_types::ClientOutcome,
     node::ValidatorNodeProvider,
 };
 use linera_execution::{committee::ValidatorName, ChainOwnership};

@@ -28,7 +28,8 @@ use linera_base::{
 };
 use linera_chain::{data_types::HashedValue, ChainStateView};
 use linera_core::{
-    client::{ChainClient, ChainClientError, ClientOutcome, RoundTimeout},
+    client::{ChainClient, ChainClientError},
+    data_types::{ClientOutcome, RoundTimeout},
     node::{NotificationStream, ValidatorNodeProvider},
     worker::{Notification, Reason},
 };

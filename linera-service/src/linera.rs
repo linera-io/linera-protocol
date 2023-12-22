@@ -14,8 +14,8 @@ use linera_base::{
 };
 use linera_chain::data_types::{Certificate, CertificateValue, ExecutedBlock};
 use linera_core::{
-    client::{ChainClient, ChainClientBuilder, ClientOutcome},
-    data_types::ChainInfoQuery,
+    client::{ChainClient, ChainClientBuilder},
+    data_types::{ChainInfoQuery, ClientOutcome},
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, ValidatorNodeProvider},
     notifier::Notifier,
