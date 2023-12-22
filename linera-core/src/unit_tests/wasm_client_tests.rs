@@ -84,6 +84,7 @@ where
     let cert = creator
         .subscribe_to_published_bytecodes(publisher.chain_id)
         .await
+        .unwrap()
         .unwrap();
     publisher.receive_certificate(cert).await.unwrap();
     publisher.process_inbox().await.unwrap();
@@ -96,6 +97,7 @@ where
             Bytecode::load_from_file(service_path).await?,
         )
         .await
+        .unwrap()
         .unwrap();
     let bytecode_id = bytecode_id.with_abi::<counter::CounterAbi>();
     // Receive our own cert to broadcast the bytecode location.
@@ -113,6 +115,7 @@ where
     let (application_id, _) = creator
         .create_application(bytecode_id, &(), &initial_value, vec![])
         .await
+        .unwrap()
         .unwrap();
 
     let increment = 5_u64;
@@ -210,6 +213,7 @@ where
     let cert = creator
         .subscribe_to_published_bytecodes(publisher.chain_id)
         .await
+        .unwrap()
         .unwrap();
     publisher.receive_certificate(cert).await.unwrap();
     publisher.process_inbox().await.unwrap();
@@ -224,6 +228,7 @@ where
             )
             .await
             .unwrap()
+            .unwrap()
     };
     let bytecode_id1 = bytecode_id1.with_abi::<counter::CounterAbi>();
     let (bytecode_id2, cert2) = {
@@ -235,6 +240,7 @@ where
                 Bytecode::load_from_file(service_path).await?,
             )
             .await
+            .unwrap()
             .unwrap()
     };
     let bytecode_id2 = bytecode_id2.with_abi::<meta_counter::MetaCounterAbi>();
@@ -250,6 +256,7 @@ where
     let (application_id1, _) = creator
         .create_application(bytecode_id1, &(), &initial_value, vec![])
         .await
+        .unwrap()
         .unwrap();
     let (application_id2, _) = creator
         .create_application(
@@ -259,12 +266,14 @@ where
             vec![application_id1.forget_abi()],
         )
         .await
+        .unwrap()
         .unwrap();
 
     let increment = 5_u64;
     let cert = creator
         .execute_operation(Operation::user(application_id2, &(receiver_id, increment))?)
         .await
+        .unwrap()
         .unwrap();
 
     receiver.receive_certificate(cert).await.unwrap();
@@ -343,6 +352,7 @@ where
     let cert = creator
         .subscribe_to_published_bytecodes(publisher.chain_id)
         .await
+        .unwrap()
         .unwrap();
     publisher.receive_certificate(cert).await.unwrap();
     publisher.process_inbox().await.unwrap();
@@ -358,6 +368,7 @@ where
             )
             .await
             .unwrap()
+            .unwrap()
     };
     let bytecode_id = bytecode_id.with_abi::<reentrant_counter::ReentrantCounterAbi>();
     // Receive our own certificate to broadcast the bytecode locations.
@@ -371,12 +382,14 @@ where
     let (application_id, _) = creator
         .create_application(bytecode_id, &(), &initial_value, vec![])
         .await
+        .unwrap()
         .unwrap();
 
     let increment = 51_u64;
     let certificate = creator
         .execute_operation(Operation::user(application_id, &increment)?)
         .await
+        .unwrap()
         .unwrap();
     creator.receive_certificate(certificate).await.unwrap();
 
@@ -450,7 +463,9 @@ where
                 Bytecode::load_from_file(contract_path).await?,
                 Bytecode::load_from_file(service_path).await?,
             )
-            .await?
+            .await
+            .unwrap()
+            .unwrap()
     };
     let bytecode_id = bytecode_id.with_abi::<fungible::FungibleTokenAbi>();
 
@@ -467,7 +482,9 @@ where
     let params = fungible::Parameters::new("FUN");
     let (application_id, _cert) = sender
         .create_application(bytecode_id, &params, &state, vec![])
-        .await?;
+        .await
+        .unwrap()
+        .unwrap();
 
     // Make a transfer using the fungible app.
     let transfer = fungible::Operation::Transfer {
@@ -480,7 +497,9 @@ where
     };
     let cert = sender
         .execute_operation(Operation::user(application_id, &transfer)?)
-        .await?;
+        .await
+        .unwrap()
+        .unwrap();
 
     let messages = cert.value().messages().unwrap();
     {
@@ -500,7 +519,7 @@ where
     }
     receiver.synchronize_from_validators().await.unwrap();
     receiver.receive_certificate(cert).await.unwrap();
-    let certs = receiver.process_inbox().await.unwrap();
+    let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let messages = match certs[0].value() {
         CertificateValue::ConfirmedBlock { executed_block, .. } => {
@@ -528,10 +547,12 @@ where
     };
     let cert = sender
         .execute_operation(Operation::user(application_id, &transfer)?)
-        .await?;
+        .await
+        .unwrap()
+        .unwrap();
 
-    receiver.receive_certificate(cert).await?;
-    let certs = receiver.process_inbox().await?;
+    receiver.receive_certificate(cert).await.unwrap();
+    let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let messages = match certs[0].value() {
         CertificateValue::ConfirmedBlock { executed_block, .. } => {
@@ -643,7 +664,9 @@ where
                 Bytecode::load_from_file(contract_path).await?,
                 Bytecode::load_from_file(service_path).await?,
             )
-            .await?
+            .await
+            .unwrap()
+            .unwrap()
     };
     let bytecode_id = bytecode_id.with_abi::<social::SocialAbi>();
 
@@ -656,13 +679,17 @@ where
 
     let (application_id, _cert) = receiver
         .create_application(bytecode_id, &(), &(), vec![])
-        .await?;
+        .await
+        .unwrap()
+        .unwrap();
 
     // Request to subscribe to the sender.
     let request_subscribe = social::Operation::RequestSubscribe(sender.chain_id());
     let cert = receiver
         .execute_operation(Operation::user(application_id, &request_subscribe)?)
-        .await?;
+        .await
+        .unwrap()
+        .unwrap();
 
     // Subscribe the receiver. This also registers the application.
     sender.synchronize_from_validators().await.unwrap();
@@ -674,10 +701,12 @@ where
     let post = social::Operation::Post(text.clone());
     let cert = sender
         .execute_operation(Operation::user(application_id, &post)?)
-        .await?;
+        .await
+        .unwrap()
+        .unwrap();
 
-    receiver.receive_certificate(cert.clone()).await?;
-    let certs = receiver.process_inbox().await?;
+    receiver.receive_certificate(cert.clone()).await.unwrap();
+    let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
 
     // There should be a message receiving the new post.
@@ -711,7 +740,9 @@ where
     let request_unsubscribe = social::Operation::RequestUnsubscribe(sender.chain_id());
     let cert = receiver
         .execute_operation(Operation::user(application_id, &request_unsubscribe)?)
-        .await?;
+        .await
+        .unwrap()
+        .unwrap();
 
     // Unsubscribe the receiver.
     sender.synchronize_from_validators().await.unwrap();
@@ -722,18 +753,21 @@ where
     let post = social::Operation::Post("Nobody will read this!".to_string());
     let cert = sender
         .execute_operation(Operation::user(application_id, &post)?)
-        .await?;
+        .await
+        .unwrap()
+        .unwrap();
 
     // The post will not be received by the unsubscribed chain.
-    receiver.receive_certificate(cert).await?;
-    let certs = receiver.process_inbox().await?;
+    receiver.receive_certificate(cert).await.unwrap();
+    let certs = receiver.process_inbox().await.unwrap().0;
     assert!(certs.is_empty());
 
     // There is still only one post it can see.
     let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
     let posts = receiver
         .query_user_application(application_id, &query)
-        .await?;
+        .await
+        .unwrap();
     let expected = async_graphql::Response::new(
         async_graphql::Value::from_json(json!({
             "receivedPosts": {

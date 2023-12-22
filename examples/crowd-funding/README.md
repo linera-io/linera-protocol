@@ -118,7 +118,7 @@ APP_ID_0=$(linera --with-wallet 0 project publish-and-create \
            --json-parameters "{ \"ticker_symbol\": \"FUN\" }")
 
 # Wait for it to fully complete
-sleep 8
+sleep 12
 ```
 
 We will remember the application ID for the newly created token as `$APP_ID_0`.
@@ -139,7 +139,7 @@ APP_ID_1=$(linera --with-wallet 0 \
            --json-parameters '"'"$APP_ID_0"'"')
 
 # Wait for it to fully complete
-sleep 5
+sleep 12
 ```
 
 ## Interacting with the campaign
@@ -150,12 +150,12 @@ First, a node service has to be started for each wallet, using two different por
 linera --with-wallet 0 service --port 8080 &
 
 # Wait for it to fully complete
-sleep 2
+sleep 5
 
 linera --with-wallet 1 service --port 8081 &
 
 # Wait for it to fully complete
-sleep 2
+sleep 5
 ```
 
 Point your browser to http://localhost:8080, and enter the query:

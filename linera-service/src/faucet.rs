@@ -11,7 +11,7 @@ use linera_base::{
     identifiers::{ChainId, MessageId},
 };
 use linera_core::{
-    client::{ChainClient, ChainClientError},
+    client::{ChainClient, ChainClientError, ClientOutcome},
     node::ValidatorNodeProvider,
 };
 use linera_execution::{committee::ValidatorName, ChainOwnership};
@@ -147,7 +147,16 @@ where
         }
 
         let ownership = ChainOwnership::single(public_key);
-        let (message_id, certificate) = client.open_chain(ownership, self.amount).await?;
+        let (message_id, certificate) = match client.open_chain(ownership, self.amount).await? {
+            ClientOutcome::Committed(result) => result,
+            ClientOutcome::WaitForTimeout(timeout) => {
+                return Err(Error::new(format!(
+                    "This faucet is using a multi-owner chain and is not the leader right now. \
+                    try again at {}",
+                    timeout.timestamp,
+                )));
+            }
+        };
         let chain_id = ChainId::child(message_id);
         Ok(ClaimOutcome {
             message_id,

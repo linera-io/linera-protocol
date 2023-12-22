@@ -6,7 +6,7 @@ use anyhow::{anyhow, bail, Context, Error};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
-use futures::{lock::Mutex, StreamExt};
+use futures::{lock::Mutex, Future, StreamExt};
 use linera_base::{
     crypto::{CryptoHash, CryptoRng, KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, Timestamp},
@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_chain::data_types::{Certificate, CertificateValue, ExecutedBlock};
 use linera_core::{
-    client::{ChainClient, ChainClientBuilder},
+    client::{ChainClient, ChainClientBuilder, ClientOutcome},
     data_types::ChainInfoQuery,
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, ValidatorNodeProvider},
@@ -40,7 +40,7 @@ use linera_service::{
     },
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     faucet::FaucetService,
-    node_service::NodeService,
+    node_service::{wait_for_next_round, NodeService},
     project::{self, Project},
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfig},
 };
@@ -286,9 +286,8 @@ impl ClientContext {
     {
         for chain_id in self.wallet_state.own_chain_ids() {
             let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
-            chain_client.process_inbox().await.unwrap();
+            self.process_inbox(&mut chain_client).await.unwrap();
             chain_client.update_validators().await.unwrap();
-            self.update_wallet_from_client(&mut chain_client).await;
         }
     }
 
@@ -501,14 +500,33 @@ impl ClientContext {
         let mut certificates = Vec::new();
         for chain_id in self.wallet_state.chain_ids() {
             let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
-            if let Ok(cert) = chain_client.subscribe_to_new_committees().await {
-                debug!(
-                    "Subscribed {:?} to the admin chain {:?}",
-                    chain_id,
-                    self.wallet_state.genesis_admin_chain(),
-                );
-                certificates.push(cert);
-                self.update_wallet_from_client(&mut chain_client).await;
+            loop {
+                let stream = match chain_client.subscribe().await {
+                    Ok(stream) => stream,
+                    Err(error) => {
+                        warn!(%chain_id, %error, "Failed to subscribe to notifications.");
+                        break;
+                    }
+                };
+                match chain_client.subscribe_to_new_committees().await {
+                    Ok(ClientOutcome::Committed(cert)) => {
+                        debug!(
+                            "Subscribed {:?} to the admin chain {:?}",
+                            chain_id,
+                            self.wallet_state.genesis_admin_chain(),
+                        );
+                        certificates.push(cert);
+                        self.update_wallet_from_client(&mut chain_client).await;
+                        break;
+                    }
+                    Ok(ClientOutcome::WaitForTimeout(timeout)) => {
+                        wait_for_next_round(stream, timeout).await;
+                    }
+                    Err(error) => {
+                        warn!(%chain_id, %error, "Failed to subscribe to new committees.");
+                        break;
+                    }
+                }
             }
         }
         certificates
@@ -525,19 +543,41 @@ impl ClientContext {
                 .receive_certificate(certificate.clone())
                 .await
                 .unwrap();
-            chain_client.process_inbox().await.unwrap();
+            self.process_inbox(&mut chain_client).await.unwrap();
             let epochs = chain_client.epochs().await.unwrap();
             debug!("{:?} accepts epochs {:?}", chain_id, epochs);
-            self.update_wallet_from_client(&mut chain_client).await;
+        }
+    }
+
+    async fn process_inbox<S>(
+        &mut self,
+        chain_client: &mut ChainClient<impl ValidatorNodeProvider + Sync + 'static, S>,
+    ) -> anyhow::Result<Vec<Certificate>>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        let mut certificates = Vec::new();
+        loop {
+            chain_client.synchronize_from_validators().await?;
+            let stream = chain_client.subscribe().await?;
+            let result = chain_client.process_inbox().await;
+            self.update_wallet_from_client(chain_client).await;
+            let (new_certificates, maybe_timeout) = result.unwrap();
+            certificates.extend(new_certificates);
+            match maybe_timeout {
+                None => return Ok(certificates),
+                Some(timestamp) => wait_for_next_round(stream, timestamp).await,
+            }
         }
     }
 
     async fn publish_bytecode<S>(
-        &self,
-        chain_client: &mut ChainClient<impl ValidatorNodeProvider + Sync, S>,
+        &mut self,
+        chain_client: &mut ChainClient<impl ValidatorNodeProvider + Sync + 'static, S>,
         contract: PathBuf,
         service: PathBuf,
-    ) -> Result<BytecodeId, anyhow::Error>
+    ) -> anyhow::Result<BytecodeId>
     where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
@@ -553,21 +593,62 @@ impl ClientContext {
         ))?;
 
         info!("Publishing bytecode...");
-        let (bytecode_id, _cert) = chain_client
-            .publish_bytecode(contract_bytecode, service_bytecode)
-            .await
-            .context("failed to publish bytecode")?;
+        let bytecode_id = loop {
+            let stream = chain_client.subscribe().await?;
+            match chain_client
+                .publish_bytecode(contract_bytecode.clone(), service_bytecode.clone())
+                .await
+                .context("failed to publish bytecode")?
+            {
+                ClientOutcome::Committed((bytecode_id, _)) => break bytecode_id,
+                ClientOutcome::WaitForTimeout(timeout) => {
+                    wait_for_next_round(stream, timeout).await;
+                }
+            }
+        };
 
         info!("{}", "Bytecode published successfully!".green().bold());
 
         debug!("Synchronizing...");
         chain_client.synchronize_from_validators().await?;
-        chain_client.process_inbox().await?;
+        self.process_inbox(chain_client).await?;
         Ok(bytecode_id)
     }
 
     fn generate_key_pair(&mut self) -> KeyPair {
         KeyPair::generate_from(&mut self.prng)
+    }
+
+    /// Applies the given function to the chain client.
+    /// Updates the wallet regardless of the outcome. As long as the function returns a round
+    /// timeout, it will wait and retry.
+    async fn apply_client_command<S, F, Fut, T>(
+        &mut self,
+        mut client: ChainClient<NodeProvider, S>,
+        mut f: F,
+    ) -> anyhow::Result<(T, ChainClient<NodeProvider, S>)>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+        F: FnMut(ChainClient<NodeProvider, S>) -> Fut,
+        Fut: Future<
+            Output = (
+                anyhow::Result<ClientOutcome<T>>,
+                ChainClient<NodeProvider, S>,
+            ),
+        >,
+    {
+        loop {
+            let stream = client.subscribe().await?;
+            let (result, moved_client) = f(client).await;
+            client = moved_client;
+            self.update_and_save_wallet(&mut client).await;
+            let timeout = match result? {
+                ClientOutcome::Committed(t) => return Ok((t, client)),
+                ClientOutcome::WaitForTimeout(timeout) => timeout,
+            };
+            linera_service::node_service::wait_for_next_round(stream, timeout).await;
+        }
     }
 }
 
@@ -716,7 +797,7 @@ impl ClientOptions {
     }
 }
 
-#[derive(clap::Subcommand)]
+#[derive(Clone, clap::Subcommand)]
 enum ClientCommand {
     /// Print CLI help in Markdown format, and exit.
     #[command(hide = true)]
@@ -1117,7 +1198,7 @@ enum ClientCommand {
     Net(NetCommand),
 }
 
-#[derive(clap::Parser)]
+#[derive(Clone, clap::Parser)]
 enum NetCommand {
     /// Start a Local Linera Network
     Up {
@@ -1160,7 +1241,7 @@ enum NetCommand {
     Helper,
 }
 
-#[derive(clap::Subcommand)]
+#[derive(Clone, clap::Subcommand)]
 enum WalletCommand {
     /// Show the contents of the wallet.
     Show { chain_id: Option<ChainId> },
@@ -1191,7 +1272,7 @@ enum WalletCommand {
     },
 }
 
-#[derive(clap::Parser)]
+#[derive(Clone, clap::Parser)]
 enum ProjectCommand {
     /// Create a new Linera project.
     New {
@@ -1297,7 +1378,7 @@ impl Runnable for Job {
                 public_key,
                 balance,
             } => {
-                let mut chain_client = context.make_chain_client(storage, chain_id);
+                let chain_client = context.make_chain_client(storage, chain_id);
                 let (new_public_key, key_pair) = match public_key {
                     Some(key) => (key, None),
                     None => {
@@ -1307,10 +1388,18 @@ impl Runnable for Job {
                 };
                 info!("Starting operation to open a new chain");
                 let time_start = Instant::now();
-                let ownership = ChainOwnership::single(new_public_key);
-                let result = chain_client.open_chain(ownership, balance).await;
-                context.update_and_save_wallet(&mut chain_client).await;
-                let (message_id, certificate) = result.context("failed to open chain")?;
+                let ((message_id, certificate), _) = context
+                    .apply_client_command(chain_client, |mut chain_client| {
+                        let ownership = ChainOwnership::single(new_public_key);
+                        async move {
+                            let result = chain_client
+                                .open_chain(ownership, balance)
+                                .await
+                                .context("failed to open chain");
+                            (result, chain_client)
+                        }
+                    })
+                    .await?;
                 let id = ChainId::child(message_id);
                 let timestamp = match certificate.value() {
                     CertificateValue::ConfirmedBlock {
@@ -1336,7 +1425,7 @@ impl Runnable for Job {
                 multi_leader_rounds,
                 balance,
             } => {
-                let mut chain_client = context.make_chain_client(storage, chain_id);
+                let chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting operation to open a new chain");
                 let time_start = Instant::now();
                 let owners = if weights.is_empty() {
@@ -1354,10 +1443,19 @@ impl Runnable for Job {
                     public_keys.into_iter().zip(weights).collect::<Vec<_>>()
                 };
                 let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
-                let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
-                let result = chain_client.open_chain(ownership, balance).await;
-                context.update_and_save_wallet(&mut chain_client).await;
-                let (message_id, certificate) = result.context("failed to open chain")?;
+                let ((message_id, certificate), _) = context
+                    .apply_client_command(chain_client, |mut chain_client| {
+                        let ownership =
+                            ChainOwnership::multiple(owners.clone(), multi_leader_rounds);
+                        async move {
+                            let result = chain_client
+                                .open_chain(ownership, balance)
+                                .await
+                                .context("failed to open chain");
+                            (result, chain_client)
+                        }
+                    })
+                    .await?;
                 // No key pair. This chain can be assigned explicitly using the assign command.
                 let key_pair = None;
                 let id = ChainId::child(message_id);
@@ -1439,82 +1537,88 @@ impl Runnable for Job {
                 for cert in certificates {
                     chain_client.receive_certificate(cert).await.unwrap();
                 }
-                let n = chain_client
-                    .process_inbox()
+                let n = context
+                    .process_inbox(&mut chain_client)
                     .await
                     .unwrap()
                     .into_iter()
                     .filter_map(|c| c.value().executed_block().map(|e| e.messages.len()))
                     .sum::<usize>();
                 info!("Subscribed {} chains to new committees", n);
-
-                // Create the new committee.
-                let mut committee = chain_client.local_committee().await.unwrap();
-                let mut policy = committee.policy().clone();
-                let mut validators = committee.validators().clone();
-                match command {
-                    SetValidator {
-                        name,
-                        address,
-                        votes,
-                    } => {
-                        validators.insert(
-                            name,
-                            ValidatorState {
-                                network_address: address,
-                                votes,
-                            },
-                        );
-                    }
-                    RemoveValidator { name } => {
-                        if validators.remove(&name).is_none() {
-                            warn!("Skipping removal of nonexistent validator");
-                            return Ok(());
-                        }
-                    }
-                    ResourceControlPolicy {
-                        certificate,
-                        fuel,
-                        storage_num_reads,
-                        storage_bytes_read,
-                        storage_bytes_written,
-                        storage_bytes_stored,
-                        maximum_bytes_read_per_block,
-                        maximum_bytes_written_per_block,
-                        messages,
-                    } => {
-                        if let Some(certificate) = certificate {
-                            policy.certificate = certificate;
-                        }
-                        if let Some(fuel) = fuel {
-                            policy.fuel = fuel;
-                        }
-                        if let Some(storage_num_reads) = storage_num_reads {
-                            policy.storage_num_reads = storage_num_reads;
-                        }
-                        if let Some(storage_bytes_read) = storage_bytes_read {
-                            policy.storage_bytes_read = storage_bytes_read;
-                        }
-                        if let Some(storage_bytes_written) = storage_bytes_written {
-                            policy.storage_bytes_written = storage_bytes_written;
-                        }
-                        if let Some(storage_bytes_stored) = storage_bytes_stored {
-                            policy.storage_bytes_stored = storage_bytes_stored;
-                        }
-                        if let Some(maximum_bytes_read_per_block) = maximum_bytes_read_per_block {
-                            policy.maximum_bytes_read_per_block = maximum_bytes_read_per_block;
-                        }
-                        if let Some(maximum_bytes_written_per_block) =
-                            maximum_bytes_written_per_block
-                        {
-                            policy.maximum_bytes_written_per_block =
-                                maximum_bytes_written_per_block;
-                        }
-                        if let Some(messages) = messages {
-                            policy.messages = messages;
-                        }
-                        info!(
-                            "ResourceControlPolicy:\n\
+                let (maybe_certificate, chain_client) = context
+                    .apply_client_command(chain_client, |mut chain_client| {
+                        let command = command.clone();
+                        async move {
+                            // Create the new committee.
+                            let mut committee = chain_client.local_committee().await.unwrap();
+                            let mut policy = committee.policy().clone();
+                            let mut validators = committee.validators().clone();
+                            match command {
+                                SetValidator {
+                                    name,
+                                    address,
+                                    votes,
+                                } => {
+                                    validators.insert(
+                                        name,
+                                        ValidatorState {
+                                            network_address: address,
+                                            votes,
+                                        },
+                                    );
+                                }
+                                RemoveValidator { name } => {
+                                    if validators.remove(&name).is_none() {
+                                        warn!("Skipping removal of nonexistent validator");
+                                        return (Ok(ClientOutcome::Committed(None)), chain_client);
+                                    }
+                                }
+                                ResourceControlPolicy {
+                                    certificate,
+                                    fuel,
+                                    storage_num_reads,
+                                    storage_bytes_read,
+                                    storage_bytes_written,
+                                    storage_bytes_stored,
+                                    maximum_bytes_read_per_block,
+                                    maximum_bytes_written_per_block,
+                                    messages,
+                                } => {
+                                    if let Some(certificate) = certificate {
+                                        policy.certificate = certificate;
+                                    }
+                                    if let Some(fuel) = fuel {
+                                        policy.fuel = fuel;
+                                    }
+                                    if let Some(storage_num_reads) = storage_num_reads {
+                                        policy.storage_num_reads = storage_num_reads;
+                                    }
+                                    if let Some(storage_bytes_read) = storage_bytes_read {
+                                        policy.storage_bytes_read = storage_bytes_read;
+                                    }
+                                    if let Some(storage_bytes_written) = storage_bytes_written {
+                                        policy.storage_bytes_written = storage_bytes_written;
+                                    }
+                                    if let Some(storage_bytes_stored) = storage_bytes_stored {
+                                        policy.storage_bytes_stored = storage_bytes_stored;
+                                    }
+                                    if let Some(maximum_bytes_read_per_block) =
+                                        maximum_bytes_read_per_block
+                                    {
+                                        policy.maximum_bytes_read_per_block =
+                                            maximum_bytes_read_per_block;
+                                    }
+                                    if let Some(maximum_bytes_written_per_block) =
+                                        maximum_bytes_written_per_block
+                                    {
+                                        policy.maximum_bytes_written_per_block =
+                                            maximum_bytes_written_per_block;
+                                    }
+                                    if let Some(messages) = messages {
+                                        policy.messages = messages;
+                                    }
+                                    info!(
+                                        "ResourceControlPolicy:\n\
                             {:.2} base cost per block\n\
                             {:.2} cost per byte of operations and incoming messages\n\
                             {:.2} cost per byte operation\n\
@@ -1524,43 +1628,58 @@ impl Runnable for Job {
                             {:.2} per byte of outgoing messages\n\
                             {:.2} maximum number bytes read per block\n\
                             {:.2} maximum number bytes written per block",
-                            policy.certificate,
-                            policy.fuel,
-                            policy.storage_num_reads,
-                            policy.storage_bytes_read,
-                            policy.storage_bytes_written,
-                            policy.storage_bytes_stored,
-                            policy.messages,
-                            policy.maximum_bytes_read_per_block,
-                            policy.maximum_bytes_written_per_block
-                        );
-                        if certificate.is_none()
-                            && fuel.is_none()
-                            && storage_num_reads.is_none()
-                            && storage_bytes_read.is_none()
-                            && storage_bytes_written.is_none()
-                            && storage_bytes_stored.is_none()
-                            && maximum_bytes_read_per_block.is_none()
-                            && maximum_bytes_written_per_block.is_none()
-                            && messages.is_none()
-                        {
-                            return Ok(());
+                                        policy.certificate,
+                                        policy.fuel,
+                                        policy.storage_num_reads,
+                                        policy.storage_bytes_read,
+                                        policy.storage_bytes_written,
+                                        policy.storage_bytes_stored,
+                                        policy.messages,
+                                        policy.maximum_bytes_read_per_block,
+                                        policy.maximum_bytes_written_per_block
+                                    );
+                                    if certificate.is_none()
+                                        && fuel.is_none()
+                                        && storage_num_reads.is_none()
+                                        && storage_bytes_read.is_none()
+                                        && storage_bytes_written.is_none()
+                                        && storage_bytes_stored.is_none()
+                                        && maximum_bytes_read_per_block.is_none()
+                                        && maximum_bytes_written_per_block.is_none()
+                                        && messages.is_none()
+                                    {
+                                        return (Ok(ClientOutcome::Committed(None)), chain_client);
+                                    }
+                                }
+                                _ => unreachable!(),
+                            }
+                            committee = Committee::new(validators, policy);
+                            let result = chain_client
+                                .stage_new_committee(committee)
+                                .await
+                                .context("failed to stage committee")
+                                .map(|outcome| outcome.map(Some));
+                            (result, chain_client)
                         }
-                    }
-                    _ => unreachable!(),
-                }
-                committee = Committee::new(validators, policy);
-                let result = chain_client.stage_new_committee(committee).await;
-                context.update_and_save_wallet(&mut chain_client).await;
-                let certificate = result.context("failed to stage committee")?;
+                    })
+                    .await?;
+                let Some(certificate) = maybe_certificate else {
+                    return Ok(());
+                };
                 info!("Staging committee:\n{:?}", certificate);
                 context.push_to_all_chains(&storage, &certificate).await;
 
                 // Remove the old committee.
-                let result = chain_client.finalize_committee().await;
-                context.update_and_save_wallet(&mut chain_client).await;
-                let certificate = result.context("failed to finalize committee")?;
                 info!("Finalizing committee:\n{:?}", certificate);
+                let (certificate, _) = context
+                    .apply_client_command(chain_client, |mut chain_client| async move {
+                        let result = chain_client
+                            .finalize_committee()
+                            .await
+                            .context("failed to finalize committee");
+                        (result, chain_client)
+                    })
+                    .await?;
                 context.push_to_all_chains(&storage, &certificate).await;
                 context.save_wallet();
 
@@ -1737,19 +1856,29 @@ impl Runnable for Job {
 
                 info!("Synchronizing...");
                 chain_client.synchronize_from_validators().await?;
-                chain_client.process_inbox().await?;
+                context.process_inbox(&mut chain_client).await?;
 
                 info!("Creating application...");
-                let result = chain_client
-                    .create_application_untyped(
-                        bytecode_id,
-                        parameters,
-                        argument,
-                        required_application_ids.unwrap_or_default(),
-                    )
-                    .await;
-                context.update_and_save_wallet(&mut chain_client).await;
-                let (application_id, _) = result.context("failed to create application")?;
+                let (application_id, _) = context
+                    .apply_client_command(chain_client, move |mut chain_client| {
+                        let parameters = parameters.clone();
+                        let argument = argument.clone();
+                        let required_application_ids = required_application_ids.clone();
+                        async move {
+                            let result = chain_client
+                                .create_application_untyped(
+                                    bytecode_id,
+                                    parameters,
+                                    argument,
+                                    required_application_ids.unwrap_or_default(),
+                                )
+                                .await
+                                .context("failed to create application")
+                                .map(|outcome| outcome.map(|(application_id, _)| application_id));
+                            (result, chain_client)
+                        }
+                    })
+                    .await?;
                 info!("{}", "Application created successfully!".green().bold());
                 println!("{}", application_id);
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs());
@@ -1779,17 +1908,25 @@ impl Runnable for Job {
                 let bytecode_id = result.context("failed to publish bytecode")?;
 
                 info!("Creating application...");
-                let result = chain_client
-                    .create_application_untyped(
-                        bytecode_id,
-                        parameters,
-                        argument,
-                        required_application_ids.unwrap_or_default(),
-                    )
-                    .await;
-                context.update_and_save_wallet(&mut chain_client).await;
-                let (application_id, _) = result.context("failed to create application")?;
-
+                let ((application_id, _), _) = context
+                    .apply_client_command(chain_client, move |mut chain_client| {
+                        let parameters = parameters.clone();
+                        let argument = argument.clone();
+                        let required_application_ids = required_application_ids.clone();
+                        async move {
+                            let result = chain_client
+                                .create_application_untyped(
+                                    bytecode_id,
+                                    parameters,
+                                    argument,
+                                    required_application_ids.unwrap_or_default(),
+                                )
+                                .await
+                                .context("failed to create application");
+                            (result, chain_client)
+                        }
+                    })
+                    .await?;
                 info!("{}", "Application published successfully!".green().bold());
                 println!("{}", application_id);
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs());
@@ -1854,17 +1991,25 @@ impl Runnable for Job {
                     let bytecode_id = result.context("failed to publish bytecode")?;
 
                     info!("Creating application...");
-                    let result = chain_client
-                        .create_application_untyped(
-                            bytecode_id,
-                            parameters,
-                            argument,
-                            required_application_ids.unwrap_or_default(),
-                        )
-                        .await;
-                    context.update_and_save_wallet(&mut chain_client).await;
-                    let (application_id, _) = result.context("failed to create application")?;
-
+                    let ((application_id, _), _) = context
+                        .apply_client_command(chain_client, move |mut chain_client| {
+                            let parameters = parameters.clone();
+                            let argument = argument.clone();
+                            let required_application_ids = required_application_ids.clone();
+                            async move {
+                                let result = chain_client
+                                    .create_application_untyped(
+                                        bytecode_id,
+                                        parameters,
+                                        argument,
+                                        required_application_ids.unwrap_or_default(),
+                                    )
+                                    .await
+                                    .context("failed to create application");
+                                (result, chain_client)
+                            }
+                        })
+                        .await?;
                     info!("{}", "Application published successfully!".green().bold());
                     println!("{}", application_id);
                     info!("Time elapsed: {}s", start_time.elapsed().as_secs());

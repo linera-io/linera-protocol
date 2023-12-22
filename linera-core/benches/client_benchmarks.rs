@@ -64,6 +64,7 @@ where
     let cert = chain1
         .transfer_to_account(None, amt, account, UserData(None))
         .await
+        .unwrap()
         .unwrap();
 
     chain2.receive_certificate(cert).await.unwrap();
@@ -77,10 +78,11 @@ where
     let cert = chain1
         .claim(owner1, chain2.chain_id(), account, amt, UserData(None))
         .await
+        .unwrap()
         .unwrap();
 
     chain2.receive_certificate(cert).await.unwrap();
-    let cert = chain2.process_inbox().await.unwrap().pop().unwrap();
+    let cert = chain2.process_inbox().await.unwrap().0.pop().unwrap();
 
     chain1.receive_certificate(cert).await.unwrap();
     chain1.process_inbox().await.unwrap();

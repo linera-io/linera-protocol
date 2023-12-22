@@ -232,15 +232,6 @@ pub enum ChainClientError {
 
     #[error("Leader timeout certificate does not match the expected one.")]
     UnexpectedLeaderTimeout,
-
-    #[error("We are not the current round leader. Current round ends at {timeout}.")]
-    NotLeader {
-        chain_id: ChainId,
-        timeout: Timestamp,
-    },
-
-    #[error("Another block was being processed. Please try again.")]
-    OtherBlockProposal { certificate: Box<Certificate> },
 }
 
 impl From<Infallible> for ChainClientError {
@@ -314,7 +305,9 @@ where
     }
 
     /// Obtains the basic `ChainInfo` data for the local chain, with chain manager values.
-    pub async fn chain_info_with_manager(&mut self) -> Result<Box<ChainInfo>, LocalNodeError> {
+    pub async fn chain_info_with_manager_values(
+        &mut self,
+    ) -> Result<Box<ChainInfo>, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
         let response = self.node_client.handle_chain_info_query(query).await?;
         Ok(response.info)
@@ -1169,7 +1162,7 @@ where
         amount: Amount,
         recipient: Recipient,
         user_data: UserData,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         // TODO(#467): check the balance of `owner` before signing any block proposal.
         self.execute_operation(Operation::System(SystemOperation::Transfer {
             owner,
@@ -1188,7 +1181,7 @@ where
         recipient: Recipient,
         amount: Amount,
         user_data: UserData,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Claim {
             owner,
             target,
@@ -1322,7 +1315,7 @@ where
             ChainClientError::BlockProposalError("Unexpected previous block hash")
         );
         // Gather information on the current local state.
-        let manager = self.chain_info_with_manager().await?.manager;
+        let manager = self.chain_info_with_manager_values().await?.manager;
         let next_round = if let Some(next_round) = manager.next_round() {
             next_round
         } else if self.pending_block.is_some() {
@@ -1418,17 +1411,40 @@ where
     pub async fn execute_operations(
         &mut self,
         operations: Vec<Operation>,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.prepare_chain().await?;
-        let messages = self.pending_messages().await?;
-        self.execute_block(messages, operations).await
+        self.execute_with_messages(operations).await
+    }
+
+    /// Executes a list of operations, without calling `prepare_chain`.
+    pub async fn execute_with_messages(
+        &mut self,
+        operations: Vec<Operation>,
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+        loop {
+            let messages = self.pending_messages().await?;
+            match self.execute_block(messages, operations.clone()).await? {
+                ExecuteBlockOutcome::Executed(certificate) => {
+                    return Ok(ClientOutcome::Committed(certificate));
+                }
+                ExecuteBlockOutcome::OtherBlock(certificate) => {
+                    info!(
+                        height = %certificate.value().height(),
+                        "Another block was committed; retrying."
+                    );
+                }
+                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
+                    return Ok(ClientOutcome::WaitForTimeout(timeout));
+                }
+            };
+        }
     }
 
     /// Executes an operation.
     pub async fn execute_operation(
         &mut self,
         operation: Operation,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.execute_operations(vec![operation]).await
     }
 
@@ -1439,63 +1455,72 @@ where
         &mut self,
         incoming_messages: Vec<IncomingMessage>,
         operations: Vec<Operation>,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ExecuteBlockOutcome, ChainClientError> {
         loop {
             let identity = self.identity().await?;
-            let manager = *self.chain_info_with_manager().await?.manager;
+            let info = self.chain_info_with_manager_values().await?;
+            let manager = *info.manager;
             let can_propose = match manager.next_round() {
                 Some(Round::Fast) => manager.ownership.super_owners.contains_key(&identity),
                 Some(Round::MultiLeader(_)) => true,
                 Some(Round::SingleLeader(_)) => manager.leader == Some(identity),
                 None => false,
             };
-            if !can_propose {
-                if manager.round_timeout <= self.storage_client().await.current_time() {
-                    self.request_leader_timeout().await?;
-                    continue; // We moved on to the next round; try again.
+            // If blocks are already validated, try to finalize the highest one.
+            if let Some(certificate) = manager.highest_validated() {
+                if certificate.round == manager.current_round {
+                    let committee = self.local_committee().await?;
+                    let final_certificate =
+                        self.finalize_block(&committee, certificate.clone()).await?;
+                    return Ok(ExecuteBlockOutcome::OtherBlock(final_certificate));
                 }
-                if let Some(certificate) = manager.highest_validated() {
-                    if certificate.round == manager.current_round {
-                        let committee = self.local_committee().await?;
-                        let final_certificate =
-                            self.finalize_block(&committee, certificate.clone()).await?;
-                        return Err(ChainClientError::OtherBlockProposal {
-                            certificate: Box::new(final_certificate),
-                        });
+                if can_propose {
+                    if let Some(block) = certificate.value().block() {
+                        let final_certificate = self.propose_block(block.clone()).await?;
+                        return Ok(ExecuteBlockOutcome::OtherBlock(final_certificate));
                     }
                 }
-                if let Some(proposal) = manager.requested_proposed {
-                    if proposal.content.round == manager.current_round {
-                        return Err(ChainClientError::BlockProposalError(
-                            "pending block proposal",
-                        ));
+            }
+            // If there is already a valid proposal in this round, try to finalize it.
+            if let Some(proposal) = manager.requested_proposed {
+                if proposal.content.round == manager.current_round {
+                    return Err(ChainClientError::BlockProposalError(
+                        "pending block proposal",
+                    ));
+                }
+            }
+            // Otherwise we can propose a block with our own messages and operations.
+            if can_propose {
+                if let Some(block) = &self.pending_block {
+                    if block.height == self.next_block_height {
+                        self.propose_block(block.clone()).await?;
                     }
                 }
-                return Err(ChainClientError::NotLeader {
+                let timestamp = self.next_timestamp(&incoming_messages).await;
+                let block = Block {
+                    epoch: self.epoch().await?,
                     chain_id: self.chain_id,
-                    timeout: manager.round_timeout,
-                });
+                    incoming_messages,
+                    operations,
+                    previous_block_hash: self.block_hash,
+                    height: self.next_block_height,
+                    authenticated_signer: Some(self.identity().await?),
+                    timestamp,
+                };
+                let certificate = self.propose_block(block).await?;
+                return Ok(ExecuteBlockOutcome::Executed(certificate));
             }
-            // If blocks are already validated, propose the highest one.
-            if let Some(cert) = manager.highest_validated() {
-                if let Some(block) = cert.value().block() {
-                    let certificate = Box::new(self.propose_block(block.clone()).await?);
-                    return Err(ChainClientError::OtherBlockProposal { certificate });
-                }
+            // But if the current round has not timed out yet, we have to wait.
+            if manager.round_timeout > self.storage_client().await.current_time() {
+                let timeout = RoundTimeout {
+                    timestamp: manager.round_timeout,
+                    current_round: manager.current_round,
+                    next_block_height: info.next_block_height,
+                };
+                return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout));
             }
-            // We can propose a block with our own messages and operations.
-            let timestamp = self.next_timestamp(&incoming_messages).await;
-            let block = Block {
-                epoch: self.epoch().await?,
-                chain_id: self.chain_id,
-                incoming_messages,
-                operations,
-                previous_block_hash: self.block_hash,
-                height: self.next_block_height,
-                authenticated_signer: Some(self.identity().await?),
-                timestamp,
-            };
-            return self.propose_block(block).await;
+            // If it has timed out, we request a timeout certificate and retry in the next round.
+            self.request_leader_timeout().await?;
         }
     }
 
@@ -1600,7 +1625,7 @@ where
         &mut self,
         application_id: UserApplicationId,
         chain_id: Option<ChainId>,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         let chain_id = chain_id.unwrap_or(application_id.creation.chain_id);
         self.execute_operation(Operation::System(SystemOperation::RequestApplication {
             application_id,
@@ -1616,7 +1641,7 @@ where
         amount: Amount,
         account: Account,
         user_data: UserData,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.transfer(owner, amount, Recipient::Account(account), user_data)
             .await
     }
@@ -1627,7 +1652,7 @@ where
         owner: Option<Owner>,
         amount: Amount,
         user_data: UserData,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.transfer(owner, amount, Recipient::Burn, user_data)
             .await
     }
@@ -1672,7 +1697,7 @@ where
     pub async fn rotate_key_pair(
         &mut self,
         key_pair: KeyPair,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         let new_public_key = key_pair.public();
         self.known_key_pairs.insert(new_public_key.into(), key_pair);
         self.transfer_ownership(new_public_key).await
@@ -1682,7 +1707,7 @@ where
     pub async fn transfer_ownership(
         &mut self,
         new_public_key: PublicKey,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
             super_owners: vec![new_public_key],
             owners: Vec::new(),
@@ -1699,31 +1724,43 @@ where
         &mut self,
         new_public_key: PublicKey,
         new_weight: u64,
-    ) -> Result<Certificate, ChainClientError> {
-        let ownership = self.prepare_chain().await?.manager.ownership;
-        ensure!(
-            ownership.is_active(),
-            ChainError::InactiveChain(self.chain_id)
-        );
-        let messages = self.pending_messages().await?;
-        let mut owners = ownership.owners.values().copied().collect::<Vec<_>>();
-        owners.extend(
-            ownership
-                .super_owners
-                .values()
-                .copied()
-                .zip(iter::repeat(100)),
-        );
-        owners.push((new_public_key, new_weight));
-        self.execute_block(
-            messages,
-            vec![Operation::System(SystemOperation::ChangeOwnership {
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+        loop {
+            let ownership = self.prepare_chain().await?.manager.ownership;
+            ensure!(
+                ownership.is_active(),
+                ChainError::InactiveChain(self.chain_id)
+            );
+            let messages = self.pending_messages().await?;
+            let mut owners = ownership.owners.values().copied().collect::<Vec<_>>();
+            owners.extend(
+                ownership
+                    .super_owners
+                    .values()
+                    .copied()
+                    .zip(iter::repeat(100)),
+            );
+            owners.push((new_public_key, new_weight));
+            let operations = vec![Operation::System(SystemOperation::ChangeOwnership {
                 super_owners: Vec::new(),
                 owners,
                 multi_leader_rounds: ownership.multi_leader_rounds,
-            })],
-        )
-        .await
+            })];
+            match self.execute_block(messages, operations).await? {
+                ExecuteBlockOutcome::Executed(certificate) => {
+                    return Ok(ClientOutcome::Committed(certificate));
+                }
+                ExecuteBlockOutcome::OtherBlock(certificate) => {
+                    info!(
+                        height = %certificate.value().height(),
+                        "Another block was committed; retrying."
+                    );
+                }
+                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
+                    return Ok(ClientOutcome::WaitForTimeout(timeout));
+                }
+            };
+        }
     }
 
     /// Opens a new chain with a derived UID.
@@ -1731,36 +1768,45 @@ where
         &mut self,
         ownership: ChainOwnership,
         balance: Amount,
-    ) -> Result<(MessageId, Certificate), ChainClientError> {
+    ) -> Result<ClientOutcome<(MessageId, Certificate)>, ChainClientError> {
         self.prepare_chain().await?;
-        let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
-        let epoch = epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
-        let messages = self.pending_messages().await?;
-        let certificate = self
-            .execute_block(
-                messages,
-                vec![Operation::System(SystemOperation::OpenChain {
-                    ownership,
-                    committees,
-                    admin_id: self.admin_id,
-                    epoch,
-                    balance,
-                })],
-            )
-            .await?;
-        // The first message of the only operation created the new chain.
-        let message_id = certificate
-            .value()
-            .executed_block()
-            .and_then(|executed_block| {
-                executed_block.message_id_for_operation(0, OPEN_CHAIN_MESSAGE_INDEX)
-            })
-            .ok_or_else(|| ChainClientError::InternalError("Failed to create new chain"))?;
-        Ok((message_id, certificate))
+        loop {
+            let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
+            let epoch = epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
+            let messages = self.pending_messages().await?;
+            let certificate = match self
+                .execute_block(
+                    messages,
+                    vec![Operation::System(SystemOperation::OpenChain {
+                        ownership: ownership.clone(),
+                        committees,
+                        admin_id: self.admin_id,
+                        epoch,
+                        balance,
+                    })],
+                )
+                .await?
+            {
+                ExecuteBlockOutcome::Executed(certificate) => certificate,
+                ExecuteBlockOutcome::OtherBlock(_) => continue,
+                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
+                    return Ok(ClientOutcome::WaitForTimeout(timeout));
+                }
+            };
+            // The first message of the only operation created the new chain.
+            let message_id = certificate
+                .value()
+                .executed_block()
+                .and_then(|executed_block| {
+                    executed_block.message_id_for_operation(0, OPEN_CHAIN_MESSAGE_INDEX)
+                })
+                .ok_or_else(|| ChainClientError::InternalError("Failed to create new chain"))?;
+            return Ok(ClientOutcome::Committed((message_id, certificate)));
+        }
     }
 
     /// Closes the chain (and loses everything in it!!).
-    pub async fn close_chain(&mut self) -> Result<Certificate, ChainClientError> {
+    pub async fn close_chain(&mut self) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::CloseChain))
             .await
     }
@@ -1770,22 +1816,23 @@ where
         &mut self,
         contract: Bytecode,
         service: Bytecode,
-    ) -> Result<(BytecodeId, Certificate), ChainClientError> {
-        let certificate = self
-            .execute_operation(Operation::System(SystemOperation::PublishBytecode {
-                contract,
-                service,
-            }))
-            .await?;
-        // The first message of the only operation published the bytecode.
-        let message_id = certificate
-            .value()
-            .executed_block()
-            .and_then(|executed_block| {
-                executed_block.message_id_for_operation(0, PUBLISH_BYTECODE_MESSAGE_INDEX)
-            })
-            .ok_or_else(|| ChainClientError::InternalError("Failed to publish bytecode"))?;
-        Ok((BytecodeId::new(message_id), certificate))
+    ) -> Result<ClientOutcome<(BytecodeId, Certificate)>, ChainClientError> {
+        self.execute_operation(Operation::System(SystemOperation::PublishBytecode {
+            contract: contract.clone(),
+            service: service.clone(),
+        }))
+        .await?
+        .try_map(|certificate| {
+            // The first message of the only operation published the bytecode.
+            let message_id = certificate
+                .value()
+                .executed_block()
+                .and_then(|executed_block| {
+                    executed_block.message_id_for_operation(0, PUBLISH_BYTECODE_MESSAGE_INDEX)
+                })
+                .ok_or_else(|| ChainClientError::InternalError("Failed to publish bytecode"))?;
+            Ok((BytecodeId::new(message_id), certificate))
+        })
     }
 
     /// Creates an application by instantiating some bytecode.
@@ -1795,18 +1842,18 @@ where
         parameters: &<A as ContractAbi>::Parameters,
         initialization_argument: &A::InitializationArgument,
         required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<(UserApplicationId<A>, Certificate), ChainClientError> {
+    ) -> Result<ClientOutcome<(UserApplicationId<A>, Certificate)>, ChainClientError> {
         let initialization_argument = serde_json::to_vec(initialization_argument)?;
         let parameters = serde_json::to_vec(parameters)?;
-        let (app_id, cert) = self
+        Ok(self
             .create_application_untyped(
                 bytecode_id.forget_abi(),
                 parameters,
                 initialization_argument,
                 required_application_ids,
             )
-            .await?;
-        Ok((app_id.with_abi(), cert))
+            .await?
+            .map(|(app_id, cert)| (app_id.with_abi(), cert)))
     }
 
     /// Creates an application by instantiating some bytecode.
@@ -1816,52 +1863,70 @@ where
         parameters: Vec<u8>,
         initialization_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<(UserApplicationId, Certificate), ChainClientError> {
-        let certificate = self
-            .execute_operation(Operation::System(SystemOperation::CreateApplication {
-                bytecode_id,
-                parameters,
-                initialization_argument,
-                required_application_ids,
-            }))
-            .await?;
-        // The first message of the only operation created the application.
-        let creation = certificate
-            .value()
-            .executed_block()
-            .and_then(|executed_block| {
-                executed_block.message_id_for_operation(0, CREATE_APPLICATION_MESSAGE_INDEX)
-            })
-            .ok_or_else(|| ChainClientError::InternalError("Failed to create application"))?;
-        let id = ApplicationId {
-            creation,
+    ) -> Result<ClientOutcome<(UserApplicationId, Certificate)>, ChainClientError> {
+        self.execute_operation(Operation::System(SystemOperation::CreateApplication {
             bytecode_id,
-        };
-        Ok((id, certificate))
+            parameters,
+            initialization_argument,
+            required_application_ids,
+        }))
+        .await?
+        .try_map(|certificate| {
+            // The first message of the only operation created the application.
+            let creation = certificate
+                .value()
+                .executed_block()
+                .and_then(|executed_block| {
+                    executed_block.message_id_for_operation(0, CREATE_APPLICATION_MESSAGE_INDEX)
+                })
+                .ok_or_else(|| ChainClientError::InternalError("Failed to create application"))?;
+            let id = ApplicationId {
+                creation,
+                bytecode_id,
+            };
+            Ok((id, certificate))
+        })
     }
 
     /// Creates a new committee and starts using it (admin chains only).
     pub async fn stage_new_committee(
         &mut self,
         committee: Committee,
-    ) -> Result<Certificate, ChainClientError> {
-        self.prepare_chain().await?;
-        let epoch = self.epoch().await?;
-        let messages = self.pending_messages().await?;
-        self.execute_block(
-            messages,
-            vec![Operation::System(SystemOperation::Admin(
-                AdminOperation::CreateCommittee {
-                    epoch: epoch.try_add_one()?,
-                    committee,
-                },
-            ))],
-        )
-        .await
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+        loop {
+            self.prepare_chain().await?;
+            let epoch = self.epoch().await?;
+            let messages = self.pending_messages().await?;
+            match self
+                .execute_block(
+                    messages,
+                    vec![Operation::System(SystemOperation::Admin(
+                        AdminOperation::CreateCommittee {
+                            epoch: epoch.try_add_one()?,
+                            committee: committee.clone(),
+                        },
+                    ))],
+                )
+                .await?
+            {
+                ExecuteBlockOutcome::Executed(certificate) => {
+                    return Ok(ClientOutcome::Committed(certificate))
+                }
+                ExecuteBlockOutcome::OtherBlock(_) => continue,
+                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
+                    return Ok(ClientOutcome::WaitForTimeout(timeout));
+                }
+            };
+        }
     }
 
     /// Creates an empty block to process all incoming messages. This may require several blocks.
-    pub async fn process_inbox(&mut self) -> Result<Vec<Certificate>, ChainClientError> {
+    ///
+    /// If not all certificates could be processed due to a timeout, the timestamp for when to retry
+    /// is returned, too.
+    pub async fn process_inbox(
+        &mut self,
+    ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), ChainClientError> {
         self.prepare_chain().await?;
         let mut certificates = Vec::new();
         loop {
@@ -1870,29 +1935,36 @@ where
                 break;
             }
             match self.execute_block(incoming_messages, vec![]).await {
-                Ok(certificate) => certificates.push(certificate),
-                Err(ChainClientError::OtherBlockProposal { certificate }) => {
-                    certificates.push(*certificate);
+                Ok(ExecuteBlockOutcome::Executed(certificate))
+                | Ok(ExecuteBlockOutcome::OtherBlock(certificate)) => {
+                    certificates.push(certificate)
+                }
+                Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
+                    return Ok((certificates, Some(timeout)));
                 }
                 Err(error) => return Err(error),
             };
         }
-        Ok(certificates)
+        Ok((certificates, None))
     }
 
     /// Creates an empty block to process all incoming messages. This may require several blocks.
     /// If we are not a chain owner, this doesn't fail, and just returns an empty list.
-    pub async fn process_inbox_if_owned(&mut self) -> Result<Vec<Certificate>, ChainClientError> {
+    pub async fn process_inbox_if_owned(
+        &mut self,
+    ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), ChainClientError> {
         match self.process_inbox().await {
-            Ok(certificates) => Ok(certificates),
-            Err(ChainClientError::CannotFindKeyForChain(_)) => Ok(Vec::new()),
+            Ok(result) => Ok(result),
+            Err(ChainClientError::CannotFindKeyForChain(_)) => Ok((Vec::new(), None)),
             Err(error) => Err(error),
         }
     }
 
     /// Starts listening to the admin chain for new committees. (This is only useful for
     /// other genesis chains or for testing.)
-    pub async fn subscribe_to_new_committees(&mut self) -> Result<Certificate, ChainClientError> {
+    pub async fn subscribe_to_new_committees(
+        &mut self,
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Subscribe {
             chain_id: self.admin_id,
             channel: SystemChannel::Admin,
@@ -1904,7 +1976,7 @@ where
     /// testing.)
     pub async fn unsubscribe_from_new_committees(
         &mut self,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Unsubscribe {
             chain_id: self.admin_id,
             channel: SystemChannel::Admin,
@@ -1916,7 +1988,7 @@ where
     pub async fn subscribe_to_published_bytecodes(
         &mut self,
         chain_id: ChainId,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Subscribe {
             chain_id,
             channel: SystemChannel::PublishedBytecodes,
@@ -1928,7 +2000,7 @@ where
     pub async fn unsubscribe_from_published_bytecodes(
         &mut self,
         chain_id: ChainId,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Unsubscribe {
             chain_id,
             channel: SystemChannel::PublishedBytecodes,
@@ -1940,7 +2012,9 @@ where
     /// only). Currently, each individual chain is still entitled to wait before accepting
     /// this command. However, it is expected that deprecated validators stop functioning
     /// shortly after such command is issued.
-    pub async fn finalize_committee(&mut self) -> Result<Certificate, ChainClientError> {
+    pub async fn finalize_committee(
+        &mut self,
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.prepare_chain().await?;
         let (current_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         let current_epoch = current_epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
@@ -1956,8 +2030,7 @@ where
                 }
             })
             .collect();
-        let messages = self.pending_messages().await?;
-        self.execute_block(messages, operations).await
+        self.execute_with_messages(operations).await
     }
 
     /// Sends money to a chain.
@@ -1969,7 +2042,7 @@ where
         amount: Amount,
         account: Account,
         user_data: UserData,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Transfer {
             owner,
             recipient: Recipient::Account(account),
@@ -1993,4 +2066,71 @@ where
             .read_values_downward(from, limit)
             .await
     }
+}
+
+/// The outcome of trying to commit a list of operations to the chain.
+#[derive(Debug)]
+pub enum ClientOutcome<T> {
+    /// The operations were committed successfully.
+    Committed(T),
+    /// We are not the round leader and cannot do anything. Try again at the specified time or
+    /// or whenever the round or block height changes.
+    WaitForTimeout(RoundTimeout),
+}
+
+#[derive(Debug)]
+pub struct RoundTimeout {
+    pub timestamp: Timestamp,
+    pub current_round: Round,
+    pub next_block_height: BlockHeight,
+}
+
+impl<T> ClientOutcome<T> {
+    pub fn unwrap(self) -> T {
+        match self {
+            ClientOutcome::Committed(t) => t,
+            ClientOutcome::WaitForTimeout(_) => panic!(),
+        }
+    }
+
+    pub fn expect(self, msg: &'static str) -> T {
+        match self {
+            ClientOutcome::Committed(t) => t,
+            ClientOutcome::WaitForTimeout(_) => panic!("{}", msg),
+        }
+    }
+
+    pub fn map<F, S>(self, f: F) -> ClientOutcome<S>
+    where
+        F: FnOnce(T) -> S,
+    {
+        match self {
+            ClientOutcome::Committed(t) => ClientOutcome::Committed(f(t)),
+            ClientOutcome::WaitForTimeout(timeout) => ClientOutcome::WaitForTimeout(timeout),
+        }
+    }
+
+    #[allow(clippy::result_large_err)]
+    fn try_map<F, S>(self, f: F) -> Result<ClientOutcome<S>, ChainClientError>
+    where
+        F: FnOnce(T) -> Result<S, ChainClientError>,
+    {
+        match self {
+            ClientOutcome::Committed(t) => Ok(ClientOutcome::Committed(f(t)?)),
+            ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
+        }
+    }
+}
+
+/// The outcome of trying to commit a list of incoming messages and operations to the chain.
+#[derive(Debug)]
+enum ExecuteBlockOutcome {
+    /// A block with the messages and operations was committed.
+    Executed(Certificate),
+    /// A different block was already proposed and got committed. Check whether the messages and
+    /// operations are still suitable, and try again at the next block height.
+    OtherBlock(Certificate),
+    /// We are not the round leader and cannot do anything. Try again at the specified time or
+    /// or whenever the round or block height changes.
+    WaitForTimeout(RoundTimeout),
 }
