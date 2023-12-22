@@ -43,8 +43,6 @@ impl Contract for Amm {
         operation: Self::Operation,
     ) -> Result<ExecutionResult<Self::Message>, AmmError> {
         let mut result = ExecutionResult::default();
-        let owner = Self::get_owner(&operation);
-        Self::check_account_authentication(None, context.authenticated_signer, owner)?;
         if context.chain_id == system_api::current_application_id().creation.chain_id {
             self.execute_order_local(operation).await?;
         } else {
