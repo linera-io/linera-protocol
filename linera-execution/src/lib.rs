@@ -144,9 +144,11 @@ pub enum ExecutionError {
 
     #[error("Pricing error: {0}")]
     PricingError(#[from] PricingError),
-    #[error("Excessive readings from storage")]
+    #[error("Excessive number of read queries from storage")]
+    ExcessiveNumReads,
+    #[error("Excessive number of bytes read from storage")]
     ExcessiveRead,
-    #[error("Excessive writings to storage")]
+    #[error("Excessive number of bytes written to storage")]
     ExcessiveWrite,
     #[error("Runtime failed to respond to application")]
     MissingRuntimeResponse,

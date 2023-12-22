@@ -54,9 +54,8 @@ impl ResourceControlPolicy {
     }
 
     pub fn messages_price(&self, data: &impl Serialize) -> Result<Amount, PricingError> {
-        let size =
-            u128::try_from(bcs::serialized_size(data)?).map_err(|_| ArithmeticError::Overflow)?;
-        Ok(self.messages.try_mul(size)?)
+        let size = bcs::serialized_size(data)?;
+        Ok(self.messages.try_mul(size as u128)?)
     }
 
     pub fn storage_num_reads_price(&self, count: u64) -> Result<Amount, PricingError> {
@@ -75,9 +74,8 @@ impl ResourceControlPolicy {
         &self,
         data: &impl Serialize,
     ) -> Result<Amount, PricingError> {
-        let size =
-            u128::try_from(bcs::serialized_size(data)?).map_err(|_| ArithmeticError::Overflow)?;
-        Ok(self.storage_bytes_written.try_mul(size)?)
+        let size = bcs::serialized_size(data)?;
+        Ok(self.storage_bytes_written.try_mul(size as u128)?)
     }
 
     pub fn storage_bytes_stored_price(&self, count: u64) -> Result<Amount, PricingError> {

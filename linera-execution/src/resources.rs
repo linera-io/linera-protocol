@@ -6,7 +6,7 @@
 use crate::{policy::ResourceControlPolicy, system::SystemExecutionError, ExecutionError};
 
 use custom_debug_derive::Debug;
-use linera_base::data_types::{Amount, ArithmeticError};
+use linera_base::data_types::Amount;
 
 /// The entries of the runtime related to storage
 #[derive(Copy, Debug, Clone)]
@@ -91,22 +91,26 @@ impl ResourceTracker {
         let used_fuel = initial_fuel.saturating_sub(runtime_counts.remaining_fuel);
         self.used_fuel += used_fuel;
         Self::sub_assign_fees(balance, policy.fuel_price(used_fuel)?)?;
+
         // The number of reads
         Self::sub_assign_fees(
             balance,
             policy.storage_num_reads_price(runtime_counts.num_reads)?,
         )?;
         self.num_reads += runtime_counts.num_reads;
+
         // The number of bytes read
         let bytes_read = runtime_counts.bytes_read;
         self.maximum_bytes_left_to_read -= bytes_read;
         self.bytes_read += runtime_counts.bytes_read;
         Self::sub_assign_fees(balance, policy.storage_bytes_read_price(bytes_read)?)?;
+
         // The number of bytes written
         let bytes_written = runtime_counts.bytes_written;
         self.maximum_bytes_left_to_write -= bytes_written;
         self.bytes_written += bytes_written;
         Self::sub_assign_fees(balance, policy.storage_bytes_written_price(bytes_written)?)?;
+
         Ok(())
     }
 
@@ -147,7 +151,7 @@ impl RuntimeCounts {
     pub fn increment_num_reads(&mut self, limits: &RuntimeLimits) -> Result<(), ExecutionError> {
         self.num_reads += 1;
         if self.num_reads >= limits.max_budget_num_reads {
-            return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
+            return Err(ExecutionError::ExcessiveNumReads);
         }
         Ok(())
     }
@@ -157,14 +161,10 @@ impl RuntimeCounts {
         limits: &RuntimeLimits,
         increment: u64,
     ) -> Result<(), ExecutionError> {
-        if increment >= u64::MAX / 2 {
-            return Err(ExecutionError::ExcessiveRead);
-        }
-        self.bytes_read += increment;
-        if self.bytes_read >= limits.max_budget_bytes_read {
-            return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
-        }
-        if self.bytes_read >= limits.maximum_bytes_left_to_read {
+        self.bytes_read = self.bytes_read
+            .checked_add(increment)
+            .ok_or(ExecutionError::ExcessiveRead)?;
+        if self.bytes_read >= limits.max_budget_bytes_read || self.bytes_read >= limits.maximum_bytes_left_to_read {
             return Err(ExecutionError::ExcessiveRead);
         }
         Ok(())
@@ -175,14 +175,10 @@ impl RuntimeCounts {
         limits: &RuntimeLimits,
         increment: u64,
     ) -> Result<(), ExecutionError> {
-        if increment >= u64::MAX / 2 {
-            return Err(ExecutionError::ExcessiveWrite);
-        }
-        self.bytes_written += increment;
-        if self.bytes_written >= limits.max_budget_bytes_written {
-            return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
-        }
-        if self.bytes_written >= limits.maximum_bytes_left_to_write {
+        self.bytes_written = self.bytes_written
+            .checked_add(increment)
+            .ok_or(ExecutionError::ExcessiveWrite)?;
+        if self.bytes_written >= limits.max_budget_bytes_written || self.bytes_written >= limits.maximum_bytes_left_to_write {
             return Err(ExecutionError::ExcessiveWrite);
         }
         Ok(())
