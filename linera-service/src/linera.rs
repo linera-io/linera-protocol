@@ -1373,14 +1373,23 @@ impl Runnable for Job {
                 recipient,
                 amount,
             } => {
-                let mut chain_client = context.make_chain_client(storage, sender.chain_id);
+                let chain_client = context.make_chain_client(storage, sender.chain_id);
                 info!("Starting transfer");
                 let time_start = Instant::now();
-                let result = chain_client
-                    .transfer_to_account(sender.owner, amount, recipient, UserData::default())
-                    .await;
-                context.update_and_save_wallet(&mut chain_client).await;
-                let certificate = result.context("failed to make transfer")?;
+                let (certificate, _) = context
+                    .apply_client_command(chain_client, |mut chain_client| async move {
+                        let result = chain_client
+                            .transfer_to_account(
+                                sender.owner,
+                                amount,
+                                recipient,
+                                UserData::default(),
+                            )
+                            .await
+                            .context("failed to make transfer");
+                        (result, chain_client)
+                    })
+                    .await?;
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
                 debug!("{:?}", certificate);
