@@ -12,10 +12,7 @@ use crate::{
     SystemMessage, UserApplicationDescription, UserApplicationId,
 };
 use futures::StreamExt;
-use linera_base::{
-    ensure,
-    identifiers::{ChainId, Owner},
-};
+use linera_base::identifiers::{ChainId, Owner};
 use linera_views::{
     common::Context,
     key_value_store_view::KeyValueStoreView,
@@ -269,10 +266,9 @@ where
         // Update externally-visible results.
         results.push(ExecutionResult::User(application_id, execution_result));
         // Check that all sessions were properly closed.
-        ensure!(
-            session_manager.states.is_empty(),
-            ExecutionError::SessionWasNotClosed
-        );
+        if let Some(session_id) = session_manager.states.keys().next() {
+            return Err(ExecutionError::SessionWasNotClosed(*session_id));
+        }
         Ok(results)
     }
 

@@ -96,7 +96,7 @@ pub trait UserServiceModule {
 #[derive(Error, Debug)]
 pub enum ExecutionError {
     #[error(transparent)]
-    ViewError(ViewError),
+    ViewError(#[from] ViewError),
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
     #[error(transparent)]
@@ -113,30 +113,35 @@ pub enum ExecutionError {
     #[error("Attempt to use a system API to write to read-only storage")]
     WriteAttemptToReadOnlyStorage,
 
-    #[error("A session is still opened at the end of a transaction")]
-    SessionWasNotClosed,
     #[error("Invalid operation for this application")]
     InvalidOperation,
     #[error("Invalid message for this application")]
     InvalidMessage,
     #[error("Invalid query for this application")]
     InvalidQuery,
-    #[error("Can't call another application during a query")]
-    CallApplicationFromQuery,
-    #[error("Queries can't change application state")]
-    LockStateFromQuery,
-    #[error("Session does not exist or was already closed")]
-    InvalidSession,
-    #[error("Attempted to call or forward an active session")]
-    SessionIsInUse,
-    #[error("Attempted to get a session that is not locked")]
-    SessionStateNotLocked,
-    #[error("Session is not accessible by this owner")]
-    InvalidSessionOwner,
+
+    #[error("Session {0} does not exist or was already closed")]
+    InvalidSession(SessionId),
+    #[error("Attempted to call or forward an active session {0}")]
+    SessionIsInUse(SessionId),
+    #[error("Attempted to save a session {0} but it is not locked")]
+    SessionStateNotLocked(SessionId),
+    #[error("Session {session_id} is owned by {owned_by} but was accessed by {accessed_by}")]
+    InvalidSessionOwner {
+        session_id: Box<SessionId>,
+        accessed_by: Box<UserApplicationId>,
+        owned_by: Box<UserApplicationId>,
+    },
+    #[error("Session {0} is still opened at the end of a transaction")]
+    SessionWasNotClosed(SessionId),
+
     #[error("Attempted to call an application while the state is locked")]
-    ApplicationIsInUse,
+    ApplicationIsInUse(UserApplicationId),
     #[error("Attempted to read an application state that is not locked")]
-    ApplicationStateNotLocked,
+    ApplicationStateNotLocked(UserApplicationId),
+    #[error("Failed to load bytecode from storage {0:?}")]
+    ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
+
     #[error("Pricing error: {0}")]
     PricingError(#[from] PricingError),
     #[error("Excessive readings from storage")]
@@ -147,15 +152,18 @@ pub enum ExecutionError {
     MissingRuntimeResponse,
     #[error("Bytecode ID {0:?} is invalid")]
     InvalidBytecodeId(BytecodeId),
-    #[error("Failed to load bytecode from storage {0:?}")]
-    ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
 }
 
-impl From<ViewError> for ExecutionError {
-    fn from(error: ViewError) -> Self {
-        match error {
-            ViewError::TryLockError(_) => ExecutionError::ApplicationIsInUse,
-            error => ExecutionError::ViewError(error),
+impl ExecutionError {
+    fn invalid_session_owner(
+        session_id: SessionId,
+        accessed_by: UserApplicationId,
+        owned_by: UserApplicationId,
+    ) -> Self {
+        Self::InvalidSessionOwner {
+            session_id: Box::new(session_id),
+            accessed_by: Box::new(accessed_by),
+            owned_by: Box::new(owned_by),
         }
     }
 }

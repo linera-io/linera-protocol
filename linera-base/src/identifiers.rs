@@ -67,6 +67,7 @@ pub struct BytecodeId<A = ()> {
 }
 
 /// The identifier of a session.
+#[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct SessionId<A = ()> {
     /// The user application that runs the session.
     pub application_id: ApplicationId<A>,
@@ -476,6 +477,61 @@ impl<A> SessionId<A> {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "SessionId")]
+struct SerializableSessionId {
+    pub application_id: ApplicationId,
+    pub index: u64,
+}
+
+impl<A> Serialize for SessionId<A> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        if serializer.is_human_readable() {
+            let bytes = bcs::to_bytes(&SerializableSessionId {
+                application_id: self.application_id.forget_abi(),
+                index: self.index,
+            })
+            .map_err(serde::ser::Error::custom)?;
+            serializer.serialize_str(&hex::encode(bytes))
+        } else {
+            SerializableSessionId::serialize(
+                &SerializableSessionId {
+                    application_id: self.application_id.forget_abi(),
+                    index: self.index,
+                },
+                serializer,
+            )
+        }
+    }
+}
+
+impl<'de, A> Deserialize<'de> for SessionId<A> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let session_id_bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+            let session_id: SerializableSessionId =
+                bcs::from_bytes(&session_id_bytes).map_err(serde::de::Error::custom)?;
+            Ok(SessionId {
+                application_id: session_id.application_id.with_abi(),
+                index: session_id.index,
+            })
+        } else {
+            let value = SerializableSessionId::deserialize(deserializer)?;
+            Ok(SessionId {
+                application_id: value.application_id.with_abi(),
+                index: value.index,
+            })
+        }
+    }
+}
+
 impl Display for Owner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         Display::fmt(&self.0, f)
@@ -553,6 +609,7 @@ bcs_scalar!(
     BytecodeId,
     "A unique identifier for an application bytecode"
 );
+bcs_scalar!(SessionId, "A unique identifier for an application session");
 doc_scalar!(ChainDescription, "How to create a chain");
 doc_scalar!(
     ChainId,

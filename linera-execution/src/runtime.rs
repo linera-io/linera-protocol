@@ -215,12 +215,19 @@ where
         for id in session_ids {
             let mut state = states
                 .get(id)
-                .ok_or(ExecutionError::InvalidSession)?
+                .ok_or_else(|| ExecutionError::InvalidSession(*id))?
                 .clone()
                 .try_lock_arc()
-                .ok_or(ExecutionError::SessionIsInUse)?;
+                .ok_or_else(|| ExecutionError::SessionIsInUse(*id))?;
             // Verify ownership.
-            ensure!(state.owner == from_id, ExecutionError::InvalidSessionOwner);
+            ensure!(
+                state.owner == from_id,
+                ExecutionError::InvalidSessionOwner {
+                    session_id: Box::new(*id),
+                    accessed_by: Box::new(from_id),
+                    owned_by: Box::new(state.owner)
+                }
+            );
             // Transfer the session.
             state.owner = to_id;
         }
@@ -263,15 +270,15 @@ where
             .session_manager_mut()
             .states
             .get(&session_id)
-            .ok_or(ExecutionError::InvalidSession)?
+            .ok_or_else(|| ExecutionError::InvalidSession(session_id))?
             .clone()
             .try_lock_arc()
-            .ok_or(ExecutionError::SessionIsInUse)?;
+            .ok_or_else(|| ExecutionError::SessionIsInUse(session_id))?;
         let state = guard.data.clone();
         // Verify ownership.
         ensure!(
             guard.owner == application_id,
-            ExecutionError::InvalidSessionOwner
+            ExecutionError::invalid_session_owner(session_id, application_id, guard.owner,)
         );
         // Remember the guard. This will prevent reentrancy.
         self.active_sessions_mut().insert(session_id, guard);
@@ -290,7 +297,11 @@ where
             // Verify ownership.
             ensure!(
                 guard.get().owner == application_id,
-                ExecutionError::InvalidSessionOwner
+                ExecutionError::invalid_session_owner(
+                    session_id,
+                    application_id,
+                    guard.get().owner,
+                )
             );
             // Save the state and unlock the session for future calls.
             guard.get_mut().data = state;
@@ -309,7 +320,11 @@ where
             // Verify ownership.
             ensure!(
                 guard.get().owner == application_id,
-                ExecutionError::InvalidSessionOwner
+                ExecutionError::invalid_session_owner(
+                    session_id,
+                    application_id,
+                    guard.get().owner,
+                )
             );
             // Remove the entry from the set of active sessions.
             guard.remove();
@@ -317,7 +332,7 @@ where
             self.session_manager_mut()
                 .states
                 .remove(&session_id)
-                .ok_or(ExecutionError::InvalidSession)?;
+                .ok_or(ExecutionError::InvalidSession(session_id))?;
         }
         Ok(())
     }
@@ -403,21 +418,23 @@ where
 
     pub(crate) async fn unlock_view_user_state(&self) -> Result<(), ExecutionError> {
         // Make the view available again.
+        let application_id = self.application_id();
         match self
             .active_view_user_states_mut()
             .await
-            .remove(&self.application_id())
+            .remove(&application_id)
         {
             Some(_) => Ok(()),
-            None => Err(ExecutionError::ApplicationStateNotLocked),
+            None => Err(ExecutionError::ApplicationStateNotLocked(application_id)),
         }
     }
 
     pub(crate) async fn contains_key(&self, key: Vec<u8>) -> Result<bool, ExecutionError> {
+        let application_id = self.application_id();
         let state = self.active_view_user_states_mut().await;
         let view = state
-            .get(&self.application_id())
-            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
+            .get(&application_id)
+            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked(application_id))?;
         let result = view.contains_key(&key).await?;
         self.increment_num_reads().await?;
         Ok(result)
@@ -427,10 +444,11 @@ where
         &self,
         key: Vec<u8>,
     ) -> Result<Option<Vec<u8>>, ExecutionError> {
+        let application_id = self.application_id();
         let state = self.active_view_user_states_mut().await;
         let view = state
-            .get(&self.application_id())
-            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
+            .get(&application_id)
+            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked(application_id))?;
         let result = view.get(&key).await?;
         self.increment_num_reads().await?;
         if let Some(value) = &result {
@@ -443,10 +461,11 @@ where
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError> {
+        let application_id = self.application_id();
         let state = self.active_view_user_states_mut().await;
         let view = state
-            .get(&self.application_id())
-            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
+            .get(&application_id)
+            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked(application_id))?;
         let results = view.multi_get(keys).await?;
         self.increment_num_reads().await?;
         for value in results.iter().flatten() {
@@ -460,10 +479,11 @@ where
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, ExecutionError> {
         // Read keys matching a prefix. We have to collect since iterators do not pass the wit barrier
+        let application_id = self.application_id();
         let state = self.active_view_user_states_mut().await;
         let view = state
-            .get(&self.application_id())
-            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
+            .get(&application_id)
+            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked(application_id))?;
         let keys = view.find_keys_by_prefix(&key_prefix).await?;
         self.increment_num_reads().await?;
         let mut read_size = 0;
@@ -479,10 +499,11 @@ where
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
         // Read key/values matching a prefix. We have to collect since iterators do not pass the wit barrier
+        let application_id = self.application_id();
         let state = self.active_view_user_states_mut().await;
         let view = state
-            .get(&self.application_id())
-            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked)?;
+            .get(&application_id)
+            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked(application_id))?;
         let key_values = view.find_key_values_by_prefix(&key_prefix).await?;
         self.increment_num_reads().await?;
         let mut read_size = 0;
@@ -583,16 +604,14 @@ where
 
     pub(crate) fn save_and_unlock_my_state(&self, state: Vec<u8>) -> Result<(), ExecutionError> {
         // Make the view available again.
-        match self
-            .active_simple_user_states_mut()
-            .remove(&self.application_id())
-        {
+        let application_id = self.application_id();
+        match self.active_simple_user_states_mut().remove(&application_id) {
             Some(mut view) => {
                 // Set the state.
                 view.set(state);
                 Ok(())
             }
-            None => Err(ExecutionError::ApplicationStateNotLocked),
+            None => Err(ExecutionError::ApplicationStateNotLocked(application_id)),
         }
     }
 
@@ -606,10 +625,11 @@ where
         let size = batch.size() as u64;
         self.increment_bytes_written(size).await?;
         // Write the batch and make the view available again.
+        let application_id = self.application_id();
         match self
             .active_view_user_states_mut()
             .await
-            .remove(&self.application_id())
+            .remove(&application_id)
         {
             Some(mut view) => {
                 let stored_size = view.total_size().sum_i32()?;
@@ -619,7 +639,7 @@ where
                 self.update_stored_size(increment).await?;
                 Ok(())
             }
-            None => Err(ExecutionError::ApplicationStateNotLocked),
+            None => Err(ExecutionError::ApplicationStateNotLocked(application_id)),
         }
     }
 

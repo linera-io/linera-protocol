@@ -418,7 +418,10 @@ async fn test_simple_user_operation_with_leaking_session(
         )
         .await;
 
-    assert!(matches!(result, Err(ExecutionError::SessionWasNotClosed)));
+    assert!(matches!(
+        result,
+        Err(ExecutionError::SessionWasNotClosed(_))
+    ));
     Ok(())
 }
 

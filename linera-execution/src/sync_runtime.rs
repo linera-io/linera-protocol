@@ -244,9 +244,14 @@ impl<const W: bool> SyncRuntimeInternal<W> {
     ) -> Result<(), ExecutionError> {
         let states = &mut self.session_manager.states;
         for id in session_ids {
-            let state = states.get_mut(id).ok_or(ExecutionError::InvalidSession)?;
+            let state = states
+                .get_mut(id)
+                .ok_or(ExecutionError::InvalidSession(*id))?;
             // Verify ownership.
-            ensure!(state.owner == from_id, ExecutionError::InvalidSessionOwner);
+            ensure!(
+                state.owner == from_id,
+                ExecutionError::invalid_session_owner(*id, from_id, state.owner,)
+            );
             // Transfer the session.
             state.owner = to_id;
         }
@@ -289,13 +294,13 @@ impl<const W: bool> SyncRuntimeInternal<W> {
             .session_manager
             .states
             .get_mut(&session_id)
-            .ok_or(ExecutionError::InvalidSession)?;
+            .ok_or(ExecutionError::InvalidSession(session_id))?;
         // Verify locking.
-        ensure!(!state.locked, ExecutionError::SessionIsInUse);
+        ensure!(!state.locked, ExecutionError::SessionIsInUse(session_id));
         // Verify ownership.
         ensure!(
             state.owner == application_id,
-            ExecutionError::InvalidSessionOwner
+            ExecutionError::invalid_session_owner(session_id, application_id, state.owner,)
         );
         // Lock state and return data.
         state.locked = true;
@@ -312,13 +317,16 @@ impl<const W: bool> SyncRuntimeInternal<W> {
             .session_manager
             .states
             .get_mut(&session_id)
-            .ok_or(ExecutionError::InvalidSession)?;
+            .ok_or(ExecutionError::InvalidSession(session_id))?;
         // Verify locking.
-        ensure!(state.locked, ExecutionError::SessionStateNotLocked);
+        ensure!(
+            state.locked,
+            ExecutionError::SessionStateNotLocked(session_id)
+        );
         // Verify ownership.
         ensure!(
             state.owner == application_id,
-            ExecutionError::InvalidSessionOwner
+            ExecutionError::invalid_session_owner(session_id, application_id, state.owner,)
         );
         // Save data.
         state.data = data;
@@ -335,19 +343,22 @@ impl<const W: bool> SyncRuntimeInternal<W> {
             .session_manager
             .states
             .get(&session_id)
-            .ok_or(ExecutionError::InvalidSession)?;
+            .ok_or(ExecutionError::InvalidSession(session_id))?;
         // Verify locking.
-        ensure!(state.locked, ExecutionError::SessionStateNotLocked);
+        ensure!(
+            state.locked,
+            ExecutionError::SessionStateNotLocked(session_id)
+        );
         // Verify ownership.
         ensure!(
             state.owner == application_id,
-            ExecutionError::InvalidSessionOwner
+            ExecutionError::invalid_session_owner(session_id, application_id, state.owner,)
         );
         // Delete the session entirely.
         self.session_manager
             .states
             .remove(&session_id)
-            .ok_or(ExecutionError::InvalidSession)?;
+            .ok_or(ExecutionError::InvalidSession(session_id))?;
         Ok(())
     }
 }
@@ -542,7 +553,7 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     fn try_read_my_state_new(&mut self) -> Result<Self::Read, ExecutionError> {
         let id = self.application_id()?;
         let state = self.simple_user_states.entry(id).or_default();
-        ensure!(!state.locked, ExecutionError::ApplicationIsInUse); // TODO: include the id
+        ensure!(!state.locked, ExecutionError::ApplicationIsInUse(id));
         let receiver = self
             .execution_state_sender
             .send_request(|callback| Request::ReadSimpleUserState { id, callback })?;
@@ -565,7 +576,7 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     fn lock_new(&mut self) -> Result<Self::Lock, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        ensure!(!state.locked, ExecutionError::ApplicationIsInUse); // TODO: include the id
+        ensure!(!state.locked, ExecutionError::ApplicationIsInUse(id));
         state.locked = true;
         Ok(())
     }
@@ -577,7 +588,7 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     fn unlock_new(&mut self) -> Result<Self::Unlock, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked);
+        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
         state.locked = false;
         Ok(())
     }
@@ -592,7 +603,7 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     fn write_batch_and_unlock(&mut self, batch: Batch) -> Result<(), ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked);
+        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
         state.force_all_pending_queries()?;
         self.execution_state_sender
             .send_request(|callback| Request::WriteBatch {
@@ -608,7 +619,7 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked); // TODO: include the id
+        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
         self.runtime_counts
             .increment_num_reads(&self.runtime_limits)?;
         let receiver = self
@@ -630,7 +641,7 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     ) -> Result<Self::ReadMultiValuesBytes, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked); // TODO: include the id
+        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
         self.runtime_counts
             .increment_num_reads(&self.runtime_limits)?;
         let receiver = self
@@ -661,7 +672,7 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     ) -> Result<Self::ReadValueBytes, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked); // TODO: include the id
+        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
         self.runtime_counts
             .increment_num_reads(&self.runtime_limits)?;
         let receiver = self
@@ -690,7 +701,7 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     ) -> Result<Self::FindKeysByPrefix, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked); // TODO: include the id
+        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
         self.runtime_counts
             .increment_num_reads(&self.runtime_limits)?;
         let receiver = self.execution_state_sender.send_request(move |callback| {
@@ -725,7 +736,7 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked); // TODO: include the id
+        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
         self.runtime_counts
             .increment_num_reads(&self.runtime_limits)?;
         let receiver = self.execution_state_sender.send_request(move |callback| {
@@ -795,10 +806,9 @@ impl ContractSyncRuntime {
         assert_eq!(runtime.applications.len(), 1);
         assert_eq!(runtime.applications[0].id, application_id);
         // Check that all sessions were properly closed.
-        ensure!(
-            runtime.session_manager.states.is_empty(),
-            ExecutionError::SessionWasNotClosed
-        );
+        if let Some(session_id) = runtime.session_manager.states.keys().next() {
+            return Err(ExecutionError::SessionWasNotClosed(*session_id));
+        }
         // Adds the results of the last call to the execution results.
         runtime.execution_results.push(ExecutionResult::User(
             application_id,
