@@ -979,19 +979,24 @@ where
         certificate.value
     );
     // Cannot use the chain any more.
-    assert!(matches!(
-        sender
-            .transfer_to_account(
-                None,
-                Amount::from_tokens(3),
-                Account::chain(ChainId::root(2)),
-                UserData::default()
-            )
-            .await,
-        Err(ChainClientError::LocalNodeError(
-            LocalNodeError::InactiveChain(_)
-        ))
-    ));
+    let result = sender
+        .transfer_to_account(
+            None,
+            Amount::from_tokens(3),
+            Account::chain(ChainId::root(2)),
+            UserData::default(),
+        )
+        .await;
+    assert!(
+        matches!(
+            result,
+            Err(ChainClientError::LocalNodeError(
+                LocalNodeError::InactiveChain(_)
+            )),
+        ),
+        "Unexpected result: {:?}",
+        result
+    );
     Ok(())
 }
 
