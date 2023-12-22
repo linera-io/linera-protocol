@@ -995,7 +995,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ExecutionStateView, TestExecutionRuntimeContext};
+    use crate::{ExecutionRuntimeConfig, ExecutionStateView, TestExecutionRuntimeContext};
     use linera_base::{
         crypto::{BcsSignable, KeyPair},
         data_types::BlockHeight,
@@ -1029,7 +1029,8 @@ mod tests {
             committees: BTreeMap::new(),
             ..SystemExecutionState::default()
         };
-        let view = ExecutionStateView::from_system_state(state, Default::default()).await;
+        let view =
+            ExecutionStateView::from_system_state(state, ExecutionRuntimeConfig::default()).await;
         (view, context)
     }
 

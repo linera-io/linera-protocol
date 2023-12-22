@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
-use linera_execution::WasmRuntime;
+use linera_execution::{ExecutionRuntimeConfig, WasmRuntime};
 use linera_views::{
     common::TableStatus,
     rocks_db::{RocksDbContextError, RocksDbStore, RocksDbStoreConfig},
@@ -80,7 +80,7 @@ impl RocksDbStorage<TestClock> {
         let storage = RocksDbStorage {
             client: Arc::new(storage),
             clock,
-            execution_runtime_config: Default::default(),
+            execution_runtime_config: ExecutionRuntimeConfig::default(),
         };
         Ok((storage, table_status))
     }
@@ -95,7 +95,7 @@ impl RocksDbStorage<WallClock> {
         let storage = RocksDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
-            execution_runtime_config: Default::default(),
+            execution_runtime_config: ExecutionRuntimeConfig::default(),
         };
         Ok(storage)
     }
@@ -108,7 +108,7 @@ impl RocksDbStorage<WallClock> {
         let storage = RocksDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
-            execution_runtime_config: Default::default(),
+            execution_runtime_config: ExecutionRuntimeConfig::default(),
         };
         Ok((storage, table_status))
     }

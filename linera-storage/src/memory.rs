@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::db_storage::{DbStorage, DbStorageInner};
-use linera_execution::WasmRuntime;
+use linera_execution::{ExecutionRuntimeConfig, WasmRuntime};
 use linera_views::memory::{create_memory_store_stream_queries, MemoryStore};
 use std::sync::Arc;
 
@@ -31,7 +31,7 @@ impl<C> MemoryStorage<C> {
         Self {
             client: Arc::new(MemoryStorageInner::make(wasm_runtime, max_stream_queries)),
             clock,
-            execution_runtime_config: Default::default(),
+            execution_runtime_config: ExecutionRuntimeConfig::default(),
         }
     }
 }

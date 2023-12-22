@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
-use linera_execution::WasmRuntime;
+use linera_execution::{ExecutionRuntimeConfig, WasmRuntime};
 use linera_views::{
     common::TableStatus,
     scylla_db::{ScyllaDbContextError, ScyllaDbStore, ScyllaDbStoreConfig},
@@ -81,7 +81,7 @@ impl ScyllaDbStorage<TestClock> {
         let storage = ScyllaDbStorage {
             client: Arc::new(storage),
             clock,
-            execution_runtime_config: Default::default(),
+            execution_runtime_config: ExecutionRuntimeConfig::default(),
         };
         Ok((storage, table_status))
     }
@@ -96,7 +96,7 @@ impl ScyllaDbStorage<WallClock> {
         let storage = ScyllaDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
-            execution_runtime_config: Default::default(),
+            execution_runtime_config: ExecutionRuntimeConfig::default(),
         };
         Ok(storage)
     }
@@ -110,7 +110,7 @@ impl ScyllaDbStorage<WallClock> {
         let storage = ScyllaDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
-            execution_runtime_config: Default::default(),
+            execution_runtime_config: ExecutionRuntimeConfig::default(),
         };
         Ok((storage, table_status))
     }

@@ -30,9 +30,9 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::{Account, AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation},
-    ChainOwnership, ChannelSubscription, ExecutionError, ExecutionStateView, GenericApplicationId,
-    Message, Query, Response, SystemExecutionError, SystemExecutionState, SystemQuery,
-    SystemResponse,
+    ChainOwnership, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
+    ExecutionStateView, GenericApplicationId, Message, Query, Response, SystemExecutionError,
+    SystemExecutionState, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, MemoryStorage, Storage, TestClock};
 use linera_views::{
@@ -63,7 +63,7 @@ struct Dummy;
 impl BcsSignable for Dummy {}
 
 async fn make_state_hash(state: SystemExecutionState) -> CryptoHash {
-    ExecutionStateView::from_system_state(state, Default::default())
+    ExecutionStateView::from_system_state(state, ExecutionRuntimeConfig::default())
         .await
         .crypto_hash()
         .await
