@@ -7,7 +7,7 @@ use amm::{AmmError, ApplicationCall, Message, Operation};
 use async_trait::async_trait;
 use fungible::{Account, AccountOwner, Destination, FungibleTokenAbi};
 use linera_sdk::{
-    base::{Amount, ApplicationId, SessionId, WithContractAbi},
+    base::{Amount, ApplicationId, Owner, SessionId, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
     OperationContext, OutgoingMessage, SessionCallResult, ViewStateStorage,
@@ -119,6 +119,19 @@ impl Contract for Amm {
 }
 
 impl Amm {
+    /// authenticate the originator of the message
+    fn check_account_authentication(
+        authenticated_application_id: Option<ApplicationId>,
+        authenticated_signer: Option<Owner>,
+        owner: AccountOwner,
+    ) -> Result<(), AmmError> {
+        match owner {
+            AccountOwner::User(address) if authenticated_signer == Some(address) => Ok(()),
+            AccountOwner::Application(id) if authenticated_application_id == Some(id) => Ok(()),
+            _ => Err(AmmError::IncorrectAuthentication),
+        }
+    }
+
     async fn execute_order_local(&mut self, operation: Operation) -> Result<(), AmmError> {
         match operation {
             Operation::Swap {
