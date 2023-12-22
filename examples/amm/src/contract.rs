@@ -43,6 +43,8 @@ impl Contract for Amm {
         operation: Self::Operation,
     ) -> Result<ExecutionResult<Self::Message>, AmmError> {
         let mut result = ExecutionResult::default();
+        let owner = Self::get_owner(&operation);
+        Self::check_account_authentication(None, context.authenticated_signer, owner)?;
         if context.chain_id == system_api::current_application_id().creation.chain_id {
             self.execute_order_local(operation).await?;
         } else {
@@ -68,6 +70,7 @@ impl Contract for Amm {
                 input_token_idx,
                 input_amount,
             } => {
+                Self::check_account_authentication(None, context.authenticated_signer, owner)?;
                 self.execute_swap(owner, input_token_idx, input_amount)
                     .await?;
             }
@@ -90,6 +93,11 @@ impl Contract for Amm {
                 input_token_idx,
                 input_amount,
             } => {
+                Self::check_account_authentication(
+                    context.authenticated_caller_id,
+                    context.authenticated_signer,
+                    owner,
+                )?;
                 if context.chain_id == system_api::current_application_id().creation.chain_id {
                     self.execute_swap(owner, input_token_idx, input_amount)
                         .await?;
@@ -119,6 +127,27 @@ impl Contract for Amm {
 }
 
 impl Amm {
+    /// Get the owner from the order
+    fn get_owner(operation: &Operation) -> AccountOwner {
+        match operation {
+            Operation::Swap {
+                owner,
+                input_token_idx: _,
+                input_amount: _,
+            } => *owner,
+            Operation::AddLiquidity {
+                owner,
+                max_token0_amount: _,
+                max_token1_amount: _,
+            } => *owner,
+            Operation::RemoveLiquidity {
+                owner,
+                token_to_remove_idx: _,
+                token_to_remove_amount: _,
+            } => *owner,
+        }
+    }
+
     /// authenticate the originator of the message
     fn check_account_authentication(
         authenticated_application_id: Option<ApplicationId>,
