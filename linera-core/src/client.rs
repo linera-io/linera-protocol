@@ -1427,7 +1427,7 @@ where
                 ExecuteBlockOutcome::Executed(certificate) => {
                     return Ok(ClientOutcome::Committed(certificate));
                 }
-                ExecuteBlockOutcome::OtherBlock(certificate) => {
+                ExecuteBlockOutcome::Conflict(certificate) => {
                     info!(
                         height = %certificate.value().height(),
                         "Another block was committed; retrying."
@@ -1472,12 +1472,12 @@ where
                     let committee = self.local_committee().await?;
                     let final_certificate =
                         self.finalize_block(&committee, certificate.clone()).await?;
-                    return Ok(ExecuteBlockOutcome::OtherBlock(final_certificate));
+                    return Ok(ExecuteBlockOutcome::Conflict(final_certificate));
                 }
                 if can_propose {
                     if let Some(block) = certificate.value().block() {
                         let final_certificate = self.propose_block(block.clone()).await?;
-                        return Ok(ExecuteBlockOutcome::OtherBlock(final_certificate));
+                        return Ok(ExecuteBlockOutcome::Conflict(final_certificate));
                     }
                 }
             }
@@ -1518,7 +1518,7 @@ where
                     let certificate = self
                         .submit_block_proposal(&committee, (*proposal).clone(), hashed_value)
                         .await?;
-                    return Ok(ExecuteBlockOutcome::OtherBlock(certificate));
+                    return Ok(ExecuteBlockOutcome::Conflict(certificate));
                 }
             }
             // But if the current round has not timed out yet, we have to wait.
@@ -1761,7 +1761,7 @@ where
                 ExecuteBlockOutcome::Executed(certificate) => {
                     return Ok(ClientOutcome::Committed(certificate));
                 }
-                ExecuteBlockOutcome::OtherBlock(certificate) => {
+                ExecuteBlockOutcome::Conflict(certificate) => {
                     info!(
                         height = %certificate.value().height(),
                         "Another block was committed; retrying."
@@ -1799,7 +1799,7 @@ where
                 .await?
             {
                 ExecuteBlockOutcome::Executed(certificate) => certificate,
-                ExecuteBlockOutcome::OtherBlock(_) => continue,
+                ExecuteBlockOutcome::Conflict(_) => continue,
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
                     return Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
@@ -1923,7 +1923,7 @@ where
                 ExecuteBlockOutcome::Executed(certificate) => {
                     return Ok(ClientOutcome::Committed(certificate))
                 }
-                ExecuteBlockOutcome::OtherBlock(_) => continue,
+                ExecuteBlockOutcome::Conflict(_) => continue,
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
                     return Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
@@ -1947,9 +1947,7 @@ where
             }
             match self.execute_block(incoming_messages, vec![]).await {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
-                | Ok(ExecuteBlockOutcome::OtherBlock(certificate)) => {
-                    certificates.push(certificate)
-                }
+                | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
                     return Ok((certificates, Some(timeout)));
                 }
@@ -2140,7 +2138,7 @@ enum ExecuteBlockOutcome {
     Executed(Certificate),
     /// A different block was already proposed and got committed. Check whether the messages and
     /// operations are still suitable, and try again at the next block height.
-    OtherBlock(Certificate),
+    Conflict(Certificate),
     /// We are not the round leader and cannot do anything. Try again at the specified time or
     /// or whenever the round or block height changes.
     WaitForTimeout(RoundTimeout),
