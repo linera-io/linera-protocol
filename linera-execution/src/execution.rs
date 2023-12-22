@@ -308,7 +308,8 @@ where
         &self,
         mut results: Vec<ExecutionResult>,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
-        // TODO: It looks like we are forgetting about messages by early entries in `results`.
+        // TODO(#1417): It looks like we are forgetting about the recipients of messages
+        // sent by earlier entries in `results` (i.e. application calls).
         let Some(ExecutionResult::User(application_id, result)) = results.last() else {
             return Ok(results);
         };
