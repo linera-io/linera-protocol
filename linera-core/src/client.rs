@@ -764,7 +764,7 @@ where
             proposal,
             hashed_value,
         };
-        let mut certificate = self
+        let certificate = self
             .communicate_chain_updates(committee, content.block.chain_id, submit_action)
             .await?
             .ok_or_else(|| ChainClientError::InternalError("Missing certificate"))?;
@@ -779,14 +779,14 @@ where
                 certificate.value().is_confirmed(),
                 ChainClientError::InternalError("Certificate is not for a confirmed block")
             );
+            Ok(certificate)
         } else {
             ensure!(
                 certificate.value().is_validated(),
                 ChainClientError::InternalError("Certificate is not for a validated block")
             );
-            certificate = self.finalize_block(committee, certificate).await?;
+            self.finalize_block(committee, certificate).await
         }
-        Ok(certificate)
     }
 
     /// Broadcasts certified blocks and optionally one more block proposal.
@@ -1457,6 +1457,7 @@ where
         operations: Vec<Operation>,
     ) -> Result<ExecuteBlockOutcome, ChainClientError> {
         loop {
+            // TODO(afck): Update all validators about the current round.
             let identity = self.identity().await?;
             let info = self.chain_info_with_manager_values().await?;
             let manager = *info.manager;
@@ -1470,12 +1471,14 @@ where
             if let Some(certificate) = manager.highest_validated() {
                 if certificate.round == manager.current_round {
                     let committee = self.local_committee().await?;
+                    // TODO(afck): If this fails due to round timeout, retry.
                     let final_certificate =
                         self.finalize_block(&committee, certificate.clone()).await?;
                     return Ok(ExecuteBlockOutcome::Conflict(final_certificate));
                 }
                 if can_propose {
                     if let Some(block) = certificate.value().block() {
+                        // TODO(afck): If this fails due to round timeout, retry.
                         let final_certificate = self.propose_block(block.clone()).await?;
                         return Ok(ExecuteBlockOutcome::Conflict(final_certificate));
                     }
@@ -1485,7 +1488,9 @@ where
             if can_propose {
                 if let Some(block) = &self.pending_block {
                     if block.height == self.next_block_height {
-                        self.propose_block(block.clone()).await?;
+                        // TODO(afck): If this fails due to round timeout, retry.
+                        let certificate = self.propose_block(block.clone()).await?;
+                        return Ok(ExecuteBlockOutcome::Conflict(certificate));
                     }
                 }
                 let timestamp = self.next_timestamp(&incoming_messages).await;
@@ -1499,6 +1504,7 @@ where
                     authenticated_signer: Some(self.identity().await?),
                     timestamp,
                 };
+                // TODO(afck): If this fails due to round timeout, retry.
                 let certificate = self.propose_block(block).await?;
                 return Ok(ExecuteBlockOutcome::Executed(certificate));
             }
@@ -1515,6 +1521,7 @@ where
                     } else {
                         HashedValue::new_validated(executed_block)
                     };
+                    // TODO(afck): If this fails due to round timeout, retry.
                     let certificate = self
                         .submit_block_proposal(&committee, (*proposal).clone(), hashed_value)
                         .await?;
