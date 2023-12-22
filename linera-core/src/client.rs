@@ -1481,14 +1481,6 @@ where
                     }
                 }
             }
-            // If there is already a valid proposal in this round, try to finalize it.
-            if let Some(proposal) = manager.requested_proposed {
-                if proposal.content.round == manager.current_round {
-                    return Err(ChainClientError::BlockProposalError(
-                        "pending block proposal",
-                    ));
-                }
-            }
             // Otherwise we can propose a block with our own messages and operations.
             if can_propose {
                 if let Some(block) = &self.pending_block {
@@ -1509,6 +1501,25 @@ where
                 };
                 let certificate = self.propose_block(block).await?;
                 return Ok(ExecuteBlockOutcome::Executed(certificate));
+            }
+            // If there is already a valid proposal in this round, try to finalize it.
+            if let Some(proposal) = manager.requested_proposed {
+                if proposal.content.round == manager.current_round {
+                    let committee = self.local_committee().await?;
+                    let (executed_block, _) = self
+                        .node_client
+                        .stage_block_execution(proposal.content.block.clone())
+                        .await?;
+                    let hashed_value = if proposal.content.round.is_fast() {
+                        HashedValue::new_confirmed(executed_block)
+                    } else {
+                        HashedValue::new_validated(executed_block)
+                    };
+                    let certificate = self
+                        .submit_block_proposal(&committee, (*proposal).clone(), hashed_value)
+                        .await?;
+                    return Ok(ExecuteBlockOutcome::OtherBlock(certificate));
+                }
             }
             // But if the current round has not timed out yet, we have to wait.
             if manager.round_timeout > self.storage_client().await.current_time() {
