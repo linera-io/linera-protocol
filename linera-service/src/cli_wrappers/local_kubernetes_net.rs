@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
-    util::{self, current_binary_parent, CommandExt},
+    util::{self, CommandExt},
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
@@ -36,14 +36,14 @@ pub struct LocalKubernetesNetConfig {
     pub testing_prng_seed: Option<u64>,
     pub num_initial_validators: usize,
     pub num_shards: usize,
-    pub binaries_dir: Option<PathBuf>,
+    pub binaries: Option<Option<PathBuf>>,
 }
 
 /// A simplified version of [`LocalKubernetesNetConfig`]
 #[cfg(any(test, feature = "test"))]
 pub struct SharedLocalKubernetesNetTestingConfig {
     pub network: Network,
-    pub binaries_dir: Option<PathBuf>,
+    pub binaries: Option<Option<PathBuf>>,
 }
 
 /// A set of Linera validators running locally as native processes.
@@ -53,7 +53,7 @@ pub struct LocalKubernetesNet {
     testing_prng_seed: Option<u64>,
     next_client_id: usize,
     tmp_dir: Arc<TempDir>,
-    binaries_dir: Option<PathBuf>,
+    binaries: Option<Option<PathBuf>>,
     kubectl_instance: Arc<Mutex<KubectlInstance>>,
     kind_clusters: Vec<KindCluster>,
     num_initial_validators: usize,
@@ -62,11 +62,8 @@ pub struct LocalKubernetesNet {
 
 #[cfg(any(test, feature = "test"))]
 impl SharedLocalKubernetesNetTestingConfig {
-    pub fn new(network: Network, binaries_dir: Option<PathBuf>) -> Self {
-        Self {
-            network,
-            binaries_dir,
-        }
+    pub fn new(network: Network, binaries: Option<Option<PathBuf>>) -> Self {
+        Self { network, binaries }
     }
 }
 
@@ -90,7 +87,7 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
         let mut net = LocalKubernetesNet::new(
             self.network,
             self.testing_prng_seed,
-            self.binaries_dir,
+            self.binaries,
             KubectlInstance::new(Vec::new()),
             clusters,
             self.num_initial_validators,
@@ -131,7 +128,7 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
                 let mut net = LocalKubernetesNet::new(
                     self.network,
                     Some(seed),
-                    self.binaries_dir,
+                    self.binaries,
                     KubectlInstance::new(Vec::new()),
                     clusters,
                     num_validators,
@@ -282,7 +279,7 @@ impl LocalKubernetesNet {
     fn new(
         network: Network,
         testing_prng_seed: Option<u64>,
-        binaries_dir: Option<PathBuf>,
+        binaries: Option<Option<PathBuf>>,
         kubectl_instance: KubectlInstance,
         kind_clusters: Vec<KindCluster>,
         num_initial_validators: usize,
@@ -293,7 +290,7 @@ impl LocalKubernetesNet {
             testing_prng_seed,
             next_client_id: 0,
             tmp_dir: Arc::new(tempdir()?),
-            binaries_dir,
+            binaries,
             kubectl_instance: Arc::new(Mutex::new(kubectl_instance)),
             kind_clusters,
             num_initial_validators,
@@ -371,19 +368,11 @@ impl LocalKubernetesNet {
     }
 
     async fn run(&mut self) -> Result<()> {
-        let binary_parent =
-            current_binary_parent().expect("Fetching current binaries path should not fail");
-        let binaries_path = if let Some(binaries_dir) = &self.binaries_dir {
-            binaries_dir
-        } else {
-            &binary_parent
-        };
-
         let github_root = get_github_root().await?;
         // Build Docker image
         let docker_image = DockerImage::build(
             String::from("linera-test:latest"),
-            binaries_path,
+            &self.binaries,
             &github_root,
         )
         .await?;

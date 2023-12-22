@@ -1147,11 +1147,12 @@ enum NetCommand {
         #[arg(long)]
         kubernetes: bool,
 
-        /// Directory where we should grab the binaries to be packaged in the Docker image
-        /// and run inside the Kubernetes deployment.
+        /// If this is not set, we'll build the binaries from within the Docker container
+        /// If it's set, but with no directory path arg, we'll look for the binaries based on `current_binary_parent`
+        /// If it's set, but with a directory path arg, we'll get the binaries from that path directory
         #[cfg(feature = "kubernetes")]
-        #[arg(long)]
-        binaries_dir: Option<PathBuf>,
+        #[arg(long, num_args=0..=1)]
+        binaries: Option<Option<PathBuf>>,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is
@@ -2322,7 +2323,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 #[cfg(feature = "kubernetes")]
                 kubernetes,
                 #[cfg(feature = "kubernetes")]
-                binaries_dir,
+                binaries,
             } => {
                 if *validators < 1 {
                     panic!("The local test network must have at least one validator.");
@@ -2335,7 +2336,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 tokio::spawn(handle_signals(shutdown_sender));
 
                 #[cfg(feature = "kubernetes")]
-                let (kubernetes, binaries_dir) = (*kubernetes, binaries_dir.clone());
+                let (kubernetes, binaries) = (*kubernetes, binaries.clone());
                 #[cfg(not(feature = "kubernetes"))]
                 let (kubernetes, _binaries_dir) = (false, PathBuf::default());
 
@@ -2347,7 +2348,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                             testing_prng_seed: *testing_prng_seed,
                             num_initial_validators: *validators,
                             num_shards: *shards,
-                            binaries_dir: binaries_dir.clone(),
+                            binaries: binaries.clone(),
                         };
                         let (mut net, client1) = config.instantiate().await?;
                         let result = Ok(net_up(extra_wallets, &mut net, client1).await?);
