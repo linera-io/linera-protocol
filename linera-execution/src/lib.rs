@@ -110,6 +110,8 @@ pub enum ExecutionError {
     JoinError(#[from] tokio::task::JoinError),
     #[error("Host future was polled after it had finished")]
     PolledTwice,
+    #[error("The given promise is invalid or was polled once already")]
+    InvalidPromise,
     #[error("Attempt to use a system API to write to read-only storage")]
     WriteAttemptToReadOnlyStorage,
 

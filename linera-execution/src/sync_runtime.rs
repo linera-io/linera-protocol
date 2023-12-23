@@ -141,7 +141,7 @@ impl<T> QueryManager<T> {
         let promise = self
             .pending_queries
             .remove(&id)
-            .ok_or(ExecutionError::PolledTwice)?;
+            .ok_or(ExecutionError::InvalidPromise)?;
         let value = promise.read()?;
         self.active_query_count -= 1;
         Ok(value)
@@ -568,9 +568,9 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
         let state = self
             .simple_user_states
             .get_mut(&id)
-            .ok_or(ExecutionError::PolledTwice)?;
+            .ok_or(ExecutionError::InvalidPromise)?;
         let receiver =
-            std::mem::take(&mut state.pending_query).ok_or(ExecutionError::PolledTwice)?;
+            std::mem::take(&mut state.pending_query).ok_or(ExecutionError::InvalidPromise)?;
         receiver.recv_response()
     }
 
