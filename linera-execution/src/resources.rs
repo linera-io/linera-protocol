@@ -161,10 +161,13 @@ impl RuntimeCounts {
         limits: &RuntimeLimits,
         increment: u64,
     ) -> Result<(), ExecutionError> {
-        self.bytes_read = self.bytes_read
+        self.bytes_read = self
+            .bytes_read
             .checked_add(increment)
             .ok_or(ExecutionError::ExcessiveRead)?;
-        if self.bytes_read >= limits.max_budget_bytes_read || self.bytes_read >= limits.maximum_bytes_left_to_read {
+        if self.bytes_read >= limits.max_budget_bytes_read
+            || self.bytes_read >= limits.maximum_bytes_left_to_read
+        {
             return Err(ExecutionError::ExcessiveRead);
         }
         Ok(())
@@ -175,10 +178,13 @@ impl RuntimeCounts {
         limits: &RuntimeLimits,
         increment: u64,
     ) -> Result<(), ExecutionError> {
-        self.bytes_written = self.bytes_written
+        self.bytes_written = self
+            .bytes_written
             .checked_add(increment)
             .ok_or(ExecutionError::ExcessiveWrite)?;
-        if self.bytes_written >= limits.max_budget_bytes_written || self.bytes_written >= limits.maximum_bytes_left_to_write {
+        if self.bytes_written >= limits.max_budget_bytes_written
+            || self.bytes_written >= limits.maximum_bytes_left_to_write
+        {
             return Err(ExecutionError::ExcessiveWrite);
         }
         Ok(())

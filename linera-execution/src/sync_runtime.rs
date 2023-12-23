@@ -177,7 +177,9 @@ struct ViewUserState {
 
 impl ViewUserState {
     fn force_all_pending_queries(&mut self) -> Result<(), ExecutionError> {
+        self.contains_key_queries.force_all()?;
         self.read_value_queries.force_all()?;
+        self.read_multi_values_queries.force_all()?;
         self.find_keys_queries.force_all()?;
         self.find_key_values_queries.force_all()?;
         Ok(())
@@ -371,7 +373,7 @@ impl<const W: bool> SyncRuntime<W> {
     fn into_inner(self) -> Option<SyncRuntimeInternal<W>> {
         let runtime = Arc::into_inner(self.0)?
             .into_inner()
-            .expect("thread should not panicked");
+            .expect("thread should not have panicked");
         Some(runtime)
     }
 

@@ -135,9 +135,9 @@ pub enum ExecutionError {
     #[error("Session {0} is still opened at the end of a transaction")]
     SessionWasNotClosed(SessionId),
 
-    #[error("Attempted to call an application while the state is locked")]
+    #[error("Attempted to call application {0} while the state is locked")]
     ApplicationIsInUse(UserApplicationId),
-    #[error("Attempted to read an application state that is not locked")]
+    #[error("Attempted to read the state of application {0} but it is not locked")]
     ApplicationStateNotLocked(UserApplicationId),
     #[error("Failed to load bytecode from storage {0:?}")]
     ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
