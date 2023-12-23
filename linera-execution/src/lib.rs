@@ -6,16 +6,21 @@
 mod applications;
 pub mod committee;
 mod execution;
+mod execution_state_actor;
 mod graphql;
 mod ownership;
 pub mod policy;
 mod resources;
 mod runtime;
 pub mod runtime_actor;
+mod sync_runtime;
 pub mod system;
 mod wasm;
 
-pub use crate::runtime_actor::{ContractActorRuntime, ServiceActorRuntime};
+pub use crate::{
+    runtime_actor::{ContractActorRuntime, ServiceActorRuntime},
+    sync_runtime::{ContractSyncRuntime, ServiceSyncRuntime},
+};
 pub use applications::{
     ApplicationRegistryView, BytecodeLocation, GenericApplicationId, UserApplicationDescription,
     UserApplicationId,
@@ -67,6 +72,11 @@ pub trait UserContractModule {
         &self,
         runtime: ContractActorRuntime,
     ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError>;
+
+    fn instantiate_with_sync_runtime(
+        &self,
+        runtime: ContractSyncRuntime,
+    ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError>;
 }
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
@@ -75,13 +85,18 @@ pub trait UserServiceModule {
         &self,
         runtime: ServiceActorRuntime,
     ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError>;
+
+    fn instantiate_with_sync_runtime(
+        &self,
+        runtime: ServiceSyncRuntime,
+    ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError>;
 }
 
 /// A type for errors happening during execution.
 #[derive(Error, Debug)]
 pub enum ExecutionError {
     #[error(transparent)]
-    ViewError(ViewError),
+    ViewError(#[from] ViewError),
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
     #[error(transparent)]
@@ -95,50 +110,64 @@ pub enum ExecutionError {
     JoinError(#[from] tokio::task::JoinError),
     #[error("Host future was polled after it had finished")]
     PolledTwice,
+    #[error("The given promise is invalid or was polled once already")]
+    InvalidPromise,
     #[error("Attempt to use a system API to write to read-only storage")]
     WriteAttemptToReadOnlyStorage,
 
-    #[error("A session is still opened at the end of a transaction")]
-    SessionWasNotClosed,
     #[error("Invalid operation for this application")]
     InvalidOperation,
     #[error("Invalid message for this application")]
     InvalidMessage,
     #[error("Invalid query for this application")]
     InvalidQuery,
-    #[error("Can't call another application during a query")]
-    CallApplicationFromQuery,
-    #[error("Queries can't change application state")]
-    LockStateFromQuery,
-    #[error("Session does not exist or was already closed")]
-    InvalidSession,
-    #[error("Attempted to call or forward an active session")]
-    SessionIsInUse,
-    #[error("Session is not accessible by this owner")]
-    InvalidSessionOwner,
-    #[error("Attempted to call an application while the state is locked")]
-    ApplicationIsInUse,
-    #[error("Attempted to get an entry that is not locked")]
-    ApplicationStateNotLocked,
+
+    #[error("Session {0} does not exist or was already closed")]
+    InvalidSession(SessionId),
+    #[error("Attempted to call or forward an active session {0}")]
+    SessionIsInUse(SessionId),
+    #[error("Attempted to save a session {0} but it is not locked")]
+    SessionStateNotLocked(SessionId),
+    #[error("Session {session_id} is owned by {owned_by} but was accessed by {accessed_by}")]
+    InvalidSessionOwner {
+        session_id: Box<SessionId>,
+        accessed_by: Box<UserApplicationId>,
+        owned_by: Box<UserApplicationId>,
+    },
+    #[error("Session {0} is still opened at the end of a transaction")]
+    SessionWasNotClosed(SessionId),
+
+    #[error("Attempted to call application {0} while the state is locked")]
+    ApplicationIsInUse(UserApplicationId),
+    #[error("Attempted to read the state of application {0} but it is not locked")]
+    ApplicationStateNotLocked(UserApplicationId),
+    #[error("Failed to load bytecode from storage {0:?}")]
+    ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
+
     #[error("Pricing error: {0}")]
     PricingError(#[from] PricingError),
-    #[error("Excessive readings from storage")]
+    #[error("Excessive number of read queries from storage")]
+    ExcessiveNumReads,
+    #[error("Excessive number of bytes read from storage")]
     ExcessiveRead,
-    #[error("Excessive writings to storage")]
+    #[error("Excessive number of bytes written to storage")]
     ExcessiveWrite,
     #[error("Runtime failed to respond to application")]
     MissingRuntimeResponse,
     #[error("Bytecode ID {0:?} is invalid")]
     InvalidBytecodeId(BytecodeId),
-    #[error("Failed to load bytecode from storage {0:?}")]
-    ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
 }
 
-impl From<ViewError> for ExecutionError {
-    fn from(error: ViewError) -> Self {
-        match error {
-            ViewError::TryLockError(_) => ExecutionError::ApplicationIsInUse,
-            error => ExecutionError::ViewError(error),
+impl ExecutionError {
+    fn invalid_session_owner(
+        session_id: SessionId,
+        accessed_by: UserApplicationId,
+        owned_by: UserApplicationId,
+    ) -> Self {
+        Self::InvalidSessionOwner {
+            session_id: Box::new(session_id),
+            accessed_by: Box::new(accessed_by),
+            owned_by: Box::new(owned_by),
         }
     }
 }
@@ -217,11 +246,21 @@ pub struct SessionCallResult {
     pub close_session: bool,
 }
 
+/// System runtime implementation in use.
+#[derive(Default, Clone, Copy)]
+pub enum ExecutionRuntimeConfig {
+    Actor,
+    #[default]
+    Synchronous,
+}
+
 /// Requirements for the `extra` field in our state views (and notably the
 /// [`ExecutionStateView`]).
 #[async_trait]
 pub trait ExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId;
+
+    fn execution_runtime_config(&self) -> ExecutionRuntimeConfig;
 
     fn user_contracts(&self) -> &Arc<DashMap<UserApplicationId, UserContractCode>>;
 
@@ -449,6 +488,16 @@ pub trait BaseRuntime {
 pub trait ServiceRuntime: BaseRuntime {
     type TryQueryApplication: fmt::Debug + Send;
 
+    /// Queries another application.
+    fn try_query_application(
+        &mut self,
+        queried_id: UserApplicationId,
+        argument: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        let promise = self.try_query_application_new(queried_id, argument)?;
+        self.try_query_application_wait(&promise)
+    }
+
     /// Queries another application (new).
     fn try_query_application_new(
         &mut self,
@@ -653,15 +702,17 @@ impl OperationContext {
 #[derive(Clone)]
 pub struct TestExecutionRuntimeContext {
     chain_id: ChainId,
+    execution_runtime_config: ExecutionRuntimeConfig,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
 }
 
 #[cfg(any(test, feature = "test"))]
 impl TestExecutionRuntimeContext {
-    fn new(chain_id: ChainId) -> Self {
+    fn new(chain_id: ChainId, execution_runtime_config: ExecutionRuntimeConfig) -> Self {
         Self {
             chain_id,
+            execution_runtime_config,
             user_contracts: Arc::default(),
             user_services: Arc::default(),
         }
@@ -673,6 +724,10 @@ impl TestExecutionRuntimeContext {
 impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId {
         self.chain_id
+    }
+
+    fn execution_runtime_config(&self) -> ExecutionRuntimeConfig {
+        self.execution_runtime_config
     }
 
     fn user_contracts(&self) -> &Arc<DashMap<UserApplicationId, UserContractCode>> {

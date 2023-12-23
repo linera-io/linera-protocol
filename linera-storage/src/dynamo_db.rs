@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
-use linera_execution::WasmRuntime;
+use linera_execution::{ExecutionRuntimeConfig, WasmRuntime};
 use linera_views::{
     common::TableStatus,
     dynamo_db::{DynamoDbContextError, DynamoDbStore, DynamoDbStoreConfig},
@@ -85,6 +85,7 @@ impl DynamoDbStorage<TestClock> {
         let storage = DynamoDbStorage {
             client: Arc::new(storage),
             clock,
+            execution_runtime_config: ExecutionRuntimeConfig::default(),
         };
         Ok((storage, table_status))
     }
@@ -99,6 +100,7 @@ impl DynamoDbStorage<WallClock> {
         let storage = DynamoDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
+            execution_runtime_config: ExecutionRuntimeConfig::default(),
         };
         Ok(storage)
     }
@@ -112,6 +114,7 @@ impl DynamoDbStorage<WallClock> {
         let storage = DynamoDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
+            execution_runtime_config: ExecutionRuntimeConfig::default(),
         };
         Ok((storage, table_status))
     }

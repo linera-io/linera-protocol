@@ -24,8 +24,11 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     state.balance = Amount::from_tokens(4);
     let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
-            .await;
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            Default::default(),
+        )
+        .await;
     let operation = SystemOperation::Transfer {
         owner: None,
         amount: Amount::from_tokens(4),
@@ -63,8 +66,11 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
-            .await;
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            Default::default(),
+        )
+        .await;
     let message = SystemMessage::Credit {
         amount: Amount::from_tokens(4),
         account: Account::chain(ChainId::root(0)),
@@ -100,8 +106,11 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     state.balance = Amount::from_tokens(4);
     let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
-            .await;
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            Default::default(),
+        )
+        .await;
     let context = QueryContext {
         chain_id: ChainId::root(0),
     };

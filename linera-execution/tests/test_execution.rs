@@ -13,18 +13,23 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, Owner, SessionId},
 };
 use linera_execution::{
-    policy::ResourceControlPolicy, ContractActorRuntime, ServiceActorRuntime, *,
+    policy::ResourceControlPolicy, ContractActorRuntime, ContractSyncRuntime, ServiceActorRuntime,
+    ServiceSyncRuntime, *,
 };
 use linera_views::{batch::Batch, common::Context, memory::MemoryContext, views::View};
 use std::sync::Arc;
+use test_case::test_case;
 
 #[tokio::test]
 async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
-            .await;
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            Default::default(),
+        )
+        .await;
 
     let app_desc = create_dummy_user_application_description();
     let app_id = view
@@ -94,6 +99,16 @@ impl UserContractModule for TestModule {
     fn instantiate_with_actor_runtime(
         &self,
         runtime: ContractActorRuntime,
+    ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError> {
+        Ok(Box::new(TestApplication {
+            owner: self.owner,
+            runtime,
+        }))
+    }
+
+    fn instantiate_with_sync_runtime(
+        &self,
+        runtime: ContractSyncRuntime,
     ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError> {
         Ok(Box::new(TestApplication {
             owner: self.owner,
@@ -236,6 +251,16 @@ impl UserServiceModule for TestModule {
             runtime,
         }))
     }
+
+    fn instantiate_with_sync_runtime(
+        &self,
+        runtime: ServiceSyncRuntime,
+    ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError> {
+        Ok(Box::new(TestApplication {
+            owner: self.owner,
+            runtime,
+        }))
+    }
 }
 
 impl<Runtime> UserService for TestApplication<Runtime>
@@ -262,14 +287,21 @@ where
     }
 }
 
+#[test_case(ExecutionRuntimeConfig::Actor ; "actor")]
+#[test_case(ExecutionRuntimeConfig::Synchronous ; "synchronous")]
 #[tokio::test]
-async fn test_simple_user_operation() -> anyhow::Result<()> {
+async fn test_simple_user_operation(
+    execution_runtime_config: ExecutionRuntimeConfig,
+) -> anyhow::Result<()> {
     let owner = Owner::from(PublicKey::debug(0));
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
-            .await;
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            execution_runtime_config,
+        )
+        .await;
     let app_desc = create_dummy_user_application_description();
     let app_id = view
         .system
@@ -339,14 +371,21 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test_case(ExecutionRuntimeConfig::Actor ; "actor")]
+#[test_case(ExecutionRuntimeConfig::Synchronous ; "synchronous")]
 #[tokio::test]
-async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()> {
+async fn test_simple_user_operation_with_leaking_session(
+    execution_runtime_config: ExecutionRuntimeConfig,
+) -> anyhow::Result<()> {
     let owner = Owner::from(PublicKey::debug(0));
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
-            .await;
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            execution_runtime_config,
+        )
+        .await;
     let app_desc = create_dummy_user_application_description();
     let app_id = view
         .system
@@ -379,7 +418,10 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
         )
         .await;
 
-    assert!(matches!(result, Err(ExecutionError::SessionWasNotClosed)));
+    assert!(matches!(
+        result,
+        Err(ExecutionError::SessionWasNotClosed(_))
+    ));
     Ok(())
 }
 
@@ -388,14 +430,21 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
 /// Sends an operation to the [`TestApplication`] requesting it to fail a cross-application call.
 /// It is then forwarded to the reentrant call, where the cross-application call handler fails and
 /// the execution error should be handled correctly (without panicking).
+#[test_case(ExecutionRuntimeConfig::Actor ; "actor")]
+#[test_case(ExecutionRuntimeConfig::Synchronous ; "synchronous")]
 #[tokio::test]
-async fn test_cross_application_error() -> anyhow::Result<()> {
+async fn test_cross_application_error(
+    execution_runtime_config: ExecutionRuntimeConfig,
+) -> anyhow::Result<()> {
     let owner = Owner::from(PublicKey::debug(0));
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
-            .await;
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            execution_runtime_config,
+        )
+        .await;
     let app_desc = create_dummy_user_application_description();
     let app_id = view
         .system

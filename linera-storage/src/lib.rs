@@ -44,8 +44,8 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    ChainOwnership, ExecutionError, ExecutionRuntimeContext, UserApplicationDescription,
-    UserApplicationId, UserContractCode, UserServiceCode, WasmRuntime,
+    ChainOwnership, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
+    UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode, WasmRuntime,
 };
 use linera_views::{
     common::Context,
@@ -298,6 +298,7 @@ async fn read_publish_bytecode_operation(
 pub struct ChainRuntimeContext<S> {
     storage: S,
     chain_id: ChainId,
+    execution_runtime_config: ExecutionRuntimeConfig,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
     _chain_guard: Arc<ChainGuard>,
@@ -310,6 +311,10 @@ where
 {
     fn chain_id(&self) -> ChainId {
         self.chain_id
+    }
+
+    fn execution_runtime_config(&self) -> linera_execution::ExecutionRuntimeConfig {
+        self.execution_runtime_config
     }
 
     fn user_contracts(&self) -> &Arc<DashMap<UserApplicationId, UserContractCode>> {

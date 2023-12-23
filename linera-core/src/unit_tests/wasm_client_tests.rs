@@ -483,21 +483,21 @@ where
         .await?;
 
     let messages = cert.value().messages().unwrap();
-    assert!(messages.iter().any(
-        |OutgoingMessage {
-             destination,
-             message,
-             ..
-         }| {
-            matches!(
-                message, Message::System(SystemMessage::RegisterApplications { applications })
-                if matches!(
-                    applications[0], UserApplicationDescription{ bytecode_id: b_id, .. }
-                    if b_id == bytecode_id.forget_abi()
-                )
-            ) && *destination == Destination::Recipient(receiver.chain_id())
-        }
-    ));
+    {
+        let OutgoingMessage {
+            destination,
+            message,
+            ..
+        } = &messages[0];
+        assert!(matches!(
+            message, Message::System(SystemMessage::RegisterApplications { applications })
+            if applications.len() == 1 && matches!(
+                applications[0], UserApplicationDescription{ bytecode_id: b_id, .. }
+                if b_id == bytecode_id.forget_abi()
+            )
+        ));
+        assert_eq!(*destination, Destination::Recipient(receiver.chain_id()));
+    }
     receiver.synchronize_from_validators().await.unwrap();
     receiver.receive_certificate(cert).await.unwrap();
     let certs = receiver.process_inbox().await.unwrap();

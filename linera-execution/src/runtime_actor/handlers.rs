@@ -95,12 +95,14 @@ where
                 self.read().await.handle_request(base_request).await?
             }
             ContractRequest::RemainingFuel { response_sender } => {
-                response_sender.respond(self.read().await.remaining_fuel())
+                response_sender.respond(self.read().await.remaining_fuel().await)
             }
             ContractRequest::SetRemainingFuel {
                 remaining_fuel,
                 response_sender,
-            } => response_sender.respond(self.write().await.set_remaining_fuel(remaining_fuel)),
+            } => {
+                response_sender.respond(self.write().await.set_remaining_fuel(remaining_fuel).await)
+            }
             ContractRequest::TryReadAndLockMyState { response_sender } => response_sender.respond(
                 match self.write().await.try_read_and_lock_my_state().await {
                     Ok(bytes) => Some(bytes),

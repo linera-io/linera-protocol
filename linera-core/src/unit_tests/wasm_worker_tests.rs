@@ -28,10 +28,10 @@ use linera_execution::{
     committee::Epoch,
     policy::ResourceControlPolicy,
     system::{SystemChannel, SystemMessage, SystemOperation},
-    Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription, ExecutionStateView,
-    GenericApplicationId, Message, Operation, OperationContext, ResourceTracker,
-    SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmContractModule,
-    WasmRuntime,
+    Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription, ExecutionRuntimeConfig,
+    ExecutionStateView, GenericApplicationId, Message, Operation, OperationContext,
+    ResourceTracker, SystemExecutionState, UserApplicationDescription, UserApplicationId,
+    WasmContractModule, WasmRuntime,
 };
 use linera_storage::{MemoryStorage, Storage};
 use linera_views::views::{CryptoHashView, ViewError};
@@ -246,7 +246,11 @@ where
         timestamp: Timestamp::from(2),
         ..make_state(Epoch::ZERO, creator_chain, admin_id)
     };
-    let creator_state = ExecutionStateView::from_system_state(creator_system_state.clone()).await;
+    let creator_state = ExecutionStateView::from_system_state(
+        creator_system_state.clone(),
+        ExecutionRuntimeConfig::default(),
+    )
+    .await;
     let subscribe_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
         block: subscribe_block,
         messages: vec![OutgoingMessage {
@@ -370,7 +374,11 @@ where
         .known_applications
         .insert(application_id, application_description.clone());
     creator_system_state.timestamp = Timestamp::from(4);
-    let mut creator_state = ExecutionStateView::from_system_state(creator_system_state).await;
+    let mut creator_state = ExecutionStateView::from_system_state(
+        creator_system_state,
+        ExecutionRuntimeConfig::default(),
+    )
+    .await;
     creator_state
         .simulate_initialization(
             contract,
