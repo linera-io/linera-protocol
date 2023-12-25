@@ -125,27 +125,6 @@ impl Contract for Amm {
 }
 
 impl Amm {
-    /// Get the owner from the order
-    fn get_owner(operation: &Operation) -> AccountOwner {
-        match operation {
-            Operation::Swap {
-                owner,
-                input_token_idx: _,
-                input_amount: _,
-            } => *owner,
-            Operation::AddLiquidity {
-                owner,
-                max_token0_amount: _,
-                max_token1_amount: _,
-            } => *owner,
-            Operation::RemoveLiquidity {
-                owner,
-                token_to_remove_idx: _,
-                token_to_remove_amount: _,
-            } => *owner,
-        }
-    }
-
     /// authenticate the originator of the message
     fn check_account_authentication(
         authenticated_application_id: Option<ApplicationId>,
