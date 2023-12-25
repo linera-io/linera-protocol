@@ -919,6 +919,42 @@ impl DynamoDbStoreInternal {
             Err(error.into())
         }
     }
+
+    async fn get_list_responses(
+        &self,
+        attribute: &str,
+        key_prefix: &[u8],
+    ) -> Result<QueryResults, DynamoDbContextError> {
+        ensure!(
+            !key_prefix.is_empty(),
+            DynamoDbContextError::ZeroLengthKeyPrefix
+        );
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            DynamoDbContextError::KeyPrefixTooLong
+        );
+        let mut responses = Vec::new();
+        let mut start_key = None;
+        loop {
+            let response = self
+                .get_query_output(attribute, key_prefix, start_key)
+                .await?;
+            let last_evaluated = response.last_evaluated_key.clone();
+            responses.push(response);
+            match last_evaluated {
+                None => {
+                    break;
+                }
+                Some(value) => {
+                    start_key = Some(value);
+                }
+            }
+        }
+        Ok(QueryResults {
+            prefix_len: key_prefix.len(),
+            responses,
+        })
+    }
 }
 
 struct QueryResponses {
@@ -1081,44 +1117,6 @@ impl KeyValueIterable<DynamoDbContextError> for DynamoDbKeyValues {
             pos,
             iters,
         }
-    }
-}
-
-impl DynamoDbStoreInternal {
-    async fn get_list_responses(
-        &self,
-        attribute: &str,
-        key_prefix: &[u8],
-    ) -> Result<QueryResponses, DynamoDbContextError> {
-        ensure!(
-            !key_prefix.is_empty(),
-            DynamoDbContextError::ZeroLengthKeyPrefix
-        );
-        ensure!(
-            key_prefix.len() <= MAX_KEY_SIZE,
-            DynamoDbContextError::KeyPrefixTooLong
-        );
-        let mut responses = Vec::new();
-        let mut start_key = None;
-        loop {
-            let response = self
-                .get_query_output(attribute, key_prefix, start_key)
-                .await?;
-            let last_evaluated = response.last_evaluated_key.clone();
-            responses.push(response);
-            match last_evaluated {
-                None => {
-                    break;
-                }
-                Some(value) => {
-                    start_key = Some(value);
-                }
-            }
-        }
-        Ok(QueryResponses {
-            prefix_len: key_prefix.len(),
-            responses,
-        })
     }
 }
 
