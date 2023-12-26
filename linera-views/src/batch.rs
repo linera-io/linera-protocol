@@ -15,8 +15,11 @@
 //! is public because some other libraries require it. But the users using views should
 //! not have to deal with batches.
 
+use bcs::serialized_size;
+use std::vec::IntoIter;
+use std::iter::Peekable;
 use crate::{
-    common::{Context, KeyIterable},
+    common::{get_uleb128_size, Context, KeyIterable},
     memory::{MemoryContext, MemoryContextError},
     views::ViewError,
 };
@@ -371,6 +374,65 @@ impl DeletePrefixExpander for MemoryContext<()> {
         Ok(vector_list)
     }
 }
+
+
+#[derive(Serialize, Deserialize)]
+struct PairInsertionDeletion(SimpleUnorderedBatch);
+
+struct PairInsertionDeletionIter {
+    delete_iter: Peekable<IntoIter<Vec<u8>>>,
+    insert_iter: Peekable<IntoIter<(Vec<u8>,Vec<u8>)>>,
+}
+
+impl PairInsertionDeletionIter {
+    fn remaining_len(&self) -> usize {
+        self.delete_iter.len() + self.insert_iter.len()
+    }
+
+    fn next_size(&mut self, value_size: usize, obj: &PairInsertionDeletion) -> Result<usize, bcs::Error> {
+        if let Some(delete) = self.delete_iter.peek() {
+            let next_size = serialized_size(&delete)?;
+            Ok(value_size + next_size + get_uleb128_size(obj.0.deletions.len() + 1) + get_uleb128_size(obj.0.insertions.len()))
+        } else if let Some((key,value)) = self.insert_iter.peek() {
+            let next_size = serialized_size(&key)? + serialized_size(&value)?;
+            Ok(value_size + next_size + get_uleb128_size(obj.0.deletions.len()) + get_uleb128_size(obj.0.insertions.len() + 1))
+        } else {
+            Ok(value_size + get_uleb128_size(obj.0.deletions.len()) + get_uleb128_size(obj.0.insertions.len()))
+        }
+    }
+}
+
+
+impl PairInsertionDeletion {
+    fn into_iter(self) -> PairInsertionDeletionIter {
+        let delete_iter = self.0.deletions.into_iter().peekable();
+        let insert_iter = self.0.insertions.into_iter().peekable();
+        PairInsertionDeletionIter { delete_iter, insert_iter }
+    }
+
+    fn len(&self) -> usize {
+        self.0.deletions.len() + self.0.insertions.len()
+    }
+}
+
+
+
+fn try_append(iter: &mut PairInsertionDeletionIter, obj: &mut PairInsertionDeletion, value_size: &mut usize) -> Result<bool, bcs::Error> {
+    if let Some(delete) = iter.delete_iter.next() {
+        *value_size += serialized_size(&delete)?;
+        obj.0.deletions.push(delete);
+        Ok(true)
+    } else if let Some((key, value)) = iter.insert_iter.next() {
+        *value_size += serialized_size(&key)? + serialized_size(&value)?;
+        obj.0.insertions.push((key, value));
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+
+
 
 #[cfg(test)]
 mod tests {
