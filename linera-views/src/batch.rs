@@ -375,6 +375,40 @@ impl DeletePrefixExpander for MemoryContext<()> {
     }
 }
 
+/// The simplified batch used for the computation.
+pub trait SimplifiedBatch {
+    /// The Iterator type used for the batch
+    type Iter: SimplifiedBatchIter;
+    /// Returns an owning iterator on the simplified batch.
+    fn into_iter(self) -> Self::Iter;
+
+    /// Returns the total number of entries of the simplified batch
+    fn len(&self) -> usize;
+
+    /// Appends the iterator to the simplified batch
+    fn append(&mut self, iter: &mut Self::Iter) -> bool;
+
+}
+
+/// The iterator over the simplified batch
+pub trait SimplifiedBatchIter {
+    /// The corresponding simplified batch type
+    type Entry: SimplifiedBatch;
+    /// The type of a symbolic entry. Typically an Enum for Delete, Insert, etc.
+    type SymbolicSingEntry;
+    /// Returns the number of remaining entries in the iterator.
+    fn remaining_len(&self) -> usize;
+
+    /// Returns the length of the overhead with an increase
+    fn overhead(&self, sing_entry: Self::SymbolicSingEntry) -> usize;
+
+    /// Returns the next size of the iterator
+    fn next_size(&mut self, value_size: usize, obj: &Self::Entry) -> Result<usize, bcs::Error>;
+}
+
+
+
+
 
 #[derive(Serialize, Deserialize)]
 struct PairInsertionDeletion(SimpleUnorderedBatch);
