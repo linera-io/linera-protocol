@@ -386,7 +386,7 @@ pub trait SimplifiedBatch {
     fn len(&self) -> usize;
 
     /// Appends the iterator to the simplified batch
-    fn append(&mut self, iter: &mut Self::Iter) -> bool;
+    fn try_append(&mut self, iter: &mut Self::Iter) -> bool;
 
 }
 
@@ -407,16 +407,57 @@ pub trait SimplifiedBatchIter {
 }
 
 
-
-
-
 #[derive(Serialize, Deserialize)]
-struct PairInsertionDeletion(SimpleUnorderedBatch);
+struct PairInsertionDeletion {
+    /// List of deletions unordered
+    pub deletions: Vec<Vec<u8>>,
+    /// List of insertions unordered
+    pub insertions: Vec<(Vec<u8>, Vec<u8>)>,
+}
 
 struct PairInsertionDeletionIter {
     delete_iter: Peekable<IntoIter<Vec<u8>>>,
     insert_iter: Peekable<IntoIter<(Vec<u8>,Vec<u8>)>>,
 }
+
+/// The possible choices for insertion or deletion
+pub enum PairInsertionDeletionChoice {
+    /// An insertion is the next operation
+    Insertion,
+    /// A deletion is the next operation
+    Deletion,
+    /// No subsequent operation is available
+    Nothing,
+}
+
+impl PairInsertionDeletion {
+    fn into_iter(self) -> PairInsertionDeletionIter {
+        let delete_iter = self.deletions.into_iter().peekable();
+        let insert_iter = self.insertions.into_iter().peekable();
+        PairInsertionDeletionIter { delete_iter, insert_iter }
+    }
+
+    fn len(&self) -> usize {
+        self.deletions.len() + self.insertions.len()
+    }
+
+    fn try_append(&mut self, iter: &mut PairInsertionDeletionIter, value_size: &mut usize) -> Result<bool, bcs::Error> {
+        if let Some(delete) = iter.delete_iter.next() {
+            *value_size += serialized_size(&delete)?;
+            self.deletions.push(delete);
+            Ok(true)
+        } else if let Some((key, value)) = iter.insert_iter.next() {
+            *value_size += serialized_size(&key)? + serialized_size(&value)?;
+            self.insertions.push((key, value));
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+}
+
+
+
 
 impl PairInsertionDeletionIter {
     fn remaining_len(&self) -> usize {
@@ -426,42 +467,13 @@ impl PairInsertionDeletionIter {
     fn next_size(&mut self, value_size: usize, obj: &PairInsertionDeletion) -> Result<usize, bcs::Error> {
         if let Some(delete) = self.delete_iter.peek() {
             let next_size = serialized_size(&delete)?;
-            Ok(value_size + next_size + get_uleb128_size(obj.0.deletions.len() + 1) + get_uleb128_size(obj.0.insertions.len()))
+            Ok(value_size + next_size + get_uleb128_size(obj.deletions.len() + 1) + get_uleb128_size(obj.insertions.len()))
         } else if let Some((key,value)) = self.insert_iter.peek() {
             let next_size = serialized_size(&key)? + serialized_size(&value)?;
-            Ok(value_size + next_size + get_uleb128_size(obj.0.deletions.len()) + get_uleb128_size(obj.0.insertions.len() + 1))
+            Ok(value_size + next_size + get_uleb128_size(obj.deletions.len()) + get_uleb128_size(obj.insertions.len() + 1))
         } else {
-            Ok(value_size + get_uleb128_size(obj.0.deletions.len()) + get_uleb128_size(obj.0.insertions.len()))
+            Ok(value_size + get_uleb128_size(obj.deletions.len()) + get_uleb128_size(obj.insertions.len()))
         }
-    }
-}
-
-
-impl PairInsertionDeletion {
-    fn into_iter(self) -> PairInsertionDeletionIter {
-        let delete_iter = self.0.deletions.into_iter().peekable();
-        let insert_iter = self.0.insertions.into_iter().peekable();
-        PairInsertionDeletionIter { delete_iter, insert_iter }
-    }
-
-    fn len(&self) -> usize {
-        self.0.deletions.len() + self.0.insertions.len()
-    }
-}
-
-
-
-fn try_append(iter: &mut PairInsertionDeletionIter, obj: &mut PairInsertionDeletion, value_size: &mut usize) -> Result<bool, bcs::Error> {
-    if let Some(delete) = iter.delete_iter.next() {
-        *value_size += serialized_size(&delete)?;
-        obj.0.deletions.push(delete);
-        Ok(true)
-    } else if let Some((key, value)) = iter.insert_iter.next() {
-        *value_size += serialized_size(&key)? + serialized_size(&value)?;
-        obj.0.insertions.push((key, value));
-        Ok(true)
-    } else {
-        Ok(false)
     }
 }
 
