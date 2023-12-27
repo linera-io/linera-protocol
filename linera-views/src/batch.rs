@@ -379,6 +379,7 @@ impl DeletePrefixExpander for MemoryContext<()> {
 pub trait SimplifiedBatch {
     /// The Iterator type used for the batch
     type Iter: SimplifiedBatchIter;
+
     /// Returns an owning iterator on the simplified batch.
     fn into_iter(self) -> Self::Iter;
 
@@ -386,7 +387,7 @@ pub trait SimplifiedBatch {
     fn len(&self) -> usize;
 
     /// Appends the iterator to the simplified batch
-    fn try_append(&mut self, iter: &mut Self::Iter) -> bool;
+    fn try_append(&mut self, iter: &mut Self::Iter, value_size: &mut usize) -> Result<bool, bcs::Error>;
 
 }
 
@@ -394,13 +395,8 @@ pub trait SimplifiedBatch {
 pub trait SimplifiedBatchIter {
     /// The corresponding simplified batch type
     type Entry: SimplifiedBatch;
-    /// The type of a symbolic entry. Typically an Enum for Delete, Insert, etc.
-    type SymbolicSingEntry;
     /// Returns the number of remaining entries in the iterator.
     fn remaining_len(&self) -> usize;
-
-    /// Returns the length of the overhead with an increase
-    fn overhead(&self, sing_entry: Self::SymbolicSingEntry) -> usize;
 
     /// Returns the next size of the iterator
     fn next_size(&mut self, value_size: usize, obj: &Self::Entry) -> Result<usize, bcs::Error>;
@@ -420,28 +416,19 @@ struct PairInsertionDeletionIter {
     insert_iter: Peekable<IntoIter<(Vec<u8>,Vec<u8>)>>,
 }
 
-/// The possible choices for insertion or deletion
-pub enum PairInsertionDeletionChoice {
-    /// An insertion is the next operation
-    Insertion,
-    /// A deletion is the next operation
-    Deletion,
-    /// No subsequent operation is available
-    Nothing,
-}
-
-impl PairInsertionDeletion {
-    fn into_iter(self) -> PairInsertionDeletionIter {
+impl SimplifiedBatch for PairInsertionDeletion {
+    type Iter = PairInsertionDeletionIter;
+    fn into_iter(self) -> Self::Iter {
         let delete_iter = self.deletions.into_iter().peekable();
         let insert_iter = self.insertions.into_iter().peekable();
-        PairInsertionDeletionIter { delete_iter, insert_iter }
+        Self::Iter { delete_iter, insert_iter }
     }
 
     fn len(&self) -> usize {
         self.deletions.len() + self.insertions.len()
     }
 
-    fn try_append(&mut self, iter: &mut PairInsertionDeletionIter, value_size: &mut usize) -> Result<bool, bcs::Error> {
+    fn try_append(&mut self, iter: &mut Self::Iter, value_size: &mut usize) -> Result<bool, bcs::Error> {
         if let Some(delete) = iter.delete_iter.next() {
             *value_size += serialized_size(&delete)?;
             self.deletions.push(delete);
@@ -456,10 +443,8 @@ impl PairInsertionDeletion {
     }
 }
 
-
-
-
-impl PairInsertionDeletionIter {
+impl SimplifiedBatchIter for PairInsertionDeletionIter {
+    type Entry = PairInsertionDeletion;
     fn remaining_len(&self) -> usize {
         self.delete_iter.len() + self.insert_iter.len()
     }
