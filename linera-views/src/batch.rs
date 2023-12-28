@@ -386,6 +386,9 @@ pub trait SimplifiedBatch {
     /// Returns the total number of entries of the simplified batch
     fn len(&self) -> usize;
 
+    /// Returns the total number of bytes of the simplified batch
+    fn bytes(&self) -> usize;
+
     /// Appends the iterator to the simplified batch
     fn try_append(&mut self, iter: &mut Self::Iter, value_size: &mut usize) -> Result<bool, bcs::Error>;
 
@@ -402,22 +405,14 @@ pub trait SimplifiedBatchIter {
     fn next_size(&mut self, value_size: usize, obj: &Self::Entry) -> Result<usize, bcs::Error>;
 }
 
-
-#[derive(Serialize, Deserialize)]
-struct PairInsertionDeletion {
-    /// List of deletions unordered
-    pub deletions: Vec<Vec<u8>>,
-    /// List of insertions unordered
-    pub insertions: Vec<(Vec<u8>, Vec<u8>)>,
-}
-
-struct PairInsertionDeletionIter {
+/// The iterator that corresponds to a SimpleUnorderedBatch
+pub struct SimpleUnorderedBatchIter {
     delete_iter: Peekable<IntoIter<Vec<u8>>>,
     insert_iter: Peekable<IntoIter<(Vec<u8>,Vec<u8>)>>,
 }
 
-impl SimplifiedBatch for PairInsertionDeletion {
-    type Iter = PairInsertionDeletionIter;
+impl SimplifiedBatch for SimpleUnorderedBatch {
+    type Iter = SimpleUnorderedBatchIter;
     fn into_iter(self) -> Self::Iter {
         let delete_iter = self.deletions.into_iter().peekable();
         let insert_iter = self.insertions.into_iter().peekable();
@@ -426,6 +421,17 @@ impl SimplifiedBatch for PairInsertionDeletion {
 
     fn len(&self) -> usize {
         self.deletions.len() + self.insertions.len()
+    }
+
+    fn bytes(&self) -> usize {
+        let mut total_size = 0;
+        for (key, value) in &self.insertions {
+	    total_size += key.len() + value.len();
+        }
+        for deletion in &self.deletions {
+	    total_size += deletion.len();
+        }
+        total_size
     }
 
     fn try_append(&mut self, iter: &mut Self::Iter, value_size: &mut usize) -> Result<bool, bcs::Error> {
@@ -443,13 +449,13 @@ impl SimplifiedBatch for PairInsertionDeletion {
     }
 }
 
-impl SimplifiedBatchIter for PairInsertionDeletionIter {
-    type Entry = PairInsertionDeletion;
+impl SimplifiedBatchIter for SimpleUnorderedBatchIter {
+    type Entry = SimpleUnorderedBatch;
     fn remaining_len(&self) -> usize {
         self.delete_iter.len() + self.insert_iter.len()
     }
 
-    fn next_size(&mut self, value_size: usize, obj: &PairInsertionDeletion) -> Result<usize, bcs::Error> {
+    fn next_size(&mut self, value_size: usize, obj: &SimpleUnorderedBatch) -> Result<usize, bcs::Error> {
         if let Some(delete) = self.delete_iter.peek() {
             let next_size = serialized_size(&delete)?;
             Ok(value_size + next_size + get_uleb128_size(obj.deletions.len() + 1) + get_uleb128_size(obj.insertions.len()))
