@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::batch::SimplifiedBatch;
+use crate::batch::SimplifiedBatchIter;
 use crate::{
     batch::{Batch, DeletePrefixExpander, SimpleUnorderedBatch},
     common::{
-        get_uleb128_size, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore,
+        CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore,
         ReadableKeyValueStore, TableStatus, WritableKeyValueStore, MIN_VIEW_TAG,
     },
     lru_caching::LruCachingStore,
@@ -32,7 +33,7 @@ use aws_sdk_dynamodb::{
     Client,
 };
 use aws_smithy_types::error::operation::BuildError;
-use bcs::serialized_size;
+//use bcs::serialized_size;
 use futures::future::join_all;
 use linera_base::ensure;
 use serde::{Deserialize, Serialize};
@@ -348,15 +349,15 @@ impl JournalHeader {
                 break;
             }
             let key = get_journaling_key(base_key, KeyTag::Entry as u8, self.block_count - 1)?;
-            let value = store.read_value::<DynamoDbBatch>(&key).await?;
+            let value = store.read_value::<SimpleUnorderedBatch>(&key).await?;
             if let Some(value) = value {
                 let mut tb = TransactionBuilder::default();
                 tb.insert_delete_request(key, store)?; // Delete the preceding journal entry
-                for delete in value.0.deletions {
+                for delete in value.deletions {
                     tb.insert_delete_request(delete, store)?;
                 }
-                for key_value in value.0.insertions {
-                    tb.insert_put_request(key_value.0, key_value.1, store)?;
+                for (key, value) in value.insertions {
+                    tb.insert_put_request(key, value, store)?;
                 }
                 self.block_count -= 1;
                 DynamoDbBatch::add_journal_header_operations(&mut tb, &self, store, base_key)?;
@@ -403,40 +404,23 @@ impl DynamoDbBatch {
         store: &DynamoDbStoreInternal,
         base_key: &[u8],
     ) -> Result<JournalHeader, DynamoDbContextError> {
-        let mut delete_iter = self.0.deletions.into_iter().peekable();
-        let mut insert_iter = self.0.insertions.into_iter().peekable();
+        let mut iter = self.0.into_iter();
         let mut value_size = 0;
         let mut transact_size = 0;
-        let mut deletions = Vec::new();
-        let mut insertions = Vec::new();
+        let mut simp_batch = SimpleUnorderedBatch::default();
         let mut block_count = 0;
         let mut transacts = Vec::new();
         loop {
-            if let Some(delete) = delete_iter.next() {
-                value_size += serialized_size(&delete)?;
-                deletions.push(delete);
-            } else if let Some((key, value)) = insert_iter.next() {
-                value_size += serialized_size(&key)? + serialized_size(&value)?;
-                insertions.push((key, value));
-            } else {
+            let result = simp_batch.try_append(&mut iter, &mut value_size)?;
+            if !result {
                 break;
             }
-            let (value_flush, transact_flush) = if (delete_iter.len() + insert_iter.len() == 0)
-                || deletions.len() + insertions.len() == MAX_TRANSACT_WRITE_ITEM_SIZE - 2
+            let (value_flush, transact_flush) = if (iter.remaining_len() == 0)
+                || simp_batch.len() == MAX_TRANSACT_WRITE_ITEM_SIZE - 2
             {
                 (true, true)
             } else {
-                let next_size = if let Some(delete) = delete_iter.peek() {
-                    serialized_size(&delete)?
-                } else {
-                    // Unwrapping: We checked above that at least one iterator is not empty.
-                    let (key, value) = insert_iter.peek().unwrap();
-                    serialized_size(&key)? + serialized_size(&value)?
-                };
-                let next_value_size = value_size
-                    + next_size
-                    + get_uleb128_size(deletions.len() + 1)
-                    + get_uleb128_size(insertions.len() + 1);
+                let next_value_size = iter.next_value_size(value_size, &simp_batch)?;
                 let next_transact_size = transact_size + next_value_size;
                 let value_flush = if next_transact_size > MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE {
                     true
@@ -447,14 +431,8 @@ impl DynamoDbBatch {
                 (value_flush, transact_flush)
             };
             if value_flush {
-                value_size +=
-                    get_uleb128_size(deletions.len()) + get_uleb128_size(insertions.len());
-                let simple_unordered_batch = SimpleUnorderedBatch {
-                    deletions: mem::take(&mut deletions),
-                    insertions: mem::take(&mut insertions),
-                };
-                let entry = DynamoDbBatch(simple_unordered_batch);
-                let value = bcs::to_bytes(&entry)?;
+                value_size += simp_batch.overhead_size();
+                let value = simp_batch.to_bytes()?;
                 assert_eq!(value.len(), value_size);
                 let key = get_journaling_key(base_key, KeyTag::Entry as u8, block_count)?;
                 transacts.push(store.build_put_transact(key, value)?);
@@ -1617,7 +1595,8 @@ pub async fn clear_tables(client: &aws_sdk_dynamodb::Client) -> Result<(), Dynam
 mod tests {
     use crate::{
         batch::SimpleUnorderedBatch,
-        dynamo_db::{get_uleb128_size, MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE},
+        common::get_uleb128_size,
+        dynamo_db::{MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE},
     };
     use bcs::serialized_size;
 

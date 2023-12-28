@@ -389,9 +389,14 @@ pub trait SimplifiedBatch {
     /// Returns the total number of bytes of the simplified batch
     fn bytes(&self) -> usize;
 
+    /// Returns the overhead size of the simplified batch
+    fn overhead_size(&self) -> usize;
+
     /// Appends the iterator to the simplified batch
     fn try_append(&mut self, iter: &mut Self::Iter, value_size: &mut usize) -> Result<bool, bcs::Error>;
 
+    /// returns the serialization and clears the simplified batch
+    fn to_bytes(&mut self) -> Result<Vec<u8>, bcs::Error>;
 }
 
 /// The iterator over the simplified batch
@@ -402,7 +407,7 @@ pub trait SimplifiedBatchIter {
     fn remaining_len(&self) -> usize;
 
     /// Returns the next size of the iterator
-    fn next_size(&mut self, value_size: usize, obj: &Self::Entry) -> Result<usize, bcs::Error>;
+    fn next_value_size(&mut self, value_size: usize, obj: &Self::Entry) -> Result<usize, bcs::Error>;
 }
 
 /// The iterator that corresponds to a SimpleUnorderedBatch
@@ -434,6 +439,10 @@ impl SimplifiedBatch for SimpleUnorderedBatch {
         total_size
     }
 
+    fn overhead_size(&self) -> usize {
+        get_uleb128_size(self.deletions.len()) + get_uleb128_size(self.insertions.len())
+    }
+
     fn try_append(&mut self, iter: &mut Self::Iter, value_size: &mut usize) -> Result<bool, bcs::Error> {
         if let Some(delete) = iter.delete_iter.next() {
             *value_size += serialized_size(&delete)?;
@@ -447,6 +456,13 @@ impl SimplifiedBatch for SimpleUnorderedBatch {
             Ok(false)
         }
     }
+
+    fn to_bytes(&mut self) -> Result<Vec<u8>, bcs::Error> {
+        let value = bcs::to_bytes(&self)?;
+        self.deletions.clear();
+        self.insertions.clear();
+        Ok(value)
+    }
 }
 
 impl SimplifiedBatchIter for SimpleUnorderedBatchIter {
@@ -455,7 +471,7 @@ impl SimplifiedBatchIter for SimpleUnorderedBatchIter {
         self.delete_iter.len() + self.insert_iter.len()
     }
 
-    fn next_size(&mut self, value_size: usize, obj: &SimpleUnorderedBatch) -> Result<usize, bcs::Error> {
+    fn next_value_size(&mut self, value_size: usize, obj: &SimpleUnorderedBatch) -> Result<usize, bcs::Error> {
         if let Some(delete) = self.delete_iter.peek() {
             let next_size = serialized_size(&delete)?;
             Ok(value_size + next_size + get_uleb128_size(obj.deletions.len() + 1) + get_uleb128_size(obj.insertions.len()))
