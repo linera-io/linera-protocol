@@ -397,6 +397,12 @@ pub trait SimplifiedBatch {
 
     /// returns the serialization and clears the simplified batch
     fn to_bytes(&mut self) -> Result<Vec<u8>, bcs::Error>;
+
+    /// Adds an individual delete operation
+    fn add_delete(&mut self, key: Vec<u8>);
+
+    /// Adds an individual insert of (key,value)
+    fn add_insert(&mut self, key: Vec<u8>, value: Vec<u8>);
 }
 
 /// The iterator over the simplified batch
@@ -463,6 +469,16 @@ impl SimplifiedBatch for SimpleUnorderedBatch {
         self.insertions.clear();
         Ok(value)
     }
+
+    fn add_delete(&mut self, key: Vec<u8>) {
+        self.deletions.push(key)
+    }
+
+    fn add_insert(&mut self, key: Vec<u8>, value: Vec<u8>) {
+        self.insertions.push((key,value))
+    }
+
+
 }
 
 impl SimplifiedBatchIter for SimpleUnorderedBatchIter {
