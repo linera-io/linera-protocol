@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::batch::SimplifiedBatch;
 use crate::{
     batch::{Batch, DeletePrefixExpander, SimpleUnorderedBatch},
     common::{
@@ -373,23 +374,11 @@ impl JournalHeader {
 struct DynamoDbBatch(SimpleUnorderedBatch);
 
 impl DynamoDbBatch {
-    /// The total number of entries to be submitted
-    fn len(&self) -> usize {
-        self.0.deletions.len() + self.0.insertions.len()
-    }
-
     fn is_fastpath_feasible(&self) -> bool {
-        if self.len() > MAX_TRANSACT_WRITE_ITEM_SIZE {
+        if self.0.len() > MAX_TRANSACT_WRITE_ITEM_SIZE {
             return false;
         }
-        let mut total_size = 0;
-        for (key, value) in &self.0.insertions {
-            total_size += key.len() + value.len();
-        }
-        for deletion in &self.0.deletions {
-            total_size += deletion.len();
-        }
-        total_size <= MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE
+        self.0.bytes() <= MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE
     }
 
     fn add_journal_header_operations(
