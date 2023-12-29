@@ -19,18 +19,15 @@
 use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::get_table_name};
 
 use crate::{
-    batch::{Batch, DeletePrefixExpander},
+    batch::{Batch, DeletePrefixExpander, UnorderedBatch},
     common::{
         get_upper_bound_option, CommonStoreConfig, ContextFromStore, KeyValueStore,
         ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
+    simp_store::{JournalConsistencyError, SimplifiedKeyValueStore, StoreFromSimplifiedStore},
     value_splitting::DatabaseConsistencyError,
 };
-use crate::simp_store::StoreFromSimplifiedStore;
-use crate::simp_store::SimplifiedKeyValueStore;
-use crate::simp_store::JournalConsistencyError;
-use crate::batch::UnorderedBatch;
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use futures::future::join_all;
@@ -41,7 +38,7 @@ use scylla::{
     transport::errors::{DbError, QueryError},
     IntoTypedRows, Session, SessionBuilder,
 };
-use std::{ops::Deref, mem, sync::Arc};
+use std::{mem, ops::Deref, sync::Arc};
 use thiserror::Error;
 
 /// The creation of a ScyllaDB client that can be used for accessing it.
@@ -191,7 +188,10 @@ impl WritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = 16000000;
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
-    async fn write_simplified_batch(&self, simp_batch: &mut Self::SimpBatch) -> Result<(), ScyllaDbContextError> {
+    async fn write_simplified_batch(
+        &self,
+        simp_batch: &mut Self::SimpBatch,
+    ) -> Result<(), ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         Self::write_simplified_batch_internal(store, simp_batch).await
@@ -754,7 +754,8 @@ impl ScyllaDbStore {
         store_config: ScyllaDbStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (simp_store, table_status) = ScyllaDbStoreInternal::new_for_testing(store_config).await?;
+        let (simp_store, table_status) =
+            ScyllaDbStoreInternal::new_for_testing(store_config).await?;
         let store = StoreFromSimplifiedStore::new(simp_store);
         let store = LruCachingStore::new(store, cache_size);
         let store = ScyllaDbStore { store };

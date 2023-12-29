@@ -8,11 +8,9 @@ use crate::{
         ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
+    simp_store::{JournalConsistencyError, SimplifiedKeyValueStore, StoreFromSimplifiedStore},
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
-use crate::simp_store::StoreFromSimplifiedStore;
-use crate::simp_store::SimplifiedKeyValueStore;
-use crate::simp_store::JournalConsistencyError;
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
@@ -925,7 +923,10 @@ impl SimplifiedKeyValueStore for DynamoDbStoreInternal {
 impl WritableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
     const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
 
-    async fn write_simplified_batch(&self, simp_batch: &mut Self::SimpBatch) -> Result<(), DynamoDbContextError> {
+    async fn write_simplified_batch(
+        &self,
+        simp_batch: &mut Self::SimpBatch,
+    ) -> Result<(), DynamoDbContextError> {
         let mut tb = TransactionBuilder::default();
         for key in mem::take(&mut simp_batch.deletions) {
             tb.insert_delete_request(key, self)?;
@@ -1020,7 +1021,8 @@ impl DynamoDbStore {
         store_config: DynamoDbStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (simp_store, table_status) = DynamoDbStoreInternal::new_for_testing(store_config).await?;
+        let (simp_store, table_status) =
+            DynamoDbStoreInternal::new_for_testing(store_config).await?;
         let store = StoreFromSimplifiedStore::new(simp_store);
         let store = ValueSplittingStore::new(store);
         let store = LruCachingStore::new(store, cache_size);

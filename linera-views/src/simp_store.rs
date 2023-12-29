@@ -3,19 +3,14 @@
 
 //! A simplified key value store from which we can implement a key-value store
 
+use crate::{
+    batch::{Batch, DeletePrefixExpander, SimplifiedBatch, SimplifiedBatchIter},
+    common::{from_bytes_opt, KeyIterable, KeyValueIterable, KeyValueStore, MIN_VIEW_TAG},
+};
 use async_trait::async_trait;
-use crate::common::from_bytes_opt;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use crate::common::KeyValueIterable;
-use crate::batch::Batch;
-use crate::batch::SimplifiedBatch;
-use crate::batch::SimplifiedBatchIter;
-use crate::common::KeyIterable;
-use crate::common::KeyValueStore;
 use static_assertions as sa;
-use crate::common::MIN_VIEW_TAG;
 use std::fmt::Debug;
-use crate::batch::DeletePrefixExpander;
 use thiserror::Error;
 
 /// The tag used for the journal stuff.
@@ -99,8 +94,12 @@ pub trait SimplifiedKeyValueStore {
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error>;
 
-    /// Writes the simplified `batch` in the database
-    async fn write_simplified_batch(&self, simp_batch: &mut Self::SimpBatch) -> Result<(), Self::Error>;
+    /// Writes the simplified `batch` in the database. After the writing, the
+    /// simplified batch must be empty.
+    async fn write_simplified_batch(
+        &self,
+        simp_batch: &mut Self::SimpBatch,
+    ) -> Result<(), Self::Error>;
 
     /// Reads a single `key` and deserializes the result if present.
     async fn read_value<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
@@ -148,7 +147,12 @@ where
     type Error = K::Error;
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         let mut vector_list = Vec::new();
-        for key in self.client.find_keys_by_prefix(key_prefix).await?.iterator() {
+        for key in self
+            .client
+            .find_keys_by_prefix(key_prefix)
+            .await?
+            .iterator()
+        {
             vector_list.push(key?.to_vec());
         }
         Ok(vector_list)
@@ -202,7 +206,7 @@ where
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
         let mut simp_batch = K::SimpBatch::from_batch(self, batch).await?;
-	if Self::is_fastpath_feasible(&simp_batch) {
+        if Self::is_fastpath_feasible(&simp_batch) {
             self.client.write_simplified_batch(&mut simp_batch).await
         } else {
             let header = self.write_journal(simp_batch, base_key).await?;
@@ -211,7 +215,7 @@ where
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
-	let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
+        let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
         let value = self.read_value::<JournalHeader>(&key).await?;
         if let Some(header) = value {
             self.coherently_resolve_journal(header, base_key).await?;
@@ -292,7 +296,7 @@ where
                 let value = simp_batch.to_bytes()?;
                 assert_eq!(value.len(), value_size);
                 let key = get_journaling_key(base_key, KeyTag::Entry as u8, block_count)?;
-                transacts.add_insert(key,value);
+                transacts.add_insert(key, value);
                 block_count += 1;
                 transact_size += value_size;
                 value_size = 0;
@@ -313,17 +317,13 @@ where
         Ok(header)
     }
 
-
     fn is_fastpath_feasible(simp_batch: &K::SimpBatch) -> bool {
         if simp_batch.len() > K::MAX_TRANSACT_WRITE_ITEM_SIZE {
             return false;
         }
         simp_batch.bytes() <= K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE
     }
-
-
 }
-
 
 impl<K> StoreFromSimplifiedStore<K> {
     /// Creates a new store from a simplified one.
@@ -331,4 +331,3 @@ impl<K> StoreFromSimplifiedStore<K> {
         Self { client: store }
     }
 }
-
