@@ -42,7 +42,7 @@ CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 OWNER_1=e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316
 ```
 
-Now, compile the `counter` application WebAssembly binaries, publish and create an application instance,
+Now, compile the `counter` application WebAssembly binaries, publish and create an application instance.
 
 ```bash
 (cd examples/counter && cargo build --release)

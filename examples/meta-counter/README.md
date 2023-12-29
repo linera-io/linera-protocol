@@ -36,7 +36,20 @@ To start the local linera network
 linera net up --testing-prng-seed 37
 ```
 
+This will start the local linera network. We used the
+test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
+presentation.
+
+Copy and paste `export LINERA_WALLET="/var . . . ."` & `export LINERA_STORAGE="rocksdb:/. . . ."` from output of `linera net up --testing-prng-seed 37` into another terminal
+
+```bash
+CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
+OWNER_1=e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316
+```
+
 Now, publish-and-create the `counter` application
+
+Now, compile the `meta-counter` application WebAssembly binaries, publish and create an application instance.
 
 ```bash
 (cd examples/meta-counter && cargo build --release)
@@ -71,4 +84,6 @@ linera service --port $PORT &
 ```
 - Running the query again would yield `4`
 
-Now, if we check from `counter` application we will also get `4` because eventually we modify state 
+Now, if we check from `counter` application we will also get `4` because eventually we modified the state 
+
+<!-- cargo-rdme end -->
