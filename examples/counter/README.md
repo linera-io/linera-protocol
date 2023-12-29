@@ -45,7 +45,7 @@ OWNER_1=e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316
 Now, compile the `counter` application WebAssembly binaries, publish and create an application instance,
 
 ```bash
-(cd examples/fungible && cargo build --release)
+(cd examples/counter && cargo build --release)
 
 APPLICATION_ID=$(linera publish-and-create \
   ../target/wasm32-unknown-unknown/release/counter_{contract,service}.wasm \
@@ -67,13 +67,13 @@ linera service --port $PORT &
 
 - Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$APPLICATION_ID`
 - To get the current value of `counter`, run the query
-```
+```json
     query{
         value
     }
 ```
 - To increase the value of the counter by 3, perform `increase` operation
-```
+```json
     mutation Increament{
         increment(value: 3)
     }
@@ -104,4 +104,3 @@ Web UIs for specific accounts can be opened by navigating URLs of the form
 `echo "http://localhost:3000/$CHAIN_1?app=$APPLICATION_ID&owner=$OWNER_1&port=$PORT"`
 
 <!-- cargo-rdme end -->
-

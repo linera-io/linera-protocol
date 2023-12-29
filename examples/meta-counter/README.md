@@ -1,0 +1,74 @@
+<!-- cargo-rdme start -->
+
+# Meta-Counter Example Application
+
+This application demonstrates how `cross_application_call` works in Linera. In our counter example 
+which has an `handle_application_call` implemented to handle cross-applicationm calls. To use this application one must publish and created the `counter` application on the local linera network
+
+# How It Works
+
+It requires the `application id` of the counter example as a parameter. It sends a message
+to itself with a value of `0` to increament so that no value is changed but the parameters and working is 
+checked.
+
+To perform the `increament` operation it send a message along with the value to be increamented. 
+On recieving the cross chain message it send a `cross_application_call` to the counter application
+whose application id we already provided at the time of creation.
+
+When the counter application recieves a cross application call it increaments the value by the specified
+amount
+
+
+# Usage
+
+## Setup 
+
+First, build Linera and add it to the path:
+
+```bash
+cargo build
+export PATH=$PWD/target/debug:$PATH
+```
+
+To start the local linera network
+
+```bash
+linera net up --testing-prng-seed 37
+```
+
+Now, publish-and-create the `counter` application
+
+```bash
+(cd examples/meta-counter && cargo build --release)
+linera publish-and-create \
+  ../target/wasm32-unknown-unknown/release/meta_counter_{contract,service}.wasm \
+  --json-argument="null" --json-parameters '"'"$APPLICATION_ID"'"' --required-application-ids $APPLICATION_ID
+```
+
+## Using the Counter Application
+
+First, a node service for the current wallet has to be started:
+
+```bash
+PORT=8080
+linera service --port $PORT &
+```
+
+### Using GraphiQL
+
+- Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$APPLICATION_ID`
+- To get the current value of `counter`, run the query
+```json
+    query{
+        value
+    }
+```
+- To increase the value of the counter by 3, perform `increase` operation
+```json
+    mutation Increament{
+        increment(value: 3)
+    }
+```
+- Running the query again would yield `4`
+
+Now, if we check from `counter` application we will also get `4` because eventually we modify state 
