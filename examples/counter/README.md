@@ -1,0 +1,107 @@
+<!-- cargo-rdme start -->
+
+# Counter Example Application
+
+This example application implements a simple counter contract, it is initialised with an 
+unsigned integer which can be increased by an operation `increment`.
+
+# How It Works
+
+It is a very basic Linera application, which is initialised by an `u64` which can be increamented 
+by an `u64`.
+
+For example if contract was initialised with 1, querying the contract would give us 1. Now if we want 
+`increament` it by 3. We will have to perform an operation with the parameter being 3. Now querying the
+application would give us 4 (1+3 = 4)
+
+# Usage
+
+## Setting Up
+
+First, build Linera and add it to the path:
+
+```bash
+cargo build
+export PATH=$PWD/target/debug:$PATH
+```
+
+To start the local linera network
+
+```bash
+linera net up --testing-prng-seed 37
+```
+
+This will start the local linera network. We used the
+test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
+presentation.
+
+Copy and paste `export LINERA_WALLET="/var . . . ."` & `export LINERA_STORAGE="rocksdb:/. . . ."` from output of `linera net up --testing-prng-seed 37` into another terminal
+
+```bash
+CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
+OWNER_1=e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316
+```
+
+Now, compile the `counter` application WebAssembly binaries, publish and create an application instance,
+
+```bash
+(cd examples/fungible && cargo build --release)
+
+APPLICATION_ID=$(linera publish-and-create \
+  ../target/wasm32-unknown-unknown/release/counter_{contract,service}.wasm \
+  --json-argument "1")
+```
+
+We have saved the `APPLICATION_ID` as it will be useful later
+
+## Using the Counter Application
+
+First, a node service for the current wallet has to be started:
+
+```bash
+PORT=8080
+linera service --port $PORT &
+```
+
+### Using GraphiQL
+
+- Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$APPLICATION_ID`
+- To get the current value of `counter`, run the query
+```
+    query{
+        value
+    }
+```
+- To increase the value of the counter by 3, perform `increase` operation
+```
+    mutation Increament{
+        increment(value: 3)
+    }
+```
+- Running the query again would yield `4`
+
+
+### Using web frontend
+
+Installing and starting the web server 
+
+```bash
+cd examples/counter/web-frontend/
+npm install
+
+# Start the server but not open the web page right away.
+BROWSER=none npm start &
+```
+
+Web UIs for specific accounts can be opened by navigating URLs of the form
+`http://localhost:3000/$CHAIN_1?app=$APPLICATION_ID&owner=$OWNER_1&port=$PORT` where
+- the path is the ID of the chain where the account is located.
+- the argument `app` is the token application ID obtained when creating the token.
+- `owner` is the address of the chosen user account (owner must be have permissions to create blocks in the given chain).
+- `port` is the port of the wallet service (the wallet must know the secret key of `owner`).
+
+
+`echo "http://localhost:3000/$CHAIN_1?app=$APPLICATION_ID&owner=$OWNER_1&port=$PORT"`
+
+<!-- cargo-rdme end -->
+
