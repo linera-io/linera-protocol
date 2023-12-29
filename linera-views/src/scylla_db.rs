@@ -27,6 +27,10 @@ use crate::{
     lru_caching::LruCachingStore,
     value_splitting::DatabaseConsistencyError,
 };
+use crate::simp_store::StoreFromSimplifiedStore;
+use crate::simp_store::SimplifiedKeyValueStore;
+use crate::simp_store::JournalConsistencyError;
+use crate::batch::UnorderedBatch;
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use futures::future::join_all;
@@ -37,7 +41,7 @@ use scylla::{
     transport::errors::{DbError, QueryError},
     IntoTypedRows, Session, SessionBuilder,
 };
-use std::{ops::Deref, sync::Arc};
+use std::{ops::Deref, mem, sync::Arc};
 use thiserror::Error;
 
 /// The creation of a ScyllaDB client that can be used for accessing it.
@@ -106,6 +110,10 @@ pub enum ScyllaDbContextError {
     /// The database is not coherent
     #[error(transparent)]
     DatabaseConsistencyError(#[from] DatabaseConsistencyError),
+
+    /// The journal is not coherent
+    #[error(transparent)]
+    JournalConsistencyError(#[from] JournalConsistencyError),
 }
 
 impl From<ScyllaDbContextError> for crate::views::ViewError {
@@ -122,6 +130,11 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+    // We cannot directly write the batch because if a delete is followed by a write then
+    // the delete takes priority. See the sentence "The first tie-breaking rule when two
+    // cells have the same write timestamp is that dead cells win over live cells"
+    // from https://github.com/scylladb/scylladb/blob/master/docs/dev/timestamp-conflict-resolution.md
+    type SimpBatch = UnorderedBatch;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -173,20 +186,15 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
 
 #[async_trait]
 impl WritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
+    const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = usize::MAX;
+    /// The total size is 16M
+    const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = 16000000;
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
-    async fn write_batch(
-        &self,
-        batch: Batch,
-        _base_key: &[u8],
-    ) -> Result<(), ScyllaDbContextError> {
+    async fn write_simplified_batch(&self, simp_batch: &mut Self::SimpBatch) -> Result<(), ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        Self::write_batch_internal(store, batch).await
-    }
-
-    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), ScyllaDbContextError> {
-        Ok(())
+        Self::write_simplified_batch_internal(store, simp_batch).await
     }
 }
 
@@ -256,18 +264,10 @@ impl ScyllaDbStoreInternal {
         Ok(false)
     }
 
-    async fn write_batch_internal(
+    async fn write_simplified_batch_internal(
         store: &ScyllaDbStorePair,
-        batch: Batch,
+        simp_batch: &mut UnorderedBatch,
     ) -> Result<(), ScyllaDbContextError> {
-        // We cannot directly write the batch because if a delete is followed by a write then
-        // the delete takes priority. See the sentence "The first tie-breaking rule when two
-        // cells have the same write timestamp is that dead cells win over live cells"
-        // from https://github.com/scylladb/scylladb/blob/master/docs/dev/timestamp-conflict-resolution.md
-        let mut unordered_batch = batch.simplify();
-        unordered_batch
-            .expand_colliding_prefix_deletions(store)
-            .await?;
         let session = &store.0;
         let table_name = &store.1;
         let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Logged);
@@ -277,7 +277,7 @@ impl ScyllaDbStoreInternal {
             "DELETE FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ?",
             table_name
         );
-        for key_prefix in unordered_batch.key_prefix_deletions {
+        for key_prefix in mem::take(&mut simp_batch.key_prefix_deletions) {
             ensure!(
                 key_prefix.len() <= MAX_KEY_SIZE,
                 ScyllaDbContextError::KeyTooLong
@@ -296,7 +296,7 @@ impl ScyllaDbStoreInternal {
             }
         }
         let query3 = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k = ?", table_name);
-        for key in unordered_batch.simple_unordered_batch.deletions {
+        for key in mem::take(&mut simp_batch.simple_unordered_batch.deletions) {
             let values = vec![key];
             batch_values.push(values);
             batch_query.append_statement(Query::new(query3.clone()));
@@ -305,7 +305,7 @@ impl ScyllaDbStoreInternal {
             "INSERT INTO kv.{} (dummy, k, v) VALUES (0, ?, ?)",
             table_name
         );
-        for (key, value) in unordered_batch.simple_unordered_batch.insertions {
+        for (key, value) in mem::take(&mut simp_batch.simple_unordered_batch.insertions) {
             ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
             let values = vec![key, value];
             batch_values.push(values);
@@ -670,7 +670,7 @@ impl ScyllaDbStoreInternal {
 /// A shared DB store for ScyllaDB implementing LruCaching
 #[derive(Clone)]
 pub struct ScyllaDbStore {
-    store: LruCachingStore<ScyllaDbStoreInternal>,
+    store: LruCachingStore<StoreFromSimplifiedStore<ScyllaDbStoreInternal>>,
 }
 
 /// The type for building a new ScyllaDb Key Value Store
@@ -745,7 +745,7 @@ impl KeyValueStore for ScyllaDbStore {
 impl ScyllaDbStore {
     /// Gets the table name of a store
     pub async fn get_table_name(&self) -> String {
-        self.store.client.get_table_name().await
+        self.store.client.client.get_table_name().await
     }
 
     /// Creates a [`ScyllaDbStore`] from the input parameters.
@@ -754,7 +754,8 @@ impl ScyllaDbStore {
         store_config: ScyllaDbStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (store, table_status) = ScyllaDbStoreInternal::new_for_testing(store_config).await?;
+        let (simp_store, table_status) = ScyllaDbStoreInternal::new_for_testing(store_config).await?;
+        let store = StoreFromSimplifiedStore::new(simp_store);
         let store = LruCachingStore::new(store, cache_size);
         let store = ScyllaDbStore { store };
         Ok((store, table_status))
@@ -765,7 +766,8 @@ impl ScyllaDbStore {
         store_config: ScyllaDbStoreConfig,
     ) -> Result<Self, ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let store = ScyllaDbStoreInternal::initialize(store_config).await?;
+        let simp_store = ScyllaDbStoreInternal::initialize(store_config).await?;
+        let store = StoreFromSimplifiedStore::new(simp_store);
         let store = LruCachingStore::new(store, cache_size);
         let store = ScyllaDbStore { store };
         Ok(store)
@@ -802,7 +804,8 @@ impl ScyllaDbStore {
         store_config: ScyllaDbStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (store, table_status) = ScyllaDbStoreInternal::new(store_config).await?;
+        let (simp_store, table_status) = ScyllaDbStoreInternal::new(store_config).await?;
+        let store = StoreFromSimplifiedStore::new(simp_store);
         let store = LruCachingStore::new(store, cache_size);
         let store = ScyllaDbStore { store };
         Ok((store, table_status))
