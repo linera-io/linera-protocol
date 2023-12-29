@@ -16,10 +16,19 @@ use static_assertions as sa;
 use crate::common::MIN_VIEW_TAG;
 use std::fmt::Debug;
 use crate::batch::DeletePrefixExpander;
+use thiserror::Error;
 
 /// The tag used for the journal stuff.
 const JOURNAL_TAG: u8 = 0;
 sa::const_assert!(JOURNAL_TAG < MIN_VIEW_TAG);
+
+/// Data type indicating that the database is not consistent
+#[derive(Error, Debug)]
+pub enum JournalConsistencyError {
+    /// The journal block could not be retrieved, it could be missing or corrupted
+    #[error("the journal block could not be retrieved, it could be missing or corrupted")]
+    FailureToRetrieveJournalBlock,
+}
 
 #[repr(u8)]
 enum KeyTag {
@@ -39,7 +48,7 @@ fn get_journaling_key(base_key: &[u8], tag: u8, pos: u32) -> Result<Vec<u8>, bcs
     Ok(key)
 }
 
-/// Low-level, asynchronous key-value operations with 
+/// Low-level, asynchronous key-value operations with simplified batch
 #[async_trait]
 pub trait SimplifiedKeyValueStore {
     /// The maximal number of items in a simplified transaction
@@ -150,12 +159,13 @@ where
 impl<K> KeyValueStore for StoreFromSimplifiedStore<K>
 where
     K: SimplifiedKeyValueStore + Send + Sync,
+    K::Error: From<JournalConsistencyError>,
 {
     /// The reqding constants do not change
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
     /// The basic types do not change
-    type Error = <K as SimplifiedKeyValueStore>::Error;
+    type Error = K::Error;
     type Keys = K::Keys;
     type KeyValues = K::KeyValues;
 
@@ -213,6 +223,7 @@ where
 impl<K> StoreFromSimplifiedStore<K>
 where
     K: SimplifiedKeyValueStore + Send + Sync,
+    K::Error: From<JournalConsistencyError>,
 {
     /// Resolves the database by using the header that has been retrieved
     async fn coherently_resolve_journal(
@@ -238,8 +249,7 @@ where
                 }
                 self.client.write_simplified_batch(&mut simp_batch).await?;
             } else {
-                panic!();
-//                return Err(bcs::Error);
+                return Err(JournalConsistencyError::FailureToRetrieveJournalBlock.into());
             }
         }
         Ok(())
