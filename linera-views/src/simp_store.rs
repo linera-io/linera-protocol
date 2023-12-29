@@ -323,3 +323,12 @@ where
 
 
 }
+
+
+impl<K> StoreFromSimplifiedStore<K> {
+    /// Creates a new store from a simplified one.
+    pub fn new(store: K) -> Self {
+        Self { client: store }
+    }
+}
+
