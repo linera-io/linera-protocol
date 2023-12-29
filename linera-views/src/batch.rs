@@ -376,7 +376,8 @@ impl DeletePrefixExpander for MemoryContext<()> {
 }
 
 /// The simplified batch used for the computation.
-pub trait SimplifiedBatch {
+#[async_trait]
+pub trait SimplifiedBatch: Sized + Send + Sync {
     /// The Iterator type used for the batch
     type Iter: SimplifiedBatchIter;
 
@@ -403,17 +404,18 @@ pub trait SimplifiedBatch {
 
     /// Adds an individual insert of (key,value)
     fn add_insert(&mut self, key: Vec<u8>, value: Vec<u8>);
+
+    /// Gets the next size of iterator
+    fn next_value_size(&self, value_size: usize, iter: &mut Self::Iter) -> Result<usize, bcs::Error>;
+
+    /// Creates a simplified batch from an existing batch
+    async fn from_batch<S: DeletePrefixExpander + Send + Sync>(store: S, batch: Batch) -> Result<Self, S::Error>;
 }
 
 /// The iterator over the simplified batch
-pub trait SimplifiedBatchIter {
-    /// The corresponding simplified batch type
-    type Entry: SimplifiedBatch;
+pub trait SimplifiedBatchIter: Send + Sync {
     /// Returns the number of remaining entries in the iterator.
     fn remaining_len(&self) -> usize;
-
-    /// Returns the next size of the iterator
-    fn next_value_size(&mut self, value_size: usize, obj: &Self::Entry) -> Result<usize, bcs::Error>;
 }
 
 /// The iterator that corresponds to a SimpleUnorderedBatch
@@ -422,6 +424,7 @@ pub struct SimpleUnorderedBatchIter {
     insert_iter: Peekable<IntoIter<(Vec<u8>,Vec<u8>)>>,
 }
 
+#[async_trait]
 impl SimplifiedBatch for SimpleUnorderedBatch {
     type Iter = SimpleUnorderedBatchIter;
     fn into_iter(self) -> Self::Iter {
@@ -479,24 +482,27 @@ impl SimplifiedBatch for SimpleUnorderedBatch {
     }
 
 
+    fn next_value_size(&self, value_size: usize, iter: &mut SimpleUnorderedBatchIter) -> Result<usize, bcs::Error> {
+        if let Some(delete) = iter.delete_iter.peek() {
+            let next_size = serialized_size(&delete)?;
+            Ok(value_size + next_size + get_uleb128_size(self.deletions.len() + 1) + get_uleb128_size(self.insertions.len()))
+        } else if let Some((key,value)) = iter.insert_iter.peek() {
+            let next_size = serialized_size(&key)? + serialized_size(&value)?;
+            Ok(value_size + next_size + get_uleb128_size(self.deletions.len()) + get_uleb128_size(self.insertions.len() + 1))
+        } else {
+            Ok(value_size + get_uleb128_size(self.deletions.len()) + get_uleb128_size(self.insertions.len()))
+        }
+    }
+
+    async fn from_batch<S: DeletePrefixExpander + Send + Sync>(store: S, batch: Batch) -> Result<Self, S::Error> {
+        let unordered_batch = batch.simplify();
+        unordered_batch.expand_delete_prefixes(&store).await
+    }
 }
 
 impl SimplifiedBatchIter for SimpleUnorderedBatchIter {
-    type Entry = SimpleUnorderedBatch;
     fn remaining_len(&self) -> usize {
         self.delete_iter.len() + self.insert_iter.len()
-    }
-
-    fn next_value_size(&mut self, value_size: usize, obj: &SimpleUnorderedBatch) -> Result<usize, bcs::Error> {
-        if let Some(delete) = self.delete_iter.peek() {
-            let next_size = serialized_size(&delete)?;
-            Ok(value_size + next_size + get_uleb128_size(obj.deletions.len() + 1) + get_uleb128_size(obj.insertions.len()))
-        } else if let Some((key,value)) = self.insert_iter.peek() {
-            let next_size = serialized_size(&key)? + serialized_size(&value)?;
-            Ok(value_size + next_size + get_uleb128_size(obj.deletions.len()) + get_uleb128_size(obj.insertions.len() + 1))
-        } else {
-            Ok(value_size + get_uleb128_size(obj.deletions.len()) + get_uleb128_size(obj.insertions.len()))
-        }
     }
 }
 

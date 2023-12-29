@@ -420,7 +420,7 @@ impl DynamoDbBatch {
             {
                 (true, true)
             } else {
-                let next_value_size = iter.next_value_size(value_size, &simp_batch)?;
+                let next_value_size = simp_batch.next_value_size(value_size, &mut iter)?;
                 let next_transact_size = transact_size + next_value_size;
                 let value_flush = if next_transact_size > MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE {
                     true

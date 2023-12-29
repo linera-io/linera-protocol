@@ -5,12 +5,39 @@
 
 use async_trait::async_trait;
 use crate::common::from_bytes_opt;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use crate::common::KeyValueIterable;
 use crate::batch::Batch;
 use crate::batch::SimplifiedBatch;
+use crate::batch::SimplifiedBatchIter;
 use crate::common::KeyIterable;
+use crate::common::KeyValueStore;
+use static_assertions as sa;
+use crate::common::MIN_VIEW_TAG;
 use std::fmt::Debug;
+use crate::batch::DeletePrefixExpander;
+
+/// The tag used for the journal stuff.
+const JOURNAL_TAG: u8 = 0;
+sa::const_assert!(JOURNAL_TAG < MIN_VIEW_TAG);
+
+#[repr(u8)]
+enum KeyTag {
+    /// Prefix for the storing of the header of the journal.
+    Journal = 1,
+    /// Prefix for the block entry.
+    Entry,
+}
+
+fn get_journaling_key(base_key: &[u8], tag: u8, pos: u32) -> Result<Vec<u8>, bcs::Error> {
+    // We used the value 0 because it does not collide with other key values.
+    // since other tags are starting from 1.
+    let mut key = base_key.to_vec();
+    key.extend([JOURNAL_TAG]);
+    key.extend([tag]);
+    bcs::serialize_into(&mut key, &pos)?;
+    Ok(key)
+}
 
 /// Low-level, asynchronous key-value operations with 
 #[async_trait]
@@ -28,10 +55,10 @@ pub trait SimplifiedKeyValueStore {
     const MAX_KEY_SIZE: usize;
 
     /// The error type.
-    type SimpBatch: SimplifiedBatch + Serialize + Deserialize;
+    type SimpBatch: SimplifiedBatch + Serialize + DeserializeOwned + Default;
 
     /// The error type.
-    type Error: Debug;
+    type Error: Debug + From<bcs::Error>;
 
     /// Returns type for key search operations.
     type Keys: KeyIterable<Self::Error>;
@@ -64,7 +91,7 @@ pub trait SimplifiedKeyValueStore {
     ) -> Result<Self::KeyValues, Self::Error>;
 
     /// Writes the simplified `batch` in the database
-    async fn write_simplified_batch(&self, batch: Batch) -> Result<(), Self::Error>;
+    async fn write_simplified_batch(&self, simp_batch: &mut Self::SimpBatch) -> Result<(), Self::Error>;
 
     /// Reads a single `key` and deserializes the result if present.
     async fn read_value<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
@@ -96,10 +123,27 @@ struct JournalHeader {
     block_count: u32,
 }
 
+/// A KeyValueStore built from a SimplifiedKeyValueStore by using journaling
+/// for bypassing the limits on the batch size
 #[derive(Clone)]
 pub struct StoreFromSimplifiedStore<K> {
     /// The inner client that is called by the LRU cache one
     pub client: K,
+}
+
+#[async_trait]
+impl<K> DeletePrefixExpander for &StoreFromSimplifiedStore<K>
+where
+    K: SimplifiedKeyValueStore + Send + Sync,
+{
+    type Error = K::Error;
+    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
+        let mut vector_list = Vec::new();
+        for key in self.client.find_keys_by_prefix(key_prefix).await?.iterator() {
+            vector_list.push(key?.to_vec());
+        }
+        Ok(vector_list)
+    }
 }
 
 #[async_trait]
@@ -111,7 +155,7 @@ where
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
     /// The basic types do not change
-    type Error = K::Error;
+    type Error = <K as SimplifiedKeyValueStore>::Error;
     type Keys = K::Keys;
     type KeyValues = K::KeyValues;
 
@@ -125,7 +169,7 @@ where
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
-        self.cleint.contains_key(key).await
+        self.client.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(
@@ -146,17 +190,17 @@ where
         self.client.find_key_values_by_prefix(key_prefix).await
     }
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
-        let simp_batch = K::SimpBatch::from_batch(self, batch).await?;
-	if K::is_fastpath_feasible(simp_batch) {
-            self.write_simplified_batch(simp_batch).await
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
+        let mut simp_batch = K::SimpBatch::from_batch(self, batch).await?;
+	if Self::is_fastpath_feasible(&simp_batch) {
+            self.client.write_simplified_batch(&mut simp_batch).await
         } else {
             let header = self.write_journal(simp_batch, base_key).await?;
             self.coherently_resolve_journal(header, base_key).await
         }
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
 	let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
         let value = self.read_value::<JournalHeader>(&key).await?;
         if let Some(header) = value {
@@ -173,39 +217,40 @@ where
     /// Resolves the database by using the header that has been retrieved
     async fn coherently_resolve_journal(
         &self,
-        header: mut JournalHeader,
+        mut header: JournalHeader,
         base_key: &[u8],
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), K::Error> {
         loop {
             if header.block_count == 0 {
                 break;
             }
-            let key = get_journaling_key(base_key, KeyTag::Entry as u8, self.block_count - 1)?;
-            let mut value = store.read_value::<K::SimpBatch>(&key).await?;
-            if let Some(value) = value {
-                value.add_delete(key); // Delete the journal entry
+            let key = get_journaling_key(base_key, KeyTag::Entry as u8, header.block_count - 1)?;
+            let simp_batch = self.client.read_value::<K::SimpBatch>(&key).await?;
+            if let Some(mut simp_batch) = simp_batch {
+                simp_batch.add_delete(key); // Delete the journal entry
                 header.block_count -= 1;
                 let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
                 if header.block_count > 0 {
-                    let value = bcs::to_bytes(header)?;
-                    value.add_insert(key, value);
+                    let value = bcs::to_bytes(&header)?;
+                    simp_batch.add_insert(key, value);
                 } else {
-                    value.add_delete(key);
+                    simp_batch.add_delete(key);
                 }
-                self.write_simplified_batch(value).await?;
+                self.client.write_simplified_batch(&mut simp_batch).await?;
             } else {
-                return Err(DynamoDbContextError::DatabaseRecoveryFailed);
+                panic!();
+//                return Err(bcs::Error);
             }
         }
         Ok(())
     }
 
     /// Writes blocks to the database and resolves them later.
-    pub async fn write_journal(
+    async fn write_journal(
         &self,
         simplified_batch: K::SimpBatch,
         base_key: &[u8],
-    ) -> Result<JournalHeader, DynamoDbContextError> {
+    ) -> Result<JournalHeader, K::Error> {
         let mut iter = simplified_batch.into_iter();
         let mut value_size = 0;
         let mut transact_size = 0;
@@ -222,12 +267,12 @@ where
             {
                 (true, true)
             } else {
-                let next_value_size = iter.next_value_size(value_size, &simp_batch)?;
+                let next_value_size = simp_batch.next_value_size(value_size, &mut iter)?;
                 let next_transact_size = transact_size + next_value_size;
                 let value_flush = if next_transact_size > K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE {
                     true
                 } else {
-                    next_value_size > K::RAW_MAX_VALUE_SIZE
+                    next_value_size > K::MAX_VALUE_SIZE
                 };
                 let transact_flush = next_transact_size > K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
                 (value_flush, transact_flush)
@@ -243,7 +288,7 @@ where
                 value_size = 0;
             }
             if transact_flush {
-                self.write_simplified_batch(transacts).await?;
+                self.client.write_simplified_batch(&mut transacts).await?;
                 transact_size = 0;
             }
         }
@@ -252,8 +297,8 @@ where
             let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
             let value = bcs::to_bytes(&header)?;
             let mut sing_oper = K::SimpBatch::default();
-            sing_oper.add_insert(key, value).await?;
-            self.write_simplified_batch(sing_oper).await?;
+            sing_oper.add_insert(key, value);
+            self.client.write_simplified_batch(&mut sing_oper).await?;
         }
         Ok(header)
     }
