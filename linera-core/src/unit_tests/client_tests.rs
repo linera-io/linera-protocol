@@ -8,7 +8,7 @@ mod wasm;
 use crate::{
     client::{
         client_test_utils::{FaultType, MakeMemoryStorage, StorageBuilder, TestBuilder},
-        ChainClient, ChainClientError, CommunicateAction,
+        ChainClient, ChainClientError, CommunicateAction, MessageAction,
     },
     local_node::LocalNodeError,
     node::{
@@ -184,7 +184,7 @@ where
     // The received amount is not in the unprotected balance.
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
 
-    // First attempt that should be skipped.
+    // First attempt that should be rejected.
     sender
         .claim(
             owner,
@@ -209,15 +209,17 @@ where
 
     receiver.receive_certificate(cert).await?;
     let cert = receiver.process_inbox().await?.pop().unwrap();
-
-    // The first `Claim` message was not selected by the receiver.
-    assert_eq!(cert.value().block().unwrap().incoming_messages.len(), 1);
-    assert_eq!(
-        cert.value().block().unwrap().incoming_messages[0]
-            .event
-            .height,
-        BlockHeight::from(2)
-    );
+    {
+        let messages = &cert.value().block().unwrap().incoming_messages;
+        // Both `Claim` messages were included in the block.
+        assert_eq!(messages.len(), 2);
+        // The first one was rejected.
+        assert_eq!(messages[0].event.height, BlockHeight::from(1));
+        assert_eq!(messages[0].action, MessageAction::Reject);
+        // The second was accepted.
+        assert_eq!(messages[1].event.height, BlockHeight::from(2));
+        assert_eq!(messages[1].action, MessageAction::Accept);
+    }
 
     sender.receive_certificate(cert).await?;
     sender.process_inbox().await?;

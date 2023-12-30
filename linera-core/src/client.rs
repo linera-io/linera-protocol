@@ -30,7 +30,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
-        HashedValue, IncomingMessage, LiteCertificate, LiteVote,
+        HashedValue, IncomingMessage, LiteCertificate, LiteVote, MessageAction,
     },
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -1193,11 +1193,12 @@ where
                     ChainExecutionContext::IncomingMessage(index),
                 ) = **chain_error
                 {
-                    // Remove the faulty message from the block.
-                    // TODO(#990): To optimize receiver's liveness and sender's
-                    // experience, we probably don't want to this message to stay pending and be
-                    // selected again next time we create a block.
-                    block.incoming_messages.remove(index as usize);
+                    // Reject the faulty message from the block.
+                    let message = block
+                        .incoming_messages
+                        .get_mut(index as usize)
+                        .expect("index should exist");
+                    message.action = MessageAction::Reject;
                     continue;
                 }
             }
