@@ -131,8 +131,9 @@ pub struct Event {
     pub index: u32,
     /// The authenticated signer for the operation that created the event, if any.
     pub authenticated_signer: Option<Owner>,
-    /// Whether the message can be skipped.
-    pub is_skippable: bool,
+    /// True if the message cannot be skipped or rejected by the receiver.
+    /// This only concerns certain system messages that cannot fail.
+    pub is_protected: bool,
     /// The timestamp of the block that caused the message.
     pub timestamp: Timestamp,
     /// The message of the event (i.e. the actual payload of a message).
@@ -195,8 +196,8 @@ pub struct OutgoingMessage {
     pub destination: Destination,
     /// The user authentication carried by the message, if any.
     pub authenticated_signer: Option<Owner>,
-    /// Whether the message can be skipped.
-    pub is_skippable: bool,
+    /// True if the message cannot be skipped or rejected by the receiver.
+    pub is_protected: bool,
     /// The message itself.
     pub message: Message,
 }

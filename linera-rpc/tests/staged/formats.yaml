@@ -337,7 +337,7 @@ Event:
     - authenticated_signer:
         OPTION:
           TYPENAME: Owner
-    - is_skippable: BOOL
+    - is_protected: BOOL
     - timestamp:
         TYPENAME: Timestamp
     - message:
@@ -545,7 +545,7 @@ OutgoingMessage:
     - authenticated_signer:
         OPTION:
           TYPENAME: Owner
-    - is_skippable: BOOL
+    - is_protected: BOOL
     - message:
         TYPENAME: Message
 Owner:

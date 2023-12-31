@@ -29,7 +29,7 @@ fn make_event(
         height: BlockHeight::from(height),
         index,
         authenticated_signer: None,
-        is_skippable: true,
+        is_protected: false,
         timestamp: Timestamp::default(),
         message: Message::User {
             application_id: UserApplicationId::default(),
@@ -45,7 +45,7 @@ fn make_unskippable_event(
     message: impl Into<Vec<u8>>,
 ) -> Event {
     let mut event = make_event(certificate_hash, height, index, message);
-    event.is_skippable = false;
+    event.is_protected = true;
     event
 }
 

@@ -553,9 +553,9 @@ type OutgoingMessage {
 	"""
 	authenticatedSigner: Owner
 	"""
-	Whether the message can be skipped.
+	True if the message cannot be skipped or rejected by the receiver.
 	"""
-	isSkippable: Boolean!
+	isProtected: Boolean!
 	"""
 	The message itself.
 	"""

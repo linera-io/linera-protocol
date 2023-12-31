@@ -136,8 +136,6 @@ where
         Self {
             destination: message.destination.into(),
             authenticated: message.authenticated,
-            is_skippable: message.is_skippable,
-            // TODO(#743): Do we need explicit error handling?
             message: bcs::to_bytes(&message.message).expect("message serialization failed"),
         }
     }

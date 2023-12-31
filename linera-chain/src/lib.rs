@@ -71,7 +71,7 @@ pub enum ChainError {
         next_height: BlockHeight,
         next_index: u32,
     },
-    #[error("Block proposed to {chain_id:?} is attempting to skip unskippable message {event:?}")]
+    #[error("Block proposed to {chain_id:?} is attempting to skip protected message {event:?}")]
     UnskippableMessage {
         chain_id: ChainId,
         origin: Box<Origin>,
