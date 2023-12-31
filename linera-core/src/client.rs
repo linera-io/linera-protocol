@@ -1189,17 +1189,28 @@ where
             if let Err(LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))) = &result
             {
                 if let ChainError::ExecutionError(
-                    _,
+                    error,
                     ChainExecutionContext::IncomingMessage(index),
-                ) = **chain_error
+                ) = &**chain_error
                 {
-                    // Reject the faulty message from the block.
                     let message = block
                         .incoming_messages
-                        .get_mut(index as usize)
-                        .expect("index should exist");
-                    message.action = MessageAction::Reject;
-                    continue;
+                        .get_mut(*index as usize)
+                        .expect("Message at given index should exist");
+                    if message.event.is_protected {
+                        error!("Protected incoming message failed to execute locally: {message:?}");
+                    } else {
+                        // Reject the faulty message from the block and continue.
+                        // TODO(#1420): This is potentially a bit heavy-handed for
+                        // retryable errors.
+                        info!(
+                            "Message received from {:?} failed to execute locally \
+                               and will be rejected: {error}",
+                            message.origin
+                        );
+                        message.action = MessageAction::Reject;
+                        continue;
+                    }
                 }
             }
             return Ok(result?.0);
