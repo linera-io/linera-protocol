@@ -71,6 +71,12 @@ pub enum ChainError {
         next_height: BlockHeight,
         next_index: u32,
     },
+    #[error("Block proposed to {chain_id:?} is attempting to reject protected message {event:?}")]
+    CannotRejectMessage {
+        chain_id: ChainId,
+        origin: Box<Origin>,
+        event: Event,
+    },
     #[error("Block proposed to {chain_id:?} is attempting to skip protected message {event:?}")]
     CannotSkipMessage {
         chain_id: ChainId,

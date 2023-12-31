@@ -598,6 +598,14 @@ where
         }
         for (index, message) in block.incoming_messages.iter().enumerate() {
             if let MessageAction::Reject = message.action {
+                ensure!(
+                    !message.event.is_protected,
+                    ChainError::CannotRejectMessage {
+                        chain_id,
+                        origin: Box::new(message.origin.clone()),
+                        event: message.event.clone(),
+                    }
+                );
                 // Skip execution of rejected message.
                 continue;
             }
