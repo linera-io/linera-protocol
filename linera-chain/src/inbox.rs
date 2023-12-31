@@ -133,7 +133,7 @@ impl From<(ChainId, Origin, InboxError)> for ChainError {
                     next_index: next_cursor.index,
                 }
             }
-            InboxError::UnskippableEvent { event } => ChainError::UnskippableMessage {
+            InboxError::UnskippableEvent { event } => ChainError::CannotSkipMessage {
                 chain_id,
                 origin: origin.into(),
                 event,

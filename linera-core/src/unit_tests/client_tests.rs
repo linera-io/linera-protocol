@@ -825,7 +825,7 @@ where
         result,
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
-        )) if matches!(*error, ChainError::UnskippableMessage {
+        )) if matches!(*error, ChainError::CannotSkipMessage {
             event: Event { message: Message::System(SystemMessage::Credit { .. }), .. }, ..
         })
     ));

@@ -946,7 +946,7 @@ where
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(chain_error))
-                if matches!(*chain_error, ChainError::UnskippableMessage { .. })
+                if matches!(*chain_error, ChainError::CannotSkipMessage { .. })
         ));
     }
     {
@@ -1005,7 +1005,7 @@ where
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(chain_error))
-                if matches!(*chain_error, ChainError::UnskippableMessage { .. })
+                if matches!(*chain_error, ChainError::CannotSkipMessage { .. })
         ));
     }
     {
