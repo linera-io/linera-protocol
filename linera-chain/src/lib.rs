@@ -79,7 +79,7 @@ pub enum ChainError {
     },
     #[error(
         "Block proposed to {chain_id:?} is attempting to skip a message \
-             that cannot be skipped: {event:?}"
+         that cannot be skipped: {event:?}"
     )]
     CannotSkipMessage {
         chain_id: ChainId,

@@ -1204,9 +1204,8 @@ where
                         // TODO(#1420): This is potentially a bit heavy-handed for
                         // retryable errors.
                         info!(
-                            "Message received from {:?} failed to execute locally \
-                               and will be rejected: {error}",
-                            message.origin
+                            %error, origin = ?message.origin,
+                            "Message failed to execute locally and will be rejected."
                         );
                         message.action = MessageAction::Reject;
                         continue;
