@@ -95,6 +95,17 @@ pub struct IncomingMessage {
     /// The content of the message to be delivered to the inbox identified by
     /// `origin`.
     pub event: Event,
+    /// What to do with the message.
+    pub action: MessageAction,
+}
+
+/// What to do with a message picked from the inbox.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum MessageAction {
+    /// Execute the incoming message.
+    Accept,
+    /// Do not execute the incoming message.
+    Reject,
 }
 
 impl IncomingMessage {
@@ -120,8 +131,9 @@ pub struct Event {
     pub index: u32,
     /// The authenticated signer for the operation that created the event, if any.
     pub authenticated_signer: Option<Owner>,
-    /// Whether the message can be skipped.
-    pub is_skippable: bool,
+    /// True if the message cannot be skipped or rejected by the receiver.
+    /// This only concerns certain system messages that cannot fail.
+    pub is_protected: bool,
     /// The timestamp of the block that caused the message.
     pub timestamp: Timestamp,
     /// The message of the event (i.e. the actual payload of a message).
@@ -184,8 +196,8 @@ pub struct OutgoingMessage {
     pub destination: Destination,
     /// The user authentication carried by the message, if any.
     pub authenticated_signer: Option<Owner>,
-    /// Whether the message can be skipped.
-    pub is_skippable: bool,
+    /// True if the message cannot be skipped or rejected by the receiver.
+    pub is_protected: bool,
     /// The message itself.
     pub message: Message,
 }
@@ -581,6 +593,12 @@ impl CertificateValue {
     }
 }
 
+impl Event {
+    pub fn is_skippable(&self) -> bool {
+        !self.is_protected
+    }
+}
+
 impl ExecutedBlock {
     /// Returns the `message_index`th outgoing message created by the `operation_index`th operation,
     /// or `None` if there is no such operation or message.
@@ -936,6 +954,10 @@ impl BcsSignable for ValueHashAndRound {}
 
 impl BcsHashable for CertificateValue {}
 
+doc_scalar!(
+    MessageAction,
+    "Whether an incoming message is accepted or rejected"
+);
 doc_scalar!(
     ChannelFullName,
     "A channel name together with its application id"

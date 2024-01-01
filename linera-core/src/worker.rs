@@ -15,7 +15,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
-        HashedValue, IncomingMessage, LiteCertificate, Medium, Origin, Target,
+        HashedValue, IncomingMessage, LiteCertificate, Medium, MessageAction, Origin, Target,
     },
     ChainManagerOutcome, ChainStateView,
 };
@@ -594,9 +594,9 @@ where
         result_certificate?;
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
-        // We should always agree on the messages and state hash.
         let local_time = self.storage.current_time();
         let verified_outcome = chain.execute_block(block, local_time).await?;
+        // We should always agree on the messages and state hash.
         ensure!(
             *messages == verified_outcome.messages,
             WorkerError::IncorrectMessages
@@ -981,7 +981,11 @@ where
 
         assert_eq!(event.message, outgoing_message.message);
 
-        Ok(Some(IncomingMessage { origin, event }))
+        Ok(Some(IncomingMessage {
+            origin,
+            event,
+            action: MessageAction::Accept,
+        }))
     }
 }
 
@@ -1206,6 +1210,7 @@ where
                     messages.push(IncomingMessage {
                         origin: origin.clone(),
                         event: event.clone(),
+                        action: MessageAction::Accept,
                     });
                 }
             }

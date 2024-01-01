@@ -167,13 +167,14 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
           incomingMessages {
             origin
             event
+            action
           }
           operations
         }
         messages {
           destination
           authenticatedSigner
-          isSkippable
+          isProtected
           message
         }
         messageCounts
@@ -199,13 +200,14 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
           incomingMessages {
             origin
             event
+            action
           }
           operations
         }
         messages {
           destination
           authenticatedSigner
-          isSkippable
+          isProtected
           message
         }
         stateHash

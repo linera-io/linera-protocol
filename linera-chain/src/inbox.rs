@@ -133,7 +133,7 @@ impl From<(ChainId, Origin, InboxError)> for ChainError {
                     next_index: next_cursor.index,
                 }
             }
-            InboxError::UnskippableEvent { event } => ChainError::UnskippableMessage {
+            InboxError::UnskippableEvent { event } => ChainError::CannotSkipMessage {
                 chain_id,
                 origin: origin.into(),
                 event,
@@ -175,7 +175,7 @@ where
                 break;
             }
             ensure!(
-                previous_event.is_skippable,
+                previous_event.is_skippable(),
                 InboxError::UnskippableEvent {
                     event: previous_event
                 }
@@ -240,7 +240,7 @@ where
                     // The receiver has already executed a later event from the same
                     // sender ahead of time so we should skip this one.
                     ensure!(
-                        cursor < Cursor::from(&previous_event) && event.is_skippable,
+                        cursor < Cursor::from(&previous_event) && event.is_skippable(),
                         InboxError::UnexpectedEvent {
                             previous_event,
                             event,

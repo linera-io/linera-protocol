@@ -337,7 +337,7 @@ Event:
     - authenticated_signer:
         OPTION:
           TYPENAME: Owner
-    - is_skippable: BOOL
+    - is_protected: BOOL
     - timestamp:
         TYPENAME: Timestamp
     - message:
@@ -380,6 +380,8 @@ IncomingMessage:
         TYPENAME: Origin
     - event:
         TYPENAME: Event
+    - action:
+        TYPENAME: MessageAction
 LiteCertificate:
   STRUCT:
     - value:
@@ -427,6 +429,12 @@ Message:
           - application_id:
               TYPENAME: ApplicationId
           - bytes: BYTES
+MessageAction:
+  ENUM:
+    0:
+      Accept: UNIT
+    1:
+      Reject: UNIT
 MessageId:
   STRUCT:
     - chain_id:
@@ -537,7 +545,7 @@ OutgoingMessage:
     - authenticated_signer:
         OPTION:
           TYPENAME: Owner
-    - is_skippable: BOOL
+    - is_protected: BOOL
     - message:
         TYPENAME: Message
 Owner:

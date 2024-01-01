@@ -33,14 +33,15 @@ test('Blocks mounting', () => {
                         System: { BytecodePublished: { operation_index: 0 } }
                       },
                       timestamp: 1694097510206912
-                    }
+                    },
+                    action: "Accept",
                   }],
                   operations: []
                 },
                 messages: [{
                   destination: { Subscribers: [1] },
                   authenticatedSigner: null,
-                  isSkippable: false,
+                  isProtected: true,
                   message: {
                     System: {
                       BytecodeLocations: {

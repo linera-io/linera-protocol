@@ -30,7 +30,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
-        HashedValue, IncomingMessage, LiteCertificate, LiteVote,
+        HashedValue, IncomingMessage, LiteCertificate, LiteVote, MessageAction,
     },
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -1189,16 +1189,27 @@ where
             if let Err(LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))) = &result
             {
                 if let ChainError::ExecutionError(
-                    _,
+                    error,
                     ChainExecutionContext::IncomingMessage(index),
-                ) = **chain_error
+                ) = &**chain_error
                 {
-                    // Remove the faulty message from the block.
-                    // TODO(#990): To optimize receiver's liveness and sender's
-                    // experience, we probably don't want to this message to stay pending and be
-                    // selected again next time we create a block.
-                    block.incoming_messages.remove(index as usize);
-                    continue;
+                    let message = block
+                        .incoming_messages
+                        .get_mut(*index as usize)
+                        .expect("Message at given index should exist");
+                    if message.event.is_protected {
+                        error!("Protected incoming message failed to execute locally: {message:?}");
+                    } else {
+                        // Reject the faulty message from the block and continue.
+                        // TODO(#1420): This is potentially a bit heavy-handed for
+                        // retryable errors.
+                        info!(
+                            %error, origin = ?message.origin,
+                            "Message failed to execute locally and will be rejected."
+                        );
+                        message.action = MessageAction::Reject;
+                        continue;
+                    }
                 }
             }
             return Ok(result?.0);

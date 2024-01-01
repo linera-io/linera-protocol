@@ -19,7 +19,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        ChannelFullName, Event, ExecutedBlock, HashedValue, IncomingMessage, Origin,
+        ChannelFullName, Event, ExecutedBlock, HashedValue, IncomingMessage, MessageAction, Origin,
         OutgoingMessage,
     },
     test::{make_child_block, make_first_block, BlockTestExt},
@@ -142,7 +142,7 @@ where
         messages: vec![OutgoingMessage {
             destination: Destination::Recipient(publisher_chain.into()),
             authenticated_signer: None,
-            is_skippable: false,
+            is_protected: true,
             message: Message::System(publish_message.clone()),
         }],
         message_counts: vec![1],
@@ -170,10 +170,11 @@ where
             height: publish_block_height,
             index: 0,
             authenticated_signer: None,
-            is_skippable: false,
+            is_protected: true,
             timestamp: Timestamp::from(1),
             message: Message::System(publish_message),
         },
+        action: MessageAction::Accept,
     };
     let broadcast_block = make_child_block(&publish_certificate.value)
         .with_timestamp(1)
@@ -202,7 +203,7 @@ where
         messages: vec![OutgoingMessage {
             destination: broadcast_channel,
             authenticated_signer: None,
-            is_skippable: true,
+            is_protected: false,
             message: Message::System(broadcast_message.clone()),
         }],
         message_counts: vec![1],
@@ -256,7 +257,7 @@ where
         messages: vec![OutgoingMessage {
             destination: Destination::Recipient(publisher_chain.into()),
             authenticated_signer: None,
-            is_skippable: false,
+            is_protected: true,
             message: Message::System(subscribe_message.clone()),
         }],
         message_counts: vec![1],
@@ -284,10 +285,11 @@ where
             height: subscribe_block_height,
             index: 0,
             authenticated_signer: None,
-            is_skippable: false,
+            is_protected: true,
             timestamp: Timestamp::from(2),
             message: subscribe_message.into(),
         },
+        action: MessageAction::Accept,
     };
     let accept_block = make_child_block(&broadcast_certificate.value)
         .with_timestamp(3)
@@ -299,7 +301,7 @@ where
         messages: vec![OutgoingMessage {
             destination: Destination::Recipient(creator_chain.into()),
             authenticated_signer: None,
-            is_skippable: false,
+            is_protected: true,
             message: Message::System(SystemMessage::Notify {
                 id: creator_chain.into(),
             }),
@@ -360,10 +362,11 @@ where
                 height: broadcast_block_height,
                 index: 0,
                 authenticated_signer: None,
-                is_skippable: true,
+                is_protected: false,
                 timestamp: Timestamp::from(1),
                 message: Message::System(broadcast_message),
             },
+            action: MessageAction::Accept,
         });
     creator_system_state
         .registry
@@ -391,7 +394,7 @@ where
         messages: vec![OutgoingMessage {
             destination: Destination::Recipient(creator_chain.into()),
             authenticated_signer: None,
-            is_skippable: false,
+            is_protected: true,
             message: Message::System(SystemMessage::ApplicationCreated),
         }],
         message_counts: vec![0, 1],
