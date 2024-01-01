@@ -593,6 +593,12 @@ impl CertificateValue {
     }
 }
 
+impl Event {
+    pub fn is_skippable(&self) -> bool {
+        !self.is_protected
+    }
+}
+
 impl ExecutedBlock {
     /// Returns the `message_index`th outgoing message created by the `operation_index`th operation,
     /// or `None` if there is no such operation or message.

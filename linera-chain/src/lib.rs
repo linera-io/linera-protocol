@@ -77,15 +77,18 @@ pub enum ChainError {
         origin: Box<Origin>,
         event: Event,
     },
-    #[error("Block proposed to {chain_id:?} is attempting to skip protected message {event:?}")]
+    #[error(
+        "Block proposed to {chain_id:?} is attempting to skip a message \
+             that cannot be skipped: {event:?}"
+    )]
     CannotSkipMessage {
         chain_id: ChainId,
         origin: Box<Origin>,
         event: Event,
     },
     #[error(
-        "Incoming message in block proposed to {chain_id:?} has timestamp {message_timestamp:},
-        which is later than the block timestamp {block_timestamp:}."
+        "Incoming message in block proposed to {chain_id:?} has timestamp {message_timestamp:}, \
+         which is later than the block timestamp {block_timestamp:}."
     )]
     IncorrectEventTimestamp {
         chain_id: ChainId,
