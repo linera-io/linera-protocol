@@ -16,23 +16,24 @@ use linera_base::{
 use crate::{CalleeContext, MessageContext, OperationContext};
 
 impl From<wit_types::OperationContext> for OperationContext {
-    fn from(application_context: wit_types::OperationContext) -> Self {
+    fn from(context: wit_types::OperationContext) -> Self {
         OperationContext {
-            chain_id: ChainId(application_context.chain_id.into()),
-            authenticated_signer: application_context.authenticated_signer.map(Owner::from),
-            height: BlockHeight(application_context.height),
-            index: application_context.index,
+            chain_id: ChainId(context.chain_id.into()),
+            authenticated_signer: context.authenticated_signer.map(Owner::from),
+            height: BlockHeight(context.height),
+            index: context.index,
         }
     }
 }
 
 impl From<wit_types::MessageContext> for MessageContext {
-    fn from(application_context: wit_types::MessageContext) -> Self {
+    fn from(context: wit_types::MessageContext) -> Self {
         MessageContext {
-            chain_id: ChainId(application_context.chain_id.into()),
-            authenticated_signer: application_context.authenticated_signer.map(Owner::from),
-            height: BlockHeight(application_context.height),
-            message_id: application_context.message_id.into(),
+            chain_id: ChainId(context.chain_id.into()),
+            is_bouncing: context.is_bouncing,
+            authenticated_signer: context.authenticated_signer.map(Owner::from),
+            height: BlockHeight(context.height),
+            message_id: context.message_id.into(),
         }
     }
 }
@@ -48,13 +49,11 @@ impl From<wit_types::MessageId> for MessageId {
 }
 
 impl From<wit_types::CalleeContext> for CalleeContext {
-    fn from(application_context: wit_types::CalleeContext) -> Self {
+    fn from(context: wit_types::CalleeContext) -> Self {
         CalleeContext {
-            chain_id: ChainId(application_context.chain_id.into()),
-            authenticated_signer: application_context.authenticated_signer.map(Owner::from),
-            authenticated_caller_id: application_context
-                .authenticated_caller_id
-                .map(ApplicationId::from),
+            chain_id: ChainId(context.chain_id.into()),
+            authenticated_signer: context.authenticated_signer.map(Owner::from),
+            authenticated_caller_id: context.authenticated_caller_id.map(ApplicationId::from),
         }
     }
 }

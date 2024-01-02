@@ -77,6 +77,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
     };
     let context = MessageContext {
         chain_id: ChainId::root(0),
+        is_bouncing: false,
         height: BlockHeight(0),
         certificate_hash: CryptoHash::new(&Dummy),
         message_id: MessageId {

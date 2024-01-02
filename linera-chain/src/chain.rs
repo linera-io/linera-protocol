@@ -602,6 +602,7 @@ where
             // Execute the received message.
             let context = MessageContext {
                 chain_id,
+                is_bouncing: message.event.is_bouncing(),
                 height: block.height,
                 certificate_hash: message.event.certificate_hash,
                 message_id: MessageId {

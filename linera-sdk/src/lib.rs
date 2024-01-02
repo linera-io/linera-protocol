@@ -346,6 +346,8 @@ pub struct OperationContext {
 pub struct MessageContext {
     /// The current chain id.
     pub chain_id: ChainId,
+    /// Whether the message was rejected by the original receiver and is now bouncing back.
+    pub is_bouncing: bool,
     /// The authenticated signer of the operation, if any.
     pub authenticated_signer: Option<Owner>,
     /// The current block height.
