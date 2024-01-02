@@ -1477,6 +1477,7 @@ where
                                 %error, round = %manager.current_round,
                                 "Failed to finalize pending validated block."
                             );
+                            // TODO(#1423): The round just ended; or are there other errors?
                             Ok(ExecuteBlockOutcome::wait_for_timeout(&info))
                         }
                     };
@@ -1492,6 +1493,7 @@ where
                                     %error, round = %manager.current_round,
                                     "Failed to re-propose validated block from an earlier round."
                                 );
+                                // TODO(#1423): The round just ended; or are there other errors?
                                 Ok(ExecuteBlockOutcome::wait_for_timeout(&info))
                             }
                         };
@@ -1511,6 +1513,7 @@ where
                                     %error, round = %manager.current_round,
                                     "Failed to re-propose local pending block."
                                 );
+                                // TODO(#1423): The round just ended; or are there other errors?
                                 Ok(ExecuteBlockOutcome::wait_for_timeout(&info))
                             }
                         };
@@ -1536,6 +1539,7 @@ where
                             %error, round = %manager.current_round,
                             "Failed to propose new block."
                         );
+                        // TODO(#1423): The round just ended; or are there other errors?
                         Ok(ExecuteBlockOutcome::wait_for_timeout(&info))
                     }
                 };
@@ -1563,6 +1567,7 @@ where
                                 %error, round = %manager.current_round,
                                 "Failed to propose pending block."
                             );
+                            // TODO(#1423): The round just ended; or are there other errors?
                             Ok(ExecuteBlockOutcome::wait_for_timeout(&info))
                         }
                     };
@@ -2139,6 +2144,7 @@ enum ExecuteBlockOutcome {
 
 impl ExecuteBlockOutcome {
     fn wait_for_timeout(info: &ChainInfo) -> Self {
+        // TODO(#1424): Local timeout might not match validators' exactly.
         Self::WaitForTimeout(RoundTimeout {
             timestamp: info.manager.round_timeout,
             current_round: info.manager.current_round,
