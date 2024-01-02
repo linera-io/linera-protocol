@@ -11,12 +11,12 @@ mod graphql;
 mod ownership;
 pub mod policy;
 mod resources;
-mod sync_runtime;
+mod runtime;
 pub mod system;
 mod util;
 mod wasm;
 
-pub use crate::sync_runtime::{ContractSyncRuntime, ServiceSyncRuntime};
+pub use crate::runtime::{ContractSyncRuntime, ServiceSyncRuntime};
 pub use applications::{
     ApplicationRegistryView, BytecodeLocation, GenericApplicationId, UserApplicationDescription,
     UserApplicationId,
