@@ -15,18 +15,23 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{
     extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router, Server,
 };
-use futures::lock::{Mutex, MutexGuard, OwnedMutexGuard};
+use futures::{
+    future::{self},
+    lock::{Mutex, MutexGuard, OwnedMutexGuard},
+    Future,
+};
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
-    data_types::Amount,
+    data_types::{Amount, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner},
     BcsHexParseError,
 };
 use linera_chain::{data_types::HashedValue, ChainStateView};
 use linera_core::{
     client::{ChainClient, ChainClientError},
-    node::ValidatorNodeProvider,
-    worker::Notification,
+    data_types::{ClientOutcome, RoundTimeout},
+    node::{NotificationStream, ValidatorNodeProvider},
+    worker::{Notification, Reason},
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -38,8 +43,11 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{
+    collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc, time::Duration,
+};
 use thiserror::Error as ThisError;
+use tokio_stream::StreamExt;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
 
@@ -214,11 +222,50 @@ where
         system_operation: SystemOperation,
         chain_id: ChainId,
     ) -> Result<CryptoHash, Error> {
-        let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let operation = Operation::System(system_operation);
-        let result = client.execute_operation(operation).await;
-        self.context.lock().await.update_wallet(&mut *client).await;
-        Ok(result?.hash())
+        let certificate = self
+            .apply_client_command(&chain_id, move |mut client| {
+                let operation = Operation::System(system_operation.clone());
+                async move {
+                    let result = client
+                        .execute_operation(operation)
+                        .await
+                        .map_err(Error::from);
+                    (result, client)
+                }
+            })
+            .await?;
+        Ok(certificate.hash())
+    }
+
+    /// Applies the given function to the chain client.
+    /// Updates the wallet regardless of the outcome. As long as the function returns a round
+    /// timeout, it will wait and retry.
+    async fn apply_client_command<F, Fut, T>(
+        &self,
+        chain_id: &ChainId,
+        mut f: F,
+    ) -> Result<T, Error>
+    where
+        F: FnMut(OwnedMutexGuard<ChainClient<P, S>>) -> Fut,
+        Fut: Future<
+            Output = (
+                Result<ClientOutcome<T>, Error>,
+                OwnedMutexGuard<ChainClient<P, S>>,
+            ),
+        >,
+    {
+        loop {
+            let mut client = self.clients.try_client_lock(chain_id).await?;
+            let stream = client.subscribe().await?;
+            let (result, mut client) = f(client).await;
+            self.context.lock().await.update_wallet(&mut *client).await;
+            let timeout = match result? {
+                ClientOutcome::Committed(t) => return Ok(t),
+                ClientOutcome::WaitForTimeout(timeout) => timeout,
+            };
+            drop(client);
+            wait_for_next_round(stream, timeout).await;
+        }
     }
 }
 
@@ -232,14 +279,23 @@ where
 {
     /// Processes the inbox and returns the lists of certificate hashes that were created, if any.
     async fn process_inbox(&self, chain_id: ChainId) -> Result<Vec<CryptoHash>, Error> {
-        let mut client = self.clients.try_client_lock(&chain_id).await?;
-        client.synchronize_from_validators().await?;
-        let result = client.process_inbox().await;
-        self.context.lock().await.update_wallet(&mut *client).await;
-        let certificates = result?;
-        drop(client);
-        let hashes = certificates.into_iter().map(|cert| cert.hash()).collect();
-        Ok(hashes)
+        let mut hashes = Vec::new();
+        loop {
+            let mut client = self.clients.try_client_lock(&chain_id).await?;
+            client.synchronize_from_validators().await?;
+            let result = client.process_inbox().await;
+            self.context.lock().await.update_wallet(&mut *client).await;
+            let (certificates, maybe_timeout) = result?;
+            hashes.extend(certificates.into_iter().map(|cert| cert.hash()));
+            match maybe_timeout {
+                None => return Ok(hashes),
+                Some(timestamp) => {
+                    let stream = client.subscribe().await?;
+                    drop(client);
+                    wait_for_next_round(stream, timestamp).await;
+                }
+            }
+        }
     }
 
     /// Retries the pending block that was unsuccessfully proposed earlier.
@@ -260,12 +316,18 @@ where
         amount: Amount,
         user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
-        let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let result = client
-            .transfer(owner, amount, recipient, user_data.unwrap_or_default())
-            .await;
-        self.context.lock().await.update_wallet(&mut *client).await;
-        Ok(result?.hash())
+        self.apply_client_command(&chain_id, move |mut client| {
+            let user_data = user_data.clone();
+            async move {
+                let result = client
+                    .transfer(owner, amount, recipient, user_data.unwrap_or_default())
+                    .await
+                    .map_err(Error::from)
+                    .map(|outcome| outcome.map(|certificate| certificate.hash()));
+                (result, client)
+            }
+        })
+        .await
     }
 
     /// Claims `amount` units of value from the given owner's account in
@@ -281,18 +343,24 @@ where
         amount: Amount,
         user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
-        let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let result = client
-            .claim(
-                owner,
-                target,
-                recipient,
-                amount,
-                user_data.unwrap_or_default(),
-            )
-            .await;
-        self.context.lock().await.update_wallet(&mut *client).await;
-        Ok(result?.hash())
+        self.apply_client_command(&chain_id, move |mut client| {
+            let user_data = user_data.clone();
+            async move {
+                let result = client
+                    .claim(
+                        owner,
+                        target,
+                        recipient,
+                        amount,
+                        user_data.unwrap_or_default(),
+                    )
+                    .await
+                    .map_err(Error::from)
+                    .map(|outcome| outcome.map(|certificate| certificate.hash()));
+                (result, client)
+            }
+        })
+        .await
     }
 
     /// Creates (or activates) a new chain by installing the given authentication key.
@@ -303,12 +371,22 @@ where
         public_key: PublicKey,
         balance: Option<Amount>,
     ) -> Result<ChainId, Error> {
-        let mut client = self.clients.try_client_lock(&chain_id).await?;
         let ownership = ChainOwnership::single(public_key);
         let balance = balance.unwrap_or(Amount::ZERO);
-        let result = client.open_chain(ownership, balance).await;
-        self.context.lock().await.update_wallet(&mut *client).await;
-        Ok(ChainId::child(result?.0))
+        let message_id = self
+            .apply_client_command(&chain_id, move |mut client| {
+                let ownership = ownership.clone();
+                async move {
+                    let result = client
+                        .open_chain(ownership, balance)
+                        .await
+                        .map_err(Error::from)
+                        .map(|outcome| outcome.map(|(message_id, _)| message_id));
+                    (result, client)
+                }
+            })
+            .await?;
+        Ok(ChainId::child(message_id))
     }
 
     /// Creates (or activates) a new chain by installing the given authentication keys.
@@ -338,19 +416,32 @@ where
         };
         let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
         let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
-        let mut client = self.clients.try_client_lock(&chain_id).await?;
         let balance = balance.unwrap_or(Amount::ZERO);
-        let result = client.open_chain(ownership, balance).await;
-        self.context.lock().await.update_wallet(&mut *client).await;
-        Ok(ChainId::child(result?.0))
+        let message_id = self
+            .apply_client_command(&chain_id, move |mut client| {
+                let ownership = ownership.clone();
+                async move {
+                    let result = client
+                        .open_chain(ownership, balance)
+                        .await
+                        .map_err(Error::from)
+                        .map(|outcome| outcome.map(|(message_id, _)| message_id));
+                    (result, client)
+                }
+            })
+            .await?;
+        Ok(ChainId::child(message_id))
     }
 
     /// Closes the chain.
     async fn close_chain(&self, chain_id: ChainId) -> Result<CryptoHash, Error> {
-        let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let result = client.close_chain().await;
-        self.context.lock().await.update_wallet(&mut *client).await;
-        Ok(result?.hash())
+        let certificate = self
+            .apply_client_command(&chain_id, |mut client| async move {
+                let result = client.close_chain().await.map_err(Error::from);
+                (result, client)
+            })
+            .await?;
+        Ok(certificate.hash())
     }
 
     /// Changes the authentication key of the chain.
@@ -442,10 +533,19 @@ where
         contract: Bytecode,
         service: Bytecode,
     ) -> Result<BytecodeId, Error> {
-        let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let result = client.publish_bytecode(contract, service).await;
-        self.context.lock().await.update_wallet(&mut *client).await;
-        Ok(result?.0)
+        self.apply_client_command(&chain_id, move |mut client| {
+            let contract = contract.clone();
+            let service = service.clone();
+            async move {
+                let result = client
+                    .publish_bytecode(contract, service)
+                    .await
+                    .map_err(Error::from)
+                    .map(|outcome| outcome.map(|(bytecode_id, _)| bytecode_id));
+                (result, client)
+            }
+        })
+        .await
     }
 
     /// Creates a new application.
@@ -457,17 +557,25 @@ where
         initialization_argument: String,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ApplicationId, Error> {
-        let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let result = client
-            .create_application_untyped(
-                bytecode_id,
-                parameters.as_bytes().to_vec(),
-                initialization_argument.as_bytes().to_vec(),
-                required_application_ids,
-            )
-            .await;
-        self.context.lock().await.update_wallet(&mut *client).await;
-        Ok(result?.0)
+        self.apply_client_command(&chain_id, move |mut client| {
+            let parameters = parameters.as_bytes().to_vec();
+            let initialization_argument = initialization_argument.as_bytes().to_vec();
+            let required_application_ids = required_application_ids.clone();
+            async move {
+                let result = client
+                    .create_application_untyped(
+                        bytecode_id,
+                        parameters,
+                        initialization_argument,
+                        required_application_ids,
+                    )
+                    .await
+                    .map_err(Error::from)
+                    .map(|outcome| outcome.map(|(application_id, _)| application_id));
+                (result, client)
+            }
+        })
+        .await
     }
 
     /// Requests a `RegisterApplications` message from another chain so the application can be used
@@ -478,12 +586,20 @@ where
         application_id: UserApplicationId,
         target_chain_id: Option<ChainId>,
     ) -> Result<CryptoHash, Error> {
-        let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let result = client
-            .request_application(application_id, target_chain_id)
-            .await;
-        self.context.lock().await.update_wallet(&mut *client).await;
-        Ok(result?.hash())
+        loop {
+            let mut client = self.clients.try_client_lock(&chain_id).await?;
+            let result = client
+                .request_application(application_id, target_chain_id)
+                .await;
+            self.context.lock().await.update_wallet(&mut *client).await;
+            let timeout = match result? {
+                ClientOutcome::Committed(certificate) => return Ok(certificate.hash()),
+                ClientOutcome::WaitForTimeout(timeout) => timeout,
+            };
+            let stream = client.subscribe().await?;
+            drop(client);
+            wait_for_next_round(stream, timeout).await;
+        }
     }
 }
 
@@ -828,12 +944,22 @@ where
                 application_id,
                 bytes,
             })
-            .collect();
+            .collect::<Vec<_>>();
 
-        let Some(mut client) = self.clients.client_lock(&chain_id).await else {
-            return Err(NodeServiceError::UnknownChainId);
+        let hash = loop {
+            let Some(mut client) = self.clients.client_lock(&chain_id).await else {
+                return Err(NodeServiceError::UnknownChainId);
+            };
+            let timeout = match client.execute_operations(operations.clone()).await? {
+                ClientOutcome::Committed(certificate) => break certificate.value.hash(),
+                ClientOutcome::WaitForTimeout(timeout) => timeout,
+            };
+            let stream = client.subscribe().await.map_err(|_| {
+                ChainClientError::InternalError("Could not subscribe to the local node.")
+            })?;
+            drop(client);
+            wait_for_next_round(stream, timeout).await;
         };
-        let hash = client.execute_operations(operations).await?.value.hash();
         Ok(async_graphql::Response::new(hash.to_value()))
     }
 
@@ -881,4 +1007,20 @@ where
 
         Ok(response.into())
     }
+}
+
+/// Returns after the specified time or if we receive a notification that a new round has started.
+pub async fn wait_for_next_round(stream: NotificationStream, timeout: RoundTimeout) {
+    let mut stream = stream.filter(|notification| match &notification.reason {
+        Reason::NewBlock { height, .. } => *height >= timeout.next_block_height,
+        Reason::NewRound { round, .. } => *round > timeout.current_round,
+        Reason::NewIncomingMessage { .. } => false,
+    });
+    future::select(
+        Box::pin(stream.next()),
+        Box::pin(tokio::time::sleep(Duration::from_micros(
+            timeout.timestamp.saturating_diff_micros(Timestamp::now()),
+        ))),
+    )
+    .await;
 }
