@@ -9,7 +9,7 @@ use linera_base::{
 };
 use linera_service::cli_wrappers::{ApplicationWrapper, ClientWrapper, Network};
 use port_selector::random_free_tcp_port;
-use rand::seq::IteratorRandom as _;
+use rand::{seq::IteratorRandom as _, SeedableRng};
 use serde_json::Value;
 use std::{
     collections::BTreeMap,
@@ -46,6 +46,10 @@ enum Args {
         /// The faucet (which implicitly defines the network)
         #[arg(long = "faucet", default_value = "http://faucet.devnet.linera.net")]
         faucet: String,
+
+        /// The seed for the PRNG determining the pattern of transactions.
+        #[arg(long = "seed", default_value = "0")]
+        seed: u64,
     },
 }
 
@@ -58,7 +62,8 @@ async fn main() -> Result<()> {
             apps,
             transactions,
             faucet,
-        } => benchmark_with_fungible(users, apps, transactions, faucet).await,
+            seed,
+        } => benchmark_with_fungible(users, apps, transactions, faucet, seed).await,
     }
 }
 
@@ -67,6 +72,7 @@ async fn benchmark_with_fungible(
     n_apps: usize,
     n_transactions: usize,
     faucet: String,
+    seed: u64,
 ) -> Result<()> {
     // Create the users
     let clients = join_all(
@@ -169,18 +175,13 @@ async fn benchmark_with_fungible(
     let successes_1 = Arc::new(AtomicUsize::new(0));
     let failures_1 = Arc::new(AtomicUsize::new(0));
     let mut expected_balances = vec![vec![Amount::ZERO; clients.len()]; clients.len()];
+    let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
 
     for _ in 0..total_transactions {
-        let (sender_i, (sender_app, sender_context, _)) = apps
-            .iter()
-            .enumerate()
-            .choose(&mut rand::rngs::OsRng)
-            .unwrap();
-        let (receiver_i, (_, receiver_context, _)) = apps
-            .iter()
-            .enumerate()
-            .choose(&mut rand::rngs::OsRng)
-            .unwrap();
+        let (sender_i, (sender_app, sender_context, _)) =
+            apps.iter().enumerate().choose(&mut rng).unwrap();
+        let (receiver_i, (_, receiver_context, _)) =
+            apps.iter().enumerate().choose(&mut rng).unwrap();
         expected_balances[receiver_i][sender_i]
             .try_add_assign(Amount::ONE)
             .unwrap();
