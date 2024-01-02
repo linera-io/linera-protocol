@@ -27,10 +27,6 @@ enum Args {
         #[arg(long = "users", default_value = "4")]
         users: usize,
 
-        /// The number of app instances to be deployed per user.
-        #[arg(long = "apps", default_value = "1")]
-        apps: usize,
-
         /// The number of transactions being made per user.
         #[arg(long = "transactions", default_value = "4")]
         transactions: usize,
@@ -51,17 +47,15 @@ async fn main() -> Result<()> {
     match args {
         Args::Fungible {
             users,
-            apps,
             transactions,
             faucet,
             seed,
-        } => benchmark_with_fungible(users, apps, transactions, faucet, seed).await,
+        } => benchmark_with_fungible(users, transactions, faucet, seed).await,
     }
 }
 
 async fn benchmark_with_fungible(
     n_users: usize,
-    n_apps: usize,
     n_transactions: usize,
     faucet: String,
     seed: u64,
@@ -150,26 +144,29 @@ async fn benchmark_with_fungible(
     .await;
 
     // create transaction futures
-    let total_transactions = n_users * n_apps * n_transactions;
+    let total_transactions = n_users * n_transactions;
     let mut expected_balances = vec![vec![Amount::ZERO; contexts.len()]; clients.len()];
     let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
 
-    let transaction_futures = (0..total_transactions).map(|_| {
-        let (sender_i, (sender_app, sender_context, _)) =
-            apps.iter().enumerate().choose(&mut rng).unwrap();
-        let (receiver_i, (_, receiver_context, _)) =
-            apps.iter().enumerate().choose(&mut rng).unwrap();
-        expected_balances[receiver_i][sender_i]
-            .try_add_assign(Amount::ONE)
-            .unwrap();
-        sender_app.transfer(
-            AccountOwner::User(sender_context.owner),
-            Amount::ONE,
-            Account {
-                chain_id: receiver_context.default_chain,
-                owner: AccountOwner::User(receiver_context.owner),
-            },
-        )
+    let transaction_futures = (0..n_transactions).flat_map(|_| {
+        apps.iter()
+            .enumerate()
+            .map(|(sender_i, (sender_app, sender_context, _))| {
+                let (receiver_i, (_, receiver_context, _)) =
+                    apps.iter().enumerate().choose(&mut rng).unwrap();
+                expected_balances[receiver_i][sender_i]
+                    .try_add_assign(Amount::ONE)
+                    .unwrap();
+                sender_app.transfer(
+                    AccountOwner::User(sender_context.owner),
+                    Amount::ONE,
+                    Account {
+                        chain_id: receiver_context.default_chain,
+                        owner: AccountOwner::User(receiver_context.owner),
+                    },
+                )
+            })
+            .collect::<Vec<_>>()
     });
 
     println!("ROUND 1");
