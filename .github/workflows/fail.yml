@@ -13,9 +13,9 @@ permissions:
 
 jobs:
   test:
-    runs-on: self-hosted
+    runs-on: arc-runner-set
     steps:
-    - name: Fail loudly, IV
+    - name: Fail loudly, V
       run: |
         >&2 echo WORKFLOW INTENTIONALLY FAILING
         exit 1
