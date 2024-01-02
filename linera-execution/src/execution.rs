@@ -325,7 +325,7 @@ where
             system_result.messages.push(RawOutgoingMessage {
                 destination: message.destination.clone(),
                 authenticated: false,
-                is_skippable: true,
+                is_protected: false,
                 message: SystemMessage::RegisterApplications {
                     applications: applications.clone(),
                 },

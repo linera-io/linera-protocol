@@ -21,7 +21,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockProposal, Certificate, ChainAndHeight, ChannelFullName, Event, ExecutedBlock,
-        HashedValue, IncomingMessage, LiteVote, Medium, Origin, OutgoingMessage,
+        HashedValue, IncomingMessage, LiteVote, Medium, MessageAction, Origin, OutgoingMessage,
         SignatureAggregator,
     },
     test::{make_child_block, make_first_block, BlockTestExt, VoteTestExt},
@@ -246,7 +246,7 @@ fn direct_outgoing_message(recipient: ChainId, message: SystemMessage) -> Outgoi
     OutgoingMessage {
         destination: Destination::Recipient(recipient),
         authenticated_signer: None,
-        is_skippable: false,
+        is_protected: true,
         message: Message::System(message),
     }
 }
@@ -255,7 +255,7 @@ fn channel_outgoing_message(name: ChannelName, message: SystemMessage) -> Outgoi
     OutgoingMessage {
         destination: Destination::Subscribers(name),
         authenticated_signer: None,
-        is_skippable: false,
+        is_protected: true,
         message: Message::System(message),
     }
 }
@@ -873,13 +873,14 @@ where
                     height: BlockHeight::ZERO,
                     index: 0,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    is_protected: true,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::ONE,
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .with_incoming_message(IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
@@ -888,13 +889,14 @@ where
                     height: BlockHeight::ZERO,
                     index: 1,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    is_protected: true,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::from_tokens(2),
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .with_incoming_message(IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
@@ -903,13 +905,14 @@ where
                     height: BlockHeight::from(1),
                     index: 0,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    is_protected: true,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::from_tokens(2), // wrong
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .into_fast_proposal(&recipient_key_pair);
         // Inconsistent received messages.
@@ -929,20 +932,21 @@ where
                     height: BlockHeight::ZERO,
                     index: 1,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    is_protected: true,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::from_tokens(2),
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .into_fast_proposal(&recipient_key_pair);
         // Skipped message.
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(chain_error))
-                if matches!(*chain_error, ChainError::UnskippableMessage { .. })
+                if matches!(*chain_error, ChainError::CannotSkipMessage { .. })
         ));
     }
     {
@@ -955,13 +959,14 @@ where
                     height: BlockHeight::from(1),
                     index: 0,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    is_protected: true,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::from_tokens(3),
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .with_incoming_message(IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
@@ -970,13 +975,14 @@ where
                     height: BlockHeight::ZERO,
                     index: 0,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    is_protected: true,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::ONE,
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .with_incoming_message(IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
@@ -985,20 +991,21 @@ where
                     height: BlockHeight::ZERO,
                     index: 1,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    is_protected: true,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::from_tokens(2),
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .into_fast_proposal(&recipient_key_pair);
         // Inconsistent order in received messages (heights).
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(chain_error))
-                if matches!(*chain_error, ChainError::UnskippableMessage { .. })
+                if matches!(*chain_error, ChainError::CannotSkipMessage { .. })
         ));
     }
     {
@@ -1011,13 +1018,14 @@ where
                     height: BlockHeight::ZERO,
                     index: 0,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    is_protected: true,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::ONE,
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .into_fast_proposal(&recipient_key_pair);
         // Taking the first message only is ok.
@@ -1055,13 +1063,14 @@ where
                     height: BlockHeight::from(0),
                     index: 1,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    is_protected: true,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::from_tokens(2),
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .with_incoming_message(IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
@@ -1070,13 +1079,14 @@ where
                     height: BlockHeight::from(1),
                     index: 0,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    is_protected: true,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::from_tokens(3),
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .into_fast_proposal(&recipient_key_pair);
         worker
@@ -1417,7 +1427,7 @@ where
             height: BlockHeight::ZERO,
             index: 0,
             authenticated_signer: None,
-            is_skippable: false,
+            is_protected: true,
             timestamp: Timestamp::from(0),
             message: Message::System(SystemMessage::OpenChain {
                 ownership,
@@ -1427,6 +1437,7 @@ where
                 balance,
             }),
         },
+        action: MessageAction::Accept,
     };
     let value = HashedValue::new_confirmed(ExecutedBlock {
         block: make_first_block(chain_id).with_incoming_message(open_chain_message),
@@ -1634,13 +1645,14 @@ where
                 height: BlockHeight::ZERO,
                 index: 0,
                 authenticated_signer: None,
-                is_skippable: false,
+                is_protected: true,
                 timestamp: Timestamp::from(0),
                 message: Message::System(SystemMessage::Credit {
                     account: Account::chain(ChainId::root(1)),
                     amount: Amount::from_tokens(995),
                 }),
             },
+            action: MessageAction::Accept,
         }],
         &committee,
         Amount::ZERO,
@@ -1684,7 +1696,7 @@ where
             height,
             index: 0,
             authenticated_signer: None,
-            is_skippable: false,
+            is_protected: true,
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. }),
         } if certificate_hash == CryptoHash::new(&Dummy)
@@ -1874,7 +1886,7 @@ where
             height,
             index: 0,
             authenticated_signer: None,
-            is_skippable: false,
+            is_protected: true,
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. })
         } if certificate_hash == certificate.hash()
@@ -1978,7 +1990,7 @@ where
             height,
             index: 0,
             authenticated_signer: None,
-            is_skippable: false,
+            is_protected: true,
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. })
         } if certificate_hash == certificate.hash()
@@ -2248,13 +2260,14 @@ where
                 height: BlockHeight::ZERO,
                 index: 0,
                 authenticated_signer: None,
-                is_skippable: false,
+                is_protected: true,
                 timestamp: Timestamp::from(0),
                 message: Message::System(SystemMessage::Credit {
                     account: Account::chain(ChainId::root(2)),
                     amount: Amount::from_tokens(5),
                 }),
             },
+            action: MessageAction::Accept,
         }],
         &committee,
         Amount::from_tokens(4),
@@ -2571,13 +2584,14 @@ where
                         height: BlockHeight::ZERO,
                         index: 1,
                         authenticated_signer: None,
-                        is_skippable: false,
+                        is_protected: true,
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::Subscribe {
                             id: user_id,
                             subscription: admin_channel_subscription.clone(),
                         }),
                     },
+                    action: MessageAction::Accept,
                 }),
             messages: vec![direct_outgoing_message(
                 user_id,
@@ -2691,7 +2705,7 @@ where
                         height: BlockHeight::from(0),
                         index: 0,
                         authenticated_signer: None,
-                        is_skippable: false,
+                        is_protected: true,
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::OpenChain {
                             ownership: ChainOwnership::single(key_pair.public()),
@@ -2701,6 +2715,7 @@ where
                             balance: Amount::ZERO,
                         }),
                     },
+                    action: MessageAction::Accept,
                 })
                 .with_incoming_message(IncomingMessage {
                     origin: admin_channel_origin.clone(),
@@ -2709,13 +2724,14 @@ where
                         height: BlockHeight::from(1),
                         index: 0,
                         authenticated_signer: None,
-                        is_skippable: false,
+                        is_protected: true,
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::SetCommittees {
                             epoch: Epoch::from(1),
                             committees: committees2.clone(),
                         }),
                     },
+                    action: MessageAction::Accept,
                 })
                 .with_incoming_message(IncomingMessage {
                     origin: Origin::chain(admin_id),
@@ -2724,13 +2740,14 @@ where
                         height: BlockHeight::from(1),
                         index: 1,
                         authenticated_signer: None,
-                        is_skippable: false,
+                        is_protected: true,
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::Credit {
                             account: Account::chain(user_id),
                             amount: Amount::from_tokens(2),
                         }),
                     },
+                    action: MessageAction::Accept,
                 })
                 .with_incoming_message(IncomingMessage {
                     origin: Origin::chain(admin_id),
@@ -2739,10 +2756,11 @@ where
                         height: BlockHeight::from(2),
                         index: 0,
                         authenticated_signer: None,
-                        is_skippable: false,
+                        is_protected: true,
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::Notify { id: user_id }),
                     },
+                    action: MessageAction::Accept,
                 }),
             messages: Vec::new(),
             message_counts: vec![0, 0, 0, 0],
@@ -3124,13 +3142,14 @@ where
                         height: BlockHeight::ZERO,
                         index: 0,
                         authenticated_signer: None,
-                        is_skippable: false,
+                        is_protected: true,
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::Credit {
                             account: Account::chain(admin_id),
                             amount: Amount::ONE,
                         }),
                     },
+                    action: MessageAction::Accept,
                 }),
             messages: Vec::new(),
             message_counts: vec![0],

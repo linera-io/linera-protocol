@@ -10,7 +10,7 @@ use linera_base::{
     identifiers::{ChainDescription, Destination},
 };
 use linera_chain::{
-    data_types::{CertificateValue, HashedValue, Medium},
+    data_types::{CertificateValue, HashedValue, Medium, MessageAction},
     ChainManagerInfo,
 };
 use linera_core::{data_types::CrossChainRequest, node::NodeError};
@@ -39,6 +39,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<SystemMessage>(&samples)?;
     tracer.trace_type::<Operation>(&samples)?;
     tracer.trace_type::<Message>(&samples)?;
+    tracer.trace_type::<MessageAction>(&samples)?;
     tracer.trace_type::<HashedValue>(&samples)?;
     tracer.trace_type::<CertificateValue>(&samples)?;
     tracer.trace_type::<Medium>(&samples)?;

@@ -4,7 +4,7 @@
 use crate::{
     data_types::{
         Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, Event, IncomingMessage,
-        Medium, Origin, OutgoingMessage, Target,
+        Medium, MessageAction, Origin, OutgoingMessage, Target,
     },
     inbox::{InboxError, InboxStateView},
     outbox::OutboxStateView,
@@ -393,7 +393,7 @@ where
             let OutgoingMessage {
                 destination,
                 authenticated_signer,
-                is_skippable,
+                is_protected,
                 message,
             } = outgoing_message;
             // Skip events that do not belong to this origin OR have no effect on this
@@ -432,7 +432,7 @@ where
                 height,
                 index,
                 authenticated_signer,
-                is_skippable,
+                is_protected,
                 timestamp,
                 message,
             });
@@ -589,6 +589,7 @@ where
                             message: Message::System(SystemMessage::OpenChain { .. }),
                             ..
                         },
+                        action: MessageAction::Accept,
                         ..
                     })
                 ),
@@ -596,6 +597,18 @@ where
             );
         }
         for (index, message) in block.incoming_messages.iter().enumerate() {
+            if let MessageAction::Reject = message.action {
+                ensure!(
+                    !message.event.is_protected,
+                    ChainError::CannotRejectMessage {
+                        chain_id,
+                        origin: Box::new(message.origin.clone()),
+                        event: message.event.clone(),
+                    }
+                );
+                // Skip execution of rejected message.
+                continue;
+            }
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let chain_execution_context = ChainExecutionContext::IncomingMessage(index);
             // Execute the received message.
@@ -770,7 +783,7 @@ where
         for RawOutgoingMessage {
             destination,
             authenticated,
-            is_skippable,
+            is_protected,
             message,
         } in raw_result.messages
         {
@@ -790,7 +803,7 @@ where
             messages.push(OutgoingMessage {
                 destination,
                 authenticated_signer,
-                is_skippable,
+                is_protected,
                 message: lift(message),
             });
         }

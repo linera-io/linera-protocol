@@ -78,7 +78,6 @@ record session-call-result {
 record outgoing-message {
     destination: destination,
     authenticated: bool,
-    is-skippable: bool,
     message: list<u8>,
 }
 

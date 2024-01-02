@@ -619,8 +619,9 @@ pub struct RawOutgoingMessage<Message> {
     pub destination: Destination,
     /// Whether the message is authenticated.
     pub authenticated: bool,
-    /// Whether the message can be skipped by the receiver.
-    pub is_skippable: bool,
+    /// True if the message cannot be skipped or rejected by the receiver.
+    /// This only concerns certain system messages that cannot fail.
+    pub is_protected: bool,
     /// The message itself.
     pub message: Message,
 }
