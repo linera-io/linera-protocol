@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    policy::ResourceControlPolicy,
-    resources::{ResourceTracker, RuntimeLimits},
-    runtime::{ApplicationStatus, ExecutionRuntime, SessionManager},
-    system::SystemExecutionStateView,
+    policy::ResourceControlPolicy, resources::ResourceTracker, system::SystemExecutionStateView,
     ContractSyncRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeConfig,
     ExecutionRuntimeContext, Message, MessageContext, Operation, OperationContext, Query,
     QueryContext, RawExecutionResult, RawOutgoingMessage, Response, ServiceSyncRuntime,
@@ -174,16 +171,6 @@ where
         tracker: &mut ResourceTracker,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         let execution_results = match self.context().extra().execution_runtime_config() {
-            ExecutionRuntimeConfig::Actor => {
-                self.run_user_action_with_actor_runtime(
-                    application_id,
-                    chain_id,
-                    action,
-                    policy,
-                    tracker,
-                )
-                .await?
-            }
             ExecutionRuntimeConfig::Synchronous => {
                 self.run_user_action_with_synchronous_runtime(
                     application_id,
@@ -197,79 +184,6 @@ where
         };
         self.update_execution_results_with_app_registrations(execution_results)
             .await
-    }
-
-    async fn run_user_action_with_actor_runtime(
-        &mut self,
-        application_id: UserApplicationId,
-        chain_id: ChainId,
-        action: UserAction,
-        policy: &ResourceControlPolicy,
-        tracker: &mut ResourceTracker,
-    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
-        let balance = self.system.balance.get();
-        let runtime_limits = tracker.limits(policy, balance);
-        let initial_remaining_fuel = policy.remaining_fuel(*balance);
-        // Try to load the contract. This may fail if the corresponding
-        // bytecode-publishing certificate doesn't exist yet on this validator.
-        let description = self
-            .system
-            .registry
-            .describe_application(application_id)
-            .await?;
-        let contract = self
-            .context()
-            .extra()
-            .get_user_contract(&description)
-            .await?;
-        let signer = action.signer();
-        // Create the execution runtime for this transaction.
-        let mut session_manager = SessionManager::default();
-        let mut results = Vec::new();
-        let mut applications = vec![ApplicationStatus {
-            id: application_id,
-            parameters: description.parameters,
-            signer,
-        }];
-        let runtime = ExecutionRuntime::new(
-            chain_id,
-            &mut applications,
-            self,
-            &mut session_manager,
-            &mut results,
-            initial_remaining_fuel,
-            runtime_limits,
-        );
-        // Make the call to user code.
-        let (runtime_actor, runtime_sender) = runtime.contract_runtime_actor();
-        let mut contract = contract.instantiate_with_actor_runtime(runtime_sender)?;
-        let execution_result_future = tokio::task::spawn_blocking(move || match action {
-            UserAction::Initialize(context, argument) => contract.initialize(context, argument),
-            UserAction::Operation(context, operation) => {
-                contract.execute_operation(context, operation)
-            }
-            UserAction::Message(context, message) => contract.execute_message(context, message),
-        });
-        runtime_actor.run().await?;
-        let mut execution_result = execution_result_future.await??;
-
-        // Set the authenticated signer to be used in outgoing messages.
-        execution_result.authenticated_signer = signer;
-        let runtime_counts = runtime.runtime_counts().await;
-        let balance = self.system.balance.get_mut();
-        tracker.update_limits(balance, policy, runtime_counts)?;
-
-        // Check that applications were correctly stacked and unstacked.
-        assert_eq!(applications.len(), 1);
-        assert_eq!(applications[0].id, application_id);
-
-        // Update externally-visible results.
-        results.push(ExecutionResult::User(application_id, execution_result));
-        // Check that all sessions were properly closed.
-        if let Some(session_id) = session_manager.states.keys().next() {
-            return Err(ExecutionError::SessionWasNotClosed(*session_id));
-        }
-        Ok(results)
     }
 
     async fn run_user_action_with_synchronous_runtime(
@@ -427,10 +341,6 @@ where
                 bytes,
             } => {
                 let response = match self.context().extra().execution_runtime_config() {
-                    ExecutionRuntimeConfig::Actor => {
-                        self.query_application_with_actor_runtime(application_id, context, bytes)
-                            .await?
-                    }
                     ExecutionRuntimeConfig::Synchronous => {
                         self.query_application_with_sync_runtime(application_id, context, bytes)
                             .await?
@@ -439,56 +349,6 @@ where
                 Ok(Response::User(response))
             }
         }
-    }
-
-    async fn query_application_with_actor_runtime(
-        &mut self,
-        application_id: UserApplicationId,
-        context: QueryContext,
-        query: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        // Load the service.
-        let description = self
-            .system
-            .registry
-            .describe_application(application_id)
-            .await?;
-        let service = self
-            .context()
-            .extra()
-            .get_user_service(&description)
-            .await?;
-        // Create the execution runtime for this transaction.
-        let mut session_manager = SessionManager::default();
-        let mut results = Vec::new();
-        let mut applications = vec![ApplicationStatus {
-            id: application_id,
-            parameters: description.parameters,
-            signer: None,
-        }];
-        let runtime_limits = RuntimeLimits::default();
-        let remaining_fuel = 0;
-        let runtime = ExecutionRuntime::new(
-            context.chain_id,
-            &mut applications,
-            self,
-            &mut session_manager,
-            &mut results,
-            remaining_fuel,
-            runtime_limits,
-        );
-        let (runtime_actor, runtime_sender) = runtime.service_runtime_actor();
-        let mut service = service.instantiate_with_actor_runtime(runtime_sender)?;
-        // Run the query.
-        let response_future =
-            tokio::task::spawn_blocking(move || service.handle_query(context, query));
-        runtime_actor.run().await?;
-        let response = response_future.await??;
-
-        // Check that applications were correctly stacked and unstacked.
-        assert_eq!(applications.len(), 1);
-        assert_eq!(applications[0].id, application_id);
-        Ok(response)
     }
 
     async fn query_application_with_sync_runtime(

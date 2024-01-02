@@ -12,10 +12,7 @@ use linera_base::{
     ensure,
     identifiers::{ChainDescription, ChainId, Owner, SessionId},
 };
-use linera_execution::{
-    policy::ResourceControlPolicy, ContractActorRuntime, ContractSyncRuntime, ServiceActorRuntime,
-    ServiceSyncRuntime, *,
-};
+use linera_execution::{policy::ResourceControlPolicy, ContractSyncRuntime, ServiceSyncRuntime, *};
 use linera_views::{batch::Batch, common::Context, memory::MemoryContext, views::View};
 use std::sync::Arc;
 use test_case::test_case;
@@ -96,16 +93,6 @@ enum TestOperation {
 }
 
 impl UserContractModule for TestModule {
-    fn instantiate_with_actor_runtime(
-        &self,
-        runtime: ContractActorRuntime,
-    ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError> {
-        Ok(Box::new(TestApplication {
-            owner: self.owner,
-            runtime,
-        }))
-    }
-
     fn instantiate_with_sync_runtime(
         &self,
         runtime: ContractSyncRuntime,
@@ -242,16 +229,6 @@ where
 }
 
 impl UserServiceModule for TestModule {
-    fn instantiate_with_actor_runtime(
-        &self,
-        runtime: ServiceActorRuntime,
-    ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError> {
-        Ok(Box::new(TestApplication {
-            owner: self.owner,
-            runtime,
-        }))
-    }
-
     fn instantiate_with_sync_runtime(
         &self,
         runtime: ServiceSyncRuntime,
@@ -287,7 +264,6 @@ where
     }
 }
 
-#[test_case(ExecutionRuntimeConfig::Actor ; "actor")]
 #[test_case(ExecutionRuntimeConfig::Synchronous ; "synchronous")]
 #[tokio::test]
 async fn test_simple_user_operation(
@@ -371,7 +347,6 @@ async fn test_simple_user_operation(
     Ok(())
 }
 
-#[test_case(ExecutionRuntimeConfig::Actor ; "actor")]
 #[test_case(ExecutionRuntimeConfig::Synchronous ; "synchronous")]
 #[tokio::test]
 async fn test_simple_user_operation_with_leaking_session(
@@ -430,7 +405,6 @@ async fn test_simple_user_operation_with_leaking_session(
 /// Sends an operation to the [`TestApplication`] requesting it to fail a cross-application call.
 /// It is then forwarded to the reentrant call, where the cross-application call handler fails and
 /// the execution error should be handled correctly (without panicking).
-#[test_case(ExecutionRuntimeConfig::Actor ; "actor")]
 #[test_case(ExecutionRuntimeConfig::Synchronous ; "synchronous")]
 #[tokio::test]
 async fn test_cross_application_error(
