@@ -93,7 +93,7 @@ enum TestOperation {
 }
 
 impl UserContractModule for TestModule {
-    fn instantiate_with_sync_runtime(
+    fn instantiate(
         &self,
         runtime: ContractSyncRuntime,
     ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError> {
@@ -229,7 +229,7 @@ where
 }
 
 impl UserServiceModule for TestModule {
-    fn instantiate_with_sync_runtime(
+    fn instantiate(
         &self,
         runtime: ServiceSyncRuntime,
     ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError> {

@@ -88,7 +88,7 @@ impl WasmContractModule {
 }
 
 impl UserContractModule for WasmContractModule {
-    fn instantiate_with_sync_runtime(
+    fn instantiate(
         &self,
         runtime: ContractSyncRuntime,
     ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError> {
@@ -149,7 +149,7 @@ impl WasmServiceModule {
 }
 
 impl UserServiceModule for WasmServiceModule {
-    fn instantiate_with_sync_runtime(
+    fn instantiate(
         &self,
         runtime: ServiceSyncRuntime,
     ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError> {

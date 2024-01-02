@@ -793,7 +793,7 @@ impl ContractSyncRuntime {
         });
         let runtime = ContractSyncRuntime::new(runtime);
         let execution_result = {
-            let mut code = code.instantiate_with_sync_runtime(runtime.clone())?;
+            let mut code = code.instantiate(runtime.clone())?;
             match action {
                 UserAction::Initialize(context, argument) => code.initialize(context, argument)?,
                 UserAction::Operation(context, operation) => {
@@ -901,7 +901,7 @@ impl ContractRuntime for ContractSyncRuntime {
             });
             (callee_context, authenticated_signer, code)
         };
-        let mut code = code.instantiate_with_sync_runtime(self.clone())?;
+        let mut code = code.instantiate(self.clone())?;
         let raw_result =
             code.handle_application_call(callee_context, argument, forwarded_sessions)?;
         {
@@ -961,7 +961,7 @@ impl ContractRuntime for ContractSyncRuntime {
             });
             (callee_context, authenticated_signer, session_state, code)
         };
-        let mut code = code.instantiate_with_sync_runtime(self.clone())?;
+        let mut code = code.instantiate(self.clone())?;
         let (raw_result, session_state) =
             code.handle_session_call(callee_context, session_state, argument, forwarded_sessions)?;
         {
@@ -1038,7 +1038,7 @@ impl ServiceRuntime for ServiceSyncRuntime {
             });
             (query_context, code)
         };
-        let mut code = code.instantiate_with_sync_runtime(self.clone())?;
+        let mut code = code.instantiate(self.clone())?;
         let promise = code.handle_query(query_context, argument)?;
         {
             let mut this = self.as_inner();
