@@ -15,7 +15,7 @@ jobs:
   test:
     runs-on: arc-runner-set
     steps:
-    - name: Fail loudly, V
+    - name: Fail loudly, VI
       run: |
-        >&2 echo WORKFLOW INTENTIONALLY FAILING
+        >&2 echo WORKFLOW INTENTIONALLY FAILING (VI)
         exit 1
