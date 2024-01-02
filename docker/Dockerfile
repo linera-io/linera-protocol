@@ -1,15 +1,3 @@
-##############################################################################
-################## Meant to be run with Google Cloud Build ###################
-##############################################################################
-
-# From the root of the repo, use the following command to run:
-#   gcloud builds submit --tag us-docker.pkg.dev/linera-io-dev/linera-docker-repo/<PACKAGE_NAME>:<VERSION_TAG> --timeout="3h" --machine-type=e2-highcpu-32
-# The package name needs that prefix so it stores it in the proper Docker container registry on GCP (Google Cloud Platform).
-# Make sure you specify the <PACKAGE_NAME> and <VERSION_TAG> you want though.
-# The --timeout and --machine-type flags are optional, but building with the default machine type
-# takes considerably longer. The default timeout is 1h, which you'll likely hit if you run with
-# the default machine type.
-
 # Build arguments:
 #
 # - `binaries` is the path to the directory containing the Linera
