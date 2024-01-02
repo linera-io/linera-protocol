@@ -11,15 +11,7 @@ use linera_service::cli_wrappers::{ApplicationWrapper, ClientWrapper, Network};
 use port_selector::random_free_tcp_port;
 use rand::{seq::IteratorRandom as _, SeedableRng};
 use serde_json::Value;
-use std::{
-    collections::BTreeMap,
-    iter,
-    path::Path,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
-};
+use std::{collections::BTreeMap, iter, path::Path, sync::Arc};
 use tempfile::tempdir;
 use tokio::time::Instant;
 
@@ -74,19 +66,14 @@ async fn benchmark_with_fungible(
     faucet: String,
     seed: u64,
 ) -> Result<()> {
-    // Create the users
-    let clients = join_all(
-        (0..n_users)
-            .map(|n| ClientWrapper::new(Arc::new(tempdir().unwrap()), Network::Grpc, None, n))
-            .map(|client| {
-                let faucet = faucet.clone();
-                async move {
-                    client.wallet_init(&[], Some(&faucet)).await.unwrap();
-                    println!("wallet created");
-                    client
-                }
-            }),
-    )
+    // Create the clients and initialize the wallets
+    let clients = (0..n_users)
+        .map(|n| ClientWrapper::new(Arc::new(tempdir().unwrap()), Network::Grpc, None, n))
+        .collect::<Vec<_>>();
+    join_all(clients.iter().map(|client| async {
+        client.wallet_init(&[], Some(&faucet)).await.unwrap();
+        println!("wallet created");
+    }))
     .await;
 
     // Sync their balances (sanity check)
@@ -108,22 +95,17 @@ async fn benchmark_with_fungible(
         default_chain: ChainId,
     }
 
-    let mut contexts = vec![];
-
-    // Upload fungibles
-    for (i, client) in clients.iter().enumerate() {
+    // Publish and create the fungible applications
+    let contexts = join_all(clients.iter().enumerate().map(|(i, client)| async move {
         let initial_state = InitialState {
             accounts: BTreeMap::from([(
                 AccountOwner::User(client.get_owner().unwrap()),
                 Amount::from_tokens(1_000_000),
             )]),
         };
+        let path = Path::new("../examples/fungible").canonicalize().unwrap();
         let (contract, service) = client
-            .build_application(
-                &Path::new("../examples/fungible").canonicalize().unwrap(),
-                "fungible",
-                true,
-            )
+            .build_application(&path, "fungible", true)
             .await
             .unwrap();
         let parameters = fungible::Parameters::new(format!("FUN{}", i).leak());
@@ -138,25 +120,23 @@ async fn benchmark_with_fungible(
             )
             .await
             .unwrap();
-        println!(
-            "User {:?} has published application {:?}",
-            client.get_owner(),
-            &application_id
-        );
-        contexts.push(BenchmarkContext {
+        BenchmarkContext {
             application_id,
             client,
             owner: client.get_owner().unwrap(),
             default_chain: client.default_chain().unwrap(),
-        });
+        }
+    }))
+    .await;
+    for context in &contexts {
+        println!(
+            "User {:?} has published application {:?}",
+            context.owner, context.application_id
+        );
     }
 
-    let total_transactions = n_users * n_apps * n_transactions;
-
-    let mut apps = vec![];
-
-    // create node-services
-    for context in contexts {
+    // create node services
+    let apps = join_all(contexts.iter().map(|context| async move {
         let free_port = random_free_tcp_port().unwrap();
         let node_service = context.client.run_node_service(free_port).await.unwrap();
         let app = FungibleApp(
@@ -165,19 +145,16 @@ async fn benchmark_with_fungible(
                 .await
                 .unwrap(),
         );
-        // adding the node service so that it doesn't get dropped.
-        apps.push((app, context, node_service));
-    }
+        (app, context, node_service)
+    }))
+    .await;
 
     // create transaction futures
-    let mut transaction_futures = vec![];
-
-    let successes_1 = Arc::new(AtomicUsize::new(0));
-    let failures_1 = Arc::new(AtomicUsize::new(0));
-    let mut expected_balances = vec![vec![Amount::ZERO; clients.len()]; clients.len()];
+    let total_transactions = n_users * n_apps * n_transactions;
+    let mut expected_balances = vec![vec![Amount::ZERO; contexts.len()]; clients.len()];
     let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
 
-    for _ in 0..total_transactions {
+    let transaction_futures = (0..total_transactions).map(|_| {
         let (sender_i, (sender_app, sender_context, _)) =
             apps.iter().enumerate().choose(&mut rng).unwrap();
         let (receiver_i, (_, receiver_context, _)) =
@@ -185,58 +162,53 @@ async fn benchmark_with_fungible(
         expected_balances[receiver_i][sender_i]
             .try_add_assign(Amount::ONE)
             .unwrap();
-        let successes = successes_1.clone();
-        let failures = failures_1.clone();
-        transaction_futures.push(async move {
-            let res = sender_app
-                .transfer(
-                    AccountOwner::User(sender_context.owner),
-                    Amount::ONE,
-                    Account {
-                        chain_id: receiver_context.default_chain,
-                        owner: AccountOwner::User(receiver_context.owner),
-                    },
-                )
-                .await;
-
-            match res {
-                Ok(_) => successes.fetch_add(1, Ordering::Relaxed),
-                Err(e) => {
-                    eprintln!("{:?}", e);
-                    failures.fetch_add(1, Ordering::Relaxed)
-                }
-            }
-        });
-    }
+        sender_app.transfer(
+            AccountOwner::User(sender_context.owner),
+            Amount::ONE,
+            Account {
+                chain_id: receiver_context.default_chain,
+                owner: AccountOwner::User(receiver_context.owner),
+            },
+        )
+    });
 
     println!("ROUND 1");
 
     let timer = Instant::now();
 
-    join_all(transaction_futures).await;
+    let results = join_all(transaction_futures).await;
+    let successes = results.into_iter().filter(Result::is_ok).count();
 
-    let tps: f64 = successes_1.load(Ordering::Relaxed) as f64 / timer.elapsed().as_secs_f64();
+    let tps: f64 = successes as f64 / timer.elapsed().as_secs_f64();
 
-    println!("Successes: {:?}", successes_1);
-    println!("Failures:  {:?}", failures_1);
+    println!("Successes: {:?}", successes);
+    println!("Failures:  {:?}", total_transactions - successes);
 
     println!("TPS:       {}", tps);
 
-    for ((_, context, node_service), expected_balances) in apps.iter().zip(expected_balances) {
-        for ((_, sender_context, _), expected_balance) in apps.iter().zip(expected_balances) {
-            let app = FungibleApp(
-                node_service
-                    .make_application(&context.default_chain, &sender_context.application_id)
-                    .await
-                    .unwrap(),
-            );
-            app.assert_balances(iter::once((
-                AccountOwner::User(context.owner),
-                expected_balance,
-            )))
-            .await;
-        }
-    }
+    join_all(apps.iter().zip(expected_balances).map(
+        |((_, context, node_service), expected_balances)| {
+            join_all(apps.iter().zip(expected_balances).map(
+                |((_, sender_context, _), expected_balance)| async move {
+                    let app = FungibleApp(
+                        node_service
+                            .make_application(
+                                &context.default_chain,
+                                &sender_context.application_id,
+                            )
+                            .await
+                            .unwrap(),
+                    );
+                    app.assert_balances(iter::once((
+                        AccountOwner::User(context.owner),
+                        expected_balance,
+                    )))
+                    .await;
+                },
+            ))
+        },
+    ))
+    .await;
 
     Ok(())
 }
