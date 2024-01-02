@@ -10,7 +10,6 @@ mod sync_response;
 
 use self::handlers::RequestHandler;
 pub use self::{
-    handlers::RespondExt,
     requests::{BaseRequest, ContractRequest, ServiceRequest},
     senders::{ContractActorRuntime, ServiceActorRuntime},
     sync_response::{SyncReceiver, SyncSender},
@@ -133,6 +132,34 @@ impl<T> ReceiverExt<T> for oneshot::Receiver<T> {
     fn recv_response(self) -> Result<T, ExecutionError> {
         self.recv()
             .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)
+    }
+}
+
+/// Helper trait to send a response and log on failure.
+pub trait RespondExt {
+    type Response;
+
+    /// Responds to a request using the `response_sender` channel endpoint.
+    fn respond(self, response: Self::Response);
+}
+
+impl<Response> RespondExt for oneshot::Sender<Response> {
+    type Response = Response;
+
+    fn respond(self, response: Self::Response) {
+        if self.send(response).is_err() {
+            tracing::debug!("Request sent to `RuntimeActor` was canceled");
+        }
+    }
+}
+
+impl<Response> RespondExt for SyncSender<Response> {
+    type Response = Response;
+
+    fn respond(self, response: Self::Response) {
+        if self.send(response).is_err() {
+            tracing::debug!("Request sent to `RuntimeActor` was canceled");
+        }
     }
 }
 

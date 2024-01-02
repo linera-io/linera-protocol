@@ -5,7 +5,7 @@
 
 use super::{
     requests::{BaseRequest, ContractRequest, ServiceRequest},
-    sync_response::SyncSender,
+    RespondExt,
 };
 use crate::{runtime::ExecutionRuntime, ExecutionError, ExecutionRuntimeContext};
 use async_lock::RwLock;
@@ -171,33 +171,5 @@ where
         }
 
         Ok(())
-    }
-}
-
-/// Helper trait to send a response and log on failure.
-pub trait RespondExt {
-    type Response;
-
-    /// Responds to a request using the `response_sender` channel endpoint.
-    fn respond(self, response: Self::Response);
-}
-
-impl<Response> RespondExt for oneshot::Sender<Response> {
-    type Response = Response;
-
-    fn respond(self, response: Self::Response) {
-        if self.send(response).is_err() {
-            tracing::debug!("Request sent to `RuntimeActor` was canceled");
-        }
-    }
-}
-
-impl<Response> RespondExt for SyncSender<Response> {
-    type Response = Response;
-
-    fn respond(self, response: Self::Response) {
-        if self.send(response).is_err() {
-            tracing::debug!("Request sent to `RuntimeActor` was canceled");
-        }
     }
 }
