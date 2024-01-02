@@ -427,7 +427,8 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionResult<Message> {
         self
     }
 
-    /// Adds an authenticated message to the execution result.
+    /// Adds an authenticated message to the execution result. Authenticated messages can
+    /// act on behalf of the user that created them.
     pub fn with_authenticated_message(
         mut self,
         destination: impl Into<Destination>,
@@ -438,6 +439,40 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionResult<Message> {
             destination,
             authenticated: true,
             is_tracked: false,
+            message,
+        });
+        self
+    }
+
+    /// Adds a tracked message to the execution result. Tracked messages are bounced if
+    /// rejected on the receiving end.
+    pub fn with_tracked_message(
+        mut self,
+        destination: impl Into<Destination>,
+        message: Message,
+    ) -> Self {
+        let destination = destination.into();
+        self.messages.push(OutgoingMessage {
+            destination,
+            authenticated: false,
+            is_tracked: true,
+            message,
+        });
+        self
+    }
+
+    /// Adds a tracked and authenticated message to the execution result. Tracked messages
+    /// are bounced if rejected on the receiving end.
+    pub fn with_tracked_authenticated_message(
+        mut self,
+        destination: impl Into<Destination>,
+        message: Message,
+    ) -> Self {
+        let destination = destination.into();
+        self.messages.push(OutgoingMessage {
+            destination,
+            authenticated: true,
+            is_tracked: true,
             message,
         });
         self

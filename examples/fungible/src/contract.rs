@@ -294,7 +294,7 @@ impl FungibleToken {
                 owner: account.owner,
                 amount,
             };
-            ExecutionResult::default().with_message(account.chain_id, message)
+            ExecutionResult::default().with_tracked_message(account.chain_id, message)
         }
     }
 }
