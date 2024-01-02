@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! An actor implementation to handle a user application runtime.
+//! Helper traits and functions.
 
 mod sync_response;
 
@@ -9,7 +9,7 @@ pub use self::sync_response::{SyncReceiver, SyncSender};
 use crate::ExecutionError;
 use futures::channel::mpsc;
 
-/// Extension trait to help with sending requests to [`RuntimeActor`]s.
+/// Extension trait to help with sending requests to an actor.
 ///
 /// Prepares a channel for the actor to send a response back to the sender of the request.
 pub trait UnboundedSenderExt<Request> {

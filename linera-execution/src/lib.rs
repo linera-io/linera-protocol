@@ -11,9 +11,9 @@ mod graphql;
 mod ownership;
 pub mod policy;
 mod resources;
-pub mod runtime_actor;
 mod sync_runtime;
 pub mod system;
+mod util;
 mod wasm;
 
 pub use crate::sync_runtime::{ContractSyncRuntime, ServiceSyncRuntime};

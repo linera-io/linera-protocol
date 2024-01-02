@@ -5,7 +5,7 @@ use crate::{
     execution::UserAction,
     execution_state_actor::{ExecutionStateSender, Request},
     resources::{RuntimeCounts, RuntimeLimits},
-    runtime_actor::{ReceiverExt, UnboundedSenderExt},
+    util::{ReceiverExt, UnboundedSenderExt},
     BaseRuntime, CallResult, ContractRuntime, ExecutionError, ExecutionResult, ServiceRuntime,
     SessionId, UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
 };

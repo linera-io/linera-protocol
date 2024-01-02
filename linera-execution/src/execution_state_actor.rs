@@ -4,7 +4,7 @@
 //! Handle requests from the synchronous execution thread of user applications.
 
 use crate::{
-    runtime_actor::RespondExt, ExecutionError, ExecutionRuntimeContext, ExecutionStateView,
+    util::RespondExt, ExecutionError, ExecutionRuntimeContext, ExecutionStateView,
     UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
 };
 use futures::channel::mpsc;
