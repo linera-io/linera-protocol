@@ -3,19 +3,19 @@
 # Meta-Counter Example Application
 
 This application demonstrates how `cross_application_call` works in Linera. In our counter example 
-which has an `handle_application_call` implemented to handle cross-applicationm calls. To use this application one must publish and created the `counter` application on the local linera network
+which has an `handle_application_call` implemented to handle cross-application calls. To use this application one must publish and created the `counter` application on the local linera network
 
 # How It Works
 
 It requires the `application id` of the counter example as a parameter. It sends a message
-to itself with a value of `0` to increament so that no value is changed but the parameters and working is 
+to itself with a value of `0` to increment so that no value is changed but the parameters and working is 
 checked.
 
-To perform the `increament` operation it send a message along with the value to be increamented. 
+To perform the `increment` operation it send a message along with the value to be incremented. 
 On recieving the cross chain message it send a `cross_application_call` to the counter application
 whose application id we already provided at the time of creation.
 
-When the counter application recieves a cross application call it increaments the value by the specified
+When the counter application recieves a cross application call it increments the value by the specified
 amount
 
 
@@ -78,7 +78,7 @@ linera service --port $PORT &
 ```
 - To increase the value of the counter by 3, perform `increase` operation
 ```json
-    mutation Increament{
+    mutation Increment{
         increment(value: 3)
     }
 ```

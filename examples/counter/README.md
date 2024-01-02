@@ -7,11 +7,11 @@ unsigned integer which can be increased by an operation `increment`.
 
 # How It Works
 
-It is a very basic Linera application, which is initialised by an `u64` which can be increamented 
+It is a very basic Linera application, which is initialised by an `u64` which can be incremented 
 by an `u64`.
 
 For example if contract was initialised with 1, querying the contract would give us 1. Now if we want 
-`increament` it by 3. We will have to perform an operation with the parameter being 3. Now querying the
+`increment` it by 3. We will have to perform an operation with the parameter being 3. Now querying the
 application would give us 4 (1+3 = 4)
 
 # Usage
@@ -74,7 +74,7 @@ linera service --port $PORT &
 ```
 - To increase the value of the counter by 3, perform `increase` operation
 ```json
-    mutation Increament{
+    mutation Increment{
         increment(value: 3)
     }
 ```

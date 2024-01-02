@@ -2,17 +2,19 @@
 
 # Reentrant-Counter Example Application
 
-This application just works like `counter` application i.e. increaments the value, but internal working 
+This application just works like `counter` application i.e. increments the value, but internal working 
 is different than that of the `counter` application
 
 # How It Works
 
-It does increaments the value but instead of increamenting the value in a single operation 
-it instead divides it into two halves, one half is increamented via `operation` and the other 
+It does increments the value but instead of incrementing the value in a single operation 
+it instead divides it into two halves, one half is incremented via `operation` and the other 
 half via `application_call`, hence making a re-entry.
 
 For example, let the current value be 1, now we want to increase its value by `4`. The four would be 
-divided into halves. `first_half` = 2 and `second_half` = 2, the first half 
+divided into halves. `first_half` = 2 and `second_half` = 2, the first half is incremented through 
+the operation hence making the value to be `3` now the other half is incremented by an application call
+which call the current application and increment by `2` thus making it `5`
  
 # Usage
 
@@ -71,7 +73,7 @@ linera service --port $PORT &
 ```
 - To increase the value of the counter by 4, perform `increase` operation
 ```json
-    mutation Increament{
+    mutation Increment{
         increment(value: 4)
     }
 ```

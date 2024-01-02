@@ -14,7 +14,7 @@ It supports the following operations
 amount of the other token calculated based on the current AMM ratio. Note: The `Swap` operations 
 are needed to performed from a remote chain 
 
-- Add Liquidity:  AThis operation allows adding liquidity to the AMM. Given a maximum 
+- Add Liquidity: This operation allows adding liquidity to the AMM. Given a maximum 
 `token0` and `token1` amount that you're willing to add, it adds liquidity such that you'll be 
 adding at most `max_token0_amount` of `token0` and `max_token1_amount` of `token1`. The amounts 
 will be calculated based on the current AMM ratio. The owner, in this case, refers to the user 
