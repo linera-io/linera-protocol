@@ -29,14 +29,10 @@ resource unlock {
     wait: func() -> result<unit, string>
 }
 
-resource try-query-application {
-    static new: func(
-        application: application-id,
-        query: list<u8>,
-    ) -> try-query-application
-
-    wait: func() -> result<list<u8>, string>
-}
+try-query-application: func(
+    application: application-id,
+    query: list<u8>,
+) -> result<list<u8>, string>
 
 record application-id {
     bytecode-id: bytecode-id,

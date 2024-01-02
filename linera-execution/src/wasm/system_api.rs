@@ -141,7 +141,6 @@ macro_rules! impl_service_system_api {
             type Load = <Self as BaseRuntime>::Read;
             type Lock = <Self as BaseRuntime>::Lock;
             type Unlock = <Self as BaseRuntime>::Unlock;
-            type TryQueryApplication = <Self as ServiceRuntime>::TryQueryApplication;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -210,23 +209,18 @@ macro_rules! impl_service_system_api {
                     .map(Ok)
             }
 
-            fn try_query_application_new(
+            fn try_query_application(
                 &mut self,
                 application: service_system_api::ApplicationId,
                 argument: &[u8],
-            ) -> Result<Self::TryQueryApplication, Self::Error> {
-                ServiceRuntime::try_query_application_new(
+            ) -> Result<Result<Vec<u8>, String>, Self::Error> {
+                let promise = ServiceRuntime::try_query_application_new(
                     self,
                     application.into(),
                     argument.to_vec(),
-                )
-            }
+                )?;
 
-            fn try_query_application_wait(
-                &mut self,
-                promise: &Self::TryQueryApplication,
-            ) -> Result<Result<Vec<u8>, String>, Self::Error> {
-                ServiceRuntime::try_query_application_wait(self, promise)
+                ServiceRuntime::try_query_application_wait(self, &promise)
                     // TODO(#1153): remove
                     .map(Ok)
             }
