@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    docker::DockerImage, helm::HelmRelease, kind::KindCluster, kubectl::KubectlInstance,
-    util::get_github_root,
+    docker::DockerImage, kind::KindCluster, kubectl::KubectlInstance, util::get_github_root,
 };
 use crate::{
-    cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
+    cli_wrappers::{helmfile::HelmFile, ClientWrapper, LineraNet, LineraNetConfig, Network},
     util::{self, CommandExt},
 };
 use anyhow::{anyhow, bail, ensure, Result};
@@ -409,15 +408,7 @@ impl LocalKubernetesNet {
                     base_dir.join(&server_config_filename),
                 )?;
 
-                HelmRelease::install(
-                    String::from("linera-core"),
-                    &base_dir,
-                    i,
-                    &github_root,
-                    num_shards,
-                    cluster_id,
-                )
-                .await?;
+                HelmFile::sync(&base_dir, i, &github_root, num_shards, cluster_id).await?;
 
                 let mut kubectl_instance = kubectl_instance.lock().await;
                 let output = kubectl_instance.get_pods(cluster_id).await?;
