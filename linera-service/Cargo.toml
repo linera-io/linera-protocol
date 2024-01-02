@@ -13,7 +13,7 @@ edition = "2021"
 [features]
 default = ["wasmer", "rocksdb"]
 test = ["linera-views/test"]
-benchmark = ["linera-base/test", "dep:fungible", "dep:concurrent-queue", "dep:port-selector"]
+benchmark = ["linera-base/test", "dep:fungible", "dep:port-selector"]
 wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb", "linera-storage/rocksdb"]
@@ -34,7 +34,6 @@ clap = { workspace = true }
 clap-markdown = { workspace = true }
 colored = { workspace = true }
 comfy-table = { workspace = true }
-concurrent-queue = { workspace = true, optional = true }
 current_platform = "0.2.0"
 dirs = { workspace = true }
 file-lock = "2.1.10"

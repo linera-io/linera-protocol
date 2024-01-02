@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser as _;
-use fungible::{Account, AccountOwner, FungibleTokenAbi, InitialState,};
+use fungible::{Account, AccountOwner, FungibleTokenAbi, InitialState};
 use futures::future::join_all;
 use linera_base::{
     async_graphql::InputType,
@@ -13,6 +13,7 @@ use rand::seq::IteratorRandom as _;
 use serde_json::Value;
 use std::{
     collections::BTreeMap,
+    iter,
     path::Path,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -74,10 +75,11 @@ async fn benchmark_with_fungible(
             .map(|client| {
                 let faucet = faucet.clone();
                 async move {
-                client.wallet_init(&[], Some(&faucet)).await.unwrap();
-                println!("wallet created");
-                client
-            }}),
+                    client.wallet_init(&[], Some(&faucet)).await.unwrap();
+                    println!("wallet created");
+                    client
+                }
+            }),
     )
     .await;
 
@@ -166,10 +168,22 @@ async fn benchmark_with_fungible(
 
     let successes_1 = Arc::new(AtomicUsize::new(0));
     let failures_1 = Arc::new(AtomicUsize::new(0));
+    let mut expected_balances = vec![vec![Amount::ZERO; clients.len()]; clients.len()];
 
     for _ in 0..total_transactions {
-        let (sender_app, sender_context, _) = apps.iter().choose(&mut rand::rngs::OsRng).unwrap();
-        let (_, receiver_context, _) = apps.iter().choose(&mut rand::rngs::OsRng).unwrap();
+        let (sender_i, (sender_app, sender_context, _)) = apps
+            .iter()
+            .enumerate()
+            .choose(&mut rand::rngs::OsRng)
+            .unwrap();
+        let (receiver_i, (_, receiver_context, _)) = apps
+            .iter()
+            .enumerate()
+            .choose(&mut rand::rngs::OsRng)
+            .unwrap();
+        expected_balances[receiver_i][sender_i]
+            .try_add_assign(Amount::ONE)
+            .unwrap();
         let successes = successes_1.clone();
         let failures = failures_1.clone();
         transaction_futures.push(async move {
@@ -200,14 +214,28 @@ async fn benchmark_with_fungible(
 
     join_all(transaction_futures).await;
 
-    let tps: f64 = successes_1.load(Ordering::Relaxed)
-        as f64
-        / timer.elapsed().as_secs_f64();
+    let tps: f64 = successes_1.load(Ordering::Relaxed) as f64 / timer.elapsed().as_secs_f64();
 
     println!("Successes: {:?}", successes_1);
     println!("Failures:  {:?}", failures_1);
 
     println!("TPS:       {}", tps);
+
+    for ((_, context, node_service), expected_balances) in apps.iter().zip(expected_balances) {
+        for ((_, sender_context, _), expected_balance) in apps.iter().zip(expected_balances) {
+            let app = FungibleApp(
+                node_service
+                    .make_application(&context.default_chain, &sender_context.application_id)
+                    .await
+                    .unwrap(),
+            );
+            app.assert_balances(iter::once((
+                AccountOwner::User(context.owner),
+                expected_balance,
+            )))
+            .await;
+        }
+    }
 
     Ok(())
 }
