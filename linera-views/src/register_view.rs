@@ -23,8 +23,7 @@ enum KeyTag {
 /// A view that supports modifying a single value of type `T`.
 #[derive(Debug)]
 pub struct RegisterView<C, T> {
-    was_cleared: bool,
-    after_clear_set: bool,
+    is_default: bool,
     context: C,
     stored_value: Box<T>,
     update: Option<Box<T>>,
@@ -51,8 +50,7 @@ where
         let stored_value = Box::new(from_bytes_opt(&values_bytes[0])?.unwrap_or_default());
         let hash = from_bytes_opt(&values_bytes[1])?;
         Ok(Self {
-            was_cleared: false,
-            after_clear_set: false,
+            is_default: false,
             context,
             stored_value,
             update: None,
@@ -62,18 +60,17 @@ where
     }
 
     fn rollback(&mut self) {
-        self.was_cleared = false;
-        self.after_clear_set = false;
+        self.is_default = false;
         self.update = None;
         *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.was_cleared {
+        if self.is_default {
             batch.delete_key_prefix(self.context.base_key());
         }
         // If there is clearing then we want to write the value only if it has been set afterward
-        if !self.was_cleared || self.after_clear_set {
+        if !self.is_default {
             if let Some(value) = self.update.take() {
                 let key = self.context.base_tag(KeyTag::Value as u8);
                 batch.put_key_value(key, &value)?;
@@ -85,7 +82,7 @@ where
         // and stored_hash = hash, we need to update the
         // hash, otherwise, we will recompute it while this
         // can be avoided.
-        if self.stored_hash != hash || self.was_cleared {
+        if self.stored_hash != hash || self.is_default {
             let key = self.context.base_tag(KeyTag::Hash as u8);
             match hash {
                 None => batch.delete_key(key),
@@ -93,14 +90,12 @@ where
             }
             self.stored_hash = hash;
         }
-        self.was_cleared = false;
-        self.after_clear_set = false;
+        self.is_default = false;
         Ok(())
     }
 
     fn clear(&mut self) {
-        self.was_cleared = true;
-        self.after_clear_set = false;
+        self.is_default = true;
         self.update = Some(Box::default());
         *self.hash.get_mut() = None;
     }
@@ -143,9 +138,7 @@ where
     /// # })
     /// ```
     pub fn set(&mut self, value: T) {
-        if self.was_cleared {
-            self.after_clear_set = true;
-        }
+        self.is_default = false;
         self.update = Some(Box::new(value));
         *self.hash.get_mut() = None;
     }
@@ -175,6 +168,7 @@ where
     /// ```
     pub fn get_mut(&mut self) -> &mut T {
         *self.hash.get_mut() = None;
+        self.is_default = false;
         match &mut self.update {
             Some(value) => value,
             update => {
