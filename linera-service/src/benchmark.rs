@@ -1,55 +1,56 @@
-use anyhow::{Context, Result};
-use concurrent_queue::ConcurrentQueue;
-use fungible::{Account, AccountOwner, FungibleTokenAbi, InitialState, Operation};
-use futures::{
-    future::join_all,
-    stream::{FuturesUnordered, StreamExt},
+use anyhow::Result;
+use clap::Parser as _;
+use fungible::{Account, AccountOwner, FungibleTokenAbi, InitialState,};
+use futures::future::join_all;
+use linera_base::{
+    async_graphql::InputType,
+    data_types::Amount,
+    identifiers::{ApplicationId, ChainId, Owner},
 };
-use linera_base::{async_graphql::InputType, data_types::Amount};
 use linera_service::cli_wrappers::{ApplicationWrapper, ClientWrapper, Network};
 use port_selector::random_free_tcp_port;
-use rand::prelude::{IteratorRandom, RngCore};
+use rand::seq::IteratorRandom as _;
 use serde_json::Value;
 use std::{
     collections::BTreeMap,
-    future::Future,
     path::Path,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     },
 };
-use std::time::Duration;
-use structopt::StructOpt;
 use tempfile::tempdir;
 use tokio::time::Instant;
-use linera_base::identifiers::{ApplicationId, ChainId, Owner};
 
-#[derive(StructOpt)]
+#[derive(clap::Parser)]
+#[command(
+    name = "linera-benchmark",
+    version = clap::crate_version!(),
+    about = "Run benchmarks against a Linera network",
+)]
 enum Args {
-    #[structopt(name = "fungible")]
     Fungible {
         /// The number of users in the test.
-        #[structopt(long = "users", default_value = "4")]
+        #[arg(long = "users", default_value = "4")]
         users: usize,
 
         /// The number of app instances to be deployed per user.
-        #[structopt(long = "apps", default_value = "1")]
+        #[arg(long = "apps", default_value = "1")]
         apps: usize,
 
         /// The number of transactions being made per user.
-        #[structopt(long = "transactions", default_value = "4")]
+        #[arg(long = "transactions", default_value = "4")]
         transactions: usize,
 
         /// The faucet (which implicitly defines the network)
-        #[structopt(long = "faucet", default_value = "http://faucet.devnet.linera.net")]
+        #[arg(long = "faucet", default_value = "http://faucet.devnet.linera.net")]
         faucet: String,
     },
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::from_args();
+    let args = Args::parse();
     match args {
         Args::Fungible {
             users,
@@ -67,16 +68,16 @@ async fn benchmark_with_fungible(
     faucet: String,
 ) -> Result<()> {
     // Create the users
-    let faucet = "http://faucet.devnet.linera.net";
     let clients = join_all(
         (0..n_users)
-            .into_iter()
             .map(|n| ClientWrapper::new(Arc::new(tempdir().unwrap()), Network::Grpc, None, n))
-            .map(|client| async move {
-                client.wallet_init(&[], Some(faucet)).await.unwrap();
+            .map(|client| {
+                let faucet = faucet.clone();
+                async move {
+                client.wallet_init(&[], Some(&faucet)).await.unwrap();
                 println!("wallet created");
                 client
-            }),
+            }}),
     )
     .await;
 
@@ -96,13 +97,13 @@ async fn benchmark_with_fungible(
         application_id: ApplicationId<FungibleTokenAbi>,
         client: &'a ClientWrapper,
         owner: Owner,
-        default_chain: ChainId
+        default_chain: ChainId,
     }
 
     let mut contexts = vec![];
 
     // Upload fungibles
-    for client in &clients {
+    for (i, client) in clients.iter().enumerate() {
         let initial_state = InitialState {
             accounts: BTreeMap::from([(
                 AccountOwner::User(client.get_owner().unwrap()),
@@ -117,11 +118,12 @@ async fn benchmark_with_fungible(
             )
             .await
             .unwrap();
+        let parameters = fungible::Parameters::new(format!("FUN{}", i).leak());
         let application_id = client
             .publish_and_create::<FungibleTokenAbi>(
                 contract,
                 service,
-                &(),
+                &parameters,
                 &initial_state,
                 &[],
                 None,
@@ -133,17 +135,15 @@ async fn benchmark_with_fungible(
             client.get_owner(),
             &application_id
         );
-        contexts.push(
-            BenchmarkContext {
-                application_id,
-                client,
-                owner: client.get_owner().unwrap(),
-                default_chain: client.default_chain().unwrap()
-            }
-        );
+        contexts.push(BenchmarkContext {
+            application_id,
+            client,
+            owner: client.get_owner().unwrap(),
+            default_chain: client.default_chain().unwrap(),
+        });
     }
 
-    let mut total_transactions = n_users * n_apps * n_transactions;
+    let total_transactions = n_users * n_apps * n_transactions;
 
     let mut apps = vec![];
 
@@ -189,7 +189,7 @@ async fn benchmark_with_fungible(
                 Err(e) => {
                     eprintln!("{:?}", e);
                     failures.fetch_add(1, Ordering::Relaxed)
-                },
+                }
             }
         });
     }
@@ -200,12 +200,12 @@ async fn benchmark_with_fungible(
 
     join_all(transaction_futures).await;
 
-    let tps: f64 = (successes_1.load(Ordering::Relaxed) + failures_1.load(Ordering::Relaxed)) as f64
+    let tps: f64 = successes_1.load(Ordering::Relaxed)
+        as f64
         / timer.elapsed().as_secs_f64();
 
     println!("Successes: {:?}", successes_1);
     println!("Failures:  {:?}", failures_1);
-
 
     println!("TPS:       {}", tps);
 
@@ -248,17 +248,5 @@ impl FungibleApp {
             destination.to_value(),
         );
         self.0.mutate(mutation).await
-    }
-
-    async fn claim(&self, source: fungible::Account, target: fungible::Account, amount: Amount) {
-        // Claiming tokens from chain1 to chain2.
-        let mutation = format!(
-            "claim(sourceAccount: {}, amount: \"{}\", targetAccount: {})",
-            source.to_value(),
-            amount,
-            target.to_value()
-        );
-
-        self.0.mutate(mutation).await.unwrap();
     }
 }

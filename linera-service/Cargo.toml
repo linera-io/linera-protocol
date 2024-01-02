@@ -53,7 +53,7 @@ linera-storage = { workspace = true }
 linera-views = { workspace = true }
 parse_duration = { workspace = true }
 pathdiff = { workspace = true, optional = true }
-port-selector = { workspace = true, optional = true}
+port-selector = { workspace = true, optional = true }
 prometheus = { workspace = true }
 rand = { workspace = true }
 rand07 = { workspace = true }
