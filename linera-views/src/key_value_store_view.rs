@@ -116,7 +116,7 @@ impl SizeData {
 #[derive(Debug)]
 pub struct KeyValueStoreView<C> {
     context: C,
-    was_cleared: bool,
+    delete_storage_first: bool,
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
     stored_total_size: SizeData,
     total_size: SizeData,
@@ -146,7 +146,7 @@ where
         let sizes = ByteMapView::load(context_sizes).await?;
         Ok(Self {
             context,
-            was_cleared: false,
+            delete_storage_first: false,
             updates: BTreeMap::new(),
             stored_total_size: total_size,
             total_size,
@@ -158,7 +158,7 @@ where
     }
 
     fn rollback(&mut self) {
-        self.was_cleared = false;
+        self.delete_storage_first = false;
         self.updates.clear();
         self.deleted_prefixes.clear();
         self.total_size = self.stored_total_size;
@@ -167,7 +167,7 @@ where
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.was_cleared {
+        if self.delete_storage_first {
             self.stored_total_size = SizeData::default();
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
@@ -176,6 +176,7 @@ where
                     batch.put_key_value_bytes(key, value);
                 }
             }
+            self.stored_hash = None
         } else {
             for index in mem::take(&mut self.deleted_prefixes) {
                 let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
@@ -195,7 +196,7 @@ where
         // and stored_hash = hash, we need to update the
         // hash, otherwise, we will recompute it while this
         // can be avoided.
-        if self.stored_hash != hash || self.was_cleared {
+        if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
             match hash {
                 None => batch.delete_key(key),
@@ -203,20 +204,17 @@ where
             }
             self.stored_hash = hash;
         }
-        // We could have the scenario where was_cleared is called but
-        // stored_total_size = total_size. If the test for was_cleared
-        // were absent then we would be a size of 0 down the line.
         if self.stored_total_size != self.total_size {
             let key = self.context.base_tag(KeyTag::TotalSize as u8);
             batch.put_key_value(key, &self.total_size)?;
             self.stored_total_size = self.total_size;
         }
-        self.was_cleared = false;
+        self.delete_storage_first = false;
         Ok(())
     }
 
     fn clear(&mut self) {
-        self.was_cleared = true;
+        self.delete_storage_first = true;
         self.updates.clear();
         self.deleted_prefixes.clear();
         self.total_size = SizeData::default();
@@ -279,7 +277,7 @@ where
         let mut updates = self.updates.iter();
         let mut update = updates.next();
         let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
-        if !self.was_cleared {
+        if !self.delete_storage_first {
             for index in self
                 .context
                 .find_keys_by_prefix(&key_prefix)
@@ -378,7 +376,7 @@ where
         let mut updates = self.updates.iter();
         let mut update = updates.next();
         let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
-        if !self.was_cleared {
+        if !self.delete_storage_first {
             for entry in self
                 .context
                 .find_key_values_by_prefix(&key_prefix)
@@ -543,7 +541,7 @@ where
             };
             return Ok(value);
         }
-        if self.was_cleared {
+        if self.delete_storage_first {
             return Ok(None);
         }
         if contains_key(&self.deleted_prefixes, index) {
@@ -623,7 +621,7 @@ where
                 }
             }
         }
-        if !self.was_cleared {
+        if !self.delete_storage_first {
             let values = self.context.read_multi_values_bytes(vector_query).await?;
             for (i, value) in missed_indices.into_iter().zip(values) {
                 result[i] = value;
@@ -665,7 +663,7 @@ where
                         self.total_size.sub_assign(entry_size);
                     }
                     self.sizes.remove(key.clone());
-                    if self.was_cleared {
+                    if self.delete_storage_first {
                         self.updates.remove(&key);
                     } else {
                         self.updates.insert(key, Update::Removed);
@@ -708,7 +706,7 @@ where
                         self.sizes.remove(key);
                     }
                     self.sizes.remove_by_prefix(key_prefix.clone());
-                    if !self.was_cleared {
+                    if !self.delete_storage_first {
                         insert_key_prefix(&mut self.deleted_prefixes, key_prefix);
                     }
                 }
@@ -801,7 +799,7 @@ where
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
         let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
-        if !self.was_cleared {
+        if !self.delete_storage_first {
             for key in self
                 .context
                 .find_keys_by_prefix(&key_prefix_full)
@@ -874,7 +872,7 @@ where
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
         let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
-        if !self.was_cleared {
+        if !self.delete_storage_first {
             for entry in self
                 .context
                 .find_key_values_by_prefix(&key_prefix_full)

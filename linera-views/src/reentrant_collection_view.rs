@@ -53,7 +53,7 @@ impl<T> std::ops::DerefMut for WriteGuardedView<T> {
 #[allow(clippy::type_complexity)]
 pub struct ReentrantByteCollectionView<C, W> {
     context: C,
-    was_cleared: bool,
+    delete_storage_first: bool,
     updates: Mutex<BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
@@ -92,7 +92,7 @@ where
         let hash = context.read_value(&key).await?;
         Ok(Self {
             context,
-            was_cleared: false,
+            delete_storage_first: false,
             updates: Mutex::new(BTreeMap::new()),
             stored_hash: hash,
             hash: Mutex::new(hash),
@@ -100,13 +100,13 @@ where
     }
 
     fn rollback(&mut self) {
-        self.was_cleared = false;
+        self.delete_storage_first = false;
         self.updates.get_mut().clear();
         *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.was_cleared {
+        if self.delete_storage_first {
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(self.updates.get_mut()) {
                 if let Update::Set(view) = update {
@@ -117,6 +117,7 @@ where
                     self.add_index(batch, &index);
                 }
             }
+            self.stored_hash = None;
         } else {
             for (index, update) in mem::take(self.updates.get_mut()) {
                 match update {
@@ -141,7 +142,7 @@ where
         // and stored_hash = hash, we need to update the
         // hash, otherwise, we will recompute it while this
         // can be avoided.
-        if self.stored_hash != hash || self.was_cleared {
+        if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
             match hash {
                 None => batch.delete_key(key),
@@ -149,12 +150,12 @@ where
             }
             self.stored_hash = hash;
         }
-        self.was_cleared = false;
+        self.delete_storage_first = false;
         Ok(())
     }
 
     fn clear(&mut self) {
-        self.was_cleared = true;
+        self.delete_storage_first = true;
         self.updates.get_mut().clear();
         *self.hash.get_mut() = None;
     }
@@ -245,7 +246,7 @@ where
             Self::try_load_view(
                 &self.context,
                 self.updates.get_mut(),
-                self.was_cleared,
+                self.delete_storage_first,
                 &short_key,
             )
             .await?
@@ -277,7 +278,7 @@ where
             Self::try_load_view(
                 &self.context,
                 &mut *self.updates.lock().await,
-                self.was_cleared,
+                self.delete_storage_first,
                 &short_key,
             )
             .await?
@@ -305,7 +306,7 @@ where
     /// ```
     pub fn remove_entry(&mut self, short_key: Vec<u8>) {
         *self.hash.get_mut() = None;
-        if self.was_cleared {
+        if self.delete_storage_first {
             self.updates.get_mut().remove(&short_key);
         } else {
             self.updates.get_mut().insert(short_key, Update::Removed);
@@ -393,7 +394,7 @@ where
                     }
                 }
                 btree_map::Entry::Vacant(_entry) => {
-                    selected_short_keys.push((short_key, self.was_cleared));
+                    selected_short_keys.push((short_key, self.delete_storage_first));
                 }
             }
         }
@@ -472,7 +473,7 @@ where
                     }
                 }
                 btree_map::Entry::Vacant(_entry) => {
-                    selected_short_keys.push((short_key, self.was_cleared));
+                    selected_short_keys.push((short_key, self.delete_storage_first));
                 }
             }
         }
@@ -576,7 +577,7 @@ where
         let updates = self.updates.lock().await;
         let mut updates = updates.iter();
         let mut update = updates.next();
-        if !self.was_cleared {
+        if !self.delete_storage_first {
             let base = self.get_index_key(&[]);
             for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
                 let index = index?;

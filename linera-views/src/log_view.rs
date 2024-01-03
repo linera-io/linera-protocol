@@ -29,7 +29,7 @@ enum KeyTag {
 #[derive(Debug)]
 pub struct LogView<C, T> {
     context: C,
-    was_cleared: bool,
+    delete_storage_first: bool,
     stored_count: usize,
     new_values: Vec<T>,
     stored_hash: Option<HasherOutput>,
@@ -56,7 +56,7 @@ where
         let hash = from_bytes_opt(&values_bytes[1])?;
         Ok(Self {
             context,
-            was_cleared: false,
+            delete_storage_first: false,
             stored_count,
             new_values: Vec::new(),
             stored_hash: hash,
@@ -65,13 +65,13 @@ where
     }
 
     fn rollback(&mut self) {
-        self.was_cleared = false;
+        self.delete_storage_first = false;
         self.new_values.clear();
         *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.was_cleared && self.stored_count > 0 {
+        if self.delete_storage_first && self.stored_count > 0 {
             batch.delete_key_prefix(self.context.base_key());
             self.stored_count = 0;
         }
@@ -92,7 +92,7 @@ where
         // and stored_hash = hash, we need to update the
         // hash, otherwise, we will recompute it while this
         // can be avoided.
-        if self.stored_hash != hash || self.was_cleared {
+        if self.stored_hash != hash || self.delete_storage_first {
             let key = self.context.base_tag(KeyTag::Hash as u8);
             match hash {
                 None => batch.delete_key(key),
@@ -100,12 +100,12 @@ where
             }
             self.stored_hash = hash;
         }
-        self.was_cleared = false;
+        self.delete_storage_first = false;
         Ok(())
     }
 
     fn clear(&mut self) {
-        self.was_cleared = true;
+        self.delete_storage_first = true;
         self.new_values.clear();
         *self.hash.get_mut() = None;
     }
@@ -145,7 +145,7 @@ where
     /// # })
     /// ```
     pub fn count(&self) -> usize {
-        if self.was_cleared {
+        if self.delete_storage_first {
             self.new_values.len()
         } else {
             self.stored_count + self.new_values.len()
@@ -177,7 +177,7 @@ where
     /// # })
     /// ```
     pub async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
-        let value = if self.was_cleared {
+        let value = if self.delete_storage_first {
             self.new_values.get(index).cloned()
         } else if index < self.stored_count {
             let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
@@ -203,7 +203,7 @@ where
     /// ```
     pub async fn multi_get(&self, indices: Vec<usize>) -> Result<Vec<Option<T>>, ViewError> {
         let mut result = Vec::new();
-        if self.was_cleared {
+        if self.delete_storage_first {
             for index in indices {
                 result.push(self.new_values.get(index).cloned());
             }
@@ -265,7 +265,7 @@ where
     where
         R: RangeBounds<usize>,
     {
-        let effective_stored_count = if self.was_cleared {
+        let effective_stored_count = if self.delete_storage_first {
             0
         } else {
             self.stored_count

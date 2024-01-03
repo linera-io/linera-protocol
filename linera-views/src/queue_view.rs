@@ -32,7 +32,7 @@ pub struct QueueView<C, T> {
     context: C,
     stored_indices: Range<usize>,
     front_delete_count: usize,
-    was_cleared: bool,
+    delete_storage_first: bool,
     new_back_values: VecDeque<T>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
@@ -60,7 +60,7 @@ where
             context,
             stored_indices,
             front_delete_count: 0,
-            was_cleared: false,
+            delete_storage_first: false,
             new_back_values: VecDeque::new(),
             stored_hash: hash,
             hash: Mutex::new(hash),
@@ -68,15 +68,16 @@ where
     }
 
     fn rollback(&mut self) {
-        self.was_cleared = false;
+        self.delete_storage_first = false;
         self.front_delete_count = 0;
         self.new_back_values.clear();
         *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.was_cleared {
+        if self.delete_storage_first {
             batch.delete_key_prefix(self.context.base_key());
+            self.stored_hash = None;
         }
         if self.stored_count() == 0 {
             let key_prefix = self.context.base_tag(KeyTag::Index as u8);
@@ -100,7 +101,7 @@ where
             }
             self.new_back_values.clear();
         }
-        if !self.was_cleared || !self.stored_indices.is_empty() {
+        if !self.delete_storage_first || !self.stored_indices.is_empty() {
             let key = self.context.base_tag(KeyTag::Store as u8);
             batch.put_key_value(key, &self.stored_indices)?;
         }
@@ -110,7 +111,7 @@ where
         // and stored_hash = hash, we need to update the
         // hash, otherwise, we will recompute it while this
         // can be avoided.
-        if self.stored_hash != hash || self.was_cleared {
+        if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
             match hash {
                 None => batch.delete_key(key),
@@ -118,12 +119,12 @@ where
             }
             self.stored_hash = hash;
         }
-        self.was_cleared = false;
+        self.delete_storage_first = false;
         Ok(())
     }
 
     fn clear(&mut self) {
-        self.was_cleared = true;
+        self.delete_storage_first = true;
         self.new_back_values.clear();
         *self.hash.get_mut() = None;
     }
@@ -131,7 +132,7 @@ where
 
 impl<C, T> QueueView<C, T> {
     fn stored_count(&self) -> usize {
-        if self.was_cleared {
+        if self.delete_storage_first {
             0
         } else {
             self.stored_indices.len() - self.front_delete_count
@@ -295,7 +296,7 @@ where
             return Ok(Vec::new());
         }
         let mut values = Vec::with_capacity(count);
-        if !self.was_cleared {
+        if !self.delete_storage_first {
             let stored_remainder = self.stored_count();
             let start = self.stored_indices.end - stored_remainder;
             if count <= stored_remainder {
@@ -336,7 +337,7 @@ where
         }
         let mut values = Vec::with_capacity(count);
         let new_back_len = self.new_back_values.len();
-        if count <= new_back_len || self.was_cleared {
+        if count <= new_back_len || self.delete_storage_first {
             values.extend(
                 self.new_back_values
                     .range((new_back_len - count)..new_back_len)
@@ -377,7 +378,7 @@ where
     }
 
     async fn load_all(&mut self) -> Result<(), ViewError> {
-        if !self.was_cleared {
+        if !self.delete_storage_first {
             let stored_remainder = self.stored_count();
             let start = self.stored_indices.end - stored_remainder;
             let elements = self.read_context(start..self.stored_indices.end).await?;
@@ -390,7 +391,7 @@ where
             // * Because a self.front_delete_count forces them to be removed
             // * Or because loading them means that their value can be changed which invalidates
             //   the entries on storage
-            self.was_cleared = true;
+            self.delete_storage_first = true;
         }
         Ok(())
     }
