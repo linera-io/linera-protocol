@@ -134,13 +134,13 @@ struct JournalHeader {
 /// A KeyValueStore built from a SimplifiedKeyValueStore by using journaling
 /// for bypassing the limits on the batch size
 #[derive(Clone)]
-pub struct StoreFromSimplifiedStore<K> {
+pub struct JournalingKeyValueStore<K> {
     /// The inner client that is called by the LRU cache one
     pub client: K,
 }
 
 #[async_trait]
-impl<K> DeletePrefixExpander for &StoreFromSimplifiedStore<K>
+impl<K> DeletePrefixExpander for &JournalingKeyValueStore<K>
 where
     K: SimplifiedKeyValueStore + Send + Sync,
 {
@@ -160,7 +160,7 @@ where
 }
 
 #[async_trait]
-impl<K> KeyValueStore for StoreFromSimplifiedStore<K>
+impl<K> KeyValueStore for JournalingKeyValueStore<K>
 where
     K: SimplifiedKeyValueStore + Send + Sync,
     K::Error: From<JournalConsistencyError>,
@@ -224,7 +224,7 @@ where
     }
 }
 
-impl<K> StoreFromSimplifiedStore<K>
+impl<K> JournalingKeyValueStore<K>
 where
     K: SimplifiedKeyValueStore + Send + Sync,
     K::Error: From<JournalConsistencyError>,
@@ -325,7 +325,7 @@ where
     }
 }
 
-impl<K> StoreFromSimplifiedStore<K> {
+impl<K> JournalingKeyValueStore<K> {
     /// Creates a new store from a simplified one.
     pub fn new(store: K) -> Self {
         Self { client: store }

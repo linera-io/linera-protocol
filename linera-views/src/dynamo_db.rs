@@ -8,7 +8,7 @@ use crate::{
         ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
-    simp_store::{JournalConsistencyError, SimplifiedKeyValueStore, StoreFromSimplifiedStore},
+    simple_store::{JournalConsistencyError, SimplifiedKeyValueStore, JournalingKeyValueStore},
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
 use async_lock::{Semaphore, SemaphoreGuard};
@@ -953,7 +953,7 @@ impl KeyValueStore for DynamoDbStoreInternal {
 /// A shared DB client for DynamoDb implementing LruCaching
 #[derive(Clone)]
 pub struct DynamoDbStore {
-    store: LruCachingStore<ValueSplittingStore<StoreFromSimplifiedStore<DynamoDbStoreInternal>>>,
+    store: LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
 }
 
 #[async_trait]
@@ -1021,9 +1021,9 @@ impl DynamoDbStore {
         store_config: DynamoDbStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (simp_store, table_status) =
+        let (simple_store, table_status) =
             DynamoDbStoreInternal::new_for_testing(store_config).await?;
-        let store = StoreFromSimplifiedStore::new(simp_store);
+        let store = JournalingKeyValueStore::new(simple_store);
         let store = ValueSplittingStore::new(store);
         let store = LruCachingStore::new(store, cache_size);
         let store = Self { store };
@@ -1035,8 +1035,8 @@ impl DynamoDbStore {
         store_config: DynamoDbStoreConfig,
     ) -> Result<Self, DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let simp_store = DynamoDbStoreInternal::initialize(store_config).await?;
-        let store = StoreFromSimplifiedStore::new(simp_store);
+        let simple_store = DynamoDbStoreInternal::initialize(store_config).await?;
+        let store = JournalingKeyValueStore::new(simple_store);
         let store = ValueSplittingStore::new(store);
         let store = LruCachingStore::new(store, cache_size);
         let store = Self { store };
@@ -1074,8 +1074,8 @@ impl DynamoDbStore {
         store_config: DynamoDbStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (simp_store, table_name) = DynamoDbStoreInternal::new(store_config).await?;
-        let store = StoreFromSimplifiedStore::new(simp_store);
+        let (simple_store, table_name) = DynamoDbStoreInternal::new(store_config).await?;
+        let store = JournalingKeyValueStore::new(simple_store);
         let store = ValueSplittingStore::new(store);
         let store = LruCachingStore::new(store, cache_size);
         let store = Self { store };

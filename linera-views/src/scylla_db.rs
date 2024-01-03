@@ -25,7 +25,7 @@ use crate::{
         ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
-    simp_store::{JournalConsistencyError, SimplifiedKeyValueStore, StoreFromSimplifiedStore},
+    simple_store::{JournalConsistencyError, SimplifiedKeyValueStore, JournalingKeyValueStore},
     value_splitting::DatabaseConsistencyError,
 };
 use async_lock::{Semaphore, SemaphoreGuard};
@@ -670,7 +670,7 @@ impl ScyllaDbStoreInternal {
 /// A shared DB store for ScyllaDB implementing LruCaching
 #[derive(Clone)]
 pub struct ScyllaDbStore {
-    store: LruCachingStore<StoreFromSimplifiedStore<ScyllaDbStoreInternal>>,
+    store: LruCachingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>,
 }
 
 /// The type for building a new ScyllaDb Key Value Store
@@ -754,9 +754,9 @@ impl ScyllaDbStore {
         store_config: ScyllaDbStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (simp_store, table_status) =
+        let (simple_store, table_status) =
             ScyllaDbStoreInternal::new_for_testing(store_config).await?;
-        let store = StoreFromSimplifiedStore::new(simp_store);
+        let store = JournalingKeyValueStore::new(simple_store);
         let store = LruCachingStore::new(store, cache_size);
         let store = ScyllaDbStore { store };
         Ok((store, table_status))
@@ -767,8 +767,8 @@ impl ScyllaDbStore {
         store_config: ScyllaDbStoreConfig,
     ) -> Result<Self, ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let simp_store = ScyllaDbStoreInternal::initialize(store_config).await?;
-        let store = StoreFromSimplifiedStore::new(simp_store);
+        let simple_store = ScyllaDbStoreInternal::initialize(store_config).await?;
+        let store = JournalingKeyValueStore::new(simple_store);
         let store = LruCachingStore::new(store, cache_size);
         let store = ScyllaDbStore { store };
         Ok(store)
@@ -805,8 +805,8 @@ impl ScyllaDbStore {
         store_config: ScyllaDbStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (simp_store, table_status) = ScyllaDbStoreInternal::new(store_config).await?;
-        let store = StoreFromSimplifiedStore::new(simp_store);
+        let (simple_store, table_status) = ScyllaDbStoreInternal::new(store_config).await?;
+        let store = JournalingKeyValueStore::new(simple_store);
         let store = LruCachingStore::new(store, cache_size);
         let store = ScyllaDbStore { store };
         Ok((store, table_status))
