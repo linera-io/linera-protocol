@@ -305,7 +305,7 @@ pub trait Service: WithServiceAbi + ServiceAbi {
     ) -> Result<Self::QueryResponse, Self::Error>;
 
     /// Queries another application.
-    async fn query_application<A: ServiceAbi + Send>(
+    fn query_application<A: ServiceAbi + Send>(
         application: ApplicationId<A>,
         query: &A::Query,
     ) -> Result<A::QueryResponse, Self::Error>
