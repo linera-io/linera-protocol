@@ -78,10 +78,6 @@ where
             }
         }
         let hash = *self.hash.get_mut();
-        // In the scenario where we do a clear
-        // and stored_hash = hash, we need to update the
-        // hash, otherwise, we will recompute it while this
-        // can be avoided.
         if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
             match hash {
@@ -136,6 +132,7 @@ where
     pub fn remove(&mut self, short_key: Vec<u8>) {
         *self.hash.get_mut() = None;
         if self.delete_storage_first {
+            // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
             self.updates.remove(&short_key);
         } else {
             self.updates.insert(short_key, Update::Removed);

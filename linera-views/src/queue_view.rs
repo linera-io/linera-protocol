@@ -107,10 +107,6 @@ where
         }
         self.front_delete_count = 0;
         let hash = *self.hash.get_mut();
-        // In the scenario where we do a clear
-        // and stored_hash = hash, we need to update the
-        // hash, otherwise, we will recompute it while this
-        // can be avoided.
         if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
             match hash {

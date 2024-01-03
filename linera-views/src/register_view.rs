@@ -76,10 +76,6 @@ where
             self.stored_value = value;
         }
         let hash = *self.hash.get_mut();
-        // In the scenario where we do a clear
-        // and stored_hash = hash, we need to update the
-        // hash, otherwise, we will recompute it while this
-        // can be avoided.
         if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
             match hash {
@@ -94,7 +90,7 @@ where
 
     fn clear(&mut self) {
         self.delete_storage_first = true;
-        self.update = None;
+        self.update = Some(Box::default());
         *self.hash.get_mut() = None;
     }
 }
