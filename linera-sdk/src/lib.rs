@@ -305,7 +305,7 @@ pub trait Service: WithServiceAbi + ServiceAbi {
     ) -> Result<Self::QueryResponse, Self::Error>;
 
     /// Queries another application.
-    async fn query_application<A: ServiceAbi + Send>(
+    fn query_application<A: ServiceAbi + Send>(
         application: ApplicationId<A>,
         query: &A::Query,
     ) -> Result<A::QueryResponse, Self::Error>
@@ -315,7 +315,6 @@ pub trait Service: WithServiceAbi + ServiceAbi {
         let query_bytes = serde_json::to_vec(&query)?;
         let response_bytes =
             crate::service::system_api::query_application(application.forget_abi(), &query_bytes)
-                .await
                 .map_err(String::from)?;
         let response = serde_json::from_slice(&response_bytes)?;
         Ok(response)

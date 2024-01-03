@@ -29,7 +29,7 @@ impl Service for MetaCounter {
         request: Request,
     ) -> Result<Response, Self::Error> {
         let counter_id = Self::parameters()?;
-        Self::query_application(counter_id, &request).await
+        Self::query_application(counter_id, &request)
     }
 }
 

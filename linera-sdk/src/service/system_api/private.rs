@@ -54,11 +54,6 @@ pub fn current_application_parameters() -> Vec<u8> {
 }
 
 /// Queries another application.
-pub async fn query_application(
-    application: ApplicationId,
-    argument: &[u8],
-) -> Result<Vec<u8>, String> {
-    let promise = wit::TryQueryApplication::new(application.into(), argument);
-    yield_once().await;
-    promise.wait()
+pub fn query_application(application: ApplicationId, argument: &[u8]) -> Result<Vec<u8>, String> {
+    wit::try_query_application(application.into(), argument)
 }
