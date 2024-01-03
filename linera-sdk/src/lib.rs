@@ -315,7 +315,6 @@ pub trait Service: WithServiceAbi + ServiceAbi {
         let query_bytes = serde_json::to_vec(&query)?;
         let response_bytes =
             crate::service::system_api::query_application(application.forget_abi(), &query_bytes)
-                .await
                 .map_err(String::from)?;
         let response = serde_json::from_slice(&response_bytes)?;
         Ok(response)

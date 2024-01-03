@@ -416,8 +416,7 @@ fn mock_query() {
     };
     let query = vec![17, 23, 31, 37];
 
-    let response =
-        service::system_api::private::query_application(application_id, &query).blocking_wait();
+    let response = service::system_api::private::query_application(application_id, &query);
 
     assert_eq!(
         unsafe { INTERCEPTED_APPLICATION_ID.take() },
