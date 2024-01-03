@@ -230,7 +230,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
         .await
         .unwrap();
     let application_id = client
-        .create_application::<CounterAbi>(&bytecode_id, &original_counter_value, None)
+        .create_application::<CounterAbi>(&bytecode_id, &(), &original_counter_value, &[], None)
         .await
         .unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
@@ -280,7 +280,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
         .await
         .unwrap();
     let application_id = client1
-        .create_application::<SocialAbi>(&bytecode_id, &(), None)
+        .create_application::<SocialAbi>(&bytecode_id, &(), &(), &[], None)
         .await
         .unwrap();
 
