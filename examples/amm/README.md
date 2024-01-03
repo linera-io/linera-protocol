@@ -155,7 +155,7 @@ mutation{
         token_to_remove_idx: 1,
         token_to_remove_amount: "1",
       }
-    } 		
+    }
   )
 }
 ```
