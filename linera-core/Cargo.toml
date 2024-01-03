@@ -55,7 +55,6 @@ fungible = { workspace = true }
 linera-core = { path = ".", default-features = false, features = ["test"] }
 linera-views = { workspace = true }
 meta-counter = { workspace = true }
-reentrant-counter = { workspace = true }
 serde_json = { workspace = true }
 social = { workspace = true }
 test-case = { workspace = true }
