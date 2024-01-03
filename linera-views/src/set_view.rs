@@ -24,7 +24,7 @@ enum KeyTag {
 #[derive(Debug)]
 pub struct ByteSetView<C> {
     context: C,
-    was_cleared: bool,
+    delete_storage_first: bool,
     updates: BTreeMap<Vec<u8>, Update<()>>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
@@ -45,7 +45,7 @@ where
         let hash = context.read_value(&key).await?;
         Ok(Self {
             context,
-            was_cleared: false,
+            delete_storage_first: false,
             updates: BTreeMap::new(),
             stored_hash: hash,
             hash: Mutex::new(hash),
@@ -53,13 +53,13 @@ where
     }
 
     fn rollback(&mut self) {
-        self.was_cleared = false;
+        self.delete_storage_first = false;
         self.updates.clear();
         *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.was_cleared {
+        if self.delete_storage_first {
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Update::Set(_) = update {
@@ -67,6 +67,7 @@ where
                     batch.put_key_value_bytes(key, Vec::new());
                 }
             }
+            self.stored_hash = None;
         } else {
             for (index, update) in mem::take(&mut self.updates) {
                 let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
@@ -77,11 +78,7 @@ where
             }
         }
         let hash = *self.hash.get_mut();
-        // In the scenario where we do a clear
-        // and stored_hash = hash, we need to update the
-        // hash, otherwise, we will recompute it while this
-        // can be avoided.
-        if self.stored_hash != hash || self.was_cleared {
+        if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
             match hash {
                 None => batch.delete_key(key),
@@ -89,12 +86,12 @@ where
             }
             self.stored_hash = hash;
         }
-        self.was_cleared = false;
+        self.delete_storage_first = false;
         Ok(())
     }
 
     fn clear(&mut self) {
-        self.was_cleared = true;
+        self.delete_storage_first = true;
         self.updates.clear();
         *self.hash.get_mut() = None;
     }
@@ -134,7 +131,8 @@ where
     /// ```
     pub fn remove(&mut self, short_key: Vec<u8>) {
         *self.hash.get_mut() = None;
-        if self.was_cleared {
+        if self.delete_storage_first {
+            // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
             self.updates.remove(&short_key);
         } else {
             self.updates.insert(short_key, Update::Removed);
@@ -172,7 +170,7 @@ where
             };
             return Ok(value);
         }
-        if self.was_cleared {
+        if self.delete_storage_first {
             return Ok(false);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
@@ -236,7 +234,7 @@ where
     {
         let mut updates = self.updates.iter();
         let mut update = updates.next();
-        if !self.was_cleared {
+        if !self.delete_storage_first {
             let base = self.context.base_tag(KeyTag::Index as u8);
             for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
                 let index = index?;

@@ -654,6 +654,8 @@ where
             assert_eq!(view.queue.front().await.unwrap(), None);
             assert_eq!(view.queue.count(), 0);
         }
+        view.clear();
+        view.save().await.unwrap();
     }
     staged_hash
 }
@@ -664,7 +666,8 @@ async fn test_views_in_lru_memory_param(config: &TestConfig) {
     let mut store = LruMemoryStore::new().await;
     test_store(&mut store, config).await;
     assert_eq!(store.states.len(), 1);
-    store.states.get(&1).unwrap();
+    let entry = store.states.get(&1).unwrap().clone();
+    assert!(entry.lock().await.is_empty());
 }
 
 #[tokio::test]
@@ -680,7 +683,8 @@ async fn test_views_in_memory_param(config: &TestConfig) {
     let mut store = MemoryTestStore::new().await;
     test_store(&mut store, config).await;
     assert_eq!(store.states.len(), 1);
-    store.states.get(&1).unwrap();
+    let entry = store.states.get(&1).unwrap().clone();
+    assert!(entry.lock().await.is_empty());
 }
 
 #[tokio::test]

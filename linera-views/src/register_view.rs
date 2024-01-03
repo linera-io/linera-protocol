@@ -23,6 +23,7 @@ enum KeyTag {
 /// A view that supports modifying a single value of type `T`.
 #[derive(Debug)]
 pub struct RegisterView<C, T> {
+    delete_storage_first: bool,
     context: C,
     stored_value: Box<T>,
     update: Option<Box<T>>,
@@ -49,6 +50,7 @@ where
         let stored_value = Box::new(from_bytes_opt(&values_bytes[0])?.unwrap_or_default());
         let hash = from_bytes_opt(&values_bytes[1])?;
         Ok(Self {
+            delete_storage_first: false,
             context,
             stored_value,
             update: None,
@@ -58,12 +60,17 @@ where
     }
 
     fn rollback(&mut self) {
+        self.delete_storage_first = false;
         self.update = None;
         *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if let Some(value) = self.update.take() {
+        if self.delete_storage_first {
+            batch.delete_key_prefix(self.context.base_key());
+            self.stored_value = Box::default();
+            self.stored_hash = None;
+        } else if let Some(value) = self.update.take() {
             let key = self.context.base_tag(KeyTag::Value as u8);
             batch.put_key_value(key, &value)?;
             self.stored_value = value;
@@ -77,10 +84,12 @@ where
             }
             self.stored_hash = hash;
         }
+        self.delete_storage_first = false;
         Ok(())
     }
 
     fn clear(&mut self) {
+        self.delete_storage_first = true;
         self.update = Some(Box::default());
         *self.hash.get_mut() = None;
     }
@@ -123,6 +132,7 @@ where
     /// # })
     /// ```
     pub fn set(&mut self, value: T) {
+        self.delete_storage_first = false;
         self.update = Some(Box::new(value));
         *self.hash.get_mut() = None;
     }
@@ -152,6 +162,7 @@ where
     /// ```
     pub fn get_mut(&mut self) -> &mut T {
         *self.hash.get_mut() = None;
+        self.delete_storage_first = false;
         match &mut self.update {
             Some(value) => value,
             update => {
