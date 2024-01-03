@@ -23,7 +23,7 @@ enum KeyTag {
 /// A view that supports modifying a single value of type `T`.
 #[derive(Debug)]
 pub struct RegisterView<C, T> {
-    is_default: bool,
+    delete_storage_first: bool,
     context: C,
     stored_value: Box<T>,
     update: Option<Box<T>>,
@@ -50,7 +50,7 @@ where
         let stored_value = Box::new(from_bytes_opt(&values_bytes[0])?.unwrap_or_default());
         let hash = from_bytes_opt(&values_bytes[1])?;
         Ok(Self {
-            is_default: false,
+            delete_storage_first: false,
             context,
             stored_value,
             update: None,
@@ -60,29 +60,27 @@ where
     }
 
     fn rollback(&mut self) {
-        self.is_default = false;
+        self.delete_storage_first = false;
         self.update = None;
         *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.is_default {
+        if self.delete_storage_first {
             batch.delete_key_prefix(self.context.base_key());
-        }
-        // If there is clearing then we want to write the value only if it has been set afterward
-        if !self.is_default {
-            if let Some(value) = self.update.take() {
-                let key = self.context.base_tag(KeyTag::Value as u8);
-                batch.put_key_value(key, &value)?;
-                self.stored_value = value;
-            }
+            self.stored_value = Box::default();
+            self.stored_hash = None;
+        } else if let Some(value) = self.update.take() {
+            let key = self.context.base_tag(KeyTag::Value as u8);
+            batch.put_key_value(key, &value)?;
+            self.stored_value = value;
         }
         let hash = *self.hash.get_mut();
         // In the scenario where we do a clear
         // and stored_hash = hash, we need to update the
         // hash, otherwise, we will recompute it while this
         // can be avoided.
-        if self.stored_hash != hash || self.is_default {
+        if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
             match hash {
                 None => batch.delete_key(key),
@@ -90,12 +88,12 @@ where
             }
             self.stored_hash = hash;
         }
-        self.is_default = false;
+        self.delete_storage_first = false;
         Ok(())
     }
 
     fn clear(&mut self) {
-        self.is_default = true;
+        self.delete_storage_first = true;
         self.update = Some(Box::default());
         *self.hash.get_mut() = None;
     }
@@ -138,7 +136,7 @@ where
     /// # })
     /// ```
     pub fn set(&mut self, value: T) {
-        self.is_default = false;
+        self.delete_storage_first = false;
         self.update = Some(Box::new(value));
         *self.hash.get_mut() = None;
     }
@@ -168,7 +166,7 @@ where
     /// ```
     pub fn get_mut(&mut self) -> &mut T {
         *self.hash.get_mut() = None;
-        self.is_default = false;
+        self.delete_storage_first = false;
         match &mut self.update {
             Some(value) => value,
             update => {
