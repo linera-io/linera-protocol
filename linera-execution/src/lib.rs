@@ -12,15 +12,11 @@ mod ownership;
 pub mod policy;
 mod resources;
 mod runtime;
-pub mod runtime_actor;
-mod sync_runtime;
 pub mod system;
+mod util;
 mod wasm;
 
-pub use crate::{
-    runtime_actor::{ContractActorRuntime, ServiceActorRuntime},
-    sync_runtime::{ContractSyncRuntime, ServiceSyncRuntime},
-};
+pub use crate::runtime::{ContractSyncRuntime, ServiceSyncRuntime};
 pub use applications::{
     ApplicationRegistryView, BytecodeLocation, GenericApplicationId, UserApplicationDescription,
     UserApplicationId,
@@ -68,12 +64,7 @@ pub type UserServiceCode = Arc<dyn UserServiceModule + Send + Sync + 'static>;
 
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
 pub trait UserContractModule {
-    fn instantiate_with_actor_runtime(
-        &self,
-        runtime: ContractActorRuntime,
-    ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError>;
-
-    fn instantiate_with_sync_runtime(
+    fn instantiate(
         &self,
         runtime: ContractSyncRuntime,
     ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError>;
@@ -81,12 +72,7 @@ pub trait UserContractModule {
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
 pub trait UserServiceModule {
-    fn instantiate_with_actor_runtime(
-        &self,
-        runtime: ServiceActorRuntime,
-    ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError>;
-
-    fn instantiate_with_sync_runtime(
+    fn instantiate(
         &self,
         runtime: ServiceSyncRuntime,
     ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError>;
@@ -249,7 +235,6 @@ pub struct SessionCallResult {
 /// System runtime implementation in use.
 #[derive(Default, Clone, Copy)]
 pub enum ExecutionRuntimeConfig {
-    Actor,
     #[default]
     Synchronous,
 }

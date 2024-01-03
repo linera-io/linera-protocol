@@ -2,231 +2,257 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    execution::ExecutionStateView,
+    execution::UserAction,
+    execution_state_actor::{ExecutionStateSender, Request},
     resources::{RuntimeCounts, RuntimeLimits},
-    runtime_actor::{
-        ContractActorRuntime, ContractRequest, RuntimeActor, ServiceActorRuntime, ServiceRequest,
-    },
-    CallResult, ExecutionError, ExecutionResult, ExecutionRuntimeContext, SessionId,
-    UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
+    util::{ReceiverExt, UnboundedSenderExt},
+    BaseRuntime, CallResult, ContractRuntime, ExecutionError, ExecutionResult, ServiceRuntime,
+    SessionId, UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
 };
-use async_lock::{Mutex, MutexGuard, MutexGuardArc};
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::Timestamp,
-    ensure, hex_debug,
+    data_types::{Amount, ArithmeticError, Timestamp},
+    ensure,
     identifiers::{ChainId, Owner},
 };
-use linera_views::{
-    batch::Batch,
-    common::Context,
-    key_value_store_view::KeyValueStoreView,
-    reentrant_collection_view,
-    register_view::RegisterView,
-    views::{View, ViewError},
-};
+use linera_views::batch::Batch;
+use oneshot::Receiver;
 use std::{
-    collections::{btree_map, BTreeMap},
+    collections::BTreeMap,
     ops::DerefMut,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
-/// Runtime data tracked during the execution of a transaction.
+#[derive(Clone, Debug)]
+pub struct SyncRuntime<const W: bool>(Arc<Mutex<SyncRuntimeInternal<W>>>);
+
+pub type ContractSyncRuntime = SyncRuntime<true>;
+pub type ServiceSyncRuntime = SyncRuntime<false>;
+
+/// Runtime data tracked during the execution of a transaction on the synchronous thread.
 #[derive(Debug)]
-pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
+pub struct SyncRuntimeInternal<const WRITABLE: bool> {
     /// The current chain ID.
     chain_id: ChainId,
-    /// The current stack of application descriptions.
-    applications: Mutex<&'a mut Vec<ApplicationStatus>>,
-    /// The storage view on the execution state.
-    execution_state: Mutex<&'a mut ExecutionStateView<C>>,
-    /// All the sessions and their IDs.
-    session_manager: Mutex<&'a mut SessionManager>,
-    /// Track active (i.e. locked) applications for which re-entrancy is disallowed.
-    active_simple_user_states: Mutex<ActiveSimpleUserStates<C>>,
-    /// Track active (i.e. locked) applications for which re-entrancy is disallowed.
-    active_view_user_states: Mutex<ActiveViewUserStates<C>>,
-    /// Track active (i.e. locked) sessions for which re-entrancy is disallowed.
-    active_sessions: Mutex<ActiveSessions>,
-    /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
-    execution_results: Mutex<&'a mut Vec<ExecutionResult>>,
 
-    /// The runtime counters.
-    runtime_counts: Mutex<RuntimeCounts>,
-    /// The runtime limits
+    /// How to interact with the storage view of the execution state.
+    execution_state_sender: ExecutionStateSender,
+
+    /// The current stack of application descriptions.
+    applications: Vec<ApplicationStatus>,
+    /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
+    execution_results: Vec<ExecutionResult>,
+
+    /// All the sessions and their IDs.
+    session_manager: SessionManager,
+    /// Track application states (simple case).
+    simple_user_states: BTreeMap<UserApplicationId, SimpleUserState>,
+    /// Track application states (view case).
+    view_user_states: BTreeMap<UserApplicationId, ViewUserState>,
+
+    /// Counters to track fuel and storage consumption.
+    runtime_counts: RuntimeCounts,
+    /// The runtime limits.
     runtime_limits: RuntimeLimits,
 }
 
 /// The runtime status of an application.
 #[derive(Debug, Clone)]
-pub(crate) struct ApplicationStatus {
+struct ApplicationStatus {
     /// The application id.
-    pub(crate) id: UserApplicationId,
+    id: UserApplicationId,
     /// The parameters from the application description.
-    pub(crate) parameters: Vec<u8>,
+    parameters: Vec<u8>,
     /// The authenticated signer for the execution thread, if any.
-    pub(crate) signer: Option<Owner>,
+    signer: Option<Owner>,
 }
 
-type ActiveViewUserStates<C> =
-    BTreeMap<UserApplicationId, reentrant_collection_view::WriteGuardedView<KeyValueStoreView<C>>>;
-type ActiveSimpleUserStates<C> = BTreeMap<
-    UserApplicationId,
-    reentrant_collection_view::WriteGuardedView<RegisterView<C, Vec<u8>>>,
->;
-type ActiveSessions = BTreeMap<SessionId, MutexGuardArc<SessionState>>;
-
-#[derive(Debug, Clone, Default)]
-pub(crate) struct SessionManager {
+#[derive(Debug, Default)]
+struct SessionManager {
     /// Track the next session index to be used for each application.
-    pub(crate) counters: BTreeMap<UserApplicationId, u64>,
+    counters: BTreeMap<UserApplicationId, u64>,
     /// Track the current state (owner and data) of each session.
-    pub(crate) states: BTreeMap<SessionId, Arc<Mutex<SessionState>>>,
+    states: BTreeMap<SessionId, SessionState>,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct SessionState {
+#[derive(Debug)]
+enum Promise<T> {
+    Ready(T),
+    Pending(Receiver<T>),
+}
+
+impl<T> Promise<T> {
+    fn force(&mut self) -> Result<(), ExecutionError> {
+        if let Promise::Pending(receiver) = self {
+            let value = receiver
+                .recv_ref()
+                .map_err(|oneshot::RecvError| ExecutionError::MissingRuntimeResponse)?;
+            *self = Promise::Ready(value);
+        }
+        Ok(())
+    }
+
+    fn read(self) -> Result<T, ExecutionError> {
+        match self {
+            Promise::Pending(receiver) => {
+                let value = receiver.recv_response()?;
+                Ok(value)
+            }
+            Promise::Ready(value) => Ok(value),
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct SimpleUserState {
+    /// Whether the application state was locked.
+    locked: bool,
+    /// A read query in progress on the internal state, if any.
+    pending_query: Option<Receiver<Vec<u8>>>,
+}
+
+/// Manages a set of pending queries returning values of type `T`.
+#[derive(Debug, Default)]
+struct QueryManager<T> {
+    /// The queries in progress.
+    pending_queries: BTreeMap<u32, Promise<T>>,
+    /// The number of queries ever registered so far. Used for the index of the next query.
+    query_count: u32,
+    /// The number of active queries.
+    active_query_count: u32,
+}
+
+impl<T> QueryManager<T> {
+    fn register(&mut self, receiver: Receiver<T>) -> Result<u32, ExecutionError> {
+        let id = self.query_count;
+        self.pending_queries.insert(id, Promise::Pending(receiver));
+        self.query_count = self
+            .query_count
+            .checked_add(1)
+            .ok_or(ArithmeticError::Overflow)?;
+        self.active_query_count = self
+            .active_query_count
+            .checked_add(1)
+            .ok_or(ArithmeticError::Overflow)?;
+        Ok(id)
+    }
+
+    fn wait(&mut self, id: u32) -> Result<T, ExecutionError> {
+        let promise = self
+            .pending_queries
+            .remove(&id)
+            .ok_or(ExecutionError::InvalidPromise)?;
+        let value = promise.read()?;
+        self.active_query_count -= 1;
+        Ok(value)
+    }
+
+    fn force_all(&mut self) -> Result<(), ExecutionError> {
+        for promise in self.pending_queries.values_mut() {
+            promise.force()?;
+        }
+        Ok(())
+    }
+}
+
+type Keys = Vec<Vec<u8>>;
+type Value = Vec<u8>;
+type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+#[derive(Debug, Default)]
+struct ViewUserState {
+    /// Whether the application state was locked.
+    locked: bool,
+    /// The contains-key queries in progress.
+    contains_key_queries: QueryManager<bool>,
+    /// The read-value queries in progress.
+    read_value_queries: QueryManager<Option<Value>>,
+    /// The read-multi-values queries in progress.
+    read_multi_values_queries: QueryManager<Vec<Option<Value>>>,
+    /// The find-keys queries in progress.
+    find_keys_queries: QueryManager<Keys>,
+    /// The find-key-values queries in progress.
+    find_key_values_queries: QueryManager<KeyValues>,
+}
+
+impl ViewUserState {
+    fn force_all_pending_queries(&mut self) -> Result<(), ExecutionError> {
+        self.contains_key_queries.force_all()?;
+        self.read_value_queries.force_all()?;
+        self.read_multi_values_queries.force_all()?;
+        self.find_keys_queries.force_all()?;
+        self.find_key_values_queries.force_all()?;
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct SessionState {
     /// Track which application can call into the session.
     owner: UserApplicationId,
-    /// The internal state of the session.
-    #[debug(with = "hex_debug")]
+    /// Whether the session is already active.
+    locked: bool,
+    /// Some data saved inside the session.
     data: Vec<u8>,
 }
 
-impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W>
-where
-    C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
-    C::Extra: ExecutionRuntimeContext,
-{
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new(
+impl<const W: bool> SyncRuntimeInternal<W> {
+    fn new(
         chain_id: ChainId,
-        applications: &'a mut Vec<ApplicationStatus>,
-        execution_state: &'a mut ExecutionStateView<C>,
-        session_manager: &'a mut SessionManager,
-        execution_results: &'a mut Vec<ExecutionResult>,
-        remaining_fuel: u64,
+        execution_state_sender: ExecutionStateSender,
         runtime_limits: RuntimeLimits,
+        remaining_fuel: u64,
     ) -> Self {
-        assert_eq!(chain_id, execution_state.context().extra().chain_id());
+        let runtime_counts = RuntimeCounts {
+            remaining_fuel,
+            ..Default::default()
+        };
         Self {
-            applications: Mutex::new(applications),
-            execution_state: Mutex::new(execution_state),
-            session_manager: Mutex::new(session_manager),
-            active_simple_user_states: Mutex::default(),
-            active_view_user_states: Mutex::default(),
-            active_sessions: Mutex::default(),
-            execution_results: Mutex::new(execution_results),
-            runtime_counts: Mutex::new(RuntimeCounts {
-                remaining_fuel,
-                ..Default::default()
-            }),
-            runtime_limits,
             chain_id,
+            execution_state_sender,
+            applications: Vec::new(),
+            execution_results: Vec::default(),
+            session_manager: SessionManager::default(),
+            simple_user_states: BTreeMap::default(),
+            view_user_states: BTreeMap::default(),
+            runtime_counts,
+            runtime_limits,
         }
     }
 
-    fn applications_mut(&self) -> MutexGuard<'_, &'a mut Vec<ApplicationStatus>> {
-        self.applications
-            .try_lock()
-            .expect("single-threaded execution should not lock `application_ids`")
-    }
-
-    fn execution_state_mut(&self) -> MutexGuard<'_, &'a mut ExecutionStateView<C>> {
-        self.execution_state
-            .try_lock()
-            .expect("single-threaded execution should not lock `execution_state`")
-    }
-
-    fn session_manager_mut(&self) -> MutexGuard<'_, &'a mut SessionManager> {
-        self.session_manager
-            .try_lock()
-            .expect("single-threaded execution should not lock `session_manager`")
-    }
-
-    fn active_simple_user_states_mut(&self) -> MutexGuard<'_, ActiveSimpleUserStates<C>> {
-        self.active_simple_user_states
-            .try_lock()
-            .expect("single-threaded execution should not lock `active_simple_user_states`")
-    }
-
-    async fn active_view_user_states_mut(&self) -> MutexGuard<'_, ActiveViewUserStates<C>> {
-        self.active_view_user_states.lock().await
-    }
-
-    fn active_sessions_mut(&self) -> MutexGuard<'_, ActiveSessions> {
-        self.active_sessions
-            .try_lock()
-            .expect("single-threaded execution should not lock `active_sessions`")
-    }
-
-    fn execution_results_mut(&self) -> MutexGuard<'_, &'a mut Vec<ExecutionResult>> {
-        self.execution_results
-            .try_lock()
-            .expect("single-threaded execution should not lock `execution_results`")
-    }
-
-    async fn load_contract(
-        &self,
+    fn load_contract(
+        &mut self,
         id: UserApplicationId,
     ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
-        let description = self
-            .execution_state_mut()
-            .system
-            .registry
-            .describe_application(id)
-            .await?;
-        let code = self
-            .execution_state_mut()
-            .context()
-            .extra()
-            .get_user_contract(&description)
-            .await?;
-        Ok((code, description))
+        self.execution_state_sender
+            .send_request(|callback| Request::LoadContract { id, callback })?
+            .recv_response()
     }
 
-    async fn load_service(
-        &self,
+    fn load_service(
+        &mut self,
         id: UserApplicationId,
     ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
-        let description = self
-            .execution_state_mut()
-            .system
-            .registry
-            .describe_application(id)
-            .await?;
-        let code = self
-            .execution_state_mut()
-            .context()
-            .extra()
-            .get_user_service(&description)
-            .await?;
-        Ok((code, description))
+        self.execution_state_sender
+            .send_request(|callback| Request::LoadService { id, callback })?
+            .recv_response()
     }
 
     fn forward_sessions(
-        &self,
+        &mut self,
         session_ids: &[SessionId],
         from_id: UserApplicationId,
         to_id: UserApplicationId,
     ) -> Result<(), ExecutionError> {
-        let states = &self.session_manager_mut().states;
+        let states = &mut self.session_manager.states;
         for id in session_ids {
-            let mut state = states
-                .get(id)
-                .ok_or_else(|| ExecutionError::InvalidSession(*id))?
-                .clone()
-                .try_lock_arc()
-                .ok_or_else(|| ExecutionError::SessionIsInUse(*id))?;
+            let state = states
+                .get_mut(id)
+                .ok_or(ExecutionError::InvalidSession(*id))?;
             // Verify ownership.
             ensure!(
                 state.owner == from_id,
-                ExecutionError::InvalidSessionOwner {
-                    session_id: Box::new(*id),
-                    accessed_by: Box::new(from_id),
-                    owned_by: Box::new(state.owner)
-                }
+                ExecutionError::invalid_session_owner(*id, from_id, state.owner,)
             );
             // Transfer the session.
             state.owner = to_id;
@@ -235,13 +261,12 @@ where
     }
 
     fn make_sessions(
-        &self,
+        &mut self,
         new_sessions: Vec<Vec<u8>>,
         creator_id: UserApplicationId,
         receiver_id: UserApplicationId,
     ) -> Vec<SessionId> {
-        let mut manager = self.session_manager_mut();
-        let manager = manager.deref_mut();
+        let manager = &mut self.session_manager;
         let states = &mut manager.states;
         let counter = manager.counters.entry(creator_id).or_default();
         let mut session_ids = Vec::new();
@@ -254,522 +279,778 @@ where
             session_ids.push(id);
             let state = SessionState {
                 owner: receiver_id,
+                locked: false,
                 data,
             };
-            states.insert(id, Arc::new(Mutex::new(state)));
+            states.insert(id, state);
         }
         session_ids
     }
 
     fn try_load_session(
-        &self,
+        &mut self,
         session_id: SessionId,
         application_id: UserApplicationId,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let guard = self
-            .session_manager_mut()
+        let state = self
+            .session_manager
             .states
-            .get(&session_id)
-            .ok_or_else(|| ExecutionError::InvalidSession(session_id))?
-            .clone()
-            .try_lock_arc()
-            .ok_or_else(|| ExecutionError::SessionIsInUse(session_id))?;
-        let state = guard.data.clone();
+            .get_mut(&session_id)
+            .ok_or(ExecutionError::InvalidSession(session_id))?;
+        // Verify locking.
+        ensure!(!state.locked, ExecutionError::SessionIsInUse(session_id));
         // Verify ownership.
         ensure!(
-            guard.owner == application_id,
-            ExecutionError::invalid_session_owner(session_id, application_id, guard.owner,)
+            state.owner == application_id,
+            ExecutionError::invalid_session_owner(session_id, application_id, state.owner,)
         );
-        // Remember the guard. This will prevent reentrancy.
-        self.active_sessions_mut().insert(session_id, guard);
-        Ok(state)
+        // Lock state and return data.
+        state.locked = true;
+        Ok(state.data.clone())
     }
 
     fn try_save_session(
-        &self,
+        &mut self,
         session_id: SessionId,
         application_id: UserApplicationId,
-        state: Vec<u8>,
+        data: Vec<u8>,
     ) -> Result<(), ExecutionError> {
-        // Remove the guard.
-        if let btree_map::Entry::Occupied(mut guard) = self.active_sessions_mut().entry(session_id)
-        {
-            // Verify ownership.
-            ensure!(
-                guard.get().owner == application_id,
-                ExecutionError::invalid_session_owner(
-                    session_id,
-                    application_id,
-                    guard.get().owner,
-                )
-            );
-            // Save the state and unlock the session for future calls.
-            guard.get_mut().data = state;
-            // Remove the entry from the set of active sessions.
-            guard.remove();
-        }
+        let state = self
+            .session_manager
+            .states
+            .get_mut(&session_id)
+            .ok_or(ExecutionError::InvalidSession(session_id))?;
+        // Verify locking.
+        ensure!(
+            state.locked,
+            ExecutionError::SessionStateNotLocked(session_id)
+        );
+        // Verify ownership.
+        ensure!(
+            state.owner == application_id,
+            ExecutionError::invalid_session_owner(session_id, application_id, state.owner,)
+        );
+        // Save data.
+        state.data = data;
+        state.locked = false;
         Ok(())
     }
 
     fn try_close_session(
-        &self,
+        &mut self,
         session_id: SessionId,
         application_id: UserApplicationId,
     ) -> Result<(), ExecutionError> {
-        if let btree_map::Entry::Occupied(guard) = self.active_sessions_mut().entry(session_id) {
-            // Verify ownership.
-            ensure!(
-                guard.get().owner == application_id,
-                ExecutionError::invalid_session_owner(
-                    session_id,
-                    application_id,
-                    guard.get().owner,
-                )
-            );
-            // Remove the entry from the set of active sessions.
-            guard.remove();
-            // Delete the session entirely.
-            self.session_manager_mut()
-                .states
-                .remove(&session_id)
-                .ok_or(ExecutionError::InvalidSession(session_id))?;
-        }
+        let state = self
+            .session_manager
+            .states
+            .get(&session_id)
+            .ok_or(ExecutionError::InvalidSession(session_id))?;
+        // Verify locking.
+        ensure!(
+            state.locked,
+            ExecutionError::SessionStateNotLocked(session_id)
+        );
+        // Verify ownership.
+        ensure!(
+            state.owner == application_id,
+            ExecutionError::invalid_session_owner(session_id, application_id, state.owner,)
+        );
+        // Delete the session entirely.
+        self.session_manager
+            .states
+            .remove(&session_id)
+            .ok_or(ExecutionError::InvalidSession(session_id))?;
         Ok(())
     }
 }
 
-impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W> {
-    async fn increment_num_reads(&self) -> Result<(), ExecutionError> {
-        let mut counts = self.runtime_counts.lock().await;
-        counts.increment_num_reads(&self.runtime_limits)
+impl<const W: bool> SyncRuntime<W> {
+    fn new(runtime: SyncRuntimeInternal<W>) -> Self {
+        SyncRuntime(Arc::new(Mutex::new(runtime)))
     }
 
-    async fn increment_bytes_read(&self, increment: u64) -> Result<(), ExecutionError> {
-        let mut counts = self.runtime_counts.lock().await;
-        counts.increment_bytes_read(&self.runtime_limits, increment)
+    fn into_inner(self) -> Option<SyncRuntimeInternal<W>> {
+        let runtime = Arc::into_inner(self.0)?
+            .into_inner()
+            .expect("thread should not have panicked");
+        Some(runtime)
     }
 
-    async fn increment_bytes_written(&self, increment: u64) -> Result<(), ExecutionError> {
-        let mut counts = self.runtime_counts.lock().await;
-        counts.increment_bytes_written(&self.runtime_limits, increment)
-    }
-
-    async fn update_stored_size(&self, delta: i32) -> Result<(), ExecutionError> {
-        let mut counts = self.runtime_counts.lock().await;
-        counts.update_stored_size(delta)
+    fn as_inner(&mut self) -> std::sync::MutexGuard<'_, SyncRuntimeInternal<W>> {
+        self.0
+            .try_lock()
+            .expect("Synchronous runtimes run on a single execution thread")
     }
 }
 
-impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W>
-where
-    C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
-    C::Extra: ExecutionRuntimeContext,
-{
-    pub(crate) fn chain_id(&self) -> ChainId {
-        self.chain_id
+impl<const W: bool> BaseRuntime for SyncRuntime<W> {
+    type Read = <SyncRuntimeInternal<W> as BaseRuntime>::Read;
+    type Lock = <SyncRuntimeInternal<W> as BaseRuntime>::Lock;
+    type Unlock = <SyncRuntimeInternal<W> as BaseRuntime>::Unlock;
+    type ReadValueBytes = <SyncRuntimeInternal<W> as BaseRuntime>::ReadValueBytes;
+    type ContainsKey = <SyncRuntimeInternal<W> as BaseRuntime>::ContainsKey;
+    type ReadMultiValuesBytes = <SyncRuntimeInternal<W> as BaseRuntime>::ReadMultiValuesBytes;
+    type FindKeysByPrefix = <SyncRuntimeInternal<W> as BaseRuntime>::FindKeysByPrefix;
+    type FindKeyValuesByPrefix = <SyncRuntimeInternal<W> as BaseRuntime>::FindKeyValuesByPrefix;
+
+    fn chain_id(&mut self) -> Result<ChainId, ExecutionError> {
+        self.as_inner().chain_id()
     }
 
-    pub(crate) fn application_id(&self) -> UserApplicationId {
-        self.applications_mut()
+    fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError> {
+        self.as_inner().application_id()
+    }
+
+    fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError> {
+        self.as_inner().application_parameters()
+    }
+
+    fn read_system_balance(&mut self) -> Result<Amount, ExecutionError> {
+        self.as_inner().read_system_balance()
+    }
+
+    fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
+        self.as_inner().read_system_timestamp()
+    }
+
+    fn try_read_my_state_new(&mut self) -> Result<Self::Read, ExecutionError> {
+        self.as_inner().try_read_my_state_new()
+    }
+
+    fn try_read_my_state_wait(&mut self, promise: &Self::Read) -> Result<Vec<u8>, ExecutionError> {
+        self.as_inner().try_read_my_state_wait(promise)
+    }
+
+    fn lock_new(&mut self) -> Result<Self::Lock, ExecutionError> {
+        self.as_inner().lock_new()
+    }
+
+    fn lock_wait(&mut self, promise: &Self::Lock) -> Result<(), ExecutionError> {
+        self.as_inner().lock_wait(promise)
+    }
+
+    fn unlock_new(&mut self) -> Result<Self::Unlock, ExecutionError> {
+        self.as_inner().unlock_new()
+    }
+
+    fn unlock_wait(&mut self, promise: &Self::Unlock) -> Result<(), ExecutionError> {
+        self.as_inner().unlock_wait(promise)
+    }
+
+    fn write_batch_and_unlock(&mut self, batch: Batch) -> Result<(), ExecutionError> {
+        self.as_inner().write_batch_and_unlock(batch)
+    }
+
+    fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
+        self.as_inner().contains_key_new(key)
+    }
+
+    fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError> {
+        self.as_inner().contains_key_wait(promise)
+    }
+
+    fn read_multi_values_bytes_new(
+        &mut self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Self::ReadMultiValuesBytes, ExecutionError> {
+        self.as_inner().read_multi_values_bytes_new(keys)
+    }
+
+    fn read_multi_values_bytes_wait(
+        &mut self,
+        promise: &Self::ReadMultiValuesBytes,
+    ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError> {
+        self.as_inner().read_multi_values_bytes_wait(promise)
+    }
+
+    fn read_value_bytes_new(
+        &mut self,
+        key: Vec<u8>,
+    ) -> Result<Self::ReadValueBytes, ExecutionError> {
+        self.as_inner().read_value_bytes_new(key)
+    }
+
+    fn read_value_bytes_wait(
+        &mut self,
+        promise: &Self::ReadValueBytes,
+    ) -> Result<Option<Vec<u8>>, ExecutionError> {
+        self.as_inner().read_value_bytes_wait(promise)
+    }
+
+    fn find_keys_by_prefix_new(
+        &mut self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Self::FindKeysByPrefix, ExecutionError> {
+        self.as_inner().find_keys_by_prefix_new(key_prefix)
+    }
+
+    fn find_keys_by_prefix_wait(
+        &mut self,
+        promise: &Self::FindKeysByPrefix,
+    ) -> Result<Vec<Vec<u8>>, ExecutionError> {
+        self.as_inner().find_keys_by_prefix_wait(promise)
+    }
+
+    fn find_key_values_by_prefix_new(
+        &mut self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError> {
+        self.as_inner().find_key_values_by_prefix_new(key_prefix)
+    }
+
+    fn find_key_values_by_prefix_wait(
+        &mut self,
+        promise: &Self::FindKeyValuesByPrefix,
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
+        self.as_inner().find_key_values_by_prefix_wait(promise)
+    }
+}
+
+impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
+    type Read = ();
+    type Lock = ();
+    type Unlock = ();
+    type ReadValueBytes = u32;
+    type ContainsKey = u32;
+    type ReadMultiValuesBytes = u32;
+    type FindKeysByPrefix = u32;
+    type FindKeyValuesByPrefix = u32;
+
+    fn chain_id(&mut self) -> Result<ChainId, ExecutionError> {
+        Ok(self.chain_id)
+    }
+
+    fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError> {
+        let id = self
+            .applications
             .last()
             .expect("at least one application description should be present in the stack")
-            .id
+            .id;
+        Ok(id)
     }
 
-    pub(crate) fn application_parameters(&self) -> Vec<u8> {
-        self.applications_mut()
+    fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError> {
+        let parameters = self
+            .applications
             .last()
             .expect("at least one application description should be present in the stack")
             .parameters
-            .clone()
+            .clone();
+        Ok(parameters)
     }
 
-    pub(crate) fn read_system_balance(&self) -> linera_base::data_types::Amount {
-        *self.execution_state_mut().system.balance.get()
+    fn read_system_balance(&mut self) -> Result<Amount, ExecutionError> {
+        self.execution_state_sender
+            .send_request(|callback| Request::SystemBalance { callback })?
+            .recv_response()
     }
 
-    pub(crate) fn read_system_timestamp(&self) -> Timestamp {
-        *self.execution_state_mut().system.timestamp.get()
+    fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
+        self.execution_state_sender
+            .send_request(|callback| Request::SystemTimestamp { callback })?
+            .recv_response()
     }
 
-    pub(crate) async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
-        let state = self
-            .execution_state_mut()
-            .simple_users
-            .try_load_entry_mut(&self.application_id())
-            .await?
-            .get()
-            .to_vec();
-        Ok(state)
-    }
-
-    pub(crate) async fn lock_view_user_state(&self) -> Result<(), ExecutionError> {
-        let view = self
-            .execution_state_mut()
-            .view_users
-            .try_load_entry_mut(&self.application_id())
-            .await?;
-        self.active_view_user_states_mut()
-            .await
-            .insert(self.application_id(), view);
+    fn try_read_my_state_new(&mut self) -> Result<Self::Read, ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.simple_user_states.entry(id).or_default();
+        ensure!(!state.locked, ExecutionError::ApplicationIsInUse(id));
+        let receiver = self
+            .execution_state_sender
+            .send_request(|callback| Request::ReadSimpleUserState { id, callback })?;
+        state.pending_query = Some(receiver);
         Ok(())
     }
 
-    pub(crate) async fn unlock_view_user_state(&self) -> Result<(), ExecutionError> {
-        // Make the view available again.
-        let application_id = self.application_id();
-        match self
-            .active_view_user_states_mut()
-            .await
-            .remove(&application_id)
-        {
-            Some(_) => Ok(()),
-            None => Err(ExecutionError::ApplicationStateNotLocked(application_id)),
-        }
+    fn try_read_my_state_wait(&mut self, _promise: &Self::Read) -> Result<Vec<u8>, ExecutionError> {
+        let id = self.application_id()?;
+        let state = self
+            .simple_user_states
+            .get_mut(&id)
+            .ok_or(ExecutionError::InvalidPromise)?;
+        let receiver =
+            std::mem::take(&mut state.pending_query).ok_or(ExecutionError::InvalidPromise)?;
+        receiver.recv_response()
     }
 
-    pub(crate) async fn contains_key(&self, key: Vec<u8>) -> Result<bool, ExecutionError> {
-        let application_id = self.application_id();
-        let state = self.active_view_user_states_mut().await;
-        let view = state
-            .get(&application_id)
-            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked(application_id))?;
-        let result = view.contains_key(&key).await?;
-        self.increment_num_reads().await?;
-        Ok(result)
+    // TODO(#1152): simplify away
+    fn lock_new(&mut self) -> Result<Self::Lock, ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        ensure!(!state.locked, ExecutionError::ApplicationIsInUse(id));
+        state.locked = true;
+        Ok(())
     }
 
-    pub(crate) async fn read_value_bytes(
-        &self,
-        key: Vec<u8>,
-    ) -> Result<Option<Vec<u8>>, ExecutionError> {
-        let application_id = self.application_id();
-        let state = self.active_view_user_states_mut().await;
-        let view = state
-            .get(&application_id)
-            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked(application_id))?;
-        let result = view.get(&key).await?;
-        self.increment_num_reads().await?;
-        if let Some(value) = &result {
-            self.increment_bytes_read(value.len() as u64).await?;
-        }
-        Ok(result)
+    fn lock_wait(&mut self, _promise: &Self::Lock) -> Result<(), ExecutionError> {
+        Ok(())
     }
 
-    pub(crate) async fn read_multi_values_bytes(
-        &self,
+    fn unlock_new(&mut self) -> Result<Self::Unlock, ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
+        state.locked = false;
+        Ok(())
+    }
+
+    fn unlock_wait(&mut self, _promise: &Self::Unlock) -> Result<(), ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        state.force_all_pending_queries()?;
+        Ok(())
+    }
+
+    fn write_batch_and_unlock(&mut self, batch: Batch) -> Result<(), ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
+        state.force_all_pending_queries()?;
+        self.execution_state_sender
+            .send_request(|callback| Request::WriteBatch {
+                id,
+                batch,
+                callback,
+            })?
+            .recv_response()?;
+        state.locked = false;
+        Ok(())
+    }
+
+    fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
+        self.runtime_counts
+            .increment_num_reads(&self.runtime_limits)?;
+        let receiver = self
+            .execution_state_sender
+            .send_request(move |callback| Request::ContainsKey { id, key, callback })?;
+        state.contains_key_queries.register(receiver)
+    }
+
+    fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        let value = state.contains_key_queries.wait(*promise)?;
+        Ok(value)
+    }
+
+    fn read_multi_values_bytes_new(
+        &mut self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError> {
-        let application_id = self.application_id();
-        let state = self.active_view_user_states_mut().await;
-        let view = state
-            .get(&application_id)
-            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked(application_id))?;
-        let results = view.multi_get(keys).await?;
-        self.increment_num_reads().await?;
-        for value in results.iter().flatten() {
-            self.increment_bytes_read(value.len() as u64).await?;
-        }
-        Ok(results)
+    ) -> Result<Self::ReadMultiValuesBytes, ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
+        self.runtime_counts
+            .increment_num_reads(&self.runtime_limits)?;
+        let receiver = self
+            .execution_state_sender
+            .send_request(move |callback| Request::ReadMultiValuesBytes { id, keys, callback })?;
+        state.read_multi_values_queries.register(receiver)
     }
 
-    pub(crate) async fn find_keys_by_prefix(
-        &self,
+    fn read_multi_values_bytes_wait(
+        &mut self,
+        promise: &Self::ReadMultiValuesBytes,
+    ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        let values = state.read_multi_values_queries.wait(*promise)?;
+        for value in &values {
+            if let Some(value) = &value {
+                self.runtime_counts
+                    .increment_bytes_read(&self.runtime_limits, value.len() as u64)?;
+            }
+        }
+        Ok(values)
+    }
+
+    fn read_value_bytes_new(
+        &mut self,
+        key: Vec<u8>,
+    ) -> Result<Self::ReadValueBytes, ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
+        self.runtime_counts
+            .increment_num_reads(&self.runtime_limits)?;
+        let receiver = self
+            .execution_state_sender
+            .send_request(move |callback| Request::ReadValueBytes { id, key, callback })?;
+        state.read_value_queries.register(receiver)
+    }
+
+    fn read_value_bytes_wait(
+        &mut self,
+        promise: &Self::ReadValueBytes,
+    ) -> Result<Option<Vec<u8>>, ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        let value = state.read_value_queries.wait(*promise)?;
+        if let Some(value) = &value {
+            self.runtime_counts
+                .increment_bytes_read(&self.runtime_limits, value.len() as u64)?;
+        }
+        Ok(value)
+    }
+
+    fn find_keys_by_prefix_new(
+        &mut self,
         key_prefix: Vec<u8>,
+    ) -> Result<Self::FindKeysByPrefix, ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
+        self.runtime_counts
+            .increment_num_reads(&self.runtime_limits)?;
+        let receiver = self.execution_state_sender.send_request(move |callback| {
+            Request::FindKeysByPrefix {
+                id,
+                key_prefix,
+                callback,
+            }
+        })?;
+        state.find_keys_queries.register(receiver)
+    }
+
+    fn find_keys_by_prefix_wait(
+        &mut self,
+        promise: &Self::FindKeysByPrefix,
     ) -> Result<Vec<Vec<u8>>, ExecutionError> {
-        // Read keys matching a prefix. We have to collect since iterators do not pass the wit barrier
-        let application_id = self.application_id();
-        let state = self.active_view_user_states_mut().await;
-        let view = state
-            .get(&application_id)
-            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked(application_id))?;
-        let keys = view.find_keys_by_prefix(&key_prefix).await?;
-        self.increment_num_reads().await?;
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        let keys = state.find_keys_queries.wait(*promise)?;
         let mut read_size = 0;
         for key in &keys {
             read_size += key.len();
         }
-        self.increment_bytes_read(read_size as u64).await?;
+        self.runtime_counts
+            .increment_bytes_read(&self.runtime_limits, read_size as u64)?;
         Ok(keys)
     }
 
-    pub(crate) async fn find_key_values_by_prefix(
-        &self,
+    fn find_key_values_by_prefix_new(
+        &mut self,
         key_prefix: Vec<u8>,
+    ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError> {
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
+        self.runtime_counts
+            .increment_num_reads(&self.runtime_limits)?;
+        let receiver = self.execution_state_sender.send_request(move |callback| {
+            Request::FindKeyValuesByPrefix {
+                id,
+                key_prefix,
+                callback,
+            }
+        })?;
+        state.find_key_values_queries.register(receiver)
+    }
+
+    fn find_key_values_by_prefix_wait(
+        &mut self,
+        promise: &Self::FindKeyValuesByPrefix,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
-        // Read key/values matching a prefix. We have to collect since iterators do not pass the wit barrier
-        let application_id = self.application_id();
-        let state = self.active_view_user_states_mut().await;
-        let view = state
-            .get(&application_id)
-            .ok_or_else(|| ExecutionError::ApplicationStateNotLocked(application_id))?;
-        let key_values = view.find_key_values_by_prefix(&key_prefix).await?;
-        self.increment_num_reads().await?;
+        let id = self.application_id()?;
+        let state = self.view_user_states.entry(id).or_default();
+        let key_values = state.find_key_values_queries.wait(*promise)?;
         let mut read_size = 0;
         for (key, value) in &key_values {
             read_size += key.len() + value.len();
         }
-        self.increment_bytes_read(read_size as u64).await?;
+        self.runtime_counts
+            .increment_bytes_read(&self.runtime_limits, read_size as u64)?;
         Ok(key_values)
     }
 }
 
-impl<'a, C> ExecutionRuntime<'a, C, false>
-where
-    C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
-    C::Extra: ExecutionRuntimeContext,
-{
-    pub(crate) fn service_runtime_actor(
-        &self,
-    ) -> (RuntimeActor<&Self, ServiceRequest>, ServiceActorRuntime) {
-        let (sender, receiver) = futures::channel::mpsc::unbounded();
-        let actor = RuntimeActor::new(self, receiver);
-        let sender = ServiceActorRuntime::new(sender);
-        (actor, sender)
-    }
-
-    /// Note that queries are not available from writable contexts.
-    pub(crate) async fn try_query_application(
-        &self,
-        queried_id: UserApplicationId,
-        argument: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        // Load the application.
-        let (code, description) = self.load_service(queried_id).await?;
-        // Make the call to user code.
-        let query_context = crate::QueryContext {
-            chain_id: self.chain_id,
-        };
-        self.applications_mut().push(ApplicationStatus {
-            id: queried_id,
+impl ContractSyncRuntime {
+    /// Main entry point to start executing a user action.
+    pub(crate) fn run_action(
+        execution_state_sender: ExecutionStateSender,
+        application_id: UserApplicationId,
+        chain_id: ChainId,
+        runtime_limits: RuntimeLimits,
+        initial_remaining_fuel: u64,
+        action: UserAction,
+    ) -> Result<(Vec<ExecutionResult>, RuntimeCounts), ExecutionError> {
+        let mut runtime = SyncRuntimeInternal::new(
+            chain_id,
+            execution_state_sender,
+            runtime_limits,
+            initial_remaining_fuel,
+        );
+        let (code, description) = runtime.load_contract(application_id)?;
+        let signer = action.signer();
+        runtime.applications.push(ApplicationStatus {
+            id: application_id,
             parameters: description.parameters,
-            signer: None,
+            signer,
         });
-
-        let (runtime_actor, runtime_sender) = self.service_runtime_actor();
-        let mut code = code.instantiate_with_actor_runtime(runtime_sender)?;
-        let value_future =
-            tokio::task::spawn_blocking(move || code.handle_query(query_context, argument));
-        runtime_actor.run().await?;
-        let value = value_future.await??;
-        self.applications_mut().pop();
-        Ok(value)
+        let runtime = ContractSyncRuntime::new(runtime);
+        let execution_result = {
+            let mut code = code.instantiate(runtime.clone())?;
+            match action {
+                UserAction::Initialize(context, argument) => code.initialize(context, argument)?,
+                UserAction::Operation(context, operation) => {
+                    code.execute_operation(context, operation)?
+                }
+                UserAction::Message(context, message) => code.execute_message(context, message)?,
+            }
+        };
+        let mut runtime = runtime
+            .into_inner()
+            .expect("Runtime clones should have been freed by now");
+        assert_eq!(runtime.applications.len(), 1);
+        assert_eq!(runtime.applications[0].id, application_id);
+        // Check that all sessions were properly closed.
+        if let Some(session_id) = runtime.session_manager.states.keys().next() {
+            return Err(ExecutionError::SessionWasNotClosed(*session_id));
+        }
+        // Adds the results of the last call to the execution results.
+        runtime.execution_results.push(ExecutionResult::User(
+            application_id,
+            execution_result.with_authenticated_signer(signer),
+        ));
+        Ok((runtime.execution_results, runtime.runtime_counts))
     }
 }
 
-impl<'a, C> ExecutionRuntime<'a, C, true>
-where
-    C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
-    C::Extra: ExecutionRuntimeContext,
-{
-    pub(crate) fn contract_runtime_actor(
-        &self,
-    ) -> (
-        RuntimeActor<async_lock::RwLock<&Self>, ContractRequest>,
-        ContractActorRuntime,
-    ) {
-        let (sender, receiver) = futures::channel::mpsc::unbounded();
-        let actor = RuntimeActor::new(async_lock::RwLock::new(self), receiver);
-        let sender = ContractActorRuntime::new(sender);
-        (actor, sender)
+impl ContractRuntime for ContractSyncRuntime {
+    fn remaining_fuel(&mut self) -> Result<u64, ExecutionError> {
+        let this = self.as_inner();
+        Ok(this.runtime_counts.remaining_fuel)
     }
 
-    pub(crate) async fn remaining_fuel(&self) -> u64 {
-        self.runtime_counts.lock().await.remaining_fuel
+    fn set_remaining_fuel(&mut self, remaining_fuel: u64) -> Result<(), ExecutionError> {
+        let mut this = self.as_inner();
+        this.runtime_counts.remaining_fuel = remaining_fuel;
+        Ok(())
     }
 
-    pub(crate) async fn runtime_counts(&self) -> RuntimeCounts {
-        *self.runtime_counts.lock().await
-    }
-
-    pub(crate) async fn set_remaining_fuel(&self, remaining_fuel: u64) {
-        self.runtime_counts.lock().await.remaining_fuel = remaining_fuel;
-    }
-
-    pub(crate) async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError> {
-        let view = self
-            .execution_state_mut()
-            .simple_users
-            .try_load_entry_mut(&self.application_id())
-            .await?;
-        let state = view.get().to_vec();
-        // Remember the view. This will prevent reentrancy.
-        self.active_simple_user_states_mut()
-            .insert(self.application_id(), view);
-        Ok(state)
-    }
-
-    pub(crate) fn save_and_unlock_my_state(&self, state: Vec<u8>) -> Result<(), ExecutionError> {
-        // Make the view available again.
-        let application_id = self.application_id();
-        match self.active_simple_user_states_mut().remove(&application_id) {
-            Some(mut view) => {
-                // Set the state.
-                view.set(state);
-                Ok(())
-            }
-            None => Err(ExecutionError::ApplicationStateNotLocked(application_id)),
+    fn try_read_and_lock_my_state(&mut self) -> Result<Option<Vec<u8>>, ExecutionError> {
+        let mut this = self.as_inner();
+        let this = this.deref_mut();
+        let id = this.application_id()?;
+        let state = this.simple_user_states.entry(id).or_default();
+        if state.locked {
+            return Ok(None);
         }
+        let receiver = this
+            .execution_state_sender
+            .send_request(|callback| Request::ReadSimpleUserState { id, callback })?;
+        let bytes = receiver.recv_response()?;
+        state.locked = true;
+        Ok(Some(bytes))
     }
 
-    pub(crate) fn unlock_my_state(&self) {
-        self.active_simple_user_states_mut()
-            .remove(&self.application_id());
-    }
-
-    pub(crate) async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {
-        // Update the write costs
-        let size = batch.size() as u64;
-        self.increment_bytes_written(size).await?;
-        // Write the batch and make the view available again.
-        let application_id = self.application_id();
-        match self
-            .active_view_user_states_mut()
-            .await
-            .remove(&application_id)
-        {
-            Some(mut view) => {
-                let stored_size = view.total_size().sum_i32()?;
-                view.write_batch(batch).await?;
-                let new_stored_size = view.total_size().sum_i32()?;
-                let increment = new_stored_size - stored_size;
-                self.update_stored_size(increment).await?;
-                Ok(())
-            }
-            None => Err(ExecutionError::ApplicationStateNotLocked(application_id)),
+    fn save_and_unlock_my_state(&mut self, bytes: Vec<u8>) -> Result<bool, ExecutionError> {
+        let mut this = self.as_inner();
+        let this = this.deref_mut();
+        let id = this.application_id()?;
+        let state = this.simple_user_states.entry(id).or_default();
+        if !state.locked {
+            return Ok(false);
         }
+        let receiver =
+            this.execution_state_sender
+                .send_request(|callback| Request::SaveSimpleUserState {
+                    id,
+                    bytes,
+                    callback,
+                })?;
+        receiver.recv_response()?;
+        state.locked = false;
+        Ok(true)
     }
 
-    pub(crate) async fn try_call_application(
-        &self,
+    fn try_call_application(
+        &mut self,
         authenticated: bool,
         callee_id: UserApplicationId,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError> {
-        let caller = self
-            .applications_mut()
-            .last()
-            .expect("caller must exist")
-            .clone();
-        // Load the application.
-        let (code, description) = self.load_contract(callee_id).await?;
-        // Change the owners of forwarded sessions.
-        self.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
-        // Make the call to user code.
-        let authenticated_signer = match caller.signer {
-            Some(signer) if authenticated => Some(signer),
-            _ => None,
+        let (callee_context, authenticated_signer, code) = {
+            let mut this = self.as_inner();
+            let caller = this.applications.last().expect("caller must exist").clone();
+            // Load the application.
+            let (code, description) = this.load_contract(callee_id)?;
+            // Change the owners of forwarded sessions.
+            this.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
+            // Make the call to user code.
+            let authenticated_signer = match caller.signer {
+                Some(signer) if authenticated => Some(signer),
+                _ => None,
+            };
+            let authenticated_caller_id = authenticated.then_some(caller.id);
+            let callee_context = crate::CalleeContext {
+                chain_id: this.chain_id,
+                authenticated_signer,
+                authenticated_caller_id,
+            };
+            this.applications.push(ApplicationStatus {
+                id: callee_id,
+                parameters: description.parameters,
+                // Allow further nested calls to be authenticated if this one is.
+                signer: authenticated_signer,
+            });
+            (callee_context, authenticated_signer, code)
         };
-        let authenticated_caller_id = authenticated.then_some(caller.id);
-        let callee_context = crate::CalleeContext {
-            chain_id: self.chain_id,
-            authenticated_signer,
-            authenticated_caller_id,
-        };
-        self.applications_mut().push(ApplicationStatus {
-            id: callee_id,
-            parameters: description.parameters,
-            // Allow further nested calls to be authenticated if this one is.
-            signer: authenticated_signer,
-        });
-        let (runtime_actor, runtime_sender) = self.contract_runtime_actor();
-        let mut code = code.instantiate_with_actor_runtime(runtime_sender)?;
-        let raw_result_future = tokio::task::spawn_blocking(move || {
-            code.handle_application_call(callee_context, argument, forwarded_sessions)
-        });
-        runtime_actor.run().await?;
-        let raw_result = raw_result_future.await??;
-        self.applications_mut().pop();
+        let mut code = code.instantiate(self.clone())?;
+        let raw_result =
+            code.handle_application_call(callee_context, argument, forwarded_sessions)?;
+        {
+            let mut this = self.as_inner();
+            this.applications.pop();
 
-        // Interpret the results of the call.
-        self.execution_results_mut().push(ExecutionResult::User(
-            callee_id,
-            raw_result
-                .execution_result
-                .with_authenticated_signer(authenticated_signer),
-        ));
-        let sessions =
-            self.make_sessions(raw_result.create_sessions, callee_id, self.application_id());
-        let result = CallResult {
-            value: raw_result.value,
-            sessions,
-        };
-        Ok(result)
+            // Interpret the results of the call.
+            this.execution_results.push(ExecutionResult::User(
+                callee_id,
+                raw_result
+                    .execution_result
+                    .with_authenticated_signer(authenticated_signer),
+            ));
+            let caller_id = this.application_id()?;
+            let sessions = this.make_sessions(raw_result.create_sessions, callee_id, caller_id);
+            let result = CallResult {
+                value: raw_result.value,
+                sessions,
+            };
+            Ok(result)
+        }
     }
 
-    pub(crate) async fn try_call_session(
-        &self,
+    fn try_call_session(
+        &mut self,
         authenticated: bool,
         session_id: SessionId,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError> {
-        let callee_id = session_id.application_id;
-        let caller = self
-            .applications_mut()
-            .last()
-            .expect("caller must exist")
-            .clone();
-        // Load the application.
-        let (code, description) = self.load_contract(callee_id).await?;
-        // Change the owners of forwarded sessions.
-        self.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
-        // Load the session.
-        let session_state = self.try_load_session(session_id, self.application_id())?;
-        // Make the call to user code.
-        let authenticated_signer = match caller.signer {
-            Some(signer) if authenticated => Some(signer),
-            _ => None,
+        let (callee_context, authenticated_signer, session_state, code) = {
+            let mut this = self.as_inner();
+            let callee_id = session_id.application_id;
+            let caller = this.applications.last().expect("caller must exist").clone();
+            // Load the application.
+            let (code, description) = this.load_contract(callee_id)?;
+            // Change the owners of forwarded sessions.
+            this.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
+            // Load the session.
+            let session_state = this.try_load_session(session_id, caller.id)?;
+            // Make the call to user code.
+            let authenticated_signer = match caller.signer {
+                Some(signer) if authenticated => Some(signer),
+                _ => None,
+            };
+            let authenticated_caller_id = authenticated.then_some(caller.id);
+            let callee_context = crate::CalleeContext {
+                chain_id: this.chain_id,
+                authenticated_signer,
+                authenticated_caller_id,
+            };
+            this.applications.push(ApplicationStatus {
+                id: callee_id,
+                parameters: description.parameters,
+                // Allow further nested calls to be authenticated if this one is.
+                signer: authenticated_signer,
+            });
+            (callee_context, authenticated_signer, session_state, code)
         };
-        let authenticated_caller_id = authenticated.then_some(caller.id);
-        let callee_context = crate::CalleeContext {
-            chain_id: self.chain_id,
-            authenticated_signer,
-            authenticated_caller_id,
-        };
-        self.applications_mut().push(ApplicationStatus {
-            id: callee_id,
-            parameters: description.parameters,
-            // Allow further nested calls to be authenticated if this one is.
-            signer: authenticated_signer,
-        });
-        let (runtime_actor, runtime_sender) = self.contract_runtime_actor();
-        let mut code = code.instantiate_with_actor_runtime(runtime_sender)?;
-        let raw_result_future = tokio::task::spawn_blocking(move || {
-            code.handle_session_call(callee_context, session_state, argument, forwarded_sessions)
-        });
-        runtime_actor.run().await?;
-        let (raw_result, session_state) = raw_result_future.await??;
-        self.applications_mut().pop();
+        let mut code = code.instantiate(self.clone())?;
+        let (raw_result, session_state) =
+            code.handle_session_call(callee_context, session_state, argument, forwarded_sessions)?;
+        {
+            let mut this = self.as_inner();
+            this.applications.pop();
 
-        // Interpret the results of the call.
-        if raw_result.close_session {
-            // Terminate the session.
-            self.try_close_session(session_id, self.application_id())?;
-        } else {
-            // Save the session.
-            self.try_save_session(session_id, self.application_id(), session_state)?;
+            // Interpret the results of the call.
+            let caller_id = this.application_id()?;
+            if raw_result.close_session {
+                // Terminate the session.
+                this.try_close_session(session_id, caller_id)?;
+            } else {
+                // Save the session.
+                this.try_save_session(session_id, caller_id, session_state)?;
+            }
+            let inner_result = raw_result.inner;
+            let callee_id = session_id.application_id;
+            this.execution_results.push(ExecutionResult::User(
+                callee_id,
+                inner_result
+                    .execution_result
+                    .with_authenticated_signer(authenticated_signer),
+            ));
+            let sessions = this.make_sessions(inner_result.create_sessions, callee_id, caller_id);
+            let result = CallResult {
+                value: inner_result.value,
+                sessions,
+            };
+            Ok(result)
         }
-        let inner_result = raw_result.inner;
-        self.execution_results_mut().push(ExecutionResult::User(
-            callee_id,
-            inner_result
-                .execution_result
-                .with_authenticated_signer(authenticated_signer),
-        ));
-        let sessions = self.make_sessions(
-            inner_result.create_sessions,
-            callee_id,
-            self.application_id(),
+    }
+}
+
+impl ServiceSyncRuntime {
+    pub(crate) fn run_query(
+        execution_state_sender: ExecutionStateSender,
+        application_id: UserApplicationId,
+        context: crate::QueryContext,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        let runtime = SyncRuntimeInternal::new(
+            context.chain_id,
+            execution_state_sender,
+            RuntimeLimits::default(),
+            0,
         );
-        let result = CallResult {
-            value: inner_result.value,
-            sessions,
+        ServiceSyncRuntime::new(runtime).try_query_application(application_id, query)
+    }
+}
+
+impl ServiceRuntime for ServiceSyncRuntime {
+    type TryQueryApplication = Vec<u8>;
+
+    /// Note that queries are not available from writable contexts.
+    // TODO(#1152): make synchronous
+    fn try_query_application_new(
+        &mut self,
+        queried_id: UserApplicationId,
+        argument: Vec<u8>,
+    ) -> Result<Self::TryQueryApplication, ExecutionError> {
+        let (query_context, code) = {
+            let mut this = self.as_inner();
+
+            // Load the application.
+            let (code, description) = this.load_service(queried_id)?;
+            // Make the call to user code.
+            let query_context = crate::QueryContext {
+                chain_id: this.chain_id,
+            };
+            this.applications.push(ApplicationStatus {
+                id: queried_id,
+                parameters: description.parameters,
+                signer: None,
+            });
+            (query_context, code)
         };
-        Ok(result)
+        let mut code = code.instantiate(self.clone())?;
+        let promise = code.handle_query(query_context, argument)?;
+        {
+            let mut this = self.as_inner();
+            this.applications.pop();
+        }
+        Ok(promise)
+    }
+
+    fn try_query_application_wait(
+        &mut self,
+        promise: &Self::TryQueryApplication,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        Ok(promise.to_vec())
     }
 }

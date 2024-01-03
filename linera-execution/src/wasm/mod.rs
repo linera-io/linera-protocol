@@ -23,9 +23,8 @@ mod wasmtime;
 
 use self::sanitizer::sanitize;
 use crate::{
-    Bytecode, ContractActorRuntime, ContractSyncRuntime, ExecutionError, ServiceActorRuntime,
-    ServiceSyncRuntime, UserContract, UserContractModule, UserService, UserServiceModule,
-    WasmRuntime,
+    Bytecode, ContractSyncRuntime, ExecutionError, ServiceSyncRuntime, UserContract,
+    UserContractModule, UserService, UserServiceModule, WasmRuntime,
 };
 use std::{path::Path, sync::Arc};
 use thiserror::Error;
@@ -89,23 +88,7 @@ impl WasmContractModule {
 }
 
 impl UserContractModule for WasmContractModule {
-    fn instantiate_with_actor_runtime(
-        &self,
-        runtime: ContractActorRuntime,
-    ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError> {
-        match self {
-            #[cfg(feature = "wasmtime")]
-            WasmContractModule::Wasmtime { module } => Ok(Box::new(
-                WasmtimeContractInstance::prepare(module, runtime)?,
-            )),
-            #[cfg(feature = "wasmer")]
-            WasmContractModule::Wasmer { engine, module } => Ok(Box::new(
-                WasmerContractInstance::prepare(engine, module, runtime)?,
-            )),
-        }
-    }
-
-    fn instantiate_with_sync_runtime(
+    fn instantiate(
         &self,
         runtime: ContractSyncRuntime,
     ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError> {
@@ -166,23 +149,7 @@ impl WasmServiceModule {
 }
 
 impl UserServiceModule for WasmServiceModule {
-    fn instantiate_with_actor_runtime(
-        &self,
-        runtime: ServiceActorRuntime,
-    ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError> {
-        match self {
-            #[cfg(feature = "wasmtime")]
-            WasmServiceModule::Wasmtime { module } => {
-                Ok(Box::new(WasmtimeServiceInstance::prepare(module, runtime)?))
-            }
-            #[cfg(feature = "wasmer")]
-            WasmServiceModule::Wasmer { module } => {
-                Ok(Box::new(WasmerServiceInstance::prepare(module, runtime)?))
-            }
-        }
-    }
-
-    fn instantiate_with_sync_runtime(
+    fn instantiate(
         &self,
         runtime: ServiceSyncRuntime,
     ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError> {
