@@ -1,11 +1,17 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! A simplified key value store from which we can implement a key-value store
+//! The Key Value Store and a simplified Key Value Store
+//! The most important traits are:
+//! * [`KeyValueStore`][trait1] which manages the access to a database and is clonable. It has a minimal interface
+//!
+//! [trait1]: common::KeyValueStore
 
 use crate::{
     batch::{Batch, DeletePrefixExpander, SimplifiedBatch, SimplifiedBatchIter},
-    common::{from_bytes_opt, KeyIterable, KeyValueIterable, KeyValueStore, MIN_VIEW_TAG},
+    common::{
+        KeyIterable, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore, MIN_VIEW_TAG,
+    },
 };
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -43,9 +49,9 @@ fn get_journaling_key(base_key: &[u8], tag: u8, pos: u32) -> Result<Vec<u8>, bcs
     Ok(key)
 }
 
-/// Low-level, asynchronous key-value operations with simplified batch
+/// Low-level, asynchronous direct write key-value operations with simplified batch
 #[async_trait]
-pub trait SimplifiedKeyValueStore {
+pub trait DirectWritableKeyValueStore<E> {
     /// The maximal number of items in a simplified transaction
     const MAX_TRANSACT_WRITE_ITEM_SIZE: usize;
 
@@ -55,74 +61,20 @@ pub trait SimplifiedKeyValueStore {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 
-    /// The maximal size of keys that can be stored.
-    const MAX_KEY_SIZE: usize;
-
-    /// The error type.
+    /// The batch type.
     type SimpBatch: SimplifiedBatch + Serialize + DeserializeOwned + Default;
-
-    /// The error type.
-    type Error: Debug + From<bcs::Error>;
-
-    /// Returns type for key search operations.
-    type Keys: KeyIterable<Self::Error>;
-
-    /// Returns type for key-value search operations.
-    type KeyValues: KeyValueIterable<Self::Error>;
-
-    /// Retrieve the number of stream queries.
-    fn max_stream_queries(&self) -> usize;
-
-    /// Retrieves a `Vec<u8>` from the database using the provided `key`.
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
-
-    /// Test whether a key exists in the database
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error>;
-
-    /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
-    async fn read_multi_values_bytes(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
-
-    /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error>;
-
-    /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
-    async fn find_key_values_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::Error>;
 
     /// Writes the simplified `batch` in the database. After the writing, the
     /// simplified batch must be empty.
-    async fn write_simplified_batch(
-        &self,
-        simp_batch: &mut Self::SimpBatch,
-    ) -> Result<(), Self::Error>;
+    async fn write_simplified_batch(&self, simp_batch: &mut Self::SimpBatch) -> Result<(), E>;
+}
 
-    /// Reads a single `key` and deserializes the result if present.
-    async fn read_value<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
-    where
-        Self::Error: From<bcs::Error>,
-    {
-        from_bytes_opt(&self.read_value_bytes(key).await?)
-    }
-
-    /// Reads multiple `keys` and deserializes the results if present.
-    async fn read_multi_values<V: DeserializeOwned + Send>(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<V>>, Self::Error>
-    where
-        Self::Error: From<bcs::Error>,
-    {
-        let mut values = Vec::with_capacity(keys.len());
-        for entry in self.read_multi_values_bytes(keys).await? {
-            values.push(from_bytes_opt(&entry)?);
-        }
-        Ok(values)
-    }
+/// Low-level, asynchronous direct read/write key-value operations with simplified batch
+pub trait DirectKeyValueStore:
+    ReadableKeyValueStore<Self::Error> + DirectWritableKeyValueStore<Self::Error>
+{
+    /// The error type.
+    type Error: Debug + From<bcs::Error>;
 }
 
 /// The header that contains the current state of the journal.
@@ -142,7 +94,7 @@ pub struct JournalingKeyValueStore<K> {
 #[async_trait]
 impl<K> DeletePrefixExpander for &JournalingKeyValueStore<K>
 where
-    K: SimplifiedKeyValueStore + Send + Sync,
+    K: DirectKeyValueStore + Send + Sync,
 {
     type Error = K::Error;
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
@@ -160,16 +112,14 @@ where
 }
 
 #[async_trait]
-impl<K> KeyValueStore for JournalingKeyValueStore<K>
+impl<K> ReadableKeyValueStore<K::Error> for JournalingKeyValueStore<K>
 where
-    K: SimplifiedKeyValueStore + Send + Sync,
+    K: DirectKeyValueStore + Send + Sync,
     K::Error: From<JournalConsistencyError>,
 {
-    /// The reqding constants do not change
-    const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
+    /// The size constant do not change
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
     /// The basic types do not change
-    type Error = K::Error;
     type Keys = K::Keys;
     type KeyValues = K::KeyValues;
 
@@ -178,33 +128,43 @@ where
         self.client.max_stream_queries()
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, K::Error> {
         self.client.read_value_bytes(key).await
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, K::Error> {
         self.client.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
+    ) -> Result<Vec<Option<Vec<u8>>>, K::Error> {
         self.client.read_multi_values_bytes(keys).await
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, K::Error> {
         self.client.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::Error> {
+    ) -> Result<Self::KeyValues, K::Error> {
         self.client.find_key_values_by_prefix(key_prefix).await
     }
+}
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
+#[async_trait]
+impl<K> WritableKeyValueStore<K::Error> for JournalingKeyValueStore<K>
+where
+    K: DirectKeyValueStore + Send + Sync,
+    K::Error: From<JournalConsistencyError>,
+{
+    /// The size constant do not change
+    const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
+
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), K::Error> {
         let mut simp_batch = K::SimpBatch::from_batch(self, batch).await?;
         if Self::is_fastpath_feasible(&simp_batch) {
             self.client.write_simplified_batch(&mut simp_batch).await
@@ -214,7 +174,7 @@ where
         }
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), K::Error> {
         let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
         let value = self.read_value::<JournalHeader>(&key).await?;
         if let Some(header) = value {
@@ -224,9 +184,17 @@ where
     }
 }
 
+impl<K> KeyValueStore for JournalingKeyValueStore<K>
+where
+    K: DirectKeyValueStore + Send + Sync,
+    K::Error: From<JournalConsistencyError> + From<bcs::Error>,
+{
+    type Error = K::Error;
+}
+
 impl<K> JournalingKeyValueStore<K>
 where
-    K: SimplifiedKeyValueStore + Send + Sync,
+    K: DirectKeyValueStore + Send + Sync,
     K::Error: From<JournalConsistencyError>,
 {
     /// Resolves the database by using the header that has been retrieved

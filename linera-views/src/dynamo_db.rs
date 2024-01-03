@@ -8,7 +8,10 @@ use crate::{
         ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
-    simple_store::{JournalConsistencyError, SimplifiedKeyValueStore, JournalingKeyValueStore},
+    simple_store::{
+        DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
+        JournalingKeyValueStore,
+    },
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
 use async_lock::{Semaphore, SemaphoreGuard};
@@ -32,7 +35,6 @@ use aws_sdk_dynamodb::{
     Client,
 };
 use aws_smithy_types::error::operation::BuildError;
-//use bcs::serialized_size;
 use futures::future::join_all;
 use linera_base::ensure;
 use std::{collections::HashMap, env, mem, str::FromStr, sync::Arc};
@@ -655,7 +657,7 @@ impl DynamoDbStoreInternal {
         &self,
         attribute: &str,
         key_prefix: &[u8],
-    ) -> Result<QueryResults, DynamoDbContextError> {
+    ) -> Result<QueryResponses, DynamoDbContextError> {
         ensure!(
             !key_prefix.is_empty(),
             DynamoDbContextError::ZeroLengthKeyPrefix
@@ -681,7 +683,7 @@ impl DynamoDbStoreInternal {
                 }
             }
         }
-        Ok(QueryResults {
+        Ok(QueryResponses {
             prefix_len: key_prefix.len(),
             responses,
         })
@@ -853,21 +855,9 @@ impl KeyValueIterable<DynamoDbContextError> for DynamoDbKeyValues {
 
 #[async_trait]
 impl ReadableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
-=======
-impl SimplifiedKeyValueStore for DynamoDbStoreInternal {
-    const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_SIZE;
-    const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
-    const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
->>>>>>> 20148f88 (Change the code of DynamoDb to se the new scheme.)
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
-    // The DynamoDB does not support the `DeletePrefix` operation.
-    // Therefore it does not make sense to have a delete prefix and they have to
-    // be downloaded for making a list.
-    // Also we remove the deletes that are followed by inserts on the same key because
-    // the TransactWriteItem and BatchWriteItem are not going to work that way.
-    type SimpBatch = SimpleUnorderedBatch;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -920,8 +910,16 @@ impl SimplifiedKeyValueStore for DynamoDbStoreInternal {
 }
 
 #[async_trait]
-impl WritableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
+impl DirectWritableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
+    const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_SIZE;
+    const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
     const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
+    // The DynamoDB does not support the `DeletePrefix` operation.
+    // Therefore it does not make sense to have a delete prefix and they have to
+    // be downloaded for making a list.
+    // Also we remove the deletes that are followed by inserts on the same key because
+    // the TransactWriteItem and BatchWriteItem are not going to work that way.
+    type SimpBatch = SimpleUnorderedBatch;
 
     async fn write_simplified_batch(
         &self,
@@ -931,8 +929,8 @@ impl WritableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
         for key in mem::take(&mut simp_batch.deletions) {
             tb.insert_delete_request(key, self)?;
         }
-        for key_value in mem::take(&mut simp_batch.insertions) {
-            tb.insert_put_request(key_value.0, key_value.1, self)?;
+        for (key, value) in mem::take(&mut simp_batch.insertions) {
+            tb.insert_put_request(key, value, self)?;
         }
         if !tb.transacts.is_empty() {
             let _guard = self.acquire().await;
@@ -946,7 +944,7 @@ impl WritableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
     }
 }
 
-impl KeyValueStore for DynamoDbStoreInternal {
+impl DirectKeyValueStore for DynamoDbStoreInternal {
     type Error = DynamoDbContextError;
 }
 

@@ -25,7 +25,10 @@ use crate::{
         ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
-    simple_store::{JournalConsistencyError, SimplifiedKeyValueStore, JournalingKeyValueStore},
+    simple_store::{
+        DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
+        JournalingKeyValueStore,
+    },
     value_splitting::DatabaseConsistencyError,
 };
 use async_lock::{Semaphore, SemaphoreGuard};
@@ -127,11 +130,6 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
-    // We cannot directly write the batch because if a delete is followed by a write then
-    // the delete takes priority. See the sentence "The first tie-breaking rule when two
-    // cells have the same write timestamp is that dead cells win over live cells"
-    // from https://github.com/scylladb/scylladb/blob/master/docs/dev/timestamp-conflict-resolution.md
-    type SimpBatch = UnorderedBatch;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -182,11 +180,16 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
 }
 
 #[async_trait]
-impl WritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
+impl DirectWritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = usize::MAX;
     /// The total size is 16M
     const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = 16000000;
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
+    // We cannot directly write the batch because if a delete is followed by a write then
+    // the delete takes priority. See the sentence "The first tie-breaking rule when two
+    // cells have the same write timestamp is that dead cells win over live cells"
+    // from https://github.com/scylladb/scylladb/blob/master/docs/dev/timestamp-conflict-resolution.md
+    type SimpBatch = UnorderedBatch;
 
     async fn write_simplified_batch(
         &self,
@@ -198,7 +201,7 @@ impl WritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     }
 }
 
-impl KeyValueStore for ScyllaDbStoreInternal {
+impl DirectKeyValueStore for ScyllaDbStoreInternal {
     type Error = ScyllaDbContextError;
 }
 

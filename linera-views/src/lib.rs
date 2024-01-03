@@ -59,7 +59,7 @@ pub mod batch;
 /// The definitions used for the `KeyValueStore` and `Context`.
 pub mod common;
 
-/// The definitions used for the `SimplifiedKeyValueStore`
+/// The definitions used for the `DirectKeyValueStore` and the `SimplifiedKeyValueStore`
 pub mod simple_store;
 
 /// The code for handling big values by splitting them into several small ones.

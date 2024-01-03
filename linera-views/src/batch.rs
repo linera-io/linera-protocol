@@ -398,7 +398,7 @@ pub trait SimplifiedBatch: Sized + Send + Sync {
         value_size: &mut usize,
     ) -> Result<bool, bcs::Error>;
 
-    /// returns the serialization and clears the simplified batch
+    /// Returns the serialization and clears the simplified batch
     fn to_bytes(&mut self) -> Result<Vec<u8>, bcs::Error>;
 
     /// Adds an individual delete operation
