@@ -60,7 +60,7 @@ pub mod batch;
 pub mod common;
 
 /// The definitions used for the `SimplifiedKeyValueStore`
-pub mod simp_store;
+pub mod simple_store;
 
 /// The code for handling big values by splitting them into several small ones.
 pub mod value_splitting;
