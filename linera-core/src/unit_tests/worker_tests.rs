@@ -214,25 +214,43 @@ async fn make_transfer_certificate_for_epoch<S>(
         None => make_first_block(chain_id),
         Some(cert) => make_child_block(&cert.value),
     };
-    let message_counts = incoming_messages
-        .iter()
-        .map(|_| 0)
-        .chain(iter::once(1))
-        .collect();
+
+    let mut message_counts = Vec::new();
+    let mut message_count = 0;
+    let mut messages = Vec::new();
+    for incoming_message in &incoming_messages {
+        if matches!(incoming_message.action, MessageAction::Reject)
+            && matches!(incoming_message.event.kind, MessageKind::Tracked)
+        {
+            messages.push(OutgoingMessage {
+                authenticated_signer: incoming_message.event.authenticated_signer,
+                destination: Destination::Recipient(incoming_message.origin.sender),
+                kind: MessageKind::Bouncing,
+                message: incoming_message.event.message.clone(),
+            });
+            message_count += 1;
+        }
+        message_counts.push(message_count);
+    }
+
     let block = Block {
         epoch,
         incoming_messages,
         ..block_template
     }
     .with_simple_transfer(recipient, amount);
-    let messages = match recipient {
-        Recipient::Account(account) => vec![direct_outgoing_message(
-            account.chain_id,
-            MessageKind::Tracked,
-            SystemMessage::Credit { account, amount },
-        )],
-        Recipient::Burn => Vec::new(),
-    };
+    match recipient {
+        Recipient::Account(account) => {
+            messages.push(direct_outgoing_message(
+                account.chain_id,
+                MessageKind::Tracked,
+                SystemMessage::Credit { account, amount },
+            ));
+            message_count += 1;
+        }
+        Recipient::Burn => (),
+    }
+    message_counts.push(message_count);
     let state_hash = make_state_hash(system_state).await;
     let value = HashedValue::new_confirmed(ExecutedBlock {
         block,
@@ -2406,6 +2424,147 @@ where
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.hash()), info.block_hash);
     assert!(info.manager.pending.is_none());
+}
+
+#[test(tokio::test)]
+async fn test_memory_handle_certificate_with_rejected_transfer() {
+    let storage = MemoryStorage::make_test_storage(None).await;
+    run_test_handle_certificate_with_rejected_transfer(storage).await;
+}
+
+#[cfg(feature = "rocksdb")]
+#[test(tokio::test)]
+async fn test_rocks_db_handle_certificate_with_rejected_transfer() {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let storage = RocksDbStorage::make_test_storage(None).await;
+    run_test_handle_certificate_with_rejected_transfer(storage).await;
+}
+
+#[cfg(feature = "aws")]
+#[test(tokio::test)]
+async fn test_dynamo_db_handle_certificate_with_rejected_transfer() {
+    let storage = DynamoDbStorage::make_test_storage(None).await;
+    run_test_handle_certificate_with_rejected_transfer(storage).await;
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_certificate_with_rejected_transfer() {
+    let storage = ScyllaDbStorage::make_test_storage(None).await;
+    run_test_handle_certificate_with_rejected_transfer(storage).await;
+}
+
+async fn run_test_handle_certificate_with_rejected_transfer<S>(storage: S)
+where
+    S: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
+    let sender_key_pair = KeyPair::generate();
+    let recipient_key_pair = KeyPair::generate();
+    let (committee, mut worker) = init_worker_with_chains(
+        storage,
+        vec![
+            (
+                ChainDescription::Root(1),
+                sender_key_pair.public(),
+                Amount::from_tokens(5),
+            ),
+            (
+                ChainDescription::Root(2),
+                recipient_key_pair.public(),
+                Amount::ZERO,
+            ),
+        ],
+    )
+    .await;
+
+    // Make two transfers.
+    let certificate0 = make_transfer_certificate(
+        ChainDescription::Root(1),
+        &sender_key_pair,
+        Recipient::root(2),
+        Amount::from_tokens(3),
+        Vec::new(),
+        &committee,
+        Amount::from_tokens(2),
+        &worker,
+        None,
+    )
+    .await;
+
+    worker
+        .fully_handle_certificate(certificate0.clone(), vec![])
+        .await
+        .unwrap();
+
+    let certificate1 = make_transfer_certificate(
+        ChainDescription::Root(1),
+        &sender_key_pair,
+        Recipient::root(2),
+        Amount::from_tokens(2),
+        Vec::new(),
+        &committee,
+        Amount::ZERO,
+        &worker,
+        Some(&certificate0),
+    )
+    .await;
+
+    worker
+        .fully_handle_certificate(certificate1.clone(), vec![])
+        .await
+        .unwrap();
+
+    // Reject the first transfer and try to use the money of the second one.
+    let certificate = make_transfer_certificate(
+        ChainDescription::Root(2),
+        &recipient_key_pair,
+        Recipient::root(3),
+        Amount::ONE,
+        vec![
+            IncomingMessage {
+                origin: Origin::chain(ChainId::root(1)),
+                event: Event {
+                    certificate_hash: certificate0.hash(),
+                    height: BlockHeight::ZERO,
+                    index: 0,
+                    authenticated_signer: None,
+                    kind: MessageKind::Tracked,
+                    timestamp: Timestamp::from(0),
+                    message: Message::System(SystemMessage::Credit {
+                        account: Account::chain(ChainId::root(2)),
+                        amount: Amount::from_tokens(3),
+                    }),
+                },
+                action: MessageAction::Reject,
+            },
+            IncomingMessage {
+                origin: Origin::chain(ChainId::root(1)),
+                event: Event {
+                    certificate_hash: certificate1.hash(),
+                    height: BlockHeight::from(1),
+                    index: 0,
+                    authenticated_signer: None,
+                    kind: MessageKind::Tracked,
+                    timestamp: Timestamp::from(0),
+                    message: Message::System(SystemMessage::Credit {
+                        account: Account::chain(ChainId::root(2)),
+                        amount: Amount::from_tokens(2),
+                    }),
+                },
+                action: MessageAction::Accept,
+            },
+        ],
+        &committee,
+        Amount::from_tokens(1),
+        &worker,
+        None,
+    )
+    .await;
+    worker
+        .fully_handle_certificate(certificate.clone(), vec![])
+        .await
+        .unwrap();
 }
 
 #[test(tokio::test)]
