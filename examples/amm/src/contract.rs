@@ -10,7 +10,7 @@ use amm::{AmmError, ApplicationCall, Message, Operation};
 use async_trait::async_trait;
 use fungible::{Account, AccountOwner, Destination, FungibleTokenAbi};
 use linera_sdk::{
-    base::{Amount, ApplicationId, SessionId, WithContractAbi},
+    base::{Amount, ApplicationId, Owner, SessionId, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
     OperationContext, OutgoingMessage, SessionCallResult, ViewStateStorage,
@@ -71,6 +71,7 @@ impl Contract for Amm {
                 input_token_idx,
                 input_amount,
             } => {
+                Self::check_account_authentication(None, context.authenticated_signer, owner)?;
                 self.execute_swap(owner, input_token_idx, input_amount)
                     .await?;
             }
@@ -93,6 +94,11 @@ impl Contract for Amm {
                 input_token_idx,
                 input_amount,
             } => {
+                Self::check_account_authentication(
+                    context.authenticated_caller_id,
+                    context.authenticated_signer,
+                    owner,
+                )?;
                 if context.chain_id == system_api::current_application_id().creation.chain_id {
                     self.execute_swap(owner, input_token_idx, input_amount)
                         .await?;
@@ -122,6 +128,19 @@ impl Contract for Amm {
 }
 
 impl Amm {
+    /// authenticate the originator of the message
+    fn check_account_authentication(
+        authenticated_application_id: Option<ApplicationId>,
+        authenticated_signer: Option<Owner>,
+        owner: AccountOwner,
+    ) -> Result<(), AmmError> {
+        match owner {
+            AccountOwner::User(address) if authenticated_signer == Some(address) => Ok(()),
+            AccountOwner::Application(id) if authenticated_application_id == Some(id) => Ok(()),
+            _ => Err(AmmError::IncorrectAuthentication),
+        }
+    }
+
     async fn execute_order_local(&mut self, operation: Operation) -> Result<(), AmmError> {
         match operation {
             Operation::Swap {

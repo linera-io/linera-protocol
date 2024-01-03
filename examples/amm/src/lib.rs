@@ -99,6 +99,10 @@ pub enum AmmError {
     #[error("Invalid pool balance")]
     InvalidPoolBalanceError,
 
+    /// Failed authentication
+    #[error("failed authentication")]
+    IncorrectAuthentication,
+
     #[error("Token not found in the pool")]
     TokenNotFoundInPoolError,
 
