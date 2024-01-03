@@ -596,20 +596,14 @@ impl ClientContext {
         ViewError: From<S::ContextError>,
     {
         info!("Loading bytecode files...");
-        let contract_path = contract.canonicalize().unwrap();
-        let contract_bytecode = Bytecode::load_from_file(&contract_path)
-            .await
-            .context(format!(
-                "failed to load contract bytecode from {:?}",
-                &contract_path
-            ))?;
-        let service_path = service.canonicalize().unwrap();
-        let service_bytecode = Bytecode::load_from_file(&service_path)
-            .await
-            .context(format!(
-                "failed to load service bytecode from {:?}",
-                &service_path
-            ))?;
+        let contract_bytecode = Bytecode::load_from_file(&contract).await.context(format!(
+            "failed to load contract bytecode from {:?}",
+            &contract
+        ))?;
+        let service_bytecode = Bytecode::load_from_file(&service).await.context(format!(
+            "failed to load service bytecode from {:?}",
+            &service
+        ))?;
 
         info!("Publishing bytecode...");
         let bytecode_id = loop {
@@ -2582,9 +2576,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 let genesis_config = match (genesis_config_path, faucet) {
                     (Some(genesis_config_path), None) => GenesisConfig::read(genesis_config_path)?,
                     (None, Some(url)) => cli_wrappers::Faucet::request_genesis_config(url).await?,
-                    (_, _) => {
-                        bail!("Either --faucet or --genesis must be specified, but not both")
-                    }
+                    (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
                 };
                 let timestamp = genesis_config.timestamp;
                 let chains = with_other_chains
