@@ -13,9 +13,9 @@ use linera_base::{
 use linera_execution::system::SystemChannel;
 use linera_service::cli_wrappers::{ApplicationWrapper, ClientWrapper, Network};
 use port_selector::random_free_tcp_port;
-use rand::{seq::IteratorRandom as _, SeedableRng};
+use rand::{Rng as _, SeedableRng};
 use serde_json::Value;
-use std::{collections::BTreeMap, path::Path, sync::Arc};
+use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
 use tempfile::tempdir;
 use tokio::time::Instant;
 
@@ -42,6 +42,10 @@ enum Args {
         /// The seed for the PRNG determining the pattern of transactions.
         #[arg(long = "seed", default_value = "0")]
         seed: u64,
+
+        #[arg(long = "uniform")]
+        /// If set, each chain receives the exact same amount of transfers.
+        uniform: bool,
     },
 }
 
@@ -54,7 +58,8 @@ async fn main() -> Result<()> {
             transactions,
             faucet,
             seed,
-        } => benchmark_with_fungible(users, transactions, faucet, seed).await,
+            uniform,
+        } => benchmark_with_fungible(users, transactions, faucet, seed, uniform).await,
     }
 }
 
@@ -63,6 +68,7 @@ async fn benchmark_with_fungible(
     n_transactions: usize,
     faucet: String,
     seed: u64,
+    uniform: bool,
 ) -> Result<()> {
     // Create the clients and initialize the wallets
     let publisher = ClientWrapper::new(Arc::new(tempdir().unwrap()), Network::Grpc, None, n_users);
@@ -87,8 +93,8 @@ async fn benchmark_with_fungible(
     let publisher_chain_id = publisher.default_chain().unwrap();
     let services = join_all(clients.iter().map(|client| async move {
         let free_port = random_free_tcp_port().unwrap();
-        let node_service = client.run_node_service(free_port).await.unwrap();
         let chain_id = client.default_chain().unwrap();
+        let node_service = client.run_node_service(free_port).await.unwrap();
         let channel = SystemChannel::PublishedBytecodes;
         node_service
             .subscribe(chain_id, publisher_chain_id, channel)
@@ -99,7 +105,7 @@ async fn benchmark_with_fungible(
     .await;
 
     // Publish the fungible application bytecode.
-    let path = Path::new("../examples/fungible").canonicalize().unwrap();
+    let path = Path::new("examples/fungible").canonicalize().unwrap();
     let (contract, service) = publisher.build_application(&path, "fungible", true).await?;
     let bytecode_id = publisher.publish_bytecode(contract, service, None).await?;
 
@@ -112,6 +118,8 @@ async fn benchmark_with_fungible(
     // Create the fungible applications
     let apps = join_all(clients.iter().zip(services).enumerate().map(
         |(i, (client, node_service))| async move {
+            let owner = client.get_owner().unwrap();
+            let default_chain = client.default_chain().unwrap();
             let initial_state = InitialState {
                 accounts: BTreeMap::from([(
                     AccountOwner::User(client.get_owner().unwrap()),
@@ -119,18 +127,16 @@ async fn benchmark_with_fungible(
                 )]),
             };
             let parameters = Parameters::new(format!("FUN{}", i).leak());
-            let application_id = client
+            let application_id = node_service
                 .create_application::<FungibleTokenAbi>(
+                    &default_chain,
                     &bytecode_id,
                     &parameters,
                     &initial_state,
                     &[],
-                    None,
                 )
                 .await
                 .unwrap();
-            let owner = client.get_owner().unwrap();
-            let default_chain = client.default_chain().unwrap();
             let context = BenchmarkContext {
                 application_id,
                 owner,
@@ -148,16 +154,19 @@ async fn benchmark_with_fungible(
     .await;
 
     // create transaction futures
-    let total_transactions = n_users * n_transactions;
     let mut expected_balances = vec![vec![Amount::ZERO; apps.len()]; apps.len()];
     let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
 
-    let transaction_futures = (0..n_transactions).flat_map(|_| {
+    let transaction_futures = (0..n_transactions).flat_map(|transaction_i| {
         apps.iter()
             .enumerate()
             .map(|(sender_i, (sender_app, sender_context, _))| {
-                let (receiver_i, (_, receiver_context, _)) =
-                    apps.iter().enumerate().choose(&mut rng).unwrap();
+                let receiver_i = if uniform {
+                    (transaction_i + sender_i + 1) % apps.len()
+                } else {
+                    rng.gen_range(0..apps.len())
+                };
+                let (_, receiver_context, _) = &apps[receiver_i];
                 expected_balances[receiver_i][sender_i]
                     .try_add_assign(Amount::ONE)
                     .unwrap();
@@ -173,7 +182,7 @@ async fn benchmark_with_fungible(
             .collect::<Vec<_>>()
     });
 
-    println!("ROUND 1");
+    println!("Making {} transactions", n_users * n_transactions);
 
     let timer = Instant::now();
 
@@ -183,7 +192,7 @@ async fn benchmark_with_fungible(
     let tps: f64 = successes as f64 / timer.elapsed().as_secs_f64();
 
     println!("Successes: {:?}", successes);
-    println!("Failures:  {:?}", total_transactions - successes);
+    println!("Failures:  {:?}", n_users * n_transactions - successes);
 
     println!("TPS:       {}", tps);
 
@@ -200,6 +209,20 @@ async fn benchmark_with_fungible(
                             .await
                             .unwrap(),
                     );
+                    for i in 0.. {
+                        tokio::time::sleep(Duration::from_secs(i)).await;
+                        let actual_balance =
+                            app.get_amount(&AccountOwner::User(context.owner)).await;
+                        if actual_balance == expected_balance {
+                            break;
+                        }
+                        if i == 4 {
+                            panic!(
+                                "Expected balance: {}, actual balance: {}",
+                                expected_balance, actual_balance
+                            );
+                        }
+                    }
                     assert_eq!(
                         app.get_amount(&AccountOwner::User(context.owner)).await,
                         expected_balance
