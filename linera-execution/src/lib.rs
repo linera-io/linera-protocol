@@ -471,29 +471,11 @@ pub trait BaseRuntime {
 }
 
 pub trait ServiceRuntime: BaseRuntime {
-    type TryQueryApplication: fmt::Debug + Send;
-
     /// Queries another application.
     fn try_query_application(
         &mut self,
         queried_id: UserApplicationId,
         argument: Vec<u8>,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        let promise = self.try_query_application_new(queried_id, argument)?;
-        self.try_query_application_wait(&promise)
-    }
-
-    /// Queries another application (new).
-    fn try_query_application_new(
-        &mut self,
-        queried_id: UserApplicationId,
-        argument: Vec<u8>,
-    ) -> Result<Self::TryQueryApplication, ExecutionError>;
-
-    /// Queries another application (wait).
-    fn try_query_application_wait(
-        &mut self,
-        promise: &Self::TryQueryApplication,
     ) -> Result<Vec<u8>, ExecutionError>;
 }
 

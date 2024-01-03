@@ -1013,15 +1013,12 @@ impl ServiceSyncRuntime {
 }
 
 impl ServiceRuntime for ServiceSyncRuntime {
-    type TryQueryApplication = Vec<u8>;
-
     /// Note that queries are not available from writable contexts.
-    // TODO(#1152): make synchronous
-    fn try_query_application_new(
+    fn try_query_application(
         &mut self,
         queried_id: UserApplicationId,
         argument: Vec<u8>,
-    ) -> Result<Self::TryQueryApplication, ExecutionError> {
+    ) -> Result<Vec<u8>, ExecutionError> {
         let (query_context, code) = {
             let mut this = self.as_inner();
 
@@ -1039,18 +1036,11 @@ impl ServiceRuntime for ServiceSyncRuntime {
             (query_context, code)
         };
         let mut code = code.instantiate(self.clone())?;
-        let promise = code.handle_query(query_context, argument)?;
+        let response = code.handle_query(query_context, argument)?;
         {
             let mut this = self.as_inner();
             this.applications.pop();
         }
-        Ok(promise)
-    }
-
-    fn try_query_application_wait(
-        &mut self,
-        promise: &Self::TryQueryApplication,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        Ok(promise.to_vec())
+        Ok(response)
     }
 }

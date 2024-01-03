@@ -214,13 +214,7 @@ macro_rules! impl_service_system_api {
                 application: service_system_api::ApplicationId,
                 argument: &[u8],
             ) -> Result<Result<Vec<u8>, String>, Self::Error> {
-                let promise = ServiceRuntime::try_query_application_new(
-                    self,
-                    application.into(),
-                    argument.to_vec(),
-                )?;
-
-                ServiceRuntime::try_query_application_wait(self, &promise)
+                ServiceRuntime::try_query_application(self, application.into(), argument.to_vec())
                     // TODO(#1153): remove
                     .map(Ok)
             }
