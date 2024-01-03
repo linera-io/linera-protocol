@@ -94,7 +94,7 @@ where
 
     fn clear(&mut self) {
         self.delete_storage_first = true;
-        self.update = Some(Box::default());
+        self.update = None;
         *self.hash.get_mut() = None;
     }
 }

@@ -573,7 +573,7 @@ where
             };
             return Ok(test);
         }
-        if self.was_cleared {
+        if self.delete_storage_first {
             return Ok(false);
         }
         if contains_key(&self.deleted_prefixes, index) {
