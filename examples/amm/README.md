@@ -3,16 +3,16 @@
 # Automated Market Maker (AMM) Example Application
 
 This example implements an Automated Market Maker (AMM) which demonstrates DeFi capabilities of the 
-Linera protocol. Pre-requisites for the AMM application is the `funglible` application, as we will
+Linera protocol. Prerequisite for the AMM application is the `fungilble` application, as we will
 be adding, removing liquidity and also perform a swap.
 
 # How it works 
 
-It supports the following operations
+It supports the following operations.
 
 - Swap: For a given input token and an input amount, it swaps that token amount for an 
 amount of the other token calculated based on the current AMM ratio. Note: The `Swap` operations 
-are needed to performed from a remote chain 
+need to be performed from a remote chain 
 
 - Add Liquidity: This operation allows adding liquidity to the AMM. Given a maximum 
 `token0` and `token1` amount that you're willing to add, it adds liquidity such that you'll be 
@@ -20,7 +20,7 @@ adding at most `max_token0_amount` of `token0` and `max_token1_amount` of `token
 will be calculated based on the current AMM ratio. The owner, in this case, refers to the user 
 adding liquidity, which currently can only be a chain owner.
 
-- Remove Liquidity: This is a liquidity removal operation. Given a token idx of the token you'd 
+- Remove Liquidity: This withdraws tokens from the AMM. Given the index of the token you'd 
 like to remove (can be 0 or 1), and an amount of that token that you'd like to remove, it calculates 
 how much of the other token will also be removed based on the current AMM ratio. Then it removes 
 the amounts from both tokens as a removal of liquidity. The owner, in this context, is the user 
@@ -37,13 +37,13 @@ cargo build
 export PATH=$PWD/target/debug:$PATH
 ```
 
-To start the local linera network
+To start the local Linera network
 
 ```bash
 linera net up --testing-prng-seed 37
 ```
 
-This will start the local linera network. We used the
+This will start the local Linera network. We used the
 test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
 presentation.
 
@@ -56,16 +56,32 @@ CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 CHAIN_2=e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3
 ```
 
-Now we have to publish and deploy the AMM application,
+Now we have to publish and create the fungible applications,
 
 ```bash
-appid1=YOUR_FUNGIBLE_APP1_ID
-appid2=YOUR_FUNGIBLE_APP2_ID
-(cd examples/counter && cargo build --release)
-AMM_APPLICATION_ID=(linera publish-and-create ../target/wasm32-unknown-unknown/release/amm_{contract,service}.wasm --json-parameters "{\"tokens\":["\"$appid1\"","\"$appid2\""]}")
+(cd examples/fungible && cargo build --release)
+
+FUN1_APP_ID=$(linera publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
+    --json-argument "{ \"accounts\": {
+        \"User:$OWNER_1\": \"100.\",
+        \"User:$OWNER_2\": \"150.\"
+    } }" \
+    --json-parameters "{ \"ticker_symbol\": \"FUN1\" }" \
+)
+
+FUN2_APP_ID=$(linera publish-and-create ./examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
+    --json-argument "{ \"accounts\": {
+        \"User:$OWNER_1\": \"100.\",
+        \"User:$OWNER_2\": \"150.\"
+    } }" \
+    --json-parameters "{ \"ticker_symbol\": \"FUN2\" }" \
+)
+
+(cd examples/amm && cargo build --release)
+AMM_APPLICATION_ID=$(linera publish-and-create ./examples/target/wasm32-unknown-unknown/release/amm_{contract,service}.wasm --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN2_APP_ID\""]}")
 ```
 
-## Using the Token Application
+## Using the AMM Application
 
 First, a node service for the current wallet has to be started:
 
@@ -76,7 +92,7 @@ linera service --port $PORT &
 
 ### Using GraphiQL
 
-Before performing any operation we need to provide liquidity to it, we will `AddLiquidity` operation,
+Before performing any operation we need to provide liquidity to it, so we will use the `AddLiquidity` operation,
 navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID`
 
 To perform `AddLiquidity` operation:
@@ -90,7 +106,7 @@ mutation{
         max_token0_amount: "50",
         max_token1_amount: "40",
       }
-    } 		
+    }
   )
 }
 ```
@@ -108,7 +124,7 @@ mutation {
   )
 }
 ```
-Note: Above mutation has to perform from `http://localhost:8080`
+Note: The above mutation has to be performed from `http://localhost:8080`
 
 Now to perform `Swap` operation, naviage to `http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID` and
 perform the following mutation
@@ -122,7 +138,7 @@ mutation{
         input_token_idx: 1,
         input_amount: "1",
       }
-    } 		
+    }
   )
 }
 ```

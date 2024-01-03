@@ -2,15 +2,15 @@
 
 # Counter Example Application
 
-This example application implements a simple counter contract, it is initialised with an 
+This example application implements a simple counter contract, it is initialized with an 
 unsigned integer which can be increased by an operation `increment`.
 
 # How It Works
 
-It is a very basic Linera application, which is initialised by an `u64` which can be incremented 
+It is a very basic Linera application, which is initialized by an `u64` which can be incremented 
 by an `u64`.
 
-For example if contract was initialised with 1, querying the contract would give us 1. Now if we want 
+For example if the contract was initialized with 1, querying the contract would give us 1. Now if we want to
 `increment` it by 3. We will have to perform an operation with the parameter being 3. Now querying the
 application would give us 4 (1+3 = 4)
 
@@ -25,13 +25,13 @@ cargo build
 export PATH=$PWD/target/debug:$PATH
 ```
 
-To start the local linera network
+To start the local Linera network
 
 ```bash
 linera net up --testing-prng-seed 37
 ```
 
-This will start the local linera network. We used the
+This will start the local Linera network. We used the
 test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
 presentation.
 
@@ -48,7 +48,7 @@ Now, compile the `counter` application WebAssembly binaries, publish and create 
 (cd examples/counter && cargo build --release)
 
 APPLICATION_ID=$(linera publish-and-create \
-  ../target/wasm32-unknown-unknown/release/counter_{contract,service}.wasm \
+  examples/target/wasm32-unknown-unknown/release/counter_{contract,service}.wasm \
   --json-argument "1")
 ```
 

@@ -27,13 +27,13 @@ cargo build
 export PATH=$PWD/target/debug:$PATH
 ```
 
-To start the local linera network
+To start the local Linera network
 
 ```bash
 linera net up --testing-prng-seed 37
 ```
 
-This will start the local linera network. We used the
+This will start the local Linera network. We used the
 test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
 presentation.
 
@@ -49,7 +49,7 @@ Now, compile the `reentrant-counter` application WebAssembly binaries, publish a
 ```bash
 (cd examples/reentrant-counter && cargo build --release)
 APPLICATION_ID=$(linera publish-and-create \
-  ../target/wasm32-unknown-unknown/release/reentrant_counter_{contract,service}.wasm \
+  examples/target/wasm32-unknown-unknown/release/reentrant_counter_{contract,service}.wasm \
   --json-argument "1")
 ```
 
