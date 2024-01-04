@@ -607,6 +607,8 @@ where
                     }
                 );
                 // Skip execution of rejected message.
+                message_counts
+                    .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
                 continue;
             }
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
@@ -721,6 +723,11 @@ where
         WASM_BYTES_WRITTEN_PER_BLOCK
             .with_label_values(&[])
             .observe(tracker.bytes_written as f64);
+
+        assert_eq!(
+            message_counts.len(),
+            block.incoming_messages.len() + block.operations.len()
+        );
         Ok(BlockExecutionOutcome {
             messages,
             message_counts,
