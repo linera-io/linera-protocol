@@ -13,7 +13,7 @@ edition = "2021"
 [features]
 default = ["wasmer", "rocksdb"]
 test = ["linera-views/test"]
-benchmark = ["linera-base/test"]
+benchmark = ["linera-base/test", "dep:fungible", "dep:port-selector"]
 wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb", "linera-storage/rocksdb"]
@@ -37,6 +37,7 @@ comfy-table = { workspace = true }
 current_platform = "0.2.0"
 dirs = { workspace = true }
 file-lock = "2.1.10"
+fungible = { workspace = true, optional = true }
 futures = { workspace = true }
 hex = { workspace = true }
 http = { workspace = true }
@@ -51,6 +52,7 @@ linera-storage = { workspace = true }
 linera-views = { workspace = true }
 parse_duration = { workspace = true }
 pathdiff = { workspace = true, optional = true }
+port-selector = { workspace = true, optional = true }
 prometheus = { workspace = true }
 rand = { workspace = true }
 rand07 = { workspace = true }
@@ -111,3 +113,8 @@ path = "src/proxy.rs"
 [[bin]]
 name = "linera-schema-export"
 path = "src/schema_export.rs"
+
+[[bin]]
+name = "linera-benchmark"
+path = "src/benchmark.rs"
+required-features = ["benchmark"]

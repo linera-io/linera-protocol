@@ -829,8 +829,9 @@ impl NodeService {
             "mutation {{ subscribe(\
                  subscriberChainId: \"{subscriber_chain_id}\", \
                  publisherChainId: \"{publisher_chain_id}\", \
-                 channel: \"{channel}\") \
-             }}"
+                 channel: \"{}\") \
+             }}",
+            channel.to_value(),
         );
         self.query_node(query).await?;
         Ok(())

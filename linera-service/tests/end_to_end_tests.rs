@@ -2100,6 +2100,52 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     net.terminate().await.unwrap();
 }
 
+#[cfg(feature = "benchmark")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, None) ; "kubernetes_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) {
+    use linera_service::util::CommandExt as _;
+    use tokio::process::Command;
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    // Create runner and two clients.
+    let (mut net, client1) = config.instantiate().await.unwrap();
+
+    let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
+
+    let mut faucet = client1
+        .run_faucet(None, chain1, Amount::from_tokens(1))
+        .await
+        .unwrap();
+
+    let path = util::resolve_binary("linera-benchmark", env!("CARGO_PKG_NAME"))
+        .await
+        .unwrap();
+    // The benchmark looks for examples/fungible, so it needs to run in the project root.
+    let current_dir = std::env::current_exe().unwrap();
+    let dir = current_dir.ancestors().nth(4).unwrap();
+    let mut command = Command::new(path);
+    command
+        .current_dir(dir)
+        .arg("fungible")
+        .args(["--wallets", "2"])
+        .args(["--transactions", "1"])
+        .arg("--uniform")
+        .args(["--faucet".to_string(), faucet.url()]);
+    let stdout = command.spawn_and_wait_for_stdout().await.unwrap();
+    let json = serde_json::from_str::<serde_json::Value>(&stdout).unwrap();
+    assert_eq!(json["successes"], 2);
+
+    faucet.ensure_is_running().unwrap();
+    faucet.terminate().await.unwrap();
+    net.ensure_is_running().await.unwrap();
+    net.terminate().await.unwrap();
+}
+
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]

@@ -3441,6 +3441,7 @@ dependencies = [
  "matching-engine",
  "parse_duration",
  "pathdiff",
+ "port-selector",
  "prometheus",
  "proptest",
  "rand 0.7.3",
@@ -4444,6 +4445,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "38f6d39893cca0701371e3c27294f09797214b86f1fb951b89ade8ec04e2abab"
 dependencies = [
  "plotters-backend",
+]
+
+[[package]]
+name = "port-selector"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd119ef551a50cd8939f0ff93bd062891f7b0dbb771b4a05df8a9c13aebaff68"
+dependencies = [
+ "rand 0.8.5",
 ]
 
 [[package]]
