@@ -632,18 +632,18 @@ where
                             event: message.event.clone(),
                         }
                     );
-                    if !message.event.is_tracked() {
+                    if message.event.is_tracked() {
+                        // Bounce the message.
+                        self.execution_state
+                            .bounce_message(context, message.event.message.clone())
+                            .await
+                            .map_err(|err| {
+                                ChainError::ExecutionError(err, chain_execution_context)
+                            })?
+                    } else {
                         // Nothing to do.
-                        message_counts.push(
-                            u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?,
-                        );
-                        continue;
+                        Vec::new()
                     }
-                    // Bounce the message.
-                    self.execution_state
-                        .bounce_message(context, message.event.message.clone())
-                        .await
-                        .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?
                 }
             };
             let mut messages_out = self
