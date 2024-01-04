@@ -1,10 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
+use anyhow::{bail, Context as _, Result};
 use clap::Parser as _;
 use fungible::{Account, AccountOwner, FungibleTokenAbi, InitialState, Parameters};
-use futures::future::join_all;
+use futures::future::{join_all, try_join_all};
 use linera_base::{
     async_graphql::InputType,
     data_types::Amount,
@@ -72,46 +72,47 @@ async fn benchmark_with_fungible(
     uniform: bool,
 ) -> Result<()> {
     // Create the clients and initialize the wallets
-    let publisher = ClientWrapper::new(
-        Arc::new(tempdir().unwrap()),
-        Network::Grpc,
-        None,
-        num_wallets,
-    );
-    publisher.wallet_init(&[], Some(&faucet)).await.unwrap();
+    let dir = Arc::new(tempdir().context("cannot create temp dir")?);
+    let publisher = ClientWrapper::new(dir, Network::Grpc, None, num_wallets);
+    publisher.wallet_init(&[], Some(&faucet)).await?;
     let clients = (0..num_wallets)
-        .map(|n| ClientWrapper::new(Arc::new(tempdir().unwrap()), Network::Grpc, None, n))
-        .collect::<Vec<_>>();
-    join_all(clients.iter().map(|client| async {
-        client.wallet_init(&[], Some(&faucet)).await.unwrap();
-    }))
-    .await;
+        .map(|n| {
+            let dir = Arc::new(tempdir().context("cannot create temp dir")?);
+            Ok(ClientWrapper::new(dir, Network::Grpc, None, n))
+        })
+        .collect::<Result<Vec<_>, anyhow::Error>>()?;
+    try_join_all(
+        clients
+            .iter()
+            .map(|client| client.wallet_init(&[], Some(&faucet))),
+    )
+    .await?;
 
     // Sync their balances (sanity check)
-    join_all(clients.iter().map(|user| async move {
-        let chain = user.default_chain().unwrap();
-        let balance = user.synchronize_balance(chain).await.unwrap();
-        info!("User {:?} has {}", user.get_owner(), balance)
+    try_join_all(clients.iter().map(|user| async move {
+        let chain = user.default_chain().context("missing default chain")?;
+        let balance = user.synchronize_balance(chain).await?;
+        info!("User {:?} has {}", user.get_owner(), balance);
+        Ok::<_, anyhow::Error>(())
     }))
-    .await;
+    .await?;
 
     // Start the node services and subscribe to the publisher chain.
-    let publisher_chain_id = publisher.default_chain().unwrap();
-    let services = join_all(clients.iter().map(|client| async move {
-        let free_port = random_free_tcp_port().unwrap();
-        let chain_id = client.default_chain().unwrap();
-        let node_service = client.run_node_service(free_port).await.unwrap();
+    let publisher_chain_id = publisher.default_chain().context("missing default chain")?;
+    let services = try_join_all(clients.iter().map(|client| async move {
+        let free_port = random_free_tcp_port().context("no free TCP port")?;
+        let chain_id = client.default_chain().context("missing default chain")?;
+        let node_service = client.run_node_service(free_port).await?;
         let channel = SystemChannel::PublishedBytecodes;
         node_service
             .subscribe(chain_id, publisher_chain_id, channel)
-            .await
-            .unwrap();
-        node_service
+            .await?;
+        Ok::<_, anyhow::Error>(node_service)
     }))
-    .await;
+    .await?;
 
     // Publish the fungible application bytecode.
-    let path = Path::new("examples/fungible").canonicalize().unwrap();
+    let path = Path::new("examples/fungible");
     let (contract, service) = publisher.build_application(&path, "fungible", true).await?;
     let bytecode_id = publisher.publish_bytecode(contract, service, None).await?;
 
@@ -122,13 +123,13 @@ async fn benchmark_with_fungible(
     }
 
     // Create the fungible applications
-    let apps = join_all(clients.iter().zip(services).enumerate().map(
+    let apps = try_join_all(clients.iter().zip(services).enumerate().map(
         |(i, (client, node_service))| async move {
-            let owner = client.get_owner().unwrap();
-            let default_chain = client.default_chain().unwrap();
+            let owner = client.get_owner().context("missing owner")?;
+            let default_chain = client.default_chain().context("missing default chain")?;
             let initial_state = InitialState {
                 accounts: BTreeMap::from([(
-                    AccountOwner::User(client.get_owner().unwrap()),
+                    AccountOwner::User(owner),
                     Amount::from_tokens(num_transactions as u128),
                 )]),
             };
@@ -141,8 +142,7 @@ async fn benchmark_with_fungible(
                     &initial_state,
                     &[],
                 )
-                .await
-                .unwrap();
+                .await?;
             let context = BenchmarkContext {
                 application_id,
                 owner,
@@ -151,13 +151,12 @@ async fn benchmark_with_fungible(
             let app = FungibleApp(
                 node_service
                     .make_application(&context.default_chain, &context.application_id)
-                    .await
-                    .unwrap(),
+                    .await?,
             );
-            (app, context, node_service)
+            Ok::<_, anyhow::Error>((app, context, node_service))
         },
     ))
-    .await;
+    .await?;
 
     // create transaction futures
     let mut expected_balances = vec![vec![Amount::ZERO; apps.len()]; apps.len()];
@@ -209,9 +208,9 @@ async fn benchmark_with_fungible(
         }}"
     );
 
-    join_all(apps.iter().zip(expected_balances).map(
+    try_join_all(apps.iter().zip(expected_balances).map(
         |((_, context, node_service), expected_balances)| {
-            join_all(apps.iter().zip(expected_balances).map(
+            try_join_all(apps.iter().zip(expected_balances).map(
                 |((_, sender_context, _), expected_balance)| async move {
                     let app = FungibleApp(
                         node_service
@@ -219,8 +218,7 @@ async fn benchmark_with_fungible(
                                 &context.default_chain,
                                 &sender_context.application_id,
                             )
-                            .await
-                            .unwrap(),
+                            .await?,
                     );
                     for i in 0.. {
                         tokio::time::sleep(Duration::from_secs(i)).await;
@@ -230,9 +228,10 @@ async fn benchmark_with_fungible(
                             break;
                         }
                         if i == 4 {
-                            panic!(
+                            bail!(
                                 "Expected balance: {}, actual balance: {}",
-                                expected_balance, actual_balance
+                                expected_balance,
+                                actual_balance
                             );
                         }
                     }
@@ -240,11 +239,12 @@ async fn benchmark_with_fungible(
                         app.get_amount(&AccountOwner::User(context.owner)).await,
                         expected_balance
                     );
+                    Ok(())
                 },
             ))
         },
     ))
-    .await;
+    .await?;
 
     Ok(())
 }
