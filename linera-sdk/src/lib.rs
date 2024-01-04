@@ -216,8 +216,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>;
 
     /// Calls another application.
-    // TODO(#488): Currently, the application state is persisted before the call and restored after the call in
-    // order to allow reentrant calls to use the most up-to-date state.
     async fn call_application<A: ContractAbi + Send>(
         &mut self,
         authenticated: bool,
@@ -226,23 +224,17 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<(A::Response, Vec<SessionId>), Self::Error> {
         let call_bytes = bcs::to_bytes(call)?;
-        let (response_bytes, ids) =
-            Self::Storage::execute_with_released_state(self, move || async move {
-                crate::contract::system_api::call_application_without_persisting_state(
-                    authenticated,
-                    application.forget_abi(),
-                    &call_bytes,
-                    forwarded_sessions,
-                )
-            })
-            .await;
+        let (response_bytes, ids) = crate::contract::system_api::call_application(
+            authenticated,
+            application.forget_abi(),
+            &call_bytes,
+            forwarded_sessions,
+        );
         let response = bcs::from_bytes(&response_bytes)?;
         Ok((response, ids))
     }
 
     /// Calls a session from another application.
-    // TODO(#488): Currently, the application state is persisted before the call and restored after the call in
-    // order to allow reentrant calls to use the most up-to-date state.
     async fn call_session<A: ContractAbi + Send>(
         &mut self,
         authenticated: bool,
@@ -251,16 +243,12 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<(A::Response, Vec<SessionId>), Self::Error> {
         let call_bytes = bcs::to_bytes(call)?;
-        let (response_bytes, ids) =
-            Self::Storage::execute_with_released_state(self, move || async move {
-                crate::contract::system_api::call_session_without_persisting_state(
-                    authenticated,
-                    session.forget_abi(),
-                    &call_bytes,
-                    forwarded_sessions,
-                )
-            })
-            .await;
+        let (response_bytes, ids) = crate::contract::system_api::call_session(
+            authenticated,
+            session.forget_abi(),
+            &call_bytes,
+            forwarded_sessions,
+        );
         let response = bcs::from_bytes(&response_bytes)?;
         Ok((response, ids))
     }
