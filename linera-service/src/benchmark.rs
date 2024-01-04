@@ -99,7 +99,8 @@ async fn benchmark_with_fungible(
 
     // Start the node services and subscribe to the publisher chain.
     let publisher_chain_id = publisher.default_chain().context("missing default chain")?;
-    let services = try_join_all(clients.iter().map(|client| async move {
+    let mut services = Vec::new();
+    for client in &clients {
         let free_port = random_free_tcp_port().context("no free TCP port")?;
         let chain_id = client.default_chain().context("missing default chain")?;
         let node_service = client.run_node_service(free_port).await?;
@@ -107,9 +108,8 @@ async fn benchmark_with_fungible(
         node_service
             .subscribe(chain_id, publisher_chain_id, channel)
             .await?;
-        Ok::<_, anyhow::Error>(node_service)
-    }))
-    .await?;
+        services.push(node_service);
+    }
 
     // Publish the fungible application bytecode.
     let path = Path::new("examples/fungible").canonicalize().unwrap();
