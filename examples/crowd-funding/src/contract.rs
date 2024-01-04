@@ -60,11 +60,10 @@ impl Contract for CrowdFunding {
                 if context.chain_id == system_api::current_application_id().creation.chain_id {
                     self.execute_pledge_with_account(owner, amount).await?;
                 } else {
-                    self.execute_pledge_with_transfer(&mut result, owner, amount)
-                        .await?;
+                    self.execute_pledge_with_transfer(&mut result, owner, amount)?;
                 }
             }
-            Operation::Collect => self.collect_pledges().await?,
+            Operation::Collect => self.collect_pledges()?,
             Operation::Cancel => self.cancel_campaign().await?,
         }
 
@@ -108,10 +107,9 @@ impl Contract for CrowdFunding {
                 self.execute_pledge_with_sessions(source, sessions).await?
             }
             ApplicationCall::PledgeWithTransfer { owner, amount } => {
-                self.execute_pledge_with_transfer(&mut result.execution_result, owner, amount)
-                    .await?;
+                self.execute_pledge_with_transfer(&mut result.execution_result, owner, amount)?;
             }
-            ApplicationCall::Collect => self.collect_pledges().await?,
+            ApplicationCall::Collect => self.collect_pledges()?,
             ApplicationCall::Cancel => self.cancel_campaign().await?,
         }
 
@@ -138,7 +136,7 @@ impl CrowdFunding {
     }
 
     /// Adds a pledge from a local account to the remote campaign chain.
-    async fn execute_pledge_with_transfer(
+    fn execute_pledge_with_transfer(
         &mut self,
         result: &mut ExecutionResult<Message>,
         owner: AccountOwner,
@@ -180,7 +178,7 @@ impl CrowdFunding {
         amount: Amount,
     ) -> Result<(), Error> {
         ensure!(amount > Amount::ZERO, Error::EmptyPledge);
-        self.receive_from_account(owner, amount).await?;
+        self.receive_from_account(owner, amount)?;
         self.finish_pledge(owner, amount).await
     }
 
@@ -192,14 +190,12 @@ impl CrowdFunding {
     ) -> Result<(), Error> {
         let sessions = self.check_session_tokens(sessions)?;
 
-        let session_balances = self.query_session_balances(&sessions).await?;
+        let session_balances = self.query_session_balances(&sessions)?;
         let amount = session_balances.iter().sum();
 
         ensure!(amount > Amount::ZERO, Error::EmptyPledge);
 
-        self.collect_session_tokens(sessions, session_balances)
-            .await?;
-
+        self.collect_session_tokens(sessions, session_balances)?;
         self.finish_pledge(source, amount).await
     }
 
@@ -221,7 +217,7 @@ impl CrowdFunding {
     }
 
     /// Gathers the balances in all the pledged sessions.
-    async fn query_session_balances(
+    fn query_session_balances(
         &mut self,
         sessions: &[SessionId<FungibleTokenAbi>],
     ) -> Result<Vec<Amount>, Error> {
@@ -238,13 +234,13 @@ impl CrowdFunding {
     }
 
     /// Collects all tokens in the sessions and places them in custody of the campaign.
-    async fn collect_session_tokens(
+    fn collect_session_tokens(
         &mut self,
         sessions: Vec<SessionId<FungibleTokenAbi>>,
         balances: Vec<Amount>,
     ) -> Result<(), Error> {
         for (session, balance) in sessions.into_iter().zip(balances) {
-            self.receive_from_session(session, balance).await?;
+            self.receive_from_session(session, balance)?;
         }
         Ok(())
     }
@@ -261,17 +257,14 @@ impl CrowdFunding {
                     .saturating_add_assign(amount);
                 Ok(())
             }
-            Status::Complete => {
-                self.send_to(amount, self.initialization_argument_().owner)
-                    .await
-            }
+            Status::Complete => self.send_to(amount, self.initialization_argument_().owner),
             Status::Cancelled => Err(Error::Cancelled),
         }
     }
 
     /// Collects all pledges and completes the campaign if the target has been reached.
-    async fn collect_pledges(&mut self) -> Result<(), Error> {
-        let total = self.balance().await?;
+    fn collect_pledges(&mut self) -> Result<(), Error> {
+        let total = self.balance()?;
 
         match self.status.get() {
             Status::Active => {
@@ -284,8 +277,7 @@ impl CrowdFunding {
             Status::Cancelled => return Err(Error::Cancelled),
         }
 
-        self.send_to(total, self.initialization_argument_().owner)
-            .await?;
+        self.send_to(total, self.initialization_argument_().owner)?;
         self.pledges.clear();
         self.status.set(Status::Complete);
 
@@ -312,19 +304,18 @@ impl CrowdFunding {
             .await
             .expect("view iteration should not fail");
         for (pledger, amount) in pledges {
-            self.send_to(amount, pledger).await?;
+            self.send_to(amount, pledger)?;
         }
 
-        let balance = self.balance().await?;
-        self.send_to(balance, self.initialization_argument_().owner)
-            .await?;
+        let balance = self.balance()?;
+        self.send_to(balance, self.initialization_argument_().owner)?;
         self.status.set(Status::Cancelled);
 
         Ok(())
     }
 
     /// Queries the token application to determine the total amount of tokens in custody.
-    async fn balance(&mut self) -> Result<Amount, Error> {
+    fn balance(&mut self) -> Result<Amount, Error> {
         let owner = AccountOwner::Application(system_api::current_application_id());
         let (response, _) = self.call_application(
             true,
@@ -339,7 +330,7 @@ impl CrowdFunding {
     }
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
-    async fn send_to(&mut self, amount: Amount, owner: AccountOwner) -> Result<(), Error> {
+    fn send_to(&mut self, amount: Amount, owner: AccountOwner) -> Result<(), Error> {
         let account = Account {
             chain_id: system_api::current_chain_id(),
             owner,
@@ -355,11 +346,7 @@ impl CrowdFunding {
     }
 
     /// Calls into the Fungible Token application to receive tokens from the given account.
-    async fn receive_from_account(
-        &mut self,
-        owner: AccountOwner,
-        amount: Amount,
-    ) -> Result<(), Error> {
+    fn receive_from_account(&mut self, owner: AccountOwner, amount: Amount) -> Result<(), Error> {
         let account = Account {
             chain_id: system_api::current_chain_id(),
             owner: AccountOwner::Application(system_api::current_application_id()),
@@ -375,7 +362,7 @@ impl CrowdFunding {
     }
 
     /// Calls into the Fungible Token application to receive tokens from the given account.
-    async fn receive_from_session(
+    fn receive_from_session(
         &mut self,
         session: SessionId<FungibleTokenAbi>,
         amount: Amount,
