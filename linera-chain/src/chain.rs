@@ -322,7 +322,7 @@ where
 
     /// Verifies that this chain is up-to-date and all the messages executed ahead of time
     /// have been properly received by now.
-    pub async fn validate_incoming_messages(&mut self) -> Result<(), ChainError> {
+    pub async fn validate_incoming_messages(&self) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let origins = self.inboxes.indices().await?;
         let inboxes = self.inboxes.try_load_entries(&origins).await?;
