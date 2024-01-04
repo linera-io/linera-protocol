@@ -445,7 +445,8 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionResult<Message> {
     }
 
     /// Adds a tracked message to the execution result. Tracked messages are bounced if
-    /// rejected on the receiving end.
+    /// rejected on the receiving end. To differentiate bounced messages from original
+    /// messages, the entrypoint `handle_message` should check `context.is_bounced`.
     pub fn with_tracked_message(
         mut self,
         destination: impl Into<Destination>,
@@ -462,7 +463,9 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionResult<Message> {
     }
 
     /// Adds a tracked and authenticated message to the execution result. Tracked messages
-    /// are bounced if rejected on the receiving end.
+    /// are bounced if rejected on the receiving end. To differentiate bounced messages
+    /// from original messages, the entrypoint `handle_message` should check
+    /// `context.is_bounced`.
     pub fn with_tracked_authenticated_message(
         mut self,
         destination: impl Into<Destination>,
