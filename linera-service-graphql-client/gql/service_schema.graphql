@@ -428,7 +428,7 @@ Whether an incoming message is accepted or rejected
 scalar MessageAction
 
 """
-The kind of an event being delivered
+The kind of outgoing message being sent
 """
 scalar MessageKind
 

@@ -603,7 +603,7 @@ pub enum MessageKind {
     /// This only concerns certain system messages that cannot fail.
     Protected,
     /// The message cannot be skipped but can be rejected. A receipt must be sent
-    /// when the message is accepted or rejected in a block of the receiver.
+    /// when the message is rejected in a block of the receiver.
     Tracked,
     /// This event is a receipt automatically created when the original event was rejected.
     Bouncing,
@@ -973,4 +973,4 @@ doc_scalar!(
     Message,
     "An message to be sent and possibly executed in the receiver's block."
 );
-doc_scalar!(MessageKind, "The kind of an event being delivered");
+doc_scalar!(MessageKind, "The kind of outgoing message being sent");
