@@ -18,6 +18,7 @@ use serde_json::Value;
 use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
 use tempfile::tempdir;
 use tokio::time::Instant;
+use tracing::info;
 
 #[derive(clap::Parser)]
 #[command(
@@ -27,11 +28,11 @@ use tokio::time::Instant;
 )]
 enum Args {
     Fungible {
-        /// The number of users in the test.
-        #[arg(long = "users", default_value = "4")]
-        users: usize,
+        /// The number of wallets in the test.
+        #[arg(long = "wallets", default_value = "4")]
+        wallets: usize,
 
-        /// The number of transactions being made per user.
+        /// The number of transactions being made per wallet.
         #[arg(long = "transactions", default_value = "4")]
         transactions: usize,
 
@@ -54,26 +55,31 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     match args {
         Args::Fungible {
-            users,
+            wallets,
             transactions,
             faucet,
             seed,
             uniform,
-        } => benchmark_with_fungible(users, transactions, faucet, seed, uniform).await,
+        } => benchmark_with_fungible(wallets, transactions, faucet, seed, uniform).await,
     }
 }
 
 async fn benchmark_with_fungible(
-    n_users: usize,
-    n_transactions: usize,
+    num_wallets: usize,
+    num_transactions: usize,
     faucet: String,
     seed: u64,
     uniform: bool,
 ) -> Result<()> {
     // Create the clients and initialize the wallets
-    let publisher = ClientWrapper::new(Arc::new(tempdir().unwrap()), Network::Grpc, None, n_users);
+    let publisher = ClientWrapper::new(
+        Arc::new(tempdir().unwrap()),
+        Network::Grpc,
+        None,
+        num_wallets,
+    );
     publisher.wallet_init(&[], Some(&faucet)).await.unwrap();
-    let clients = (0..n_users)
+    let clients = (0..num_wallets)
         .map(|n| ClientWrapper::new(Arc::new(tempdir().unwrap()), Network::Grpc, None, n))
         .collect::<Vec<_>>();
     join_all(clients.iter().map(|client| async {
@@ -85,7 +91,7 @@ async fn benchmark_with_fungible(
     join_all(clients.iter().map(|user| async move {
         let chain = user.default_chain().unwrap();
         let balance = user.synchronize_balance(chain).await.unwrap();
-        println!("User {:?} has {}", user.get_owner(), balance)
+        info!("User {:?} has {}", user.get_owner(), balance)
     }))
     .await;
 
@@ -123,7 +129,7 @@ async fn benchmark_with_fungible(
             let initial_state = InitialState {
                 accounts: BTreeMap::from([(
                     AccountOwner::User(client.get_owner().unwrap()),
-                    Amount::from_tokens(n_transactions as u128),
+                    Amount::from_tokens(num_transactions as u128),
                 )]),
             };
             let parameters = Parameters::new(format!("FUN{}", i).leak());
@@ -157,7 +163,7 @@ async fn benchmark_with_fungible(
     let mut expected_balances = vec![vec![Amount::ZERO; apps.len()]; apps.len()];
     let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
 
-    let transaction_futures = (0..n_transactions).flat_map(|transaction_i| {
+    let transaction_futures = (0..num_transactions).flat_map(|transaction_i| {
         apps.iter()
             .enumerate()
             .map(|(sender_i, (sender_app, sender_context, _))| {
@@ -182,7 +188,7 @@ async fn benchmark_with_fungible(
             .collect::<Vec<_>>()
     });
 
-    println!("Making {} transactions", n_users * n_transactions);
+    info!("Making {} transactions", num_wallets * num_transactions);
 
     let timer = Instant::now();
 
@@ -191,10 +197,17 @@ async fn benchmark_with_fungible(
 
     let tps: f64 = successes as f64 / timer.elapsed().as_secs_f64();
 
-    println!("Successes: {:?}", successes);
-    println!("Failures:  {:?}", n_users * n_transactions - successes);
-
-    println!("TPS:       {}", tps);
+    let failures = num_wallets * num_transactions - successes;
+    info!("Successes: {:?}", successes);
+    info!("Failures:  {:?}", failures);
+    info!("TPS:       {:.2}", tps);
+    println!(
+        "{{\
+            \"successes\": {successes},
+            \"failures\": {failures},
+            \"tps\": {tps}
+        }}"
+    );
 
     join_all(apps.iter().zip(expected_balances).map(
         |((_, context, node_service), expected_balances)| {
