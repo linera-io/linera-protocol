@@ -66,6 +66,10 @@ jobs:
     - name: Run some extra execution tests with wasmtime
       run: |
         cargo test --locked -p linera-execution --features wasmtime
+    - name: Run the benchmark test
+      run: |
+        cargo build --locked -p linera-service --bin linera-benchmark --features benchmark
+        cargo test --locked -p linera-service --features benchmark test_end_to_end_fungible_benchmark
     - name: Build Wasm test runner
       # use debug mode to avoid building wasmtime in release mode
       run: |

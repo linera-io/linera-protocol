@@ -112,7 +112,7 @@ async fn benchmark_with_fungible(
     .await?;
 
     // Publish the fungible application bytecode.
-    let path = Path::new("examples/fungible");
+    let path = Path::new("examples/fungible").canonicalize().unwrap();
     let (contract, service) = publisher.build_application(&path, "fungible", true).await?;
     let bytecode_id = publisher.publish_bytecode(contract, service, None).await?;
 
