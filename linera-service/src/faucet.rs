@@ -206,7 +206,7 @@ where
         genesis_config: Arc<GenesisConfig>,
     ) -> anyhow::Result<Self> {
         let start_timestamp = client.storage_client().await.current_time();
-        let start_balance = client.local_balance().await?;
+        let start_balance = client.synchronize_from_validators().await?;
         Ok(Self {
             client: Arc::new(Mutex::new(client)),
             genesis_config,
