@@ -161,8 +161,7 @@ impl CrowdFunding {
             Self::fungible_id()?,
             &call,
             vec![],
-        )
-        .await?;
+        )?;
         // Second, schedule the attribution of the funds to the (remote) campaign.
         let message = Message::PledgeWithAccount { owner, amount };
         result.messages.push(OutgoingMessage {
@@ -228,9 +227,8 @@ impl CrowdFunding {
     ) -> Result<Vec<Amount>, Error> {
         let mut balances = Vec::with_capacity(sessions.len());
         for session in sessions {
-            let (response, _) = self
-                .call_session(false, *session, &fungible::SessionCall::Balance, vec![])
-                .await?;
+            let (response, _) =
+                self.call_session(false, *session, &fungible::SessionCall::Balance, vec![])?;
             match response {
                 FungibleResponse::Balance(balance) => balances.push(balance),
                 response => return Err(Error::UnexpectedFungibleResponse(response)),
@@ -328,14 +326,12 @@ impl CrowdFunding {
     /// Queries the token application to determine the total amount of tokens in custody.
     async fn balance(&mut self) -> Result<Amount, Error> {
         let owner = AccountOwner::Application(system_api::current_application_id());
-        let (response, _) = self
-            .call_application(
-                true,
-                Self::fungible_id()?,
-                &fungible::ApplicationCall::Balance { owner },
-                vec![],
-            )
-            .await?;
+        let (response, _) = self.call_application(
+            true,
+            Self::fungible_id()?,
+            &fungible::ApplicationCall::Balance { owner },
+            vec![],
+        )?;
         match response {
             fungible::FungibleResponse::Balance(balance) => Ok(balance),
             response => Err(Error::UnexpectedFungibleResponse(response)),
@@ -354,8 +350,7 @@ impl CrowdFunding {
             amount,
             destination,
         };
-        self.call_application(true, Self::fungible_id()?, &transfer, vec![])
-            .await?;
+        self.call_application(true, Self::fungible_id()?, &transfer, vec![])?;
         Ok(())
     }
 
@@ -375,8 +370,7 @@ impl CrowdFunding {
             amount,
             destination,
         };
-        self.call_application(true, Self::fungible_id()?, &transfer, vec![])
-            .await?;
+        self.call_application(true, Self::fungible_id()?, &transfer, vec![])?;
         Ok(())
     }
 
@@ -395,7 +389,7 @@ impl CrowdFunding {
             amount,
             destination,
         };
-        self.call_session(false, session, &transfer, vec![]).await?;
+        self.call_session(false, session, &transfer, vec![])?;
         Ok(())
     }
 

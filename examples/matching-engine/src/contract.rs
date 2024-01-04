@@ -217,8 +217,7 @@ impl MatchingEngine {
             destination,
         };
         let token = Self::fungible_id(token_idx).expect("failed to get the token");
-        self.call_application(true, token, &transfer, vec![])
-            .await?;
+        self.call_application(true, token, &transfer, vec![])?;
         Ok(())
     }
 

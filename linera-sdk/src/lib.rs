@@ -216,7 +216,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>;
 
     /// Calls another application.
-    async fn call_application<A: ContractAbi + Send>(
+    fn call_application<A: ContractAbi + Send>(
         &mut self,
         authenticated: bool,
         application: ApplicationId<A>,
@@ -235,7 +235,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     }
 
     /// Calls a session from another application.
-    async fn call_session<A: ContractAbi + Send>(
+    fn call_session<A: ContractAbi + Send>(
         &mut self,
         authenticated: bool,
         session: SessionId<A>,
