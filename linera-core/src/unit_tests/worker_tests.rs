@@ -29,7 +29,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    system::{Account, AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation},
+    system::{AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation},
     ChainOwnership, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
     ExecutionStateView, GenericApplicationId, Message, MessageKind, Query, Response,
     SystemExecutionError, SystemExecutionState, SystemQuery, SystemResponse,
@@ -244,7 +244,11 @@ async fn make_transfer_certificate_for_epoch<S>(
             messages.push(direct_outgoing_message(
                 account.chain_id,
                 MessageKind::Tracked,
-                SystemMessage::Credit { account, amount },
+                SystemMessage::Credit {
+                    source: None,
+                    target: account.owner,
+                    amount,
+                },
             ));
             message_count += 1;
         }
@@ -291,9 +295,20 @@ fn channel_admin_message(message: SystemMessage) -> OutgoingMessage {
     channel_outgoing_message(SystemChannel::Admin.name(), MessageKind::Protected, message)
 }
 
+fn system_credit_message(amount: Amount) -> Message {
+    Message::System(SystemMessage::Credit {
+        source: None,
+        target: None,
+        amount,
+    })
+}
+
 fn direct_credit_message(recipient: ChainId, amount: Amount) -> OutgoingMessage {
-    let account = Account::chain(recipient);
-    let message = SystemMessage::Credit { account, amount };
+    let message = SystemMessage::Credit {
+        source: None,
+        target: None,
+        amount,
+    };
     direct_outgoing_message(recipient, MessageKind::Tracked, message)
 }
 
@@ -905,10 +920,7 @@ where
                     authenticated_signer: None,
                     kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: Message::System(SystemMessage::Credit {
-                        account: Account::chain(ChainId::root(2)),
-                        amount: Amount::ONE,
-                    }),
+                    message: system_credit_message(Amount::ONE),
                 },
                 action: MessageAction::Accept,
             })
@@ -921,10 +933,7 @@ where
                     authenticated_signer: None,
                     kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: Message::System(SystemMessage::Credit {
-                        account: Account::chain(ChainId::root(2)),
-                        amount: Amount::from_tokens(2),
-                    }),
+                    message: system_credit_message(Amount::from_tokens(2)),
                 },
                 action: MessageAction::Accept,
             })
@@ -937,10 +946,7 @@ where
                     authenticated_signer: None,
                     kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: Message::System(SystemMessage::Credit {
-                        account: Account::chain(ChainId::root(2)),
-                        amount: Amount::from_tokens(2), // wrong
-                    }),
+                    message: system_credit_message(Amount::from_tokens(2)), // wrong amount
                 },
                 action: MessageAction::Accept,
             })
@@ -964,10 +970,7 @@ where
                     authenticated_signer: None,
                     kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: Message::System(SystemMessage::Credit {
-                        account: Account::chain(ChainId::root(2)),
-                        amount: Amount::from_tokens(2),
-                    }),
+                    message: system_credit_message(Amount::from_tokens(2)),
                 },
                 action: MessageAction::Accept,
             })
@@ -991,10 +994,7 @@ where
                     authenticated_signer: None,
                     kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: Message::System(SystemMessage::Credit {
-                        account: Account::chain(ChainId::root(2)),
-                        amount: Amount::from_tokens(3),
-                    }),
+                    message: system_credit_message(Amount::from_tokens(3)),
                 },
                 action: MessageAction::Accept,
             })
@@ -1007,10 +1007,7 @@ where
                     authenticated_signer: None,
                     kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: Message::System(SystemMessage::Credit {
-                        account: Account::chain(ChainId::root(2)),
-                        amount: Amount::ONE,
-                    }),
+                    message: system_credit_message(Amount::ONE),
                 },
                 action: MessageAction::Accept,
             })
@@ -1023,10 +1020,7 @@ where
                     authenticated_signer: None,
                     kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: Message::System(SystemMessage::Credit {
-                        account: Account::chain(ChainId::root(2)),
-                        amount: Amount::from_tokens(2),
-                    }),
+                    message: system_credit_message(Amount::from_tokens(2)),
                 },
                 action: MessageAction::Accept,
             })
@@ -1050,10 +1044,7 @@ where
                     authenticated_signer: None,
                     kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: Message::System(SystemMessage::Credit {
-                        account: Account::chain(ChainId::root(2)),
-                        amount: Amount::ONE,
-                    }),
+                    message: system_credit_message(Amount::ONE),
                 },
                 action: MessageAction::Accept,
             })
@@ -1095,10 +1086,7 @@ where
                     authenticated_signer: None,
                     kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: Message::System(SystemMessage::Credit {
-                        account: Account::chain(ChainId::root(2)),
-                        amount: Amount::from_tokens(2),
-                    }),
+                    message: system_credit_message(Amount::from_tokens(2)),
                 },
                 action: MessageAction::Accept,
             })
@@ -1111,10 +1099,7 @@ where
                     authenticated_signer: None,
                     kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: Message::System(SystemMessage::Credit {
-                        account: Account::chain(ChainId::root(2)),
-                        amount: Amount::from_tokens(3),
-                    }),
+                    message: system_credit_message(Amount::from_tokens(3)),
                 },
                 action: MessageAction::Accept,
             })
@@ -1677,10 +1662,7 @@ where
                 authenticated_signer: None,
                 kind: MessageKind::Tracked,
                 timestamp: Timestamp::from(0),
-                message: Message::System(SystemMessage::Credit {
-                    account: Account::chain(ChainId::root(1)),
-                    amount: Amount::from_tokens(995),
-                }),
+                message: system_credit_message(Amount::from_tokens(995)),
             },
             action: MessageAction::Accept,
         }],
@@ -2292,10 +2274,7 @@ where
                 authenticated_signer: None,
                 kind: MessageKind::Tracked,
                 timestamp: Timestamp::from(0),
-                message: Message::System(SystemMessage::Credit {
-                    account: Account::chain(ChainId::root(2)),
-                    amount: Amount::from_tokens(5),
-                }),
+                message: system_credit_message(Amount::from_tokens(5)),
             },
             action: MessageAction::Accept,
         }],
@@ -2531,10 +2510,7 @@ where
                     authenticated_signer: None,
                     kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: Message::System(SystemMessage::Credit {
-                        account: Account::chain(ChainId::root(2)),
-                        amount: Amount::from_tokens(3),
-                    }),
+                    message: system_credit_message(Amount::from_tokens(3)),
                 },
                 action: MessageAction::Reject,
             },
@@ -2547,10 +2523,7 @@ where
                     authenticated_signer: None,
                     kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: Message::System(SystemMessage::Credit {
-                        account: Account::chain(ChainId::root(2)),
-                        amount: Amount::from_tokens(2),
-                    }),
+                    message: system_credit_message(Amount::from_tokens(2)),
                 },
                 action: MessageAction::Accept,
             },
@@ -2913,10 +2886,7 @@ where
                         authenticated_signer: None,
                         kind: MessageKind::Tracked,
                         timestamp: Timestamp::from(0),
-                        message: Message::System(SystemMessage::Credit {
-                            account: Account::chain(user_id),
-                            amount: Amount::from_tokens(2),
-                        }),
+                        message: system_credit_message(Amount::from_tokens(2)),
                     },
                     action: MessageAction::Accept,
                 })
@@ -3306,10 +3276,7 @@ where
                         authenticated_signer: None,
                         kind: MessageKind::Tracked,
                         timestamp: Timestamp::from(0),
-                        message: Message::System(SystemMessage::Credit {
-                            account: Account::chain(admin_id),
-                            amount: Amount::ONE,
-                        }),
+                        message: system_credit_message(Amount::ONE),
                     },
                     action: MessageAction::Accept,
                 }),

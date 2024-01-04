@@ -654,15 +654,19 @@ SystemMessage:
     0:
       Credit:
         STRUCT:
-          - account:
-              TYPENAME: Account
+          - target:
+              OPTION:
+                TYPENAME: Owner
           - amount:
               TYPENAME: Amount
+          - source:
+              OPTION:
+                TYPENAME: Owner
     1:
       Withdraw:
         STRUCT:
-          - account:
-              TYPENAME: Account
+          - owner:
+              TYPENAME: Owner
           - amount:
               TYPENAME: Amount
           - recipient:
@@ -759,7 +763,7 @@ SystemOperation:
         STRUCT:
           - owner:
               TYPENAME: Owner
-          - target:
+          - target_id:
               TYPENAME: ChainId
           - recipient:
               TYPENAME: Recipient

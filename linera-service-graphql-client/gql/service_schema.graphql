@@ -447,9 +447,9 @@ type MutationRoot {
 	"""
 	transfer(chainId: ChainId!, owner: Owner, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
 	"""
-	Claims `amount` units of value from the given owner's account in
-	the remote `target` chain. Depending on its configuration (see also #464), the
-	`target` chain may refuse to process the message.
+	Claims `amount` units of value from the given owner's account in the remote
+	`target` chain. Depending on its configuration, the `target` chain may refuse to
+	process the message.
 	"""
 	claim(chainId: ChainId!, owner: Owner!, targetId: ChainId!, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
 	"""
