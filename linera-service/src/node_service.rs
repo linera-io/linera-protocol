@@ -338,7 +338,7 @@ where
         &self,
         chain_id: ChainId,
         owner: Owner,
-        target: ChainId,
+        target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
         user_data: Option<UserData>,
@@ -349,7 +349,7 @@ where
                 let result = client
                     .claim(
                         owner,
-                        target,
+                        target_id,
                         recipient,
                         amount,
                         user_data.unwrap_or_default(),

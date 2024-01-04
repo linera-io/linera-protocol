@@ -104,7 +104,7 @@ pub enum SystemOperation {
     /// `target` chain may refuse to process the message.
     Claim {
         owner: Owner,
-        target: ChainId,
+        target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
         user_data: UserData,
@@ -617,7 +617,7 @@ where
             }
             Claim {
                 owner,
-                target,
+                target_id,
                 recipient,
                 amount,
                 user_data,
@@ -631,13 +631,13 @@ where
                     SystemExecutionError::IncorrectClaimAmount
                 );
                 let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(target),
+                    destination: Destination::Recipient(target_id),
                     authenticated: true,
                     kind: MessageKind::Simple,
                     message: SystemMessage::Withdraw {
                         amount,
                         account: Account {
-                            chain_id: target,
+                            chain_id: target_id,
                             owner: Some(owner),
                         },
                         user_data,

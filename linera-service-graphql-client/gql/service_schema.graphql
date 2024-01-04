@@ -451,7 +451,7 @@ type MutationRoot {
 	the remote `target` chain. Depending on its configuration (see also #464), the
 	`target` chain may refuse to process the message.
 	"""
-	claim(chainId: ChainId!, owner: Owner!, target: ChainId!, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
+	claim(chainId: ChainId!, owner: Owner!, targetId: ChainId!, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
 	"""
 	Creates (or activates) a new chain by installing the given authentication key.
 	This will automatically subscribe to the future committees created by `admin_id`.

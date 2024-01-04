@@ -1177,14 +1177,14 @@ where
     pub async fn claim(
         &mut self,
         owner: Owner,
-        target: ChainId,
+        target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
         user_data: UserData,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Claim {
             owner,
-            target,
+            target_id,
             recipient,
             amount,
             user_data,
