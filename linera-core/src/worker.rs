@@ -457,7 +457,7 @@ where
 
     async fn create_cross_chain_request(
         &self,
-        confirmed_log: &mut LogView<StorageClient::Context, CryptoHash>,
+        confirmed_log: &LogView<StorageClient::Context, CryptoHash>,
         height_map: Vec<(Medium, Vec<BlockHeight>)>,
         sender: ChainId,
         recipient: ChainId,
@@ -482,7 +482,7 @@ where
     /// Loads pending cross-chain requests.
     async fn create_network_actions(
         &self,
-        chain: &mut ChainStateView<StorageClient::Context>,
+        chain: &ChainStateView<StorageClient::Context>,
     ) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
         let targets = chain.outboxes.indices().await?;
@@ -499,7 +499,7 @@ where
         for (recipient, height_map) in heights_by_recipient {
             let request = self
                 .create_cross_chain_request(
-                    &mut chain.confirmed_log,
+                    &chain.confirmed_log,
                     height_map.into_iter().collect(),
                     chain_id,
                     recipient,
@@ -537,7 +537,7 @@ where
         if tip.next_block_height > block.height {
             // Block was already confirmed.
             let info = ChainInfoResponse::new(&chain, self.key_pair());
-            let actions = self.create_network_actions(&mut chain).await?;
+            let actions = self.create_network_actions(&chain).await?;
             self.register_delivery_notifier(
                 block.chain_id,
                 block.height,
@@ -618,7 +618,7 @@ where
         tip.num_outgoing_messages += messages.len() as u32;
         chain.confirmed_log.push(certificate.hash());
         let info = ChainInfoResponse::new(&chain, self.key_pair());
-        let mut actions = self.create_network_actions(&mut chain).await?;
+        let mut actions = self.create_network_actions(&chain).await?;
         actions.notifications.push(Notification {
             chain_id: block.chain_id,
             reason: Reason::NewBlock {
@@ -1083,7 +1083,7 @@ where
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
         // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
-        let actions = self.create_network_actions(&mut chain).await?;
+        let actions = self.create_network_actions(&chain).await?;
         NUM_ROUNDS_IN_BLOCK_PROPOSAL
             .with_label_values(&[round.type_name()])
             .observe(round.number() as f64);
@@ -1243,7 +1243,7 @@ where
         let response = ChainInfoResponse::new(info, self.key_pair());
         trace!("{} --> {:?}", self.nickname, response);
         // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
-        let actions = self.create_network_actions(&mut chain).await?;
+        let actions = self.create_network_actions(&chain).await?;
         Ok((response, actions))
     }
 
