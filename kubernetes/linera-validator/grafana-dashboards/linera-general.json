@@ -207,8 +207,8 @@
     "list": []
   },
   "time": {
-    "from": "2024-01-03T14:32:01.797Z",
-    "to": "2024-01-03T15:54:46.957Z"
+    "from": "now-24h",
+    "to": "now"
   },
   "timepicker": {
     "refresh_intervals": [
