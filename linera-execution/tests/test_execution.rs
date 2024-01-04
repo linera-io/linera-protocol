@@ -13,7 +13,12 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, Owner, SessionId},
 };
 use linera_execution::{policy::ResourceControlPolicy, ContractSyncRuntime, ServiceSyncRuntime, *};
-use linera_views::{batch::Batch, common::Context, memory::MemoryContext, views::View};
+use linera_views::{
+    batch::Batch,
+    common::Context,
+    memory::MemoryContext,
+    views::{View, ViewError},
+};
 use std::sync::Arc;
 use test_case::test_case;
 
@@ -28,16 +33,8 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         )
         .await;
 
-    let app_desc = create_dummy_user_application_description();
-    let app_id = view
-        .system
-        .registry
-        .register_application(app_desc.clone())
-        .await?;
-    assert_eq!(
-        view.system.registry.describe_application(app_id).await?,
-        app_desc
-    );
+    let (app_id, app_desc) =
+        &create_dummy_user_application_registrations(&mut view.system.registry, 1).await?[0];
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
@@ -52,7 +49,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         .execute_operation(
             context,
             Operation::User {
-                application_id: app_id,
+                application_id: *app_id,
                 bytes: vec![],
             },
             &policy,
@@ -62,22 +59,22 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
 
     assert!(matches!(
         result,
-        Err(ExecutionError::ApplicationBytecodeNotFound(desc)) if *desc == app_desc
+        Err(ExecutionError::ApplicationBytecodeNotFound(desc)) if &*desc == app_desc
     ));
     Ok(())
 }
 
 #[derive(Clone)]
-struct TestModule {
+struct TestModule<const IS_CALLER: bool> {
     owner: Owner,
 }
 
-struct TestApplication<Runtime> {
+struct TestApplication<const IS_CALLER: bool, Runtime> {
     owner: Owner,
     runtime: Runtime,
 }
 
-impl TestModule {
+impl<const IS_CALLER: bool> TestModule<IS_CALLER> {
     fn new(owner: Owner) -> Self {
         Self { owner }
     }
@@ -92,36 +89,60 @@ enum TestOperation {
     FailingCrossApplicationCall,
 }
 
-impl UserContractModule for TestModule {
+impl UserContractModule for TestModule<true> {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntime,
     ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError> {
-        Ok(Box::new(TestApplication {
+        Ok(Box::new(TestApplication::<true, ContractSyncRuntime> {
             owner: self.owner,
             runtime,
         }))
     }
 }
 
-impl<Runtime> UserContract for TestApplication<Runtime>
+impl UserContractModule for TestModule<false> {
+    fn instantiate(
+        &self,
+        runtime: ContractSyncRuntime,
+    ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError> {
+        Ok(Box::new(TestApplication::<false, ContractSyncRuntime> {
+            owner: self.owner,
+            runtime,
+        }))
+    }
+}
+
+/// Key to store the application ID to call.
+static CALLEE_ID_KEY: [u8; 1] = [0];
+/// Key to store some dummy data in the application state.
+static DUMMY_STATE_KEY: [u8; 1] = [1];
+
+impl<Runtime> UserContract for TestApplication<true, Runtime>
 where
     Runtime: ContractRuntime,
 {
-    /// Nothing needs to be done during initialization.
+    /// Store the application ID to be called.
     fn initialize(
         &mut self,
         context: OperationContext,
-        _argument: Vec<u8>,
+        argument: Vec<u8>,
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         assert_eq!(context.authenticated_signer, Some(self.owner));
+        assert!(bcs::from_bytes::<UserApplicationId>(&argument).is_ok());
+
+        self.runtime.lock()?;
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(CALLEE_ID_KEY.to_vec(), argument);
+        self.runtime.write_batch_and_unlock(batch)?;
+
         Ok(RawExecutionResult::default())
     }
 
     /// Extend the application state with the `operation` bytes.
     ///
-    /// Calls itself during the operation, opening a session. The session is intentionally
-    /// leaked if the test operation is [`TestOperation::LeakingSession`].
+    /// Calls the callee test application during the operation, opening a session. The session is
+    /// intentionally leaked if the test operation is [`TestOperation::LeakingSession`].
     fn execute_operation(
         &mut self,
         context: OperationContext,
@@ -130,24 +151,31 @@ where
         assert_eq!(operation.len(), 1);
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
-        let app_id = self.runtime.application_id()?;
+
+        self.runtime.lock()?;
+
+        // Read the application ID to call
+        let callee_id_bytes = self
+            .runtime
+            .read_value_bytes(CALLEE_ID_KEY.to_vec())?
+            .expect("Missing application ID to call");
+        let callee_id = bcs::from_bytes(&callee_id_bytes)
+            .expect("Failed to deserialize application ID to call");
 
         // Modify our state.
-        let chosen_key = vec![0];
-        self.runtime.lock()?;
         let mut state = self
             .runtime
-            .read_value_bytes(chosen_key.clone())?
+            .read_value_bytes(DUMMY_STATE_KEY.to_vec())?
             .unwrap_or_default();
         state.extend(operation.clone());
         let mut batch = Batch::new();
-        batch.put_key_value_bytes(chosen_key, state);
+        batch.put_key_value_bytes(DUMMY_STATE_KEY.to_vec(), state);
         self.runtime.write_batch_and_unlock(batch)?;
 
         // Call ourselves after unlocking the state => ok.
         let call_result = self.runtime.try_call_application(
             /* authenticated */ true,
-            app_id,
+            callee_id,
             operation.clone(),
             vec![],
         )?;
@@ -166,7 +194,7 @@ where
         Ok(RawExecutionResult::default())
     }
 
-    /// Attempts to call ourself while the state is locked.
+    /// Attempts to call ourself.
     fn execute_message(
         &mut self,
         context: MessageContext,
@@ -176,18 +204,66 @@ where
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
         let app_id = self.runtime.application_id()?;
-        self.runtime.lock()?;
 
-        // Call ourselves while the state is locked => not ok.
+        // Call ourselves => not ok.
         self.runtime.try_call_application(
             /* authenticated */ true,
             app_id,
             message,
             vec![],
         )?;
-        self.runtime.unlock()?;
 
         Ok(RawExecutionResult::default())
+    }
+
+    fn handle_application_call(
+        &mut self,
+        _context: CalleeContext,
+        _argument: Vec<u8>,
+        _forwarded_sessions: Vec<SessionId>,
+    ) -> Result<ApplicationCallResult, ExecutionError> {
+        unreachable!("Caller test application does not support being called");
+    }
+
+    fn handle_session_call(
+        &mut self,
+        _context: CalleeContext,
+        _session_state: Vec<u8>,
+        _argument: Vec<u8>,
+        _forwarded_sessions: Vec<SessionId>,
+    ) -> Result<(SessionCallResult, Vec<u8>), ExecutionError> {
+        unreachable!("Caller test application does not support being called");
+    }
+}
+
+impl<Runtime> UserContract for TestApplication<false, Runtime>
+where
+    Runtime: ContractRuntime,
+{
+    /// Nothing needs to be done during initialization.
+    fn initialize(
+        &mut self,
+        context: OperationContext,
+        _argument: Vec<u8>,
+    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+        assert_eq!(context.authenticated_signer, Some(self.owner));
+        Ok(RawExecutionResult::default())
+    }
+
+    fn execute_operation(
+        &mut self,
+        _context: OperationContext,
+        _operation: Vec<u8>,
+    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+        unreachable!("Callee test application does not support starting transactions");
+    }
+
+    fn execute_message(
+        &mut self,
+        _context: MessageContext,
+        _message: Vec<u8>,
+    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+        unreachable!("Callee test application does not support starting transactions");
     }
 
     /// Creates a session.
@@ -228,19 +304,19 @@ where
     }
 }
 
-impl UserServiceModule for TestModule {
+impl<const IS_CALLER: bool> UserServiceModule for TestModule<IS_CALLER> {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntime,
     ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError> {
-        Ok(Box::new(TestApplication {
+        Ok(Box::new(TestApplication::<IS_CALLER, ServiceSyncRuntime> {
             owner: self.owner,
             runtime,
         }))
     }
 }
 
-impl<Runtime> UserService for TestApplication<Runtime>
+impl<const IS_CALLER: bool, Runtime> UserService for TestApplication<IS_CALLER, Runtime>
 where
     Runtime: ServiceRuntime,
 {
@@ -250,12 +326,11 @@ where
         _context: QueryContext,
         _argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let chosen_key = vec![0];
         self.runtime.lock()?;
 
         let state = self
             .runtime
-            .read_value_bytes(chosen_key)?
+            .read_value_bytes(DUMMY_STATE_KEY.to_vec())?
             .unwrap_or_default();
 
         self.runtime.unlock()?;
@@ -278,20 +353,7 @@ async fn test_simple_user_operation(
             execution_runtime_config,
         )
         .await;
-    let app_desc = create_dummy_user_application_description();
-    let app_id = view
-        .system
-        .registry
-        .register_application(app_desc.clone())
-        .await?;
-    view.context()
-        .extra()
-        .user_contracts()
-        .insert(app_id, Arc::new(TestModule::new(owner)));
-    view.context()
-        .extra()
-        .user_services()
-        .insert(app_id, Arc::new(TestModule::new(owner)));
+    let application_ids = register_test_applications(owner, &mut view).await?;
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
@@ -306,7 +368,7 @@ async fn test_simple_user_operation(
         .execute_operation(
             context,
             Operation::User {
-                application_id: app_id,
+                application_id: application_ids[0],
                 bytes: vec![TestOperation::Completely as u8],
             },
             &policy,
@@ -318,12 +380,12 @@ async fn test_simple_user_operation(
         result,
         vec![
             ExecutionResult::User(
-                app_id,
+                application_ids[1],
                 RawExecutionResult::default().with_authenticated_signer(Some(owner))
             ),
-            ExecutionResult::User(app_id, RawExecutionResult::default()),
+            ExecutionResult::User(application_ids[1], RawExecutionResult::default()),
             ExecutionResult::User(
-                app_id,
+                application_ids[0],
                 RawExecutionResult::default().with_authenticated_signer(Some(owner))
             )
         ]
@@ -336,7 +398,7 @@ async fn test_simple_user_operation(
         view.query_application(
             context,
             Query::User {
-                application_id: app_id,
+                application_id: application_ids[0],
                 bytes: vec![]
             }
         )
@@ -361,16 +423,7 @@ async fn test_simple_user_operation_with_leaking_session(
             execution_runtime_config,
         )
         .await;
-    let app_desc = create_dummy_user_application_description();
-    let app_id = view
-        .system
-        .registry
-        .register_application(app_desc.clone())
-        .await?;
-    view.context()
-        .extra()
-        .user_contracts()
-        .insert(app_id, Arc::new(TestModule::new(owner)));
+    let application_ids = register_test_applications(owner, &mut view).await?;
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
@@ -385,7 +438,7 @@ async fn test_simple_user_operation_with_leaking_session(
         .execute_operation(
             context,
             Operation::User {
-                application_id: app_id,
+                application_id: application_ids[0],
                 bytes: vec![TestOperation::LeakingSession as u8],
             },
             &policy,
@@ -419,20 +472,7 @@ async fn test_cross_application_error(
             execution_runtime_config,
         )
         .await;
-    let app_desc = create_dummy_user_application_description();
-    let app_id = view
-        .system
-        .registry
-        .register_application(app_desc.clone())
-        .await?;
-    view.context()
-        .extra()
-        .user_contracts()
-        .insert(app_id, Arc::new(TestModule::new(owner)));
-    view.context()
-        .extra()
-        .user_services()
-        .insert(app_id, Arc::new(TestModule::new(owner)));
+    let application_ids = register_test_applications(owner, &mut view).await?;
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
@@ -447,7 +487,7 @@ async fn test_cross_application_error(
         view.execute_operation(
             context,
             Operation::User {
-                application_id: app_id,
+                application_id: application_ids[0],
                 bytes: vec![TestOperation::FailingCrossApplicationCall as u8],
             },
             &policy,
@@ -458,4 +498,70 @@ async fn test_cross_application_error(
     ));
 
     Ok(())
+}
+
+pub async fn register_test_applications<C>(
+    owner: Owner,
+    state: &mut ExecutionStateView<C>,
+) -> anyhow::Result<Vec<UserApplicationId>>
+where
+    C: Context<Extra = TestExecutionRuntimeContext> + Clone + Send + Sync + 'static,
+    ViewError: From<C::Error>,
+{
+    let (application_ids, _application_descriptions): (Vec<_>, Vec<_>) =
+        create_dummy_user_application_registrations(&mut state.system.registry, 2)
+            .await?
+            .into_iter()
+            .unzip();
+    let extra = state.context().extra();
+
+    extra
+        .user_contracts()
+        .insert(application_ids[0], Arc::new(TestModule::<true>::new(owner)));
+    extra
+        .user_services()
+        .insert(application_ids[0], Arc::new(TestModule::<true>::new(owner)));
+    extra.user_contracts().insert(
+        application_ids[1],
+        Arc::new(TestModule::<false>::new(owner)),
+    );
+    extra.user_services().insert(
+        application_ids[1],
+        Arc::new(TestModule::<false>::new(owner)),
+    );
+
+    let mut caller_application_state = state
+        .view_users
+        .try_load_entry_mut(&application_ids[0])
+        .await?;
+    let callee_id =
+        bcs::to_bytes(&application_ids[1]).expect("Failed to serialize application ID to call");
+
+    let mut batch = Batch::new();
+    batch.put_key_value_bytes(CALLEE_ID_KEY.to_vec(), callee_id);
+    caller_application_state.write_batch(batch).await?;
+
+    Ok(application_ids)
+}
+
+pub async fn create_dummy_user_application_registrations<C>(
+    registry: &mut ApplicationRegistryView<C>,
+    count: u64,
+) -> anyhow::Result<Vec<(UserApplicationId, UserApplicationDescription)>>
+where
+    C: Context + Clone + Send + Sync + 'static,
+    ViewError: From<C::Error>,
+{
+    let mut ids = Vec::with_capacity(count as usize);
+
+    for index in 0..count {
+        let description = create_dummy_user_application_description(index);
+        let id = registry.register_application(description.clone()).await?;
+
+        assert_eq!(registry.describe_application(id).await?, description);
+
+        ids.push((id, description));
+    }
+
+    Ok(ids)
 }

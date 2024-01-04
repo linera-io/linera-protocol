@@ -9,13 +9,13 @@ use linera_base::{
 use linera_execution::{BytecodeLocation, UserApplicationDescription};
 use serde::{Deserialize, Serialize};
 
-pub fn create_dummy_user_application_description() -> UserApplicationDescription {
+pub fn create_dummy_user_application_description(index: u64) -> UserApplicationDescription {
     let chain_id = ChainId::root(1);
     let certificate_hash = CryptoHash::new(&FakeCertificate);
     UserApplicationDescription {
         bytecode_id: BytecodeId::new(MessageId {
             chain_id,
-            height: BlockHeight(1),
+            height: BlockHeight(index),
             index: 0,
         }),
         bytecode_location: BytecodeLocation {
@@ -24,7 +24,7 @@ pub fn create_dummy_user_application_description() -> UserApplicationDescription
         },
         creation: MessageId {
             chain_id,
-            height: BlockHeight(1),
+            height: BlockHeight(index),
             index: 1,
         },
         required_application_ids: vec![],
