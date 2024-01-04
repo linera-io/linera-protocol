@@ -99,9 +99,9 @@ pub enum SystemOperation {
         amount: Amount,
         user_data: UserData,
     },
-    /// Claims `amount` units of value from the given owner's account in
-    /// the remote `target` chain. Depending on its configuration (see also #464), the
-    /// `target` chain may refuse to process the message.
+    /// Claims `amount` units of value from the given owner's account in the remote
+    /// `target` chain. Depending on its configuration, the `target` chain may refuse to
+    /// process the message.
     Claim {
         owner: Owner,
         target_id: ChainId,
