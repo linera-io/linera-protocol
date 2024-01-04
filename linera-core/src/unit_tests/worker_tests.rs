@@ -31,8 +31,8 @@ use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::{Account, AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation},
     ChainOwnership, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionStateView, GenericApplicationId, Message, Query, Response, SystemExecutionError,
-    SystemExecutionState, SystemQuery, SystemResponse,
+    ExecutionStateView, GenericApplicationId, Message, MessageKind, Query, Response,
+    SystemExecutionError, SystemExecutionState, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, MemoryStorage, Storage, TestClock};
 use linera_views::{
@@ -228,6 +228,7 @@ async fn make_transfer_certificate_for_epoch<S>(
     let messages = match recipient {
         Recipient::Account(account) => vec![direct_outgoing_message(
             account.chain_id,
+            MessageKind::Tracked,
             SystemMessage::Credit { account, amount },
         )],
         Recipient::Burn => Vec::new(),
@@ -242,28 +243,40 @@ async fn make_transfer_certificate_for_epoch<S>(
     make_certificate(committee, worker, value)
 }
 
-fn direct_outgoing_message(recipient: ChainId, message: SystemMessage) -> OutgoingMessage {
+fn direct_outgoing_message(
+    recipient: ChainId,
+    kind: MessageKind,
+    message: SystemMessage,
+) -> OutgoingMessage {
     OutgoingMessage {
         destination: Destination::Recipient(recipient),
         authenticated_signer: None,
-        is_protected: true,
+        kind,
         message: Message::System(message),
     }
 }
 
-fn channel_outgoing_message(name: ChannelName, message: SystemMessage) -> OutgoingMessage {
+fn channel_outgoing_message(
+    name: ChannelName,
+    kind: MessageKind,
+    message: SystemMessage,
+) -> OutgoingMessage {
     OutgoingMessage {
         destination: Destination::Subscribers(name),
         authenticated_signer: None,
-        is_protected: true,
+        kind,
         message: Message::System(message),
     }
+}
+
+fn channel_admin_message(message: SystemMessage) -> OutgoingMessage {
+    channel_outgoing_message(SystemChannel::Admin.name(), MessageKind::Protected, message)
 }
 
 fn direct_credit_message(recipient: ChainId, amount: Amount) -> OutgoingMessage {
     let account = Account::chain(recipient);
     let message = SystemMessage::Credit { account, amount };
-    direct_outgoing_message(recipient, message)
+    direct_outgoing_message(recipient, MessageKind::Tracked, message)
 }
 
 /// Creates `count` key pairs and returns them, sorted by the `Owner` created from their public key.
@@ -615,7 +628,6 @@ where
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let recipient = Recipient::root(2);
     let (committee, mut worker) = init_worker_with_chains(
         storage,
         vec![(
@@ -631,7 +643,7 @@ where
     let certificate0 = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        recipient,
+        Recipient::root(2),
         Amount::ONE,
         Vec::new(),
         &committee,
@@ -873,7 +885,7 @@ where
                     height: BlockHeight::ZERO,
                     index: 0,
                     authenticated_signer: None,
-                    is_protected: true,
+                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -889,7 +901,7 @@ where
                     height: BlockHeight::ZERO,
                     index: 1,
                     authenticated_signer: None,
-                    is_protected: true,
+                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -905,7 +917,7 @@ where
                     height: BlockHeight::from(1),
                     index: 0,
                     authenticated_signer: None,
-                    is_protected: true,
+                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -932,7 +944,7 @@ where
                     height: BlockHeight::ZERO,
                     index: 1,
                     authenticated_signer: None,
-                    is_protected: true,
+                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -959,7 +971,7 @@ where
                     height: BlockHeight::from(1),
                     index: 0,
                     authenticated_signer: None,
-                    is_protected: true,
+                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -975,7 +987,7 @@ where
                     height: BlockHeight::ZERO,
                     index: 0,
                     authenticated_signer: None,
-                    is_protected: true,
+                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -991,7 +1003,7 @@ where
                     height: BlockHeight::ZERO,
                     index: 1,
                     authenticated_signer: None,
-                    is_protected: true,
+                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -1018,7 +1030,7 @@ where
                     height: BlockHeight::ZERO,
                     index: 0,
                     authenticated_signer: None,
-                    is_protected: true,
+                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -1063,7 +1075,7 @@ where
                     height: BlockHeight::from(0),
                     index: 1,
                     authenticated_signer: None,
-                    is_protected: true,
+                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -1079,7 +1091,7 @@ where
                     height: BlockHeight::from(1),
                     index: 0,
                     authenticated_signer: None,
-                    is_protected: true,
+                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -1427,7 +1439,7 @@ where
             height: BlockHeight::ZERO,
             index: 0,
             authenticated_signer: None,
-            is_protected: true,
+            kind: MessageKind::Protected,
             timestamp: Timestamp::from(0),
             message: Message::System(SystemMessage::OpenChain {
                 ownership,
@@ -1645,7 +1657,7 @@ where
                 height: BlockHeight::ZERO,
                 index: 0,
                 authenticated_signer: None,
-                is_protected: true,
+                kind: MessageKind::Tracked,
                 timestamp: Timestamp::from(0),
                 message: Message::System(SystemMessage::Credit {
                     account: Account::chain(ChainId::root(1)),
@@ -1696,7 +1708,7 @@ where
             height,
             index: 0,
             authenticated_signer: None,
-            is_protected: true,
+            kind: MessageKind::Tracked,
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. }),
         } if certificate_hash == CryptoHash::new(&Dummy)
@@ -1886,7 +1898,7 @@ where
             height,
             index: 0,
             authenticated_signer: None,
-            is_protected: true,
+            kind: MessageKind::Tracked,
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. })
         } if certificate_hash == certificate.hash()
@@ -1990,7 +2002,7 @@ where
             height,
             index: 0,
             authenticated_signer: None,
-            is_protected: true,
+            kind: MessageKind::Tracked,
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. })
         } if certificate_hash == certificate.hash()
@@ -2260,7 +2272,7 @@ where
                 height: BlockHeight::ZERO,
                 index: 0,
                 authenticated_signer: None,
-                is_protected: true,
+                kind: MessageKind::Tracked,
                 timestamp: Timestamp::from(0),
                 message: Message::System(SystemMessage::Credit {
                     account: Account::chain(ChainId::root(2)),
@@ -2476,6 +2488,7 @@ where
             messages: vec![
                 direct_outgoing_message(
                     user_id,
+                    MessageKind::Protected,
                     SystemMessage::OpenChain {
                         ownership: ChainOwnership::single(key_pair.public()),
                         epoch: Epoch::ZERO,
@@ -2486,6 +2499,7 @@ where
                 ),
                 direct_outgoing_message(
                     admin_id,
+                    MessageKind::Protected,
                     SystemMessage::Subscribe {
                         id: user_id,
                         subscription: admin_channel_subscription.clone(),
@@ -2543,13 +2557,10 @@ where
                 }))
                 .with_simple_transfer(Recipient::chain(user_id), Amount::from_tokens(2)),
             messages: vec![
-                channel_outgoing_message(
-                    SystemChannel::Admin.name(),
-                    SystemMessage::SetCommittees {
-                        epoch: Epoch::from(1),
-                        committees: committees2.clone(),
-                    },
-                ),
+                channel_admin_message(SystemMessage::SetCommittees {
+                    epoch: Epoch::from(1),
+                    committees: committees2.clone(),
+                }),
                 direct_credit_message(user_id, Amount::from_tokens(2)),
             ],
             message_counts: vec![1, 2],
@@ -2584,7 +2595,7 @@ where
                         height: BlockHeight::ZERO,
                         index: 1,
                         authenticated_signer: None,
-                        is_protected: true,
+                        kind: MessageKind::Protected,
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::Subscribe {
                             id: user_id,
@@ -2595,6 +2606,7 @@ where
                 }),
             messages: vec![direct_outgoing_message(
                 user_id,
+                MessageKind::Protected,
                 SystemMessage::Notify { id: user_id },
             )],
             message_counts: vec![1],
@@ -2705,7 +2717,7 @@ where
                         height: BlockHeight::from(0),
                         index: 0,
                         authenticated_signer: None,
-                        is_protected: true,
+                        kind: MessageKind::Protected,
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::OpenChain {
                             ownership: ChainOwnership::single(key_pair.public()),
@@ -2724,7 +2736,7 @@ where
                         height: BlockHeight::from(1),
                         index: 0,
                         authenticated_signer: None,
-                        is_protected: true,
+                        kind: MessageKind::Protected,
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::SetCommittees {
                             epoch: Epoch::from(1),
@@ -2740,7 +2752,7 @@ where
                         height: BlockHeight::from(1),
                         index: 1,
                         authenticated_signer: None,
-                        is_protected: true,
+                        kind: MessageKind::Tracked,
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::Credit {
                             account: Account::chain(user_id),
@@ -2756,7 +2768,7 @@ where
                         height: BlockHeight::from(2),
                         index: 0,
                         authenticated_signer: None,
-                        is_protected: true,
+                        kind: MessageKind::Protected,
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::Notify { id: user_id }),
                     },
@@ -2921,13 +2933,10 @@ where
                     committee: committee.clone(),
                 },
             )),
-            messages: vec![channel_outgoing_message(
-                SystemChannel::Admin.name(),
-                SystemMessage::SetCommittees {
-                    epoch: Epoch::from(1),
-                    committees: committees2.clone(),
-                },
-            )],
+            messages: vec![channel_admin_message(SystemMessage::SetCommittees {
+                epoch: Epoch::from(1),
+                committees: committees2.clone(),
+            })],
             message_counts: vec![1],
             state_hash: make_state_hash(SystemExecutionState {
                 committees: committees2.clone(),
@@ -3072,20 +3081,14 @@ where
                     epoch: Epoch::ZERO,
                 })),
             messages: vec![
-                channel_outgoing_message(
-                    SystemChannel::Admin.name(),
-                    SystemMessage::SetCommittees {
-                        epoch: Epoch::from(1),
-                        committees: committees2.clone(),
-                    },
-                ),
-                channel_outgoing_message(
-                    SystemChannel::Admin.name(),
-                    SystemMessage::SetCommittees {
-                        epoch: Epoch::from(1),
-                        committees: committees3.clone(),
-                    },
-                ),
+                channel_admin_message(SystemMessage::SetCommittees {
+                    epoch: Epoch::from(1),
+                    committees: committees2.clone(),
+                }),
+                channel_admin_message(SystemMessage::SetCommittees {
+                    epoch: Epoch::from(1),
+                    committees: committees3.clone(),
+                }),
             ],
             message_counts: vec![1, 2],
             state_hash: make_state_hash(SystemExecutionState {
@@ -3142,7 +3145,7 @@ where
                         height: BlockHeight::ZERO,
                         index: 0,
                         authenticated_signer: None,
-                        is_protected: true,
+                        kind: MessageKind::Tracked,
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::Credit {
                             account: Account::chain(admin_id),

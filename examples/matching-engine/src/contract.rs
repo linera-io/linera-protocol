@@ -307,6 +307,7 @@ impl MatchingEngine {
         result.messages.push(OutgoingMessage {
             destination: chain_id.into(),
             authenticated: true,
+            is_tracked: false,
             message,
         });
         Ok(())

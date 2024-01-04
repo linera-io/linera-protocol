@@ -393,7 +393,7 @@ where
             let OutgoingMessage {
                 destination,
                 authenticated_signer,
-                is_protected,
+                kind,
                 message,
             } = outgoing_message;
             // Skip events that do not belong to this origin OR have no effect on this
@@ -432,7 +432,7 @@ where
                 height,
                 index,
                 authenticated_signer,
-                is_protected,
+                kind,
                 timestamp,
                 message,
             });
@@ -597,20 +597,6 @@ where
             );
         }
         for (index, message) in block.incoming_messages.iter().enumerate() {
-            if let MessageAction::Reject = message.action {
-                ensure!(
-                    !message.event.is_protected,
-                    ChainError::CannotRejectMessage {
-                        chain_id,
-                        origin: Box::new(message.origin.clone()),
-                        event: message.event.clone(),
-                    }
-                );
-                // Skip execution of rejected message.
-                message_counts
-                    .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
-                continue;
-            }
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let chain_execution_context = ChainExecutionContext::IncomingMessage(index);
             // Execute the received message.
@@ -625,30 +611,56 @@ where
                 },
                 authenticated_signer: message.event.authenticated_signer,
             };
-            let results = self
-                .execution_state
-                .execute_message(
-                    context,
-                    message.event.message.clone(),
-                    &policy,
-                    &mut tracker,
-                )
-                .await
-                .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
+            let results = match message.action {
+                MessageAction::Accept => self
+                    .execution_state
+                    .execute_message(
+                        context,
+                        message.event.message.clone(),
+                        &policy,
+                        &mut tracker,
+                    )
+                    .await
+                    .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?,
+                MessageAction::Reject => {
+                    ensure!(
+                        !message.event.is_protected(),
+                        ChainError::CannotRejectMessage {
+                            chain_id,
+                            origin: Box::new(message.origin.clone()),
+                            event: message.event.clone(),
+                        }
+                    );
+                    if !message.event.is_tracked() {
+                        // Nothing to do.
+                        message_counts.push(
+                            u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?,
+                        );
+                        continue;
+                    }
+                    // Bounce the message.
+                    self.execution_state
+                        .bounce_message(context, message.event.message.clone())
+                        .await
+                        .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?
+                }
+            };
             let mut messages_out = self
                 .process_execution_results(context.height, results)
                 .await?;
-            let balance = self.execution_state.system.balance.get_mut();
-            Self::sub_assign_fees(
-                balance,
-                policy.storage_bytes_written_price_raw(&message)?,
-                chain_execution_context,
-            )?;
-            Self::sub_assign_fees(
-                balance,
-                policy.messages_price(&messages_out)?,
-                chain_execution_context,
-            )?;
+            if let MessageAction::Accept = message.action {
+                let balance = self.execution_state.system.balance.get_mut();
+                Self::sub_assign_fees(
+                    balance,
+                    policy.storage_bytes_written_price_raw(&message)?,
+                    chain_execution_context,
+                )?;
+                Self::sub_assign_fees(
+                    balance,
+                    policy.messages_price(&messages_out)?,
+                    chain_execution_context,
+                )?;
+            }
             messages.append(&mut messages_out);
             message_counts
                 .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
@@ -790,7 +802,7 @@ where
         for RawOutgoingMessage {
             destination,
             authenticated,
-            is_protected,
+            kind,
             message,
         } in raw_result.messages
         {
@@ -810,7 +822,7 @@ where
             messages.push(OutgoingMessage {
                 destination,
                 authenticated_signer,
-                is_protected,
+                kind,
                 message: lift(message),
             });
         }

@@ -382,6 +382,8 @@ pub struct OutgoingMessage<Message> {
     pub destination: Destination,
     /// Whether the message is authenticated.
     pub authenticated: bool,
+    /// Whether the message is tracked.
+    pub is_tracked: bool,
     /// The message itself.
     pub message: Message,
 }
@@ -417,6 +419,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionResult<Message> {
         self.messages.push(OutgoingMessage {
             destination,
             authenticated: false,
+            is_tracked: false,
             message,
         });
         self
@@ -432,6 +435,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionResult<Message> {
         self.messages.push(OutgoingMessage {
             destination,
             authenticated: true,
+            is_tracked: false,
             message,
         });
         self

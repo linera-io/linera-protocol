@@ -1278,7 +1278,7 @@ where
                         .incoming_messages
                         .get_mut(*index as usize)
                         .expect("Message at given index should exist");
-                    if message.event.is_protected {
+                    if message.event.is_protected() {
                         error!("Protected incoming message failed to execute locally: {message:?}");
                     } else {
                         // Reject the faulty message from the block and continue.

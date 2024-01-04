@@ -7,7 +7,7 @@ use linera_base::{
     crypto::{BcsSignable, CryptoHash},
     data_types::Timestamp,
 };
-use linera_execution::{Message, UserApplicationId};
+use linera_execution::{Message, MessageKind, UserApplicationId};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -29,7 +29,7 @@ fn make_event(
         height: BlockHeight::from(height),
         index,
         authenticated_signer: None,
-        is_protected: false,
+        kind: MessageKind::Simple,
         timestamp: Timestamp::default(),
         message: Message::User {
             application_id: UserApplicationId::default(),
@@ -45,7 +45,7 @@ fn make_unskippable_event(
     message: impl Into<Vec<u8>>,
 ) -> Event {
     let mut event = make_event(certificate_hash, height, index, message);
-    event.is_protected = true;
+    event.kind = MessageKind::Protected;
     event
 }
 

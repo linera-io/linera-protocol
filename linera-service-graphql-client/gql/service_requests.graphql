@@ -174,7 +174,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
         messages {
           destination
           authenticatedSigner
-          isProtected
+          kind
           message
         }
         messageCounts
@@ -207,7 +207,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
         messages {
           destination
           authenticatedSigner
-          isProtected
+          kind
           message
         }
         stateHash

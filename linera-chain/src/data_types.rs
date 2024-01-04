@@ -12,7 +12,7 @@ use linera_base::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    BytecodeLocation, GenericApplicationId, Message, Operation,
+    BytecodeLocation, GenericApplicationId, Message, MessageKind, Operation,
 };
 use serde::{de::Deserializer, Deserialize, Serialize};
 use std::{
@@ -131,9 +131,8 @@ pub struct Event {
     pub index: u32,
     /// The authenticated signer for the operation that created the event, if any.
     pub authenticated_signer: Option<Owner>,
-    /// True if the message cannot be skipped or rejected by the receiver.
-    /// This only concerns certain system messages that cannot fail.
-    pub is_protected: bool,
+    /// The kind of event being delivered.
+    pub kind: MessageKind,
     /// The timestamp of the block that caused the message.
     pub timestamp: Timestamp,
     /// The message of the event (i.e. the actual payload of a message).
@@ -196,8 +195,8 @@ pub struct OutgoingMessage {
     pub destination: Destination,
     /// The user authentication carried by the message, if any.
     pub authenticated_signer: Option<Owner>,
-    /// True if the message cannot be skipped or rejected by the receiver.
-    pub is_protected: bool,
+    /// The kind of event being sent.
+    pub kind: MessageKind,
     /// The message itself.
     pub message: Message,
 }
@@ -595,7 +594,23 @@ impl CertificateValue {
 
 impl Event {
     pub fn is_skippable(&self) -> bool {
-        !self.is_protected
+        use MessageKind::*;
+        match self.kind {
+            Protected | Tracked => false,
+            Simple | Bouncing => true,
+        }
+    }
+
+    pub fn is_protected(&self) -> bool {
+        matches!(self.kind, MessageKind::Protected)
+    }
+
+    pub fn is_tracked(&self) -> bool {
+        matches!(self.kind, MessageKind::Tracked)
+    }
+
+    pub fn is_bouncing(&self) -> bool {
+        matches!(self.kind, MessageKind::Bouncing)
     }
 }
 

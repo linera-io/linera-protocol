@@ -22,6 +22,7 @@ mod types {
     pub type ChannelFullName = Value;
     pub type Epoch = Value;
     pub type Event = Value;
+    pub type MessageKind = Value;
     pub type Message = Value;
     pub type MessageAction = Value;
     pub type Operation = Value;
@@ -61,7 +62,8 @@ mod types {
     };
     pub use linera_core::worker::{Notification, Reason};
     pub use linera_execution::{
-        committee::Epoch, ChainOwnership, Message, Operation, UserApplicationDescription,
+        committee::Epoch, ChainOwnership, Message, MessageKind, Operation,
+        UserApplicationDescription,
     };
 }
 
@@ -178,13 +180,13 @@ mod from {
             let block::BlockBlockValueExecutedBlockMessages {
                 destination,
                 authenticated_signer,
-                is_protected,
+                kind,
                 message,
             } = val;
             OutgoingMessage {
                 destination,
                 authenticated_signer,
-                is_protected,
+                kind,
                 message,
             }
         }

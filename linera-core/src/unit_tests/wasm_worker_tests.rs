@@ -29,7 +29,7 @@ use linera_execution::{
     policy::ResourceControlPolicy,
     system::{SystemChannel, SystemMessage, SystemOperation},
     Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription, ExecutionRuntimeConfig,
-    ExecutionStateView, GenericApplicationId, Message, Operation, OperationContext,
+    ExecutionStateView, GenericApplicationId, Message, MessageKind, Operation, OperationContext,
     ResourceTracker, SystemExecutionState, UserApplicationDescription, UserApplicationId,
     WasmContractModule, WasmRuntime,
 };
@@ -142,7 +142,7 @@ where
         messages: vec![OutgoingMessage {
             destination: Destination::Recipient(publisher_chain.into()),
             authenticated_signer: None,
-            is_protected: true,
+            kind: MessageKind::Protected,
             message: Message::System(publish_message.clone()),
         }],
         message_counts: vec![1],
@@ -170,7 +170,7 @@ where
             height: publish_block_height,
             index: 0,
             authenticated_signer: None,
-            is_protected: true,
+            kind: MessageKind::Protected,
             timestamp: Timestamp::from(1),
             message: Message::System(publish_message),
         },
@@ -203,7 +203,7 @@ where
         messages: vec![OutgoingMessage {
             destination: broadcast_channel,
             authenticated_signer: None,
-            is_protected: false,
+            kind: MessageKind::Simple,
             message: Message::System(broadcast_message.clone()),
         }],
         message_counts: vec![1],
@@ -257,7 +257,7 @@ where
         messages: vec![OutgoingMessage {
             destination: Destination::Recipient(publisher_chain.into()),
             authenticated_signer: None,
-            is_protected: true,
+            kind: MessageKind::Protected,
             message: Message::System(subscribe_message.clone()),
         }],
         message_counts: vec![1],
@@ -285,7 +285,7 @@ where
             height: subscribe_block_height,
             index: 0,
             authenticated_signer: None,
-            is_protected: true,
+            kind: MessageKind::Protected,
             timestamp: Timestamp::from(2),
             message: subscribe_message.into(),
         },
@@ -301,7 +301,7 @@ where
         messages: vec![OutgoingMessage {
             destination: Destination::Recipient(creator_chain.into()),
             authenticated_signer: None,
-            is_protected: true,
+            kind: MessageKind::Protected,
             message: Message::System(SystemMessage::Notify {
                 id: creator_chain.into(),
             }),
@@ -362,7 +362,7 @@ where
                 height: broadcast_block_height,
                 index: 0,
                 authenticated_signer: None,
-                is_protected: false,
+                kind: MessageKind::Simple,
                 timestamp: Timestamp::from(1),
                 message: Message::System(broadcast_message),
             },
@@ -394,7 +394,7 @@ where
         messages: vec![OutgoingMessage {
             destination: Destination::Recipient(creator_chain.into()),
             authenticated_signer: None,
-            is_protected: true,
+            kind: MessageKind::Protected,
             message: Message::System(SystemMessage::ApplicationCreated),
         }],
         message_counts: vec![0, 1],
