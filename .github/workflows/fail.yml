@@ -15,8 +15,16 @@ jobs:
   test-small:
     runs-on: gcp-small
     steps:
-    - name: Fail loudly, VII
+    - name: Fail loudly, VIII
       run: |
         hostname
-        >&2 echo 'WORKFLOW INTENTIONALLY FAILING (VII)'
+        >&2 echo 'SMALL WORKFLOW INTENTIONALLY FAILING (VIII)'
+        exit 1
+  test-large:
+    runs-on: gcp-large
+    steps:
+    - name: Fail loudly, VIII
+      run: |
+        hostname
+        >&2 echo 'LARGE WORKFLOW INTENTIONALLY FAILING (VIII)'
         exit 1
