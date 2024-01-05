@@ -87,7 +87,7 @@ linera service --port $PORT &
 Installing and starting the web server:
 
 ```bash
-cd examples/counter/web-frontend/
+cd examples/counter/web-frontend
 npm install
 
 # Start the server but not open the web page right away.

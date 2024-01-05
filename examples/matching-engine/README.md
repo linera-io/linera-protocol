@@ -94,7 +94,7 @@ FUN2_APP_ID=$(linera publish-and-create examples/target/wasm32-unknown-unknown/r
 Now we have to publish and deploy the Matching Engine application:
 
 ```bash
-(cd examples/matching-engine/ && cargo build --release)
+(cd examples/matching-engine && cargo build --release)
 MATCHING_ENGINE=$(linera publish-and-create examples/target/wasm32-unknown-unknown/release/matching_engine_{contract,service}.wasm --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN1_APP_ID\""]}")
 ```
 

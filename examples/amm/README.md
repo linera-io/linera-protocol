@@ -70,7 +70,7 @@ FUN1_APP_ID=$(linera publish-and-create examples/target/wasm32-unknown-unknown/r
     --json-parameters "{ \"ticker_symbol\": \"FUN1\" }" \
 )
 
-FUN2_APP_ID=$(linera publish-and-create ./examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
+FUN2_APP_ID=$(linera publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
     --json-argument "{ \"accounts\": {
         \"User:$OWNER_1\": \"100.\",
         \"User:$OWNER_2\": \"150.\"
@@ -79,7 +79,7 @@ FUN2_APP_ID=$(linera publish-and-create ./examples/target/wasm32-unknown-unknown
 )
 
 (cd examples/amm && cargo build --release)
-AMM_APPLICATION_ID=$(linera publish-and-create ./examples/target/wasm32-unknown-unknown/release/amm_{contract,service}.wasm --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN2_APP_ID\""]}")
+AMM_APPLICATION_ID=$(linera publish-and-create examples/target/wasm32-unknown-unknown/release/amm_{contract,service}.wasm --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN2_APP_ID\""]}")
 ```
 
 ## Using the AMM Application
