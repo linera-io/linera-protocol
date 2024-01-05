@@ -2498,7 +2498,7 @@ where
     let certificate = make_transfer_certificate(
         ChainDescription::Root(2),
         &recipient_key_pair,
-        Recipient::root(3),
+        Recipient::Burn,
         Amount::ONE,
         vec![
             IncomingMessage {
@@ -2534,10 +2534,60 @@ where
         None,
     )
     .await;
+
     worker
         .fully_handle_certificate(certificate.clone(), vec![])
         .await
         .unwrap();
+
+    {
+        let chain = worker
+            .storage
+            .load_active_chain(ChainId::root(2))
+            .await
+            .unwrap();
+        chain.validate_incoming_messages().await.unwrap();
+    }
+
+    // Process the bounced message and try to use the refund.
+    let certificate2 = make_transfer_certificate(
+        ChainDescription::Root(1),
+        &sender_key_pair,
+        Recipient::Burn,
+        Amount::from_tokens(3),
+        vec![IncomingMessage {
+            origin: Origin::chain(ChainId::root(2)),
+            event: Event {
+                certificate_hash: certificate.hash(),
+                height: BlockHeight::ZERO,
+                index: 0,
+                authenticated_signer: None,
+                kind: MessageKind::Bouncing,
+                timestamp: Timestamp::from(0),
+                message: system_credit_message(Amount::from_tokens(3)),
+            },
+            action: MessageAction::Accept,
+        }],
+        &committee,
+        Amount::ZERO,
+        &worker,
+        Some(&certificate1),
+    )
+    .await;
+
+    worker
+        .fully_handle_certificate(certificate2.clone(), vec![])
+        .await
+        .unwrap();
+
+    {
+        let chain = worker
+            .storage
+            .load_active_chain(ChainId::root(1))
+            .await
+            .unwrap();
+        chain.validate_incoming_messages().await.unwrap();
+    }
 }
 
 #[test(tokio::test)]
