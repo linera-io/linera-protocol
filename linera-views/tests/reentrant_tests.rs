@@ -7,6 +7,7 @@ use linera_views::{
     register_view::RegisterView,
     views::{CryptoHashRootView, RootView, View},
 };
+use linera_views::views::CryptoHashView;
 use rand::{Rng, SeedableRng};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -24,6 +25,7 @@ async fn reentrant_collection_view_check() {
     let nmax: u8 = 25;
     for _ in 0..n {
         let mut view = StateView::load(context.clone()).await.unwrap();
+        let hash = view.crypto_hash().await.unwrap();
         let save = rng.gen::<bool>();
         //
         let count_oper = rng.gen_range(0..25);
@@ -80,6 +82,14 @@ async fn reentrant_collection_view_check() {
                 // Doing the rollback
                 view.rollback();
                 new_map = map.clone();
+            }
+            // Checking the hash
+            let new_hash = view.crypto_hash().await.unwrap();
+            if new_map == map {
+                assert_eq!(hash, new_hash);
+            } else {
+                // Inequality could be a bug or a hash collision (unlikely)
+                assert_ne!(hash, new_hash);
             }
             // Checking the keys
             let keys_view = view.v.indices().await.unwrap();
