@@ -4,11 +4,10 @@
 use linera_views::{
     map_view::ByteMapView,
     memory::create_memory_context,
-    views::{CryptoHashRootView, RootView, View},
+    views::{CryptoHashRootView, CryptoHashView, RootView, View},
 };
 use rand::{distributions::Uniform, Rng, RngCore, SeedableRng};
 use std::collections::{BTreeMap, BTreeSet};
-use linera_views::views::CryptoHashView;
 
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {
@@ -98,15 +97,14 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
                         let pos = rng.gen_range(0..count);
                         let vec = new_state_vec[pos].clone();
                         vec.0
-                    },
+                    }
                     _ => {
                         let len = rng.gen_range(1..6);
-                        rng
-                        .clone()
-                        .sample_iter(Uniform::from(0..4))
-                        .take(len)
-                        .collect::<Vec<_>>()
-                    },
+                        rng.clone()
+                            .sample_iter(Uniform::from(0..4))
+                            .take(len)
+                            .collect::<Vec<_>>()
+                    }
                 };
                 let result = view.map.get_mut_or_default(key.clone()).await.unwrap();
                 let new_value = rng.gen::<u8>();
