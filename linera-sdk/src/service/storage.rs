@@ -57,13 +57,10 @@ where
         context: wit_types::QueryContext,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, String> {
-        let application: Arc<Application> = Arc::new(system_api::lock_and_load_view().await);
+        let application: Arc<Application> = Arc::new(system_api::load_view().await);
         let argument: Application::Query =
             serde_json::from_slice(&argument).map_err(|e| e.to_string())?;
         let result = application.handle_query(&context.into(), argument).await;
-        if result.is_ok() {
-            system_api::unlock_view().await;
-        }
         let query_response = result.map_err(|error| error.to_string())?;
         serde_json::to_vec(&query_response).map_err(|e| e.to_string())
     }

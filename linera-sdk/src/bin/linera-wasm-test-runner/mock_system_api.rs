@@ -689,58 +689,6 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
             })
         },
     )?;
-    linker.func_wrap0_async(
-        "service_system_api",
-        "lock::new: func() -> handle<lock>",
-        move |_: Caller<'_, Resources>| Box::new(async move { 0 }),
-    )?;
-    linker.func_wrap2_async(
-        "service_system_api",
-        "lock::wait: func(self: handle<lock>) -> result<unit, string>",
-        move |mut caller: Caller<'_, Resources>, _handle: i32, return_offset: i32| {
-            Box::new(async move {
-                let function = get_function(&mut caller, "mocked-lock: func() -> bool").expect(
-                    "Missing `mocked-lock` function in the module. \
-                    Please ensure `linera_sdk::test::mock_application_state` was called",
-                );
-
-                let (locked,) = function
-                    .typed::<(), (i32,), _>(&mut caller)
-                    .expect("Incorrect `mocked-lock` function signature")
-                    .call_async(&mut caller, ())
-                    .await
-                    .expect(
-                        "Failed to call `mocked-lock` function. \
-                        Please ensure `linera_sdk::test::mock_application_state` was called",
-                    );
-
-                match locked {
-                    0 => {
-                        store_in_memory(&mut caller, return_offset, 1_i32);
-                    }
-                    _ => {
-                        let alloc_function = get_function(&mut caller, "cabi_realloc").expect(
-                            "Missing `cabi_realloc` function in the module. \
-                            Please ensure `linera_sdk` is compiled in with the module",
-                        );
-
-                        let error_message = "Failed to lock view".as_bytes();
-                        let error_message_length = error_message.len() as i32;
-                        let error_message_address = alloc_function
-                            .typed::<(i32, i32, i32, i32), i32, _>(&mut caller)
-                            .expect("Incorrect `cabi_realloc` function signature")
-                            .call_async(&mut caller, (0, 0, 1, error_message_length))
-                            .await
-                            .expect("Failed to call `cabi_realloc` function");
-
-                        store_in_memory(&mut caller, return_offset, 0_i32);
-                        store_in_memory(&mut caller, return_offset + 4, error_message_address);
-                        store_in_memory(&mut caller, return_offset + 8, error_message_length);
-                    }
-                }
-            })
-        },
-    )?;
     linker.func_wrap15_async(
         "service_system_api",
         "try-query-application: func(\

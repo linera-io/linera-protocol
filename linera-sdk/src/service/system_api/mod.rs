@@ -9,7 +9,7 @@ mod private;
 pub mod private;
 
 pub(crate) use self::private::{
-    current_application_parameters, load, lock_and_load_view, query_application, unlock_view,
+    current_application_parameters, load, load_view, query_application,
 };
 use super::service_system_api as wit;
 use linera_base::{

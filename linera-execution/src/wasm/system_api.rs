@@ -139,8 +139,6 @@ macro_rules! impl_service_system_api {
             type Error = ExecutionError;
 
             type Load = <Self as BaseRuntime>::Read;
-            type Lock = <Self as BaseRuntime>::Lock;
-            type Unlock = <Self as BaseRuntime>::Unlock;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -179,32 +177,6 @@ macro_rules! impl_service_system_api {
                 promise: &Self::Load,
             ) -> Result<Result<Vec<u8>, String>, Self::Error> {
                 self.try_read_my_state_wait(promise)
-                    // TODO(#1153): remove
-                    .map(Ok)
-            }
-
-            fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
-                BaseRuntime::lock_new(self)
-            }
-
-            fn lock_wait(
-                &mut self,
-                promise: &Self::Lock,
-            ) -> Result<Result<(), String>, Self::Error> {
-                BaseRuntime::lock_wait(self, promise)
-                    // TODO(#1153): remove
-                    .map(Ok)
-            }
-
-            fn unlock_new(&mut self) -> Result<Self::Unlock, Self::Error> {
-                BaseRuntime::unlock_new(self)
-            }
-
-            fn unlock_wait(
-                &mut self,
-                promise: &Self::Unlock,
-            ) -> Result<Result<(), String>, Self::Error> {
-                BaseRuntime::unlock_wait(self, promise)
                     // TODO(#1153): remove
                     .map(Ok)
             }

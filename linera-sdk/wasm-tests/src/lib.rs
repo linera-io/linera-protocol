@@ -208,8 +208,7 @@ fn mock_load_view() {
     assert_eq!(initial_view.two.get(), contract_view.two.get());
     assert_eq!(initial_view.three.get(), contract_view.three.get());
 
-    let service_view =
-        service::system_api::private::lock_and_load_view::<DummyView<_>>().blocking_wait();
+    let service_view = service::system_api::private::load_view::<DummyView<_>>().blocking_wait();
 
     assert_eq!(initial_view.one.get(), service_view.one.get());
     assert_eq!(initial_view.two.get(), service_view.two.get());
@@ -249,8 +248,7 @@ fn mock_find_keys() {
 
     assert_eq!(contract_keys, keys);
 
-    let service_view =
-        service::system_api::private::lock_and_load_view::<DummyView<_>>().blocking_wait();
+    let service_view = service::system_api::private::load_view::<DummyView<_>>().blocking_wait();
 
     let service_keys = service_view
         .map
@@ -304,8 +302,7 @@ fn mock_find_key_value_pairs() {
 
     assert_eq!(contract_pairs, expected_pairs);
 
-    let service_view =
-        service::system_api::private::lock_and_load_view::<DummyView<_>>().blocking_wait();
+    let service_view = service::system_api::private::load_view::<DummyView<_>>().blocking_wait();
 
     let mut service_pairs = Vec::new();
 
