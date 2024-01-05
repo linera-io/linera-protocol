@@ -36,7 +36,7 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
         let mut new_state_map = state_map.clone();
         let mut new_state_vec = state_vec.clone();
         for _ in 0..count_oper {
-            let choice = rng.gen_range(0..6);
+            let choice = rng.gen_range(0..7);
             let count = view.map.count().await.unwrap();
             if choice == 0 {
                 // inserting random stuff
@@ -86,6 +86,29 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
                 let vec = new_state_vec[pos].clone();
                 let key = vec.0;
                 let result = view.map.get_mut(key.clone()).await.unwrap().unwrap();
+                let new_value = rng.gen::<u8>();
+                *result = new_value;
+                new_state_map.insert(key, new_value);
+            }
+            if choice == 6 && count > 0 {
+                let choice = rng.gen_range(0..count);
+                let key = match choice {
+                    0 => {
+                        // Scenario 1 of using existing key
+                        let pos = rng.gen_range(0..count);
+                        let vec = new_state_vec[pos].clone();
+                        vec.0
+                    },
+                    _ => {
+                        let len = rng.gen_range(1..6);
+                        rng
+                        .clone()
+                        .sample_iter(Uniform::from(0..4))
+                        .take(len)
+                        .collect::<Vec<_>>()
+                    },
+                };
+                let result = view.map.get_mut_or_default(key.clone()).await.unwrap();
                 let new_value = rng.gen::<u8>();
                 *result = new_value;
                 new_state_map.insert(key, new_value);

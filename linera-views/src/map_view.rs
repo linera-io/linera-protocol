@@ -701,6 +701,7 @@ where
     pub async fn get_mut_or_default(&mut self, short_key: Vec<u8>) -> Result<&mut V, ViewError> {
         use std::collections::btree_map::Entry;
 
+        *self.hash.get_mut() = None;
         let update = match self.updates.entry(short_key.clone()) {
             Entry::Vacant(e) if self.was_cleared => e.insert(Update::Set(V::default())),
             Entry::Vacant(e) => {
