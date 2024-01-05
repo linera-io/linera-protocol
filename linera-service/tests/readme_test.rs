@@ -11,8 +11,12 @@ use linera_service::util::QuotedBashScript;
 use tokio::process::Command;
 
 #[test_case::test_case(".." ; "main")]
-#[test_case::test_case("../examples/fungible" ; "fungible")]
+#[test_case::test_case("../examples/amm" ; "amm")]
+#[test_case::test_case("../examples/counter" ; "counter")]
 #[test_case::test_case("../examples/crowd-funding" ; "crowd funding")]
+#[test_case::test_case("../examples/fungible" ; "fungible")]
+#[test_case::test_case("../examples/matching-engine" ; "matching engine")]
+#[test_case::test_case("../examples/meta-counter" ; "meta counter")]
 #[test_case::test_case("../examples/social" ; "social")]
 #[test_log::test(tokio::test)]
 async fn test_script_in_readme(path: &str) -> std::io::Result<()> {

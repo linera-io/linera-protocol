@@ -3,8 +3,8 @@
 # Automated Market Maker (AMM) Example Application
 
 This example implements an Automated Market Maker (AMM) which demonstrates DeFi capabilities of the 
-Linera protocol. Prerequisite for the AMM application is the `fungilble` application, as we will
-be adding, removing liquidity and also perform a swap.
+Linera protocol. Prerequisite for the AMM application is the `fungible` application, as we will
+be adding/removing liquidity and also performing a swap.
 
 # How it works 
 
@@ -12,7 +12,7 @@ It supports the following operations.
 
 - Swap: For a given input token and an input amount, it swaps that token amount for an 
 amount of the other token calculated based on the current AMM ratio. Note: The `Swap` operations 
-need to be performed from a remote chain 
+need to be performed from a remote chain.
 
 - Add Liquidity: This operation allows adding liquidity to the AMM. Given a maximum 
 `token0` and `token1` amount that you're willing to add, it adds liquidity such that you'll be 
@@ -30,24 +30,25 @@ removing liquidity, which currently can only be a chain owner.
 
 ## Setting Up
 
-First, build Linera and add it to the path:
+Before getting started, make sure that the binary tools `linera*` corresponding to
+your version of `linera-sdk` are in your PATH. For scripting purposes, we also assume
+that the BASH function `linera_spawn_and_read_wallet_variables` is defined.
+
+From the root of Linera repository, this can be achieved as follows:
 
 ```bash
-cargo build
-export PATH=$PWD/target/debug:$PATH
+export PATH="$PWD/target/debug:$PATH"
+source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 ```
 
-To start the local Linera network
+To start the local Linera network:
 
 ```bash
-linera net up --testing-prng-seed 37
+linera_spawn_and_read_wallet_variables linera net up --testing-prng-seed 37
 ```
 
-This will start the local Linera network. We used the
-test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
-presentation.
-
-Copy and paste `export LINERA_WALLET="/var . . . ."` & `export LINERA_STORAGE="rocksdb:/. . . ."` from output of `linera net up --testing-prng-seed 37` into another terminal
+We use the test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
+explanation.
 
 ```bash
 OWNER_1=e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316
@@ -56,7 +57,7 @@ CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 CHAIN_2=e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3
 ```
 
-Now we have to publish and create the fungible applications,
+Now we have to publish and create the fungible applications:
 
 ```bash
 (cd examples/fungible && cargo build --release)
@@ -93,7 +94,7 @@ linera service --port $PORT &
 ### Using GraphiQL
 
 Before performing any operation we need to provide liquidity to it, so we will use the `AddLiquidity` operation,
-navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID`
+navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID`.
 
 To perform `AddLiquidity` operation:
 
@@ -111,9 +112,9 @@ mutation{
 }
 ```
 
-We can only perform `Swap` from a remote chain i.e. other than the chain on which  `AMM` is deployed to,
-we can do it from GraphiQL by perfoming a mutation `requestApplication` so that we can perform the `Swap` operation from the
-chain
+We can only perform `Swap` from a remote chain i.e. other than the chain on which `AMM` is deployed to,
+we can do it from GraphiQL by perfoming the `requestApplication` mutation so that we can perform the 
+`Swap` operation from the chain.
 
 ```json
 mutation {
@@ -124,10 +125,10 @@ mutation {
   )
 }
 ```
-Note: The above mutation has to be performed from `http://localhost:8080`
+Note: The above mutation has to be performed from `http://localhost:8080`.
 
 Now to perform `Swap` operation, naviage to `http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID` and
-perform the following mutation
+perform the following mutation:
 
 ```json
 mutation{
@@ -143,8 +144,8 @@ mutation{
 }
 ```
 
-We can also `RemoveLiquidiy` operation, navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID` and
-perform the following mutation
+We can also perform the `RemoveLiquidity` operation, navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID` and
+perform the following mutation:
 
 ```json
 mutation{

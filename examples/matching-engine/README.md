@@ -3,60 +3,62 @@
 # Matching Engine Example Application
 
 This sample application demonstrates a matching engine, showcasing the DeFi capabilities
-on the Linera protocol
+on the Linera protocol.
 
-The matching engine trades between two tokens `token_0` & `token_1`, we can take the help
-of the `fungible` application example to create two token applications
+The matching engine trades between two tokens `token_0` & `token_1`. We can refer to
+the `fungible` application example on how to create two token applications.
 
 An order can be of two types:
 
 - Bid: For buying token 1 and paying in token 0, these are ordered in from the highest
-  bid (most preferable) to the smallest bid.
-- Ask: For selling token 1, to be paid in token 0, these are ordered from the smallest
-  (most preferable) to the highest bid.
+  bid (most preferable) to the lowest price.
+- Ask: For selling token 1, to be paid in token 0, these are ordered from the lowest
+  (most preferable) to the highest price.
 
-An `OrderId` is used to uniquely identify an order and enables following functionality
+An `OrderId` is used to uniquely identify an order and enables the following functionality:
 
-- Modify: Allows to modify the order
-- Cancel: Cancelling an order
+- Modify: Allows to modify the order.
+- Cancel: Cancelling an order.
 
-When inserting an order it goes through the following steps
+When inserting an order it goes through the following steps:
 
-- Transfer of tokens from the `fungible` application to the `matching engine` application through a cross application call so that it can be paid to the counterparty
+- Transfer of tokens from the `fungible` application to the `matching engine` application through a cross-application
+call so that it can be paid to the counterparty.
 
 - The engine selects the matching price levels for the inserted order. It then proceeds
   to clear these levels, executing trades and ensuring that at the end of the process,
-  the best bid is less than the best ask. This involves adjusting the orders in the market
+  the best bid has a higher price than the best ask. This involves adjusting the orders in the market
   and potentially creating a series of transfer orders for the required tokens. If, after
   the level clearing, the order is completely filled, it is not inserted. Otherwise,
   it becomes a liquidity order in the matching engine, providing depth to the market
   and potentially being matched with future orders.
 
-When order is created from a remote chain, it transfer the tokens of the same owner
-from the remote chain to the chain of matching engine, a message `ExecuteOrder` is sent with the order details.
+When an order is created from a remote chain, it transfers the tokens of the same owner
+from the remote chain to the chain of the matching engine, and a `ExecuteOrder` message is sent with the order details.
 
 # Usage
 
 ## Setting Up
 
-First, build Linera and add it to the path:
+Before getting started, make sure that the binary tools `linera*` corresponding to
+your version of `linera-sdk` are in your PATH. For scripting purposes, we also assume
+that the BASH function `linera_spawn_and_read_wallet_variables` is defined.
+
+From the root of Linera repository, this can be achieved as follows:
 
 ```bash
-cargo build
-export PATH=$PWD/target/debug:$PATH
+export PATH="$PWD/target/debug:$PATH"
+source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 ```
 
-To start the local Linera network
+To start the local Linera network:
 
 ```bash
-linera net up --testing-prng-seed 37
+linera_spawn_and_read_wallet_variables linera net up --testing-prng-seed 37
 ```
 
-This will start the local Linera network. We used the
-test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
-presentation.
-
-Copy and paste `export LINERA_WALLET="/var . . . ."` & `export LINERA_STORAGE="rocksdb:/. . . ."` from output of `linera net up --testing-prng-seed 37` into another terminal
+We use the test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
+explanation.
 
 ```bash
 OWNER_1=e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316
@@ -65,7 +67,7 @@ CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 CHAIN_2=e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3
 ```
 
-Publish and creating two `fungible` application whose `application_id` will be used as a
+Publish and create two `fungible` application whose `application_id` will be used as a
 parameter while creating the `matching engine` example.
 
 ```bash
@@ -89,7 +91,7 @@ FUN2_APP_ID=$(linera publish-and-create examples/target/wasm32-unknown-unknown/r
 
 ```
 
-Now we have to publish and deploy the Matching Engine application,
+Now we have to publish and deploy the Matching Engine application:
 
 ```bash
 (cd examples/matching-engine/ && cargo build --release)
@@ -107,15 +109,15 @@ linera service --port $PORT &
 
 ### Using GraphiQL
 
-Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE`
+Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE`.
 
-To create a `Bid` order nature
+To create a `Bid` order nature:
 
 ```json
 mutation ExecuteOrder {
   executeOrder(
     order:{
-      Insert : {
+        Insert : {
         owner: "User:e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316",
         amount: "1",
         nature: Bid,
@@ -128,7 +130,7 @@ mutation ExecuteOrder {
 }
 ```
 
-To query about the bid price
+To query about the bid price:
 
 ```json
 query{
