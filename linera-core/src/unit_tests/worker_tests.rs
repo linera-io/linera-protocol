@@ -164,9 +164,38 @@ fn make_certificate_with_round<S>(
 }
 
 #[allow(clippy::too_many_arguments)]
+async fn make_simple_transfer_certificate<S>(
+    chain_description: ChainDescription,
+    key_pair: &KeyPair,
+    target_id: ChainId,
+    amount: Amount,
+    incoming_messages: Vec<IncomingMessage>,
+    committee: &Committee,
+    balance: Amount,
+    worker: &WorkerState<S>,
+    previous_confirmed_block: Option<&Certificate>,
+) -> Certificate {
+    make_transfer_certificate_for_epoch(
+        chain_description,
+        key_pair,
+        None,
+        Recipient::chain(target_id),
+        amount,
+        incoming_messages,
+        Epoch::ZERO,
+        committee,
+        balance,
+        worker,
+        previous_confirmed_block,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
 async fn make_transfer_certificate<S>(
     chain_description: ChainDescription,
     key_pair: &KeyPair,
+    source: Option<Owner>,
     recipient: Recipient,
     amount: Amount,
     incoming_messages: Vec<IncomingMessage>,
@@ -178,6 +207,7 @@ async fn make_transfer_certificate<S>(
     make_transfer_certificate_for_epoch(
         chain_description,
         key_pair,
+        source,
         recipient,
         amount,
         incoming_messages,
@@ -194,6 +224,7 @@ async fn make_transfer_certificate<S>(
 async fn make_transfer_certificate_for_epoch<S>(
     chain_description: ChainDescription,
     key_pair: &KeyPair,
+    source: Option<Owner>,
     recipient: Recipient,
     amount: Amount,
     incoming_messages: Vec<IncomingMessage>,
@@ -238,14 +269,14 @@ async fn make_transfer_certificate_for_epoch<S>(
         incoming_messages,
         ..block_template
     }
-    .with_simple_transfer(recipient, amount);
+    .with_transfer(source, recipient, amount);
     match recipient {
         Recipient::Account(account) => {
             messages.push(direct_outgoing_message(
                 account.chain_id,
                 MessageKind::Tracked,
                 SystemMessage::Credit {
-                    source: None,
+                    source,
                     target: account.owner,
                     amount,
                 },
@@ -368,7 +399,7 @@ where
     )
     .await;
     let block_proposal = make_first_block(ChainId::root(1))
-        .with_simple_transfer(Recipient::root(2), Amount::from_tokens(5))
+        .with_simple_transfer(ChainId::root(2), Amount::from_tokens(5))
         .into_fast_proposal(&sender_key_pair);
     let unknown_key_pair = KeyPair::generate();
     let mut bad_signature_block_proposal = block_proposal.clone();
@@ -439,7 +470,7 @@ where
     .await;
     // test block non-positive amount
     let zero_amount_block_proposal = make_first_block(ChainId::root(1))
-        .with_simple_transfer(Recipient::root(2), Amount::ZERO)
+        .with_simple_transfer(ChainId::root(2), Amount::ZERO)
         .into_fast_proposal(&sender_key_pair);
     assert!(matches!(
     worker
@@ -604,7 +635,7 @@ where
     )
     .await;
     let block_proposal = make_first_block(ChainId::root(1))
-        .with_simple_transfer(Recipient::root(2), Amount::from_tokens(5))
+        .with_simple_transfer(ChainId::root(2), Amount::from_tokens(5))
         .into_fast_proposal(&sender_key_pair);
     let unknown_key = KeyPair::generate();
 
@@ -671,12 +702,12 @@ where
     )
     .await;
     let block_proposal0 = make_first_block(ChainId::root(1))
-        .with_simple_transfer(Recipient::root(2), Amount::ONE)
+        .with_simple_transfer(ChainId::root(2), Amount::ONE)
         .into_fast_proposal(&sender_key_pair);
-    let certificate0 = make_transfer_certificate(
+    let certificate0 = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Recipient::root(2),
+        ChainId::root(2),
         Amount::ONE,
         Vec::new(),
         &committee,
@@ -686,7 +717,7 @@ where
     )
     .await;
     let block_proposal1 = make_child_block(&certificate0.value)
-        .with_simple_transfer(Recipient::root(2), Amount::from_tokens(2))
+        .with_simple_transfer(ChainId::root(2), Amount::from_tokens(2))
         .into_fast_proposal(&sender_key_pair);
 
     assert!(matches!(
@@ -771,7 +802,6 @@ where
 {
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
-    let recipient = Recipient::root(2);
     let (committee, mut worker) = init_worker_with_chains(
         storage,
         vec![
@@ -795,8 +825,8 @@ where
         &worker,
         HashedValue::new_confirmed(ExecutedBlock {
             block: make_first_block(ChainId::root(1))
-                .with_simple_transfer(recipient, Amount::ONE)
-                .with_simple_transfer(recipient, Amount::from_tokens(2)),
+                .with_simple_transfer(ChainId::root(2), Amount::ONE)
+                .with_simple_transfer(ChainId::root(2), Amount::from_tokens(2)),
             messages: vec![
                 direct_credit_message(ChainId::root(2), Amount::ONE),
                 direct_credit_message(ChainId::root(2), Amount::from_tokens(2)),
@@ -817,7 +847,7 @@ where
         &worker,
         HashedValue::new_confirmed(ExecutedBlock {
             block: make_child_block(&certificate0.value)
-                .with_simple_transfer(recipient, Amount::from_tokens(3)),
+                .with_simple_transfer(ChainId::root(2), Amount::from_tokens(3)),
             messages: vec![direct_credit_message(
                 ChainId::root(2),
                 Amount::from_tokens(3),
@@ -892,7 +922,7 @@ where
     );
     {
         let block_proposal = make_first_block(ChainId::root(2))
-            .with_simple_transfer(Recipient::root(3), Amount::from_tokens(6))
+            .with_simple_transfer(ChainId::root(3), Amount::from_tokens(6))
             .into_fast_proposal(&recipient_key_pair);
         // Insufficient funding
         assert!(matches!(
@@ -910,7 +940,7 @@ where
     }
     {
         let block_proposal = make_first_block(ChainId::root(2))
-            .with_simple_transfer(Recipient::root(3), Amount::from_tokens(5))
+            .with_simple_transfer(ChainId::root(3), Amount::from_tokens(5))
             .with_incoming_message(IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
@@ -960,7 +990,7 @@ where
     }
     {
         let block_proposal = make_first_block(ChainId::root(2))
-            .with_simple_transfer(Recipient::root(3), Amount::from_tokens(6))
+            .with_simple_transfer(ChainId::root(3), Amount::from_tokens(6))
             .with_incoming_message(IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
@@ -984,7 +1014,7 @@ where
     }
     {
         let block_proposal = make_first_block(ChainId::root(2))
-            .with_simple_transfer(Recipient::root(3), Amount::from_tokens(6))
+            .with_simple_transfer(ChainId::root(3), Amount::from_tokens(6))
             .with_incoming_message(IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
@@ -1034,7 +1064,7 @@ where
     }
     {
         let block_proposal = make_first_block(ChainId::root(2))
-            .with_simple_transfer(Recipient::root(3), Amount::ONE)
+            .with_simple_transfer(ChainId::root(3), Amount::ONE)
             .with_incoming_message(IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
@@ -1076,7 +1106,7 @@ where
 
         // Then receive the next two messages.
         let block_proposal = make_child_block(&certificate.value)
-            .with_simple_transfer(Recipient::root(3), Amount::from_tokens(3))
+            .with_simple_transfer(ChainId::root(3), Amount::from_tokens(3))
             .with_incoming_message(IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
@@ -1158,7 +1188,7 @@ where
     )
     .await;
     let block_proposal = make_first_block(ChainId::root(1))
-        .with_simple_transfer(Recipient::root(2), Amount::from_tokens(1000))
+        .with_simple_transfer(ChainId::root(2), Amount::from_tokens(1000))
         .into_fast_proposal(&sender_key_pair);
     assert!(matches!(
         worker.handle_block_proposal(block_proposal).await,
@@ -1227,7 +1257,7 @@ where
     )
     .await;
     let block_proposal = make_first_block(ChainId::root(1))
-        .with_simple_transfer(Recipient::root(2), Amount::from_tokens(5))
+        .with_simple_transfer(ChainId::root(2), Amount::from_tokens(5))
         .into_fast_proposal(&sender_key_pair);
 
     let (chain_info_response, _actions) =
@@ -1298,7 +1328,7 @@ where
     )
     .await;
     let block_proposal = make_first_block(ChainId::root(1))
-        .with_simple_transfer(Recipient::root(2), Amount::from_tokens(5))
+        .with_simple_transfer(ChainId::root(2), Amount::from_tokens(5))
         .into_fast_proposal(&sender_key_pair);
 
     let (response, _actions) = worker
@@ -1356,10 +1386,10 @@ where
         vec![(ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO)],
     )
     .await;
-    let certificate = make_transfer_certificate(
+    let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Recipient::root(2),
+        ChainId::root(2),
         Amount::from_tokens(5),
         Vec::new(),
         &committee,
@@ -1512,10 +1542,10 @@ where
         )],
     )
     .await;
-    let certificate = make_transfer_certificate(
+    let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(2),
         &sender_key_pair,
-        Recipient::root(2),
+        ChainId::root(2),
         Amount::from_tokens(5),
         Vec::new(),
         &committee,
@@ -1578,10 +1608,10 @@ where
         ],
     )
     .await;
-    let certificate = make_transfer_certificate(
+    let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Recipient::root(2),
+        ChainId::root(2),
         Amount::from_tokens(5),
         Vec::new(),
         &committee,
@@ -1648,10 +1678,10 @@ where
     )
     .await;
 
-    let certificate = make_transfer_certificate(
+    let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &key_pair,
-        Recipient::root(2),
+        ChainId::root(2),
         Amount::from_tokens(1000),
         vec![IncomingMessage {
             origin: Origin::chain(ChainId::root(3)),
@@ -1772,10 +1802,10 @@ where
     )
     .await;
 
-    let certificate = make_transfer_certificate(
+    let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Recipient::root(2),
+        ChainId::root(2),
         Amount::ONE,
         Vec::new(),
         &committee,
@@ -1855,10 +1885,10 @@ where
     let (committee, mut worker) =
         init_worker_with_chain(storage, ChainDescription::Root(1), name, Amount::ONE).await;
 
-    let certificate = make_transfer_certificate(
+    let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &key_pair,
-        Recipient::root(1),
+        ChainId::root(1),
         Amount::ONE,
         Vec::new(),
         &committee,
@@ -1953,10 +1983,10 @@ where
         vec![(ChainDescription::Root(2), PublicKey::debug(2), Amount::ONE)],
     )
     .await;
-    let certificate = make_transfer_certificate(
+    let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Recipient::root(2),
+        ChainId::root(2),
         Amount::from_tokens(10),
         Vec::new(),
         &committee,
@@ -2050,10 +2080,10 @@ where
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker(storage, /* is_client */ false);
-    let certificate = make_transfer_certificate(
+    let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Recipient::root(2),
+        ChainId::root(2),
         Amount::from_tokens(10),
         Vec::new(),
         &committee,
@@ -2113,10 +2143,10 @@ where
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker(storage, /* is_client */ true);
-    let certificate = make_transfer_certificate(
+    let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Recipient::root(2),
+        ChainId::root(2),
         Amount::from_tokens(10),
         Vec::new(),
         &committee,
@@ -2225,10 +2255,10 @@ where
         })
     );
 
-    let certificate = make_transfer_certificate(
+    let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Recipient::root(2),
+        ChainId::root(2),
         Amount::from_tokens(5),
         Vec::new(),
         &committee,
@@ -2260,10 +2290,10 @@ where
     );
 
     // Try to use the money. This requires selecting the incoming message in a next block.
-    let certificate = make_transfer_certificate(
+    let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(2),
         &recipient_key_pair,
-        Recipient::root(3),
+        ChainId::root(3),
         Amount::ONE,
         vec![IncomingMessage {
             origin: Origin::chain(ChainId::root(1)),
@@ -2380,10 +2410,10 @@ where
         )],
     )
     .await;
-    let certificate = make_transfer_certificate(
+    let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Recipient::root(2), // the recipient chain does not exist
+        ChainId::root(2), // the recipient chain does not exist
         Amount::from_tokens(5),
         Vec::new(),
         &committee,
@@ -2458,10 +2488,10 @@ where
     .await;
 
     // Make two transfers.
-    let certificate0 = make_transfer_certificate(
+    let certificate0 = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Recipient::root(2),
+        ChainId::root(2),
         Amount::from_tokens(3),
         Vec::new(),
         &committee,
@@ -2476,10 +2506,10 @@ where
         .await
         .unwrap();
 
-    let certificate1 = make_transfer_certificate(
+    let certificate1 = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Recipient::root(2),
+        ChainId::root(2),
         Amount::from_tokens(2),
         Vec::new(),
         &committee,
@@ -2498,6 +2528,7 @@ where
     let certificate = make_transfer_certificate(
         ChainDescription::Root(2),
         &recipient_key_pair,
+        None,
         Recipient::Burn,
         Amount::ONE,
         vec![
@@ -2553,6 +2584,7 @@ where
     let certificate2 = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
+        None,
         Recipient::Burn,
         Amount::from_tokens(3),
         vec![IncomingMessage {
@@ -2737,7 +2769,7 @@ where
                     epoch: Epoch::from(1),
                     committee: committee.clone(),
                 }))
-                .with_simple_transfer(Recipient::chain(user_id), Amount::from_tokens(2)),
+                .with_simple_transfer(user_id, Amount::from_tokens(2)),
             messages: vec![
                 channel_admin_message(SystemMessage::SetCommittees {
                     epoch: Epoch::from(1),
@@ -3084,8 +3116,7 @@ where
         &committee,
         &worker,
         HashedValue::new_confirmed(ExecutedBlock {
-            block: make_first_block(user_id)
-                .with_simple_transfer(Recipient::chain(admin_id), Amount::ONE),
+            block: make_first_block(user_id).with_simple_transfer(admin_id, Amount::ONE),
             messages: vec![direct_credit_message(admin_id, Amount::ONE)],
             message_counts: vec![1],
             state_hash: make_state_hash(SystemExecutionState {
@@ -3228,8 +3259,7 @@ where
         &committee,
         &worker,
         HashedValue::new_confirmed(ExecutedBlock {
-            block: make_first_block(user_id)
-                .with_simple_transfer(Recipient::chain(admin_id), Amount::ONE),
+            block: make_first_block(user_id).with_simple_transfer(admin_id, Amount::ONE),
             messages: vec![direct_credit_message(admin_id, Amount::ONE)],
             message_counts: vec![1],
             state_hash: make_state_hash(SystemExecutionState {
@@ -3385,6 +3415,7 @@ async fn test_cross_chain_helper() {
     let certificate0 = make_transfer_certificate_for_epoch(
         ChainDescription::Root(0),
         &key_pair0,
+        None,
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -3398,6 +3429,7 @@ async fn test_cross_chain_helper() {
     let certificate1 = make_transfer_certificate_for_epoch(
         ChainDescription::Root(0),
         &key_pair0,
+        None,
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -3411,6 +3443,7 @@ async fn test_cross_chain_helper() {
     let certificate2 = make_transfer_certificate_for_epoch(
         ChainDescription::Root(0),
         &key_pair0,
+        None,
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -3425,6 +3458,7 @@ async fn test_cross_chain_helper() {
     let certificate3 = make_transfer_certificate_for_epoch(
         ChainDescription::Root(0),
         &key_pair0,
+        None,
         Recipient::chain(id1),
         Amount::ONE,
         Vec::new(),
@@ -3727,7 +3761,7 @@ where
 
     // Create block2, also at height 1, but different from block 1.
     let amount = Amount::from_tokens(1);
-    let block2 = make_child_block(&value0).with_simple_transfer(Recipient::root(1), amount);
+    let block2 = make_child_block(&value0).with_simple_transfer(ChainId::root(1), amount);
     let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await.unwrap();
 
     // Since round 3 is already over, a validated block from round 3 won't update the validator's
