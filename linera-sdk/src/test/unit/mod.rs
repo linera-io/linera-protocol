@@ -36,7 +36,6 @@ static mut MOCK_SYSTEM_BALANCE: Option<Amount> = None;
 static mut MOCK_SYSTEM_TIMESTAMP: Option<Timestamp> = None;
 static mut MOCK_LOG_COLLECTOR: Vec<(log::Level, String)> = Vec::new();
 static mut MOCK_APPLICATION_STATE: Option<Vec<u8>> = None;
-static mut MOCK_APPLICATION_STATE_LOCKED: bool = false;
 static mut MOCK_KEY_VALUE_STORE: Option<MemoryContext<()>> = None;
 static mut MOCK_TRY_QUERY_APPLICATION: Option<
     Box<dyn FnMut(ApplicationId, Vec<u8>) -> Result<Vec<u8>, String>>,
@@ -159,50 +158,14 @@ impl wit::MockSystemApi for MockSystemApi {
         )
     }
 
-    fn mocked_load_and_lock() -> Option<Vec<u8>> {
-        if unsafe { MOCK_APPLICATION_STATE_LOCKED } {
-            None
-        } else {
-            let state = unsafe { MOCK_APPLICATION_STATE.clone() }.expect(
-                "Unexpected call to the `load_and_lock` system API. \
-                Please call `mock_application_state` first",
-            );
-            unsafe { MOCK_APPLICATION_STATE_LOCKED = true };
-            Some(state)
-        }
-    }
-
-    fn mocked_store_and_unlock(state: Vec<u8>) -> bool {
-        if unsafe { MOCK_APPLICATION_STATE_LOCKED } {
-            assert!(
-                unsafe { MOCK_APPLICATION_STATE.is_some() },
-                "Unexpected call to `store_and_unlock` system API. \
-                Please call `mock_application_state` first."
-            );
-            unsafe { MOCK_APPLICATION_STATE = Some(state) };
-            unsafe { MOCK_APPLICATION_STATE_LOCKED = false };
-            true
-        } else {
-            false
-        }
-    }
-
-    fn mocked_lock() -> bool {
-        if unsafe { MOCK_APPLICATION_STATE_LOCKED } {
-            false
-        } else {
-            unsafe { MOCK_APPLICATION_STATE_LOCKED = true };
-            true
-        }
-    }
-
-    fn mocked_unlock() -> bool {
-        if unsafe { MOCK_APPLICATION_STATE_LOCKED } {
-            unsafe { MOCK_APPLICATION_STATE_LOCKED = false };
-            true
-        } else {
-            false
-        }
+    fn mocked_store(state: Vec<u8>) -> bool {
+        assert!(
+            unsafe { MOCK_APPLICATION_STATE.is_some() },
+            "Unexpected call to `store_and_unlock` system API. \
+            Please call `mock_application_state` first."
+        );
+        unsafe { MOCK_APPLICATION_STATE = Some(state) };
+        true
     }
 
     fn mocked_read_multi_values_bytes(keys: Vec<Vec<u8>>) -> Vec<Option<Vec<u8>>> {
