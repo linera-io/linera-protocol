@@ -46,7 +46,7 @@ async fn test_fuel_for_counter_wasm_application(
             execution_runtime_config,
         )
         .await;
-    let app_desc = create_dummy_user_application_description();
+    let app_desc = create_dummy_user_application_description(1);
     let app_id = view
         .system
         .registry

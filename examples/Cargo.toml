@@ -7,7 +7,6 @@ members = [
         "fungible",
         "matching-engine",
         "meta-counter",
-        "reentrant-counter",
         "social",
 ]
 

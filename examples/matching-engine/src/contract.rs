@@ -67,7 +67,7 @@ impl Contract for MatchingEngine {
                 if context.chain_id == system_api::current_application_id().creation.chain_id {
                     self.execute_order_local(order).await?;
                 } else {
-                    self.execute_order_remote(&mut result, order).await?;
+                    self.execute_order_remote(&mut result, order)?;
                 }
             }
         }
@@ -115,8 +115,7 @@ impl Contract for MatchingEngine {
                 if context.chain_id == system_api::current_application_id().creation.chain_id {
                     self.execute_order_local(order).await?;
                 } else {
-                    self.execute_order_remote(&mut result.execution_result, order)
-                        .await?;
+                    self.execute_order_remote(&mut result.execution_result, order)?;
                 }
             }
         }
@@ -175,7 +174,7 @@ impl MatchingEngine {
     }
 
     /// Calls into the Fungible Token application to receive tokens from the given account.
-    async fn receive_from_account(
+    fn receive_from_account(
         &mut self,
         owner: &AccountOwner,
         amount: &Amount,
@@ -188,11 +187,11 @@ impl MatchingEngine {
         };
         let destination = Destination::Account(account);
         let (amount, token_idx) = Self::get_amount_idx(nature, price, amount);
-        self.transfer(*owner, amount, destination, token_idx).await
+        self.transfer(*owner, amount, destination, token_idx)
     }
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
-    async fn send_to(&mut self, transfer: Transfer) -> Result<(), MatchingEngineError> {
+    fn send_to(&mut self, transfer: Transfer) -> Result<(), MatchingEngineError> {
         let account = Account {
             chain_id: system_api::current_chain_id(),
             owner: transfer.owner,
@@ -200,11 +199,10 @@ impl MatchingEngine {
         let destination = Destination::Account(account);
         let owner_app = AccountOwner::Application(system_api::current_application_id());
         self.transfer(owner_app, transfer.amount, destination, transfer.token_idx)
-            .await
     }
 
     /// Transfers tokens from the owner to the destination
-    async fn transfer(
+    fn transfer(
         &mut self,
         owner: AccountOwner,
         amount: Amount,
@@ -217,8 +215,7 @@ impl MatchingEngine {
             destination,
         };
         let token = Self::fungible_id(token_idx).expect("failed to get the token");
-        self.call_application(true, token, &transfer, vec![])
-            .await?;
+        self.call_application(true, token, &transfer, vec![])?;
         Ok(())
     }
 
@@ -239,13 +236,12 @@ impl MatchingEngine {
                 nature,
                 price,
             } => {
-                self.receive_from_account(&owner, &amount, &nature, &price)
-                    .await?;
+                self.receive_from_account(&owner, &amount, &nature, &price)?;
                 let transfers = self
                     .insert_and_uncross_market(&owner, amount, nature, &price)
                     .await?;
                 for transfer in transfers {
-                    self.send_to(transfer).await?;
+                    self.send_to(transfer)?;
                 }
             }
             Order::Cancel { owner, order_id } => {
@@ -283,7 +279,7 @@ impl MatchingEngine {
     ///   This is similar to the code for the crowd-funding.
     /// * Creation of the message that will represent the order on the chain of the matching
     ///   engine
-    async fn execute_order_remote(
+    fn execute_order_remote(
         &mut self,
         result: &mut ExecutionResult<Message>,
         order: Order,
@@ -302,7 +298,7 @@ impl MatchingEngine {
             // First, move the funds to the matching engine chain (under the same owner).
             let destination = fungible::Destination::Account(Account { chain_id, owner });
             let (amount, token_idx) = Self::get_amount_idx(&nature, &price, &amount);
-            self.transfer(owner, amount, destination, token_idx).await?;
+            self.transfer(owner, amount, destination, token_idx)?;
         }
         result.messages.push(OutgoingMessage {
             destination: chain_id.into(),
@@ -343,7 +339,7 @@ impl MatchingEngine {
     ) -> Result<(), MatchingEngineError> {
         self.check_order_id(&order_id, owner).await?;
         let transfer = self.modify_order(order_id, cancel_amount).await?;
-        self.send_to(transfer).await
+        self.send_to(transfer)
     }
 
     /// Orders which have length 0 should be removed from the system.
@@ -441,7 +437,7 @@ impl MatchingEngine {
     }
 
     /// Get the order_id that increases starting from 0.
-    async fn get_new_order_id(&mut self) -> Result<OrderId, MatchingEngineError> {
+    fn get_new_order_id(&mut self) -> Result<OrderId, MatchingEngineError> {
         let value = self.next_order_number.get_mut();
         let value_ret = *value;
         *value += 1;
@@ -649,7 +645,7 @@ impl MatchingEngine {
         // Asks are ordered from the smallest (most preferable) to the highest.
         // The prices have custom serialization so that they are in increasing order.
         // To reverse the order of the bids, we take the bitwise complement of the price.
-        let order_id = self.get_new_order_id().await?;
+        let order_id = self.get_new_order_id()?;
         let mut final_amount = amount;
         let mut transfers = Vec::new();
         match nature {

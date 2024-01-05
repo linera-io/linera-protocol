@@ -72,8 +72,7 @@ impl Contract for MetaCounter {
             return Err(Error::ValueIsTooHigh);
         }
         log::trace!("executing {} via {:?}", value, Self::counter_id()?);
-        self.call_application(true, Self::counter_id()?, &value, vec![])
-            .await?;
+        self.call_application(true, Self::counter_id()?, &value, vec![])?;
         Ok(ExecutionResult::default())
     }
 

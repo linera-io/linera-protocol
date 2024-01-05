@@ -47,9 +47,9 @@ impl Contract for Amm {
     ) -> Result<ExecutionResult<Self::Message>, AmmError> {
         let mut result = ExecutionResult::default();
         if context.chain_id == system_api::current_application_id().creation.chain_id {
-            self.execute_order_local(operation).await?;
+            self.execute_order_local(operation)?;
         } else {
-            self.execute_order_remote(&mut result, operation).await?;
+            self.execute_order_remote(&mut result, operation)?;
         }
 
         Ok(result)
@@ -72,8 +72,7 @@ impl Contract for Amm {
                 input_amount,
             } => {
                 Self::check_account_authentication(None, context.authenticated_signer, owner)?;
-                self.execute_swap(owner, input_token_idx, input_amount)
-                    .await?;
+                self.execute_swap(owner, input_token_idx, input_amount)?;
             }
         }
 
@@ -100,14 +99,12 @@ impl Contract for Amm {
                     owner,
                 )?;
                 if context.chain_id == system_api::current_application_id().creation.chain_id {
-                    self.execute_swap(owner, input_token_idx, input_amount)
-                        .await?;
+                    self.execute_swap(owner, input_token_idx, input_amount)?;
                 } else {
                     self.execute_application_call_remote(
                         &mut result.execution_result,
                         application_call,
-                    )
-                    .await?;
+                    )?;
                 }
             }
         }
@@ -141,7 +138,7 @@ impl Amm {
         }
     }
 
-    async fn execute_order_local(&mut self, operation: Operation) -> Result<(), AmmError> {
+    fn execute_order_local(&mut self, operation: Operation) -> Result<(), AmmError> {
         match operation {
             Operation::Swap {
                 owner: _,
@@ -157,8 +154,8 @@ impl Amm {
                     return Err(AmmError::NoZeroAmounts);
                 }
 
-                let balance0 = self.get_pool_balance(0).await?;
-                let balance1 = self.get_pool_balance(1).await?;
+                let balance0 = self.get_pool_balance(0)?;
+                let balance1 = self.get_pool_balance(1)?;
 
                 let token0_amount;
                 let token1_amount;
@@ -219,8 +216,8 @@ impl Amm {
                     token1_amount = max_token1_amount;
                 }
 
-                self.receive_from_account(&owner, 0, token0_amount).await?;
-                self.receive_from_account(&owner, 1, token1_amount).await?;
+                self.receive_from_account(&owner, 0, token0_amount)?;
+                self.receive_from_account(&owner, 1, token1_amount)?;
 
                 Ok(())
             }
@@ -237,8 +234,8 @@ impl Amm {
                 }
 
                 let other_token_to_remove_idx = 1 - token_to_remove_idx;
-                let balance0 = self.get_pool_balance(0).await?;
-                let balance1 = self.get_pool_balance(1).await?;
+                let balance0 = self.get_pool_balance(0)?;
+                let balance1 = self.get_pool_balance(1)?;
 
                 if token_to_remove_idx == 0 && token_to_remove_amount > balance0 {
                     token_to_remove_amount = balance0;
@@ -269,16 +266,14 @@ impl Amm {
                     )
                 };
 
-                self.send_to(&owner, token_to_remove_idx, token_to_remove_amount)
-                    .await?;
-                self.send_to(&owner, other_token_to_remove_idx, other_amount)
-                    .await?;
+                self.send_to(&owner, token_to_remove_idx, token_to_remove_amount)?;
+                self.send_to(&owner, other_token_to_remove_idx, other_amount)?;
                 Ok(())
             }
         }
     }
 
-    async fn execute_swap(
+    fn execute_swap(
         &mut self,
         owner: AccountOwner,
         input_token_idx: u32,
@@ -293,21 +288,19 @@ impl Amm {
         }
 
         let output_token_idx = 1 - input_token_idx;
-        let input_pool_balance = self.get_pool_balance(input_token_idx).await?;
-        let output_pool_balance = self.get_pool_balance(output_token_idx).await?;
+        let input_pool_balance = self.get_pool_balance(input_token_idx)?;
+        let output_pool_balance = self.get_pool_balance(output_token_idx)?;
 
         let output_amount =
             self.calculate_output_amount(input_amount, input_pool_balance, output_pool_balance)?;
 
-        self.receive_from_account(&owner, input_token_idx, input_amount)
-            .await?;
-        self.send_to(&owner, output_token_idx, output_amount)
-            .await?;
+        self.receive_from_account(&owner, input_token_idx, input_amount)?;
+        self.send_to(&owner, output_token_idx, output_amount)?;
 
         Ok(())
     }
 
-    async fn execute_order_remote(
+    fn execute_order_remote(
         &mut self,
         result: &mut ExecutionResult<Message>,
         operation: Operation,
@@ -350,7 +343,7 @@ impl Amm {
         Ok(())
     }
 
-    async fn execute_application_call_remote(
+    fn execute_application_call_remote(
         &mut self,
         result: &mut ExecutionResult<Message>,
         application_call: ApplicationCall,
@@ -422,9 +415,9 @@ impl Amm {
         Ok(output_amount)
     }
 
-    async fn get_pool_balance(&mut self, token_idx: u32) -> Result<Amount, AmmError> {
+    fn get_pool_balance(&mut self, token_idx: u32) -> Result<Amount, AmmError> {
         let pool_owner = AccountOwner::Application(system_api::current_application_id());
-        self.balance(&pool_owner, token_idx).await
+        self.balance(&pool_owner, token_idx)
     }
 
     fn fungible_id(token_idx: u32) -> Result<ApplicationId<FungibleTokenAbi>, AmmError> {
@@ -432,7 +425,7 @@ impl Amm {
         Ok(parameter.tokens[token_idx as usize])
     }
 
-    async fn transfer(
+    fn transfer(
         &mut self,
         owner: &AccountOwner,
         amount: Amount,
@@ -445,25 +438,20 @@ impl Amm {
             destination,
         };
         let token = Self::fungible_id(token_idx).expect("failed to get the token");
-        self.call_application(true, token, &transfer, vec![])
-            .await?;
+        self.call_application(true, token, &transfer, vec![])?;
         Ok(())
     }
 
-    async fn balance(&mut self, owner: &AccountOwner, token_idx: u32) -> Result<Amount, AmmError> {
+    fn balance(&mut self, owner: &AccountOwner, token_idx: u32) -> Result<Amount, AmmError> {
         let balance = fungible::ApplicationCall::Balance { owner: *owner };
         let token = Self::fungible_id(token_idx).expect("failed to get the token");
-        match self
-            .call_application(true, token, &balance, vec![])
-            .await?
-            .0
-        {
+        match self.call_application(true, token, &balance, vec![])?.0 {
             fungible::FungibleResponse::Balance(balance) => Ok(balance),
             response => Err(AmmError::UnexpectedFungibleResponse(response)),
         }
     }
 
-    async fn receive_from_account(
+    fn receive_from_account(
         &mut self,
         owner: &AccountOwner,
         token_idx: u32,
@@ -474,10 +462,10 @@ impl Amm {
             owner: AccountOwner::Application(system_api::current_application_id()),
         };
         let destination = Destination::Account(account);
-        self.transfer(owner, amount, destination, token_idx).await
+        self.transfer(owner, amount, destination, token_idx)
     }
 
-    async fn send_to(
+    fn send_to(
         &mut self,
         owner: &AccountOwner,
         token_idx: u32,
@@ -490,6 +478,5 @@ impl Amm {
         let destination = Destination::Account(account);
         let owner_app = AccountOwner::Application(system_api::current_application_id());
         self.transfer(&owner_app, amount, destination, token_idx)
-            .await
     }
 }

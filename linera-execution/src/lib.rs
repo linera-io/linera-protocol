@@ -123,6 +123,8 @@ pub enum ExecutionError {
     #[error("Session {0} is still opened at the end of a transaction")]
     SessionWasNotClosed(SessionId),
 
+    #[error("Attempted to perform a reentrant call to application {0}")]
+    ReentrantCall(UserApplicationId),
     #[error("Attempted to call application {0} while the state is locked")]
     ApplicationIsInUse(UserApplicationId),
     #[error("Attempted to read the state of application {0} but it is not locked")]

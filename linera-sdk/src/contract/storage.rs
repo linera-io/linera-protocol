@@ -14,7 +14,7 @@ use async_trait::async_trait;
 use futures::TryFutureExt;
 use linera_views::views::RootView;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{future::Future, mem};
+use std::future::Future;
 
 /// The storage APIs used by a contract.
 #[async_trait]
@@ -50,16 +50,6 @@ pub trait ContractStateStorage<Application> {
             .await
             .map_err(|error| error.to_string())
     }
-
-    /// Executes an `operation`, persisting the `Application` `state` before execution and reloading
-    /// the `state` afterwards.
-    async fn execute_with_released_state<Operation>(
-        state: &mut Application,
-        operation: impl FnOnce() -> Operation + Send,
-    ) -> Operation::Output
-    where
-        Operation: Future + Send,
-        Operation::Output: Send;
 }
 
 #[async_trait]
@@ -74,20 +64,6 @@ where
     async fn store_and_unlock(state: Application) {
         system_api::store_and_unlock(state).await;
     }
-
-    async fn execute_with_released_state<Operation>(
-        state: &mut Application,
-        operation: impl FnOnce() -> Operation + Send,
-    ) -> Operation::Output
-    where
-        Operation: Future + Send,
-        Operation::Output: Send,
-    {
-        Self::store_and_unlock(mem::take(state)).await;
-        let result = operation().await;
-        *state = Self::load_and_lock().await;
-        result
-    }
 }
 
 #[async_trait]
@@ -101,19 +77,5 @@ where
 
     async fn store_and_unlock(state: Application) {
         system_api::store_and_unlock_view(state).await;
-    }
-
-    async fn execute_with_released_state<Operation>(
-        state: &mut Application,
-        operation: impl FnOnce() -> Operation + Send,
-    ) -> Operation::Output
-    where
-        Operation: Future + Send,
-        Operation::Output: Send,
-    {
-        state.save().await.expect("Failed to save view state");
-        let result = operation().await;
-        *state = Self::load_and_lock().await;
-        result
     }
 }

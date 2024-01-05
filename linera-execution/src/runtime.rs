@@ -18,7 +18,7 @@ use linera_base::{
 use linera_views::batch::Batch;
 use oneshot::Receiver;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     ops::DerefMut,
     sync::{Arc, Mutex},
 };
@@ -39,7 +39,9 @@ pub struct SyncRuntimeInternal<const WRITABLE: bool> {
     execution_state_sender: ExecutionStateSender,
 
     /// The current stack of application descriptions.
-    applications: Vec<ApplicationStatus>,
+    call_stack: Vec<ApplicationStatus>,
+    /// The set of the IDs of the applications that are in the `call_stack`.
+    active_applications: HashSet<UserApplicationId>,
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
     execution_results: Vec<ExecutionResult>,
 
@@ -210,7 +212,8 @@ impl<const W: bool> SyncRuntimeInternal<W> {
         Self {
             chain_id,
             execution_state_sender,
-            applications: Vec::new(),
+            call_stack: Vec::new(),
+            active_applications: HashSet::new(),
             execution_results: Vec::default(),
             session_manager: SessionManager::default(),
             simple_user_states: BTreeMap::default(),
@@ -236,6 +239,42 @@ impl<const W: bool> SyncRuntimeInternal<W> {
         self.execution_state_sender
             .send_request(|callback| Request::LoadService { id, callback })?
             .recv_response()
+    }
+
+    /// Returns the [`ApplicationStatus`] of the current application.
+    ///
+    /// The current application is the last to be pushed to the `call_stack`.
+    ///
+    /// # Panics
+    ///
+    /// If the call stack is empty.
+    fn current_application(&mut self) -> &ApplicationStatus {
+        self.call_stack
+            .last()
+            .expect("Call stack is unexpectedly empty")
+    }
+
+    /// Inserts a new [`ApplicationStatus`] to the end of the `call_stack`.
+    ///
+    /// Ensures the application's ID is also tracked in the `active_applications` set.
+    fn push_application(&mut self, status: ApplicationStatus) {
+        self.active_applications.insert(status.id);
+        self.call_stack.push(status);
+    }
+
+    /// Removes the [`current_application`][`Self::current_application`] from the `call_stack`.
+    ///
+    /// Ensures the application's ID is also removed from the `active_applications` set.
+    ///
+    /// # Panics
+    ///
+    /// If the call stack is empty.
+    fn pop_application(&mut self) {
+        let status = self
+            .call_stack
+            .pop()
+            .expect("Can't remove application from empty call stack");
+        assert!(self.active_applications.remove(&status.id));
     }
 
     fn forward_sessions(
@@ -382,6 +421,21 @@ impl<const W: bool> SyncRuntime<W> {
             .try_lock()
             .expect("Synchronous runtimes run on a single execution thread")
     }
+
+    /// Ensures that a call to `application_id` is not-reentrant.
+    ///
+    /// Returns an error if there already is an entry for `application_id` in the call stack.
+    fn check_for_reentrancy(
+        &mut self,
+        application_id: UserApplicationId,
+    ) -> Result<(), ExecutionError> {
+        let this = self.as_inner();
+        ensure!(
+            !this.active_applications.contains(&application_id),
+            ExecutionError::ReentrantCall(application_id)
+        );
+        Ok(())
+    }
 }
 
 impl<const W: bool> BaseRuntime for SyncRuntime<W> {
@@ -522,22 +576,11 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     }
 
     fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError> {
-        let id = self
-            .applications
-            .last()
-            .expect("at least one application description should be present in the stack")
-            .id;
-        Ok(id)
+        Ok(self.current_application().id)
     }
 
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError> {
-        let parameters = self
-            .applications
-            .last()
-            .expect("at least one application description should be present in the stack")
-            .parameters
-            .clone();
-        Ok(parameters)
+        Ok(self.current_application().parameters.clone())
     }
 
     fn read_system_balance(&mut self) -> Result<Amount, ExecutionError> {
@@ -786,7 +829,7 @@ impl ContractSyncRuntime {
         );
         let (code, description) = runtime.load_contract(application_id)?;
         let signer = action.signer();
-        runtime.applications.push(ApplicationStatus {
+        runtime.push_application(ApplicationStatus {
             id: application_id,
             parameters: description.parameters,
             signer,
@@ -805,8 +848,10 @@ impl ContractSyncRuntime {
         let mut runtime = runtime
             .into_inner()
             .expect("Runtime clones should have been freed by now");
-        assert_eq!(runtime.applications.len(), 1);
-        assert_eq!(runtime.applications[0].id, application_id);
+        assert_eq!(runtime.call_stack.len(), 1);
+        assert_eq!(runtime.call_stack[0].id, application_id);
+        assert_eq!(runtime.active_applications.len(), 1);
+        assert!(runtime.active_applications.contains(&application_id));
         // Check that all sessions were properly closed.
         if let Some(session_id) = runtime.session_manager.states.keys().next() {
             return Err(ExecutionError::SessionWasNotClosed(*session_id));
@@ -875,25 +920,28 @@ impl ContractRuntime for ContractSyncRuntime {
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError> {
+        self.check_for_reentrancy(callee_id)?;
         let (callee_context, authenticated_signer, code) = {
             let mut this = self.as_inner();
-            let caller = this.applications.last().expect("caller must exist").clone();
+            let caller = this.current_application();
+            let caller_id = caller.id;
+            let caller_signer = caller.signer;
             // Load the application.
             let (code, description) = this.load_contract(callee_id)?;
             // Change the owners of forwarded sessions.
-            this.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
+            this.forward_sessions(&forwarded_sessions, caller_id, callee_id)?;
             // Make the call to user code.
-            let authenticated_signer = match caller.signer {
+            let authenticated_signer = match caller_signer {
                 Some(signer) if authenticated => Some(signer),
                 _ => None,
             };
-            let authenticated_caller_id = authenticated.then_some(caller.id);
+            let authenticated_caller_id = authenticated.then_some(caller_id);
             let callee_context = crate::CalleeContext {
                 chain_id: this.chain_id,
                 authenticated_signer,
                 authenticated_caller_id,
             };
-            this.applications.push(ApplicationStatus {
+            this.push_application(ApplicationStatus {
                 id: callee_id,
                 parameters: description.parameters,
                 // Allow further nested calls to be authenticated if this one is.
@@ -906,7 +954,7 @@ impl ContractRuntime for ContractSyncRuntime {
             code.handle_application_call(callee_context, argument, forwarded_sessions)?;
         {
             let mut this = self.as_inner();
-            this.applications.pop();
+            this.pop_application();
 
             // Interpret the results of the call.
             this.execution_results.push(ExecutionResult::User(
@@ -932,28 +980,31 @@ impl ContractRuntime for ContractSyncRuntime {
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError> {
+        self.check_for_reentrancy(session_id.application_id)?;
         let (callee_context, authenticated_signer, session_state, code) = {
             let mut this = self.as_inner();
             let callee_id = session_id.application_id;
-            let caller = this.applications.last().expect("caller must exist").clone();
+            let caller = this.current_application();
+            let caller_id = caller.id;
+            let caller_signer = caller.signer;
             // Load the application.
             let (code, description) = this.load_contract(callee_id)?;
             // Change the owners of forwarded sessions.
-            this.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
+            this.forward_sessions(&forwarded_sessions, caller_id, callee_id)?;
             // Load the session.
-            let session_state = this.try_load_session(session_id, caller.id)?;
+            let session_state = this.try_load_session(session_id, caller_id)?;
             // Make the call to user code.
-            let authenticated_signer = match caller.signer {
+            let authenticated_signer = match caller_signer {
                 Some(signer) if authenticated => Some(signer),
                 _ => None,
             };
-            let authenticated_caller_id = authenticated.then_some(caller.id);
+            let authenticated_caller_id = authenticated.then_some(caller_id);
             let callee_context = crate::CalleeContext {
                 chain_id: this.chain_id,
                 authenticated_signer,
                 authenticated_caller_id,
             };
-            this.applications.push(ApplicationStatus {
+            this.push_application(ApplicationStatus {
                 id: callee_id,
                 parameters: description.parameters,
                 // Allow further nested calls to be authenticated if this one is.
@@ -966,7 +1017,7 @@ impl ContractRuntime for ContractSyncRuntime {
             code.handle_session_call(callee_context, session_state, argument, forwarded_sessions)?;
         {
             let mut this = self.as_inner();
-            this.applications.pop();
+            this.pop_application();
 
             // Interpret the results of the call.
             let caller_id = this.application_id()?;
@@ -1028,7 +1079,7 @@ impl ServiceRuntime for ServiceSyncRuntime {
             let query_context = crate::QueryContext {
                 chain_id: this.chain_id,
             };
-            this.applications.push(ApplicationStatus {
+            this.push_application(ApplicationStatus {
                 id: queried_id,
                 parameters: description.parameters,
                 signer: None,
@@ -1039,7 +1090,7 @@ impl ServiceRuntime for ServiceSyncRuntime {
         let response = code.handle_query(query_context, argument)?;
         {
             let mut this = self.as_inner();
-            this.applications.pop();
+            this.pop_application();
         }
         Ok(response)
     }

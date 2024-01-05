@@ -3144,7 +3144,6 @@ dependencies = [
  "prometheus",
  "proptest",
  "rand 0.8.5",
- "reentrant-counter",
  "serde",
  "serde_json",
  "social",
@@ -4838,19 +4837,6 @@ checksum = "a18479200779601e498ada4e8c1e1f50e3ee19deb0259c25825a98b5603b2cb4"
 dependencies = [
  "getrandom 0.2.11",
  "libredox",
- "thiserror",
-]
-
-[[package]]
-name = "reentrant-counter"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bcs",
- "futures",
- "linera-sdk",
- "serde",
- "serde_json",
  "thiserror",
 ]
 
