@@ -8,6 +8,7 @@ use linera_views::{
 };
 use rand::{distributions::Uniform, Rng, RngCore, SeedableRng};
 use std::collections::{BTreeMap, BTreeSet};
+use linera_views::views::CryptoHashView;
 
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {
@@ -27,6 +28,7 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
         let mut view = StateView::load(context.clone()).await.unwrap();
         let save = rng.gen::<bool>();
         let read_state = view.map.key_values().await.unwrap();
+        let read_hash = view.crypto_hash().await.unwrap();
         let state_vec = state_map.clone().into_iter().collect::<Vec<_>>();
         assert_eq!(state_vec, read_state);
         //
@@ -80,6 +82,13 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
                 new_state_map = state_map.clone();
             }
             new_state_vec = new_state_map.clone().into_iter().collect();
+            let new_hash = view.crypto_hash().await.unwrap();
+            if state_vec == new_state_vec {
+                assert_eq!(new_hash, read_hash);
+            } else {
+                // Hash equality is a bug or a hash collision (unlikely)
+                assert_ne!(new_hash, read_hash);
+            }
             let new_key_values = view.map.key_values().await.unwrap();
             assert_eq!(new_state_vec, new_key_values);
             for u in 0..4 {
