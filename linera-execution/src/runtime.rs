@@ -436,8 +436,6 @@ impl<const W: bool> SyncRuntime<W> {
 
 impl<const W: bool> BaseRuntime for SyncRuntime<W> {
     type Read = <SyncRuntimeInternal<W> as BaseRuntime>::Read;
-    type Lock = <SyncRuntimeInternal<W> as BaseRuntime>::Lock;
-    type Unlock = <SyncRuntimeInternal<W> as BaseRuntime>::Unlock;
     type ReadValueBytes = <SyncRuntimeInternal<W> as BaseRuntime>::ReadValueBytes;
     type ContainsKey = <SyncRuntimeInternal<W> as BaseRuntime>::ContainsKey;
     type ReadMultiValuesBytes = <SyncRuntimeInternal<W> as BaseRuntime>::ReadMultiValuesBytes;
@@ -472,24 +470,8 @@ impl<const W: bool> BaseRuntime for SyncRuntime<W> {
         self.as_inner().try_read_my_state_wait(promise)
     }
 
-    fn lock_new(&mut self) -> Result<Self::Lock, ExecutionError> {
-        self.as_inner().lock_new()
-    }
-
-    fn lock_wait(&mut self, promise: &Self::Lock) -> Result<(), ExecutionError> {
-        self.as_inner().lock_wait(promise)
-    }
-
-    fn unlock_new(&mut self) -> Result<Self::Unlock, ExecutionError> {
-        self.as_inner().unlock_new()
-    }
-
-    fn unlock_wait(&mut self, promise: &Self::Unlock) -> Result<(), ExecutionError> {
-        self.as_inner().unlock_wait(promise)
-    }
-
-    fn write_batch_and_unlock(&mut self, batch: Batch) -> Result<(), ExecutionError> {
-        self.as_inner().write_batch_and_unlock(batch)
+    fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError> {
+        self.as_inner().write_batch(batch)
     }
 
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
@@ -559,8 +541,6 @@ impl<const W: bool> BaseRuntime for SyncRuntime<W> {
 
 impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     type Read = ();
-    type Lock = ();
-    type Unlock = ();
     type ReadValueBytes = u32;
     type ContainsKey = u32;
     type ReadMultiValuesBytes = u32;
@@ -612,27 +592,7 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
         receiver.recv_response()
     }
 
-    // TODO(#1152): simplify away
-    fn lock_new(&mut self) -> Result<Self::Lock, ExecutionError> {
-        Ok(())
-    }
-
-    fn lock_wait(&mut self, _promise: &Self::Lock) -> Result<(), ExecutionError> {
-        Ok(())
-    }
-
-    fn unlock_new(&mut self) -> Result<Self::Unlock, ExecutionError> {
-        Ok(())
-    }
-
-    fn unlock_wait(&mut self, _promise: &Self::Unlock) -> Result<(), ExecutionError> {
-        let id = self.application_id()?;
-        let state = self.view_user_states.entry(id).or_default();
-        state.force_all_pending_queries()?;
-        Ok(())
-    }
-
-    fn write_batch_and_unlock(&mut self, batch: Batch) -> Result<(), ExecutionError> {
+    fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
         state.force_all_pending_queries()?;
@@ -857,18 +817,7 @@ impl ContractRuntime for ContractSyncRuntime {
         Ok(())
     }
 
-    fn try_read_and_lock_my_state(&mut self) -> Result<Option<Vec<u8>>, ExecutionError> {
-        let mut this = self.as_inner();
-        let this = this.deref_mut();
-        let id = this.application_id()?;
-        let receiver = this
-            .execution_state_sender
-            .send_request(|callback| Request::ReadSimpleUserState { id, callback })?;
-        let bytes = receiver.recv_response()?;
-        Ok(Some(bytes))
-    }
-
-    fn save_and_unlock_my_state(&mut self, bytes: Vec<u8>) -> Result<bool, ExecutionError> {
+    fn save_my_state(&mut self, bytes: Vec<u8>) -> Result<bool, ExecutionError> {
         let mut this = self.as_inner();
         let this = this.deref_mut();
         let id = this.application_id()?;

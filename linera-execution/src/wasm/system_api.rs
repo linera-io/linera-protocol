@@ -46,7 +46,7 @@ macro_rules! impl_contract_system_api {
 
             // TODO(#1152): remove
             fn store(&mut self, state: &[u8]) -> Result<bool, Self::Error> {
-                self.save_and_unlock_my_state(state.to_vec())
+                self.save_my_state(state.to_vec())
             }
 
             fn try_call_application(
@@ -299,7 +299,7 @@ macro_rules! impl_view_system_api {
                     }
                 }
                 // Hack: The following is a no-op for services.
-                self.write_batch_and_unlock(batch)
+                self.write_batch(batch)
             }
         }
     };

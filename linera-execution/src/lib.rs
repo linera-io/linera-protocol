@@ -314,8 +314,6 @@ pub struct QueryContext {
 
 pub trait BaseRuntime {
     type Read: fmt::Debug + Send;
-    type Lock: fmt::Debug + Send;
-    type Unlock: fmt::Debug + Send;
     type ContainsKey: fmt::Debug + Send;
     type ReadMultiValuesBytes: fmt::Debug + Send;
     type ReadValueBytes: fmt::Debug + Send;
@@ -352,26 +350,6 @@ pub trait BaseRuntime {
     /// Reads the application state (wait).
     fn try_read_my_state_wait(&mut self, promise: &Self::Read) -> Result<Vec<u8>, ExecutionError>;
 
-    /// Locks the view user state and prevents further reading/loading
-    #[cfg(feature = "test")]
-    fn lock(&mut self) -> Result<(), ExecutionError> {
-        let promise = self.lock_new()?;
-        self.lock_wait(&promise)
-    }
-
-    /// Locks the view user state and prevents further reading/loading (new)
-    fn lock_new(&mut self) -> Result<Self::Lock, ExecutionError>;
-
-    /// Locks the view user state and prevents further reading/loading (wait)
-    fn lock_wait(&mut self, promise: &Self::Lock) -> Result<(), ExecutionError>;
-
-    /// Unlocks the view user state and allows reading/loading again
-    #[cfg(feature = "test")]
-    fn unlock(&mut self) -> Result<(), ExecutionError> {
-        let promise = self.unlock_new()?;
-        self.unlock_wait(&promise)
-    }
-
     /// Tests whether a key exists in the key-value store
     #[cfg(feature = "test")]
     fn contains_key(&mut self, key: Vec<u8>) -> Result<bool, ExecutionError> {
@@ -407,16 +385,10 @@ pub trait BaseRuntime {
         promise: &Self::ReadMultiValuesBytes,
     ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError>;
 
-    /// Unlocks the view user state and allows reading/loading again (new)
-    fn unlock_new(&mut self) -> Result<Self::Unlock, ExecutionError>;
-
-    /// Unlocks the view user state and allows reading/loading again (wait)
-    fn unlock_wait(&mut self, promise: &Self::Unlock) -> Result<(), ExecutionError>;
-
-    /// Writes the batch and then unlock.
+    /// Writes a batch of changes.
     ///
     /// Hack: This fails for services.
-    fn write_batch_and_unlock(&mut self, batch: Batch) -> Result<(), ExecutionError>;
+    fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError>;
 
     /// Reads the key from the key-value store
     #[cfg(feature = "test")]
@@ -499,12 +471,8 @@ pub trait ContractRuntime: BaseRuntime {
     fn set_remaining_fuel(&mut self, remaining_fuel: u64) -> Result<(), ExecutionError>;
 
     // TODO(#1152): remove
-    /// Reads the application state and prevents further reading/loading until the state is saved.
-    fn try_read_and_lock_my_state(&mut self) -> Result<Option<Vec<u8>>, ExecutionError>;
-
-    // TODO(#1152): remove
     /// Saves the application state and allows reading/loading the state again.
-    fn save_and_unlock_my_state(&mut self, state: Vec<u8>) -> Result<bool, ExecutionError>;
+    fn save_my_state(&mut self, state: Vec<u8>) -> Result<bool, ExecutionError>;
 
     /// Calls another application. Forwarded sessions will now be visible to
     /// `callee_id` (but not to the caller any more).
