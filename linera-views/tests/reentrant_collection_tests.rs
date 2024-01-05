@@ -96,9 +96,7 @@ async fn reentrant_collection_view_check() {
                 for _i in 0..n_ins {
                     let pos = rng.gen_range(0..nmax);
                     let _subview = view.v.try_load_entry(&pos).await.unwrap();
-                    if !new_map.contains_key(&pos) {
-                        new_map.insert(pos, 0);
-                    }
+                    new_map.entry(pos).or_insert(0);
                 }
             }
             if choice == 4 {
