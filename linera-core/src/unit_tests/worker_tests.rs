@@ -29,7 +29,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    system::{AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation},
+    system::{Account, AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation},
     ChainOwnership, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
     ExecutionStateView, GenericApplicationId, Message, MessageKind, Query, Response,
     SystemExecutionError, SystemExecutionState, SystemQuery, SystemResponse,
@@ -185,6 +185,7 @@ async fn make_simple_transfer_certificate<S>(
         Epoch::ZERO,
         committee,
         balance,
+        BTreeMap::new(),
         worker,
         previous_confirmed_block,
     )
@@ -201,6 +202,7 @@ async fn make_transfer_certificate<S>(
     incoming_messages: Vec<IncomingMessage>,
     committee: &Committee,
     balance: Amount,
+    balances: BTreeMap<Owner, Amount>,
     worker: &WorkerState<S>,
     previous_confirmed_block: Option<&Certificate>,
 ) -> Certificate {
@@ -214,6 +216,7 @@ async fn make_transfer_certificate<S>(
         Epoch::ZERO,
         committee,
         balance,
+        balances,
         worker,
         previous_confirmed_block,
     )
@@ -231,6 +234,7 @@ async fn make_transfer_certificate_for_epoch<S>(
     epoch: Epoch,
     committee: &Committee,
     balance: Amount,
+    balances: BTreeMap<Owner, Amount>,
     worker: &WorkerState<S>,
     previous_confirmed_block: Option<&Certificate>,
 ) -> Certificate {
@@ -239,6 +243,7 @@ async fn make_transfer_certificate_for_epoch<S>(
         committees: [(epoch, committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(key_pair.public()),
         balance,
+        balances,
         ..make_state(epoch, chain_description, ChainId::root(0))
     };
     let block_template = match &previous_confirmed_block {
@@ -267,6 +272,7 @@ async fn make_transfer_certificate_for_epoch<S>(
     let block = Block {
         epoch,
         incoming_messages,
+        authenticated_signer: source,
         ..block_template
     }
     .with_transfer(source, recipient, amount);
@@ -1554,7 +1560,7 @@ where
         None,
     )
     .await;
-    // This fails because `make_transfer_certificate` uses `sender_key_pair.public()` to
+    // This fails because `make_simple_transfer_certificate` uses `sender_key_pair.public()` to
     // compute the hash of the execution state.
     assert!(matches!(
         worker.fully_handle_certificate(certificate, vec![]).await,
@@ -2469,14 +2475,26 @@ where
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
+    let sender = Owner::from(sender_key_pair.public());
+    let sender_account = Account {
+        chain_id: ChainId::root(1),
+        owner: Some(sender),
+    };
+
     let recipient_key_pair = KeyPair::generate();
+    let recipient = Owner::from(sender_key_pair.public());
+    let recipient_account = Account {
+        chain_id: ChainId::root(2),
+        owner: Some(recipient),
+    };
+
     let (committee, mut worker) = init_worker_with_chains(
         storage,
         vec![
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Amount::from_tokens(5),
+                Amount::from_tokens(6),
             ),
             (
                 ChainDescription::Root(2),
@@ -2487,35 +2505,86 @@ where
     )
     .await;
 
-    // Make two transfers.
-    let certificate0 = make_simple_transfer_certificate(
+    // First move the money from the public balance to the sender's account.
+    // This takes two certificates (sending, receiving) sadly.
+    let certificate00 = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        ChainId::root(2),
-        Amount::from_tokens(3),
+        None,
+        Recipient::Account(sender_account),
+        Amount::from_tokens(5),
         Vec::new(),
         &committee,
-        Amount::from_tokens(2),
+        Amount::ONE,
+        BTreeMap::new(),
         &worker,
         None,
     )
     .await;
 
     worker
-        .fully_handle_certificate(certificate0.clone(), vec![])
+        .fully_handle_certificate(certificate00.clone(), vec![])
         .await
         .unwrap();
 
-    let certificate1 = make_simple_transfer_certificate(
+    let certificate01 = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        ChainId::root(2),
-        Amount::from_tokens(2),
+        None,
+        Recipient::Burn,
+        Amount::ONE,
+        vec![IncomingMessage {
+            origin: Origin::chain(ChainId::root(1)),
+            event: Event {
+                certificate_hash: certificate00.hash(),
+                height: BlockHeight::from(0),
+                index: 0,
+                authenticated_signer: None,
+                kind: MessageKind::Tracked,
+                timestamp: Timestamp::from(0),
+                message: Message::System(SystemMessage::Credit {
+                    source: None,
+                    target: Some(sender),
+                    amount: Amount::from_tokens(5),
+                }),
+            },
+            action: MessageAction::Accept,
+        }],
+        &committee,
+        Amount::ZERO,
+        BTreeMap::from_iter([(sender, Amount::from_tokens(5))]),
+        &worker,
+        Some(&certificate00),
+    )
+    .await;
+
+    worker
+        .fully_handle_certificate(certificate01.clone(), vec![])
+        .await
+        .unwrap();
+
+    {
+        let chain = worker
+            .storage
+            .load_active_chain(ChainId::root(1))
+            .await
+            .unwrap();
+        chain.validate_incoming_messages().await.unwrap();
+    }
+
+    // Then, make two transfers to the recipient.
+    let certificate1 = make_transfer_certificate(
+        ChainDescription::Root(1),
+        &sender_key_pair,
+        Some(sender),
+        Recipient::Account(recipient_account),
+        Amount::from_tokens(3),
         Vec::new(),
         &committee,
         Amount::ZERO,
+        BTreeMap::from_iter([(sender, Amount::from_tokens(2))]),
         &worker,
-        Some(&certificate0),
+        Some(&certificate01),
     )
     .await;
 
@@ -2524,43 +2593,72 @@ where
         .await
         .unwrap();
 
+    let certificate2 = make_transfer_certificate(
+        ChainDescription::Root(1),
+        &sender_key_pair,
+        Some(sender),
+        Recipient::Account(recipient_account),
+        Amount::from_tokens(2),
+        Vec::new(),
+        &committee,
+        Amount::ZERO,
+        BTreeMap::from_iter([(sender, Amount::from_tokens(0))]),
+        &worker,
+        Some(&certificate1),
+    )
+    .await;
+
+    worker
+        .fully_handle_certificate(certificate2.clone(), vec![])
+        .await
+        .unwrap();
+
     // Reject the first transfer and try to use the money of the second one.
     let certificate = make_transfer_certificate(
         ChainDescription::Root(2),
         &recipient_key_pair,
-        None,
+        Some(recipient),
         Recipient::Burn,
         Amount::ONE,
         vec![
             IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
-                    certificate_hash: certificate0.hash(),
-                    height: BlockHeight::ZERO,
+                    certificate_hash: certificate1.hash(),
+                    height: BlockHeight::from(2),
                     index: 0,
                     authenticated_signer: None,
                     kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::from_tokens(3)),
+                    message: Message::System(SystemMessage::Credit {
+                        source: Some(sender),
+                        target: Some(recipient),
+                        amount: Amount::from_tokens(3),
+                    }),
                 },
                 action: MessageAction::Reject,
             },
             IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
-                    certificate_hash: certificate1.hash(),
-                    height: BlockHeight::from(1),
+                    certificate_hash: certificate2.hash(),
+                    height: BlockHeight::from(3),
                     index: 0,
                     authenticated_signer: None,
                     kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::from_tokens(2)),
+                    message: Message::System(SystemMessage::Credit {
+                        source: Some(sender),
+                        target: Some(recipient),
+                        amount: Amount::from_tokens(2),
+                    }),
                 },
                 action: MessageAction::Accept,
             },
         ],
         &committee,
-        Amount::from_tokens(1),
+        Amount::ZERO,
+        BTreeMap::from_iter([(recipient, Amount::from_tokens(1))]),
         &worker,
         None,
     )
@@ -2581,34 +2679,39 @@ where
     }
 
     // Process the bounced message and try to use the refund.
-    let certificate2 = make_transfer_certificate(
+    let certificate3 = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        None,
+        Some(sender),
         Recipient::Burn,
         Amount::from_tokens(3),
         vec![IncomingMessage {
             origin: Origin::chain(ChainId::root(2)),
             event: Event {
                 certificate_hash: certificate.hash(),
-                height: BlockHeight::ZERO,
+                height: BlockHeight::from(0),
                 index: 0,
                 authenticated_signer: None,
                 kind: MessageKind::Bouncing,
                 timestamp: Timestamp::from(0),
-                message: system_credit_message(Amount::from_tokens(3)),
+                message: Message::System(SystemMessage::Credit {
+                    source: Some(sender),
+                    target: Some(recipient),
+                    amount: Amount::from_tokens(3),
+                }),
             },
             action: MessageAction::Accept,
         }],
         &committee,
         Amount::ZERO,
+        BTreeMap::from_iter([(sender, Amount::from_tokens(0))]),
         &worker,
-        Some(&certificate1),
+        Some(&certificate2),
     )
     .await;
 
     worker
-        .fully_handle_certificate(certificate2.clone(), vec![])
+        .fully_handle_certificate(certificate3.clone(), vec![])
         .await
         .unwrap();
 
@@ -3422,6 +3525,7 @@ async fn test_cross_chain_helper() {
         Epoch::ZERO,
         &committee,
         Amount::ONE,
+        BTreeMap::new(),
         &worker,
         None,
     )
@@ -3436,6 +3540,7 @@ async fn test_cross_chain_helper() {
         Epoch::ZERO,
         &committee,
         Amount::ONE,
+        BTreeMap::new(),
         &worker,
         Some(&certificate0),
     )
@@ -3450,6 +3555,7 @@ async fn test_cross_chain_helper() {
         Epoch::from(1),
         &committee,
         Amount::ONE,
+        BTreeMap::new(),
         &worker,
         Some(&certificate1),
     )
@@ -3465,6 +3571,7 @@ async fn test_cross_chain_helper() {
         Epoch::ZERO,
         &committee,
         Amount::ONE,
+        BTreeMap::new(),
         &worker,
         Some(&certificate2),
     )
