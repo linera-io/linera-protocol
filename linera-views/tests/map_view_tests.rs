@@ -36,7 +36,7 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
         let mut new_state_map = state_map.clone();
         let mut new_state_vec = state_vec.clone();
         for _ in 0..count_oper {
-            let choice = rng.gen_range(0..5);
+            let choice = rng.gen_range(0..6);
             let count = view.map.count().await.unwrap();
             if choice == 0 {
                 // inserting random stuff
@@ -80,6 +80,15 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
                 // Doing the rollback
                 view.rollback();
                 new_state_map = state_map.clone();
+            }
+            if choice == 5 && count > 0 {
+                let pos = rng.gen_range(0..count);
+                let vec = new_state_vec[pos].clone();
+                let key = vec.0;
+                let result = view.map.get_mut(key.clone()).await.unwrap().unwrap();
+                let new_value = rng.gen::<u8>();
+                *result = new_value;
+                new_state_map.insert(key, new_value);
             }
             new_state_vec = new_state_map.clone().into_iter().collect();
             let new_hash = view.crypto_hash().await.unwrap();
