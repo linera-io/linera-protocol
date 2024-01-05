@@ -161,21 +161,6 @@ fn mock_load_blob_state() {
     );
 }
 
-/// Test loading and locking a mocked application state.
-#[webassembly_test]
-fn mock_load_and_lock_blob_state() {
-    let state = vec![0, 1, 2, 3, 4, 5, 6];
-
-    test::mock_application_state(
-        bcs::to_bytes(&state).expect("Failed to serialize vector using BCS"),
-    );
-
-    assert_eq!(
-        contract::system_api::private::load_and_lock::<Vec<u8>>(),
-        Some(state)
-    );
-}
-
 /// A dummy view to test the key value store.
 #[derive(RootView)]
 struct DummyView<C> {
@@ -201,8 +186,7 @@ fn mock_load_view() {
         .blocking_wait()
         .expect("Failed to persist view state");
 
-    let contract_view =
-        contract::system_api::private::load_and_lock_view::<DummyView<_>>().blocking_wait();
+    let contract_view = contract::system_api::private::load_view::<DummyView<_>>().blocking_wait();
 
     assert_eq!(initial_view.one.get(), contract_view.one.get());
     assert_eq!(initial_view.two.get(), contract_view.two.get());
@@ -237,8 +221,7 @@ fn mock_find_keys() {
         .blocking_wait()
         .expect("Failed to persist view state");
 
-    let contract_view =
-        contract::system_api::private::load_and_lock_view::<DummyView<_>>().blocking_wait();
+    let contract_view = contract::system_api::private::load_view::<DummyView<_>>().blocking_wait();
 
     let contract_keys = contract_view
         .map
@@ -286,8 +269,7 @@ fn mock_find_key_value_pairs() {
         .blocking_wait()
         .expect("Failed to persist view state");
 
-    let contract_view =
-        contract::system_api::private::load_and_lock_view::<DummyView<_>>().blocking_wait();
+    let contract_view = contract::system_api::private::load_view::<DummyView<_>>().blocking_wait();
 
     let mut contract_pairs = Vec::new();
 
@@ -354,7 +336,7 @@ fn mock_write_batch() {
         .expect("Failed to persist view state");
 
     let mut altered_view =
-        contract::system_api::private::load_and_lock_view::<DummyView<_>>().blocking_wait();
+        contract::system_api::private::load_view::<DummyView<_>>().blocking_wait();
 
     altered_view.one.set(100);
     altered_view.two.clear();

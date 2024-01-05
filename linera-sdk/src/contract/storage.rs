@@ -58,11 +58,11 @@ where
     Application: Contract + Default + DeserializeOwned + Serialize + Send + 'static,
 {
     async fn load_and_lock() -> Application {
-        system_api::load_and_lock().expect("Failed to lock contract state")
+        system_api::load().expect("Failed to lock contract state")
     }
 
     async fn store_and_unlock(state: Application) {
-        system_api::store_and_unlock(state).await;
+        system_api::store(state).await;
     }
 }
 
@@ -72,10 +72,10 @@ where
     Application: Contract + RootView<ViewStorageContext> + Send + 'static,
 {
     async fn load_and_lock() -> Application {
-        system_api::load_and_lock_view().await
+        system_api::load_view().await
     }
 
     async fn store_and_unlock(state: Application) {
-        system_api::store_and_unlock_view(state).await;
+        system_api::store_view(state).await;
     }
 }

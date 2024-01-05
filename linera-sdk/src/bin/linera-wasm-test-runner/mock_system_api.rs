@@ -393,61 +393,6 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
             })
         },
     )?;
-    linker.func_wrap1_async(
-        "contract_system_api",
-        "load-and-lock: func() -> option<list<u8>>",
-        move |mut caller: Caller<'_, Resources>, return_offset: i32| {
-            Box::new(async move {
-                let function = get_function(
-                    &mut caller,
-                    "mocked-load-and-lock: func() -> option<list<u8>>",
-                )
-                .expect(
-                    "Missing `mocked-load-and-lock` function in the module. \
-                    Please ensure `linera_sdk::test::mock_application_state` was called",
-                );
-
-                let (result_offset,) = function
-                    .typed::<(), (i32,), _>(&mut caller)
-                    .expect("Incorrect `mocked-load-and-lock` function signature")
-                    .call_async(&mut caller, ())
-                    .await
-                    .expect(
-                        "Failed to call `mocked-load-and-lock` function. \
-                        Please ensure `linera_sdk::test::mock_application_state` was called",
-                    );
-
-                copy_memory_slices(&mut caller, result_offset, return_offset, 12);
-            })
-        },
-    )?;
-    linker.func_wrap0_async(
-        "contract_system_api",
-        "lock::new: func() -> handle<lock>",
-        move |_: Caller<'_, Resources>| Box::new(async move { 0 }),
-    )?;
-    linker.func_wrap1_async(
-        "contract_system_api",
-        "lock::wait: func(self: handle<lock>) -> unit",
-        move |mut caller: Caller<'_, Resources>, _handle: i32| {
-            Box::new(async move {
-                let function = get_function(&mut caller, "mocked-lock: func() -> bool").expect(
-                    "Missing `mocked-lock` function in the module. \
-                    Please ensure `linera_sdk::test::mock_application_state` was called",
-                );
-
-                function
-                    .typed::<(), (i32,), _>(&mut caller)
-                    .expect("Incorrect `mocked-lock` function signature")
-                    .call_async(&mut caller, ())
-                    .await
-                    .expect(
-                        "Failed to call `mocked-lock` function. \
-                        Please ensure `linera_sdk::test::mock_application_state` was called",
-                    );
-            })
-        },
-    )?;
 
     linker.func_wrap1_async(
         "service_system_api",
@@ -1179,7 +1124,6 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
 
     let resource_names = [
         "load",
-        "lock",
         "read-multi-values-bytes",
         "read-value-bytes",
         "find-keys",

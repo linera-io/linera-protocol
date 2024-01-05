@@ -5,7 +5,7 @@
 //! that shouldn't be used by applications directly.
 
 use super::super::contract_system_api as wit;
-use crate::{util::yield_once, views::ViewStorageContext};
+use crate::views::ViewStorageContext;
 use linera_base::identifiers::{ApplicationId, SessionId};
 use linera_views::views::{RootView, View};
 use serde::{de::DeserializeOwned, Serialize};
@@ -27,40 +27,32 @@ where
     }
 }
 
-/// Loads the application state and locks it for writes.
-pub fn load_and_lock<State>() -> Option<State>
+/// Loads the application state.
+pub fn load<State>() -> Option<State>
 where
     State: Default + DeserializeOwned,
 {
-    let state_bytes = wit::load_and_lock()?;
+    let state_bytes = wit::load();
     Some(deserialize_state(state_bytes))
 }
 
-/// Saves the application state and unlocks it.
-pub async fn store_and_unlock<State>(state: State)
+/// Saves the application state.
+pub async fn store<State>(state: State)
 where
     State: Serialize,
 {
-    wit::store_and_unlock(&bcs::to_bytes(&state).expect("State serialization failed"));
+    wit::store(&bcs::to_bytes(&state).expect("State serialization failed"));
 }
 
-/// Loads the application state and locks it for writes.
-pub async fn load_and_lock_view<State: View<ViewStorageContext>>() -> State {
-    let promise = wit::Lock::new();
-    yield_once().await;
-    promise.wait();
-    load_view_using::<State>().await
-}
-
-/// Helper function to load the application state or create a new one if it doesn't exist.
-pub async fn load_view_using<State: View<ViewStorageContext>>() -> State {
+/// Loads the application state or create a new one if it doesn't exist.
+pub async fn load_view<State: View<ViewStorageContext>>() -> State {
     let context = ViewStorageContext::default();
     let r = State::load(context).await;
     r.expect("Failed to load application state")
 }
 
-/// Saves the application state and unlocks it.
-pub async fn store_and_unlock_view<State: RootView<ViewStorageContext>>(mut state: State) {
+/// Saves the application state.
+pub async fn store_view<State: RootView<ViewStorageContext>>(mut state: State) {
     state.save().await.expect("save operation failed");
 }
 

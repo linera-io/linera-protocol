@@ -11,8 +11,6 @@ macro_rules! impl_contract_system_api {
         {
             type Error = ExecutionError;
 
-            type Lock = <Self as BaseRuntime>::Lock;
-
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
             }
@@ -47,21 +45,8 @@ macro_rules! impl_contract_system_api {
             }
 
             // TODO(#1152): remove
-            fn load_and_lock(&mut self) -> Result<Option<Vec<u8>>, Self::Error> {
-                self.try_read_and_lock_my_state()
-            }
-
-            // TODO(#1152): remove
-            fn store_and_unlock(&mut self, state: &[u8]) -> Result<bool, Self::Error> {
+            fn store(&mut self, state: &[u8]) -> Result<bool, Self::Error> {
                 self.save_and_unlock_my_state(state.to_vec())
-            }
-
-            fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
-                BaseRuntime::lock_new(self)
-            }
-
-            fn lock_wait(&mut self, promise: &Self::Lock) -> Result<(), Self::Error> {
-                BaseRuntime::lock_wait(self, promise)
             }
 
             fn try_call_application(
