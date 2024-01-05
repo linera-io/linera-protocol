@@ -2,17 +2,35 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
+    common::Context,
     memory::create_memory_context,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
-    views::{CryptoHashRootView, CryptoHashView, RootView, View},
+    views::{CryptoHashRootView, CryptoHashView, RootView, View, ViewError},
 };
 use rand::{Rng, SeedableRng};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(CryptoHashRootView)]
-pub struct StateView<C> {
+struct StateView<C> {
     pub v: ReentrantCollectionView<C, u8, RegisterView<C, u32>>,
+}
+
+impl<C> StateView<C>
+where
+    C: Send + Context + Sync,
+    ViewError: From<C::Error>,
+{
+    async fn key_values(&self) -> BTreeMap<u8, u32> {
+        let mut map = BTreeMap::new();
+        let keys = self.v.indices().await.unwrap();
+        for key in keys {
+            let subview = self.v.try_load_entry(&key).await.unwrap();
+            let value = subview.get();
+            map.insert(key, *value);
+        }
+        map
+    }
 }
 
 #[tokio::test]
@@ -91,15 +109,13 @@ async fn reentrant_collection_view_check() {
                 assert_ne!(hash, new_hash);
             }
             // Checking the keys
-            let keys_view = view.v.indices().await.unwrap();
-            let keys_view = keys_view.into_iter().collect::<BTreeSet<_>>();
-            let keys_map = new_map.clone().into_keys().collect::<BTreeSet<_>>();
-            assert_eq!(keys_view, keys_map);
+            let key_values = view.key_values().await;
+            assert_eq!(key_values, new_map);
             // Checking the try_load_entries on all indices
-            let indices = keys_map.clone().into_iter().collect::<Vec<_>>();
+            let indices = key_values.into_iter().map(|x| x.0).collect::<Vec<_>>();
             let subviews = view.v.try_load_entries(&indices).await.unwrap();
-            for i in 0..keys_map.len() {
-                let index: u8 = indices[i];
+            for i in 0..indices.len() {
+                let index = indices[i];
                 let value_view = *subviews[i].get();
                 let value_map = match new_map.get(&index) {
                     None => 0,
