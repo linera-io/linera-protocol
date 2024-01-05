@@ -1177,14 +1177,14 @@ where
     pub async fn claim(
         &mut self,
         owner: Owner,
-        target: ChainId,
+        target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
         user_data: UserData,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Claim {
             owner,
-            target,
+            target_id,
             recipient,
             amount,
             user_data,
@@ -1278,7 +1278,7 @@ where
                         .incoming_messages
                         .get_mut(*index as usize)
                         .expect("Message at given index should exist");
-                    if message.event.is_protected {
+                    if message.event.is_protected() {
                         error!("Protected incoming message failed to execute locally: {message:?}");
                     } else {
                         // Reject the faulty message from the block and continue.

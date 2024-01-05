@@ -280,6 +280,8 @@ pub struct OperationContext {
 pub struct MessageContext {
     /// The current chain id.
     pub chain_id: ChainId,
+    /// Whether the message was rejected by the original receiver and is now bouncing back.
+    pub is_bouncing: bool,
     /// The authenticated signer of the operation that created the message, if any.
     pub authenticated_signer: Option<Owner>,
     /// The current block height.
@@ -586,11 +588,25 @@ pub struct RawOutgoingMessage<Message> {
     pub destination: Destination,
     /// Whether the message is authenticated.
     pub authenticated: bool,
-    /// True if the message cannot be skipped or rejected by the receiver.
-    /// This only concerns certain system messages that cannot fail.
-    pub is_protected: bool,
+    /// The kind of outgoing message being sent.
+    pub kind: MessageKind,
     /// The message itself.
     pub message: Message,
+}
+
+/// The kind of outgoing message being sent.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Copy)]
+pub enum MessageKind {
+    /// The message can be skipped or rejected. No receipt is requested.
+    Simple,
+    /// The message cannot be skipped nor rejected. No receipt is requested.
+    /// This only concerns certain system messages that cannot fail.
+    Protected,
+    /// The message cannot be skipped but can be rejected. A receipt must be sent
+    /// when the message is rejected in a block of the receiver.
+    Tracked,
+    /// This event is a receipt automatically created when the original event was rejected.
+    Bouncing,
 }
 
 /// Externally visible results of an execution. These results are meant in the context of
@@ -957,3 +973,4 @@ doc_scalar!(
     Message,
     "An message to be sent and possibly executed in the receiver's block."
 );
+doc_scalar!(MessageKind, "The kind of outgoing message being sent");

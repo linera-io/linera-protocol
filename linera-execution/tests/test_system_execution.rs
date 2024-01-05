@@ -10,7 +10,7 @@ use linera_base::{
 };
 use linera_execution::{
     policy::ResourceControlPolicy,
-    system::{Account, Recipient, UserData},
+    system::{Recipient, UserData},
     ExecutionResult, ExecutionStateView, Message, MessageContext, Operation, OperationContext,
     Query, QueryContext, RawExecutionResult, ResourceTracker, Response, SystemExecutionState,
     SystemMessage, SystemOperation, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
@@ -73,10 +73,12 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         .await;
     let message = SystemMessage::Credit {
         amount: Amount::from_tokens(4),
-        account: Account::chain(ChainId::root(0)),
+        target: None,
+        source: None,
     };
     let context = MessageContext {
         chain_id: ChainId::root(0),
+        is_bouncing: false,
         height: BlockHeight(0),
         certificate_hash: CryptoHash::new(&Dummy),
         message_id: MessageId {

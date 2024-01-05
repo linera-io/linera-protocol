@@ -5,7 +5,6 @@
 use super::*;
 use crate::test::{make_first_block, BlockTestExt};
 use linera_base::data_types::Amount;
-use linera_execution::system::Recipient;
 
 #[test]
 fn test_signed_values() {
@@ -14,7 +13,7 @@ fn test_signed_values() {
     let name1 = ValidatorName(key1.public());
 
     let block =
-        make_first_block(ChainId::root(1)).with_simple_transfer(Recipient::root(2), Amount::ONE);
+        make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(2), Amount::ONE);
     let executed_block = ExecutedBlock {
         block,
         messages: Vec::new(),
@@ -42,7 +41,7 @@ fn test_certificates() {
     let committee = Committee::make_simple(vec![name1, name2]);
 
     let block =
-        make_first_block(ChainId::root(1)).with_simple_transfer(Recipient::root(1), Amount::ONE);
+        make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(1), Amount::ONE);
     let executed_block = ExecutedBlock {
         block,
         messages: Vec::new(),

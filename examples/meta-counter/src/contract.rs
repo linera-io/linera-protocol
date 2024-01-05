@@ -48,19 +48,31 @@ impl Contract for MetaCounter {
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,
-        (recipient_id, operation): (ChainId, u64),
+        (recipient_id, value): (ChainId, u64),
     ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
-        log::trace!("message: {:?}", operation);
-        Ok(ExecutionResult::default().with_message(recipient_id, operation))
+        log::trace!("message: {:?}", value);
+        if value >= 20000 {
+            Ok(ExecutionResult::default().with_tracked_message(recipient_id, value))
+        } else {
+            Ok(ExecutionResult::default().with_message(recipient_id, value))
+        }
     }
 
     async fn execute_message(
         &mut self,
-        _context: &MessageContext,
-        message: u64,
+        context: &MessageContext,
+        value: u64,
     ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
-        log::trace!("executing {:?} via {:?}", message, Self::counter_id()?);
-        self.call_application(true, Self::counter_id()?, &message, vec![])
+        if context.is_bouncing {
+            log::trace!("receiving a bouncing message {value}");
+            return Ok(ExecutionResult::default());
+        }
+        if value >= 10000 {
+            log::trace!("failing message {value} on purpose");
+            return Err(Error::ValueIsTooHigh);
+        }
+        log::trace!("executing {} via {:?}", value, Self::counter_id()?);
+        self.call_application(true, Self::counter_id()?, &value, vec![])
             .await?;
         Ok(ExecutionResult::default())
     }
@@ -98,6 +110,9 @@ pub enum Error {
 
     #[error("MetaCounter application doesn't support any cross-application sessions")]
     SessionsNotSupported,
+
+    #[error("Message failed")]
+    ValueIsTooHigh,
 
     /// Failed to deserialize BCS bytes
     #[error("Failed to deserialize BCS bytes")]

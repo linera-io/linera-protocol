@@ -196,14 +196,14 @@ impl ServiceAbi for FungibleTokenAbi {
 /// An operation.
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum Operation {
-    /// A transfer from a (locally owned) account to a (possibly remote) account.
+    /// Transfers tokens from a (locally owned) account to a (possibly remote) account.
     Transfer {
         owner: AccountOwner,
         amount: Amount,
         target_account: Account,
     },
-    /// Same as transfer but the source account may be remote. Depending on its
-    /// configuration (see also #464), the target chain may take time or refuse to process
+    /// Same as `Transfer` but the source account may be remote. Depending on its
+    /// configuration, the target chain may take time or refuse to process
     /// the message.
     Claim {
         source_account: Account,
@@ -215,10 +215,15 @@ pub enum Operation {
 /// A message.
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Message {
-    /// Credit the given account.
-    Credit { owner: AccountOwner, amount: Amount },
+    /// Credits the given `target` account, unless the message is bouncing, in which case
+    /// `source` is credited instead.
+    Credit {
+        target: AccountOwner,
+        amount: Amount,
+        source: AccountOwner,
+    },
 
-    /// Withdraw from the given account and starts a transfer to the target account.
+    /// Withdraws from the given account and starts a transfer to the target account.
     Withdraw {
         owner: AccountOwner,
         amount: Amount,
@@ -229,9 +234,9 @@ pub enum Message {
 /// A cross-application call.
 #[derive(Debug, Deserialize, Serialize)]
 pub enum ApplicationCall {
-    /// A request for an account balance.
+    /// Requests an account balance.
     Balance { owner: AccountOwner },
-    /// A transfer from an account.
+    /// Transfers tokens from an account.
     Transfer {
         owner: AccountOwner,
         amount: Amount,
@@ -243,16 +248,18 @@ pub enum ApplicationCall {
         amount: Amount,
         target_account: Account,
     },
-    /// A request for this fungible token's ticker symbol.
+    /// Requests this fungible token's ticker symbol.
     TickerSymbol,
 }
 
 /// A cross-application call into a session.
 #[derive(Debug, Deserialize, Serialize)]
 pub enum SessionCall {
-    /// A request for the session's balance.
+    /// Requests the session's balance.
     Balance,
-    /// A transfer from the session.
+    /// Transfers the given `amount` from the session to the given `destination`. If the
+    /// destination is an account on a remote chain, any bouncing message will credit the
+    /// local account for the same owner.
     Transfer {
         amount: Amount,
         destination: Destination,

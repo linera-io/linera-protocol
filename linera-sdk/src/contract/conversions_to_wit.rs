@@ -136,6 +136,7 @@ where
         Self {
             destination: message.destination.into(),
             authenticated: message.authenticated,
+            is_tracked: message.is_tracked,
             message: bcs::to_bytes(&message.message).expect("message serialization failed"),
         }
     }

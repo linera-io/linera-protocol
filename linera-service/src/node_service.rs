@@ -330,15 +330,15 @@ where
         .await
     }
 
-    /// Claims `amount` units of value from the given owner's account in
-    /// the remote `target` chain. Depending on its configuration (see also #464), the
-    /// `target` chain may refuse to process the message.
+    /// Claims `amount` units of value from the given owner's account in the remote
+    /// `target` chain. Depending on its configuration, the `target` chain may refuse to
+    /// process the message.
     #[allow(clippy::too_many_arguments)]
     async fn claim(
         &self,
         chain_id: ChainId,
         owner: Owner,
-        target: ChainId,
+        target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
         user_data: Option<UserData>,
@@ -349,7 +349,7 @@ where
                 let result = client
                     .claim(
                         owner,
-                        target,
+                        target_id,
                         recipient,
                         amount,
                         user_data.unwrap_or_default(),

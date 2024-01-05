@@ -67,7 +67,7 @@ impl Contract for FungibleToken {
                 Self::check_account_authentication(None, context.authenticated_signer, owner)?;
                 self.debit(owner, amount).await?;
                 Ok(self
-                    .finish_transfer_to_account(amount, target_account)
+                    .finish_transfer_to_account(amount, target_account, owner)
                     .await)
             }
 
@@ -92,8 +92,13 @@ impl Contract for FungibleToken {
         message: Message,
     ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
         match message {
-            Message::Credit { owner, amount } => {
-                self.credit(owner, amount).await;
+            Message::Credit {
+                amount,
+                target,
+                source,
+            } => {
+                let receiver = if context.is_bouncing { source } else { target };
+                self.credit(receiver, amount).await;
                 Ok(ExecutionResult::default())
             }
             Message::Withdraw {
@@ -104,7 +109,7 @@ impl Contract for FungibleToken {
                 Self::check_account_authentication(None, context.authenticated_signer, owner)?;
                 self.debit(owner, amount).await?;
                 Ok(self
-                    .finish_transfer_to_account(amount, target_account)
+                    .finish_transfer_to_account(amount, target_account, owner)
                     .await)
             }
         }
@@ -136,9 +141,18 @@ impl Contract for FungibleToken {
                     owner,
                 )?;
                 self.debit(owner, amount).await?;
-                Ok(self
-                    .finish_transfer_to_destination(amount, destination)
-                    .await)
+                let mut result = ApplicationCallResult::default();
+                match destination {
+                    Destination::Account(account) => {
+                        result.execution_result = self
+                            .finish_transfer_to_account(amount, account, owner)
+                            .await;
+                    }
+                    Destination::NewSession => {
+                        result.create_sessions.push(amount);
+                    }
+                }
+                Ok(result)
             }
 
             ApplicationCall::Claim {
@@ -232,10 +246,20 @@ impl FungibleToken {
 
         let updated_session = (balance > Amount::ZERO).then_some(balance);
 
+        let mut result = ApplicationCallResult::default();
+        match destination {
+            Destination::Account(account) => {
+                result.execution_result = self
+                    .finish_transfer_to_account(amount, account, account.owner)
+                    .await;
+            }
+            Destination::NewSession => {
+                result.create_sessions.push(amount);
+            }
+        }
+
         Ok(SessionCallResult {
-            inner: self
-                .finish_transfer_to_destination(amount, destination)
-                .await,
+            inner: result,
             new_state: updated_session,
         })
     }
@@ -249,7 +273,7 @@ impl FungibleToken {
         if source_account.chain_id == system_api::current_chain_id() {
             self.debit(source_account.owner, amount).await?;
             Ok(self
-                .finish_transfer_to_account(amount, target_account)
+                .finish_transfer_to_account(amount, target_account, source_account.owner)
                 .await)
         } else {
             let message = Message::Withdraw {
@@ -263,38 +287,22 @@ impl FungibleToken {
     }
 
     /// Executes the final step of a transfer where the tokens are sent to the destination.
-    async fn finish_transfer_to_destination(
-        &mut self,
-        amount: Amount,
-        destination: Destination,
-    ) -> ApplicationCallResult<Message, FungibleResponse, Amount> {
-        let mut result = ApplicationCallResult::default();
-        match destination {
-            Destination::Account(account) => {
-                result.execution_result = self.finish_transfer_to_account(amount, account).await;
-            }
-            Destination::NewSession => {
-                result.create_sessions.push(amount);
-            }
-        }
-        result
-    }
-
-    /// Executes the final step of a transfer where the tokens are sent to the destination.
     async fn finish_transfer_to_account(
         &mut self,
         amount: Amount,
         account: Account,
+        source: AccountOwner,
     ) -> ExecutionResult<Message> {
         if account.chain_id == system_api::current_chain_id() {
             self.credit(account.owner, amount).await;
             ExecutionResult::default()
         } else {
             let message = Message::Credit {
-                owner: account.owner,
+                target: account.owner,
                 amount,
+                source,
             };
-            ExecutionResult::default().with_message(account.chain_id, message)
+            ExecutionResult::default().with_tracked_message(account.chain_id, message)
         }
     }
 }

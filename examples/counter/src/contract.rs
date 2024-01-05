@@ -211,6 +211,7 @@ mod tests {
     fn dummy_message_context() -> MessageContext {
         MessageContext {
             chain_id: ChainId([0; 4].into()),
+            is_bouncing: false,
             authenticated_signer: None,
             height: BlockHeight(0),
             message_id: MessageId {

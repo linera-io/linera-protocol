@@ -5,7 +5,7 @@
 use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, Bytecode, BytecodeLocation, ChainOwnership, ChannelName,
-    ChannelSubscription, Destination, MessageContext, OperationContext, QueryContext,
+    ChannelSubscription, Destination, MessageContext, MessageKind, OperationContext, QueryContext,
     RawExecutionResult, RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
 };
 use async_graphql::Enum;
@@ -99,12 +99,12 @@ pub enum SystemOperation {
         amount: Amount,
         user_data: UserData,
     },
-    /// Claims `amount` units of value from the given owner's account in
-    /// the remote `target` chain. Depending on its configuration (see also #464), the
-    /// `target` chain may refuse to process the message.
+    /// Claims `amount` units of value from the given owner's account in the remote
+    /// `target` chain. Depending on its configuration, the `target` chain may refuse to
+    /// process the message.
     Claim {
         owner: Owner,
-        target: ChainId,
+        target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
         user_data: UserData,
@@ -180,13 +180,18 @@ pub enum AdminOperation {
 /// A system message meant to be executed on a remote chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum SystemMessage {
-    /// Credits `amount` units of value to the account.
-    Credit { account: Account, amount: Amount },
+    /// Credits `amount` units of value to the account `target` -- unless the message is
+    /// bouncing, in which case `source` is credited instead.
+    Credit {
+        target: Option<Owner>,
+        amount: Amount,
+        source: Option<Owner>,
+    },
     /// Withdraws `amount` units of value from the account and starts a transfer to credit
     /// the recipient. The message must be properly authenticated. Receiver chains may
     /// refuse it depending on their configuration.
     Withdraw {
-        account: Account,
+        owner: Owner,
         amount: Amount,
         recipient: Recipient,
         user_data: UserData,
@@ -517,7 +522,7 @@ where
                 let e1 = RawOutgoingMessage {
                     destination: Destination::Recipient(child_id),
                     authenticated: false,
-                    is_protected: true,
+                    kind: MessageKind::Protected,
                     message: SystemMessage::OpenChain {
                         ownership: ownership.clone(),
                         committees: committees.clone(),
@@ -533,7 +538,7 @@ where
                 let e2 = RawOutgoingMessage {
                     destination: Destination::Recipient(admin_id),
                     authenticated: false,
-                    is_protected: true,
+                    kind: MessageKind::Protected,
                     message: SystemMessage::Subscribe {
                         id: child_id,
                         subscription,
@@ -566,7 +571,7 @@ where
                         let message = RawOutgoingMessage {
                             destination: Destination::Recipient(subscription.chain_id),
                             authenticated: false,
-                            is_protected: true,
+                            kind: MessageKind::Protected,
                             message: SystemMessage::Unsubscribe {
                                 id: context.chain_id,
                                 subscription,
@@ -609,15 +614,19 @@ where
                     let message = RawOutgoingMessage {
                         destination: Destination::Recipient(account.chain_id),
                         authenticated: false,
-                        is_protected: true,
-                        message: SystemMessage::Credit { amount, account },
+                        kind: MessageKind::Tracked,
+                        message: SystemMessage::Credit {
+                            amount,
+                            source: owner,
+                            target: account.owner,
+                        },
                     };
                     result.messages.push(message);
                 }
             }
             Claim {
                 owner,
-                target,
+                target_id,
                 recipient,
                 amount,
                 user_data,
@@ -631,15 +640,12 @@ where
                     SystemExecutionError::IncorrectClaimAmount
                 );
                 let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(target),
+                    destination: Destination::Recipient(target_id),
                     authenticated: true,
-                    is_protected: false, // because it can fail
+                    kind: MessageKind::Simple,
                     message: SystemMessage::Withdraw {
                         amount,
-                        account: Account {
-                            chain_id: target,
-                            owner: Some(owner),
-                        },
+                        owner,
                         user_data,
                         recipient,
                     },
@@ -662,7 +668,7 @@ where
                         let message = RawOutgoingMessage {
                             destination: Destination::Subscribers(SystemChannel::Admin.name()),
                             authenticated: false,
-                            is_protected: true,
+                            kind: MessageKind::Protected,
                             message: SystemMessage::SetCommittees {
                                 epoch,
                                 committees: self.committees.get().clone(),
@@ -678,7 +684,7 @@ where
                         let message = RawOutgoingMessage {
                             destination: Destination::Subscribers(SystemChannel::Admin.name()),
                             authenticated: false,
-                            is_protected: true,
+                            kind: MessageKind::Protected,
                             message: SystemMessage::SetCommittees {
                                 epoch: self.epoch.get().expect("chain is active"),
                                 committees: self.committees.get().clone(),
@@ -711,7 +717,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(chain_id),
                     authenticated: false,
-                    is_protected: true,
+                    kind: MessageKind::Protected,
                     message: SystemMessage::Subscribe {
                         id: context.chain_id,
                         subscription,
@@ -732,7 +738,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(chain_id),
                     authenticated: false,
-                    is_protected: true,
+                    kind: MessageKind::Protected,
                     message: SystemMessage::Unsubscribe {
                         id: context.chain_id,
                         subscription,
@@ -746,7 +752,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(context.chain_id),
                     authenticated: false,
-                    is_protected: true,
+                    kind: MessageKind::Protected,
                     message: SystemMessage::BytecodePublished {
                         operation_index: context.index,
                     },
@@ -774,7 +780,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(context.chain_id),
                     authenticated: false,
-                    is_protected: true,
+                    kind: MessageKind::Protected,
                     message: SystemMessage::ApplicationCreated,
                 };
                 result.messages.push(message);
@@ -787,7 +793,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(chain_id),
                     authenticated: false,
-                    is_protected: false, // because it can fail
+                    kind: MessageKind::Simple,
                     message: SystemMessage::RequestApplication(application_id),
                 };
                 result.messages.push(message);
@@ -806,50 +812,47 @@ where
         let mut result = RawExecutionResult::default();
         use SystemMessage::*;
         match message {
-            Credit { amount, account } => {
-                ensure!(
-                    account.chain_id == context.chain_id,
-                    SystemExecutionError::IncorrectChainId(account.chain_id)
-                );
-                match &account.owner {
+            Credit {
+                amount,
+                source,
+                target,
+            } => {
+                let receiver = if context.is_bouncing { source } else { target };
+                match receiver {
                     None => {
                         let new_balance = self.balance.get().saturating_add(amount);
                         self.balance.set(new_balance);
                     }
                     Some(owner) => {
-                        let balance = self.balances.get_mut_or_default(owner).await?;
+                        let balance = self.balances.get_mut_or_default(&owner).await?;
                         *balance = balance.saturating_add(amount);
                     }
                 }
             }
             Withdraw {
                 amount,
-                account: Account { owner, chain_id },
+                owner,
                 user_data: _,
                 recipient,
             } => {
                 ensure!(
-                    chain_id == context.chain_id,
-                    SystemExecutionError::IncorrectChainId(chain_id)
-                );
-                ensure!(
-                    owner.is_some(),
-                    SystemExecutionError::UnauthenticatedClaimOwner
-                );
-                ensure!(
-                    context.authenticated_signer == owner,
+                    context.authenticated_signer == Some(owner),
                     SystemExecutionError::UnauthenticatedClaimOwner
                 );
 
-                let balance = self.balances.get_mut_or_default(&owner.unwrap()).await?;
+                let balance = self.balances.get_mut_or_default(&owner).await?;
                 balance.try_sub_assign(amount)?;
                 match recipient {
                     Recipient::Account(account) => {
                         let message = RawOutgoingMessage {
                             destination: Destination::Recipient(account.chain_id),
                             authenticated: false,
-                            is_protected: true,
-                            message: SystemMessage::Credit { amount, account },
+                            kind: MessageKind::Tracked,
+                            message: SystemMessage::Credit {
+                                amount,
+                                source: Some(owner),
+                                target: account.owner,
+                            },
                         };
                         result.messages.push(message);
                     }
@@ -874,7 +877,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(id),
                     authenticated: false,
-                    is_protected: true,
+                    kind: MessageKind::Protected,
                     message: SystemMessage::Notify { id },
                 };
                 result.messages.push(message);
@@ -888,7 +891,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(id),
                     authenticated: false,
-                    is_protected: true,
+                    kind: MessageKind::Protected,
                     message: SystemMessage::Notify { id },
                 };
                 result.messages.push(message);
@@ -906,7 +909,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Subscribers(SystemChannel::PublishedBytecodes.name()),
                     authenticated: false,
-                    is_protected: false,
+                    kind: MessageKind::Simple,
                     message: SystemMessage::BytecodeLocations { locations },
                 };
                 result.messages.push(message);
@@ -934,7 +937,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(context.message_id.chain_id),
                     authenticated: false,
-                    is_protected: false,
+                    kind: MessageKind::Simple,
                     message: SystemMessage::RegisterApplications { applications },
                 };
                 result.messages.push(message);

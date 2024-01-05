@@ -6,7 +6,7 @@
 use linera_base::{
     crypto::KeyPair,
     data_types::{Amount, BlockHeight, Round, Timestamp},
-    identifiers::ChainId,
+    identifiers::{ChainId, Owner},
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorState},
@@ -56,7 +56,10 @@ pub trait BlockTestExt: Sized {
     fn with_operation(self, operation: impl Into<Operation>) -> Self;
 
     /// Returns the block with a transfer operation appended at the end.
-    fn with_simple_transfer(self, recipient: Recipient, amount: Amount) -> Self;
+    fn with_transfer(self, owner: Option<Owner>, recipient: Recipient, amount: Amount) -> Self;
+
+    /// Returns the block with a simple transfer operation appended at the end.
+    fn with_simple_transfer(self, chain_id: ChainId, amount: Amount) -> Self;
 
     /// Returns the block with the given message appended at the end.
     fn with_incoming_message(self, incoming_message: IncomingMessage) -> Self;
@@ -82,13 +85,17 @@ impl BlockTestExt for Block {
         self
     }
 
-    fn with_simple_transfer(self, recipient: Recipient, amount: Amount) -> Self {
+    fn with_transfer(self, owner: Option<Owner>, recipient: Recipient, amount: Amount) -> Self {
         self.with_operation(SystemOperation::Transfer {
-            owner: None,
+            owner,
             recipient,
             amount,
             user_data: Default::default(),
         })
+    }
+
+    fn with_simple_transfer(self, chain_id: ChainId, amount: Amount) -> Self {
+        self.with_transfer(None, Recipient::chain(chain_id), amount)
     }
 
     fn with_incoming_message(mut self, incoming_message: IncomingMessage) -> Self {

@@ -4,12 +4,12 @@
 use crate::{
     policy::ResourceControlPolicy, resources::ResourceTracker, system::SystemExecutionStateView,
     ContractSyncRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, Message, MessageContext, Operation, OperationContext, Query,
-    QueryContext, RawExecutionResult, RawOutgoingMessage, Response, ServiceSyncRuntime,
+    ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
+    Query, QueryContext, RawExecutionResult, RawOutgoingMessage, Response, ServiceSyncRuntime,
     SystemMessage, UserApplicationDescription, UserApplicationId,
 };
 use futures::StreamExt;
-use linera_base::identifiers::{ChainId, Owner};
+use linera_base::identifiers::{ChainId, Destination, Owner};
 use linera_views::{
     common::Context,
     key_value_store_view::KeyValueStoreView,
@@ -239,7 +239,7 @@ where
             system_result.messages.push(RawOutgoingMessage {
                 destination: message.destination.clone(),
                 authenticated: false,
-                is_protected: false,
+                kind: MessageKind::Simple,
                 message: SystemMessage::RegisterApplications {
                     applications: applications.clone(),
                 },
@@ -321,6 +321,45 @@ where
                     tracker,
                 )
                 .await
+            }
+        }
+    }
+
+    pub async fn bounce_message(
+        &self,
+        context: MessageContext,
+        message: Message,
+    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
+        assert_eq!(context.chain_id, self.context().extra().chain_id());
+        match message {
+            Message::System(message) => {
+                let mut result = RawExecutionResult {
+                    authenticated_signer: context.authenticated_signer,
+                    ..Default::default()
+                };
+                result.messages.push(RawOutgoingMessage {
+                    destination: Destination::Recipient(context.message_id.chain_id),
+                    authenticated: true,
+                    kind: MessageKind::Bouncing,
+                    message,
+                });
+                Ok(vec![ExecutionResult::System(result)])
+            }
+            Message::User {
+                application_id,
+                bytes,
+            } => {
+                let mut result = RawExecutionResult {
+                    authenticated_signer: context.authenticated_signer,
+                    ..Default::default()
+                };
+                result.messages.push(RawOutgoingMessage {
+                    destination: Destination::Recipient(context.message_id.chain_id),
+                    authenticated: true,
+                    kind: MessageKind::Bouncing,
+                    message: bytes,
+                });
+                Ok(vec![ExecutionResult::User(application_id, result)])
             }
         }
     }

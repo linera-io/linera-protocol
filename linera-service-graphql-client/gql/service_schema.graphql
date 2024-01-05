@@ -427,6 +427,11 @@ Whether an incoming message is accepted or rejected
 """
 scalar MessageAction
 
+"""
+The kind of outgoing message being sent
+"""
+scalar MessageKind
+
 type MutationRoot {
 	"""
 	Processes the inbox and returns the lists of certificate hashes that were created, if any.
@@ -442,11 +447,11 @@ type MutationRoot {
 	"""
 	transfer(chainId: ChainId!, owner: Owner, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
 	"""
-	Claims `amount` units of value from the given owner's account in
-	the remote `target` chain. Depending on its configuration (see also #464), the
-	`target` chain may refuse to process the message.
+	Claims `amount` units of value from the given owner's account in the remote
+	`target` chain. Depending on its configuration, the `target` chain may refuse to
+	process the message.
 	"""
-	claim(chainId: ChainId!, owner: Owner!, target: ChainId!, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
+	claim(chainId: ChainId!, owner: Owner!, targetId: ChainId!, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
 	"""
 	Creates (or activates) a new chain by installing the given authentication key.
 	This will automatically subscribe to the future committees created by `admin_id`.
@@ -553,9 +558,9 @@ type OutgoingMessage {
 	"""
 	authenticatedSigner: Owner
 	"""
-	True if the message cannot be skipped or rejected by the receiver.
+	The kind of event being sent.
 	"""
-	isProtected: Boolean!
+	kind: MessageKind!
 	"""
 	The message itself.
 	"""

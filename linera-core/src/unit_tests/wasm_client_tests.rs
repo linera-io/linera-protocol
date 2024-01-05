@@ -14,9 +14,9 @@ use linera_base::{
     data_types::Amount,
     identifiers::{ChainDescription, ChainId, Destination, Owner},
 };
-use linera_chain::data_types::{CertificateValue, OutgoingMessage};
+use linera_chain::data_types::{CertificateValue, MessageAction, OutgoingMessage};
 use linera_execution::{
-    policy::ResourceControlPolicy, Bytecode, Message, Operation, SystemMessage,
+    policy::ResourceControlPolicy, Bytecode, Message, MessageKind, Operation, SystemMessage,
     UserApplicationDescription, WasmRuntime,
 };
 use linera_storage::Storage;
@@ -269,9 +269,8 @@ where
         .unwrap()
         .unwrap();
 
-    let increment = 5_u64;
     let cert = creator
-        .execute_operation(Operation::user(application_id2, &(receiver_id, increment))?)
+        .execute_operation(Operation::user(application_id2, &(receiver_id, 5))?)
         .await
         .unwrap()
         .unwrap();
@@ -289,6 +288,53 @@ where
         async_graphql::Response::new(async_graphql::Value::from_json(json!({"value": 5})).unwrap());
 
     assert_eq!(expected, response);
+
+    // Try again with a value that will make the (untracked) message fail.
+    let cert = creator
+        .execute_operation(Operation::user(application_id2, &(receiver_id, 10000))?)
+        .await
+        .unwrap()
+        .unwrap();
+
+    receiver.receive_certificate(cert).await.unwrap();
+    let mut certs = receiver.process_inbox().await.unwrap().0;
+    assert_eq!(certs.len(), 1);
+    let cert = certs.pop().unwrap();
+    let incoming_messages = &cert.value().block().unwrap().incoming_messages;
+    assert_eq!(incoming_messages.len(), 1);
+    assert_eq!(incoming_messages[0].action, MessageAction::Reject);
+    assert_eq!(incoming_messages[0].event.kind, MessageKind::Simple);
+    let messages = cert.value().messages().unwrap();
+    assert_eq!(messages.len(), 0);
+
+    // Try again with a value that will make the (tracked) message fail.
+    let cert = creator
+        .execute_operation(Operation::user(application_id2, &(receiver_id, 20000))?)
+        .await
+        .unwrap()
+        .unwrap();
+
+    receiver.receive_certificate(cert).await.unwrap();
+    let mut certs = receiver.process_inbox().await.unwrap().0;
+    assert_eq!(certs.len(), 1);
+    let cert = certs.pop().unwrap();
+    let incoming_messages = &cert.value().block().unwrap().incoming_messages;
+    assert_eq!(incoming_messages.len(), 1);
+    assert_eq!(incoming_messages[0].action, MessageAction::Reject);
+    assert_eq!(incoming_messages[0].event.kind, MessageKind::Tracked);
+    let messages = cert.value().messages().unwrap();
+    assert_eq!(messages.len(), 1);
+
+    // The bounced message is marked as "bouncing" in the Wasm context and succeeds.
+    creator.receive_certificate(cert).await.unwrap();
+    let mut certs = creator.process_inbox().await.unwrap().0;
+    assert_eq!(certs.len(), 1);
+    let cert = certs.pop().unwrap();
+    let incoming_messages = &cert.value().block().unwrap().incoming_messages;
+    assert_eq!(incoming_messages.len(), 1);
+    assert_eq!(incoming_messages[0].action, MessageAction::Accept);
+    assert_eq!(incoming_messages[0].event.kind, MessageKind::Bouncing);
+
     Ok(())
 }
 
