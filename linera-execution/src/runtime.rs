@@ -107,8 +107,6 @@ impl<T> Promise<T> {
 
 #[derive(Debug, Default)]
 struct SimpleUserState {
-    /// Whether the application state was locked.
-    locked: bool,
     /// A read query in progress on the internal state, if any.
     pending_query: Option<Receiver<Vec<u8>>>,
 }
@@ -163,8 +161,6 @@ type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
 #[derive(Debug, Default)]
 struct ViewUserState {
-    /// Whether the application state was locked.
-    locked: bool,
     /// The contains-key queries in progress.
     contains_key_queries: QueryManager<bool>,
     /// The read-value queries in progress.
@@ -598,7 +594,6 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     fn try_read_my_state_new(&mut self) -> Result<Self::Read, ExecutionError> {
         let id = self.application_id()?;
         let state = self.simple_user_states.entry(id).or_default();
-        ensure!(!state.locked, ExecutionError::ApplicationIsInUse(id));
         let receiver = self
             .execution_state_sender
             .send_request(|callback| Request::ReadSimpleUserState { id, callback })?;
@@ -619,10 +614,6 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
 
     // TODO(#1152): simplify away
     fn lock_new(&mut self) -> Result<Self::Lock, ExecutionError> {
-        let id = self.application_id()?;
-        let state = self.view_user_states.entry(id).or_default();
-        ensure!(!state.locked, ExecutionError::ApplicationIsInUse(id));
-        state.locked = true;
         Ok(())
     }
 
@@ -631,10 +622,6 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     }
 
     fn unlock_new(&mut self) -> Result<Self::Unlock, ExecutionError> {
-        let id = self.application_id()?;
-        let state = self.view_user_states.entry(id).or_default();
-        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
-        state.locked = false;
         Ok(())
     }
 
@@ -648,7 +635,6 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     fn write_batch_and_unlock(&mut self, batch: Batch) -> Result<(), ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
         state.force_all_pending_queries()?;
         self.execution_state_sender
             .send_request(|callback| Request::WriteBatch {
@@ -657,14 +643,12 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
                 callback,
             })?
             .recv_response()?;
-        state.locked = false;
         Ok(())
     }
 
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
         self.runtime_counts
             .increment_num_reads(&self.runtime_limits)?;
         let receiver = self
@@ -686,7 +670,6 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     ) -> Result<Self::ReadMultiValuesBytes, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
         self.runtime_counts
             .increment_num_reads(&self.runtime_limits)?;
         let receiver = self
@@ -717,7 +700,6 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     ) -> Result<Self::ReadValueBytes, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
         self.runtime_counts
             .increment_num_reads(&self.runtime_limits)?;
         let receiver = self
@@ -746,7 +728,6 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     ) -> Result<Self::FindKeysByPrefix, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
         self.runtime_counts
             .increment_num_reads(&self.runtime_limits)?;
         let receiver = self.execution_state_sender.send_request(move |callback| {
@@ -781,7 +762,6 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        ensure!(state.locked, ExecutionError::ApplicationStateNotLocked(id));
         self.runtime_counts
             .increment_num_reads(&self.runtime_limits)?;
         let receiver = self.execution_state_sender.send_request(move |callback| {
@@ -881,15 +861,10 @@ impl ContractRuntime for ContractSyncRuntime {
         let mut this = self.as_inner();
         let this = this.deref_mut();
         let id = this.application_id()?;
-        let state = this.simple_user_states.entry(id).or_default();
-        if state.locked {
-            return Ok(None);
-        }
         let receiver = this
             .execution_state_sender
             .send_request(|callback| Request::ReadSimpleUserState { id, callback })?;
         let bytes = receiver.recv_response()?;
-        state.locked = true;
         Ok(Some(bytes))
     }
 
@@ -897,10 +872,6 @@ impl ContractRuntime for ContractSyncRuntime {
         let mut this = self.as_inner();
         let this = this.deref_mut();
         let id = this.application_id()?;
-        let state = this.simple_user_states.entry(id).or_default();
-        if !state.locked {
-            return Ok(false);
-        }
         let receiver =
             this.execution_state_sender
                 .send_request(|callback| Request::SaveSimpleUserState {
@@ -909,7 +880,6 @@ impl ContractRuntime for ContractSyncRuntime {
                     callback,
                 })?;
         receiver.recv_response()?;
-        state.locked = false;
         Ok(true)
     }
 
