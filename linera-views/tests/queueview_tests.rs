@@ -4,10 +4,9 @@
 use linera_views::{
     memory::create_memory_context,
     queue_view::QueueView,
-    views::{CryptoHashRootView, RootView, View},
+    views::{CryptoHashRootView, CryptoHashView, RootView, View},
 };
 use rand::{Rng, SeedableRng};
-use linera_views::views::CryptoHashView;
 
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {

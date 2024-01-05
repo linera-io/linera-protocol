@@ -2,21 +2,39 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    memory::create_memory_context,
     collection_view::CollectionView,
+    common::Context,
+    memory::create_memory_context,
     register_view::RegisterView,
-    views::{CryptoHashRootView, RootView, View},
+    views::{CryptoHashRootView, CryptoHashView, RootView, View, ViewError},
 };
 use rand::{Rng, SeedableRng};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 #[derive(CryptoHashRootView)]
-pub struct StateView<C> {
+struct StateView<C> {
     pub v: CollectionView<C, u8, RegisterView<C, u32>>,
 }
 
+impl<C> StateView<C>
+where
+    C: Send + Context + Sync,
+    ViewError: From<C::Error>,
+{
+    async fn key_values(&self) -> BTreeMap<u8, u32> {
+        let mut map = BTreeMap::new();
+        let keys = self.v.indices().await.unwrap();
+        for key in keys {
+            let subview = self.v.try_load_entry(&key).await.unwrap();
+            let value = subview.get();
+            map.insert(key, *value);
+        }
+        map
+    }
+}
+
 #[tokio::test]
-async fn collection_view_check() {
+async fn classic_collection_view_check() {
     let context = create_memory_context();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     let mut map = BTreeMap::<u8, u32>::new();
@@ -24,12 +42,13 @@ async fn collection_view_check() {
     let nmax: u8 = 25;
     for _ in 0..n {
         let mut view = StateView::load(context.clone()).await.unwrap();
+        let hash = view.crypto_hash().await.unwrap();
         let save = rng.gen::<bool>();
         //
         let count_oper = rng.gen_range(0..25);
         let mut new_map = map.clone();
         for _ in 0..count_oper {
-            let choice = rng.gen_range(0..4);
+            let choice = rng.gen_range(0..6);
             if choice == 0 {
                 // deleting random stuff
                 let pos = rng.gen_range(0..nmax);
@@ -48,20 +67,45 @@ async fn collection_view_check() {
                 }
             }
             if choice == 2 {
+                // The load_entry actually changes the entries to default if missing
+                let n_load = rng.gen_range(0..5);
+                for _i in 0..n_load {
+                    let pos = rng.gen_range(0..nmax);
+                    let _subview = view.v.load_entry(&pos).await.unwrap();
+                    if !new_map.contains_key(&pos) {
+                        new_map.insert(pos, 0);
+                    }
+                }
+            }
+            if choice == 3 {
+                // The load_entry actually changes the entries to default if missing
+                let n_reset = rng.gen_range(0..5);
+                for _i in 0..n_reset {
+                    let pos = rng.gen_range(0..nmax);
+                    view.v.reset_entry_to_default(&pos).await.unwrap();
+                    new_map.insert(pos, 0);
+                }
+            }
+            if choice == 4 {
                 // Doing the clearing
                 view.clear();
                 new_map.clear();
             }
-            if choice == 3 {
+            if choice == 5 {
                 // Doing the rollback
                 view.rollback();
                 new_map = map.clone();
             }
+            // Checking the hash
+            let new_hash = view.crypto_hash().await.unwrap();
+            if map == new_map {
+                assert_eq!(new_hash, hash);
+            } else {
+                assert_ne!(new_hash, hash);
+            }
             // Checking the keys
-            let keys_view = view.v.indices().await.unwrap();
-            let keys_view = keys_view.into_iter().collect::<BTreeSet<_>>();
-            let keys_map = new_map.clone().into_keys().collect::<BTreeSet<_>>();
-            assert_eq!(keys_view, keys_map);
+            let key_values = view.key_values().await;
+            assert_eq!(key_values, new_map);
         }
         if save {
             map = new_map.clone();
