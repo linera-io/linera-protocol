@@ -173,7 +173,6 @@ where
     /// # })
     /// ```
     pub async fn load_entry_mut(&mut self, short_key: Vec<u8>) -> Result<&mut W, ViewError> {
-        *self.hash.get_mut() = None;
         self.do_load_entry_mut(short_key).await
     }
 
@@ -316,6 +315,7 @@ where
     }
 
     async fn do_load_entry_mut(&mut self, short_key: Vec<u8>) -> Result<&mut W, ViewError> {
+        *self.hash.get_mut() = None;
         match self.updates.get_mut().entry(short_key.clone()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
