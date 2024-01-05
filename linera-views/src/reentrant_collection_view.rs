@@ -336,7 +336,6 @@ where
         &mut self,
         short_key: Vec<u8>,
     ) -> Result<(), ViewError> {
-        *self.hash.get_mut() = None;
         let mut view = self.try_load_entry_mut(short_key).await?;
         view.clear();
         Ok(())
