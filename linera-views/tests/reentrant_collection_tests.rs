@@ -48,7 +48,7 @@ async fn reentrant_collection_view_check() {
         let count_oper = rng.gen_range(0..25);
         let mut new_map = map.clone();
         for _ in 0..count_oper {
-            let choice = rng.gen_range(0..5);
+            let choice = rng.gen_range(0..6);
             if choice == 0 {
                 // deleting random stuff
                 let pos = rng.gen_range(0..nmax);
@@ -91,11 +91,22 @@ async fn reentrant_collection_view_check() {
                 }
             }
             if choice == 3 {
+                // changing some random entries
+                let n_ins = rng.gen_range(0..5);
+                for _i in 0..n_ins {
+                    let pos = rng.gen_range(0..nmax);
+                    let _subview = view.v.try_load_entry(&pos).await.unwrap();
+                    if !new_map.contains_key(&pos) {
+                        new_map.insert(pos, 0);
+                    }
+                }
+            }
+            if choice == 4 {
                 // Doing the clearing
                 view.clear();
                 new_map.clear();
             }
-            if choice == 4 {
+            if choice == 5 {
                 // Doing the rollback
                 view.rollback();
                 new_map = map.clone();

@@ -270,6 +270,21 @@ where
         &self,
         short_key: Vec<u8>,
     ) -> Result<ReadGuardedView<W>, ViewError> {
+        {
+            let mut hash = self.hash.lock().await;
+            *hash = None;
+        }
+        self.local_try_load_entry(short_key).await
+    }
+
+    /// When computing the hash we are locking the hash.
+    /// So, we cannot use the function try_load_entry
+    /// because it locks the hash, which creates a
+    /// deadlock.
+    async fn local_try_load_entry(
+        &self,
+        short_key: Vec<u8>,
+    ) -> Result<ReadGuardedView<W>, ViewError> {
         Ok(ReadGuardedView(
             Self::try_load_view(
                 &self.context,
@@ -685,7 +700,7 @@ where
                 hasher.update_with_bcs_bytes(&keys.len())?;
                 for key in keys {
                     hasher.update_with_bytes(&key)?;
-                    let view = self.try_load_entry(key).await?;
+                    let view = self.local_try_load_entry(key).await?;
                     let hash = view.hash().await?;
                     hasher.write_all(hash.as_ref())?;
                 }
