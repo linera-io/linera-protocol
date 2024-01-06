@@ -94,19 +94,8 @@ pub enum ExecutionError {
     WasmError(#[from] WasmExecutionError),
     #[error(transparent)]
     JoinError(#[from] tokio::task::JoinError),
-    #[error("Host future was polled after it had finished")]
-    PolledTwice,
     #[error("The given promise is invalid or was polled once already")]
     InvalidPromise,
-    #[error("Attempt to use a system API to write to read-only storage")]
-    WriteAttemptToReadOnlyStorage,
-
-    #[error("Invalid operation for this application")]
-    InvalidOperation,
-    #[error("Invalid message for this application")]
-    InvalidMessage,
-    #[error("Invalid query for this application")]
-    InvalidQuery,
 
     #[error("Session {0} does not exist or was already closed")]
     InvalidSession(SessionId),
@@ -125,10 +114,6 @@ pub enum ExecutionError {
 
     #[error("Attempted to perform a reentrant call to application {0}")]
     ReentrantCall(UserApplicationId),
-    #[error("Attempted to call application {0} while the state is locked")]
-    ApplicationIsInUse(UserApplicationId),
-    #[error("Attempted to read the state of application {0} but it is not locked")]
-    ApplicationStateNotLocked(UserApplicationId),
     #[error("Failed to load bytecode from storage {0:?}")]
     ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
 
