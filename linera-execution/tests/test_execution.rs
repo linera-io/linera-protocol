@@ -131,10 +131,9 @@ where
         assert_eq!(context.authenticated_signer, Some(self.owner));
         assert!(bcs::from_bytes::<UserApplicationId>(&argument).is_ok());
 
-        self.runtime.lock()?;
         let mut batch = Batch::new();
         batch.put_key_value_bytes(CALLEE_ID_KEY.to_vec(), argument);
-        self.runtime.write_batch_and_unlock(batch)?;
+        self.runtime.write_batch(batch)?;
 
         Ok(RawExecutionResult::default())
     }
@@ -152,8 +151,6 @@ where
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
 
-        self.runtime.lock()?;
-
         // Read the application ID to call
         let callee_id_bytes = self
             .runtime
@@ -170,7 +167,7 @@ where
         state.extend(operation.clone());
         let mut batch = Batch::new();
         batch.put_key_value_bytes(DUMMY_STATE_KEY.to_vec(), state);
-        self.runtime.write_batch_and_unlock(batch)?;
+        self.runtime.write_batch(batch)?;
 
         // Call ourselves after unlocking the state => ok.
         let call_result = self.runtime.try_call_application(
@@ -326,14 +323,10 @@ where
         _context: QueryContext,
         _argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        self.runtime.lock()?;
-
         let state = self
             .runtime
             .read_value_bytes(DUMMY_STATE_KEY.to_vec())?
             .unwrap_or_default();
-
-        self.runtime.unlock()?;
 
         Ok(state)
     }

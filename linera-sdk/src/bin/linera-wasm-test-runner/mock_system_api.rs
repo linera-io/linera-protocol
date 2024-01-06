@@ -393,61 +393,6 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
             })
         },
     )?;
-    linker.func_wrap1_async(
-        "contract_system_api",
-        "load-and-lock: func() -> option<list<u8>>",
-        move |mut caller: Caller<'_, Resources>, return_offset: i32| {
-            Box::new(async move {
-                let function = get_function(
-                    &mut caller,
-                    "mocked-load-and-lock: func() -> option<list<u8>>",
-                )
-                .expect(
-                    "Missing `mocked-load-and-lock` function in the module. \
-                    Please ensure `linera_sdk::test::mock_application_state` was called",
-                );
-
-                let (result_offset,) = function
-                    .typed::<(), (i32,), _>(&mut caller)
-                    .expect("Incorrect `mocked-load-and-lock` function signature")
-                    .call_async(&mut caller, ())
-                    .await
-                    .expect(
-                        "Failed to call `mocked-load-and-lock` function. \
-                        Please ensure `linera_sdk::test::mock_application_state` was called",
-                    );
-
-                copy_memory_slices(&mut caller, result_offset, return_offset, 12);
-            })
-        },
-    )?;
-    linker.func_wrap0_async(
-        "contract_system_api",
-        "lock::new: func() -> handle<lock>",
-        move |_: Caller<'_, Resources>| Box::new(async move { 0 }),
-    )?;
-    linker.func_wrap1_async(
-        "contract_system_api",
-        "lock::wait: func(self: handle<lock>) -> unit",
-        move |mut caller: Caller<'_, Resources>, _handle: i32| {
-            Box::new(async move {
-                let function = get_function(&mut caller, "mocked-lock: func() -> bool").expect(
-                    "Missing `mocked-lock` function in the module. \
-                    Please ensure `linera_sdk::test::mock_application_state` was called",
-                );
-
-                function
-                    .typed::<(), (i32,), _>(&mut caller)
-                    .expect("Incorrect `mocked-lock` function signature")
-                    .call_async(&mut caller, ())
-                    .await
-                    .expect(
-                        "Failed to call `mocked-lock` function. \
-                        Please ensure `linera_sdk::test::mock_application_state` was called",
-                    );
-            })
-        },
-    )?;
 
     linker.func_wrap1_async(
         "service_system_api",
@@ -686,58 +631,6 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
 
                 store_in_memory(&mut caller, return_offset, 0_i32);
                 copy_memory_slices(&mut caller, result_offset, return_offset + 4, 8);
-            })
-        },
-    )?;
-    linker.func_wrap0_async(
-        "service_system_api",
-        "lock::new: func() -> handle<lock>",
-        move |_: Caller<'_, Resources>| Box::new(async move { 0 }),
-    )?;
-    linker.func_wrap2_async(
-        "service_system_api",
-        "lock::wait: func(self: handle<lock>) -> result<unit, string>",
-        move |mut caller: Caller<'_, Resources>, _handle: i32, return_offset: i32| {
-            Box::new(async move {
-                let function = get_function(&mut caller, "mocked-lock: func() -> bool").expect(
-                    "Missing `mocked-lock` function in the module. \
-                    Please ensure `linera_sdk::test::mock_application_state` was called",
-                );
-
-                let (locked,) = function
-                    .typed::<(), (i32,), _>(&mut caller)
-                    .expect("Incorrect `mocked-lock` function signature")
-                    .call_async(&mut caller, ())
-                    .await
-                    .expect(
-                        "Failed to call `mocked-lock` function. \
-                        Please ensure `linera_sdk::test::mock_application_state` was called",
-                    );
-
-                match locked {
-                    0 => {
-                        store_in_memory(&mut caller, return_offset, 1_i32);
-                    }
-                    _ => {
-                        let alloc_function = get_function(&mut caller, "cabi_realloc").expect(
-                            "Missing `cabi_realloc` function in the module. \
-                            Please ensure `linera_sdk` is compiled in with the module",
-                        );
-
-                        let error_message = "Failed to lock view".as_bytes();
-                        let error_message_length = error_message.len() as i32;
-                        let error_message_address = alloc_function
-                            .typed::<(i32, i32, i32, i32), i32, _>(&mut caller)
-                            .expect("Incorrect `cabi_realloc` function signature")
-                            .call_async(&mut caller, (0, 0, 1, error_message_length))
-                            .await
-                            .expect("Failed to call `cabi_realloc` function");
-
-                        store_in_memory(&mut caller, return_offset, 0_i32);
-                        store_in_memory(&mut caller, return_offset + 4, error_message_address);
-                        store_in_memory(&mut caller, return_offset + 8, error_message_length);
-                    }
-                }
             })
         },
     )?;
@@ -1231,7 +1124,6 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
 
     let resource_names = [
         "load",
-        "lock",
         "read-multi-values-bytes",
         "read-value-bytes",
         "find-keys",

@@ -15,13 +15,7 @@ enum log-level {
 }
 
 load: func() -> list<u8>
-load-and-lock: func() -> option<list<u8>>
-store-and-unlock: func(value: list<u8>) -> bool
-
-resource lock {
-    static new: func() -> lock
-    wait: func() -> unit
-}
+store: func(value: list<u8>) -> bool
 
 try-call-application: func(
     authenticated: bool,

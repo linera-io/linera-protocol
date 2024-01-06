@@ -11,8 +11,6 @@ macro_rules! impl_contract_system_api {
         {
             type Error = ExecutionError;
 
-            type Lock = <Self as BaseRuntime>::Lock;
-
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
             }
@@ -47,21 +45,8 @@ macro_rules! impl_contract_system_api {
             }
 
             // TODO(#1152): remove
-            fn load_and_lock(&mut self) -> Result<Option<Vec<u8>>, Self::Error> {
-                self.try_read_and_lock_my_state()
-            }
-
-            // TODO(#1152): remove
-            fn store_and_unlock(&mut self, state: &[u8]) -> Result<bool, Self::Error> {
-                self.save_and_unlock_my_state(state.to_vec())
-            }
-
-            fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
-                BaseRuntime::lock_new(self)
-            }
-
-            fn lock_wait(&mut self, promise: &Self::Lock) -> Result<(), Self::Error> {
-                BaseRuntime::lock_wait(self, promise)
+            fn store(&mut self, state: &[u8]) -> Result<bool, Self::Error> {
+                self.save_my_state(state.to_vec())
             }
 
             fn try_call_application(
@@ -139,8 +124,6 @@ macro_rules! impl_service_system_api {
             type Error = ExecutionError;
 
             type Load = <Self as BaseRuntime>::Read;
-            type Lock = <Self as BaseRuntime>::Lock;
-            type Unlock = <Self as BaseRuntime>::Unlock;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -179,32 +162,6 @@ macro_rules! impl_service_system_api {
                 promise: &Self::Load,
             ) -> Result<Result<Vec<u8>, String>, Self::Error> {
                 self.try_read_my_state_wait(promise)
-                    // TODO(#1153): remove
-                    .map(Ok)
-            }
-
-            fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
-                BaseRuntime::lock_new(self)
-            }
-
-            fn lock_wait(
-                &mut self,
-                promise: &Self::Lock,
-            ) -> Result<Result<(), String>, Self::Error> {
-                BaseRuntime::lock_wait(self, promise)
-                    // TODO(#1153): remove
-                    .map(Ok)
-            }
-
-            fn unlock_new(&mut self) -> Result<Self::Unlock, Self::Error> {
-                BaseRuntime::unlock_new(self)
-            }
-
-            fn unlock_wait(
-                &mut self,
-                promise: &Self::Unlock,
-            ) -> Result<Result<(), String>, Self::Error> {
-                BaseRuntime::unlock_wait(self, promise)
                     // TODO(#1153): remove
                     .map(Ok)
             }
@@ -342,7 +299,7 @@ macro_rules! impl_view_system_api {
                     }
                 }
                 // Hack: The following is a no-op for services.
-                self.write_batch_and_unlock(batch)
+                self.write_batch(batch)
             }
         }
     };

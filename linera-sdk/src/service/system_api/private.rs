@@ -25,23 +25,8 @@ where
     }
 }
 
-/// Loads the application state (and locks it for writes).
-pub async fn lock_and_load_view<State: View<ViewStorageContext>>() -> State {
-    let promise = wit::Lock::new();
-    yield_once().await;
-    promise.wait().expect("Failed to lock application state");
-    load_view_using::<State>().await
-}
-
-/// Unlocks the service state previously loaded.
-pub async fn unlock_view() {
-    let promise = wit::Unlock::new();
-    yield_once().await;
-    promise.wait().expect("Failed to unlock application state");
-}
-
 /// Helper function to load the service state or create a new one if it doesn't exist.
-pub async fn load_view_using<State: View<ViewStorageContext>>() -> State {
+pub async fn load_view<State: View<ViewStorageContext>>() -> State {
     let context = ViewStorageContext::default();
     State::load(context)
         .await
