@@ -295,7 +295,17 @@ where
         short_key: Vec<u8>,
     ) -> Result<ReadGuardedView<W>, ViewError> {
         *self.hash.get_mut() = None;
-        self.local_try_load_entry(short_key).await
+        Ok(ReadGuardedView(
+            Self::try_load_view_mut(
+                &self.context,
+                &mut *self.updates.lock().await,
+                self.was_cleared,
+                &short_key,
+            )
+            .await?
+            .try_read_arc()
+            .ok_or_else(|| ViewError::TryLockError(short_key))?,
+        ))
     }
 
     /// Loads a subview at the given index in the collection and gives read-only access to the data.
@@ -322,27 +332,6 @@ where
                 &self.context,
                 &*self.updates.lock().await,
                 self.was_cleared,
-                &short_key,
-            )
-            .await?
-            .try_read_arc()
-            .ok_or_else(|| ViewError::TryLockError(short_key))?,
-        ))
-    }
-
-    /// When computing the hash we are locking the hash.
-    /// So, we cannot use the function try_load_entry
-    /// because it locks the hash, which creates a
-    /// deadlock.
-    async fn local_try_load_entry(
-        &self,
-        short_key: Vec<u8>,
-    ) -> Result<ReadGuardedView<W>, ViewError> {
-        Ok(ReadGuardedView(
-            Self::try_load_view_mut(
-                &self.context,
-                &mut *self.updates.lock().await,
-                self.delete_storage_first,
                 &short_key,
             )
             .await?
@@ -753,7 +742,7 @@ where
                 hasher.update_with_bcs_bytes(&keys.len())?;
                 for key in keys {
                     hasher.update_with_bytes(&key)?;
-                    let view = self.local_try_load_entry(key).await?;
+                    let view = self.try_load_entry(key).await?;
                     let hash = view.hash().await?;
                     hasher.write_all(hash.as_ref())?;
                 }
