@@ -276,7 +276,8 @@ where
     }
 
     /// Loads a subview at the given index in the collection and gives read-only access to the data.
-    /// If an entry was removed before then a default entry is put on this index.
+    /// If an entry was removed before or is absent then a default entry is added to the collection
+    /// on the key.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -309,7 +310,8 @@ where
     }
 
     /// Loads a subview at the given index in the collection and gives read-only access to the data.
-    /// If an entry was removed before then a default entry is put on this index.
+    /// If an entry was removed before or is absent then a default view is returned that will never
+    /// be added to the collection nor added to the storage and cannot be modified.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
