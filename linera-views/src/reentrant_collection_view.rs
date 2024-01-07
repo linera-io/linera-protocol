@@ -232,13 +232,9 @@ where
         Ok(match updates.get(short_key) {
             Some(entry) => match entry {
                 Update::Set(view) => view.clone(),
-                _entry @ Update::Removed => {
-                    Self::wrapped_view(context, true, short_key).await?
-                }
+                _entry @ Update::Removed => Self::wrapped_view(context, true, short_key).await?,
             },
-            None => {
-                Self::wrapped_view(context, was_cleared, short_key).await?
-            }
+            None => Self::wrapped_view(context, was_cleared, short_key).await?,
         })
     }
 
@@ -846,7 +842,10 @@ where
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entry_or_insert<Q>(&mut self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
+    pub async fn try_load_entry_or_insert<Q>(
+        &mut self,
+        index: &Q,
+    ) -> Result<ReadGuardedView<W>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
@@ -1227,7 +1226,10 @@ where
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entry_or_insert<Q>(&mut self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
+    pub async fn try_load_entry_or_insert<Q>(
+        &mut self,
+        index: &Q,
+    ) -> Result<ReadGuardedView<W>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
