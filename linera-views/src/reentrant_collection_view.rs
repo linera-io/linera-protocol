@@ -193,6 +193,8 @@ where
         Ok(Arc::new(RwLock::new(view)))
     }
 
+    /// Load the view and insert it into the updates if needed.
+    /// If the entry is missing, then it is set to default.
     async fn try_load_view_mut(
         context: &C,
         updates: &mut BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
@@ -218,6 +220,9 @@ where
         })
     }
 
+    /// Load the view from the update is available.
+    /// If missing, then the entry is loaded and is not inserted
+    /// into updates.
     async fn try_load_view(
         context: &C,
         updates: &BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
@@ -280,6 +285,29 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
+    ///   let subview = view.try_load_entry_or_insert(vec![0, 1]).await.unwrap();
+    ///   let value = subview.get();
+    ///   assert_eq!(*value, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entry_or_insert(
+        &mut self,
+        short_key: Vec<u8>,
+    ) -> Result<ReadGuardedView<W>, ViewError> {
+        *self.hash.get_mut() = None;
+        self.local_try_load_entry(short_key).await
+    }
+
+    /// Loads a subview at the given index in the collection and gives read-only access to the data.
+    /// If an entry was removed before then a default entry is put on this index.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
     ///   let subview = view.try_load_entry(vec![0, 1]).await.unwrap();
     ///   let value = subview.get();
     ///   assert_eq!(*value, String::default());
@@ -289,11 +317,17 @@ where
         &self,
         short_key: Vec<u8>,
     ) -> Result<ReadGuardedView<W>, ViewError> {
-        {
-            let mut hash = self.hash.lock().await;
-            *hash = None;
-        }
-        self.local_try_load_entry(short_key).await
+        Ok(ReadGuardedView(
+            Self::try_load_view(
+                &self.context,
+                &*self.updates.lock().await,
+                self.was_cleared,
+                &short_key,
+            )
+            .await?
+            .try_read_arc()
+            .ok_or_else(|| ViewError::TryLockError(short_key))?,
+        ))
     }
 
     /// When computing the hash we are locking the hash.
