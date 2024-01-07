@@ -850,6 +850,30 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
+    ///   let subview = view.try_load_entry_or_insert(&23).await.unwrap();
+    ///   let value = subview.get();
+    ///   assert_eq!(*value, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entry_or_insert<Q>(&mut self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        self.collection.try_load_entry_or_insert(short_key).await
+    }
+
+    /// Loads a subview at the given index in the collection and gives read-only access to the data.
+    /// If an entry was removed before then a default entry is put on this index.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
     ///   let subview = view.try_load_entry(&23).await.unwrap();
     ///   let value = subview.get();
     ///   assert_eq!(*value, String::default());
@@ -1195,6 +1219,30 @@ where
     {
         let short_key = index.to_custom_bytes()?;
         self.collection.try_load_entry_mut(short_key).await
+    }
+
+    /// Loads a subview at the given index in the collection and gives read-only access to the data.
+    /// If an entry was removed before then a default entry is put on this index.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
+    ///   let subview = view.try_load_entry_or_insert(&23).await.unwrap();
+    ///   let value = subview.get();
+    ///   assert_eq!(*value, String::default());
+    /// # })
+    /// ```
+    pub async fn try_load_entry_or_insert<Q>(&mut self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + ?Sized,
+    {
+        let short_key = index.to_custom_bytes()?;
+        self.collection.try_load_entry_or_insert(short_key).await
     }
 
     /// Loads a subview at the given index in the collection and gives read-only access to the data.

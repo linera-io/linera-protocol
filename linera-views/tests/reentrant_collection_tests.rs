@@ -50,13 +50,13 @@ async fn reentrant_collection_view_check() {
         for _ in 0..count_oper {
             let choice = rng.gen_range(0..6);
             if choice == 0 {
-                // deleting random stuff
+                // Deleting some random stuff
                 let pos = rng.gen_range(0..nmax);
                 view.v.remove_entry(&pos).unwrap();
                 new_map.remove(&pos);
             }
             if choice == 1 {
-                // getting an array of reference
+                // Getting an array of reference
                 let mut indices = Vec::new();
                 let mut set_indices = BTreeSet::new();
                 let mut values = Vec::new();
@@ -68,7 +68,7 @@ async fn reentrant_collection_view_check() {
                     let value = rng.gen::<u32>();
                     values.push(value);
                 }
-                // Only if all indices are distinct can the query
+                // Only if all indices are distinct can the query be acceptable
                 if set_indices.len() == n_ins {
                     let mut subviews = view.v.try_load_entries_mut(&indices).await.unwrap();
                     for i in 0..n_ins {
@@ -80,7 +80,7 @@ async fn reentrant_collection_view_check() {
                 }
             }
             if choice == 2 {
-                // changing some random entries
+                // Changing some random entries
                 let n_ins = rng.gen_range(0..5);
                 for _i in 0..n_ins {
                     let pos = rng.gen_range(0..nmax);
@@ -91,12 +91,20 @@ async fn reentrant_collection_view_check() {
                 }
             }
             if choice == 3 {
-                // changing some random entries
+                // Loading some random entries and setting to 0 if missing
+                let n_ins = rng.gen_range(0..5);
+                for _i in 0..n_ins {
+                    let pos = rng.gen_range(0..nmax);
+                    let _subview = view.v.try_load_entry_or_insert(&pos).await.unwrap();
+                    new_map.entry(pos).or_insert(0);
+                }
+            }
+            if choice == 4 {
+                // Loading some random entries and doing nothing
                 let n_ins = rng.gen_range(0..5);
                 for _i in 0..n_ins {
                     let pos = rng.gen_range(0..nmax);
                     let _subview = view.v.try_load_entry(&pos).await.unwrap();
-                    new_map.entry(pos).or_insert(0);
                 }
             }
             if choice == 4 {
