@@ -218,6 +218,25 @@ where
         })
     }
 
+    async fn try_load_view(
+        context: &C,
+        updates: &BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
+        was_cleared: bool,
+        short_key: &[u8],
+    ) -> Result<Arc<RwLock<W>>, ViewError> {
+        Ok(match updates.get(short_key) {
+            Some(entry) => match entry {
+                Update::Set(view) => view.clone(),
+                _entry @ Update::Removed => {
+                    Self::wrapped_view(context, true, short_key).await?
+                }
+            },
+            None => {
+                Self::wrapped_view(context, was_cleared, short_key).await?
+            }
+        })
+    }
+
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     /// ```rust
