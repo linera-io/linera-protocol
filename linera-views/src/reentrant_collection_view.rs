@@ -193,7 +193,7 @@ where
         Ok(Arc::new(RwLock::new(view)))
     }
 
-    async fn try_load_view(
+    async fn try_load_view_mut(
         context: &C,
         updates: &mut BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
         was_cleared: bool,
@@ -239,7 +239,7 @@ where
     ) -> Result<WriteGuardedView<W>, ViewError> {
         *self.hash.get_mut() = None;
         Ok(WriteGuardedView(
-            Self::try_load_view(
+            Self::try_load_view_mut(
                 &self.context,
                 self.updates.get_mut(),
                 self.delete_storage_first,
@@ -286,7 +286,7 @@ where
         short_key: Vec<u8>,
     ) -> Result<ReadGuardedView<W>, ViewError> {
         Ok(ReadGuardedView(
-            Self::try_load_view(
+            Self::try_load_view_mut(
                 &self.context,
                 &mut *self.updates.lock().await,
                 self.delete_storage_first,
