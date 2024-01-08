@@ -369,30 +369,6 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
             })
         },
     )?;
-    linker.func_wrap1_async(
-        "contract_system_api",
-        "load: func() -> list<u8>",
-        move |mut caller: Caller<'_, Resources>, return_offset: i32| {
-            Box::new(async move {
-                let function = get_function(&mut caller, "mocked-load: func() -> list<u8>").expect(
-                    "Missing `mocked-load` function in the module. \
-                    Please ensure `linera_sdk::test::mock_application_state` was called",
-                );
-
-                let (result_offset,) = function
-                    .typed::<(), (i32,), _>(&mut caller)
-                    .expect("Incorrect `mocked-load` function signature")
-                    .call_async(&mut caller, ())
-                    .await
-                    .expect(
-                        "Failed to call `mocked-load` function. \
-                        Please ensure `linera_sdk::test::mock_application_state` was called",
-                    );
-
-                copy_memory_slices(&mut caller, result_offset, return_offset, 8);
-            })
-        },
-    )?;
 
     linker.func_wrap1_async(
         "service_system_api",
