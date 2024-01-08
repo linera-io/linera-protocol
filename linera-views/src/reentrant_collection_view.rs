@@ -180,14 +180,14 @@ where
 {
     async fn wrapped_view(
         context: &C,
-        clear: bool,
+        delete_storage_first: bool,
         short_key: &[u8],
     ) -> Result<Arc<RwLock<W>>, ViewError> {
         let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
         let context = context.clone_with_base_key(key);
         // Obtain a view and set its pending state to the default (e.g. empty) state
         let mut view = W::load(context).await?;
-        if clear {
+        if delete_storage_first {
             view.clear();
         }
         Ok(Arc::new(RwLock::new(view)))
@@ -198,7 +198,7 @@ where
     async fn try_load_view_mut(
         context: &C,
         updates: &mut BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
-        was_cleared: bool,
+        delete_storage_first: bool,
         short_key: &[u8],
     ) -> Result<Arc<RwLock<W>>, ViewError> {
         use btree_map::Entry::*;
@@ -213,7 +213,8 @@ where
                 }
             },
             Vacant(entry) => {
-                let wrapped_view = Self::wrapped_view(context, was_cleared, short_key).await?;
+                let wrapped_view =
+                    Self::wrapped_view(context, delete_storage_first, short_key).await?;
                 entry.insert(Update::Set(wrapped_view.clone()));
                 wrapped_view
             }
@@ -226,7 +227,7 @@ where
     async fn try_load_view(
         context: &C,
         updates: &BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
-        was_cleared: bool,
+        delete_storage_first: bool,
         short_key: &[u8],
     ) -> Result<Arc<RwLock<W>>, ViewError> {
         Ok(match updates.get(short_key) {
@@ -234,7 +235,7 @@ where
                 Update::Set(view) => view.clone(),
                 _entry @ Update::Removed => Self::wrapped_view(context, true, short_key).await?,
             },
-            None => Self::wrapped_view(context, was_cleared, short_key).await?,
+            None => Self::wrapped_view(context, delete_storage_first, short_key).await?,
         })
     }
 
@@ -296,7 +297,7 @@ where
             Self::try_load_view_mut(
                 &self.context,
                 &mut *self.updates.lock().await,
-                self.was_cleared,
+                self.delete_storage_first,
                 &short_key,
             )
             .await?
@@ -329,7 +330,7 @@ where
             Self::try_load_view(
                 &self.context,
                 &*self.updates.lock().await,
-                self.was_cleared,
+                self.delete_storage_first,
                 &short_key,
             )
             .await?
