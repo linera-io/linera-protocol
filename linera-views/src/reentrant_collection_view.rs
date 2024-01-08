@@ -237,17 +237,16 @@ where
     /// If missing, then the entry is loaded from storage and if
     /// missing there an error is reported.
     async fn try_load_view(
-        context: &C,
-        updates: &BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
-        delete_storage_first: bool,
+        &self,
         short_key: &[u8],
     ) -> Result<Arc<RwLock<W>>, ViewError> {
+        let updates = self.updates.lock().await;
         Ok(match updates.get(short_key) {
             Some(entry) => match entry {
                 Update::Set(view) => view.clone(),
-                _entry @ Update::Removed => Self::wrapped_view_check(context, true, short_key).await?,
+                _entry @ Update::Removed => Self::wrapped_view_check(&self.context, true, short_key).await?,
             },
-            None => Self::wrapped_view_check(context, delete_storage_first, short_key).await?,
+            None => Self::wrapped_view_check(&self.context, self.delete_storage_first, short_key).await?,
         })
     }
 
@@ -333,10 +332,7 @@ where
         short_key: Vec<u8>,
     ) -> Result<ReadGuardedView<W>, ViewError> {
         Ok(ReadGuardedView(
-            Self::try_load_view(
-                &self.context,
-                &*self.updates.lock().await,
-                self.delete_storage_first,
+            self.try_load_view(
                 &short_key,
             )
             .await?
