@@ -98,7 +98,8 @@ async fn benchmark_with_fungible(
     .await?;
 
     // Start the node services and subscribe to the publisher chain.
-    let publisher_chain_id = publisher.default_chain().context("missing default chain")?;
+    let publisher_chain_id =
+        publisher.default_chain().context("missing default chain")?;
     let mut services = Vec::new();
     for client in &clients {
         let free_port = random_free_tcp_port().context("no free TCP port")?;
@@ -113,7 +114,8 @@ async fn benchmark_with_fungible(
 
     // Publish the fungible application bytecode.
     let path = Path::new("examples/fungible").canonicalize().unwrap();
-    let (contract, service) = publisher.build_application(&path, "fungible", true).await?;
+    let (contract, service) =
+        publisher.build_application(&path, "fungible", true).await?;
     let bytecode_id = publisher.publish_bytecode(contract, service, None).await?;
 
     struct BenchmarkContext {
@@ -126,7 +128,8 @@ async fn benchmark_with_fungible(
     let apps = try_join_all(clients.iter().zip(services).enumerate().map(
         |(i, (client, node_service))| async move {
             let owner = client.get_owner().context("missing owner")?;
-            let default_chain = client.default_chain().context("missing default chain")?;
+            let default_chain =
+                client.default_chain().context("missing default chain")?;
             let initial_state = InitialState {
                 accounts: BTreeMap::from([(
                     AccountOwner::User(owner),

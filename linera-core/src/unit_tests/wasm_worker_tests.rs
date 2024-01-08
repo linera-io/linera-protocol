@@ -19,8 +19,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        ChannelFullName, Event, ExecutedBlock, HashedValue, IncomingMessage, MessageAction, Origin,
-        OutgoingMessage,
+        ChannelFullName, Event, ExecutedBlock, HashedValue, IncomingMessage,
+        MessageAction, Origin, OutgoingMessage,
     },
     test::{make_child_block, make_first_block, BlockTestExt},
 };
@@ -28,10 +28,10 @@ use linera_execution::{
     committee::Epoch,
     policy::ResourceControlPolicy,
     system::{SystemChannel, SystemMessage, SystemOperation},
-    Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription, ExecutionRuntimeConfig,
-    ExecutionStateView, GenericApplicationId, Message, MessageKind, Operation, OperationContext,
-    ResourceTracker, SystemExecutionState, UserApplicationDescription, UserApplicationId,
-    WasmContractModule, WasmRuntime,
+    Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription,
+    ExecutionRuntimeConfig, ExecutionStateView, GenericApplicationId, Message,
+    MessageKind, Operation, OperationContext, ResourceTracker, SystemExecutionState,
+    UserApplicationDescription, UserApplicationId, WasmContractModule, WasmRuntime,
 };
 use linera_storage::{MemoryStorage, Storage};
 use linera_views::views::{CryptoHashView, ViewError};
@@ -148,7 +148,8 @@ where
         message_counts: vec![1],
         state_hash: publisher_state_hash,
     });
-    let publish_certificate = make_certificate(&committee, &worker, publish_block_proposal);
+    let publish_certificate =
+        make_certificate(&committee, &worker, publish_block_proposal);
 
     let info = worker
         .fully_handle_certificate(publish_certificate.clone(), vec![])
@@ -191,7 +192,8 @@ where
     let broadcast_message = SystemMessage::BytecodeLocations {
         locations: vec![(bytecode_id, bytecode_location)],
     };
-    let broadcast_channel = Destination::Subscribers(SystemChannel::PublishedBytecodes.name());
+    let broadcast_channel =
+        Destination::Subscribers(SystemChannel::PublishedBytecodes.name());
     let broadcast_block_height = broadcast_block.height;
     publisher_system_state
         .registry
@@ -209,7 +211,8 @@ where
         message_counts: vec![1],
         state_hash: publisher_state_hash,
     });
-    let broadcast_certificate = make_certificate(&committee, &worker, broadcast_block_proposal);
+    let broadcast_certificate =
+        make_certificate(&committee, &worker, broadcast_block_proposal);
 
     let info = worker
         .fully_handle_certificate(broadcast_certificate.clone(), vec![])
@@ -263,7 +266,8 @@ where
         message_counts: vec![1],
         state_hash: creator_state.crypto_hash().await?,
     });
-    let subscribe_certificate = make_certificate(&committee, &worker, subscribe_block_proposal);
+    let subscribe_certificate =
+        make_certificate(&committee, &worker, subscribe_block_proposal);
 
     let info = worker
         .fully_handle_certificate(subscribe_certificate.clone(), vec![])

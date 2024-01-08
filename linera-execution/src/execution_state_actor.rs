@@ -25,7 +25,10 @@ where
     C::Extra: ExecutionRuntimeContext,
 {
     // TODO(#1416): Support concurrent I/O.
-    pub(crate) async fn handle_request(&mut self, request: Request) -> Result<(), ExecutionError> {
+    pub(crate) async fn handle_request(
+        &mut self,
+        request: Request,
+    ) -> Result<(), ExecutionError> {
         use Request::*;
         match request {
             LoadContract { id, callback } => {

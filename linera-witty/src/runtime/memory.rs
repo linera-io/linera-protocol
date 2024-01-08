@@ -109,12 +109,20 @@ where
     /// Reads `length` bytes from `location`.
     ///
     /// The underlying runtime may return either a memory slice or an owned buffer.
-    pub fn read(&self, location: GuestPointer, length: u32) -> Result<Cow<'_, [u8]>, RuntimeError> {
+    pub fn read(
+        &self,
+        location: GuestPointer,
+        length: u32,
+    ) -> Result<Cow<'_, [u8]>, RuntimeError> {
         self.memory.read(&*self.instance, location, length)
     }
 
     /// Writes `bytes` to `location`.
-    pub fn write(&mut self, location: GuestPointer, bytes: &[u8]) -> Result<(), RuntimeError> {
+    pub fn write(
+        &mut self,
+        location: GuestPointer,
+        bytes: &[u8],
+    ) -> Result<(), RuntimeError> {
         self.memory.write(&mut *self.instance, location, bytes)
     }
 
@@ -127,7 +135,9 @@ where
             self.cabi_realloc = Some(<Instance as InstanceWithFunction<
                 HList![i32, i32, i32, i32],
                 HList![i32],
-            >>::load_function(self.instance, "cabi_realloc")?);
+            >>::load_function(
+                self.instance, "cabi_realloc"
+            )?);
         }
 
         let size = i32::try_from(size).map_err(|_| RuntimeError::AllocationTooLarge)?;
@@ -150,12 +160,12 @@ where
     /// Deallocates the `allocation` managed by the guest.
     pub fn deallocate(&mut self, allocation: GuestPointer) -> Result<(), RuntimeError> {
         if self.cabi_free.is_none() {
-            self.cabi_free = Some(
-                <Instance as InstanceWithFunction<HList![i32], HList![]>>::load_function(
-                    self.instance,
-                    "cabi_free",
-                )?,
-            );
+            self.cabi_free = Some(<Instance as InstanceWithFunction<
+                HList![i32],
+                HList![],
+            >>::load_function(
+                self.instance, "cabi_free"
+            )?);
         }
 
         let address = allocation

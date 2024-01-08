@@ -37,5 +37,6 @@ impl<LeftHead, LeftTail, RightHead, RightTail> Merge<HCons<RightHead, RightTail>
 where
     LeftTail: Merge<RightTail>,
 {
-    type Output = HCons<Either<LeftHead, RightHead>, <LeftTail as Merge<RightTail>>::Output>;
+    type Output =
+        HCons<Either<LeftHead, RightHead>, <LeftTail as Merge<RightTail>>::Output>;
 }

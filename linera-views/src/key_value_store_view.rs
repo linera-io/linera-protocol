@@ -4,8 +4,9 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        contains_key, get_interval, get_upper_bound, insert_key_prefix, Context, HasherOutput,
-        KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
+        contains_key, get_interval, get_upper_bound, insert_key_prefix, Context,
+        HasherOutput, KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update,
+        MIN_VIEW_TAG,
     },
     map_view::ByteMapView,
     views::{HashableView, Hasher, View, ViewError},
@@ -272,7 +273,8 @@ where
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
-        let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
+        let mut suffix_closed_set =
+            SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
         if !self.delete_storage_first {
             for index in self
                 .context
@@ -371,7 +373,8 @@ where
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
         let mut update = updates.next();
-        let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
+        let mut suffix_closed_set =
+            SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
         if !self.delete_storage_first {
             for entry in self
                 .context
@@ -394,7 +397,8 @@ where
                             }
                         }
                         _ => {
-                            if !suffix_closed_set.find_key(index) && !f(index, index_val)? {
+                            if !suffix_closed_set.find_key(index) && !f(index, index_val)?
+                            {
                                 return Ok(());
                             }
                             break;
@@ -653,7 +657,8 @@ where
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
                     if let Some(value) = self.sizes.get(&key).await? {
                         let entry_size = SizeData {
-                            key: u32::try_from(key.len()).map_err(|_| ArithmeticError::Overflow)?,
+                            key: u32::try_from(key.len())
+                                .map_err(|_| ArithmeticError::Overflow)?,
                             value,
                         };
                         self.total_size.sub_assign(entry_size);
@@ -693,7 +698,8 @@ where
                     for key in key_list {
                         self.updates.remove(&key);
                     }
-                    let key_values = self.sizes.key_values_by_prefix(key_prefix.clone()).await?;
+                    let key_values =
+                        self.sizes.key_values_by_prefix(key_prefix.clone()).await?;
                     for (key, value) in key_values {
                         let entry_size = SizeData {
                             key: key.len() as u32,
@@ -724,7 +730,11 @@ where
     ///   assert_eq!(view.get(&[0,1]).await.unwrap(), Some(vec![34]));
     /// # })
     /// ```
-    pub async fn insert(&mut self, index: Vec<u8>, value: Vec<u8>) -> Result<(), ViewError> {
+    pub async fn insert(
+        &mut self,
+        index: Vec<u8>,
+        value: Vec<u8>,
+    ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         batch.put_key_value_bytes(index, value);
         self.write_batch(batch).await
@@ -762,7 +772,10 @@ where
     ///   assert_eq!(view.get(&[0,1]).await.unwrap(), None);
     /// # })
     /// ```
-    pub async fn remove_by_prefix(&mut self, key_prefix: Vec<u8>) -> Result<(), ViewError> {
+    pub async fn remove_by_prefix(
+        &mut self,
+        key_prefix: Vec<u8>,
+    ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         batch.delete_key_prefix(key_prefix);
         self.write_batch(batch).await
@@ -782,20 +795,25 @@ where
     ///   assert_eq!(keys, vec![vec![1]]);
     /// # })
     /// ```
-    pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
+    pub async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, ViewError> {
         ensure!(
             key_prefix.len() <= self.max_key_size(),
             ViewError::KeyTooLong
         );
         let len = key_prefix.len();
-        let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
+        let key_prefix_full =
+            self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut keys = Vec::new();
         let key_prefix_upper = get_upper_bound(key_prefix);
         let mut updates = self
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
-        let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
+        let mut suffix_closed_set =
+            SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
         if !self.delete_storage_first {
             for key in self
                 .context
@@ -861,14 +879,16 @@ where
             ViewError::KeyTooLong
         );
         let len = key_prefix.len();
-        let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
+        let key_prefix_full =
+            self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut key_values = Vec::new();
         let key_prefix_upper = get_upper_bound(key_prefix);
         let mut updates = self
             .updates
             .range((Included(key_prefix.to_vec()), key_prefix_upper));
         let mut update = updates.next();
-        let mut suffix_closed_set = SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
+        let mut suffix_closed_set =
+            SuffixClosedSetIterator::new(0, self.deleted_prefixes.iter());
         if !self.delete_storage_first {
             for entry in self
                 .context
@@ -879,9 +899,12 @@ where
                 let (key, value) = entry?;
                 loop {
                     match update {
-                        Some((update_key, update_value)) if update_key[len..] <= key[..] => {
+                        Some((update_key, update_value))
+                            if update_key[len..] <= key[..] =>
+                        {
                             if let Update::Set(update_value) = update_value {
-                                let key_value = (update_key[len..].to_vec(), update_value.to_vec());
+                                let key_value =
+                                    (update_key[len..].to_vec(), update_value.to_vec());
                                 key_values.push(key_value);
                             }
                             update = updates.next();
@@ -911,7 +934,9 @@ where
         Ok(key_values)
     }
 
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+    async fn compute_hash(
+        &self,
+    ) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0;
         self.for_each_index_value(|index, value| -> Result<(), ViewError> {
@@ -1002,7 +1027,10 @@ where
         view.multi_get(keys).await
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, ViewError> {
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, ViewError> {
         let view = self.view.read().await;
         view.find_keys_by_prefix(key_prefix).await
     }
@@ -1045,7 +1073,8 @@ where
 
 /// A context that stores all values in memory.
 #[cfg(any(test, feature = "test"))]
-pub type KeyValueStoreMemoryContext<E> = ContextFromStore<E, ViewContainer<MemoryContext<()>>>;
+pub type KeyValueStoreMemoryContext<E> =
+    ContextFromStore<E, ViewContainer<MemoryContext<()>>>;
 
 #[cfg(any(test, feature = "test"))]
 impl<E> KeyValueStoreMemoryContext<E> {

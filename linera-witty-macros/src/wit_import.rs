@@ -9,7 +9,9 @@ use proc_macro2::{Span, TokenStream};
 use proc_macro_error::abort;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use std::collections::HashSet;
-use syn::{spanned::Spanned, FnArg, Ident, ItemTrait, LitStr, ReturnType, TraitItem, TraitItemFn};
+use syn::{
+    spanned::Spanned, FnArg, Ident, ItemTrait, LitStr, ReturnType, TraitItem, TraitItemFn,
+};
 
 /// Returns the code generated for calling imported Wasm functions.
 ///
@@ -61,7 +63,8 @@ impl<'input> WitImportGenerator<'input> {
         let function_slots = self.function_slots();
         let slot_initializations = self.slot_initializations();
         let imported_functions = self.imported_functions();
-        let (instance_trait_alias_name, instance_trait_alias) = self.instance_trait_alias();
+        let (instance_trait_alias_name, instance_trait_alias) =
+            self.instance_trait_alias();
 
         let trait_name = self.trait_name;
 

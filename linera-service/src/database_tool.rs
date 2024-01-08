@@ -79,17 +79,20 @@ async fn evaluate_options(options: DatabaseToolOptions) -> Result<i32, anyhow::E
     match options.command {
         DatabaseToolCommand::DeleteAll { storage_config } => {
             let storage_config: StorageConfig = storage_config.parse()?;
-            let full_storage_config = storage_config.add_common_config(common_config).await?;
+            let full_storage_config =
+                storage_config.add_common_config(common_config).await?;
             full_storage_config.delete_all().await?;
         }
         DatabaseToolCommand::DeleteSingle { storage_config } => {
             let storage_config: StorageConfig = storage_config.parse()?;
-            let full_storage_config = storage_config.add_common_config(common_config).await?;
+            let full_storage_config =
+                storage_config.add_common_config(common_config).await?;
             full_storage_config.delete_single().await?;
         }
         DatabaseToolCommand::CheckExistence { storage_config } => {
             let storage_config: StorageConfig = storage_config.parse()?;
-            let full_storage_config = storage_config.add_common_config(common_config).await?;
+            let full_storage_config =
+                storage_config.add_common_config(common_config).await?;
             let test = full_storage_config.test_existence().await?;
             if test {
                 tracing::info!("The database does exist");
@@ -101,7 +104,8 @@ async fn evaluate_options(options: DatabaseToolOptions) -> Result<i32, anyhow::E
         }
         DatabaseToolCommand::CheckAbsence { storage_config } => {
             let storage_config: StorageConfig = storage_config.parse()?;
-            let full_storage_config = storage_config.add_common_config(common_config).await?;
+            let full_storage_config =
+                storage_config.add_common_config(common_config).await?;
             let test = full_storage_config.test_existence().await?;
             if test {
                 tracing::info!("The database does exist");
@@ -113,12 +117,14 @@ async fn evaluate_options(options: DatabaseToolOptions) -> Result<i32, anyhow::E
         }
         DatabaseToolCommand::Initialize { storage_config } => {
             let storage_config: StorageConfig = storage_config.parse()?;
-            let full_storage_config = storage_config.add_common_config(common_config).await?;
+            let full_storage_config =
+                storage_config.add_common_config(common_config).await?;
             full_storage_config.initialize().await?;
         }
         DatabaseToolCommand::ListTables { storage_config } => {
             let storage_config: StorageConfig = storage_config.parse()?;
-            let full_storage_config = storage_config.add_common_config(common_config).await?;
+            let full_storage_config =
+                storage_config.add_common_config(common_config).await?;
             let tables = full_storage_config.list_tables().await?;
             println!("The list of tables is {:?}", tables);
         }

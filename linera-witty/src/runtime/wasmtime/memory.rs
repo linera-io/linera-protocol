@@ -11,7 +11,10 @@ use wasmtime::{Extern, Memory};
 macro_rules! impl_memory_traits {
     ($instance:ty) => {
         impl<UserData> InstanceWithMemory for $instance {
-            fn memory_from_export(&self, export: Extern) -> Result<Option<Memory>, RuntimeError> {
+            fn memory_from_export(
+                &self,
+                export: Extern,
+            ) -> Result<Option<Memory>, RuntimeError> {
                 Ok(match export {
                     Extern::Memory(memory) => Some(memory),
                     _ => None,

@@ -17,7 +17,9 @@ use graphql_ws_client::{graphql::StreamingOperation, GraphQLClientClientBuilder}
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
 use linera_chain::data_types::HashedValue;
 use linera_core::worker::Reason;
-use linera_service_graphql_client::{block, chains, notifications, Block, Chains, Notifications};
+use linera_service_graphql_client::{
+    block, chains, notifications, Block, Chains, Notifications,
+};
 use linera_views::{
     common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
 };
@@ -156,7 +158,9 @@ impl Listener {
                 Ok(response) => {
                     if let Some(data) = response.data {
                         if let Reason::NewBlock { hash, .. } = data.notifications.reason {
-                            if let Ok(value) = self.service.get_value(chain_id, Some(hash)).await {
+                            if let Ok(value) =
+                                self.service.get_value(chain_id, Some(hash)).await
+                            {
                                 indexer.process(self, &value).await?;
                             }
                         }

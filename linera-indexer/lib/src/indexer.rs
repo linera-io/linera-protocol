@@ -36,7 +36,8 @@ pub struct StateView<C> {
 #[derive(Clone)]
 pub struct State<C>(Arc<Mutex<StateView<C>>>);
 
-type StateSchema<S> = Schema<State<ContextFromStore<(), S>>, EmptyMutation, EmptySubscription>;
+type StateSchema<S> =
+    Schema<State<ContextFromStore<(), S>>, EmptyMutation, EmptySubscription>;
 
 pub struct Indexer<S> {
     pub state: State<ContextFromStore<(), S>>,
@@ -67,9 +68,10 @@ where
 {
     /// Loads the indexer using a database backend with an `indexer` prefix.
     pub async fn load(store: S) -> Result<Self, IndexerError> {
-        let context = ContextFromStore::create(store.clone(), "indexer".as_bytes().to_vec(), ())
-            .await
-            .map_err(|e| IndexerError::ViewError(e.into()))?;
+        let context =
+            ContextFromStore::create(store.clone(), "indexer".as_bytes().to_vec(), ())
+                .await
+                .map_err(|e| IndexerError::ViewError(e.into()))?;
         let state = State(Arc::new(Mutex::new(StateView::load(context).await?)));
         Ok(Indexer {
             state,
@@ -154,7 +156,11 @@ where
         Ok(())
     }
 
-    pub async fn init(&self, listener: &Listener, chain_id: ChainId) -> Result<(), IndexerError> {
+    pub async fn init(
+        &self,
+        listener: &Listener,
+        chain_id: ChainId,
+    ) -> Result<(), IndexerError> {
         match listener.service.get_value(chain_id, None).await {
             Ok(value) => self.process(listener, &value).await,
             Err(IndexerError::NotFound(_)) => Ok(()),
@@ -187,7 +193,10 @@ where
     }
 
     /// Handles queries made to the root of the indexer
-    async fn handler(schema: Extension<StateSchema<S>>, req: GraphQLRequest) -> GraphQLResponse {
+    async fn handler(
+        schema: Extension<StateSchema<S>>,
+        req: GraphQLRequest,
+    ) -> GraphQLResponse {
         schema.execute(req.into_inner()).await.into()
     }
 

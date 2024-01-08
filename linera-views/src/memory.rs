@@ -45,7 +45,10 @@ impl KeyValueStore for MemoryStore {
         self.max_stream_queries
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
+    async fn read_value_bytes(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, MemoryContextError> {
         let map = self.map.read().await;
         Ok(map.get(key).cloned())
     }
@@ -94,7 +97,11 @@ impl KeyValueStore for MemoryStore {
         Ok(key_values)
     }
 
-    async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), MemoryContextError> {
+    async fn write_batch(
+        &self,
+        batch: Batch,
+        _base_key: &[u8],
+    ) -> Result<(), MemoryContextError> {
         let mut map = self.map.write().await;
         for ent in batch.operations {
             match ent {
@@ -139,7 +146,11 @@ pub type MemoryContext<E> = ContextFromStore<E, MemoryStore>;
 
 impl<E> MemoryContext<E> {
     /// Creates a [`MemoryContext`].
-    pub fn new(guard: MutexGuardArc<MemoryStoreMap>, max_stream_queries: usize, extra: E) -> Self {
+    pub fn new(
+        guard: MutexGuardArc<MemoryStoreMap>,
+        max_stream_queries: usize,
+        extra: E,
+    ) -> Self {
         let store = MemoryStore::new(guard, max_stream_queries);
         let base_key = Vec::new();
         Self {

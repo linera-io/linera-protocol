@@ -41,7 +41,8 @@ fn forge_arg_type(arg: &Value, non_null: bool) -> Option<String> {
                 .iter()
                 .filter_map(|x| {
                     let name = x["name"].as_str().unwrap();
-                    forge_arg_type(&x["type"], false).map(|arg| format!("{}: {}", name, arg))
+                    forge_arg_type(&x["type"], false)
+                        .map(|arg| format!("{}: {}", name, arg))
                 })
                 .collect::<Vec<_>>();
             Some(format!("{{{}}}", args.join(", ")))
@@ -73,7 +74,8 @@ fn forge_args(args: Vec<Value>) -> String {
 
 /// Auxiliary recursive function for forge_response.
 fn forge_response_type(output: &Value, name: Option<&str>, root: bool) -> Option<String> {
-    let is_non_null_or_list = matches!(output["kind"].as_str(), Some("NON_NULL") | Some("LIST"));
+    let is_non_null_or_list =
+        matches!(output["kind"].as_str(), Some("NON_NULL") | Some("LIST"));
     let incl = matches!(output.get("_include"), Some(Value::Bool(true)));
     let deprecated = matches!(output.get("isDeprecated"), Some(Value::Bool(true)));
     if !(incl || root || is_non_null_or_list) || deprecated {
@@ -120,8 +122,8 @@ fn forge_response(output: &Value) -> String {
 /// Queries mutations or queries for applications.
 #[wasm_bindgen]
 pub async fn query(app: JsValue, query: JsValue, kind: String) {
-    let link =
-        from_value::<String>(getf(&app, "link")).expect("cannot parse application vue argument");
+    let link = from_value::<String>(getf(&app, "link"))
+        .expect("cannot parse application vue argument");
     let query_json = js_to_json(&query);
     let name = query_json["name"].as_str().unwrap();
     let args = query_json["args"].as_array().unwrap().to_vec();
@@ -129,7 +131,8 @@ pub async fn query(app: JsValue, query: JsValue, kind: String) {
     let input = format!("{}{}", name, args);
     let response = forge_response(&query_json["type"]);
     let body =
-        serde_json::json!({ "query": format!("{} {{{} {}}}", kind, input, response) }).to_string();
+        serde_json::json!({ "query": format!("{} {{{} {}}}", kind, input, response) })
+            .to_string();
     let client = reqwest_client();
     match client.post(&link).body(body).send().await {
         Err(e) => setf(&app, "errors", &JsValue::from_str(&e.to_string())),

@@ -58,7 +58,11 @@ pub fn random_shuffle<R: RngCore, T: Clone>(rng: &mut R, values: &mut Vec<T>) {
 }
 
 /// Takes a random number generator, a key_prefix and extends it by n random bytes.
-pub fn get_random_byte_vector<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
+pub fn get_random_byte_vector<R: RngCore>(
+    rng: &mut R,
+    key_prefix: &[u8],
+    n: usize,
+) -> Vec<u8> {
     let mut v = key_prefix.to_vec();
     for _ in 0..n {
         let val = rng.gen_range(0..256) as u8;
@@ -68,7 +72,11 @@ pub fn get_random_byte_vector<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usi
 }
 
 /// Appends a small value to a key making collisions likely.
-pub fn get_small_key_space<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
+pub fn get_small_key_space<R: RngCore>(
+    rng: &mut R,
+    key_prefix: &[u8],
+    n: usize,
+) -> Vec<u8> {
     let mut key = key_prefix.to_vec();
     for _ in 0..n {
         let byte = rng.gen_range(0..4) as u8;
@@ -116,7 +124,10 @@ pub fn get_random_key_values_prefix<R: RngCore>(
 
 /// Takes a random number generator rng, a number n and returns n random `(key, value)`
 /// which are all distinct with key and value being of length 8.
-pub fn get_random_key_values<R: RngCore>(rng: &mut R, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+pub fn get_random_key_values<R: RngCore>(
+    rng: &mut R,
+    n: usize,
+) -> Vec<(Vec<u8>, Vec<u8>)> {
     get_random_key_values_prefix(rng, Vec::new(), 8, 8, n)
 }
 

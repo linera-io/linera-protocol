@@ -136,11 +136,20 @@ pub use {
 
 /// Does nothing. Use the metrics feature to enable.
 #[cfg(not(feature = "metrics"))]
-pub fn increment_counter(_counter: &Lazy<IntCounterVec>, _struct_name: &str, _base_key: &[u8]) {}
+pub fn increment_counter(
+    _counter: &Lazy<IntCounterVec>,
+    _struct_name: &str,
+    _base_key: &[u8],
+) {
+}
 
 /// Increments the metrics counter with the given name, with the struct and base key as labels.
 #[cfg(feature = "metrics")]
-pub fn increment_counter(counter: &Lazy<IntCounterVec>, struct_name: &str, base_key: &[u8]) {
+pub fn increment_counter(
+    counter: &Lazy<IntCounterVec>,
+    struct_name: &str,
+    base_key: &[u8],
+) {
     let base_key = hex::encode(base_key);
     let labels = [struct_name, &base_key];
     counter.with_label_values(&labels).inc();

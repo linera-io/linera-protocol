@@ -19,11 +19,12 @@ use syn::{
     parse::{self, Parse, ParseStream, Parser},
     punctuated::Punctuated,
     spanned::Spanned,
-    AngleBracketedGenericArguments, AssocConst, AssocType, Attribute, Constraint, Data, DataEnum,
-    DataStruct, DataUnion, DeriveInput, Field, Fields, GenericArgument, GenericParam, Generics,
-    Ident, MacroDelimiter, Meta, MetaList, Path, PathArguments, PredicateType, QSelf, ReturnType,
-    Token, Type, TypeArray, TypeBareFn, TypeGroup, TypeImplTrait, TypeParamBound, TypeParen,
-    TypePath, TypePtr, TypeReference, TypeSlice, TypeTuple, WhereClause, WherePredicate,
+    AngleBracketedGenericArguments, AssocConst, AssocType, Attribute, Constraint, Data,
+    DataEnum, DataStruct, DataUnion, DeriveInput, Field, Fields, GenericArgument,
+    GenericParam, Generics, Ident, MacroDelimiter, Meta, MetaList, Path, PathArguments,
+    PredicateType, QSelf, ReturnType, Token, Type, TypeArray, TypeBareFn, TypeGroup,
+    TypeImplTrait, TypeParamBound, TypeParen, TypePath, TypePtr, TypeReference,
+    TypeSlice, TypeTuple, WhereClause, WherePredicate,
 };
 
 /// Collected specializations to apply before deriving a trait for a type.
@@ -36,7 +37,8 @@ impl Specializations {
     ///
     /// The [`DeriveInput`] is changed so that its `where` clause and field types are specialized.
     pub fn new(input: &mut DeriveInput) -> Self {
-        let specializations: Vec<_> = Self::parse_specialization_attributes(&input.attrs).collect();
+        let specializations: Vec<_> =
+            Self::parse_specialization_attributes(&input.attrs).collect();
 
         for specialization in &specializations {
             specialization.apply_to(input);
@@ -69,7 +71,8 @@ impl Specializations {
                 }) if path.is_ident("witty_specialize_with")
                     && matches!(delimiter, MacroDelimiter::Paren(_)) =>
                 {
-                    let parser = Punctuated::<Specialization, Token![,]>::parse_separated_nonempty;
+                    let parser =
+                        Punctuated::<Specialization, Token![,]>::parse_separated_nonempty;
                     specializations.push(
                         parser
                             .parse2(tokens.clone())
@@ -139,7 +142,9 @@ impl Specializations {
                     PathArguments::None => None,
                     PathArguments::AngleBracketed(arguments) => Some(arguments),
                     PathArguments::Parenthesized(_) => {
-                        unreachable!("Custom type has unexpected function type parameters")
+                        unreachable!(
+                            "Custom type has unexpected function type parameters"
+                        )
                     }
                 }
             }
@@ -159,16 +164,14 @@ impl Specializations {
 
         generics
             .params
-            .extend(
-                original_generic_types
-                    .into_iter()
-                    .filter(|generic_type| match generic_type {
-                        GenericParam::Lifetime(_) | GenericParam::Const(_) => true,
-                        GenericParam::Type(type_parameter) => {
-                            !parameters_to_remove.contains(&type_parameter.ident)
-                        }
-                    }),
-            );
+            .extend(original_generic_types.into_iter().filter(|generic_type| {
+                match generic_type {
+                    GenericParam::Lifetime(_) | GenericParam::Const(_) => true,
+                    GenericParam::Type(type_parameter) => {
+                        !parameters_to_remove.contains(&type_parameter.ident)
+                    }
+                }
+            }));
 
         let (generic_parameters, _incorrect_type_generics, _unaltered_where_clasue) =
             generics.split_for_impl();
@@ -216,16 +219,16 @@ impl Specialization {
         if let Some(WhereClause { predicates, .. }) = maybe_where_clause {
             let original_predicates = mem::take(predicates);
 
-            predicates.extend(original_predicates.into_iter().filter(
-                |predicate| match predicate {
+            predicates.extend(original_predicates.into_iter().filter(|predicate| {
+                match predicate {
                     WherePredicate::Type(PredicateType { bounded_ty, .. }) => !matches!(
                         bounded_ty,
                         Type::Path(TypePath { qself: None, path })
                             if path.is_ident(&self.type_parameter),
                     ),
                     _ => true,
-                },
-            ));
+                }
+            }));
         }
     }
 
@@ -295,15 +298,20 @@ impl Specialization {
             | Type::Paren(TypeParen { elem, .. })
             | Type::Ptr(TypePtr { elem, .. })
             | Type::Reference(TypeReference { elem, .. })
-            | Type::Slice(TypeSlice { elem, .. }) => self.change_types_in_type(elem.as_mut()),
-            Type::BareFn(TypeBareFn { inputs, output, .. }) => self.change_types_in_function_type(
-                inputs.iter_mut().map(|bare_fn_arg| &mut bare_fn_arg.ty),
-                output,
-            ),
+            | Type::Slice(TypeSlice { elem, .. }) => {
+                self.change_types_in_type(elem.as_mut())
+            }
+            Type::BareFn(TypeBareFn { inputs, output, .. }) => self
+                .change_types_in_function_type(
+                    inputs.iter_mut().map(|bare_fn_arg| &mut bare_fn_arg.ty),
+                    output,
+                ),
             Type::ImplTrait(TypeImplTrait { bounds, .. }) => {
                 self.change_types_in_bounds(bounds.iter_mut())
             }
-            Type::Path(TypePath { qself: None, path }) if path.is_ident(&self.type_parameter) => {
+            Type::Path(TypePath { qself: None, path })
+                if path.is_ident(&self.type_parameter) =>
+            {
                 *the_type = self.specialized_type.clone();
             }
             Type::Path(TypePath { qself, path }) => {
@@ -327,13 +335,13 @@ impl Specialization {
         for segment in path.segments.iter_mut() {
             match &mut segment.arguments {
                 PathArguments::None => {}
-                PathArguments::AngleBracketed(angle_bracketed) => {
-                    self.change_types_in_angle_bracketed_generic_arguments(angle_bracketed)
-                }
-                PathArguments::Parenthesized(function_type) => self.change_types_in_function_type(
-                    function_type.inputs.iter_mut(),
-                    &mut function_type.output,
-                ),
+                PathArguments::AngleBracketed(angle_bracketed) => self
+                    .change_types_in_angle_bracketed_generic_arguments(angle_bracketed),
+                PathArguments::Parenthesized(function_type) => self
+                    .change_types_in_function_type(
+                        function_type.inputs.iter_mut(),
+                        &mut function_type.output,
+                    ),
             }
         }
     }

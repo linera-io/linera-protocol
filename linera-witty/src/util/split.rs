@@ -26,7 +26,8 @@ impl<AnyTail> Split<HNil> for AnyTail {
     }
 }
 
-impl<Head, SourceTail, TargetTail> Split<HCons<Head, TargetTail>> for HCons<Head, SourceTail>
+impl<Head, SourceTail, TargetTail> Split<HCons<Head, TargetTail>>
+    for HCons<Head, SourceTail>
 where
     SourceTail: Split<TargetTail>,
 {

@@ -4,8 +4,8 @@
 //! Implementations of the custom traits for types from the standard library.
 
 use crate::{
-    GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory, Split,
-    WitLoad, WitStore, WitType,
+    GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError,
+    RuntimeMemory, Split, WitLoad, WitStore, WitType,
 };
 use frunk::{HCons, HNil};
 use std::ops::Add;
@@ -127,9 +127,12 @@ where
     Head::Layout: Add<Tail::Layout>,
     <Head::Layout as Add<Tail::Layout>>::Output: Layout,
     <Head::Layout as Layout>::Flat: Add<<Tail::Layout as Layout>::Flat>,
-    Self::Layout: Layout<
-        Flat = <<Head::Layout as Layout>::Flat as Add<<Tail::Layout as Layout>::Flat>>::Output,
-    >,
+    Self::Layout:
+        Layout<
+            Flat = <<Head::Layout as Layout>::Flat as Add<
+                <Tail::Layout as Layout>::Flat,
+            >>::Output,
+        >,
 {
     fn store<Instance>(
         &self,

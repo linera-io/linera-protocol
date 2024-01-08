@@ -47,7 +47,10 @@ fn generate_mutation_root_code(input: ItemEnum) -> TokenStream2 {
                 let mut fields = vec![];
                 let mut field_names = vec![];
                 for (i, field) in unnamed.unnamed.iter().enumerate() {
-                    let name = concat(&syn::parse_str::<Ident>("field").unwrap(), &i.to_string());
+                    let name = concat(
+                        &syn::parse_str::<Ident>("field").unwrap(),
+                        &i.to_string(),
+                    );
                     let ty = &field.ty;
                     fields.push(quote! {#name: #ty});
                     field_names.push(name);

@@ -205,13 +205,15 @@ where
             Occupied(mut entry) => match entry.get_mut() {
                 Update::Set(view) => view.clone(),
                 entry @ Update::Removed => {
-                    let wrapped_view = Self::wrapped_view(context, true, short_key).await?;
+                    let wrapped_view =
+                        Self::wrapped_view(context, true, short_key).await?;
                     *entry = Update::Set(wrapped_view.clone());
                     wrapped_view
                 }
             },
             Vacant(entry) => {
-                let wrapped_view = Self::wrapped_view(context, was_cleared, short_key).await?;
+                let wrapped_view =
+                    Self::wrapped_view(context, was_cleared, short_key).await?;
                 entry.insert(Update::Set(wrapped_view.clone()));
                 wrapped_view
             }
@@ -419,7 +421,9 @@ where
         short_keys
             .into_iter()
             .map(|short_key| {
-                if let btree_map::Entry::Occupied(entry) = updates.entry(short_key.clone()) {
+                if let btree_map::Entry::Occupied(entry) =
+                    updates.entry(short_key.clone())
+                {
                     if let Update::Set(view) = entry.into_mut() {
                         Ok(WriteGuardedView(
                             view.clone()
@@ -497,7 +501,9 @@ where
         let mut result = Vec::new();
         for short_key in short_keys {
             result.push(ReadGuardedView(
-                if let btree_map::Entry::Occupied(entry) = updates.entry(short_key.clone()) {
+                if let btree_map::Entry::Occupied(entry) =
+                    updates.entry(short_key.clone())
+                {
                     let entry = entry.into_mut();
                     if let Update::Set(view) = entry {
                         view.clone()
@@ -787,7 +793,10 @@ where
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
+    pub async fn try_load_entry<Q>(
+        &self,
+        index: &Q,
+    ) -> Result<ReadGuardedView<W>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
@@ -843,7 +852,10 @@ where
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn try_reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    pub async fn try_reset_entry_to_default<Q>(
+        &mut self,
+        index: &Q,
+    ) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
@@ -1144,7 +1156,10 @@ where
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
+    pub async fn try_load_entry<Q>(
+        &self,
+        index: &Q,
+    ) -> Result<ReadGuardedView<W>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
@@ -1202,7 +1217,10 @@ where
     ///   }
     /// # })
     /// ```
-    pub async fn try_reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    pub async fn try_reset_entry_to_default<Q>(
+        &mut self,
+        index: &Q,
+    ) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,

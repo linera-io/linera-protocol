@@ -4,8 +4,8 @@
 //! Implementations of the custom traits for integer primitives.
 
 use crate::{
-    GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
-    WitLoad, WitStore, WitType,
+    GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError,
+    RuntimeMemory, WitLoad, WitStore, WitType,
 };
 use frunk::{hlist, hlist_pat, HList};
 

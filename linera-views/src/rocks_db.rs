@@ -3,7 +3,9 @@
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_upper_bound, CommonStoreConfig, ContextFromStore, KeyValueStore, TableStatus},
+    common::{
+        get_upper_bound, CommonStoreConfig, ContextFromStore, KeyValueStore, TableStatus,
+    },
     lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
@@ -62,7 +64,10 @@ impl KeyValueStore for RocksDbStoreInternal {
         self.max_stream_queries
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
+    async fn read_value_bytes(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, RocksDbContextError> {
         ensure!(key.len() <= MAX_KEY_SIZE, RocksDbContextError::KeyTooLong);
         let client = self.clone();
         let key = key.to_vec();
@@ -90,7 +95,8 @@ impl KeyValueStore for RocksDbStoreInternal {
             ensure!(key.len() <= MAX_KEY_SIZE, RocksDbContextError::KeyTooLong);
         }
         let client = self.clone();
-        let entries = tokio::task::spawn_blocking(move || client.db.multi_get(&keys)).await?;
+        let entries =
+            tokio::task::spawn_blocking(move || client.db.multi_get(&keys)).await?;
         Ok(entries.into_iter().collect::<Result<_, _>>()?)
     }
 
@@ -188,11 +194,17 @@ impl KeyValueStore for RocksDbStoreInternal {
             for operation in batch.operations {
                 match operation {
                     WriteOperation::Delete { key } => {
-                        ensure!(key.len() <= MAX_KEY_SIZE, RocksDbContextError::KeyTooLong);
+                        ensure!(
+                            key.len() <= MAX_KEY_SIZE,
+                            RocksDbContextError::KeyTooLong
+                        );
                         inner_batch.delete(&key)
                     }
                     WriteOperation::Put { key, value } => {
-                        ensure!(key.len() <= MAX_KEY_SIZE, RocksDbContextError::KeyTooLong);
+                        ensure!(
+                            key.len() <= MAX_KEY_SIZE,
+                            RocksDbContextError::KeyTooLong
+                        );
                         inner_batch.put(&key, value)
                     }
                     WriteOperation::DeletePrefix { key_prefix } => {
@@ -252,7 +264,9 @@ impl RocksDbStore {
     }
 
     /// Creates all RocksDB databases
-    pub async fn delete_all(store_config: RocksDbStoreConfig) -> Result<(), RocksDbContextError> {
+    pub async fn delete_all(
+        store_config: RocksDbStoreConfig,
+    ) -> Result<(), RocksDbContextError> {
         let path = store_config.path_buf.as_path();
         fs::remove_dir_all(path)?;
         Ok(())
@@ -276,9 +290,12 @@ impl RocksDbStore {
     }
 
     /// Initializes a RocksDB database from a specified path.
-    pub async fn initialize(store_config: RocksDbStoreConfig) -> Result<Self, RocksDbContextError> {
+    pub async fn initialize(
+        store_config: RocksDbStoreConfig,
+    ) -> Result<Self, RocksDbContextError> {
         let create_if_missing = true;
-        let (client, table_status) = Self::new_internal(store_config, create_if_missing).await?;
+        let (client, table_status) =
+            Self::new_internal(store_config, create_if_missing).await?;
         if table_status == TableStatus::Existing {
             return Err(RocksDbContextError::AlreadyExistingDatabase);
         }
@@ -366,7 +383,10 @@ impl KeyValueStore for RocksDbStore {
         self.store.max_stream_queries()
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
+    async fn read_value_bytes(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, RocksDbContextError> {
         self.store.read_value_bytes(key).await
     }
 
@@ -395,7 +415,11 @@ impl KeyValueStore for RocksDbStore {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), RocksDbContextError> {
+    async fn write_batch(
+        &self,
+        batch: Batch,
+        base_key: &[u8],
+    ) -> Result<(), RocksDbContextError> {
         self.store.write_batch(batch, base_key).await
     }
 

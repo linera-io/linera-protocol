@@ -14,7 +14,10 @@ macro_rules! impl_memory_traits {
         where
             UserData: Send + 'static,
         {
-            fn memory_from_export(&self, export: Extern) -> Result<Option<Memory>, RuntimeError> {
+            fn memory_from_export(
+                &self,
+                export: Extern,
+            ) -> Result<Option<Memory>, RuntimeError> {
                 Ok(match export {
                     Extern::Memory(memory) => Some(memory),
                     _ => None,

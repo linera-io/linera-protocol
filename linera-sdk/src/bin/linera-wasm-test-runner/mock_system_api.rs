@@ -48,12 +48,14 @@ fn copy_memory_slices(
     destination_offset: i32,
     size: i32,
 ) {
-    let memory = get_memory(caller, "memory").expect("Missing `memory` export in the module.");
+    let memory =
+        get_memory(caller, "memory").expect("Missing `memory` export in the module.");
     let memory_data = memory.data_mut(caller);
 
     let size = usize::try_from(size).expect("Invalid size of memory slice to copy");
 
-    let source_start = usize::try_from(source_offset).expect("Invalid pointer to copy data from");
+    let source_start =
+        usize::try_from(source_offset).expect("Invalid pointer to copy data from");
     let source_end = source_start + size;
 
     let destination_start =
@@ -68,8 +70,8 @@ fn load_bytes(caller: &mut Caller<'_, Resources>, offset: i32, length: i32) -> V
     let length = usize::try_from(length).expect("Invalid length");
     let end = start + length;
 
-    let memory =
-        get_memory(&mut *caller, "memory").expect("Missing `memory` export in the module.");
+    let memory = get_memory(&mut *caller, "memory")
+        .expect("Missing `memory` export in the module.");
     let memory_data = memory.data_mut(caller);
 
     memory_data[start..end].to_vec()
@@ -81,8 +83,8 @@ fn load_indirect_bytes(
     caller: &mut Caller<'_, Resources>,
     offset_and_length_location: i32,
 ) -> Vec<u8> {
-    let memory =
-        get_memory(&mut *caller, "memory").expect("Missing `memory` export in the module.");
+    let memory = get_memory(&mut *caller, "memory")
+        .expect("Missing `memory` export in the module.");
     let memory_data = memory.data_mut(&mut *caller);
 
     let offset = memory_data
@@ -120,7 +122,8 @@ async fn store_bytes_from_resource(
         .await
         .expect("Failed to call `cabi_realloc` function");
 
-    let memory = get_memory(caller, "memory").expect("Missing `memory` export in the module.");
+    let memory =
+        get_memory(caller, "memory").expect("Missing `memory` export in the module.");
     let (memory, resources) = memory.data_and_store_mut(caller);
 
     let bytes = bytes_getter(resources);
@@ -134,7 +137,8 @@ async fn store_bytes_from_resource(
 
 /// Stores a `value` at the `offset` of the guest WebAssembly module's memory.
 fn store_in_memory(caller: &mut Caller<'_, Resources>, offset: i32, value: impl Endian) {
-    let memory = get_memory(caller, "memory").expect("Missing `memory` export in the module.");
+    let memory =
+        get_memory(caller, "memory").expect("Missing `memory` export in the module.");
     let memory_data = memory.data_mut(caller);
 
     memory_data
@@ -144,7 +148,8 @@ fn store_in_memory(caller: &mut Caller<'_, Resources>, offset: i32, value: impl 
 
 /// Stores some `bytes` at the `offset` of the guest WebAssembly module's memory.
 fn store_bytes_in_memory(caller: &mut Caller<'_, Resources>, offset: i32, bytes: &[u8]) {
-    let memory = get_memory(caller, "memory").expect("Missing `memory` export in the module.");
+    let memory =
+        get_memory(caller, "memory").expect("Missing `memory` export in the module.");
     let memory_data = memory.data_mut(caller);
 
     let start = usize::try_from(offset).expect("Invalid destination address");
@@ -753,7 +758,9 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         "view_system_api",
         "read-multi-values-bytes::new: \
             func(keys: list<list<u8>>) -> handle<read-multi-values-bytes>",
-        move |mut caller: Caller<'_, Resources>, key_list_address: i32, key_list_length: i32| {
+        move |mut caller: Caller<'_, Resources>,
+              key_list_address: i32,
+              key_list_length: i32| {
             Box::new(async move {
                 let key_list_element_size = 8;
 
@@ -887,7 +894,9 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     linker.func_wrap2_async(
         "view_system_api",
         "find-keys::new: func(prefix: list<u8>) -> handle<find-keys>",
-        move |mut caller: Caller<'_, Resources>, prefix_address: i32, prefix_length: i32| {
+        move |mut caller: Caller<'_, Resources>,
+              prefix_address: i32,
+              prefix_length: i32| {
             Box::new(async move {
                 let prefix = load_bytes(&mut caller, prefix_address, prefix_length);
                 let resources = caller.data_mut();
@@ -934,7 +943,9 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     linker.func_wrap2_async(
         "view_system_api",
         "find-key-values::new: func(prefix: list<u8>) -> handle<find-key-values>",
-        move |mut caller: Caller<'_, Resources>, prefix_address: i32, prefix_length: i32| {
+        move |mut caller: Caller<'_, Resources>,
+              prefix_address: i32,
+              prefix_length: i32| {
             Box::new(async move {
                 let prefix = load_bytes(&mut caller, prefix_address, prefix_length);
                 let resources = caller.data_mut();

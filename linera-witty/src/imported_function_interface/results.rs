@@ -18,8 +18,9 @@
 //! elements than the limit.
 
 use crate::{
-    memory_layout::FlatLayout, primitive_types::FlatType, GuestPointer, InstanceWithMemory, Layout,
-    Memory, Runtime, RuntimeError, RuntimeMemory, WitLoad, WitType,
+    memory_layout::FlatLayout, primitive_types::FlatType, GuestPointer,
+    InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory, WitLoad,
+    WitType,
 };
 use frunk::HList;
 

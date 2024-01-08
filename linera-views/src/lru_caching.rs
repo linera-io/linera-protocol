@@ -178,7 +178,10 @@ where
         }
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, Self::Error> {
         self.client.find_keys_by_prefix(key_prefix).await
     }
 
@@ -189,7 +192,11 @@ where
         self.client.find_key_values_by_prefix(key_prefix).await
     }
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
+    async fn write_batch(
+        &self,
+        batch: Batch,
+        base_key: &[u8],
+    ) -> Result<(), Self::Error> {
         match &self.lru_read_values {
             None => {
                 return self.client.write_batch(batch, base_key).await;
@@ -232,7 +239,8 @@ where
                 lru_read_values: None,
             }
         } else {
-            let lru_read_values = Some(Arc::new(Mutex::new(LruPrefixCache::new(max_size))));
+            let lru_read_values =
+                Some(Arc::new(Mutex::new(LruPrefixCache::new(max_size))));
             Self {
                 client,
                 lru_read_values,

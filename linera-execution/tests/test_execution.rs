@@ -12,7 +12,9 @@ use linera_base::{
     ensure,
     identifiers::{ChainDescription, ChainId, Owner, SessionId},
 };
-use linera_execution::{policy::ResourceControlPolicy, ContractSyncRuntime, ServiceSyncRuntime, *};
+use linera_execution::{
+    policy::ResourceControlPolicy, ContractSyncRuntime, ServiceSyncRuntime, *,
+};
 use linera_views::{
     batch::Batch,
     common::Context,
@@ -34,7 +36,8 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         .await;
 
     let (app_id, app_desc) =
-        &create_dummy_user_application_registrations(&mut view.system.registry, 1).await?[0];
+        &create_dummy_user_application_registrations(&mut view.system.registry, 1)
+            .await?[0];
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
@@ -527,8 +530,8 @@ where
         .view_users
         .try_load_entry_mut(&application_ids[0])
         .await?;
-    let callee_id =
-        bcs::to_bytes(&application_ids[1]).expect("Failed to serialize application ID to call");
+    let callee_id = bcs::to_bytes(&application_ids[1])
+        .expect("Failed to serialize application ID to call");
 
     let mut batch = Batch::new();
     batch.put_key_value_bytes(CALLEE_ID_KEY.to_vec(), callee_id);

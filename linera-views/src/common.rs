@@ -335,7 +335,10 @@ pub trait KeyValueStore {
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
 
     /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error>;
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, Self::Error>;
 
     /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
     async fn find_key_values_by_prefix(
@@ -344,14 +347,18 @@ pub trait KeyValueStore {
     ) -> Result<Self::KeyValues, Self::Error>;
 
     /// Writes the `batch` in the database with `base_key` the base key of the entries for the journal.
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error>;
+    async fn write_batch(&self, batch: Batch, base_key: &[u8])
+        -> Result<(), Self::Error>;
 
     /// Clears any journal entry that may remain.
     /// The journal is located at the `base_key`.
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error>;
 
     /// Reads a single `key` and deserializes the result if present.
-    async fn read_value<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
+    async fn read_value<V: DeserializeOwned>(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<V>, Self::Error>
     where
         Self::Error: From<bcs::Error>,
     {
@@ -492,7 +499,10 @@ pub trait Context {
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
 
     /// Finds the keys matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error>;
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, Self::Error>;
 
     /// Finds the `(key,value)` pairs matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
     async fn find_key_values_by_prefix(
@@ -541,7 +551,11 @@ pub trait Context {
     }
 
     /// Obtains the `Vec<u8>` key from the key by serialization and using the `base_key`.
-    fn derive_tag_key<I: Serialize>(&self, tag: u8, index: &I) -> Result<Vec<u8>, Self::Error> {
+    fn derive_tag_key<I: Serialize>(
+        &self,
+        tag: u8,
+        index: &I,
+    ) -> Result<Vec<u8>, Self::Error> {
         assert!(tag >= MIN_VIEW_TAG, "tag should be at least MIN_VIEW_TAG");
         let mut key = self.base_key();
         key.extend([tag]);
@@ -550,12 +564,16 @@ pub trait Context {
     }
 
     /// Obtains the short `Vec<u8>` key from the key by serialization.
-    fn derive_short_key<I: Serialize + ?Sized>(index: &I) -> Result<Vec<u8>, Self::Error> {
+    fn derive_short_key<I: Serialize + ?Sized>(
+        index: &I,
+    ) -> Result<Vec<u8>, Self::Error> {
         Ok(bcs::to_bytes(index)?)
     }
 
     /// Deserialize `bytes` into type `Item`.
-    fn deserialize_value<Item: DeserializeOwned>(bytes: &[u8]) -> Result<Item, Self::Error> {
+    fn deserialize_value<Item: DeserializeOwned>(
+        bytes: &[u8],
+    ) -> Result<Item, Self::Error> {
         let value = bcs::from_bytes(bytes)?;
         Ok(value)
     }
@@ -691,7 +709,10 @@ where
         .await
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, Self::Error> {
         log_time_async(
             self.store.find_keys_by_prefix(key_prefix),
             "find_keys_by_prefix",

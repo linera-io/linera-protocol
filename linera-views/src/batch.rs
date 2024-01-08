@@ -193,7 +193,9 @@ impl Batch {
     /// Builds a batch from a builder function.
     pub async fn build<F>(builder: F) -> Result<Self, ViewError>
     where
-        F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>> + Send + Sync,
+        F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>>
+            + Send
+            + Sync,
     {
         let mut batch = Batch::new();
         builder(&mut batch).await?;
@@ -355,13 +357,19 @@ pub trait DeletePrefixExpander {
     /// The error type that can happen when expanding the key_prefix.
     type Error: Debug;
     /// Returns the list of keys to be appended to the list.
-    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
+    async fn expand_delete_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, Self::Error>;
 }
 
 #[async_trait]
 impl DeletePrefixExpander for MemoryContext<()> {
     type Error = MemoryContextError;
-    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
+    async fn expand_delete_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, Self::Error> {
         let mut vector_list = Vec::new();
         for key in <Vec<Vec<u8>> as KeyIterable<Self::Error>>::iterator(
             &self.find_keys_by_prefix(key_prefix).await?,

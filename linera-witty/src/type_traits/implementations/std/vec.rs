@@ -4,8 +4,8 @@
 //! Implementations of the custom traits for the [`Vec`] type.
 
 use crate::{
-    GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
-    WitLoad, WitStore, WitType,
+    GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError,
+    RuntimeMemory, WitLoad, WitStore, WitType,
 };
 use frunk::{hlist, hlist_pat, HList};
 
@@ -76,9 +76,9 @@ where
         destination.store(memory, location)?;
         length.store(memory, location.after::<GuestPointer>())?;
 
-        self.iter()
-            .zip(0..)
-            .try_for_each(|(element, index)| element.store(memory, destination.index::<T>(index)))
+        self.iter().zip(0..).try_for_each(|(element, index)| {
+            element.store(memory, destination.index::<T>(index))
+        })
     }
 
     fn lower<Instance>(

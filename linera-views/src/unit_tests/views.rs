@@ -60,7 +60,9 @@ pub enum Operation {
     CommitAndReload,
 }
 
-async fn run_test_queue_operations_test_cases<C>(mut contexts: C) -> Result<(), anyhow::Error>
+async fn run_test_queue_operations_test_cases<C>(
+    mut contexts: C,
+) -> Result<(), anyhow::Error>
 where
     C: TestContextFactory,
     ViewError: From<<C::Context as Context>::Error>,
@@ -121,7 +123,8 @@ where
             tweaked_test_case.insert(commit_location + 1, CommitAndReload);
             tweaked_test_case.push(CommitAndReload);
 
-            run_test_queue_operations(tweaked_test_case, contexts.new_context().await?).await?;
+            run_test_queue_operations(tweaked_test_case, contexts.new_context().await?)
+                .await?;
         }
     }
 

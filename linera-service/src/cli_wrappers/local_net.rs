@@ -358,14 +358,17 @@ impl LocalNet {
     }
 
     async fn ensure_grpc_server_has_started(nickname: &str, port: usize) -> Result<()> {
-        let connection = tonic::transport::Endpoint::new(format!("http://127.0.0.1:{port}"))
-            .context("endpoint should always parse")?
-            .connect_lazy();
+        let connection =
+            tonic::transport::Endpoint::new(format!("http://127.0.0.1:{port}"))
+                .context("endpoint should always parse")?
+                .connect_lazy();
         let mut client = HealthClient::new(connection);
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let result = client.check(HealthCheckRequest::default()).await;
-            if result.is_ok() && result.unwrap().get_ref().status() == ServingStatus::Serving {
+            if result.is_ok()
+                && result.unwrap().get_ref().status() == ServingStatus::Serving
+            {
                 info!("Successfully started {nickname}");
                 return Ok(());
             } else {

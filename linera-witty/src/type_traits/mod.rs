@@ -6,7 +6,8 @@
 mod implementations;
 
 use crate::{
-    GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
+    GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError,
+    RuntimeMemory,
 };
 
 /// A type that is representable by fundamental WIT types.

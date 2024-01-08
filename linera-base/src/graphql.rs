@@ -69,9 +69,13 @@ macro_rules! bcs_scalar {
                         description: ::std::option::Option::Some(
                             ::std::string::ToString::to_string($desc),
                         ),
-                        is_valid: ::std::option::Option::Some(::std::sync::Arc::new(|value| {
-                            <$ty as $crate::async_graphql::ScalarType>::is_valid(value)
-                        })),
+                        is_valid: ::std::option::Option::Some(::std::sync::Arc::new(
+                            |value| {
+                                <$ty as $crate::async_graphql::ScalarType>::is_valid(
+                                    value,
+                                )
+                            },
+                        )),
                         visible: ::std::option::Option::None,
                         inaccessible: false,
                         tags: ::std::default::Default::default(),
@@ -83,7 +87,9 @@ macro_rules! bcs_scalar {
             fn parse(
                 value: ::std::option::Option<$crate::async_graphql::Value>,
             ) -> $crate::async_graphql::InputValueResult<Self> {
-                <$ty as $crate::async_graphql::ScalarType>::parse(value.unwrap_or_default())
+                <$ty as $crate::async_graphql::ScalarType>::parse(
+                    value.unwrap_or_default(),
+                )
             }
 
             fn to_value(&self) -> $crate::async_graphql::Value {
@@ -111,9 +117,13 @@ macro_rules! bcs_scalar {
                         description: ::std::option::Option::Some(
                             ::std::string::ToString::to_string($desc),
                         ),
-                        is_valid: ::std::option::Option::Some(::std::sync::Arc::new(|value| {
-                            <$ty as $crate::async_graphql::ScalarType>::is_valid(value)
-                        })),
+                        is_valid: ::std::option::Option::Some(::std::sync::Arc::new(
+                            |value| {
+                                <$ty as $crate::async_graphql::ScalarType>::is_valid(
+                                    value,
+                                )
+                            },
+                        )),
                         visible: ::std::option::Option::None,
                         inaccessible: false,
                         tags: ::std::default::Default::default(),
@@ -129,7 +139,9 @@ macro_rules! bcs_scalar {
                     $crate::async_graphql::parser::types::Field,
                 >,
             ) -> $crate::async_graphql::ServerResult<$crate::async_graphql::Value> {
-                ::std::result::Result::Ok($crate::async_graphql::ScalarType::to_value(self))
+                ::std::result::Result::Ok($crate::async_graphql::ScalarType::to_value(
+                    self,
+                ))
             }
         }
 

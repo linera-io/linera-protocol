@@ -343,8 +343,12 @@ where
             }
         }
         for (sender, next_height) in info {
-            self.send_chain_information(sender, next_height, CrossChainMessageDelivery::Blocking)
-                .await?;
+            self.send_chain_information(
+                sender,
+                next_height,
+                CrossChainMessageDelivery::Blocking,
+            )
+            .await?;
         }
         Ok(())
     }
@@ -366,7 +370,9 @@ where
                 CommunicateAction::AdvanceToNextBlockHeight { height, delivery } => {
                     (*height, *delivery)
                 }
-                CommunicateAction::RequestLeaderTimeout { height, .. } => (*height, NonBlocking),
+                CommunicateAction::RequestLeaderTimeout { height, .. } => {
+                    (*height, NonBlocking)
+                }
             }
         };
         // Update the validator with missing information, if needed.

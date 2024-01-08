@@ -27,7 +27,11 @@ impl MemoryStorage<crate::TestClock> {
 }
 
 impl<C> MemoryStorage<C> {
-    pub fn new(wasm_runtime: Option<WasmRuntime>, max_stream_queries: usize, clock: C) -> Self {
+    pub fn new(
+        wasm_runtime: Option<WasmRuntime>,
+        max_stream_queries: usize,
+        clock: C,
+    ) -> Self {
         Self {
             client: Arc::new(MemoryStorageInner::make(wasm_runtime, max_stream_queries)),
             clock,

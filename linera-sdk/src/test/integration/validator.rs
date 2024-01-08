@@ -116,14 +116,21 @@ impl TestValidator {
         let mut creator = validator.new_chain().await;
 
         let application_id = creator
-            .create_application::<A>(bytecode_id, parameters, initialization_argument, vec![])
+            .create_application::<A>(
+                bytecode_id,
+                parameters,
+                initialization_argument,
+                vec![],
+            )
             .await;
 
         (validator, application_id)
     }
 
     /// Returns the locked [`WorkerState`] of this validator.
-    pub(crate) async fn worker(&self) -> MutexGuard<WorkerState<MemoryStorage<WallClock>>> {
+    pub(crate) async fn worker(
+        &self,
+    ) -> MutexGuard<WorkerState<MemoryStorage<WallClock>>> {
         self.worker.lock().await
     }
 
@@ -143,8 +150,9 @@ impl TestValidator {
     /// it.
     pub async fn new_chain(&self) -> ActiveChain {
         let key_pair = KeyPair::generate();
-        let description =
-            ChainDescription::Root(self.root_chain_counter.fetch_add(1, Ordering::AcqRel));
+        let description = ChainDescription::Root(
+            self.root_chain_counter.fetch_add(1, Ordering::AcqRel),
+        );
 
         self.worker()
             .await

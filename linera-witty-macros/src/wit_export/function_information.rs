@@ -8,9 +8,9 @@ use proc_macro2::{Span, TokenStream};
 use proc_macro_error::abort;
 use quote::{quote, quote_spanned, ToTokens};
 use syn::{
-    spanned::Spanned, FnArg, GenericArgument, GenericParam, Ident, ImplItem, ImplItemFn, LitStr,
-    PatType, Path, PathArguments, PathSegment, ReturnType, Signature, Token, Type, TypePath,
-    TypeReference,
+    spanned::Spanned, FnArg, GenericArgument, GenericParam, Ident, ImplItem, ImplItemFn,
+    LitStr, PatType, Path, PathArguments, PathSegment, ReturnType, Signature, Token,
+    Type, TypePath, TypeReference,
 };
 
 /// Pieces of information extracted from a function's definition.
@@ -26,9 +26,14 @@ pub struct FunctionInformation<'input> {
 impl<'input> FunctionInformation<'input> {
     /// Parses a function definition from an [`ImplItem`] and collects pieces of information into a
     /// [`FunctionInformation`] instance.
-    pub fn from_item(item: &'input ImplItem, caller_type_parameter: Option<&'input Ident>) -> Self {
+    pub fn from_item(
+        item: &'input ImplItem,
+        caller_type_parameter: Option<&'input Ident>,
+    ) -> Self {
         match item {
-            ImplItem::Fn(function) => FunctionInformation::new(function, caller_type_parameter),
+            ImplItem::Fn(function) => {
+                FunctionInformation::new(function, caller_type_parameter)
+            }
             ImplItem::Const(const_item) => abort!(
                 const_item.ident,
                 "Const items are not supported in exported types"
@@ -78,7 +83,8 @@ impl<'input> FunctionInformation<'input> {
             return false;
         }
 
-        let Some(GenericParam::Type(generic_type)) = signature.generics.params.first() else {
+        let Some(GenericParam::Type(generic_type)) = signature.generics.params.first()
+        else {
             return false;
         };
 
@@ -135,15 +141,16 @@ impl<'input> FunctionInformation<'input> {
         is_reentrant: bool,
         inputs: impl Iterator<Item = &'input FnArg> + Clone,
     ) -> (TokenStream, TokenStream) {
-        let parameters = inputs
-            .skip(if is_reentrant { 1 } else { 0 })
-            .map(|input| match input {
-                FnArg::Typed(parameter) => parameter,
-                FnArg::Receiver(receiver) => abort!(
-                    receiver.self_token,
-                    "Exported interfaces can not have `self` parameters"
-                ),
-            });
+        let parameters =
+            inputs
+                .skip(if is_reentrant { 1 } else { 0 })
+                .map(|input| match input {
+                    FnArg::Typed(parameter) => parameter,
+                    FnArg::Receiver(receiver) => abort!(
+                        receiver.self_token,
+                        "Exported interfaces can not have `self` parameters"
+                    ),
+                });
 
         let bindings = parameters.clone().map(|parameter| &parameter.pat);
         let types = parameters.map(|parameter| &parameter.ty);
@@ -156,10 +163,12 @@ impl<'input> FunctionInformation<'input> {
     fn parse_output(output: &ReturnType) -> (TokenStream, bool) {
         match output {
             ReturnType::Default => (quote_spanned! { output.span() => () }, false),
-            ReturnType::Type(_, return_type) => match ok_type_inside_result(return_type) {
-                Some(inner_type) => (inner_type.to_token_stream(), true),
-                None => (return_type.to_token_stream(), false),
-            },
+            ReturnType::Type(_, return_type) => {
+                match ok_type_inside_result(return_type) {
+                    Some(inner_type) => (inner_type.to_token_stream(), true),
+                    None => (return_type.to_token_stream(), false),
+                }
+            }
         }
     }
 
@@ -325,7 +334,8 @@ fn result_type_arguments(result_path: &Path) -> Option<(&Type, &Type)> {
         return None;
     }
 
-    let PathArguments::AngleBracketed(type_arguments) = &result_path.segments.last()?.arguments
+    let PathArguments::AngleBracketed(type_arguments) =
+        &result_path.segments.last()?.arguments
     else {
         return None;
     };
@@ -352,7 +362,8 @@ fn type_is_result(result_path: &Path) -> bool {
     let segment_count = result_path.segments.len();
 
     if segment_count == 1 {
-        result_path.leading_colon.is_none() && path_matches_segments(result_path, &["Result"])
+        result_path.leading_colon.is_none()
+            && path_matches_segments(result_path, &["Result"])
     } else if result_path.segments.len() == 3 {
         path_matches_segments(result_path, &["std", "result", "Result"])
     } else {

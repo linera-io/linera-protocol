@@ -68,10 +68,13 @@ impl DynamoDbStorage<TestClock> {
             table_name,
             common_config,
         };
-        let (client, _) =
-            DynamoDbStorage::new_for_testing(store_config, wasm_runtime, TestClock::new())
-                .await
-                .expect("client and table_name");
+        let (client, _) = DynamoDbStorage::new_for_testing(
+            store_config,
+            wasm_runtime,
+            TestClock::new(),
+        )
+        .await
+        .expect("client and table_name");
         client
     }
 
@@ -96,7 +99,8 @@ impl DynamoDbStorage<WallClock> {
         store_config: DynamoDbStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, DynamoDbContextError> {
-        let storage = DynamoDbStorageInner::initialize(store_config, wasm_runtime).await?;
+        let storage =
+            DynamoDbStorageInner::initialize(store_config, wasm_runtime).await?;
         let storage = DynamoDbStorage {
             client: Arc::new(storage),
             clock: WallClock,

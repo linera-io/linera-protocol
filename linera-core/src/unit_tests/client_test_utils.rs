@@ -15,7 +15,9 @@ use linera_base::{
     data_types::*,
     identifiers::{ChainDescription, ChainId},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
+use linera_chain::data_types::{
+    BlockProposal, Certificate, HashedValue, LiteCertificate,
+};
 use linera_execution::{
     committee::{Committee, ValidatorName},
     policy::ResourceControlPolicy,
@@ -34,7 +36,8 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 #[cfg(feature = "rocksdb")]
 use {
-    linera_storage::RocksDbStorage, linera_views::rocks_db::create_rocks_db_common_config,
+    linera_storage::RocksDbStorage,
+    linera_views::rocks_db::create_rocks_db_common_config,
     linera_views::rocks_db::RocksDbStoreConfig, tokio::sync::Semaphore,
 };
 
@@ -47,7 +50,8 @@ use {
 
 #[cfg(feature = "scylladb")]
 use {
-    linera_storage::ScyllaDbStorage, linera_views::scylla_db::create_scylla_db_common_config,
+    linera_storage::ScyllaDbStorage,
+    linera_views::scylla_db::create_scylla_db_common_config,
     linera_views::scylla_db::ScyllaDbStoreConfig,
 };
 
@@ -129,9 +133,14 @@ where
         .await
     }
 
-    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
-        self.spawn_and_receive(move |validator, sender| validator.do_subscribe(chains, sender))
-            .await
+    async fn subscribe(
+        &mut self,
+        chains: Vec<ChainId>,
+    ) -> Result<NotificationStream, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_subscribe(chains, sender)
+        })
+        .await
     }
 }
 
@@ -210,7 +219,11 @@ where
             let cert = validator.state.full_certificate(certificate).await?;
             let result = validator
                 .state
-                .fully_handle_certificate_with_notifications(cert, vec![], Some(&mut notifications))
+                .fully_handle_certificate_with_notifications(
+                    cert,
+                    vec![],
+                    Some(&mut notifications),
+                )
                 .await;
             validator.notifier.handle_notifications(&notifications);
             result
@@ -290,7 +303,8 @@ impl<S> FromIterator<LocalValidatorClient<S>> for NodeProvider<S> {
     where
         T: IntoIterator<Item = LocalValidatorClient<S>>,
     {
-        let destructure = |validator: LocalValidatorClient<S>| (validator.name, validator.client);
+        let destructure =
+            |validator: LocalValidatorClient<S>| (validator.name, validator.client);
         Self(iter.into_iter().map(destructure).collect())
     }
 }
@@ -332,7 +346,12 @@ struct GenesisAccount {
 }
 
 impl GenesisStorageBuilder {
-    fn add(&mut self, description: ChainDescription, public_key: PublicKey, balance: Amount) {
+    fn add(
+        &mut self,
+        description: ChainDescription,
+        public_key: PublicKey,
+        balance: Amount,
+    ) {
         self.accounts.push(GenesisAccount {
             description,
             public_key,
@@ -340,7 +359,12 @@ impl GenesisStorageBuilder {
         })
     }
 
-    async fn build<S>(&self, storage: S, initial_committee: Committee, admin_id: ChainId) -> S
+    async fn build<S>(
+        &self,
+        storage: S,
+        initial_committee: Committee,
+        admin_id: ChainId,
+    ) -> S
     where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
@@ -387,9 +411,10 @@ where
         for (i, key_pair) in key_pairs.into_iter().enumerate() {
             let name = ValidatorName(key_pair.public());
             let storage = storage_builder.build().await?;
-            let state = WorkerState::new(format!("Node {}", i), Some(key_pair), storage.clone())
-                .with_allow_inactive_chains(false)
-                .with_allow_messages_from_deprecated_epochs(false);
+            let state =
+                WorkerState::new(format!("Node {}", i), Some(key_pair), storage.clone())
+                    .with_allow_inactive_chains(false)
+                    .with_allow_messages_from_deprecated_epochs(false);
             let validator = LocalValidatorClient::new(name, state);
             if i < with_faulty_validators {
                 faulty_validators.insert(name);
@@ -512,7 +537,8 @@ where
             .await;
         self.chain_client_storages.push(storage.clone());
         let provider = self.validator_clients.iter().cloned().collect();
-        let builder = ChainClientBuilder::new(provider, 10, CrossChainMessageDelivery::NonBlocking);
+        let builder =
+            ChainClientBuilder::new(provider, 10, CrossChainMessageDelivery::NonBlocking);
         Ok(builder.build(
             chain_id,
             vec![key_pair],
@@ -532,11 +558,12 @@ where
         block_height: BlockHeight,
         target_count: usize,
     ) -> Option<Certificate> {
-        let query =
-            ChainInfoQuery::new(chain_id).with_sent_certificates_in_range(BlockHeightRange {
+        let query = ChainInfoQuery::new(chain_id).with_sent_certificates_in_range(
+            BlockHeightRange {
                 start: block_height,
                 limit: Some(1),
-            });
+            },
+        );
         let mut count = 0;
         let mut certificate = None;
         for mut validator in self.validator_clients.clone() {
@@ -662,9 +689,12 @@ impl StorageBuilder for MakeRocksDbStorage {
             path_buf,
             common_config,
         };
-        let (storage, _) =
-            RocksDbStorage::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
-                .await?;
+        let (storage, _) = RocksDbStorage::new_for_testing(
+            store_config,
+            self.wasm_runtime,
+            self.clock.clone(),
+        )
+        .await?;
         Ok(storage)
     }
 
@@ -715,9 +745,12 @@ impl StorageBuilder for MakeDynamoDbStorage {
             common_config,
         };
         self.instance_counter += 1;
-        let (storage, _) =
-            DynamoDbStorage::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
-                .await?;
+        let (storage, _) = DynamoDbStorage::new_for_testing(
+            store_config,
+            self.wasm_runtime,
+            self.clock.clone(),
+        )
+        .await?;
         Ok(storage)
     }
 
@@ -778,9 +811,12 @@ impl StorageBuilder for MakeScyllaDbStorage {
             table_name,
             common_config,
         };
-        let (storage, _) =
-            ScyllaDbStorage::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
-                .await?;
+        let (storage, _) = ScyllaDbStorage::new_for_testing(
+            store_config,
+            self.wasm_runtime,
+            self.clock.clone(),
+        )
+        .await?;
         Ok(storage)
     }
 

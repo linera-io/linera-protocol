@@ -79,7 +79,8 @@ impl From<log::Level> for wit_system_api::LogLevel {
     }
 }
 
-impl<Message, Value, SessionState> From<ApplicationCallResult<Message, Value, SessionState>>
+impl<Message, Value, SessionState>
+    From<ApplicationCallResult<Message, Value, SessionState>>
     for wit_types::ApplicationCallResult
 where
     Message: Serialize + DeserializeOwned + Debug,
@@ -118,7 +119,8 @@ where
     fn from(result: SessionCallResult<Message, Value, SessionState>) -> Self {
         // TODO(#743): Do we need explicit error handling?
         let new_state = result.new_state.map(|state| {
-            bcs::to_bytes(&state).expect("failed to serialize Value for SessionCallResult")
+            bcs::to_bytes(&state)
+                .expect("failed to serialize Value for SessionCallResult")
         });
 
         wit_types::SessionCallResult {
@@ -137,7 +139,8 @@ where
             destination: message.destination.into(),
             authenticated: message.authenticated,
             is_tracked: message.is_tracked,
-            message: bcs::to_bytes(&message.message).expect("message serialization failed"),
+            message: bcs::to_bytes(&message.message)
+                .expect("message serialization failed"),
         }
     }
 }

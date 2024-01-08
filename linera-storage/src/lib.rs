@@ -45,7 +45,8 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch},
     ChainOwnership, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode, WasmRuntime,
+    UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
+    WasmRuntime,
 };
 use linera_views::{
     common::Context,
@@ -56,7 +57,9 @@ use std::{fmt::Debug, sync::Arc};
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 use {
     linera_chain::data_types::CertificateValue,
-    linera_execution::{Operation, SystemOperation, WasmContractModule, WasmServiceModule},
+    linera_execution::{
+        Operation, SystemOperation, WasmContractModule, WasmServiceModule,
+    },
 };
 
 /// Communicate with a persistent storage using the "views" abstraction.
@@ -76,7 +79,10 @@ pub trait Storage: Sized {
     fn current_time(&self) -> Timestamp;
 
     /// Loads the view of a chain state.
-    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>
+    async fn load_chain(
+        &self,
+        id: ChainId,
+    ) -> Result<ChainStateView<Self::Context>, ViewError>
     where
         ViewError: From<Self::ContextError>;
 
@@ -106,10 +112,14 @@ pub trait Storage: Sized {
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError>;
 
     /// Writes the given certificate.
-    async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError>;
+    async fn write_certificate(&self, certificate: &Certificate)
+        -> Result<(), ViewError>;
 
     /// Writes a vector of certificates.
-    async fn write_certificates(&self, certificate: &[Certificate]) -> Result<(), ViewError>;
+    async fn write_certificates(
+        &self,
+        certificate: &[Certificate],
+    ) -> Result<(), ViewError>;
 
     /// Loads the view of a chain state and checks that it is active.
     async fn load_active_chain(
@@ -274,14 +284,16 @@ async fn read_publish_bytecode_operation(
         .read_value(bytecode_location.certificate_hash)
         .await
         .map_err(|error| match error {
-            ViewError::NotFound(_) => ExecutionError::ApplicationBytecodeNotFound(Box::new(
-                application_description.clone(),
-            )),
+            ViewError::NotFound(_) => ExecutionError::ApplicationBytecodeNotFound(
+                Box::new(application_description.clone()),
+            ),
             _ => error.into(),
         })?
         .into_inner();
     let operations = match value {
-        CertificateValue::ConfirmedBlock { executed_block, .. } => executed_block.block.operations,
+        CertificateValue::ConfirmedBlock { executed_block, .. } => {
+            executed_block.block.operations
+        }
         _ => return Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
     };
     let index = usize::try_from(bytecode_location.operation_index)

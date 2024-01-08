@@ -33,7 +33,8 @@ where
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module::<WithoutExports>("export", "simple-function");
+    let instance =
+        factory.load_test_module::<WithoutExports>("export", "simple-function");
 
     SimpleFunction::new(instance)
         .simple()

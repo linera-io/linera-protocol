@@ -233,7 +233,10 @@ impl<'a> From<&'a Committee> for CommitteeMinimal<'a> {
 }
 
 impl std::fmt::Display for ValidatorName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::result::Result<(), std::fmt::Error> {
         self.0.fmt(f)
     }
 }
@@ -247,7 +250,10 @@ impl std::str::FromStr for ValidatorName {
 }
 
 impl std::fmt::Display for Epoch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{}", self.0)
     }
 }

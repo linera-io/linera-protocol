@@ -99,10 +99,11 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
 
     // check operations plugin
     let req_client = reqwest_client();
-    let plugins = request::<Plugins, _>(&req_client, "http://localhost:8081", plugins::Variables)
-        .await
-        .unwrap()
-        .plugins;
+    let plugins =
+        request::<Plugins, _>(&req_client, "http://localhost:8081", plugins::Variables)
+            .await
+            .unwrap()
+            .plugins;
     assert_eq!(
         plugins,
         vec!["operations"],
@@ -130,10 +131,11 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
         .unwrap_or_else(|| panic!("no block found"));
     let last_hash = last_block.clone().hash;
 
-    let indexer_state = request::<State, _>(&req_client, "http://localhost:8081", state::Variables)
-        .await
-        .unwrap()
-        .state;
+    let indexer_state =
+        request::<State, _>(&req_client, "http://localhost:8081", state::Variables)
+            .await
+            .unwrap()
+            .state;
     let indexer_hash =
         indexer_state
             .iter()
@@ -153,11 +155,14 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
         key: get_operation::OperationKeyKind::Last(chain0),
     };
 
-    let indexer_operation =
-        request::<GetOperation, _>(&req_client, "http://localhost:8081/operations", variables)
-            .await
-            .unwrap()
-            .operation;
+    let indexer_operation = request::<GetOperation, _>(
+        &req_client,
+        "http://localhost:8081/operations",
+        variables,
+    )
+    .await
+    .unwrap()
+    .operation;
     match indexer_operation {
         Some(get_operation::GetOperationOperation {
             key,

@@ -30,7 +30,9 @@ use {
 mod applications_tests;
 
 /// A unique identifier for an application.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize,
+)]
 pub enum GenericApplicationId {
     /// The system application.
     System,
@@ -115,7 +117,10 @@ where
     ViewError: From<C::Error>,
 {
     #[cfg(any(test, feature = "test"))]
-    pub fn import(&mut self, registry: ApplicationRegistry) -> Result<(), SystemExecutionError> {
+    pub fn import(
+        &mut self,
+        registry: ApplicationRegistry,
+    ) -> Result<(), SystemExecutionError> {
         for (id, location) in registry.published_bytecodes {
             self.published_bytecodes.insert(&id, location)?;
         }

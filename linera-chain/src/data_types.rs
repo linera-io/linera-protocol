@@ -410,7 +410,8 @@ impl<'a> LiteCertificate<'a> {
 
     /// Returns the `Certificate` with the specified value, if it matches.
     pub fn with_value(self, value: HashedValue) -> Option<Certificate> {
-        if self.value.chain_id != value.inner().chain_id() || self.value.value_hash != value.hash()
+        if self.value.chain_id != value.inner().chain_id()
+            || self.value.value_hash != value.hash()
         {
             return None;
         }
@@ -530,7 +531,9 @@ impl CertificateValue {
     pub fn epoch(&self) -> Epoch {
         match self {
             CertificateValue::ConfirmedBlock { executed_block, .. }
-            | CertificateValue::ValidatedBlock { executed_block, .. } => executed_block.block.epoch,
+            | CertificateValue::ValidatedBlock { executed_block, .. } => {
+                executed_block.block.epoch
+            }
             CertificateValue::LeaderTimeout { epoch, .. } => *epoch,
         }
     }
@@ -573,7 +576,9 @@ impl CertificateValue {
     pub fn executed_block(&self) -> Option<&ExecutedBlock> {
         match self {
             CertificateValue::ConfirmedBlock { executed_block, .. }
-            | CertificateValue::ValidatedBlock { executed_block, .. } => Some(executed_block),
+            | CertificateValue::ValidatedBlock { executed_block, .. } => {
+                Some(executed_block)
+            }
             CertificateValue::LeaderTimeout { .. } => None,
         }
     }
@@ -623,7 +628,8 @@ impl ExecutedBlock {
         message_index: u32,
     ) -> Option<MessageId> {
         let block = &self.block;
-        let transaction_index = block.incoming_messages.len().checked_add(operation_index)?;
+        let transaction_index =
+            block.incoming_messages.len().checked_add(operation_index)?;
         let first_message_index = match transaction_index.checked_sub(1) {
             None => 0,
             Some(index) => *self.message_counts.get(index)?,
@@ -687,7 +693,11 @@ impl HashedValue {
     }
 
     /// Creates a new `LeaderTimeout` value.
-    pub fn new_leader_timeout(chain_id: ChainId, height: BlockHeight, epoch: Epoch) -> HashedValue {
+    pub fn new_leader_timeout(
+        chain_id: ChainId,
+        height: BlockHeight,
+        epoch: Epoch,
+    ) -> HashedValue {
         CertificateValue::LeaderTimeout {
             chain_id,
             height,
@@ -891,7 +901,10 @@ impl Certificate {
     }
 
     /// Verifies the certificate.
-    pub fn check<'a>(&'a self, committee: &Committee) -> Result<&'a HashedValue, ChainError> {
+    pub fn check<'a>(
+        &'a self,
+        committee: &Committee,
+    ) -> Result<&'a HashedValue, ChainError> {
         check_signatures(&self.lite_value(), self.round, &self.signatures, committee)?;
         Ok(&self.value)
     }

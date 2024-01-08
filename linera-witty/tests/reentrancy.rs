@@ -67,8 +67,8 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     ExportedSimpleFunction: ExportTo<InstanceFactory::Builder>,
 {
-    let instance =
-        factory.load_test_module::<ExportedSimpleFunction>("reentrancy", "simple-function");
+    let instance = factory
+        .load_test_module::<ExportedSimpleFunction>("reentrancy", "simple-function");
 
     Entrypoint::new(instance)
         .entrypoint()
@@ -165,7 +165,8 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     ExportedGetters<InstanceFactory::Caller<'static>>: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module::<ExportedGetters<_>>("reentrancy", "getters");
+    let instance =
+        factory.load_test_module::<ExportedGetters<_>>("reentrancy", "getters");
 
     Entrypoint::new(instance)
         .entrypoint()
@@ -257,7 +258,8 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     ExportedSetters<InstanceFactory::Caller<'static>>: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module::<ExportedSetters<_>>("reentrancy", "setters");
+    let instance =
+        factory.load_test_module::<ExportedSetters<_>>("reentrancy", "setters");
 
     Entrypoint::new(instance)
         .entrypoint()
@@ -289,7 +291,11 @@ where
     Caller: InstanceForImportedOperations,
     <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
 {
-    fn and_bool(caller: &mut Caller, first: bool, second: bool) -> Result<bool, RuntimeError> {
+    fn and_bool(
+        caller: &mut Caller,
+        first: bool,
+        second: bool,
+    ) -> Result<bool, RuntimeError> {
         ImportedOperations::new(caller).and_bool(first, second)
     }
 
@@ -301,35 +307,67 @@ where
         ImportedOperations::new(caller).add_u8(first, second)
     }
 
-    fn add_s16(caller: &mut Caller, first: i16, second: i16) -> Result<i16, RuntimeError> {
+    fn add_s16(
+        caller: &mut Caller,
+        first: i16,
+        second: i16,
+    ) -> Result<i16, RuntimeError> {
         ImportedOperations::new(caller).add_s16(first, second)
     }
 
-    fn add_u16(caller: &mut Caller, first: u16, second: u16) -> Result<u16, RuntimeError> {
+    fn add_u16(
+        caller: &mut Caller,
+        first: u16,
+        second: u16,
+    ) -> Result<u16, RuntimeError> {
         ImportedOperations::new(caller).add_u16(first, second)
     }
 
-    fn add_s32(caller: &mut Caller, first: i32, second: i32) -> Result<i32, RuntimeError> {
+    fn add_s32(
+        caller: &mut Caller,
+        first: i32,
+        second: i32,
+    ) -> Result<i32, RuntimeError> {
         ImportedOperations::new(caller).add_s32(first, second)
     }
 
-    fn add_u32(caller: &mut Caller, first: u32, second: u32) -> Result<u32, RuntimeError> {
+    fn add_u32(
+        caller: &mut Caller,
+        first: u32,
+        second: u32,
+    ) -> Result<u32, RuntimeError> {
         ImportedOperations::new(caller).add_u32(first, second)
     }
 
-    fn add_s64(caller: &mut Caller, first: i64, second: i64) -> Result<i64, RuntimeError> {
+    fn add_s64(
+        caller: &mut Caller,
+        first: i64,
+        second: i64,
+    ) -> Result<i64, RuntimeError> {
         ImportedOperations::new(caller).add_s64(first, second)
     }
 
-    fn add_u64(caller: &mut Caller, first: u64, second: u64) -> Result<u64, RuntimeError> {
+    fn add_u64(
+        caller: &mut Caller,
+        first: u64,
+        second: u64,
+    ) -> Result<u64, RuntimeError> {
         ImportedOperations::new(caller).add_u64(first, second)
     }
 
-    fn add_float32(caller: &mut Caller, first: f32, second: f32) -> Result<f32, RuntimeError> {
+    fn add_float32(
+        caller: &mut Caller,
+        first: f32,
+        second: f32,
+    ) -> Result<f32, RuntimeError> {
         ImportedOperations::new(caller).add_float32(first, second)
     }
 
-    fn add_float64(caller: &mut Caller, first: f64, second: f64) -> Result<f64, RuntimeError> {
+    fn add_float64(
+        caller: &mut Caller,
+        first: f64,
+        second: f64,
+    ) -> Result<f64, RuntimeError> {
         ImportedOperations::new(caller).add_float64(first, second)
     }
 }
@@ -347,9 +385,11 @@ where
     InstanceFactory::Instance: InstanceForEntrypoint,
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
-    ExportedOperations<InstanceFactory::Caller<'static>>: ExportTo<InstanceFactory::Builder>,
+    ExportedOperations<InstanceFactory::Caller<'static>>:
+        ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module::<ExportedOperations<_>>("reentrancy", "operations");
+    let instance =
+        factory.load_test_module::<ExportedOperations<_>>("reentrancy", "operations");
 
     Entrypoint::new(instance)
         .entrypoint()
@@ -396,7 +436,8 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     ExportedGlobalState: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module::<ExportedGlobalState>("reentrancy", "global-state");
+    let instance =
+        factory.load_test_module::<ExportedGlobalState>("reentrancy", "global-state");
     let value = 100;
 
     let result = ImportedGlobalState::new(instance)
@@ -439,14 +480,17 @@ where
 fn test_user_data<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
-    InstanceFactory::Instance: Instance<UserData = Arc<AtomicBool>> + InstanceForEntrypoint,
+    InstanceFactory::Instance:
+        Instance<UserData = Arc<AtomicBool>> + InstanceForEntrypoint,
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
     ExportedSimpleFunctionWithUserData<InstanceFactory::Caller<'static>>:
         ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory
-        .load_test_module::<ExportedSimpleFunctionWithUserData<_>>("reentrancy", "simple-function");
+    let instance = factory.load_test_module::<ExportedSimpleFunctionWithUserData<_>>(
+        "reentrancy",
+        "simple-function",
+    );
 
     let user_data = instance.user_data().clone();
 

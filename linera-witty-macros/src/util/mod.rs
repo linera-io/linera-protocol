@@ -42,13 +42,14 @@ pub fn extract_namespace(
     type_name: &Ident,
 ) -> LitStr {
     let span = Span::call_site();
-    let parameters = syn::parse::<AttributeParameters>(attribute_parameters).unwrap_or_else(|_| {
-        abort!(
-            span,
-            r#"Failed to parse attribute parameters, expected either `root = true` \
+    let parameters = syn::parse::<AttributeParameters>(attribute_parameters)
+        .unwrap_or_else(|_| {
+            abort!(
+                span,
+                r#"Failed to parse attribute parameters, expected either `root = true` \
                 or `package = "namespace:package""#
-        )
-    });
+            )
+        });
 
     let package_name = parameters.parameter("package").unwrap_or_else(|| {
         abort!(

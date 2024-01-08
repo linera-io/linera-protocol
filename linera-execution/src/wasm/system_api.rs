@@ -22,21 +22,25 @@ macro_rules! impl_contract_system_api {
             fn application_id(
                 &mut self,
             ) -> Result<contract_system_api::ApplicationId, Self::Error> {
-                BaseRuntime::application_id(self).map(|application_id| application_id.into())
+                BaseRuntime::application_id(self)
+                    .map(|application_id| application_id.into())
             }
 
             fn application_parameters(&mut self) -> Result<Vec<u8>, Self::Error> {
                 BaseRuntime::application_parameters(self)
             }
 
-            fn read_system_balance(&mut self) -> Result<contract_system_api::Amount, Self::Error> {
+            fn read_system_balance(
+                &mut self,
+            ) -> Result<contract_system_api::Amount, Self::Error> {
                 BaseRuntime::read_system_balance(self).map(|balance| balance.into())
             }
 
             fn read_system_timestamp(
                 &mut self,
             ) -> Result<contract_system_api::Timestamp, Self::Error> {
-                BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
+                BaseRuntime::read_system_timestamp(self)
+                    .map(|timestamp| timestamp.micros())
             }
 
             // TODO(#1152): remove
@@ -118,8 +122,8 @@ macro_rules! impl_contract_system_api {
 /// Generates the common code for service system API types for all Wasm runtimes.
 macro_rules! impl_service_system_api {
     ($trap:ty) => {
-        impl<T: crate::ServiceRuntime + Send + Sync + 'static> service_system_api::ServiceSystemApi
-            for T
+        impl<T: crate::ServiceRuntime + Send + Sync + 'static>
+            service_system_api::ServiceSystemApi for T
         {
             type Error = ExecutionError;
 
@@ -133,22 +137,28 @@ macro_rules! impl_service_system_api {
                 BaseRuntime::chain_id(self).map(|chain_id| chain_id.into())
             }
 
-            fn application_id(&mut self) -> Result<service_system_api::ApplicationId, Self::Error> {
-                BaseRuntime::application_id(self).map(|application_id| application_id.into())
+            fn application_id(
+                &mut self,
+            ) -> Result<service_system_api::ApplicationId, Self::Error> {
+                BaseRuntime::application_id(self)
+                    .map(|application_id| application_id.into())
             }
 
             fn application_parameters(&mut self) -> Result<Vec<u8>, Self::Error> {
                 BaseRuntime::application_parameters(self)
             }
 
-            fn read_system_balance(&mut self) -> Result<service_system_api::Amount, Self::Error> {
+            fn read_system_balance(
+                &mut self,
+            ) -> Result<service_system_api::Amount, Self::Error> {
                 BaseRuntime::read_system_balance(self).map(|balance| balance.into())
             }
 
             fn read_system_timestamp(
                 &mut self,
             ) -> Result<service_system_api::Timestamp, Self::Error> {
-                BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
+                BaseRuntime::read_system_timestamp(self)
+                    .map(|timestamp| timestamp.micros())
             }
 
             // TODO(#1152): remove
@@ -171,9 +181,13 @@ macro_rules! impl_service_system_api {
                 application: service_system_api::ApplicationId,
                 argument: &[u8],
             ) -> Result<Result<Vec<u8>, String>, Self::Error> {
-                ServiceRuntime::try_query_application(self, application.into(), argument.to_vec())
-                    // TODO(#1153): remove
-                    .map(Ok)
+                ServiceRuntime::try_query_application(
+                    self,
+                    application.into(),
+                    argument.to_vec(),
+                )
+                // TODO(#1153): remove
+                .map(Ok)
             }
 
             fn log(
@@ -201,7 +215,9 @@ macro_rules! impl_service_system_api {
 /// Generates the common code for view system API types for all WASM runtimes.
 macro_rules! impl_view_system_api {
     ($trap:ty) => {
-        impl<T: crate::BaseRuntime + Send + Sync + 'static> view_system_api::ViewSystemApi for T {
+        impl<T: crate::BaseRuntime + Send + Sync + 'static> view_system_api::ViewSystemApi
+            for T
+        {
             type Error = ExecutionError;
 
             type ContainsKey = <Self as BaseRuntime>::ContainsKey;
@@ -214,7 +230,10 @@ macro_rules! impl_view_system_api {
                 error.into()
             }
 
-            fn contains_key_new(&mut self, key: &[u8]) -> Result<Self::ContainsKey, Self::Error> {
+            fn contains_key_new(
+                &mut self,
+                key: &[u8],
+            ) -> Result<Self::ContainsKey, Self::Error> {
                 self.contains_key_new(key.to_vec())
             }
 
@@ -254,7 +273,10 @@ macro_rules! impl_view_system_api {
                 self.read_value_bytes_wait(promise)
             }
 
-            fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {
+            fn find_keys_new(
+                &mut self,
+                key_prefix: &[u8],
+            ) -> Result<Self::FindKeys, Self::Error> {
                 self.find_keys_by_prefix_new(key_prefix.to_vec())
             }
 

@@ -66,7 +66,8 @@ where
     type HostResults = Results;
     type GuestParameters =
         <<Parameters::Layout as Layout>::Flat as FlatHostParameters>::GuestParameters;
-    type GuestResults = <<Results::Layout as Layout>::Flat as FlatHostResults>::GuestResults;
+    type GuestResults =
+        <<Results::Layout as Layout>::Flat as FlatHostResults>::GuestResults;
 
     fn lower_parameters<Instance>(
         parameters: Self::HostParameters,
@@ -89,6 +90,8 @@ where
         Instance: InstanceWithMemory,
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
-        <<Results::Layout as Layout>::Flat as FlatHostResults>::lift_results(results, memory)
+        <<Results::Layout as Layout>::Flat as FlatHostResults>::lift_results(
+            results, memory,
+        )
     }
 }

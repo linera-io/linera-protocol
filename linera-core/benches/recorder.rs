@@ -61,7 +61,11 @@ impl Measurement for BenchRecorderMeasurement {
         const COUNT_FORMATTER: CountFormatter = CountFormatter;
 
         impl ValueFormatter for CountFormatter {
-            fn scale_values(&self, _typical_value: f64, _values: &mut [f64]) -> &'static str {
+            fn scale_values(
+                &self,
+                _typical_value: f64,
+                _values: &mut [f64],
+            ) -> &'static str {
                 ""
             }
 

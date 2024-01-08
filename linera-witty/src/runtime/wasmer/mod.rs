@@ -14,8 +14,8 @@ use super::traits::{Instance, Runtime};
 use std::sync::{Arc, Mutex, MutexGuard};
 pub use wasmer::FunctionEnvMut;
 use wasmer::{
-    AsStoreMut, AsStoreRef, Engine, Extern, FunctionEnv, Imports, InstantiationError, Memory,
-    Module, Store, StoreMut, StoreRef,
+    AsStoreMut, AsStoreRef, Engine, Extern, FunctionEnv, Imports, InstantiationError,
+    Memory, Module, Store, StoreMut, StoreRef,
 };
 use wasmer_vm::StoreObjects;
 
@@ -76,7 +76,8 @@ where
             .environment
             .instance
             .try_lock()
-            .expect("Unexpected usage of instance before it was initialized") = Some(instance);
+            .expect("Unexpected usage of instance before it was initialized") =
+            Some(instance);
 
         Ok(EntrypointInstance {
             store: self.store,

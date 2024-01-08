@@ -3,7 +3,9 @@
 
 use async_trait::async_trait;
 use linera_base::{crypto::KeyPair, data_types::Timestamp, identifiers::ChainId};
-use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
+use linera_chain::data_types::{
+    BlockProposal, Certificate, HashedValue, LiteCertificate,
+};
 use linera_core::{
     client::ChainClient,
     data_types::{ChainInfoQuery, ChainInfoResponse},
@@ -57,7 +59,10 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn subscribe(&mut self, _: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+    async fn subscribe(
+        &mut self,
+        _: Vec<ChainId>,
+    ) -> Result<NotificationStream, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 }
@@ -100,7 +105,13 @@ impl ClientContext<DummyValidatorNodeProvider> for DummyContext {
         unimplemented!()
     }
 
-    fn update_wallet_for_new_chain(&mut self, _: ChainId, _: Option<KeyPair>, _: Timestamp) {}
+    fn update_wallet_for_new_chain(
+        &mut self,
+        _: ChainId,
+        _: Option<KeyPair>,
+        _: Timestamp,
+    ) {
+    }
 
     async fn update_wallet<'a, S>(
         &'a mut self,

@@ -31,7 +31,9 @@ use grpc::{
     notifier_service_client::NotifierServiceClient,
     validator_node_client::ValidatorNodeClient,
     validator_worker_client::ValidatorWorkerClient,
-    validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
+    validator_worker_server::{
+        ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer,
+    },
     BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
     LiteCertificate, SubscriptionRequest,
 };
@@ -43,7 +45,9 @@ use linera_core::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
+use prometheus::{
+    register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec,
+};
 use rand::Rng;
 use std::{
     fmt::Debug,
@@ -65,7 +69,8 @@ use tonic::{
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, error, info, instrument, warn};
 
-type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
+type CrossChainSender =
+    mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
 type NotificationSender = mpsc::Sender<Notification>;
 
 pub static SERVER_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
@@ -96,14 +101,15 @@ pub static SERVER_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
-pub static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
-        "server_request_latency_per_request_type",
-        "Server request latency per request type",
-        &["method_name"]
-    )
-    .expect("Counter creation should not fail")
-});
+pub static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: Lazy<HistogramVec> =
+    Lazy::new(|| {
+        register_histogram_vec!(
+            "server_request_latency_per_request_type",
+            "Server request latency per request type",
+            &["method_name"]
+        )
+        .expect("Counter creation should not fail")
+    });
 
 #[derive(Clone)]
 pub struct GrpcServer<S> {
@@ -162,7 +168,8 @@ impl<S> Layer<S> for PrometheusMetricsMiddlewareLayer {
     }
 }
 
-impl<S> Service<tonic::codegen::http::Request<Body>> for PrometheusMetricsMiddlewareService<S>
+impl<S> Service<tonic::codegen::http::Request<Body>>
+    for PrometheusMetricsMiddlewareService<S>
 where
     S::Future: Send + 'static,
     S: Service<tonic::codegen::http::Request<Body>> + std::marker::Send,
@@ -249,7 +256,8 @@ where
 
         let (complete, receiver) = futures::channel::oneshot::channel();
 
-        let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+        let (mut health_reporter, health_service) =
+            tonic_health::server::health_reporter();
         health_reporter
             .set_serving::<ValidatorWorkerServer<Self>>()
             .await;
@@ -351,7 +359,10 @@ where
         cross_chain_sender_delay: Duration,
         cross_chain_sender_failure_rate: f32,
         this_shard: ShardId,
-        mut receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
+        mut receiver: mpsc::Receiver<(
+            linera_core::data_types::CrossChainRequest,
+            ShardId,
+        )>,
     ) {
         let pool = ConnectionPool::default();
 
@@ -369,7 +380,10 @@ where
             // Send the cross-chain query and retry if needed.
             for i in 0..cross_chain_max_retries {
                 // Delay increases linearly with the attempt number.
-                tokio::time::sleep(cross_chain_sender_delay + cross_chain_retry_delay * i).await;
+                tokio::time::sleep(
+                    cross_chain_sender_delay + cross_chain_retry_delay * i,
+                )
+                .await;
 
                 let result = || async {
                     let cross_chain_request = cross_chain_request.clone().try_into()?;
@@ -462,7 +476,8 @@ where
             wait_for_outgoing_messages,
         } = request.into_inner().try_into()?;
         debug!(?certificate, "Handling lite certificate");
-        let (sender, receiver) = wait_for_outgoing_messages.then(oneshot::channel).unzip();
+        let (sender, receiver) =
+            wait_for_outgoing_messages.then(oneshot::channel).unzip();
         match self
             .state
             .clone()
@@ -505,7 +520,8 @@ where
             wait_for_outgoing_messages,
         } = request.into_inner().try_into()?;
         debug!(?certificate, "Handling certificate");
-        let (sender, receiver) = wait_for_outgoing_messages.then(oneshot::channel).unzip();
+        let (sender, receiver) =
+            wait_for_outgoing_messages.then(oneshot::channel).unzip();
         match self
             .state
             .clone()
@@ -566,7 +582,10 @@ where
         debug!(?request, "Handling cross-chain request");
         match self.state.clone().handle_cross_chain_request(request).await {
             Ok(actions) => {
-                Self::log_request_success_and_latency(start, "handle_cross_chain_request");
+                Self::log_request_success_and_latency(
+                    start,
+                    "handle_cross_chain_request",
+                );
                 self.handle_network_actions(actions)
             }
             Err(error) => {
@@ -611,7 +630,10 @@ impl GrpcClient {
     /// Logs a warning on unexpected status codes.
     fn is_retryable(status: &Status) -> bool {
         match status.code() {
-            Code::DeadlineExceeded | Code::Aborted | Code::Unavailable | Code::Unknown => {
+            Code::DeadlineExceeded
+            | Code::Aborted
+            | Code::Unavailable
+            | Code::Unknown => {
                 info!("Notification stream interrupted: {}; retrying", status);
                 true
             }
@@ -746,7 +768,10 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
-    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+    async fn subscribe(
+        &mut self,
+        chains: Vec<ChainId>,
+    ) -> Result<NotificationStream, NodeError> {
         let notification_retry_delay = self.notification_retry_delay;
         let notification_retries = self.notification_retries;
         let mut retry_count = 0;
@@ -777,7 +802,9 @@ impl ValidatorNode for GrpcClient {
                     future::Either::Right(stream)
                 } else {
                     match client.subscribe(subscription_request.clone()).await {
-                        Err(err) => future::Either::Left(stream::iter(iter::once(Err(err)))),
+                        Err(err) => {
+                            future::Either::Left(stream::iter(iter::once(Err(err))))
+                        }
                         Ok(response) => future::Either::Right(response.into_inner()),
                     }
                 };
@@ -829,7 +856,12 @@ impl MassClient for GrpcClient {
         for request in requests {
             match request {
                 RpcMessage::BlockProposal(proposal) => {
-                    mass_client_delegate!(client, handle_block_proposal, proposal, responses)
+                    mass_client_delegate!(
+                        client,
+                        handle_block_proposal,
+                        proposal,
+                        responses
+                    )
                 }
                 RpcMessage::Certificate(request) => {
                     mass_client_delegate!(client, handle_certificate, request, responses)
@@ -877,9 +909,10 @@ impl Proxyable for CrossChainRequest {
 
         match self.inner.as_ref()? {
             Inner::UpdateRecipient(grpc::UpdateRecipient { recipient, .. })
-            | Inner::ConfirmUpdatedRecipient(grpc::ConfirmUpdatedRecipient { recipient, .. }) => {
-                recipient.clone()?.try_into().ok()
-            }
+            | Inner::ConfirmUpdatedRecipient(grpc::ConfirmUpdatedRecipient {
+                recipient,
+                ..
+            }) => recipient.clone()?.try_into().ok(),
         }
     }
 }

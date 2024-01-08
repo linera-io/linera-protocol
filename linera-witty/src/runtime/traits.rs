@@ -83,7 +83,10 @@ where
 }
 
 /// Trait alias for a Wasm module instance with the WIT Canonical ABI `cabi_realloc` function.
-pub trait CabiReallocAlias: InstanceWithFunction<HList![i32, i32, i32, i32], HList![i32]> {}
+pub trait CabiReallocAlias:
+    InstanceWithFunction<HList![i32, i32, i32, i32], HList![i32]>
+{
+}
 
 impl<AnyInstance> CabiReallocAlias for AnyInstance where
     AnyInstance: InstanceWithFunction<HList![i32, i32, i32, i32], HList![i32]>

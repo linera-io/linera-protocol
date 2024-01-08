@@ -35,7 +35,9 @@ pub fn derive_wit_type(input: TokenStream) -> TokenStream {
 
     let body = match &input.data {
         Data::Struct(struct_item) => wit_type::derive_for_struct(&struct_item.fields),
-        Data::Enum(enum_item) => wit_type::derive_for_enum(&input.ident, enum_item.variants.iter()),
+        Data::Enum(enum_item) => {
+            wit_type::derive_for_enum(&input.ident, enum_item.variants.iter())
+        }
         Data::Union(_union_item) => {
             abort!(input.ident, "Can't derive `WitType` for `union`s")
         }
@@ -61,7 +63,9 @@ pub fn derive_wit_load(input: TokenStream) -> TokenStream {
 
     let body = match &input.data {
         Data::Struct(struct_item) => wit_load::derive_for_struct(&struct_item.fields),
-        Data::Enum(enum_item) => wit_load::derive_for_enum(&input.ident, enum_item.variants.iter()),
+        Data::Enum(enum_item) => {
+            wit_load::derive_for_enum(&input.ident, enum_item.variants.iter())
+        }
         Data::Union(_union_item) => {
             abort!(input.ident, "Can't derive `WitLoad` for `union`s")
         }

@@ -33,7 +33,9 @@ impl ChainOwnership {
             super_owners: BTreeMap::new(),
             owners: keys_and_weights
                 .into_iter()
-                .map(|(public_key, weight)| (Owner::from(public_key), (public_key, weight)))
+                .map(|(public_key, weight)| {
+                    (Owner::from(public_key), (public_key, weight))
+                })
                 .collect(),
             multi_leader_rounds,
         }
@@ -99,7 +101,8 @@ impl ChainOwnership {
             Round::SingleLeader(r) => {
                 if let Some(prev_r) = r.checked_sub(1) {
                     Round::SingleLeader(prev_r)
-                } else if let Some(last_multi_r) = self.multi_leader_rounds.checked_sub(1) {
+                } else if let Some(last_multi_r) = self.multi_leader_rounds.checked_sub(1)
+                {
                     Round::MultiLeader(last_multi_r)
                 } else if self.super_owners.is_empty() {
                     return None;

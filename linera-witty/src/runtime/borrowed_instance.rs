@@ -8,7 +8,8 @@
 
 use super::{
     traits::{CabiFreeAlias, CabiReallocAlias},
-    Instance, InstanceWithFunction, InstanceWithMemory, Runtime, RuntimeError, RuntimeMemory,
+    Instance, InstanceWithFunction, InstanceWithMemory, Runtime, RuntimeError,
+    RuntimeMemory,
 };
 use crate::{memory_layout::FlatLayout, GuestPointer};
 use std::borrow::Cow;

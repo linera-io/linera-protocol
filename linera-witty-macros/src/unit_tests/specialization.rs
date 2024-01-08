@@ -94,7 +94,8 @@ fn generics_are_specialized() {
         specializations.split_generics_from(&generics_source.generics);
 
     let expected_impl_generics = quote! { <'lifetime, Fourth> };
-    let expected_type_generics = quote! { <'lifetime, u8, Vec<bool>, (String, i32), Fourth> };
+    let expected_type_generics =
+        quote! { <'lifetime, u8, Vec<bool>, (String, i32), Fourth> };
     let expected_where_clause =
         quote! { where Option<u8>: From<u8>, Box<[bool]>: From<Vec<bool> > };
 

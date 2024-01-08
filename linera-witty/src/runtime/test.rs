@@ -7,8 +7,8 @@
 //! related to memory allocation.
 
 use super::{
-    GuestPointer, Instance, InstanceWithFunction, InstanceWithMemory, Runtime, RuntimeError,
-    RuntimeMemory,
+    GuestPointer, Instance, InstanceWithFunction, InstanceWithMemory, Runtime,
+    RuntimeError, RuntimeMemory,
 };
 use crate::{memory_layout::FlatLayout, ExportFunction, WitLoad, WitStore};
 use frunk::{hlist, hlist_pat, HList};
@@ -31,8 +31,9 @@ impl Runtime for MockRuntime {
 }
 
 /// A closure for handling calls to mocked functions.
-pub type FunctionHandler<UserData> =
-    Arc<dyn Fn(MockInstance<UserData>, Box<dyn Any>) -> Result<Box<dyn Any>, RuntimeError>>;
+pub type FunctionHandler<UserData> = Arc<
+    dyn Fn(MockInstance<UserData>, Box<dyn Any>) -> Result<Box<dyn Any>, RuntimeError>,
+>;
 
 /// A fake Wasm instance.
 ///
@@ -89,7 +90,8 @@ impl<UserData> MockInstance<UserData> {
                     .lock()
                     .expect("Panic while holding a lock to a `MockInstance`'s memory");
 
-                let address = GuestPointer(memory.len().try_into()?).aligned_at(alignment as u32);
+                let address =
+                    GuestPointer(memory.len().try_into()?).aligned_at(alignment as u32);
 
                 memory.resize(address.0 as usize + allocation_size, 0);
 
@@ -113,7 +115,8 @@ impl<UserData> MockInstance<UserData> {
     where
         Parameters: 'static,
         Results: 'static,
-        Handler: Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError> + 'static,
+        Handler: Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError>
+            + 'static,
     {
         self.add_exported_function(name, handler);
         self
@@ -130,16 +133,18 @@ impl<UserData> MockInstance<UserData> {
     where
         Parameters: 'static,
         Results: 'static,
-        Handler: Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError> + 'static,
+        Handler: Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError>
+            + 'static,
     {
         self.exported_functions.insert(
             name.into(),
             Arc::new(move |caller, boxed_parameters| {
-                let parameters = boxed_parameters
-                    .downcast()
-                    .expect("Incorrect parameters used to call handler for exported function");
+                let parameters = boxed_parameters.downcast().expect(
+                    "Incorrect parameters used to call handler for exported function",
+                );
 
-                handler(caller, *parameters).map(|results| Box::new(results) as Box<dyn Any>)
+                handler(caller, *parameters)
+                    .map(|results| Box::new(results) as Box<dyn Any>)
             }),
         );
         self
@@ -155,10 +160,9 @@ impl<UserData> MockInstance<UserData> {
         Parameters: WitStore + 'static,
         Results: WitLoad + 'static,
     {
-        let handler = self
-            .imported_functions
-            .get(function)
-            .unwrap_or_else(|| panic!("Missing function imported from host: {function:?}"));
+        let handler = self.imported_functions.get(function).unwrap_or_else(|| {
+            panic!("Missing function imported from host: {function:?}")
+        });
 
         let flat_parameters = parameters.lower(&mut self.clone().memory()?)?;
         let boxed_flat_results = handler(self.clone(), Box::new(flat_parameters))?;
@@ -295,7 +299,8 @@ impl<UserData> InstanceWithMemory for MockInstance<UserData> {
 impl<Handler, Parameters, Results, UserData> ExportFunction<Handler, Parameters, Results>
     for MockInstance<UserData>
 where
-    Handler: Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError> + 'static,
+    Handler:
+        Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError> + 'static,
     Parameters: 'static,
     Results: 'static,
 {
@@ -344,7 +349,8 @@ pub struct MockExportedFunction<Parameters, Results, UserData> {
     name: String,
     call_counter: Arc<AtomicUsize>,
     expected_calls: usize,
-    handler: Arc<dyn Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError>>,
+    handler:
+        Arc<dyn Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError>>,
 }
 
 impl<Parameters, Results, UserData> MockExportedFunction<Parameters, Results, UserData>
@@ -361,7 +367,8 @@ where
     /// times.
     pub fn new(
         name: impl Into<String>,
-        handler: impl Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError> + 'static,
+        handler: impl Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError>
+            + 'static,
         expected_calls: usize,
     ) -> Self {
         MockExportedFunction {
@@ -377,14 +384,19 @@ where
         let call_counter = self.call_counter.clone();
         let handler = self.handler.clone();
 
-        instance.add_exported_function(self.name.clone(), move |caller, parameters: Parameters| {
-            call_counter.fetch_add(1, Ordering::AcqRel);
-            handler(caller, parameters)
-        });
+        instance.add_exported_function(
+            self.name.clone(),
+            move |caller, parameters: Parameters| {
+                call_counter.fetch_add(1, Ordering::AcqRel);
+                handler(caller, parameters)
+            },
+        );
     }
 }
 
-impl<Parameters, Results, UserData> Drop for MockExportedFunction<Parameters, Results, UserData> {
+impl<Parameters, Results, UserData> Drop
+    for MockExportedFunction<Parameters, Results, UserData>
+{
     fn drop(&mut self) {
         assert_eq!(
             self.call_counter.load(Ordering::Acquire),

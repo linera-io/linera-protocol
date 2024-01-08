@@ -19,8 +19,9 @@
 use crate::{
     batch::Batch,
     common::{
-        contains_key, get_interval, insert_key_prefix, Context, CustomSerialize, HasherOutput,
-        KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
+        contains_key, get_interval, insert_key_prefix, Context, CustomSerialize,
+        HasherOutput, KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update,
+        MIN_VIEW_TAG,
     },
     views::{HashableView, Hasher, View, ViewError},
 };
@@ -272,7 +273,10 @@ where
     ///   assert_eq!(map.get(&[0,1]).await.unwrap(), Some(String::from("Hola")));
     /// # })
     /// ```
-    pub async fn get_mut(&mut self, short_key: Vec<u8>) -> Result<Option<&mut V>, ViewError> {
+    pub async fn get_mut(
+        &mut self,
+        short_key: Vec<u8>,
+    ) -> Result<Option<&mut V>, ViewError> {
         *self.hash.get_mut() = None;
         self.load_value(&short_key).await?;
         if let Some(update) = self.updates.get_mut(&short_key) {
@@ -314,7 +318,11 @@ where
     ///   assert_eq!(count, 2);
     /// # })
     /// ```
-    pub async fn for_each_key_while<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
+    pub async fn for_each_key_while<F>(
+        &self,
+        mut f: F,
+        prefix: Vec<u8>,
+    ) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
@@ -381,7 +389,11 @@ where
     ///   assert_eq!(count, 1);
     /// # })
     /// ```
-    pub async fn for_each_key<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
+    pub async fn for_each_key<F>(
+        &self,
+        mut f: F,
+        prefix: Vec<u8>,
+    ) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
     {
@@ -438,7 +450,10 @@ where
     ///   assert_eq!(map.keys_by_prefix(vec![1]).await.unwrap(), vec![vec![1,2], vec![1,3]]);
     /// # })
     /// ```
-    pub async fn keys_by_prefix(&self, prefix: Vec<u8>) -> Result<Vec<Vec<u8>>, ViewError> {
+    pub async fn keys_by_prefix(
+        &self,
+        prefix: Vec<u8>,
+    ) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut keys = Vec::new();
         let prefix_clone = prefix.clone();
         self.for_each_key(
@@ -583,7 +598,11 @@ where
     ///   assert_eq!(count, 1);
     /// # })
     /// ```
-    pub async fn for_each_key_value<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
+    pub async fn for_each_key_value<F>(
+        &self,
+        mut f: F,
+        prefix: Vec<u8>,
+    ) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
     {
@@ -597,7 +616,9 @@ where
         .await
     }
 
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+    async fn compute_hash(
+        &self,
+    ) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0;
         let prefix = Vec::new();
@@ -696,12 +717,17 @@ where
     ///   assert_eq!(map.get(&[0,1]).await.unwrap(), Some(String::from("Hola")));
     /// # })
     /// ```
-    pub async fn get_mut_or_default(&mut self, short_key: Vec<u8>) -> Result<&mut V, ViewError> {
+    pub async fn get_mut_or_default(
+        &mut self,
+        short_key: Vec<u8>,
+    ) -> Result<&mut V, ViewError> {
         use std::collections::btree_map::Entry;
 
         *self.hash.get_mut() = None;
         let update = match self.updates.entry(short_key.clone()) {
-            Entry::Vacant(e) if self.delete_storage_first => e.insert(Update::Set(V::default())),
+            Entry::Vacant(e) if self.delete_storage_first => {
+                e.insert(Update::Set(V::default()))
+            }
             Entry::Vacant(e) => {
                 let key = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
                 let value = self.context.read_value(&key).await?.unwrap_or_default();

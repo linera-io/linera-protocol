@@ -198,7 +198,10 @@ where
     ///   assert_eq!(log.multi_get(vec![0,1]).await.unwrap(), vec![Some(34),Some(42)]);
     /// # })
     /// ```
-    pub async fn multi_get(&self, indices: Vec<usize>) -> Result<Vec<Option<T>>, ViewError> {
+    pub async fn multi_get(
+        &self,
+        indices: Vec<usize>,
+    ) -> Result<Vec<Option<T>>, ViewError> {
         let mut result = Vec::new();
         if self.delete_storage_first {
             for index in indices {
@@ -294,14 +297,15 @@ where
                 Ok(values)
             }
         } else {
-            Ok(
-                self.new_values[(start - effective_stored_count)..(end - effective_stored_count)]
-                    .to_vec(),
-            )
+            Ok(self.new_values
+                [(start - effective_stored_count)..(end - effective_stored_count)]
+                .to_vec())
         }
     }
 
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+    async fn compute_hash(
+        &self,
+    ) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         let elements = self.read(..).await?;
         let mut hasher = sha3::Sha3_256::default();
         hasher.update_with_bcs_bytes(&elements)?;

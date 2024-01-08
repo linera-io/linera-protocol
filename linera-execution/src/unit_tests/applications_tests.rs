@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    ApplicationRegistry, ApplicationRegistryView, BytecodeLocation, UserApplicationDescription,
-    UserApplicationId,
+    ApplicationRegistry, ApplicationRegistryView, BytecodeLocation,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},

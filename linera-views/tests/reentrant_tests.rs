@@ -51,7 +51,8 @@ async fn reentrant_collection_view_check() {
                 }
                 // Only if all indices are distinct can the query
                 if set_indices.len() == n_ins {
-                    let mut subviews = view.v.try_load_entries_mut(&indices).await.unwrap();
+                    let mut subviews =
+                        view.v.try_load_entries_mut(&indices).await.unwrap();
                     for i in 0..n_ins {
                         let index = indices[i];
                         let value = values[i];

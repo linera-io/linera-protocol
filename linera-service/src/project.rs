@@ -154,7 +154,8 @@ impl Project {
         linera_root: Option<&Path>,
     ) -> Result<()> {
         let toml_path = project_root.join("Cargo.toml");
-        let (linera_sdk_dep, linera_sdk_dev_dep) = Self::linera_sdk_dependencies(linera_root);
+        let (linera_sdk_dep, linera_sdk_dev_dep) =
+            Self::linera_sdk_dependencies(linera_root);
         let toml_contents = format!(
             include_str!("../template/Cargo.toml.template"),
             project_name = project_name,
@@ -173,12 +174,18 @@ impl Project {
 
     fn create_state_file(source_directory: &Path) -> Result<()> {
         let state_path = source_directory.join("state.rs");
-        Self::write_string_to_file(&state_path, include_str!("../template/state.rs.template"))
+        Self::write_string_to_file(
+            &state_path,
+            include_str!("../template/state.rs.template"),
+        )
     }
 
     fn create_lib_file(source_directory: &Path) -> Result<()> {
         let state_path = source_directory.join("lib.rs");
-        Self::write_string_to_file(&state_path, include_str!("../template/lib.rs.template"))
+        Self::write_string_to_file(
+            &state_path,
+            include_str!("../template/lib.rs.template"),
+        )
     }
 
     fn create_contract_file(source_directory: &Path, project_name: &str) -> Result<()> {
@@ -252,7 +259,10 @@ impl Project {
         (linera_sdk_dep, linera_sdk_dev_dep)
     }
 
-    pub fn build(&self, name: Option<String>) -> Result<(PathBuf, PathBuf), anyhow::Error> {
+    pub fn build(
+        &self,
+        name: Option<String>,
+    ) -> Result<(PathBuf, PathBuf), anyhow::Error> {
         let name = name.unwrap_or(self.project_package_name()?);
         let contract_name = format!("{}_contract", name);
         let service_name = format!("{}_service", name);

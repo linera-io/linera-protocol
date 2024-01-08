@@ -11,8 +11,8 @@ mod result_storage;
 
 use self::{guest_interface::GuestInterface, result_storage::ResultStorage};
 use crate::{
-    InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory, WitLoad, WitStore,
-    WitType,
+    InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory, WitLoad,
+    WitStore, WitType,
 };
 
 /// A type that can register some functions as exports for the target `Instance`.

@@ -70,7 +70,12 @@ impl FungibleApp {
         self.0.mutate(mutation).await.unwrap()
     }
 
-    async fn claim(&self, source: fungible::Account, target: fungible::Account, amount: Amount) {
+    async fn claim(
+        &self,
+        source: fungible::Account,
+        target: fungible::Account,
+        amount: Amount,
+    ) {
         // Claiming tokens from chain1 to chain2.
         let mutation = format!(
             "claim(sourceAccount: {}, amount: \"{}\", targetAccount: {})",
@@ -95,8 +100,10 @@ impl MatchingEngineApp {
             account_owner.to_value()
         );
         let response_body = self.0.query(query).await.unwrap();
-        serde_json::from_value(response_body["accountInfo"]["entry"]["value"]["orders"].clone())
-            .unwrap()
+        serde_json::from_value(
+            response_body["accountInfo"]["entry"]["value"]["orders"].clone(),
+        )
+        .unwrap()
     }
 
     async fn order(&self, order: matching_engine::Order) -> Value {
@@ -230,7 +237,13 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
         .await
         .unwrap();
     let application_id = client
-        .create_application::<CounterAbi>(&bytecode_id, &(), &original_counter_value, &[], None)
+        .create_application::<CounterAbi>(
+            &bytecode_id,
+            &(),
+            &original_counter_value,
+            &[],
+            None,
+        )
         .await
         .unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
@@ -305,7 +318,9 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
         .unwrap();
 
     // The returned hash should now be the latest one.
-    let query = format!("query {{ chain(chainId: \"{chain2}\") {{ tipState {{ blockHash }} }} }}");
+    let query = format!(
+        "query {{ chain(chainId: \"{chain2}\") {{ tipState {{ blockHash }} }} }}"
+    );
     let response = node_service2.query_node(&query).await.unwrap();
     assert_eq!(hash, response["chain"]["tipState"]["blockHash"]);
 
@@ -383,7 +398,14 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
     let (contract, service) = client1.build_example("fungible").await.unwrap();
     let params = fungible::Parameters::new("FUN");
     let application_id = client1
-        .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
+        .publish_and_create::<FungibleTokenAbi>(
+            contract,
+            service,
+            &params,
+            &state,
+            &[],
+            None,
+        )
         .await
         .unwrap();
 
@@ -510,7 +532,14 @@ async fn test_wasm_end_to_end_same_wallet_fungible(config: impl LineraNetConfig)
     let (contract, service) = client1.build_example("fungible").await.unwrap();
     let params = fungible::Parameters::new("FUN");
     let application_id = client1
-        .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
+        .publish_and_create::<FungibleTokenAbi>(
+            contract,
+            service,
+            &params,
+            &state,
+            &[],
+            None,
+        )
         .await
         .unwrap();
 
@@ -591,7 +620,8 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
     let state_fungible = InitialState { accounts };
 
     // Setting up the application fungible
-    let (contract_fungible, service_fungible) = client1.build_example("fungible").await.unwrap();
+    let (contract_fungible, service_fungible) =
+        client1.build_example("fungible").await.unwrap();
     let params = fungible::Parameters::new("FUN");
     let application_id_fungible = client1
         .publish_and_create::<FungibleTokenAbi>(
@@ -613,7 +643,8 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
         deadline,
         target,
     };
-    let (contract_crowd, service_crowd) = client1.build_example("crowd-funding").await.unwrap();
+    let (contract_crowd, service_crowd) =
+        client1.build_example("crowd-funding").await.unwrap();
     let application_id_crowd = client1
         .publish_and_create::<CrowdFundingAbi>(
             contract_crowd,
@@ -1462,7 +1493,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
                 ))
                 .await
                 .unwrap();
-            if response["chain"]["executionState"]["system"]["balance"].as_str() == Some("8.") {
+            if response["chain"]["executionState"]["system"]["balance"].as_str()
+                == Some("8.")
+            {
                 return;
             }
         }
@@ -1554,8 +1587,10 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
             ))
             .await
             .unwrap();
-        if response1["chain"]["executionState"]["system"]["balance"].as_str() == Some("6.")
-            && response2["chain"]["executionState"]["system"]["balance"].as_str() == Some("4.")
+        if response1["chain"]["executionState"]["system"]["balance"].as_str()
+            == Some("6.")
+            && response2["chain"]["executionState"]["system"]["balance"].as_str()
+                == Some("4.")
         {
             net.ensure_is_running().await.unwrap();
             net.terminate().await.unwrap();

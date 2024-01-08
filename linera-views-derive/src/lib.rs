@@ -6,7 +6,9 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Attribute, ItemStruct, Lit, LitStr, MetaNameValue, Type, TypePath};
+use syn::{
+    parse_macro_input, Attribute, ItemStruct, Lit, LitStr, MetaNameValue, Type, TypePath,
+};
 
 fn get_seq_parameter(generics: syn::Generics) -> Vec<syn::Ident> {
     let mut generic_vect = Vec::new();
@@ -86,7 +88,8 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let generics = input.generics;
     let template_vect = get_seq_parameter(generics.clone());
 
-    let (context, context_constraints) = context_and_constraints(&input.attrs, &template_vect);
+    let (context, context_constraints) =
+        context_and_constraints(&input.attrs, &template_vect);
 
     let mut name_quotes = Vec::new();
     let mut load_future_quotes = Vec::new();
@@ -174,7 +177,8 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
     let generics = input.generics;
     let template_vect = get_seq_parameter(generics.clone());
 
-    let (context, context_constraints) = context_and_constraints(&input.attrs, &template_vect);
+    let (context, context_constraints) =
+        context_and_constraints(&input.attrs, &template_vect);
 
     let mut flushes = Vec::new();
     let mut deletes = Vec::new();
@@ -210,14 +214,17 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
     let generics = input.generics;
     let template_vect = get_seq_parameter(generics.clone());
 
-    let (context, context_constraints) = context_and_constraints(&input.attrs, &template_vect);
+    let (context, context_constraints) =
+        context_and_constraints(&input.attrs, &template_vect);
 
     let mut field_hashes_mut = Vec::new();
     let mut field_hashes = Vec::new();
     for e in input.fields {
         let name = e.clone().ident.unwrap();
-        field_hashes_mut.push(quote! { hasher.write_all(self.#name.hash_mut().await?.as_ref())?; });
-        field_hashes.push(quote! { hasher.write_all(self.#name.hash().await?.as_ref())?; });
+        field_hashes_mut
+            .push(quote! { hasher.write_all(self.#name.hash_mut().await?.as_ref())?; });
+        field_hashes
+            .push(quote! { hasher.write_all(self.#name.hash().await?.as_ref())?; });
     }
 
     quote! {
@@ -251,7 +258,8 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
     let generics = input.generics;
     let template_vect = get_seq_parameter(generics.clone());
 
-    let (context, context_constraints) = context_and_constraints(&input.attrs, &template_vect);
+    let (context, context_constraints) =
+        context_and_constraints(&input.attrs, &template_vect);
 
     let hash_type = syn::Ident::new(&format!("{}Hash", struct_name), Span::call_site());
     quote! {
@@ -362,7 +370,9 @@ pub mod tests {
     fn test_generate_save_delete_view_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
-            insta::assert_display_snapshot!(pretty(generate_save_delete_view_code(input)));
+            insta::assert_display_snapshot!(pretty(generate_save_delete_view_code(
+                input
+            )));
         }
     }
 

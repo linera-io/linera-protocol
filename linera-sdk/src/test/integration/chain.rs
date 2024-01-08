@@ -51,7 +51,11 @@ impl ActiveChain {
     ///
     /// The microchain has a single owner that uses the `key_pair` to produce blocks. The
     /// `description` is used as the identifier of the microchain.
-    pub fn new(key_pair: KeyPair, description: ChainDescription, validator: TestValidator) -> Self {
+    pub fn new(
+        key_pair: KeyPair,
+        description: ChainDescription,
+        validator: TestValidator,
+    ) -> Self {
         ActiveChain {
             key_pair,
             description,
@@ -74,7 +78,10 @@ impl ActiveChain {
     ///
     /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
     /// to provide the block's contents.
-    pub async fn add_block(&self, block_builder: impl FnOnce(&mut BlockBuilder)) -> Vec<MessageId> {
+    pub async fn add_block(
+        &self,
+        block_builder: impl FnOnce(&mut BlockBuilder),
+    ) -> Vec<MessageId> {
         let mut tip = self.tip.lock().await;
         let mut block = BlockBuilder::new(
             self.description.into(),
@@ -109,7 +116,9 @@ impl ActiveChain {
             .validator
             .worker()
             .await
-            .handle_chain_info_query(ChainInfoQuery::new(chain_id).with_pending_messages())
+            .handle_chain_info_query(
+                ChainInfoQuery::new(chain_id).with_pending_messages(),
+            )
             .await
             .expect("Failed to query chain's pending messages");
         let messages = information.info.requested_pending_messages;
@@ -146,7 +155,10 @@ impl ActiveChain {
 
         let publish_messages = self
             .add_block(|block| {
-                block.with_system_operation(SystemOperation::PublishBytecode { contract, service });
+                block.with_system_operation(SystemOperation::PublishBytecode {
+                    contract,
+                    service,
+                });
             })
             .await;
 
@@ -183,8 +195,8 @@ impl ActiveChain {
     /// Returns a tuple with the loaded contract and service [`Bytecode`]s.
     async fn find_bytecodes_in(&self, repository: &Path) -> (Bytecode, Bytecode) {
         let manifest_path = repository.join("Cargo.toml");
-        let cargo_manifest =
-            Manifest::from_path(manifest_path).expect("Failed to load Cargo.toml manifest");
+        let cargo_manifest = Manifest::from_path(manifest_path)
+            .expect("Failed to load Cargo.toml manifest");
 
         let binaries = cargo_manifest
             .bin
@@ -229,7 +241,10 @@ impl ActiveChain {
     /// `target/wasm32-unknown-unknown/release` sub-directory. However, since the crate with the
     /// binaries could be part of a workspace, that output sub-directory must be searched in parent
     /// directories as well.
-    async fn find_output_directory_of(&self, repository: &Path) -> Result<PathBuf, io::Error> {
+    async fn find_output_directory_of(
+        &self,
+        repository: &Path,
+    ) -> Result<PathBuf, io::Error> {
         let output_sub_directory = Path::new("target/wasm32-unknown-unknown/release");
         let mut current_directory = repository;
         let mut output_path = current_directory.join(output_sub_directory);
@@ -308,7 +323,8 @@ impl ActiveChain {
     where
         A: ContractAbi,
     {
-        let bytecode_location_message = if self.needs_bytecode_location(bytecode_id).await {
+        let bytecode_location_message = if self.needs_bytecode_location(bytecode_id).await
+        {
             self.subscribe_to_published_bytecodes_from(bytecode_id.message_id.chain_id)
                 .await;
             Some(self.find_bytecode_location(bytecode_id).await)
@@ -317,7 +333,8 @@ impl ActiveChain {
         };
 
         let parameters = serde_json::to_vec(&parameters).unwrap();
-        let initialization_argument = serde_json::to_vec(&initialization_argument).unwrap();
+        let initialization_argument =
+            serde_json::to_vec(&initialization_argument).unwrap();
 
         for &dependency in &required_application_ids {
             self.register_application(dependency).await;
@@ -364,7 +381,10 @@ impl ActiveChain {
     }
 
     /// Finds the message that sends the message with the bytecode location of `bytecode_id`.
-    async fn find_bytecode_location<Abi>(&self, bytecode_id: BytecodeId<Abi>) -> MessageId {
+    async fn find_bytecode_location<Abi>(
+        &self,
+        bytecode_id: BytecodeId<Abi>,
+    ) -> MessageId {
         for height in bytecode_id.message_id.height.0.. {
             let certificate = self
                 .validator
@@ -405,7 +425,8 @@ impl ActiveChain {
     /// Registers on this chain an application created on another chain.
     pub async fn register_application<Abi>(&self, application_id: ApplicationId<Abi>) {
         if self.needs_application_description(application_id).await {
-            let source_chain = self.validator.get_chain(&application_id.creation.chain_id);
+            let source_chain =
+                self.validator.get_chain(&application_id.creation.chain_id);
 
             let request_messages = self
                 .add_block(|block| {
@@ -434,7 +455,10 @@ impl ActiveChain {
     }
 
     /// Checks if the `application_id` is missing from this microchain.
-    async fn needs_application_description<Abi>(&self, application_id: ApplicationId<Abi>) -> bool {
+    async fn needs_application_description<Abi>(
+        &self,
+        application_id: ApplicationId<Abi>,
+    ) -> bool {
         let applications = self
             .validator
             .worker()
@@ -481,9 +505,8 @@ impl ActiveChain {
             .expect("Failed to query application");
 
         match response {
-            Response::User(bytes) => {
-                serde_json::from_slice(&bytes).expect("Failed to deserialize query response")
-            }
+            Response::User(bytes) => serde_json::from_slice(&bytes)
+                .expect("Failed to deserialize query response"),
             Response::System(_) => unreachable!("User query returned a system response"),
         }
     }
@@ -497,7 +520,10 @@ impl ActiveChain {
         query: impl Into<async_graphql::Request>,
     ) -> serde_json::Value
     where
-        Abi: ServiceAbi<Query = async_graphql::Request, QueryResponse = async_graphql::Response>,
+        Abi: ServiceAbi<
+            Query = async_graphql::Request,
+            QueryResponse = async_graphql::Response,
+        >,
     {
         let query = query.into();
         let query_str = query.query.clone();

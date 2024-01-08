@@ -40,7 +40,8 @@ pub type CustomCollectionView<K, V> =
 
 /// An alias to [`linera_views::map_view::CustomMapView`] that uses the WebAssembly
 /// specific [`ViewStorageContext`].
-pub type CustomMapView<K, V> = linera_views::map_view::CustomMapView<ViewStorageContext, K, V>;
+pub type CustomMapView<K, V> =
+    linera_views::map_view::CustomMapView<ViewStorageContext, K, V>;
 
 /// An alias to [`linera_views::set_view::CustomSetView`] that uses the WebAssembly
 /// specific [`ViewStorageContext`].
@@ -64,7 +65,8 @@ pub type ReadGuardedView<'a, W> = linera_views::collection_view::ReadGuardedView
 
 /// An alias to [`linera_views::register_view::RegisterView`] that uses the WebAssembly
 /// specific [`ViewStorageContext`].
-pub type RegisterView<T> = linera_views::register_view::RegisterView<ViewStorageContext, T>;
+pub type RegisterView<T> =
+    linera_views::register_view::RegisterView<ViewStorageContext, T>;
 
 /// An alias to [`linera_views::set_view::SetView`] that uses the WebAssembly specific
 /// [`ViewStorageContext`].

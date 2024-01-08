@@ -4,7 +4,8 @@
 //! Implementations of [`InstanceWithFunction`] for Wasmer instances.
 
 use super::{
-    parameters::WasmerParameters, results::WasmerResults, EntrypointInstance, ReentrantInstance,
+    parameters::WasmerParameters, results::WasmerResults, EntrypointInstance,
+    ReentrantInstance,
 };
 use crate::{
     memory_layout::FlatLayout, primitive_types::FlatType, InstanceWithFunction, Runtime,

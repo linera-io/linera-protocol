@@ -100,13 +100,17 @@ pub trait Transport:
 }
 
 impl<T> Transport for T where
-    T: Stream<Item = Result<RpcMessage, codec::Error>> + Sink<RpcMessage, Error = codec::Error>
+    T: Stream<Item = Result<RpcMessage, codec::Error>>
+        + Sink<RpcMessage, Error = codec::Error>
 {
 }
 
 impl TransportProtocol {
     /// Creates a transport for this protocol.
-    pub async fn connect(self, address: String) -> Result<impl Transport, std::io::Error> {
+    pub async fn connect(
+        self,
+        address: String,
+    ) -> Result<impl Transport, std::io::Error> {
         let mut addresses = address
             .to_socket_addrs()
             .expect("Invalid address to connect to");

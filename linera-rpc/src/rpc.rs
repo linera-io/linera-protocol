@@ -40,7 +40,9 @@ impl RpcMessage {
             RpcMessage::Certificate(request) => request.certificate.value().chain_id(),
             RpcMessage::ChainInfoQuery(query) => query.chain_id,
             RpcMessage::CrossChainRequest(request) => request.target_chain_id(),
-            RpcMessage::Vote(_) | RpcMessage::Error(_) | RpcMessage::ChainInfoResponse(_) => {
+            RpcMessage::Vote(_)
+            | RpcMessage::Error(_)
+            | RpcMessage::ChainInfoResponse(_) => {
                 return None;
             }
         };

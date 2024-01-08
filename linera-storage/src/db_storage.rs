@@ -4,13 +4,16 @@
 use crate::{chain_guards::ChainGuards, ChainRuntimeContext, Storage};
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::{crypto::CryptoHash, data_types::Timestamp, identifiers::ChainId, sync::Lazy};
+use linera_base::{
+    crypto::CryptoHash, data_types::Timestamp, identifiers::ChainId, sync::Lazy,
+};
 use linera_chain::{
     data_types::{Certificate, CertificateValue, HashedValue, LiteCertificate},
     ChainStateView,
 };
 use linera_execution::{
-    ExecutionRuntimeConfig, UserApplicationId, UserContractCode, UserServiceCode, WasmRuntime,
+    ExecutionRuntimeConfig, UserApplicationId, UserContractCode, UserServiceCode,
+    WasmRuntime,
 };
 use linera_views::{
     batch::Batch,
@@ -172,8 +175,11 @@ where
     Client: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
     ViewError: From<<Client as KeyValueStore>::Error>,
-    <Client as KeyValueStore>::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+    <Client as KeyValueStore>::Error: From<bcs::Error>
+        + From<DatabaseConsistencyError>
+        + Send
+        + Sync
+        + serde::ser::StdError,
 {
     type Context = ContextFromStore<ChainRuntimeContext<Self>, Client>;
     type ContextError = <Client as KeyValueStore>::Error;
@@ -217,7 +223,8 @@ where
             .read_value::<CertificateValue>(&value_key)
             .await?;
         READ_VALUE_COUNTER.with_label_values(&[]).inc();
-        let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
+        let value =
+            maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         Ok(value.with_hash_unchecked(hash))
     }
 
@@ -281,20 +288,26 @@ where
         }
         let value: CertificateValue =
             value_result?.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
-        let cert: LiteCertificate =
-            cert_result?.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
+        let cert: LiteCertificate = cert_result?
+            .ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
         Ok(cert
             .with_value(value.with_hash_unchecked(hash))
             .ok_or(ViewError::InconsistentEntries)?)
     }
 
-    async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError> {
+    async fn write_certificate(
+        &self,
+        certificate: &Certificate,
+    ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         self.add_certificate_to_batch(certificate, &mut batch)?;
         self.write_batch(batch).await
     }
 
-    async fn write_certificates(&self, certificates: &[Certificate]) -> Result<(), ViewError> {
+    async fn write_certificates(
+        &self,
+        certificates: &[Certificate],
+    ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for certificate in certificates {
             self.add_certificate_to_batch(certificate, &mut batch)?;
@@ -312,9 +325,14 @@ where
     Client: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock,
     ViewError: From<<Client as KeyValueStore>::Error>,
-    <Client as KeyValueStore>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
+    <Client as KeyValueStore>::Error:
+        From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
-    fn add_value_to_batch(&self, value: &HashedValue, batch: &mut Batch) -> Result<(), ViewError> {
+    fn add_value_to_batch(
+        &self,
+        value: &HashedValue,
+        batch: &mut Batch,
+    ) -> Result<(), ViewError> {
         WRITE_VALUE_COUNTER.with_label_values(&[]).inc();
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         batch.put_key_value(value_key.to_vec(), value)?;

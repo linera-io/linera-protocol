@@ -13,7 +13,8 @@ use async_graphql::{
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{
-    extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router, Server,
+    extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router,
+    Server,
 };
 use futures::{
     future::{self},
@@ -44,7 +45,8 @@ use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
-    collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc, time::Duration,
+    collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc,
+    time::Duration,
 };
 use thiserror::Error as ThisError;
 use tokio_stream::StreamExt;
@@ -157,8 +159,12 @@ impl From<ServerError> for NodeServiceError {
 impl IntoResponse for NodeServiceError {
     fn into_response(self) -> response::Response {
         let tuple = match self {
-            NodeServiceError::BcsHexError(e) => (StatusCode::BAD_REQUEST, vec![e.to_string()]),
-            NodeServiceError::QueryStringError(e) => (StatusCode::BAD_REQUEST, vec![e.to_string()]),
+            NodeServiceError::BcsHexError(e) => {
+                (StatusCode::BAD_REQUEST, vec![e.to_string()])
+            }
+            NodeServiceError::QueryStringError(e) => {
+                (StatusCode::BAD_REQUEST, vec![e.to_string()])
+            }
             NodeServiceError::ChainClientError(e) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
             }
@@ -176,7 +182,9 @@ impl IntoResponse for NodeServiceError {
             | NodeServiceError::UnsupportedQueryType => {
                 (StatusCode::BAD_REQUEST, vec![self.to_string()])
             }
-            NodeServiceError::GraphQLParseError { error } => (StatusCode::BAD_REQUEST, vec![error]),
+            NodeServiceError::GraphQLParseError { error } => {
+                (StatusCode::BAD_REQUEST, vec![error])
+            }
             NodeServiceError::ApplicationServiceError { errors } => {
                 (StatusCode::BAD_REQUEST, errors)
             }
@@ -299,7 +307,10 @@ where
     }
 
     /// Retries the pending block that was unsuccessfully proposed earlier.
-    async fn retry_pending_block(&self, chain_id: ChainId) -> Result<Option<CryptoHash>, Error> {
+    async fn retry_pending_block(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<Option<CryptoHash>, Error> {
         let mut client = self.clients.try_client_lock(&chain_id).await?;
         let maybe_certificate = client.retry_pending_block().await?;
         self.context.lock().await.update_wallet(&mut *client).await;
@@ -521,7 +532,11 @@ where
     /// (admin chain only) Removes a committee. Once this message is accepted by a chain,
     /// blocks from the retired epoch will not be accepted until they are followed (hence
     /// re-certified) by a block certified by a recent committee.
-    async fn remove_committee(&self, chain_id: ChainId, epoch: Epoch) -> Result<CryptoHash, Error> {
+    async fn remove_committee(
+        &self,
+        chain_id: ChainId,
+        epoch: Epoch,
+    ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::Admin(AdminOperation::RemoveCommittee { epoch });
         self.execute_system_operation(operation, chain_id).await
     }
@@ -610,13 +625,19 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    async fn chain(&self, chain_id: ChainId) -> Result<ChainStateExtendedView<S::Context>, Error> {
+    async fn chain(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainStateExtendedView<S::Context>, Error> {
         let client = self.clients.try_client_lock(&chain_id).await?;
         let view = client.chain_state_view().await?;
         Ok(ChainStateExtendedView::new(view))
     }
 
-    async fn applications(&self, chain_id: ChainId) -> Result<Vec<ApplicationOverview>, Error> {
+    async fn applications(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<Vec<ApplicationOverview>, Error> {
         let client = self.clients.try_client_lock(&chain_id).await?;
         let applications = client
             .chain_state_view()
@@ -627,7 +648,9 @@ where
 
         let overviews = applications
             .into_iter()
-            .map(|(id, description)| ApplicationOverview::new(id, description, self.port, chain_id))
+            .map(|(id, description)| {
+                ApplicationOverview::new(id, description, self.port, chain_id)
+            })
             .collect();
 
         Ok(overviews)
@@ -748,7 +771,9 @@ impl ApplicationOverview {
 ///
 /// If we have no `OperationType`s or the `OperationTypes` are heterogeneous, i.e. a query
 /// was submitted with a `mutation` and `subscription`.
-fn operation_type(document: &ExecutableDocument) -> Result<OperationType, NodeServiceError> {
+fn operation_type(
+    document: &ExecutableDocument,
+) -> Result<OperationType, NodeServiceError> {
     match &document.operations {
         DocumentOperations::Single(op) => Ok(op.node.ty),
         DocumentOperations::Multiple(ops) => {
@@ -842,7 +867,9 @@ where
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S, C>, SubscriptionRoot<P, S>> {
+    pub fn schema(
+        &self,
+    ) -> Schema<QueryRoot<P, S>, MutationRoot<P, S, C>, SubscriptionRoot<P, S>> {
         Schema::build(
             QueryRoot {
                 clients: self.clients.clone(),
@@ -884,8 +911,8 @@ where
         ChainListener::new(self.config, self.clients.clone())
             .run(self.context.clone(), self.storage.clone())
             .await;
-        let serve_fut =
-            Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
+        let serve_fut = Server::bind(&SocketAddr::from(([127, 0, 0, 1], port)))
+            .serve(app.into_make_service());
         serve_fut.await?;
 
         Ok(())
@@ -908,7 +935,9 @@ where
         };
         let response = client.query_application(query).await?;
         let user_response_bytes = match response {
-            Response::System(_) => unreachable!("cannot get a system response for a user query"),
+            Response::System(_) => {
+                unreachable!("cannot get a system response for a user query")
+            }
             Response::User(user) => user,
         };
         Ok(serde_json::from_slice(&user_response_bytes)?)
@@ -964,7 +993,10 @@ where
     }
 
     /// Executes a GraphQL query and generates a response for our `Schema`.
-    async fn index_handler(service: Extension<Self>, request: GraphQLRequest) -> GraphQLResponse {
+    async fn index_handler(
+        service: Extension<Self>,
+        request: GraphQLRequest,
+    ) -> GraphQLResponse {
         service
             .0
             .schema()
@@ -986,7 +1018,8 @@ where
         let parsed_query = request.parsed_query()?;
         let operation_type = operation_type(parsed_query)?;
 
-        let chain_id: ChainId = chain_id.parse().map_err(NodeServiceError::InvalidChainId)?;
+        let chain_id: ChainId =
+            chain_id.parse().map_err(NodeServiceError::InvalidChainId)?;
         let application_id: UserApplicationId = application_id.parse()?;
 
         let response = match operation_type {
@@ -1002,7 +1035,9 @@ where
                     .user_application_mutation(application_id, &request, chain_id)
                     .await?
             }
-            OperationType::Subscription => return Err(NodeServiceError::UnsupportedQueryType),
+            OperationType::Subscription => {
+                return Err(NodeServiceError::UnsupportedQueryType)
+            }
         };
 
         Ok(response.into())

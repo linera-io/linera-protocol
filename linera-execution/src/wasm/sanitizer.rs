@@ -31,8 +31,9 @@ pub fn sanitize(bytecode: Bytecode) -> Result<Bytecode, anyhow::Error> {
 /// more information.
 pub struct Sanitizer<'bytecode> {
     bytecode: &'bytecode [u8],
-    parsed_items:
-        Box<dyn Iterator<Item = Result<Payload<'bytecode>, BinaryReaderError>> + 'bytecode>,
+    parsed_items: Box<
+        dyn Iterator<Item = Result<Payload<'bytecode>, BinaryReaderError>> + 'bytecode,
+    >,
     current_code_section: Range<usize>,
     queued_functions: Vec<FunctionBody<'bytecode>>,
     output: Option<Vec<u8>>,
@@ -149,7 +150,9 @@ impl<'bytecode> Sanitizer<'bytecode> {
     }
 
     /// Sanitizes a parsed function that is known to not have an `return` instruction at the end.
-    fn sanitize_function(function: FunctionBody<'_>) -> Result<Function, BinaryReaderError> {
+    fn sanitize_function(
+        function: FunctionBody<'_>,
+    ) -> Result<Function, BinaryReaderError> {
         let locals = Self::convert_locals(function.get_locals_reader()?)?;
         let mut sanitized_function = Function::new(locals);
         let mut instructions = Self::convert_operators(function.get_operators_reader()?)?;
@@ -161,8 +164,14 @@ impl<'bytecode> Sanitizer<'bytecode> {
         }
 
         match (instruction_before_last, last_instruction) {
-            (Some(wasm_encoder::Instruction::Return), Some(wasm_encoder::Instruction::End))
-            | (None, Some(wasm_encoder::Instruction::End | wasm_encoder::Instruction::Return))
+            (
+                Some(wasm_encoder::Instruction::Return),
+                Some(wasm_encoder::Instruction::End),
+            )
+            | (
+                None,
+                Some(wasm_encoder::Instruction::End | wasm_encoder::Instruction::Return),
+            )
             | (None, None) => {
                 sanitized_function.instruction(&wasm_encoder::Instruction::Return);
                 sanitized_function.instruction(&wasm_encoder::Instruction::End);
@@ -206,12 +215,15 @@ impl<'bytecode> Sanitizer<'bytecode> {
     /// Converts function locals parsed by [`wasmparser`] into locals encodable with
     /// [`wasm-encoder`].
     fn convert_locals(
-        locals: impl IntoIterator<Item = Result<(u32, wasmparser::ValType), BinaryReaderError>>,
+        locals: impl IntoIterator<
+            Item = Result<(u32, wasmparser::ValType), BinaryReaderError>,
+        >,
     ) -> Result<Vec<(u32, wasm_encoder::ValType)>, BinaryReaderError> {
         locals
             .into_iter()
             .map(|maybe_local| {
-                maybe_local.map(|(index, parsed_type)| (index, Self::convert_type(parsed_type)))
+                maybe_local
+                    .map(|(index, parsed_type)| (index, Self::convert_type(parsed_type)))
             })
             .collect()
     }
@@ -250,7 +262,9 @@ impl<'bytecode> Sanitizer<'bytecode> {
     /// Converts WebAssembly instructions parsed by [`wasmparser`] into instructions encodable with
     /// [`wasm-encoder`].
     fn convert_operators<'op>(
-        operators: impl IntoIterator<Item = Result<wasmparser::Operator<'op>, BinaryReaderError>>,
+        operators: impl IntoIterator<
+            Item = Result<wasmparser::Operator<'op>, BinaryReaderError>,
+        >,
     ) -> Result<Vec<wasm_encoder::Instruction<'op>>, BinaryReaderError> {
         operators
             .into_iter()

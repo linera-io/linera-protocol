@@ -34,7 +34,9 @@ impl ValidatorNodeProvider for NodeProvider {
             address if address.starts_with("tcp") || address.starts_with("udp") => {
                 Client::Simple(self.simple.make_node(address)?)
             }
-            address if address.starts_with("grpc") => Client::Grpc(self.grpc.make_node(address)?),
+            address if address.starts_with("grpc") => {
+                Client::Grpc(self.grpc.make_node(address)?)
+            }
             _ => {
                 return Err(NodeError::CannotResolveValidatorAddress {
                     address: address.to_string(),
@@ -73,12 +75,13 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
             }
         })?;
 
-        let client = GrpcClient::new(network, self.0).map_err(|e| NodeError::GrpcError {
-            error: format!(
-                "could not initialize gRPC client for address {} : {}",
-                address, e
-            ),
-        })?;
+        let client =
+            GrpcClient::new(network, self.0).map_err(|e| NodeError::GrpcError {
+                error: format!(
+                    "could not initialize gRPC client for address {} : {}",
+                    address, e
+                ),
+            })?;
         Ok(client)
     }
 }
@@ -97,11 +100,12 @@ impl ValidatorNodeProvider for SimpleNodeProvider {
     type Node = SimpleClient;
 
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
-        let network = ValidatorPublicNetworkPreConfig::from_str(address).map_err(|_| {
-            NodeError::CannotResolveValidatorAddress {
-                address: address.to_string(),
-            }
-        })?;
+        let network =
+            ValidatorPublicNetworkPreConfig::from_str(address).map_err(|_| {
+                NodeError::CannotResolveValidatorAddress {
+                    address: address.to_string(),
+                }
+            })?;
 
         let client = SimpleClient::new(network, self.0.send_timeout, self.0.recv_timeout);
 

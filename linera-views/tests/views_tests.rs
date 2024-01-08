@@ -15,7 +15,8 @@ use linera_views::{
     lru_caching::LruCachingMemoryContext,
     map_view::MapView,
     memory::{
-        create_memory_context, MemoryContext, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES,
+        create_memory_context, MemoryContext, MemoryStoreMap,
+        TEST_MEMORY_MAX_STREAM_QUERIES,
     },
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
@@ -39,12 +40,14 @@ use linera_views::rocks_db::{create_rocks_db_test_store, RocksDbContext, RocksDb
 #[cfg(feature = "aws")]
 use linera_views::{
     common::CommonStoreConfig, dynamo_db::create_dynamo_db_common_config,
-    dynamo_db::DynamoDbContext, dynamo_db::DynamoDbStoreConfig, dynamo_db::LocalStackTestContext,
-    dynamo_db::TableName, test_utils::get_table_name,
+    dynamo_db::DynamoDbContext, dynamo_db::DynamoDbStoreConfig,
+    dynamo_db::LocalStackTestContext, dynamo_db::TableName, test_utils::get_table_name,
 };
 
 #[cfg(feature = "scylladb")]
-use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbContext, ScyllaDbStore};
+use linera_views::scylla_db::{
+    create_scylla_db_test_store, ScyllaDbContext, ScyllaDbStore,
+};
 
 #[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 use std::collections::BTreeSet;
@@ -59,7 +62,8 @@ pub struct StateView<C> {
     pub set: SetView<C, usize>,
     pub queue: QueueView<C, u64>,
     pub collection: CollectionView<C, String, LogView<C, u32>>,
-    pub collection2: CollectionView<C, String, CollectionView<C, String, RegisterView<C, u32>>>,
+    pub collection2:
+        CollectionView<C, String, CollectionView<C, String, RegisterView<C, u32>>>,
     pub collection3: CollectionView<C, String, QueueView<C, u64>>,
     pub collection4: ReentrantCollectionView<C, String, QueueView<C, u64>>,
     pub key_value_store: KeyValueStoreView<C>,
@@ -345,7 +349,10 @@ impl TestConfig {
 }
 
 #[cfg(test)]
-async fn test_store<S>(store: &mut S, config: &TestConfig) -> <sha3::Sha3_256 as Hasher>::Output
+async fn test_store<S>(
+    store: &mut S,
+    config: &TestConfig,
+) -> <sha3::Sha3_256 as Hasher>::Output
 where
     S: StateStore,
     ViewError: From<<<S as StateStore>::Context as Context>::Error>,
@@ -587,7 +594,8 @@ where
         let mut view = store.load(1).await.unwrap();
         if config.with_collection {
             {
-                let mut subview = view.collection4.try_load_entry_mut("hola").await.unwrap();
+                let mut subview =
+                    view.collection4.try_load_entry_mut("hola").await.unwrap();
                 assert_eq!(subview.read_front(10).await.unwrap(), Vec::<u64>::new());
                 assert!(view.collection4.try_load_entry_mut("hola").await.is_err());
                 if config.with_queue {
@@ -860,7 +868,8 @@ async fn test_removal_api_first_second_condition(
     let context = create_memory_context();
 
     // First add an entry `1` with value `100` and commit
-    let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
+    let mut collection: CollectionViewType =
+        CollectionView::load(context.clone()).await?;
     let entry = collection.load_entry_mut(&1).await?;
     entry.set(100);
     let mut batch = Batch::new();
@@ -868,7 +877,8 @@ async fn test_removal_api_first_second_condition(
     collection.context().write_batch(batch).await?;
 
     // Reload the collection view and remove the entry, but don't commit yet
-    let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
+    let mut collection: CollectionViewType =
+        CollectionView::load(context.clone()).await?;
     collection.remove_entry(&1).unwrap();
 
     // Now, read the entry with a different value if a certain condition is true
@@ -888,7 +898,8 @@ async fn test_removal_api_first_second_condition(
     collection.flush(&mut batch)?;
     collection.context().write_batch(batch).await?;
 
-    let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
+    let mut collection: CollectionViewType =
+        CollectionView::load(context.clone()).await?;
     let expected_val = if second_condition {
         Some(100)
     } else if first_condition {
@@ -912,7 +923,8 @@ async fn test_removal_api_first_second_condition(
 async fn test_removal_api() -> anyhow::Result<()> {
     for first_condition in [true, false] {
         for second_condition in [true, false] {
-            test_removal_api_first_second_condition(first_condition, second_condition).await?;
+            test_removal_api_first_second_condition(first_condition, second_condition)
+                .await?;
         }
     }
     Ok(())
@@ -1032,14 +1044,17 @@ async fn compute_hash_view_iter<R: RngCore>(rng: &mut R, n: usize, k: usize) {
         let operations = span_random_reordering_put_delete(rng, info_op.clone());
         //
         let mut store1 = MemoryTestStore::new().await;
-        unord1_hashes
-            .push(compute_hash_unordered_put_view(rng, &mut store1, key_value_vector_b).await);
+        unord1_hashes.push(
+            compute_hash_unordered_put_view(rng, &mut store1, key_value_vector_b).await,
+        );
         let mut store2 = MemoryTestStore::new().await;
-        unord2_hashes
-            .push(compute_hash_unordered_putdelete_view(rng, &mut store2, operations).await);
+        unord2_hashes.push(
+            compute_hash_unordered_putdelete_view(rng, &mut store2, operations).await,
+        );
         let mut store3 = MemoryTestStore::new().await;
-        ord_hashes
-            .push(compute_hash_ordered_view(rng, &mut store3, key_value_vector.clone()).await);
+        ord_hashes.push(
+            compute_hash_ordered_view(rng, &mut store3, key_value_vector.clone()).await,
+        );
     }
     for i in 1..n_iter {
         assert_eq!(

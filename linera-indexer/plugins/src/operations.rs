@@ -3,7 +3,9 @@
 
 use async_graphql::{Object, OneofObject, SimpleObject};
 use axum::Router;
-use linera_base::{crypto::CryptoHash, data_types::BlockHeight, doc_scalar, identifiers::ChainId};
+use linera_base::{
+    crypto::CryptoHash, data_types::BlockHeight, doc_scalar, identifiers::ChainId,
+};
 use linera_chain::data_types::HashedValue;
 use linera_execution::Operation;
 use linera_indexer::{
@@ -222,7 +224,10 @@ where
     }
 
     /// Gets the hash of the last operation registered for a chain
-    pub async fn last(&self, chain_id: ChainId) -> Result<Option<OperationKey>, IndexerError> {
+    pub async fn last(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<Option<OperationKey>, IndexerError> {
         let plugin = self.0.lock().await;
         Ok(plugin.last.get(&chain_id).await?)
     }

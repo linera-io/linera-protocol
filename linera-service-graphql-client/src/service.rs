@@ -129,7 +129,9 @@ pub struct Transfer;
 #[cfg(not(target_arch = "wasm32"))]
 mod from {
     use super::*;
-    use linera_chain::data_types::{ExecutedBlock, HashedValue, IncomingMessage, OutgoingMessage};
+    use linera_chain::data_types::{
+        ExecutedBlock, HashedValue, IncomingMessage, OutgoingMessage,
+    };
 
     impl From<block::BlockBlockValueExecutedBlockBlockIncomingMessages> for IncomingMessage {
         fn from(val: block::BlockBlockValueExecutedBlockBlockIncomingMessages) -> Self {

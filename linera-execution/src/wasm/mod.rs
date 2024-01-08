@@ -209,13 +209,19 @@ pub mod test {
         Ok(())
     }
 
-    pub fn get_example_bytecode_paths(name: &str) -> Result<(String, String), std::io::Error> {
+    pub fn get_example_bytecode_paths(
+        name: &str,
+    ) -> Result<(String, String), std::io::Error> {
         let name = name.replace('-', "_");
         static INSTANCE: OnceCell<()> = OnceCell::new();
         INSTANCE.get_or_try_init(build_applications)?;
         Ok((
-            format!("../examples/target/wasm32-unknown-unknown/release/{name}_contract.wasm"),
-            format!("../examples/target/wasm32-unknown-unknown/release/{name}_service.wasm"),
+            format!(
+                "../examples/target/wasm32-unknown-unknown/release/{name}_contract.wasm"
+            ),
+            format!(
+                "../examples/target/wasm32-unknown-unknown/release/{name}_service.wasm"
+            ),
         ))
     }
 
@@ -225,7 +231,8 @@ pub mod test {
     ) -> Result<(WasmContractModule, WasmServiceModule), anyhow::Error> {
         let (contract_path, service_path) = get_example_bytecode_paths(name)?;
         let wasm_runtime = wasm_runtime.into().unwrap_or_default();
-        let contract = WasmContractModule::from_file(&contract_path, wasm_runtime).await?;
+        let contract =
+            WasmContractModule::from_file(&contract_path, wasm_runtime).await?;
         let service = WasmServiceModule::from_file(&service_path, wasm_runtime).await?;
         Ok((contract, service))
     }

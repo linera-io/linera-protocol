@@ -49,8 +49,8 @@ where
     }
 }
 
-impl<SourceHead, SourceTail, TargetHead, TargetTail> JoinFlatLayouts<HCons<TargetHead, TargetTail>>
-    for HCons<SourceHead, SourceTail>
+impl<SourceHead, SourceTail, TargetHead, TargetTail>
+    JoinFlatLayouts<HCons<TargetHead, TargetTail>> for HCons<SourceHead, SourceTail>
 where
     SourceHead: FlatType,
     TargetHead: FlatType,

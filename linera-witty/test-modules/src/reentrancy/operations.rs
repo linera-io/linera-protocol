@@ -11,7 +11,9 @@ wit_bindgen::generate!("reentrant-operations");
 export_reentrant_operations!(Implementation);
 
 use self::{
-    exports::witty_macros::test_modules::{entrypoint::Entrypoint, operations::Operations},
+    exports::witty_macros::test_modules::{
+        entrypoint::Entrypoint, operations::Operations,
+    },
     witty_macros::test_modules::operations::*,
 };
 

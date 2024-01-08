@@ -32,7 +32,10 @@ use linera_views::scylla_db::create_scylla_db_test_store;
 /// * `find_keys_by_prefix` / `find_key_values_by_prefix`
 /// * The ordering of keys returned by `find_keys_by_prefix` and `find_key_values_by_prefix`
 #[cfg(test)]
-async fn run_reads<S: KeyValueStore + Sync>(store: S, key_values: Vec<(Vec<u8>, Vec<u8>)>) {
+async fn run_reads<S: KeyValueStore + Sync>(
+    store: S,
+    key_values: Vec<(Vec<u8>, Vec<u8>)>,
+) {
     // We need a nontrivial key_prefix because dynamo requires a non-trivial prefix
     let mut batch = Batch::new();
     let mut keys = Vec::new();
@@ -56,7 +59,8 @@ async fn run_reads<S: KeyValueStore + Sync>(store: S, key_values: Vec<(Vec<u8>, 
             .collect::<Vec<_>>();
         let mut set_key_value1 = HashSet::new();
         let mut keys_request_deriv = Vec::new();
-        let key_values_by_prefix = store.find_key_values_by_prefix(key_prefix).await.unwrap();
+        let key_values_by_prefix =
+            store.find_key_values_by_prefix(key_prefix).await.unwrap();
         for (key, value) in key_values_by_prefix.iterator().map(Result::unwrap) {
             set_key_value1.insert((key, value));
             keys_request_deriv.push(key);
@@ -106,7 +110,8 @@ async fn run_reads<S: KeyValueStore + Sync>(store: S, key_values: Vec<(Vec<u8>, 
         }
         let values_read = store.read_multi_values_bytes(keys).await.unwrap();
         assert_eq!(values, values_read);
-        let values_read_stat = values_read.iter().map(|x| x.is_some()).collect::<Vec<_>>();
+        let values_read_stat =
+            values_read.iter().map(|x| x.is_some()).collect::<Vec<_>>();
         assert_eq!(values_read_stat, test_exists);
     }
 }
@@ -212,7 +217,11 @@ async fn test_reads_memory_specific() {
 }
 
 #[cfg(test)]
-fn generate_random_batch<R: RngCore>(rng: &mut R, key_prefix: &[u8], batch_size: usize) -> Batch {
+fn generate_random_batch<R: RngCore>(
+    rng: &mut R,
+    key_prefix: &[u8],
+    batch_size: usize,
+) -> Batch {
     let mut batch = Batch::new();
     // Fully random batch
     for _ in 0..batch_size {

@@ -77,12 +77,13 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
             "There should be at least one initial validator"
         );
 
-        let clusters = future::join_all((0..self.num_initial_validators).map(|_| async {
-            KindCluster::create()
-                .await
-                .expect("Creating kind cluster should not fail")
-        }))
-        .await;
+        let clusters =
+            future::join_all((0..self.num_initial_validators).map(|_| async {
+                KindCluster::create()
+                    .await
+                    .expect("Creating kind cluster should not fail")
+            }))
+            .await;
 
         let mut net = LocalKubernetesNet::new(
             self.network,

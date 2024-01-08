@@ -104,7 +104,8 @@ impl RocksDbStorage<WallClock> {
         store_config: RocksDbStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), RocksDbContextError> {
-        let (storage, table_status) = RocksDbStorageInner::make(store_config, wasm_runtime).await?;
+        let (storage, table_status) =
+            RocksDbStorageInner::make(store_config, wasm_runtime).await?;
         let storage = RocksDbStorage {
             client: Arc::new(storage),
             clock: WallClock,

@@ -13,8 +13,8 @@ use linera_service::{
     util::resolve_binary,
 };
 use linera_service_graphql_client::{
-    applications, block, blocks, chains, request, transfer, Applications, Block, Blocks, Chains,
-    Transfer,
+    applications, block, blocks, chains, request, transfer, Applications, Block, Blocks,
+    Chains, Transfer,
 };
 use std::{collections::BTreeMap, io::Read, rc::Rc, str::FromStr, time::Duration};
 use tempfile::tempdir;
@@ -31,7 +31,13 @@ fn reqwest_client() -> reqwest::Client {
         .unwrap()
 }
 
-async fn transfer(client: &reqwest::Client, url: &str, from: ChainId, to: ChainId, amount: &str) {
+async fn transfer(
+    client: &reqwest::Client,
+    url: &str,
+    from: ChainId,
+    to: ChainId,
+    amount: &str,
+) {
     let variables = transfer::Variables {
         chain_id: from,
         recipient: to,
@@ -64,7 +70,14 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
     };
     let params = fungible::Parameters::new("FUN");
     let application_id = client
-        .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
+        .publish_and_create::<FungibleTokenAbi>(
+            contract,
+            service,
+            &params,
+            &state,
+            &[],
+            None,
+        )
         .await
         .unwrap();
 

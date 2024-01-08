@@ -18,15 +18,15 @@ mod wasm;
 
 pub use crate::runtime::{ContractSyncRuntime, ServiceSyncRuntime};
 pub use applications::{
-    ApplicationRegistryView, BytecodeLocation, GenericApplicationId, UserApplicationDescription,
-    UserApplicationId,
+    ApplicationRegistryView, BytecodeLocation, GenericApplicationId,
+    UserApplicationDescription, UserApplicationId,
 };
 pub use execution::ExecutionStateView;
 pub use ownership::ChainOwnership;
 pub use resources::ResourceTracker;
 pub use system::{
-    SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation, SystemQuery,
-    SystemResponse,
+    SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation,
+    SystemQuery, SystemResponse,
 };
 #[cfg(all(
     any(test, feature = "test"),
@@ -49,7 +49,9 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     doc_scalar, hex_debug,
-    identifiers::{BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId},
+    identifiers::{
+        BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId,
+    },
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -103,7 +105,9 @@ pub enum ExecutionError {
     SessionIsInUse(SessionId),
     #[error("Attempted to save a session {0} but it is not locked")]
     SessionStateNotLocked(SessionId),
-    #[error("Session {session_id} is owned by {owned_by} but was accessed by {accessed_by}")]
+    #[error(
+        "Session {session_id} is owned by {owned_by} but was accessed by {accessed_by}"
+    )]
     InvalidSessionOwner {
         session_id: Box<SessionId>,
         accessed_by: Box<UserApplicationId>,
@@ -333,7 +337,10 @@ pub trait BaseRuntime {
 
     // TODO(#1152): remove
     /// Reads the application state (wait).
-    fn try_read_my_state_wait(&mut self, promise: &Self::Read) -> Result<Vec<u8>, ExecutionError>;
+    fn try_read_my_state_wait(
+        &mut self,
+        promise: &Self::Read,
+    ) -> Result<Vec<u8>, ExecutionError>;
 
     /// Tests whether a key exists in the key-value store
     #[cfg(feature = "test")]
@@ -343,10 +350,16 @@ pub trait BaseRuntime {
     }
 
     /// Tests whether a key exists in the key-value store (new)
-    fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError>;
+    fn contains_key_new(
+        &mut self,
+        key: Vec<u8>,
+    ) -> Result<Self::ContainsKey, ExecutionError>;
 
     /// Tests whether a key exists in the key-value store (wait)
-    fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError>;
+    fn contains_key_wait(
+        &mut self,
+        promise: &Self::ContainsKey,
+    ) -> Result<bool, ExecutionError>;
 
     /// Reads several keys from the key-value store
     #[cfg(feature = "test")]
@@ -377,7 +390,10 @@ pub trait BaseRuntime {
 
     /// Reads the key from the key-value store
     #[cfg(feature = "test")]
-    fn read_value_bytes(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError> {
+    fn read_value_bytes(
+        &mut self,
+        key: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, ExecutionError> {
         let promise = self.read_value_bytes_new(key)?;
         self.read_value_bytes_wait(&promise)
     }
@@ -582,7 +598,16 @@ pub struct RawExecutionResult<Message> {
 
 /// The identifier of a channel, relative to a particular application.
 #[derive(
-    Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash, Serialize, Deserialize, SimpleObject,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Debug,
+    Clone,
+    Hash,
+    Serialize,
+    Deserialize,
+    SimpleObject,
 )]
 pub struct ChannelSubscription {
     /// The chain id broadcasting on this channel.
@@ -610,7 +635,10 @@ impl ExecutionResult {
 }
 
 impl<Message> RawExecutionResult<Message> {
-    pub fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
+    pub fn with_authenticated_signer(
+        mut self,
+        authenticated_signer: Option<Owner>,
+    ) -> Self {
         self.authenticated_signer = authenticated_signer;
         self
     }
@@ -732,7 +760,9 @@ impl Operation {
     pub fn application_id(&self) -> GenericApplicationId {
         match self {
             Self::System(_) => GenericApplicationId::System,
-            Self::User { application_id, .. } => GenericApplicationId::User(*application_id),
+            Self::User { application_id, .. } => {
+                GenericApplicationId::User(*application_id)
+            }
         }
     }
 }
@@ -763,7 +793,9 @@ impl Message {
     pub fn application_id(&self) -> GenericApplicationId {
         match self {
             Self::System(_) => GenericApplicationId::System,
-            Self::User { application_id, .. } => GenericApplicationId::User(*application_id),
+            Self::User { application_id, .. } => {
+                GenericApplicationId::User(*application_id)
+            }
         }
     }
 }
@@ -794,7 +826,9 @@ impl Query {
     pub fn application_id(&self) -> GenericApplicationId {
         match self {
             Self::System(_) => GenericApplicationId::System,
-            Self::User { application_id, .. } => GenericApplicationId::User(*application_id),
+            Self::User { application_id, .. } => {
+                GenericApplicationId::User(*application_id)
+            }
         }
     }
 }

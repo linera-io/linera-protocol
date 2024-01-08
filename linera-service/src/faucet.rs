@@ -3,7 +3,9 @@
 
 use async_graphql::{EmptySubscription, Error, Object, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
-use axum::{http::StatusCode, response, response::IntoResponse, Extension, Router, Server};
+use axum::{
+    http::StatusCode, response, response::IntoResponse, Extension, Router, Server,
+};
 use futures::lock::Mutex;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
@@ -130,7 +132,8 @@ where
                 let full_duration = self
                     .end_timestamp
                     .saturating_diff_micros(self.start_timestamp);
-                let remaining_duration = self.end_timestamp.saturating_diff_micros(local_time);
+                let remaining_duration =
+                    self.end_timestamp.saturating_diff_micros(local_time);
                 let balance = client.local_balance().await?;
                 let Ok(remaining_balance) = balance.try_sub(self.amount) else {
                     return Err(Error::new("The faucet is empty."));
@@ -142,13 +145,18 @@ where
                 if Self::multiply(u128::from(self.start_balance), remaining_duration)
                     > Self::multiply(u128::from(remaining_balance), full_duration)
                 {
-                    return Err(Error::new("Not enough unlocked balance; try again later."));
+                    return Err(Error::new(
+                        "Not enough unlocked balance; try again later.",
+                    ));
                 }
             }
         }
 
         let ownership = ChainOwnership::single(public_key);
-        let (message_id, certificate) = match client.open_chain(ownership, self.amount).await? {
+        let (message_id, certificate) = match client
+            .open_chain(ownership, self.amount)
+            .await?
+        {
             ClientOutcome::Committed(result) => result,
             ClientOutcome::WaitForTimeout(timeout) => {
                 return Err(Error::new(format!(
@@ -218,7 +226,9 @@ where
         })
     }
 
-    pub fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S>, EmptySubscription> {
+    pub fn schema(
+        &self,
+    ) -> Schema<QueryRoot<P, S>, MutationRoot<P, S>, EmptySubscription> {
         let mutation_root = MutationRoot {
             client: self.client.clone(),
             amount: self.amount,
@@ -255,7 +265,10 @@ where
     }
 
     /// Executes a GraphQL query and generates a response for our `Schema`.
-    async fn index_handler(service: Extension<Self>, request: GraphQLRequest) -> GraphQLResponse {
+    async fn index_handler(
+        service: Extension<Self>,
+        request: GraphQLRequest,
+    ) -> GraphQLResponse {
         let schema = service.0.schema();
         schema.execute(request.into_inner()).await.into()
     }

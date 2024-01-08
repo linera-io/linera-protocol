@@ -89,7 +89,9 @@ impl From<contract::ExecutionResult> for RawExecutionResult<Vec<u8>> {
 impl From<contract::Destination> for Destination {
     fn from(guest: contract::Destination) -> Self {
         match guest {
-            contract::Destination::Recipient(chain_id) => Destination::Recipient(chain_id.into()),
+            contract::Destination::Recipient(chain_id) => {
+                Destination::Recipient(chain_id.into())
+            }
             contract::Destination::Subscribers(subscription) => {
                 Destination::Subscribers(subscription.into())
             }

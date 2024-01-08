@@ -98,7 +98,10 @@ impl<A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, Rest> WasmtimeParameters
                                                         M,
                                                         HCons<
                                                             N,
-                                                            HCons<O, HCons<P, HCons<Q, Rest>>>,
+                                                            HCons<
+                                                                O,
+                                                                HCons<P, HCons<Q, Rest>>,
+                                                            >,
                                                         >,
                                                     >,
                                                 >,
@@ -136,7 +139,9 @@ where
     type Parameters = (i32,);
 
     fn into_wasmtime(self) -> Self::Parameters {
-        unreachable!("Attempt to convert a list of flat parameters larger than the maximum limit");
+        unreachable!(
+            "Attempt to convert a list of flat parameters larger than the maximum limit"
+        );
     }
 
     fn from_wasmtime(_: Self::Parameters) -> Self {

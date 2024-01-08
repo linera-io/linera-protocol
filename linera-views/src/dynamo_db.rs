@@ -4,8 +4,8 @@
 use crate::{
     batch::{Batch, DeletePrefixExpander, SimpleUnorderedBatch},
     common::{
-        CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore,
-        TableStatus, MIN_VIEW_TAG,
+        CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
+        KeyValueStore, TableStatus, MIN_VIEW_TAG,
     },
     lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
@@ -55,7 +55,8 @@ pub type Config = aws_sdk_dynamodb::Config;
 
 /// Gets the AWS configuration from the environment
 pub async fn get_base_config() -> Result<Config, DynamoDbContextError> {
-    let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+    let base_config =
+        aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
     Ok((&base_config).into())
 }
 
@@ -69,7 +70,8 @@ fn get_endpoint_address() -> Option<String> {
 
 /// Gets the localstack config
 pub async fn get_localstack_config() -> Result<Config, DynamoDbContextError> {
-    let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+    let base_config =
+        aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
     let endpoint_address = get_endpoint_address().unwrap();
     let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
         .endpoint_url(endpoint_address)
@@ -320,7 +322,10 @@ impl TransactionBuilder {
         Ok(())
     }
 
-    async fn submit(self, store: &DynamoDbStoreInternal) -> Result<(), DynamoDbContextError> {
+    async fn submit(
+        self,
+        store: &DynamoDbStoreInternal,
+    ) -> Result<(), DynamoDbContextError> {
         store.submit_transactions(self.transacts).await
     }
 }
@@ -333,7 +338,11 @@ enum KeyTag {
     Entry,
 }
 
-fn get_journaling_key(base_key: &[u8], tag: u8, pos: u32) -> Result<Vec<u8>, DynamoDbContextError> {
+fn get_journaling_key(
+    base_key: &[u8],
+    tag: u8,
+    pos: u32,
+) -> Result<Vec<u8>, DynamoDbContextError> {
     // We used the value 0 because it does not collide with other key values.
     // since other tags are starting from 1.
     let mut key = base_key.to_vec();
@@ -360,7 +369,8 @@ impl JournalHeader {
             if self.block_count == 0 {
                 break;
             }
-            let key = get_journaling_key(base_key, KeyTag::Entry as u8, self.block_count - 1)?;
+            let key =
+                get_journaling_key(base_key, KeyTag::Entry as u8, self.block_count - 1)?;
             let value = store.read_value::<DynamoDbBatch>(&key).await?;
             if let Some(value) = value {
                 let mut tb = TransactionBuilder::default();
@@ -372,7 +382,9 @@ impl JournalHeader {
                     tb.insert_put_request(key_value.0, key_value.1, store)?;
                 }
                 self.block_count -= 1;
-                DynamoDbBatch::add_journal_header_operations(&mut tb, &self, store, base_key)?;
+                DynamoDbBatch::add_journal_header_operations(
+                    &mut tb, &self, store, base_key,
+                )?;
                 tb.submit(store).await?;
             } else {
                 return Err(DynamoDbContextError::DatabaseRecoveryFailed);
@@ -446,7 +458,8 @@ impl DynamoDbBatch {
             } else {
                 break;
             }
-            let (value_flush, transact_flush) = if (delete_iter.len() + insert_iter.len() == 0)
+            let (value_flush, transact_flush) = if (delete_iter.len() + insert_iter.len()
+                == 0)
                 || deletions.len() + insertions.len() == MAX_TRANSACT_WRITE_ITEM_SIZE - 2
             {
                 (true, true)
@@ -463,17 +476,19 @@ impl DynamoDbBatch {
                     + get_uleb128_size(deletions.len() + 1)
                     + get_uleb128_size(insertions.len() + 1);
                 let next_transact_size = transact_size + next_value_size;
-                let value_flush = if next_transact_size > MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE {
-                    true
-                } else {
-                    next_value_size > RAW_MAX_VALUE_SIZE
-                };
-                let transact_flush = next_transact_size > MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
+                let value_flush =
+                    if next_transact_size > MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE {
+                        true
+                    } else {
+                        next_value_size > RAW_MAX_VALUE_SIZE
+                    };
+                let transact_flush =
+                    next_transact_size > MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
                 (value_flush, transact_flush)
             };
             if value_flush {
-                value_size +=
-                    get_uleb128_size(deletions.len()) + get_uleb128_size(insertions.len());
+                value_size += get_uleb128_size(deletions.len())
+                    + get_uleb128_size(insertions.len());
                 let simple_unordered_batch = SimpleUnorderedBatch {
                     deletions: mem::take(&mut deletions),
                     insertions: mem::take(&mut insertions),
@@ -526,7 +541,8 @@ impl DynamoDbBatch {
         // Also we remove the deletes that are followed by inserts on the same key because
         // the TransactWriteItem and BatchWriteItem are not going to work that way.
         let unordered_batch = batch.simplify();
-        let simple_unordered_batch = unordered_batch.expand_delete_prefixes(store).await?;
+        let simple_unordered_batch =
+            unordered_batch.expand_delete_prefixes(store).await?;
         Ok(DynamoDbBatch(simple_unordered_batch))
     }
 }
@@ -543,7 +559,10 @@ pub struct DynamoDbStoreInternal {
 #[async_trait]
 impl DeletePrefixExpander for DynamoDbStoreInternal {
     type Error = DynamoDbContextError;
-    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
+    async fn expand_delete_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, Self::Error> {
         let mut vector_list = Vec::new();
         for key in self.find_keys_by_prefix(key_prefix).await?.iterator() {
             vector_list.push(key?.to_vec());
@@ -640,7 +659,9 @@ impl DynamoDbStoreInternal {
             SdkError::ServiceError(error) => match error.err() {
                 GetItemError::ResourceNotFoundException(error) => {
                     error.message
-                        == Some("Cannot do operations on a non-existent table".to_string())
+                        == Some(
+                            "Cannot do operations on a non-existent table".to_string(),
+                        )
                 }
                 _ => false,
             },
@@ -686,7 +707,9 @@ impl DynamoDbStoreInternal {
         Self::test_table_existence(&client, &store_config.table_name).await
     }
 
-    async fn delete_all(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
+    async fn delete_all(
+        store_config: DynamoDbStoreConfig,
+    ) -> Result<(), DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
         clear_tables(&client).await?;
         Ok(())
@@ -699,7 +722,9 @@ impl DynamoDbStoreInternal {
         list_tables_from_client(&client).await
     }
 
-    async fn delete_single(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
+    async fn delete_single(
+        store_config: DynamoDbStoreConfig,
+    ) -> Result<(), DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
         client
             .delete_table()
@@ -863,7 +888,10 @@ impl DynamoDbStoreInternal {
     ///
     /// We need that because the `test_table_existence` might return `false`
     /// from several processes but only one creates it.
-    async fn create_table(&self, stop_if_table_exists: bool) -> Result<bool, DynamoDbContextError> {
+    async fn create_table(
+        &self,
+        stop_if_table_exists: bool,
+    ) -> Result<bool, DynamoDbContextError> {
         let _guard = self.acquire().await;
         let result = self
             .client
@@ -1046,7 +1074,9 @@ impl Iterator for DynamoDbKeyValueIteratorOwned {
                     .next()
                     .map(|mut x| extract_key_value_owned(self.prefix_len, &mut x))
             }
-            Some(mut result) => Some(extract_key_value_owned(self.prefix_len, &mut result)),
+            Some(mut result) => {
+                Some(extract_key_value_owned(self.prefix_len, &mut result))
+            }
         }
     }
 }
@@ -1134,7 +1164,10 @@ impl KeyValueStore for DynamoDbStoreInternal {
         self.max_stream_queries
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
+    async fn read_value_bytes(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
         ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbContextError::KeyTooLong);
         let key_db = build_key(key.to_vec());
         self.read_value_bytes_general(key_db).await
@@ -1179,7 +1212,11 @@ impl KeyValueStore for DynamoDbStoreInternal {
         Ok(DynamoDbKeyValues { result_queries })
     }
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
+    async fn write_batch(
+        &self,
+        batch: Batch,
+        base_key: &[u8],
+    ) -> Result<(), DynamoDbContextError> {
         let block_operations = DynamoDbBatch::from_batch(self, batch).await?;
         if block_operations.is_fastpath_feasible() {
             block_operations.write_fastpath_failsafe(self).await
@@ -1217,7 +1254,10 @@ impl KeyValueStore for DynamoDbStore {
         self.store.max_stream_queries()
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
+    async fn read_value_bytes(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
         self.store.read_value_bytes(key).await
     }
 
@@ -1246,7 +1286,11 @@ impl KeyValueStore for DynamoDbStore {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
+    async fn write_batch(
+        &self,
+        batch: Batch,
+        base_key: &[u8],
+    ) -> Result<(), DynamoDbContextError> {
         self.store.write_batch(batch, base_key).await
     }
 
@@ -1262,7 +1306,8 @@ impl DynamoDbStore {
         store_config: DynamoDbStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (store, table_status) = DynamoDbStoreInternal::new_for_testing(store_config).await?;
+        let (store, table_status) =
+            DynamoDbStoreInternal::new_for_testing(store_config).await?;
         let store = ValueSplittingStore::new(store);
         let store = LruCachingStore::new(store, cache_size);
         let store = Self { store };
@@ -1296,7 +1341,9 @@ impl DynamoDbStore {
     }
 
     /// Deletes all the tables from the database
-    pub async fn delete_all(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
+    pub async fn delete_all(
+        store_config: DynamoDbStoreConfig,
+    ) -> Result<(), DynamoDbContextError> {
         DynamoDbStoreInternal::delete_all(store_config).await
     }
 
@@ -1409,7 +1456,9 @@ pub enum InvalidTableName {
     TooLong,
 
     /// allowed characters are lowercase letters, numbers, periods and hyphens
-    #[error("Table name must only contain lowercase letters, numbers, periods and hyphens")]
+    #[error(
+        "Table name must only contain lowercase letters, numbers, periods and hyphens"
+    )]
     InvalidCharacter,
 }
 
@@ -1493,7 +1542,9 @@ pub enum DynamoDbContextError {
     MissingValue,
 
     /// The value was stored as the wrong type (it should be a binary blob).
-    #[error("Value was stored as {0}, but it was expected to be stored as a binary blob")]
+    #[error(
+        "Value was stored as {0}, but it was expected to be stored as a binary blob"
+    )]
     WrongValueType(String),
 
     /// A BCS error occurred.
@@ -1545,7 +1596,9 @@ impl DynamoDbContextError {
 
     fn type_description_of(value: &AttributeValue) -> String {
         match value {
-            AttributeValue::B(_) => unreachable!("creating an error type for the correct type"),
+            AttributeValue::B(_) => {
+                unreachable!("creating an error type for the correct type")
+            }
             AttributeValue::Bool(_) => "a boolean",
             AttributeValue::Bs(_) => "a list of binary blobs",
             AttributeValue::L(_) => "a list",
@@ -1617,7 +1670,9 @@ pub async fn list_tables_from_client(
 }
 
 /// Helper function to clear all the tables from the database
-pub async fn clear_tables(client: &aws_sdk_dynamodb::Client) -> Result<(), DynamoDbContextError> {
+pub async fn clear_tables(
+    client: &aws_sdk_dynamodb::Client,
+) -> Result<(), DynamoDbContextError> {
     let tables = list_tables_from_client(client).await?;
     for table in tables {
         client.delete_table().table_name(&table).send().await?;
@@ -1629,7 +1684,9 @@ pub async fn clear_tables(client: &aws_sdk_dynamodb::Client) -> Result<(), Dynam
 mod tests {
     use crate::{
         batch::SimpleUnorderedBatch,
-        dynamo_db::{get_uleb128_size, MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE},
+        dynamo_db::{
+            get_uleb128_size, MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE,
+        },
     };
     use bcs::serialized_size;
 
@@ -1647,7 +1704,8 @@ mod tests {
     fn test_raw_visible_sizes() {
         let mut vis_computed = RAW_MAX_VALUE_SIZE - MAX_KEY_SIZE;
         vis_computed -= serialized_size(&SimpleUnorderedBatch::default()).unwrap();
-        vis_computed -= get_uleb128_size(RAW_MAX_VALUE_SIZE) + get_uleb128_size(MAX_KEY_SIZE);
+        vis_computed -=
+            get_uleb128_size(RAW_MAX_VALUE_SIZE) + get_uleb128_size(MAX_KEY_SIZE);
         assert_eq!(vis_computed, VISIBLE_MAX_VALUE_SIZE);
     }
 }

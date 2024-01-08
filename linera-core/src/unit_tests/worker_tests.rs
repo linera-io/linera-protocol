@@ -16,20 +16,24 @@ use crate::{
 use linera_base::{
     crypto::{BcsSignable, CryptoHash, *},
     data_types::*,
-    identifiers::{ChainDescription, ChainId, ChannelName, Destination, MessageId, Owner},
+    identifiers::{
+        ChainDescription, ChainId, ChannelName, Destination, MessageId, Owner,
+    },
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, ChainAndHeight, ChannelFullName, Event, ExecutedBlock,
-        HashedValue, IncomingMessage, LiteVote, Medium, MessageAction, Origin, OutgoingMessage,
-        SignatureAggregator,
+        Block, BlockProposal, Certificate, ChainAndHeight, ChannelFullName, Event,
+        ExecutedBlock, HashedValue, IncomingMessage, LiteVote, Medium, MessageAction,
+        Origin, OutgoingMessage, SignatureAggregator,
     },
     test::{make_child_block, make_first_block, BlockTestExt, VoteTestExt},
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    system::{Account, AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation},
+    system::{
+        Account, AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation,
+    },
     ChainOwnership, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
     ExecutionStateView, GenericApplicationId, Message, MessageKind, Query, Response,
     SystemExecutionError, SystemExecutionState, SystemQuery, SystemResponse,
@@ -49,7 +53,10 @@ use std::{
 use test_log::test;
 
 #[cfg(feature = "rocksdb")]
-use {linera_core::client::client_test_utils::ROCKS_DB_SEMAPHORE, linera_storage::RocksDbStorage};
+use {
+    linera_core::client::client_test_utils::ROCKS_DB_SEMAPHORE,
+    linera_storage::RocksDbStorage,
+};
 
 #[cfg(feature = "aws")]
 use linera_storage::DynamoDbStorage;
@@ -95,15 +102,19 @@ where
 {
     let key_pair = KeyPair::generate();
     let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
-    let worker = WorkerState::new("Single validator node".to_string(), Some(key_pair), storage)
-        .with_allow_inactive_chains(is_client)
-        .with_allow_messages_from_deprecated_epochs(is_client)
-        .with_grace_period_micros(TEST_GRACE_PERIOD_MICROS);
+    let worker =
+        WorkerState::new("Single validator node".to_string(), Some(key_pair), storage)
+            .with_allow_inactive_chains(is_client)
+            .with_allow_messages_from_deprecated_epochs(is_client)
+            .with_grace_period_micros(TEST_GRACE_PERIOD_MICROS);
     (committee, worker)
 }
 
 /// Same as `init_worker` but also instantiates some initial chains.
-async fn init_worker_with_chains<S, I>(storage: S, balances: I) -> (Committee, WorkerState<S>)
+async fn init_worker_with_chains<S, I>(
+    storage: S,
+    balances: I,
+) -> (Committee, WorkerState<S>)
 where
     I: IntoIterator<Item = (ChainDescription, PublicKey, Amount)>,
     S: Storage + Clone + Send + Sync + 'static,
@@ -535,8 +546,11 @@ async fn run_test_handle_block_proposal_ticks<C>(storage: DbStorage<C, TestClock
 where
     C: KeyValueStore + Clone + Send + Sync + 'static,
     ViewError: From<<C as KeyValueStore>::Error>,
-    <C as KeyValueStore>::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+    <C as KeyValueStore>::Error: From<bcs::Error>
+        + From<DatabaseConsistencyError>
+        + Send
+        + Sync
+        + serde::ser::StdError,
 {
     let key_pair = KeyPair::generate();
     let balance: Amount = Amount::from_tokens(5);
@@ -1345,7 +1359,8 @@ where
         .check(ValidatorName(worker.key_pair.as_ref().unwrap().public()))
         .as_ref()
         .unwrap();
-    let (replay_response, _actions) = worker.handle_block_proposal(block_proposal).await.unwrap();
+    let (replay_response, _actions) =
+        worker.handle_block_proposal(block_proposal).await.unwrap();
     // Workaround lack of equality.
     assert_eq!(
         CryptoHash::new(&*response.info),
@@ -1889,7 +1904,8 @@ where
     let key_pair = KeyPair::generate();
     let name = key_pair.public();
     let (committee, mut worker) =
-        init_worker_with_chain(storage, ChainDescription::Root(1), name, Amount::ONE).await;
+        init_worker_with_chain(storage, ChainDescription::Root(1), name, Amount::ONE)
+            .await;
 
     let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
@@ -2361,7 +2377,8 @@ where
         );
         assert_eq!(recipient_chain.received_log.count(), 1);
     }
-    let query = ChainInfoQuery::new(ChainId::root(2)).with_received_log_excluding_first_nth(0);
+    let query =
+        ChainInfoQuery::new(ChainId::root(2)).with_received_log_excluding_first_nth(0);
     let (response, _actions) = worker.handle_chain_info_query(query).await.unwrap();
     assert_eq!(response.info.requested_received_log.len(), 1);
     assert_eq!(
@@ -2795,13 +2812,15 @@ where
         &committee,
         &worker,
         HashedValue::new_confirmed(ExecutedBlock {
-            block: make_first_block(admin_id).with_operation(SystemOperation::OpenChain {
-                ownership: ChainOwnership::single(key_pair.public()),
-                epoch: Epoch::ZERO,
-                committees: committees.clone(),
-                admin_id,
-                balance: Amount::ZERO,
-            }),
+            block: make_first_block(admin_id).with_operation(
+                SystemOperation::OpenChain {
+                    ownership: ChainOwnership::single(key_pair.public()),
+                    epoch: Epoch::ZERO,
+                    committees: committees.clone(),
+                    admin_id,
+                    balance: Amount::ZERO,
+                },
+            ),
             messages: vec![
                 direct_outgoing_message(
                     user_id,
@@ -3389,9 +3408,9 @@ where
                     epoch: Epoch::from(1),
                     committee: committee.clone(),
                 }))
-                .with_operation(SystemOperation::Admin(AdminOperation::RemoveCommittee {
-                    epoch: Epoch::ZERO,
-                })),
+                .with_operation(SystemOperation::Admin(
+                    AdminOperation::RemoveCommittee { epoch: Epoch::ZERO },
+                )),
             messages: vec![
                 channel_admin_message(SystemMessage::SetCommittees {
                     epoch: Epoch::from(1),
@@ -3761,8 +3780,11 @@ async fn run_test_leader_timeouts<C>(storage: DbStorage<C, TestClock>)
 where
     C: KeyValueStore + Clone + Send + Sync + 'static,
     ViewError: From<<C as KeyValueStore>::Error>,
-    <C as KeyValueStore>::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+    <C as KeyValueStore>::Error: From<bcs::Error>
+        + From<DatabaseConsistencyError>
+        + Send
+        + Sync
+        + serde::ser::StdError,
 {
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
@@ -3772,11 +3794,12 @@ where
     let (committee, mut worker) = init_worker_with_chains(storage, balances).await;
 
     // Add another owner and use the leader-based protocol in all rounds.
-    let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
-        super_owners: Vec::new(),
-        owners: vec![(pub_key0, 100), (pub_key1, 100)],
-        multi_leader_rounds: 0,
-    });
+    let block0 =
+        make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
+            super_owners: Vec::new(),
+            owners: vec![(pub_key0, 100), (pub_key1, 100)],
+            multi_leader_rounds: 0,
+        });
     let (executed_block0, _) = worker.stage_block_execution(block0).await.unwrap();
     let value0 = HashedValue::new_confirmed(executed_block0);
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
@@ -3789,12 +3812,12 @@ where
     assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key1)));
 
     // So owner 0 cannot propose a block in this round. And the next round hasn't started yet.
-    let proposal =
-        make_child_block(&value0).into_proposal_with_round(&key_pairs[0], Round::SingleLeader(0));
+    let proposal = make_child_block(&value0)
+        .into_proposal_with_round(&key_pairs[0], Round::SingleLeader(0));
     let result = worker.handle_block_proposal(proposal).await;
     assert!(matches!(result, Err(WorkerError::InvalidOwner)));
-    let proposal =
-        make_child_block(&value0).into_proposal_with_round(&key_pairs[0], Round::SingleLeader(1));
+    let proposal = make_child_block(&value0)
+        .into_proposal_with_round(&key_pairs[0], Round::SingleLeader(1));
     let result = worker.handle_block_proposal(proposal).await;
     assert!(matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::SingleLeader(0)))
@@ -3829,7 +3852,8 @@ where
 
     // Now owner 0 can propose a block, but owner 1 can't.
     let block1 = make_child_block(&value0);
-    let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await.unwrap();
+    let (executed_block1, _) =
+        worker.stage_block_execution(block1.clone()).await.unwrap();
     let proposal1_wrong_owner = block1
         .clone()
         .into_proposal_with_round(&key_pairs[1], Round::SingleLeader(1));
@@ -3869,13 +3893,18 @@ where
     // Create block2, also at height 1, but different from block 1.
     let amount = Amount::from_tokens(1);
     let block2 = make_child_block(&value0).with_simple_transfer(ChainId::root(1), amount);
-    let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await.unwrap();
+    let (executed_block2, _) =
+        worker.stage_block_execution(block2.clone()).await.unwrap();
 
     // Since round 3 is already over, a validated block from round 3 won't update the validator's
     // locked block; certificate1 (with block1) remains locked.
     let value2 = HashedValue::new_validated(executed_block2.clone());
-    let certificate =
-        make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(2));
+    let certificate = make_certificate_with_round(
+        &committee,
+        &worker,
+        value2.clone(),
+        Round::SingleLeader(2),
+    );
     worker
         .handle_certificate(certificate, vec![], None)
         .await
@@ -3900,10 +3929,15 @@ where
     ));
 
     // But with the validated block certificate for block2, it is allowed.
-    let mut proposal = block2.into_proposal_with_round(&key_pairs[1], Round::SingleLeader(5));
+    let mut proposal =
+        block2.into_proposal_with_round(&key_pairs[1], Round::SingleLeader(5));
     let lite_value2 = value2.lite();
-    let certificate2 =
-        make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(4));
+    let certificate2 = make_certificate_with_round(
+        &committee,
+        &worker,
+        value2.clone(),
+        Round::SingleLeader(4),
+    );
     proposal.validated = Some(certificate2.clone());
     let (_, _) = worker.handle_block_proposal(proposal).await.unwrap();
     let (response, _) = worker
@@ -3940,8 +3974,12 @@ where
     ));
 
     // Let rounds 6 and 7 time out.
-    let certificate_timeout =
-        make_certificate_with_round(&committee, &worker, value_timeout, Round::SingleLeader(7));
+    let certificate_timeout = make_certificate_with_round(
+        &committee,
+        &worker,
+        value_timeout,
+        Round::SingleLeader(7),
+    );
     let (response, _) = worker
         .handle_certificate(certificate_timeout, vec![], None)
         .await
@@ -3996,8 +4034,11 @@ async fn run_test_round_types<C>(storage: DbStorage<C, TestClock>)
 where
     C: KeyValueStore + Clone + Send + Sync + 'static,
     ViewError: From<<C as KeyValueStore>::Error>,
-    <C as KeyValueStore>::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+    <C as KeyValueStore>::Error: From<bcs::Error>
+        + From<DatabaseConsistencyError>
+        + Send
+        + Sync
+        + serde::ser::StdError,
 {
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
@@ -4007,11 +4048,12 @@ where
     let (committee, mut worker) = init_worker_with_chains(storage, balances).await;
 
     // Add another owner and use the leader-based protocol in all rounds.
-    let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
-        super_owners: vec![pub_key0],
-        owners: vec![(pub_key0, 100), (pub_key1, 100)],
-        multi_leader_rounds: 2,
-    });
+    let block0 =
+        make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
+            super_owners: vec![pub_key0],
+            owners: vec![(pub_key0, 100), (pub_key1, 100)],
+            multi_leader_rounds: 2,
+        });
     let (executed_block0, _) = worker.stage_block_execution(block0).await.unwrap();
     let value0 = HashedValue::new_confirmed(executed_block0);
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
@@ -4026,11 +4068,12 @@ where
     assert_eq!(response.info.manager.leader, None);
 
     // So owner 1 cannot propose a block in this round. And the next round hasn't started yet.
-    let proposal = make_child_block(&value0).into_proposal_with_round(&key_pairs[1], Round::Fast);
+    let proposal =
+        make_child_block(&value0).into_proposal_with_round(&key_pairs[1], Round::Fast);
     let result = worker.handle_block_proposal(proposal).await;
     assert!(matches!(result, Err(WorkerError::InvalidOwner)));
-    let proposal =
-        make_child_block(&value0).into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
+    let proposal = make_child_block(&value0)
+        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
     let result = worker.handle_block_proposal(proposal).await;
     assert!(matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::Fast))

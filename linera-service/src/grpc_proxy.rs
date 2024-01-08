@@ -9,7 +9,8 @@ use linera_base::{identifiers::ChainId, sync::Lazy};
 use linera_core::notifier::Notifier;
 use linera_rpc::{
     config::{
-        ShardConfig, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
+        ShardConfig, TlsConfig, ValidatorInternalNetworkConfig,
+        ValidatorPublicNetworkConfig,
     },
     grpc_network::{
         grpc::{
@@ -23,7 +24,9 @@ use linera_rpc::{
     },
     grpc_pool::ConnectionPool,
 };
-use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
+use prometheus::{
+    register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec,
+};
 use rcgen::generate_simple_self_signed;
 use std::{
     fmt::Debug,
@@ -85,7 +88,8 @@ impl<S> Layer<S> for PrometheusMetricsMiddlewareLayer {
     }
 }
 
-impl<S> Service<tonic::codegen::http::Request<Body>> for PrometheusMetricsMiddlewareService<S>
+impl<S> Service<tonic::codegen::http::Request<Body>>
+    for PrometheusMetricsMiddlewareService<S>
 where
     S::Future: Send + 'static,
     S: Service<tonic::codegen::http::Request<Body>> + std::marker::Send,
@@ -190,7 +194,8 @@ impl GrpcProxy {
 
         prometheus_server::start_metrics(self.metrics_address());
 
-        let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+        let (mut health_reporter, health_service) =
+            tonic_health::server::health_reporter();
         health_reporter
             .set_serving::<ValidatorNodeServer<GrpcProxy>>()
             .await;
@@ -220,9 +225,12 @@ impl GrpcProxy {
     fn public_server(&self) -> Result<Server> {
         match self.0.tls {
             TlsConfig::Tls => {
-                let cert = generate_simple_self_signed(vec![self.0.public_config.host.clone()])?;
-                let identity =
-                    Identity::from_pem(cert.serialize_pem()?, cert.serialize_private_key_pem());
+                let cert =
+                    generate_simple_self_signed(vec![self.0.public_config.host.clone()])?;
+                let identity = Identity::from_pem(
+                    cert.serialize_pem()?,
+                    cert.serialize_private_key_pem(),
+                );
                 let tls_config = ServerTlsConfig::new().identity(identity);
                 Ok(Server::builder().tls_config(tls_config)?)
             }
@@ -338,7 +346,10 @@ impl ValidatorNode for GrpcProxy {
 #[async_trait]
 impl NotifierService for GrpcProxy {
     #[instrument(skip_all, err(Display))]
-    async fn notify(&self, request: Request<Notification>) -> Result<Response<()>, Status> {
+    async fn notify(
+        &self,
+        request: Request<Notification>,
+    ) -> Result<Response<()>, Status> {
         let notification = request.into_inner();
         let chain_id = notification
             .chain_id

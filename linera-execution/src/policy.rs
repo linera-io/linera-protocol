@@ -66,7 +66,10 @@ impl ResourceControlPolicy {
         Ok(self.storage_bytes_read.try_mul(count as u128)?)
     }
 
-    pub fn storage_bytes_written_price(&self, count: u64) -> Result<Amount, PricingError> {
+    pub fn storage_bytes_written_price(
+        &self,
+        count: u64,
+    ) -> Result<Amount, PricingError> {
         Ok(self.storage_bytes_written.try_mul(count as u128)?)
     }
 

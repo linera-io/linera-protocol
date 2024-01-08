@@ -13,9 +13,9 @@ use proc_macro_error::abort;
 use quote::quote;
 use syn::{
     punctuated::Punctuated, token::Paren, AngleBracketedGenericArguments, AssocType,
-    GenericArgument, Generics, Ident, ItemImpl, LitStr, PathArguments, PathSegment, PredicateType,
-    Token, TraitBound, TraitBoundModifier, Type, TypeParamBound, TypePath, TypeTuple, WhereClause,
-    WherePredicate,
+    GenericArgument, Generics, Ident, ItemImpl, LitStr, PathArguments, PathSegment,
+    PredicateType, Token, TraitBound, TraitBoundModifier, Type, TypeParamBound, TypePath,
+    TypeTuple, WhereClause, WherePredicate,
 };
 
 /// Returns the code generated for exporting host functions to guest Wasm instances.
@@ -47,7 +47,9 @@ impl<'input> WitExportGenerator<'input> {
         let functions = implementation
             .items
             .iter()
-            .map(|item| FunctionInformation::from_item(item, caller_type_parameter.caller()))
+            .map(|item| {
+                FunctionInformation::from_item(item, caller_type_parameter.caller())
+            })
             .collect();
 
         WitExportGenerator {
@@ -79,7 +81,8 @@ impl<'input> WitExportGenerator<'input> {
         #[cfg(feature = "wasmer")]
         {
             let user_data_type = self.user_data_type();
-            let export_target = quote! { linera_witty::wasmer::InstanceBuilder<#user_data_type> };
+            let export_target =
+                quote! { linera_witty::wasmer::InstanceBuilder<#user_data_type> };
             let target_caller_type = quote! {
                 linera_witty::wasmer::FunctionEnvMut<
                     '_,
@@ -87,10 +90,18 @@ impl<'input> WitExportGenerator<'input> {
                 >
             };
             let exported_functions = self.functions.iter().map(|function| {
-                function.generate_for_wasmer(self.namespace, self.type_name, &target_caller_type)
+                function.generate_for_wasmer(
+                    self.namespace,
+                    self.type_name,
+                    &target_caller_type,
+                )
             });
 
-            Some(self.generate_for(export_target, &target_caller_type, exported_functions))
+            Some(self.generate_for(
+                export_target,
+                &target_caller_type,
+                exported_functions,
+            ))
         }
         #[cfg(not(feature = "wasmer"))]
         {
@@ -103,13 +114,23 @@ impl<'input> WitExportGenerator<'input> {
         #[cfg(feature = "wasmtime")]
         {
             let user_data_type = self.user_data_type();
-            let export_target = quote! { linera_witty::wasmtime::Linker<#user_data_type> };
-            let target_caller_type = quote! { linera_witty::wasmtime::Caller<'_, #user_data_type> };
+            let export_target =
+                quote! { linera_witty::wasmtime::Linker<#user_data_type> };
+            let target_caller_type =
+                quote! { linera_witty::wasmtime::Caller<'_, #user_data_type> };
             let exported_functions = self.functions.iter().map(|function| {
-                function.generate_for_wasmtime(self.namespace, self.type_name, &target_caller_type)
+                function.generate_for_wasmtime(
+                    self.namespace,
+                    self.type_name,
+                    &target_caller_type,
+                )
             });
 
-            Some(self.generate_for(export_target, &target_caller_type, exported_functions))
+            Some(self.generate_for(
+                export_target,
+                &target_caller_type,
+                exported_functions,
+            ))
         }
         #[cfg(not(feature = "wasmtime"))]
         {
@@ -123,7 +144,8 @@ impl<'input> WitExportGenerator<'input> {
         {
             let user_data_type = self.user_data_type();
             let export_target = quote! { linera_witty::MockInstance<#user_data_type> };
-            let target_caller_type = quote! { linera_witty::MockInstance<#user_data_type> };
+            let target_caller_type =
+                quote! { linera_witty::MockInstance<#user_data_type> };
             let exported_functions = self.functions.iter().map(|function| {
                 function.generate_for_mock_instance(
                     self.namespace,
@@ -132,7 +154,11 @@ impl<'input> WitExportGenerator<'input> {
                 )
             });
 
-            Some(self.generate_for(export_target, &target_caller_type, exported_functions))
+            Some(self.generate_for(
+                export_target,
+                &target_caller_type,
+                exported_functions,
+            ))
         }
         #[cfg(not(feature = "mock-instance"))]
         {
@@ -218,8 +244,8 @@ impl<'input> CallerTypeParameter<'input> {
     /// Parses a type's [`Generics`] to determine if a caller type parameter should be used.
     pub fn new(generics: &'input Generics) -> Self {
         let caller_type_parameter = Self::extract_caller_type_parameter(generics);
-        let user_data_type =
-            caller_type_parameter.and_then(|caller| Self::extract_user_data_type(generics, caller));
+        let user_data_type = caller_type_parameter
+            .and_then(|caller| Self::extract_user_data_type(generics, caller));
 
         match (caller_type_parameter, user_data_type) {
             (None, None) => CallerTypeParameter::NotPresent,
@@ -232,7 +258,9 @@ impl<'input> CallerTypeParameter<'input> {
     }
 
     /// Extracts the [`Ident`]ifier used for the caller type parameter, if present.
-    fn extract_caller_type_parameter(generics: &'input Generics) -> Option<&'input Ident> {
+    fn extract_caller_type_parameter(
+        generics: &'input Generics,
+    ) -> Option<&'input Ident> {
         if generics.type_params().count() > 1 {
             abort!(
                 generics.params,

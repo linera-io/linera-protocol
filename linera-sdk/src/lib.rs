@@ -55,7 +55,9 @@ use async_trait::async_trait;
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     data_types::BlockHeight,
-    identifiers::{ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId},
+    identifiers::{
+        ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId,
+    },
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{error::Error, fmt::Debug, sync::Arc};
@@ -171,7 +173,10 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
         context: &CalleeContext,
         argument: Self::ApplicationCall,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>;
+    ) -> Result<
+        ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>,
+        Self::Error,
+    >;
 
     /// Handles a call into a session created by this application.
     ///
@@ -213,7 +218,10 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
         session: Self::SessionState,
         argument: Self::SessionCall,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>;
+    ) -> Result<
+        SessionCallResult<Self::Message, Self::Response, Self::SessionState>,
+        Self::Error,
+    >;
 
     /// Calls another application.
     fn call_application<A: ContractAbi + Send>(
@@ -301,9 +309,11 @@ pub trait Service: WithServiceAbi + ServiceAbi {
         Self::Error: From<String>,
     {
         let query_bytes = serde_json::to_vec(&query)?;
-        let response_bytes =
-            crate::service::system_api::query_application(application.forget_abi(), &query_bytes)
-                .map_err(String::from)?;
+        let response_bytes = crate::service::system_api::query_application(
+            application.forget_abi(),
+            &query_bytes,
+        )
+        .map_err(String::from)?;
         let response = serde_json::from_slice(&response_bytes)?;
         Ok(response)
     }
@@ -404,7 +414,11 @@ impl<Message> Default for ExecutionResult<Message> {
 
 impl<Message: Serialize + Debug + DeserializeOwned> ExecutionResult<Message> {
     /// Adds a message to the execution result.
-    pub fn with_message(mut self, destination: impl Into<Destination>, message: Message) -> Self {
+    pub fn with_message(
+        mut self,
+        destination: impl Into<Destination>,
+        message: Message,
+    ) -> Self {
         let destination = destination.into();
         self.messages.push(OutgoingMessage {
             destination,
@@ -482,7 +496,8 @@ pub struct ApplicationCallResult<Message, Value, SessionState> {
     pub create_sessions: Vec<SessionState>,
 }
 
-impl<Message, Value, SessionState> Default for ApplicationCallResult<Message, Value, SessionState>
+impl<Message, Value, SessionState> Default
+    for ApplicationCallResult<Message, Value, SessionState>
 where
     Value: Default,
 {

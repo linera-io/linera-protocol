@@ -83,7 +83,9 @@ pub(crate) enum InboxError {
     ArithmeticError(#[from] ArithmeticError),
     #[error("Cannot reconcile {event:?} with {previous_event:?}")]
     UnexpectedEvent { event: Event, previous_event: Event },
-    #[error("{event:?} is out of order. Block and height should be at least: {next_cursor:?}")]
+    #[error(
+        "{event:?} is out of order. Block and height should be at least: {next_cursor:?}"
+    )]
     IncorrectOrder { event: Event, next_cursor: Cursor },
     #[error("{event:?} cannot be skipped: it must be received before the next messages from the same origin")]
     UnskippableEvent { event: Event },

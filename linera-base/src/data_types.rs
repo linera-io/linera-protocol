@@ -27,7 +27,10 @@ struct AmountString(String);
 struct AmountU128(u128);
 
 impl Serialize for Amount {
-    fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    fn serialize<S: serde::ser::Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
         if serializer.is_human_readable() {
             AmountString(self.to_string()).serialize(serializer)
         } else {
@@ -37,7 +40,9 @@ impl Serialize for Amount {
 }
 
 impl<'de> Deserialize<'de> for Amount {
-    fn deserialize<D: serde::de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+    fn deserialize<D: serde::de::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Self, D::Error> {
         if deserializer.is_human_readable() {
             let AmountString(s) = AmountString::deserialize(deserializer)?;
             s.parse().map_err(serde::de::Error::custom)
@@ -49,14 +54,34 @@ impl<'de> Deserialize<'de> for Amount {
 
 /// A block height to identify blocks in a chain.
 #[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Copy,
+    Clone,
+    Hash,
+    Default,
+    Debug,
+    Serialize,
+    Deserialize,
 )]
 #[cfg_attr(any(test, feature = "test"), derive(test_strategy::Arbitrary))]
 pub struct BlockHeight(pub u64);
 
 /// An identifier for successive attempts to decide a value in a consensus protocol.
 #[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Copy,
+    Clone,
+    Hash,
+    Default,
+    Debug,
+    Serialize,
+    Deserialize,
 )]
 pub enum Round {
     #[default]
@@ -67,7 +92,17 @@ pub enum Round {
 
 /// A timestamp, in microseconds since the Unix epoch.
 #[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Copy,
+    Clone,
+    Hash,
+    Default,
+    Debug,
+    Serialize,
+    Deserialize,
 )]
 pub struct Timestamp(u64);
 
@@ -218,7 +253,10 @@ macro_rules! impl_wrapped_number {
                 Ok(Self(val))
             }
 
-            pub fn try_mul_assign(&mut self, other: $wrapped) -> Result<(), ArithmeticError> {
+            pub fn try_mul_assign(
+                &mut self,
+                other: $wrapped,
+            ) -> Result<(), ArithmeticError> {
                 self.0 = self.0.checked_mul(other).ok_or(ArithmeticError::Overflow)?;
                 Ok(())
             }
@@ -318,7 +356,8 @@ impl std::str::FromStr for Amount {
                 '.' if decimals.is_some() => return Err(ParseAmountError::Parse),
                 '.' => decimals = Some(Amount::DECIMAL_PLACES),
                 char => {
-                    let digit = u128::from(char.to_digit(10).ok_or(ParseAmountError::Parse)?);
+                    let digit =
+                        u128::from(char.to_digit(10).ok_or(ParseAmountError::Parse)?);
                     if let Some(d) = &mut decimals {
                         *d = d.checked_sub(1).ok_or(ParseAmountError::TooManyDigits)?;
                     }

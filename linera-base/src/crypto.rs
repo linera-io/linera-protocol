@@ -231,8 +231,8 @@ impl<'de> Deserialize<'de> for Signature {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
             let value = hex::decode(s).map_err(serde::de::Error::custom)?;
-            let sig =
-                dalek::Signature::try_from(value.as_slice()).map_err(serde::de::Error::custom)?;
+            let sig = dalek::Signature::try_from(value.as_slice())
+                .map_err(serde::de::Error::custom)?;
             Ok(Signature(sig))
         } else {
             #[derive(Deserialize)]
@@ -307,17 +307,24 @@ impl From<CryptoHash> for [u64; 4] {
         let bytes = crypto_hash.0;
         let mut integers = [0u64; 4];
 
-        integers[0] = u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices"));
-        integers[1] = u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices"));
-        integers[2] = u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices"));
-        integers[3] = u64::from_le_bytes(bytes[24..32].try_into().expect("incorrect indices"));
+        integers[0] =
+            u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices"));
+        integers[1] =
+            u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices"));
+        integers[2] =
+            u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices"));
+        integers[3] =
+            u64::from_le_bytes(bytes[24..32].try_into().expect("incorrect indices"));
 
         integers
     }
 }
 
 impl std::fmt::Display for Signature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::result::Result<(), std::fmt::Error> {
         let s = hex::encode(self.0.to_bytes());
         write!(f, "{}", s)
     }
@@ -337,19 +344,28 @@ impl std::fmt::Display for CryptoHash {
 }
 
 impl std::fmt::Debug for Signature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{}", hex::encode(&self.0.to_bytes()[0..8]))
     }
 }
 
 impl std::fmt::Debug for PublicKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{}", hex::encode(&self.0[..8]))
     }
 }
 
 impl std::fmt::Debug for CryptoHash {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{}", hex::encode(&self.0[..8]))
     }
 }
@@ -385,7 +401,8 @@ where
         let name = <Self as HasTypeName>::type_name();
         // Note: This assumes that names never contain the separator `::`.
         write!(hasher, "{}::", name).expect("Hasher should not fail");
-        bcs::serialize_into(hasher, &self).expect("Message serialization should not fail");
+        bcs::serialize_into(hasher, &self)
+            .expect("Message serialization should not fail");
     }
 }
 
@@ -435,7 +452,11 @@ impl Signature {
         Signature(signature)
     }
 
-    fn check_internal<T>(&self, value: &T, author: PublicKey) -> Result<(), dalek::SignatureError>
+    fn check_internal<T>(
+        &self,
+        value: &T,
+        author: PublicKey,
+    ) -> Result<(), dalek::SignatureError>
     where
         T: BcsSignable,
     {
@@ -449,14 +470,18 @@ impl Signature {
     where
         T: BcsSignable + std::fmt::Debug,
     {
-        self.check_internal(value, author)
-            .map_err(|error| CryptoError::InvalidSignature {
+        self.check_internal(value, author).map_err(|error| {
+            CryptoError::InvalidSignature {
                 error: error.to_string(),
                 type_name: T::type_name().to_string(),
-            })
+            }
+        })
     }
 
-    fn verify_batch_internal<'a, T, I>(value: &'a T, votes: I) -> Result<(), dalek::SignatureError>
+    fn verify_batch_internal<'a, T, I>(
+        value: &'a T,
+        votes: I,
+    ) -> Result<(), dalek::SignatureError>
     where
         T: BcsSignable,
         I: IntoIterator<Item = (&'a PublicKey, &'a Signature)>,
@@ -491,7 +516,8 @@ impl Signature {
 #[cfg(any(test, feature = "test"))]
 impl Arbitrary for CryptoHash {
     type Parameters = ();
-    type Strategy = strategy::Map<VecStrategy<RangeInclusive<u8>>, fn(Vec<u8>) -> CryptoHash>;
+    type Strategy =
+        strategy::Map<VecStrategy<RangeInclusive<u8>>, fn(Vec<u8>) -> CryptoHash>;
 
     fn arbitrary_with((): Self::Parameters) -> Self::Strategy {
         vec(u8::MIN..=u8::MAX, HasherOutputSize::to_usize()).prop_map(|vector| {

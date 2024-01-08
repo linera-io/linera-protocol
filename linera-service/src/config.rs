@@ -4,8 +4,8 @@
 
 use anyhow::{bail, Context as _};
 use comfy_table::{
-    modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color, ContentArrangement,
-    Table,
+    modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color,
+    ContentArrangement, Table,
 };
 use file_lock::{FileLock, FileOptions};
 use linera_base::{
@@ -225,11 +225,10 @@ impl WalletState {
         chain_id: ChainId,
         timestamp: Timestamp,
     ) -> Result<(), anyhow::Error> {
-        let key_pair = self
-            .inner
-            .unassigned_key_pairs
-            .remove(&key)
-            .context("could not assign chain to key as unassigned key was not found")?;
+        let key_pair =
+            self.inner.unassigned_key_pairs.remove(&key).context(
+                "could not assign chain to key as unassigned key was not found",
+            )?;
         let user_chain = UserChain {
             chain_id,
             key_pair: Some(key_pair),
@@ -479,7 +478,10 @@ impl GenesisConfig {
         }
     }
 
-    pub async fn initialize_storage<S>(&self, storage: &mut S) -> Result<(), anyhow::Error>
+    pub async fn initialize_storage<S>(
+        &self,
+        storage: &mut S,
+    ) -> Result<(), anyhow::Error>
     where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,

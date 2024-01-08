@@ -16,8 +16,8 @@
 //! [flattening]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md#flattening
 
 use crate::{
-    memory_layout::FlatLayout, primitive_types::FlatType, InstanceWithMemory, Layout, Memory,
-    Runtime, RuntimeError, RuntimeMemory, WitStore, WitType,
+    memory_layout::FlatLayout, primitive_types::FlatType, InstanceWithMemory, Layout,
+    Memory, Runtime, RuntimeError, RuntimeMemory, WitStore, WitType,
 };
 use frunk::HList;
 

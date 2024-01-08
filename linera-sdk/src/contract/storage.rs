@@ -8,7 +8,8 @@
 //! contract type that implements [`Contract`].
 
 use crate::{
-    contract::system_api, views::ViewStorageContext, Contract, SimpleStateStorage, ViewStateStorage,
+    contract::system_api, views::ViewStorageContext, Contract, SimpleStateStorage,
+    ViewStateStorage,
 };
 use async_trait::async_trait;
 use futures::TryFutureExt;

@@ -4,7 +4,9 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore},
-    memory::{MemoryContextError, MemoryStore, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
+    memory::{
+        MemoryContextError, MemoryStore, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES,
+    },
 };
 use async_lock::{Mutex, MutexGuardArc};
 use async_trait::async_trait;
@@ -146,7 +148,10 @@ where
         Ok(big_values)
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, Self::Error> {
         let mut keys = Vec::new();
         for big_key in self.store.find_keys_by_prefix(key_prefix).await?.iterator() {
             let big_key = big_key?;
@@ -192,7 +197,11 @@ where
         Ok(key_values)
     }
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
+    async fn write_batch(
+        &self,
+        batch: Batch,
+        base_key: &[u8],
+    ) -> Result<(), Self::Error> {
         let mut batch_new = Batch::new();
         for operation in batch.operations {
             match operation {
@@ -210,7 +219,10 @@ where
                         let remainder = value.split_off(K::MAX_VALUE_SIZE - 4);
                         for value_chunk in remainder.chunks(K::MAX_VALUE_SIZE) {
                             let big_key_segment = Self::get_segment_key(&key, count)?;
-                            batch_new.put_key_value_bytes(big_key_segment, value_chunk.to_vec());
+                            batch_new.put_key_value_bytes(
+                                big_key_segment,
+                                value_chunk.to_vec(),
+                            );
                             count += 1;
                         }
                         Self::get_initial_count_first_chunk(count, &value)?
@@ -267,7 +279,10 @@ where
         Ok(bcs::from_bytes::<u32>(&bytes)?)
     }
 
-    fn get_initial_count_first_chunk(count: u32, first_chunk: &[u8]) -> Result<Vec<u8>, K::Error> {
+    fn get_initial_count_first_chunk(
+        count: u32,
+        first_chunk: &[u8],
+    ) -> Result<Vec<u8>, K::Error> {
         let mut bytes = bcs::to_bytes(&count)?;
         bytes.reverse();
         let mut value_ext = Vec::new();
@@ -297,7 +312,10 @@ impl KeyValueStore for TestMemoryStoreInternal {
         TEST_MEMORY_MAX_STREAM_QUERIES
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
+    async fn read_value_bytes(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, MemoryContextError> {
         self.store.read_value_bytes(key).await
     }
 
@@ -326,7 +344,11 @@ impl KeyValueStore for TestMemoryStoreInternal {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), MemoryContextError> {
+    async fn write_batch(
+        &self,
+        batch: Batch,
+        base_key: &[u8],
+    ) -> Result<(), MemoryContextError> {
         ensure!(
             batch.check_value_size(Self::MAX_VALUE_SIZE),
             MemoryContextError::TooLargeValue
@@ -365,7 +387,10 @@ impl KeyValueStore for TestMemoryStore {
         self.store.max_stream_queries()
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
+    async fn read_value_bytes(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, MemoryContextError> {
         self.store.read_value_bytes(key).await
     }
 
@@ -394,7 +419,11 @@ impl KeyValueStore for TestMemoryStore {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), MemoryContextError> {
+    async fn write_batch(
+        &self,
+        batch: Batch,
+        base_key: &[u8],
+    ) -> Result<(), MemoryContextError> {
         self.store.write_batch(batch, base_key).await
     }
 
@@ -488,7 +517,8 @@ mod tests {
         batch::Batch,
         common::KeyValueStore,
         value_splitting::{
-            create_test_memory_store_internal, TestMemoryStoreInternal, ValueSplittingStore,
+            create_test_memory_store_internal, TestMemoryStoreInternal,
+            ValueSplittingStore,
         },
     };
     use rand::{Rng, SeedableRng};

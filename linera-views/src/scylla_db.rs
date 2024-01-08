@@ -21,7 +21,8 @@ use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::get_table_name};
 use crate::{
     batch::{Batch, DeletePrefixExpander},
     common::{
-        get_upper_bound_option, CommonStoreConfig, ContextFromStore, KeyValueStore, TableStatus,
+        get_upper_bound_option, CommonStoreConfig, ContextFromStore, KeyValueStore,
+        TableStatus,
     },
     lru_caching::LruCachingStore,
     value_splitting::DatabaseConsistencyError,
@@ -153,7 +154,10 @@ impl KeyValueStore for ScyllaDbStoreInternal {
         Ok(result.into_iter().collect::<Result<_, _>>()?)
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, Self::Error> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         Self::find_keys_by_prefix_internal(store, key_prefix.to_vec()).await
@@ -168,7 +172,11 @@ impl KeyValueStore for ScyllaDbStoreInternal {
         Self::find_key_values_by_prefix_internal(store, key_prefix.to_vec()).await
     }
 
-    async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), Self::Error> {
+    async fn write_batch(
+        &self,
+        batch: Batch,
+        _base_key: &[u8],
+    ) -> Result<(), Self::Error> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         Self::write_batch_internal(store, batch).await
@@ -182,8 +190,12 @@ impl KeyValueStore for ScyllaDbStoreInternal {
 #[async_trait]
 impl DeletePrefixExpander for ScyllaDbStorePair {
     type Error = ScyllaDbContextError;
-    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        ScyllaDbStoreInternal::find_keys_by_prefix_internal(self, key_prefix.to_vec()).await
+    async fn expand_delete_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, Self::Error> {
+        ScyllaDbStoreInternal::find_keys_by_prefix_internal(self, key_prefix.to_vec())
+            .await
     }
 }
 
@@ -533,7 +545,9 @@ impl ScyllaDbStoreInternal {
         .await
     }
 
-    async fn initialize(store_config: ScyllaDbStoreConfig) -> Result<Self, ScyllaDbContextError> {
+    async fn initialize(
+        store_config: ScyllaDbStoreConfig,
+    ) -> Result<Self, ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
@@ -573,7 +587,9 @@ impl ScyllaDbStoreInternal {
         Ok(tables)
     }
 
-    async fn delete_all(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
+    async fn delete_all(
+        store_config: ScyllaDbStoreConfig,
+    ) -> Result<(), ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
@@ -583,7 +599,9 @@ impl ScyllaDbStoreInternal {
         Ok(())
     }
 
-    async fn delete_single(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
+    async fn delete_single(
+        store_config: ScyllaDbStoreConfig,
+    ) -> Result<(), ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
@@ -623,9 +641,12 @@ impl ScyllaDbStoreInternal {
             Self::test_table_existence(&session, &store_config.table_name).await?;
         if !existing_table {
             if create_if_missing {
-                existing_table =
-                    Self::create_table(&session, &store_config.table_name, stop_if_table_exists)
-                        .await?;
+                existing_table = Self::create_table(
+                    &session,
+                    &store_config.table_name,
+                    stop_if_table_exists,
+                )
+                .await?;
             } else {
                 tracing::info!("ScyllaDb: Missing database for kv_name={}", kv_name);
                 return Err(ScyllaDbContextError::MissingDatabase(kv_name));
@@ -696,7 +717,10 @@ impl KeyValueStore for ScyllaDbStore {
         self.store.read_multi_values_bytes(keys).await
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, Self::Error> {
         self.store.find_keys_by_prefix(key_prefix).await
     }
 
@@ -707,7 +731,11 @@ impl KeyValueStore for ScyllaDbStore {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
+    async fn write_batch(
+        &self,
+        batch: Batch,
+        base_key: &[u8],
+    ) -> Result<(), Self::Error> {
         self.store.write_batch(batch, base_key).await
     }
 
@@ -728,7 +756,8 @@ impl ScyllaDbStore {
         store_config: ScyllaDbStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (store, table_status) = ScyllaDbStoreInternal::new_for_testing(store_config).await?;
+        let (store, table_status) =
+            ScyllaDbStoreInternal::new_for_testing(store_config).await?;
         let store = LruCachingStore::new(store, cache_size);
         let store = ScyllaDbStore { store };
         Ok((store, table_status))
@@ -753,7 +782,9 @@ impl ScyllaDbStore {
     }
 
     /// Delete all the tables of a database
-    pub async fn delete_all(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
+    pub async fn delete_all(
+        store_config: ScyllaDbStoreConfig,
+    ) -> Result<(), ScyllaDbContextError> {
         ScyllaDbStoreInternal::delete_all(store_config).await
     }
 

@@ -57,7 +57,10 @@ where
     ViewError: From<DB::Error>,
 {
     /// Loads a new runner
-    pub async fn new(config: IndexerConfig<Config>, store: DB) -> Result<Self, IndexerError>
+    pub async fn new(
+        config: IndexerConfig<Config>,
+        store: DB,
+    ) -> Result<Self, IndexerError>
     where
         Self: Sized,
     {

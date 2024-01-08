@@ -84,7 +84,8 @@ where
             batch.delete_key_prefix(key_prefix);
             self.stored_indices = Range::default();
         } else if self.front_delete_count > 0 {
-            let deletion_range = self.stored_indices.clone().take(self.front_delete_count);
+            let deletion_range =
+                self.stored_indices.clone().take(self.front_delete_count);
             self.stored_indices.start += self.front_delete_count;
             for index in deletion_range {
                 let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
@@ -186,7 +187,9 @@ where
     pub async fn back(&self) -> Result<Option<T>, ViewError> {
         Ok(match self.new_back_values.back() {
             Some(value) => Some(value.clone()),
-            None if self.stored_count() > 0 => self.get(self.stored_indices.end - 1).await?,
+            None if self.stored_count() > 0 => {
+                self.get(self.stored_indices.end - 1).await?
+            }
             _ => None,
         })
     }
@@ -365,7 +368,9 @@ where
         self.read_front(count).await
     }
 
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+    async fn compute_hash(
+        &self,
+    ) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         let count = self.count();
         let elements = self.read_front(count).await?;
         let mut hasher = sha3::Sha3_256::default();

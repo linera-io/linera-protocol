@@ -6,7 +6,9 @@ use anyhow::{bail, format_err};
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
 use linera_storage::{MemoryStorage, Storage, WallClock};
-use linera_views::{common::CommonStoreConfig, memory::MemoryStoreConfig, views::ViewError};
+use linera_views::{
+    common::CommonStoreConfig, memory::MemoryStoreConfig, views::ViewError,
+};
 use std::str::FromStr;
 use tracing::error;
 
@@ -20,7 +22,9 @@ use {
 #[cfg(feature = "aws")]
 use {
     linera_storage::DynamoDbStorage,
-    linera_views::dynamo_db::{get_config, DynamoDbStore, DynamoDbStoreConfig, TableName},
+    linera_views::dynamo_db::{
+        get_config, DynamoDbStore, DynamoDbStoreConfig, TableName,
+    },
 };
 
 #[cfg(feature = "scylladb")]
@@ -104,7 +108,9 @@ impl FromStr for StorageConfig {
             let mut parts = s.splitn(2, ':');
             let table = parts
                 .next()
-                .ok_or_else(|| format_err!("Missing DynamoDB table name, e.g. {DYNAMO_DB}TABLE"))?
+                .ok_or_else(|| {
+                    format_err!("Missing DynamoDB table name, e.g. {DYNAMO_DB}TABLE")
+                })?
                 .parse()?;
             let use_localstack = match parts.next() {
                 None | Some("env") => false,
@@ -132,17 +138,21 @@ impl FromStr for StorageConfig {
                     match part {
                         "tcp" => {
                             let address = parts.next().with_context(|| {
-                                format!("Failed to find address for {}. {}", s, parse_error)
+                                format!(
+                                    "Failed to find address for {}. {}",
+                                    s, parse_error
+                                )
                             })?;
                             let port_str = parts.next().with_context(|| {
                                 format!("Failed to find port for {}. {}", s, parse_error)
                             })?;
-                            let port = NonZeroU16::from_str(port_str).with_context(|| {
-                                format!(
-                                    "Failed to find parse port {} for {}. {}",
-                                    port_str, s, parse_error
-                                )
-                            })?;
+                            let port =
+                                NonZeroU16::from_str(port_str).with_context(|| {
+                                    format!(
+                                        "Failed to find parse port {} for {}. {}",
+                                        port_str, s, parse_error
+                                    )
+                                })?;
                             if uri.is_some() {
                                 bail!("The uri has already been assigned");
                             }
@@ -283,11 +293,17 @@ impl StoreConfig {
                 error: "existence not make sense for memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config) => Ok(RocksDbStore::test_existence(config).await?),
+            StoreConfig::RocksDb(config) => {
+                Ok(RocksDbStore::test_existence(config).await?)
+            }
             #[cfg(feature = "aws")]
-            StoreConfig::DynamoDb(config) => Ok(DynamoDbStore::test_existence(config).await?),
+            StoreConfig::DynamoDb(config) => {
+                Ok(DynamoDbStore::test_existence(config).await?)
+            }
             #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config) => Ok(ScyllaDbStore::test_existence(config).await?),
+            StoreConfig::ScyllaDb(config) => {
+                Ok(ScyllaDbStore::test_existence(config).await?)
+            }
         }
     }
 
@@ -326,7 +342,8 @@ impl StoreConfig {
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(_) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
-                error: "list_tables is not currently supported for the RocksDb storage".to_string(),
+                error: "list_tables is not currently supported for the RocksDb storage"
+                    .to_string(),
             }),
             #[cfg(feature = "aws")]
             StoreConfig::DynamoDb(config) => {
@@ -378,17 +395,20 @@ where
         }
         #[cfg(feature = "rocksdb")]
         StoreConfig::RocksDb(config) => {
-            let (storage, table_status) = RocksDbStorage::new(config, wasm_runtime).await?;
+            let (storage, table_status) =
+                RocksDbStorage::new(config, wasm_runtime).await?;
             job.run(storage).await
         }
         #[cfg(feature = "aws")]
         StoreConfig::DynamoDb(config) => {
-            let (storage, table_status) = DynamoDbStorage::new(config, wasm_runtime).await?;
+            let (storage, table_status) =
+                DynamoDbStorage::new(config, wasm_runtime).await?;
             job.run(storage).await
         }
         #[cfg(feature = "scylladb")]
         StoreConfig::ScyllaDb(config) => {
-            let (storage, table_status) = ScyllaDbStorage::new(config, wasm_runtime).await?;
+            let (storage, table_status) =
+                ScyllaDbStorage::new(config, wasm_runtime).await?;
             job.run(storage).await
         }
     }
@@ -501,7 +521,8 @@ fn test_scylla_db_storage_config_from_str() {
         }
     );
     assert_eq!(
-        StorageConfig::from_str("scylladb:tcp:db_hostname:230:table_other_storage").unwrap(),
+        StorageConfig::from_str("scylladb:tcp:db_hostname:230:table_other_storage")
+            .unwrap(),
         StorageConfig::ScyllaDb {
             uri: "db_hostname:230".to_string(),
             table_name: "table_other_storage".to_string(),

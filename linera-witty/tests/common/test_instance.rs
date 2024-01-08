@@ -9,8 +9,8 @@ use linera_witty::wasmer;
 #[cfg(feature = "wasmtime")]
 use linera_witty::wasmtime;
 use linera_witty::{
-    ExportTo, InstanceWithMemory, Layout, MockExportedFunction, MockInstance, RuntimeError,
-    WitLoad, WitStore,
+    ExportTo, InstanceWithMemory, Layout, MockExportedFunction, MockInstance,
+    RuntimeError, WitLoad, WitStore,
 };
 use std::{
     any::Any,
@@ -59,7 +59,11 @@ where
     type Instance = wasmtime::EntrypointInstance<UserData>;
     type Caller<'caller> = ::wasmtime::Caller<'caller, UserData>;
 
-    fn load_test_module<ExportedFunctions>(&mut self, group: &str, module: &str) -> Self::Instance
+    fn load_test_module<ExportedFunctions>(
+        &mut self,
+        group: &str,
+        module: &str,
+    ) -> Self::Instance
     where
         ExportedFunctions: ExportTo<Self::Builder>,
     {
@@ -96,13 +100,19 @@ where
 {
     type Builder = wasmer::InstanceBuilder<UserData>;
     type Instance = wasmer::EntrypointInstance<UserData>;
-    type Caller<'caller> = ::wasmer::FunctionEnvMut<'caller, wasmer::InstanceSlot<UserData>>;
+    type Caller<'caller> =
+        ::wasmer::FunctionEnvMut<'caller, wasmer::InstanceSlot<UserData>>;
 
-    fn load_test_module<ExportedFunctions>(&mut self, group: &str, module: &str) -> Self::Instance
+    fn load_test_module<ExportedFunctions>(
+        &mut self,
+        group: &str,
+        module: &str,
+    ) -> Self::Instance
     where
         ExportedFunctions: ExportTo<Self::Builder>,
     {
-        let engine = ::wasmer::EngineBuilder::new(::wasmer::Singlepass::default()).engine();
+        let engine =
+            ::wasmer::EngineBuilder::new(::wasmer::Singlepass::default()).engine();
         let module = ::wasmer::Module::from_file(
             &engine,
             format!("../target/wasm32-unknown-unknown/debug/{group}-{module}.wasm"),
@@ -135,7 +145,11 @@ where
     type Instance = MockInstance<UserData>;
     type Caller<'caller> = MockInstance<UserData>;
 
-    fn load_test_module<ExportedFunctions>(&mut self, group: &str, module: &str) -> Self::Instance
+    fn load_test_module<ExportedFunctions>(
+        &mut self,
+        group: &str,
+        module: &str,
+    ) -> Self::Instance
     where
         ExportedFunctions: ExportTo<Self::Builder>,
     {
@@ -462,7 +476,9 @@ where
                     &format!("witty-macros:test-modules/getters#{name}"),
                     hlist![],
                 )
-                .unwrap_or_else(|error| panic!("Failed to call getter function {name:?}: {error}"));
+                .unwrap_or_else(|error| {
+                    panic!("Failed to call getter function {name:?}: {error}")
+                });
 
             assert_eq!(value, expected_value);
         }
@@ -509,7 +525,9 @@ where
                     &format!("witty-macros:test-modules/setters#{name}"),
                     hlist![value],
                 )
-                .unwrap_or_else(|error| panic!("Failed to call setter function {name:?}: {error}"));
+                .unwrap_or_else(|error| {
+                    panic!("Failed to call setter function {name:?}: {error}")
+                });
         }
 
         #[allow(clippy::bool_assert_comparison)]
@@ -550,7 +568,9 @@ where
                     &format!("witty-macros:test-modules/operations#{name}"),
                     operands,
                 )
-                .unwrap_or_else(|error| panic!("Failed to call setter function {name:?}: {error}"));
+                .unwrap_or_else(|error| {
+                    panic!("Failed to call setter function {name:?}: {error}")
+                });
 
             assert_eq!(result, expected_result);
         }
@@ -564,10 +584,25 @@ where
                 check_operation(&caller, "and-bool", (true, false), false);
                 check_operation(&caller, "add-s8", (-100_i8, 40_i8), -60_i8);
                 check_operation(&caller, "add-u8", (201_u8, 32_u8), 233_u8);
-                check_operation(&caller, "add-s16", (-20_000_i16, 30_000_i16), 10_000_i16);
+                check_operation(
+                    &caller,
+                    "add-s16",
+                    (-20_000_i16, 30_000_i16),
+                    10_000_i16,
+                );
                 check_operation(&caller, "add-u16", (50_000_u16, 256_u16), 50_256_u16);
-                check_operation(&caller, "add-s32", (-2_000_000_i32, -1_i32), -2_000_001_i32);
-                check_operation(&caller, "add-u32", (4_000_000_u32, 1_u32), 4_000_001_u32);
+                check_operation(
+                    &caller,
+                    "add-s32",
+                    (-2_000_000_i32, -1_i32),
+                    -2_000_001_i32,
+                );
+                check_operation(
+                    &caller,
+                    "add-u32",
+                    (4_000_000_u32, 1_u32),
+                    4_000_001_u32,
+                );
                 check_operation(
                     &caller,
                     "add-s64",
@@ -580,7 +615,12 @@ where
                     (3_000_000_000_u64, 9_345_678_999_u64),
                     12_345_678_999_u64,
                 );
-                check_operation(&caller, "add-float32", (10.5_f32, 120.25_f32), 130.75_f32);
+                check_operation(
+                    &caller,
+                    "add-float32",
+                    (10.5_f32, 120.25_f32),
+                    130.75_f32,
+                );
                 check_operation(
                     &caller,
                     "add-float64",
@@ -661,13 +701,15 @@ where
         &mut self,
         instance: &mut MockInstance<UserData>,
         name: &str,
-        handler: impl Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError> + 'static,
+        handler: impl Fn(MockInstance<UserData>, Parameters) -> Result<Results, RuntimeError>
+            + 'static,
         expected_calls: usize,
     ) where
         Parameters: 'static,
         Results: 'static,
     {
-        let mock_exported_function = MockExportedFunction::new(name, handler, expected_calls);
+        let mock_exported_function =
+            MockExportedFunction::new(name, handler, expected_calls);
 
         mock_exported_function.register(instance);
 

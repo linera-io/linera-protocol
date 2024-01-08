@@ -37,7 +37,8 @@ pub fn stringify(x: &JsValue) -> String {
 }
 
 pub fn js_to_json(x: &JsValue) -> serde_json::Value {
-    serde_json::from_str::<serde_json::Value>(&stringify(x)).expect("failed to convert JS to JSON")
+    serde_json::from_str::<serde_json::Value>(&stringify(x))
+        .expect("failed to convert JS to JSON")
 }
 
 pub fn unproxy(x: &JsValue) -> JsValue {

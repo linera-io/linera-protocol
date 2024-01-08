@@ -72,7 +72,10 @@ macro_rules! ensure {
 ///     "Message { bytes: 20202020202020203130202020202020..20202020343020202020202020203530 }"
 /// );
 /// ```
-pub fn hex_debug<T: AsRef<[u8]>>(bytes: &T, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+pub fn hex_debug<T: AsRef<[u8]>>(
+    bytes: &T,
+    f: &mut std::fmt::Formatter,
+) -> std::fmt::Result {
     const ELIDE_AFTER: usize = 16;
     let bytes = bytes.as_ref();
     if bytes.len() <= 2 * ELIDE_AFTER {

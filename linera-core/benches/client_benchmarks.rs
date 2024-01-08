@@ -1,7 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use criterion::{criterion_group, criterion_main, measurement::Measurement, BatchSize, Criterion};
+use criterion::{
+    criterion_group, criterion_main, measurement::Measurement, BatchSize, Criterion,
+};
 use linera_base::{data_types::Amount, identifiers::ChainDescription};
 use linera_core::client::{
     self,
@@ -52,8 +54,9 @@ where
 
 /// Sends a token from the first chain to the first chain's owner on chain 2, then
 /// reclaims that amount.
-pub async fn run_claim_bench<B>((mut chain1, mut chain2): (ChainClient<B>, ChainClient<B>))
-where
+pub async fn run_claim_bench<B>(
+    (mut chain1, mut chain2): (ChainClient<B>, ChainClient<B>),
+) where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
 {

@@ -4,7 +4,8 @@
 //! Implementations of [`InstanceWithFunction`] for Wasmtime instances.
 
 use super::{
-    parameters::WasmtimeParameters, results::WasmtimeResults, EntrypointInstance, ReentrantInstance,
+    parameters::WasmtimeParameters, results::WasmtimeResults, EntrypointInstance,
+    ReentrantInstance,
 };
 use crate::{memory_layout::FlatLayout, InstanceWithFunction, Runtime, RuntimeError};
 use wasmtime::{AsContext, AsContextMut, Extern, TypedFunc};
@@ -12,7 +13,8 @@ use wasmtime::{AsContext, AsContextMut, Extern, TypedFunc};
 /// Implements [`InstanceWithFunction`] for the Wasmtime [`Instance`] implementations.
 macro_rules! impl_instance_with_function {
     ($instance:ty) => {
-        impl<Parameters, Results, UserData> InstanceWithFunction<Parameters, Results> for $instance
+        impl<Parameters, Results, UserData> InstanceWithFunction<Parameters, Results>
+            for $instance
         where
             Parameters: FlatLayout + WasmtimeParameters,
             Results: FlatLayout + WasmtimeResults,
@@ -37,7 +39,8 @@ macro_rules! impl_instance_with_function {
                 function: &Self::Function,
                 parameters: Parameters,
             ) -> Result<Results, RuntimeError> {
-                let results = function.call(self.as_context_mut(), parameters.into_wasmtime())?;
+                let results =
+                    function.call(self.as_context_mut(), parameters.into_wasmtime())?;
 
                 Ok(Results::from_wasmtime(results))
             }

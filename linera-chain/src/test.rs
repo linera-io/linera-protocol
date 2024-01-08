@@ -56,7 +56,12 @@ pub trait BlockTestExt: Sized {
     fn with_operation(self, operation: impl Into<Operation>) -> Self;
 
     /// Returns the block with a transfer operation appended at the end.
-    fn with_transfer(self, owner: Option<Owner>, recipient: Recipient, amount: Amount) -> Self;
+    fn with_transfer(
+        self,
+        owner: Option<Owner>,
+        recipient: Recipient,
+        amount: Amount,
+    ) -> Self;
 
     /// Returns the block with a simple transfer operation appended at the end.
     fn with_simple_transfer(self, chain_id: ChainId, amount: Amount) -> Self;
@@ -85,7 +90,12 @@ impl BlockTestExt for Block {
         self
     }
 
-    fn with_transfer(self, owner: Option<Owner>, recipient: Recipient, amount: Amount) -> Self {
+    fn with_transfer(
+        self,
+        owner: Option<Owner>,
+        recipient: Recipient,
+        amount: Amount,
+    ) -> Self {
         self.with_operation(SystemOperation::Transfer {
             owner,
             recipient,

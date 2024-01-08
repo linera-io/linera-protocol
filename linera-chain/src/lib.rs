@@ -104,7 +104,9 @@ pub enum ChainError {
         expected_block_height: BlockHeight,
         found_block_height: BlockHeight,
     },
-    #[error("The previous block hash of a new block should match the last block of the chain")]
+    #[error(
+        "The previous block hash of a new block should match the last block of the chain"
+    )]
     UnexpectedPreviousBlockHash,
     #[error("Sequence numbers above the maximal value are not usable for blocks")]
     InvalidBlockHeight,
@@ -118,7 +120,9 @@ pub enum ChainError {
     InsufficientRound(Round),
     #[error("Round number should be {0:?}")]
     WrongRound(Round),
-    #[error("A different block for height {0:?} was already locked at round number {1:?}")]
+    #[error(
+        "A different block for height {0:?} was already locked at round number {1:?}"
+    )]
     HasLockedBlock(BlockHeight, Round),
     #[error("Cannot confirm a block before its predecessors: {current_block_height:?}")]
     MissingEarlierBlocks { current_block_height: BlockHeight },

@@ -5,7 +5,9 @@ use async_trait::async_trait;
 
 use crate::{grpc_network::GrpcClient, simple_network::SimpleClient};
 use linera_base::identifiers::ChainId;
-use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
+use linera_chain::data_types::{
+    BlockProposal, Certificate, HashedValue, LiteCertificate,
+};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
@@ -36,8 +38,12 @@ impl ValidatorNode for Client {
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
-            Client::Grpc(grpc_client) => grpc_client.handle_block_proposal(proposal).await,
-            Client::Simple(simple_client) => simple_client.handle_block_proposal(proposal).await,
+            Client::Grpc(grpc_client) => {
+                grpc_client.handle_block_proposal(proposal).await
+            }
+            Client::Simple(simple_client) => {
+                simple_client.handle_block_proposal(proposal).await
+            }
         }
     }
 
@@ -86,14 +92,21 @@ impl ValidatorNode for Client {
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
             Client::Grpc(grpc_client) => grpc_client.handle_chain_info_query(query).await,
-            Client::Simple(simple_client) => simple_client.handle_chain_info_query(query).await,
+            Client::Simple(simple_client) => {
+                simple_client.handle_chain_info_query(query).await
+            }
         }
     }
 
-    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+    async fn subscribe(
+        &mut self,
+        chains: Vec<ChainId>,
+    ) -> Result<NotificationStream, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => Box::pin(grpc_client.subscribe(chains).await?),
-            Client::Simple(simple_client) => Box::pin(simple_client.subscribe(chains).await?),
+            Client::Simple(simple_client) => {
+                Box::pin(simple_client.subscribe(chains).await?)
+            }
         })
     }
 }

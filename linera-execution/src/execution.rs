@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    policy::ResourceControlPolicy, resources::ResourceTracker, system::SystemExecutionStateView,
-    ContractSyncRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
-    Query, QueryContext, RawExecutionResult, RawOutgoingMessage, Response, ServiceSyncRuntime,
-    SystemMessage, UserApplicationDescription, UserApplicationId,
+    policy::ResourceControlPolicy, resources::ResourceTracker,
+    system::SystemExecutionStateView, ContractSyncRuntime, ExecutionError,
+    ExecutionResult, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
+    MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext,
+    RawExecutionResult, RawOutgoingMessage, Response, ServiceSyncRuntime, SystemMessage,
+    UserApplicationDescription, UserApplicationId,
 };
 use futures::StreamExt;
 use linera_base::identifiers::{ChainId, Destination, Owner};
@@ -21,7 +22,9 @@ use linera_views_derive::CryptoHashView;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::{system::SystemExecutionState, TestExecutionRuntimeContext, UserContractCode},
+    crate::{
+        system::SystemExecutionState, TestExecutionRuntimeContext, UserContractCode,
+    },
     async_lock::Mutex,
     linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
     std::collections::BTreeMap,
@@ -34,7 +37,8 @@ pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,
     /// User applications (Simple based).
-    pub simple_users: ReentrantCollectionView<C, UserApplicationId, RegisterView<C, Vec<u8>>>,
+    pub simple_users:
+        ReentrantCollectionView<C, UserApplicationId, RegisterView<C, Vec<u8>>>,
     /// User applications (View based).
     pub view_users: ReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
 }
@@ -233,7 +237,10 @@ where
         let applications = self
             .system
             .registry
-            .describe_applications_with_dependencies(vec![*application_id], &Default::default())
+            .describe_applications_with_dependencies(
+                vec![*application_id],
+                &Default::default(),
+            )
             .await?;
         for message in &result.messages {
             system_result.messages.push(RawOutgoingMessage {
@@ -381,8 +388,12 @@ where
             } => {
                 let response = match self.context().extra().execution_runtime_config() {
                     ExecutionRuntimeConfig::Synchronous => {
-                        self.query_application_with_sync_runtime(application_id, context, bytes)
-                            .await?
+                        self.query_application_with_sync_runtime(
+                            application_id,
+                            context,
+                            bytes,
+                        )
+                        .await?
                     }
                 };
                 Ok(Response::User(response))
@@ -399,7 +410,12 @@ where
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
         let query_result_future = tokio::task::spawn_blocking(move || {
-            ServiceSyncRuntime::run_query(execution_state_sender, application_id, context, query)
+            ServiceSyncRuntime::run_query(
+                execution_state_sender,
+                application_id,
+                context,
+                query,
+            )
         });
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;
@@ -409,7 +425,8 @@ where
 
     pub async fn list_applications(
         &self,
-    ) -> Result<Vec<(UserApplicationId, UserApplicationDescription)>, ExecutionError> {
+    ) -> Result<Vec<(UserApplicationId, UserApplicationDescription)>, ExecutionError>
+    {
         let mut applications = vec![];
         for index in self.system.registry.known_applications.indices().await? {
             let application_description =

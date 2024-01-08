@@ -17,8 +17,8 @@ use linera_chain::data_types::{
     Block, BlockProposal, Certificate, ExecutedBlock, HashedValue, LiteCertificate,
 };
 use linera_execution::{
-    committee::ValidatorName, BytecodeLocation, Query, Response, UserApplicationDescription,
-    UserApplicationId,
+    committee::ValidatorName, BytecodeLocation, Query, Response,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -186,22 +186,25 @@ where
         let mut info = None;
         for certificate in certificates {
             let hash = certificate.hash();
-            if !certificate.value().is_confirmed() || certificate.value().chain_id() != chain_id {
+            if !certificate.value().is_confirmed()
+                || certificate.value().chain_id() != chain_id
+            {
                 // The certificate is not as expected. Give up.
                 tracing::warn!("Failed to process network certificate {}", hash);
                 return info;
             }
             let mut result = self.handle_certificate(certificate.clone(), vec![]).await;
-            if let Err(LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesNotFound(
-                locations,
-            ))) = &result
+            if let Err(LocalNodeError::WorkerError(
+                WorkerError::ApplicationBytecodesNotFound(locations),
+            )) = &result
             {
                 let chain_id = certificate.value().chain_id();
                 let mut blobs = Vec::new();
                 let maybe_blobs = future::join_all(locations.iter().map(|location| {
                     let mut node = node.clone();
                     async move {
-                        Self::try_download_blob_from(name, &mut node, chain_id, *location).await
+                        Self::try_download_blob_from(name, &mut node, chain_id, *location)
+                            .await
                     }
                 }))
                 .await;
@@ -220,7 +223,11 @@ where
                 Ok(response) => info = Some(response.info),
                 Err(error) => {
                     // The certificate is not as expected. Give up.
-                    tracing::warn!("Failed to process network certificate {}: {}", hash, error);
+                    tracing::warn!(
+                        "Failed to process network certificate {}: {}",
+                        hash,
+                        error
+                    );
                     return info;
                 }
             };
@@ -311,7 +318,8 @@ where
         let mut tasks = vec![];
         let mut node = self.node.lock().await;
         for (location, chain_id) in blob_locations {
-            if let Some(blob) = node.state.recent_value(&location.certificate_hash).await {
+            if let Some(blob) = node.state.recent_value(&location.certificate_hash).await
+            {
                 blobs.push(blob);
             } else {
                 let validators = validators.clone();
@@ -372,7 +380,10 @@ where
             .into_iter()
             .find(|certificate| certificate.value().has_message(message_id))
             .ok_or_else(|| {
-                ViewError::not_found("could not find certificate with message {}", message_id)
+                ViewError::not_found(
+                    "could not find certificate with message {}",
+                    message_id,
+                )
             })?;
         Ok(certificate)
     }
@@ -468,7 +479,12 @@ where
             }
         };
         if self
-            .try_process_certificates(name, &mut node, chain_id, info.requested_sent_certificates)
+            .try_process_certificates(
+                name,
+                &mut node,
+                chain_id,
+                info.requested_sent_certificates,
+            )
             .await
             .is_none()
         {

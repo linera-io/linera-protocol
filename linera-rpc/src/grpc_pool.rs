@@ -15,7 +15,10 @@ pub struct ConnectionPool {
 }
 
 impl ConnectionPool {
-    pub fn with_connect_timeout(mut self, connect_timeout: impl Into<Option<Duration>>) -> Self {
+    pub fn with_connect_timeout(
+        mut self,
+        connect_timeout: impl Into<Option<Duration>>,
+    ) -> Self {
         self.connect_timeout = connect_timeout.into();
         self
     }

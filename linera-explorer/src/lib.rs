@@ -33,7 +33,9 @@ use linera_indexer_graphql_client::{
         get_operation,
         get_operation::{GetOperationOperation as Operation, OperationKeyKind},
         operations,
-        operations::{OperationKeyKind as OperationsKeyKind, OperationsOperations as Operations},
+        operations::{
+            OperationKeyKind as OperationsKeyKind, OperationsOperations as Operations,
+        },
         OperationKey,
     },
 };
@@ -259,7 +261,11 @@ async fn blocks(
 }
 
 /// Returns the block page.
-async fn block(node: &str, chain_id: ChainId, hash: Option<CryptoHash>) -> Result<(Page, String)> {
+async fn block(
+    node: &str,
+    chain_id: ChainId,
+    hash: Option<CryptoHash>,
+) -> Result<(Page, String)> {
     let client = reqwest_client();
     let variables = block::Variables { hash, chain_id };
     let block = request::<gql_service::Block, _>(&client, node, variables)
@@ -292,7 +298,8 @@ async fn chains(app: &JsValue, node: &str) -> Result<ChainId> {
 /// Queries indexer plugins.
 async fn plugins(app: &JsValue, indexer: &str) {
     let client = reqwest_client();
-    let Ok(data) = request::<Plugins, _>(&client, indexer, plugins::Variables).await else {
+    let Ok(data) = request::<Plugins, _>(&client, indexer, plugins::Variables).await
+    else {
         return;
     };
     let plugins_js = data
@@ -333,11 +340,14 @@ async fn operation(
         None => OperationKeyKind::Last(chain_id),
     };
     let variables = get_operation::Variables { key };
-    let operation =
-        request::<gql_operations::GetOperation, _>(&client, &operations_indexer, variables)
-            .await?
-            .operation
-            .context("no operation found")?;
+    let operation = request::<gql_operations::GetOperation, _>(
+        &client,
+        &operations_indexer,
+        variables,
+    )
+    .await?
+    .operation
+    .context("no operation found")?;
     Ok((
         Page::Operation(operation.clone()),
         format!(
@@ -394,7 +404,8 @@ fn fill_type(element: &Value, types: &Vec<Value>) -> Value {
                                 .iter()
                                 .map(|elt| fill_type(elt, types))
                                 .collect::<Vec<_>>();
-                            object.insert("inputFields".to_string(), Value::Array(fields));
+                            object
+                                .insert("inputFields".to_string(), Value::Array(fields));
                         }
                     }
                 }
@@ -416,8 +427,10 @@ fn fill_type(element: &Value, types: &Vec<Value>) -> Value {
                     match types.iter().find(|elt: &&Value| elt["name"] == name) {
                         None => (),
                         Some(element_definition) => {
-                            object
-                                .insert("ofType".to_string(), fill_type(element_definition, types));
+                            object.insert(
+                                "ofType".to_string(),
+                                fill_type(element_definition, types),
+                            );
                         }
                     }
                 }
@@ -446,11 +459,11 @@ async fn application(app: Application) -> Result<(Page, String)> {
         .as_array()
         .expect("introspection types is not an array")
         .clone();
-    let queries =
-        list_entrypoints(&types, &sch["queryType"]["name"]).unwrap_or(Value::Array(Vec::new()));
+    let queries = list_entrypoints(&types, &sch["queryType"]["name"])
+        .unwrap_or(Value::Array(Vec::new()));
     let queries = fill_type(&queries, &types);
-    let mutations =
-        list_entrypoints(&types, &sch["mutationType"]["name"]).unwrap_or(Value::Array(Vec::new()));
+    let mutations = list_entrypoints(&types, &sch["mutationType"]["name"])
+        .unwrap_or(Value::Array(Vec::new()));
     let mutations = fill_type(&mutations, &types);
     let subscriptions = list_entrypoints(&types, &sch["subscriptionType"]["name"])
         .unwrap_or(Value::Array(Vec::new()));
@@ -476,8 +489,8 @@ async fn plugin(plugin: &str, indexer: &str) -> Result<(Page, String)> {
         .as_array()
         .expect("introspection types is not an array")
         .clone();
-    let queries =
-        list_entrypoints(&types, &sch["queryType"]["name"]).unwrap_or(Value::Array(Vec::new()));
+    let queries = list_entrypoints(&types, &sch["queryType"]["name"])
+        .unwrap_or(Value::Array(Vec::new()));
     let queries = fill_type(&queries, &types);
     let pathname = format!("/plugin?plugin={}", plugin);
     Ok((
@@ -500,7 +513,8 @@ fn format_bytes(value: &JsValue) -> JsValue {
                 Some(key_str) => {
                     if &key_str == "bytes" {
                         let array: Vec<u8> =
-                            js_sys::Uint8Array::from(getf(&modified_value, "bytes")).to_vec();
+                            js_sys::Uint8Array::from(getf(&modified_value, "bytes"))
+                                .to_vec();
                         let array_hex = hex::encode(array);
                         let hex_len = array_hex.len();
                         let hex_elided = if hex_len > 128 {
@@ -541,7 +555,9 @@ fn page_name_and_args(page: &Page) -> (&str, Vec<(String, String)>) {
                 ("index".to_string(), op.key.index.to_string()),
             ],
         ),
-        Page::Plugin { name, .. } => ("plugin", vec![("plugin".to_string(), name.to_string())]),
+        Page::Plugin { name, .. } => {
+            ("plugin", vec![("plugin".to_string(), name.to_string())])
+        }
         Page::Error(_) => ("error", Vec::new()),
     }
 }
@@ -600,8 +616,8 @@ async fn page(
         "applications" => applications(node, chain_id).await,
         "application" => {
             let app_arg = find_arg(args, "app").context("unknown application")?;
-            let app =
-                from_value::<Application>(parse(&app_arg)).expect("cannot parse applications");
+            let app = from_value::<Application>(parse(&app_arg))
+                .expect("cannot parse applications");
             application(app).await
         }
         "operation" => {
@@ -740,11 +756,14 @@ async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
                     .expect("unexpected websocket response");
                     if let Some(payload) = graphql_message.payload {
                         if let Some(message_data) = payload.data {
-                            let data =
-                                from_value::<Data>(app.clone()).expect("cannot parse vue data");
-                            if let Reason::NewBlock { .. } = message_data.notifications.reason {
+                            let data = from_value::<Data>(app.clone())
+                                .expect("cannot parse vue data");
+                            if let Reason::NewBlock { .. } =
+                                message_data.notifications.reason
+                            {
                                 if message_data.notifications.chain_id == chain {
-                                    route_aux(&app, &data, &None, &Vec::new(), false).await
+                                    route_aux(&app, &data, &None, &Vec::new(), false)
+                                        .await
                                 }
                             }
                         }

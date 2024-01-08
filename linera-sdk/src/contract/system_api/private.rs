@@ -89,5 +89,6 @@ pub fn call_session(
         .map(wit::SessionId::from)
         .collect::<Vec<_>>();
 
-    wit::try_call_session(authenticated, session.into(), argument, &forwarded_sessions).into()
+    wit::try_call_session(authenticated, session.into(), argument, &forwarded_sessions)
+        .into()
 }

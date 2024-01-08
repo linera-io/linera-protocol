@@ -127,7 +127,8 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
                     .filter(|&x| x.0[0] == u)
                     .cloned()
                     .collect::<Vec<_>>();
-                let part_key_values = view.map.key_values_by_prefix(vec![u]).await.unwrap();
+                let part_key_values =
+                    view.map.key_values_by_prefix(vec![u]).await.unwrap();
                 assert_eq!(part_state_vec, part_key_values);
             }
             for key in &all_keys {

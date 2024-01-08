@@ -3,8 +3,8 @@
 
 use crate::{
     data_types::{
-        Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, Event, IncomingMessage,
-        Medium, MessageAction, Origin, OutgoingMessage, Target,
+        Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, Event,
+        IncomingMessage, Medium, MessageAction, Origin, OutgoingMessage, Target,
     },
     inbox::{InboxError, InboxStateView},
     outbox::OutboxStateView,
@@ -23,8 +23,8 @@ use linera_execution::{
     system::{SystemExecutionError, SystemMessage},
     ExecutionError, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView,
     GenericApplicationId, Message, MessageContext, OperationContext, Query, QueryContext,
-    RawExecutionResult, RawOutgoingMessage, ResourceTracker, Response, UserApplicationDescription,
-    UserApplicationId,
+    RawExecutionResult, RawOutgoingMessage, ResourceTracker, Response,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     common::Context,
@@ -34,7 +34,9 @@ use linera_views::{
     set_view::SetView,
     views::{CryptoHashView, RootView, View, ViewError},
 };
-use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
+use prometheus::{
+    register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashSet},
@@ -153,7 +155,10 @@ impl ChainTipState {
 
     /// Returns `true` if the validated block's height is below the tip height. Returns an error if
     /// it is higher than the tip.
-    pub fn already_validated_block(&self, height: BlockHeight) -> Result<bool, ChainError> {
+    pub fn already_validated_block(
+        &self,
+        height: BlockHeight,
+    ) -> Result<bool, ChainError> {
         ensure!(
             self.next_block_height >= height,
             ChainError::MissingEarlierBlocks {
@@ -180,14 +185,14 @@ impl ChainTipState {
             .checked_add(num_incoming_messages)
             .ok_or(ArithmeticError::Overflow)?;
 
-        let num_operations =
-            u32::try_from(new_block.operations.len()).map_err(|_| ArithmeticError::Overflow)?;
+        let num_operations = u32::try_from(new_block.operations.len())
+            .map_err(|_| ArithmeticError::Overflow)?;
         self.num_operations
             .checked_add(num_operations)
             .ok_or(ArithmeticError::Overflow)?;
 
-        let num_outgoing_messages =
-            u32::try_from(outcome.messages.len()).map_err(|_| ArithmeticError::Overflow)?;
+        let num_outgoing_messages = u32::try_from(outcome.messages.len())
+            .map_err(|_| ArithmeticError::Overflow)?;
         self.num_outgoing_messages
             .checked_add(num_outgoing_messages)
             .ok_or(ArithmeticError::Overflow)?;
@@ -235,7 +240,10 @@ where
         self.context().extra().chain_id()
     }
 
-    pub async fn query_application(&mut self, query: Query) -> Result<Response, ChainError> {
+    pub async fn query_application(
+        &mut self,
+        query: Query,
+    ) -> Result<Response, ChainError> {
         let context = QueryContext {
             chain_id: self.chain_id(),
         };
@@ -243,7 +251,9 @@ where
             .execution_state
             .query_application(context, query)
             .await
-            .map_err(|error| ChainError::ExecutionError(error, ChainExecutionContext::Query))?;
+            .map_err(|error| {
+                ChainError::ExecutionError(error, ChainExecutionContext::Query)
+            })?;
         Ok(response)
     }
 
@@ -257,7 +267,10 @@ where
             .describe_application(application_id)
             .await
             .map_err(|err| {
-                ChainError::ExecutionError(err.into(), ChainExecutionContext::DescribeApplication)
+                ChainError::ExecutionError(
+                    err.into(),
+                    ChainExecutionContext::DescribeApplication,
+                )
             })
     }
 
@@ -378,7 +391,9 @@ where
         let chain_id = self.chain_id();
         ensure!(
             height >= self.next_block_height_to_receive(origin).await?,
-            ChainError::InternalError("Trying to receive blocks in the wrong order".to_string())
+            ChainError::InternalError(
+                "Trying to receive blocks in the wrong order".to_string()
+            )
         );
         tracing::trace!(
             "Processing new messages to {:?} from {:?} at height {}",
@@ -422,8 +437,10 @@ where
                         height,
                         index,
                     };
-                    self.execute_immediate_message(message_id, &message, timestamp, local_time)
-                        .await?;
+                    self.execute_immediate_message(
+                        message_id, &message, timestamp, local_time,
+                    )
+                    .await?;
                 }
             }
             // Record the inbox event to process it below.
@@ -504,7 +521,10 @@ where
     }
 
     /// Removes the incoming messages in the block from the inboxes.
-    pub async fn remove_events_from_inboxes(&mut self, block: &Block) -> Result<(), ChainError> {
+    pub async fn remove_events_from_inboxes(
+        &mut self,
+        block: &Block,
+    ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let mut events_by_origin: BTreeMap<_, Vec<&Event>> = Default::default();
         for IncomingMessage { event, origin, .. } in &block.incoming_messages {
@@ -525,10 +545,9 @@ where
             tracing::trace!("Updating inbox {:?} in chain {:?}", origin, chain_id);
             for event in events {
                 // Mark the message as processed in the inbox.
-                inbox
-                    .remove_event(event)
-                    .await
-                    .map_err(|error| ChainError::from((chain_id, origin.clone(), error)))?;
+                inbox.remove_event(event).await.map_err(|error| {
+                    ChainError::from((chain_id, origin.clone(), error))
+                })?;
             }
         }
         Ok(())
@@ -622,7 +641,9 @@ where
                         &mut tracker,
                     )
                     .await
-                    .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?,
+                    .map_err(|err| {
+                        ChainError::ExecutionError(err, chain_execution_context)
+                    })?,
                 MessageAction::Reject => {
                     ensure!(
                         !message.event.is_protected(),
@@ -663,8 +684,9 @@ where
                 )?;
             }
             messages.append(&mut messages_out);
-            message_counts
-                .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
+            message_counts.push(
+                u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?,
+            );
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
@@ -683,7 +705,9 @@ where
                 .execution_state
                 .execute_operation(context, operation.clone(), &policy, &mut tracker)
                 .await
-                .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
+                .map_err(|err| {
+                    ChainError::ExecutionError(err, chain_execution_context)
+                })?;
             let mut messages_out = self
                 .process_execution_results(context.height, results)
                 .await?;
@@ -699,8 +723,9 @@ where
                 chain_execution_context,
             )?;
             messages.append(&mut messages_out);
-            message_counts
-                .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
+            message_counts.push(
+                u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?,
+            );
         }
         let balance = self.execution_state.system.balance.get_mut();
         Self::sub_assign_fees(
@@ -852,7 +877,8 @@ where
             })
             .collect::<Vec<_>>();
         let channels = self.channels.try_load_entries_mut(&full_names).await?;
-        for ((_name, id), mut channel) in raw_result.unsubscribe.into_iter().zip(channels) {
+        for ((_name, id), mut channel) in raw_result.unsubscribe.into_iter().zip(channels)
+        {
             // Remove subscriber. Do not remove the channel outbox yet.
             channel.subscribers.remove(&id)?;
         }

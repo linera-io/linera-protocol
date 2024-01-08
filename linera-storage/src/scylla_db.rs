@@ -11,7 +11,8 @@ use std::sync::Arc;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::db_storage::TestClock, linera_views::scylla_db::create_scylla_db_common_config,
+    crate::db_storage::TestClock,
+    linera_views::scylla_db::create_scylla_db_common_config,
     linera_views::test_utils::get_table_name,
 };
 
@@ -64,10 +65,13 @@ impl ScyllaDbStorage<TestClock> {
             table_name,
             common_config,
         };
-        let (client, _) =
-            ScyllaDbStorage::new_for_testing(store_config, wasm_runtime, TestClock::new())
-                .await
-                .expect("client");
+        let (client, _) = ScyllaDbStorage::new_for_testing(
+            store_config,
+            wasm_runtime,
+            TestClock::new(),
+        )
+        .await
+        .expect("client");
         client
     }
 
@@ -92,7 +96,8 @@ impl ScyllaDbStorage<WallClock> {
         store_config: ScyllaDbStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, ScyllaDbContextError> {
-        let storage = ScyllaDbStorageInner::initialize(store_config, wasm_runtime).await?;
+        let storage =
+            ScyllaDbStorageInner::initialize(store_config, wasm_runtime).await?;
         let storage = ScyllaDbStorage {
             client: Arc::new(storage),
             clock: WallClock,

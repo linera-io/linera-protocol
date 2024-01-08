@@ -2,7 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest};
+use crate::data_types::{
+    ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
+};
 use async_trait::async_trait;
 use futures::{future, FutureExt};
 use linera_base::{
@@ -14,8 +16,9 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
-        HashedValue, IncomingMessage, LiteCertificate, Medium, MessageAction, Origin, Target,
+        Block, BlockAndRound, BlockProposal, Certificate, CertificateValue,
+        ExecutedBlock, HashedValue, IncomingMessage, LiteCertificate, Medium,
+        MessageAction, Origin, Target,
     },
     ChainManagerOutcome, ChainStateView,
 };
@@ -29,7 +32,9 @@ use linera_views::{
     views::{RootView, View, ViewError},
 };
 use lru::LruCache;
-use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
+use prometheus::{
+    register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
@@ -201,7 +206,9 @@ pub enum WorkerError {
     IncorrectStateHash,
     #[error("The given messages are not what we computed after executing the block")]
     IncorrectMessages,
-    #[error("The given message counts are not what we computed after executing the block")]
+    #[error(
+        "The given message counts are not what we computed after executing the block"
+    )]
     IncorrectMessageCounts,
     #[error("The timestamp of a Tick operation is in the future.")]
     InvalidTimestamp,
@@ -251,7 +258,11 @@ pub(crate) type DeliveryNotifiers =
     HashMap<ChainId, BTreeMap<BlockHeight, Vec<oneshot::Sender<()>>>>;
 
 impl<StorageClient> WorkerState<StorageClient> {
-    pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: StorageClient) -> Self {
+    pub fn new(
+        nickname: String,
+        key_pair: Option<KeyPair>,
+        storage: StorageClient,
+    ) -> Self {
         let recent_values = Arc::new(Mutex::new(LruCache::new(
             NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap(),
         )));
@@ -341,7 +352,10 @@ impl<StorageClient> WorkerState<StorageClient> {
             .ok_or(WorkerError::InvalidLiteCertificate)
     }
 
-    pub(crate) async fn recent_value(&mut self, hash: &CryptoHash) -> Option<HashedValue> {
+    pub(crate) async fn recent_value(
+        &mut self,
+        hash: &CryptoHash,
+    ) -> Option<HashedValue> {
         self.recent_values.lock().await.get(hash).cloned()
     }
 }
@@ -369,7 +383,8 @@ where
         blobs: Vec<HashedValue>,
         mut notifications: Option<&mut Vec<Notification>>,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let (response, actions) = self.handle_certificate(certificate, blobs, None).await?;
+        let (response, actions) =
+            self.handle_certificate(certificate, blobs, None).await?;
         if let Some(notifications) = notifications.as_mut() {
             notifications.extend(actions.notifications);
         }
@@ -462,8 +477,9 @@ where
         sender: ChainId,
         recipient: ChainId,
     ) -> Result<CrossChainRequest, WorkerError> {
-        let heights =
-            BTreeSet::from_iter(height_map.iter().flat_map(|(_, heights)| heights).copied());
+        let heights = BTreeSet::from_iter(
+            height_map.iter().flat_map(|(_, heights)| heights).copied(),
+        );
         let mut heights_usize = Vec::new();
         for height in heights {
             heights_usize.push(height.try_into()?);
@@ -517,7 +533,8 @@ where
         blobs: &[HashedValue],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
+        let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value()
+        else {
             panic!("Expecting a confirmation certificate");
         };
         let ExecutedBlock {
@@ -723,7 +740,8 @@ where
             .tip_state
             .get()
             .already_validated_block(block.height)?
-            || chain.manager.get().check_validated_block(&certificate)? == ChainManagerOutcome::Skip
+            || chain.manager.get().check_validated_block(&certificate)?
+                == ChainManagerOutcome::Skip
         {
             // If we just processed the same pending block, return the chain info unchanged.
             return Ok((
@@ -813,10 +831,12 @@ where
         let mut chain = self.storage.load_chain(recipient).await?;
         // Only process certificates with relevant heights and epochs.
         let next_height_to_receive = chain.next_block_height_to_receive(origin).await?;
-        let last_anticipated_block_height = chain.last_anticipated_block_height(origin).await?;
+        let last_anticipated_block_height =
+            chain.last_anticipated_block_height(origin).await?;
         let helper = CrossChainUpdateHelper {
             nickname: &self.nickname,
-            allow_messages_from_deprecated_epochs: self.allow_messages_from_deprecated_epochs,
+            allow_messages_from_deprecated_epochs: self
+                .allow_messages_from_deprecated_epochs,
             current_epoch: *chain.execution_state.system.epoch.get(),
             committees: chain.execution_state.system.committees.get(),
         };
@@ -827,7 +847,8 @@ where
             last_anticipated_block_height,
             certificates,
         )?;
-        let Some(last_updated_height) = certificates.last().map(|cert| cert.value().height())
+        let Some(last_updated_height) =
+            certificates.last().map(|cert| cert.value().height())
         else {
             return Ok(None);
         };
@@ -938,8 +959,10 @@ where
         message_id: MessageId,
     ) -> Result<Option<IncomingMessage>, WorkerError> {
         let sender = message_id.chain_id;
-        let index = usize::try_from(message_id.index).map_err(|_| ArithmeticError::Overflow)?;
-        let Some(certificate) = self.read_certificate(sender, message_id.height).await? else {
+        let index =
+            usize::try_from(message_id.index).map_err(|_| ArithmeticError::Overflow)?;
+        let Some(certificate) = self.read_certificate(sender, message_id.height).await?
+        else {
             return Ok(None);
         };
         let Some(messages) = certificate.value().messages() else {
@@ -1041,7 +1064,9 @@ where
         // Check if the chain is ready for this new block proposal.
         // This should always pass for nodes without voting key.
         chain.tip_state.get().verify_block_chaining(block)?;
-        if chain.manager.get().check_proposed_block(&proposal)? == ChainManagerOutcome::Skip {
+        if chain.manager.get().check_proposed_block(&proposal)?
+            == ChainManagerOutcome::Skip
+        {
             // If we just processed the same pending block, return the chain info unchanged.
             return Ok((
                 ChainInfoResponse::new(&chain, self.key_pair()),
@@ -1130,7 +1155,8 @@ where
         let (info, actions) = match certificate.value() {
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                let (info, actions, d) = self.process_validated_block(certificate).await?;
+                let (info, actions, d) =
+                    self.process_validated_block(certificate).await?;
                 duplicated = d;
                 (info, actions)
             }
@@ -1190,7 +1216,8 @@ where
         }
         let mut info = ChainInfo::from(&chain);
         if query.request_committees {
-            info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
+            info.requested_committees =
+                Some(chain.execution_state.system.committees.get().clone());
         }
         if let Some(next_block_height) = query.test_next_block_height {
             ensure!(
@@ -1222,7 +1249,9 @@ where
             let end = match range.limit {
                 None => chain.confirmed_log.count(),
                 Some(limit) => start
-                    .checked_add(usize::try_from(limit).map_err(|_| ArithmeticError::Overflow)?)
+                    .checked_add(
+                        usize::try_from(limit).map_err(|_| ArithmeticError::Overflow)?,
+                    )
                     .ok_or(ArithmeticError::Overflow)?
                     .min(chain.confirmed_log.count()),
             };
@@ -1268,7 +1297,9 @@ where
                     let origin = Origin { sender, medium };
                     let app_certificates = certificates
                         .iter()
-                        .filter(|cert| heights.binary_search(&cert.value().height()).is_ok())
+                        .filter(|cert| {
+                            heights.binary_search(&cert.value().height()).is_ok()
+                        })
                         .cloned()
                         .collect();
                     if let Some(height) = self
@@ -1290,11 +1321,12 @@ where
                         reason: Reason::NewIncomingMessage { origin, height },
                     });
                 }
-                let cross_chain_requests = vec![CrossChainRequest::ConfirmUpdatedRecipient {
-                    sender,
-                    recipient,
-                    latest_heights,
-                }];
+                let cross_chain_requests =
+                    vec![CrossChainRequest::ConfirmUpdatedRecipient {
+                        sender,
+                        recipient,
+                        latest_heights,
+                    }];
                 Ok(NetworkActions {
                     cross_chain_requests,
                     notifications,
@@ -1326,7 +1358,9 @@ where
                                 trace!("Notifying {} callers", notifiers.len());
                                 for notifier in notifiers {
                                     if let Err(()) = notifier.send(()) {
-                                        warn!("Failed to notify message delivery to caller");
+                                        warn!(
+                                            "Failed to notify message delivery to caller"
+                                        );
                                     }
                                 }
                             }

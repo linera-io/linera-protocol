@@ -3,8 +3,8 @@
 
 use super::{DynamoDbContext, TableName, TableStatus};
 use crate::dynamo_db::{
-    clear_tables, create_dynamo_db_common_config, list_tables_from_client, DynamoDbContextError,
-    DynamoDbStoreConfig, LocalStackTestContext,
+    clear_tables, create_dynamo_db_common_config, list_tables_from_client,
+    DynamoDbContextError, DynamoDbStoreConfig, LocalStackTestContext,
 };
 use anyhow::Error;
 

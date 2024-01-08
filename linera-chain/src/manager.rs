@@ -67,8 +67,8 @@
 
 use crate::{
     data_types::{
-        BlockAndRound, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
-        HashedValue, LiteVote, Vote,
+        BlockAndRound, BlockExecutionOutcome, BlockProposal, Certificate,
+        CertificateValue, HashedValue, LiteVote, Vote,
     },
     ChainError,
 };
@@ -195,7 +195,10 @@ impl ChainManager {
     }
 
     /// Verifies the safety of a proposed block with respect to voting rules.
-    pub fn check_proposed_block(&self, proposal: &BlockProposal) -> Result<Outcome, ChainError> {
+    pub fn check_proposed_block(
+        &self,
+        proposal: &BlockProposal,
+    ) -> Result<Outcome, ChainError> {
         let new_round = proposal.content.round;
         let new_block = &proposal.content.block;
         let owner = &proposal.owner;
@@ -254,7 +257,9 @@ impl ChainManager {
             let block = locked.value().block().ok_or_else(|| {
                 // Should be unreachable: We only put validated block certificates into the locked
                 // field, and we checked that the proposal includes only validated blocks.
-                ChainError::InternalError("locked certificate must contain block".to_string())
+                ChainError::InternalError(
+                    "locked certificate must contain block".to_string(),
+                )
             })?;
             ensure!(
                 locked.round < new_round && block == new_block,
@@ -291,7 +296,10 @@ impl ChainManager {
     }
 
     /// Verifies that we can vote to confirm a validated block.
-    pub fn check_validated_block(&self, certificate: &Certificate) -> Result<Outcome, ChainError> {
+    pub fn check_validated_block(
+        &self,
+        certificate: &Certificate,
+    ) -> Result<Outcome, ChainError> {
         let new_block = certificate.value().block();
         let new_round = certificate.round;
         if let Some(Vote { value, round, .. }) = &self.pending {
@@ -400,7 +408,11 @@ impl ChainManager {
 
     /// Updates the round number and timer if the timeout certificate is from a higher round than
     /// any known certificate.
-    pub fn handle_timeout_certificate(&mut self, certificate: Certificate, local_time: Timestamp) {
+    pub fn handle_timeout_certificate(
+        &mut self,
+        certificate: Certificate,
+        local_time: Timestamp,
+    ) {
         if !certificate.value().is_timeout() {
             // Unreachable: This is only called with timeout certificates.
             error!("Unexpected certificate; expected leader timeout");
@@ -435,7 +447,8 @@ impl ChainManager {
             }
             Round::SingleLeader(r) => {
                 let index = self.round_leader_index(r)?;
-                let (leader, (public_key, _)) = self.ownership.owners.iter().nth(index)?;
+                let (leader, (public_key, _)) =
+                    self.ownership.owners.iter().nth(index)?;
                 (*leader == proposal.owner).then_some(*public_key)
             }
         }
@@ -542,7 +555,9 @@ impl ChainManagerInfo {
             .requested_locked
             .as_ref()
             .map(|certificate| certificate.round);
-        if proposal_round != Some(self.current_round) && locked_round != Some(self.current_round) {
+        if proposal_round != Some(self.current_round)
+            && locked_round != Some(self.current_round)
+        {
             // There's no proposal or locked block yet in the current round.
             Some(self.current_round)
         } else if self.current_round.is_multi_leader() {

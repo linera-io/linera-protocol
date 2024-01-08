@@ -32,8 +32,8 @@ use linera_execution::{
     committee::{Committee, Epoch},
     policy::ResourceControlPolicy,
     system::{Account, Recipient, SystemOperation, UserData},
-    ChainOwnership, ExecutionError, Message, Operation, SystemExecutionError, SystemMessage,
-    SystemQuery, SystemResponse,
+    ChainOwnership, ExecutionError, Message, Operation, SystemExecutionError,
+    SystemMessage, SystemQuery, SystemResponse,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -50,30 +50,35 @@ use crate::client::client_test_utils::MakeDynamoDbStorage;
 use crate::client::client_test_utils::MakeScyllaDbStorage;
 
 #[test(tokio::test)]
-pub async fn test_memory_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
-{
-    run_test_initiating_valid_transfer_with_notifications(MakeMemoryStorage::default()).await
+pub async fn test_memory_initiating_valid_transfer_with_notifications(
+) -> Result<(), anyhow::Error> {
+    run_test_initiating_valid_transfer_with_notifications(MakeMemoryStorage::default())
+        .await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocks_db_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error> {
+async fn test_rocks_db_initiating_valid_transfer_with_notifications(
+) -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_initiating_valid_transfer_with_notifications(MakeRocksDbStorage::default()).await
+    run_test_initiating_valid_transfer_with_notifications(MakeRocksDbStorage::default())
+        .await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
-{
-    run_test_initiating_valid_transfer_with_notifications(MakeDynamoDbStorage::default()).await
+async fn test_dynamo_db_initiating_valid_transfer_with_notifications(
+) -> Result<(), anyhow::Error> {
+    run_test_initiating_valid_transfer_with_notifications(MakeDynamoDbStorage::default())
+        .await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
-async fn test_scylla_db_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
-{
-    run_test_initiating_valid_transfer_with_notifications(MakeScyllaDbStorage::default()).await
+async fn test_scylla_db_initiating_valid_transfer_with_notifications(
+) -> Result<(), anyhow::Error> {
+    run_test_initiating_valid_transfer_with_notifications(MakeScyllaDbStorage::default())
+        .await
 }
 
 async fn run_test_initiating_valid_transfer_with_notifications<B>(
@@ -114,7 +119,11 @@ where
         );
         assert_eq!(
             builder
-                .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
+                .check_that_validators_have_certificate(
+                    sender.chain_id,
+                    BlockHeight::ZERO,
+                    3
+                )
                 .await
                 .unwrap()
                 .value,
@@ -579,7 +588,9 @@ async fn test_scylla_db_open_chain_then_close_it() -> Result<(), anyhow::Error> 
     run_test_open_chain_then_close_it(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_open_chain_then_close_it<B>(storage_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_open_chain_then_close_it<B>(
+    storage_builder: B,
+) -> Result<(), anyhow::Error>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -641,7 +652,9 @@ async fn test_scylla_db_transfer_then_open_chain() -> Result<(), anyhow::Error> 
     run_test_transfer_then_open_chain(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_transfer_then_open_chain<B>(storage_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_transfer_then_open_chain<B>(
+    storage_builder: B,
+) -> Result<(), anyhow::Error>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -687,7 +700,11 @@ where
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(parent.chain_id, BlockHeight::from(0), 3)
+            .check_that_validators_have_certificate(
+                parent.chain_id,
+                BlockHeight::from(0),
+                3
+            )
             .await
             .unwrap()
             .value,
@@ -758,7 +775,9 @@ async fn test_scylla_db_open_chain_must_be_first() -> Result<(), anyhow::Error> 
     run_test_open_chain_must_be_first(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_open_chain_must_be_first<B>(storage_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_open_chain_must_be_first<B>(
+    storage_builder: B,
+) -> Result<(), anyhow::Error>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -800,7 +819,11 @@ where
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(1), 3)
+            .check_that_validators_have_certificate(
+                sender.chain_id,
+                BlockHeight::from(1),
+                3
+            )
             .await
             .unwrap()
             .value,
@@ -865,7 +888,9 @@ async fn test_scylla_db_open_chain_then_transfer() -> Result<(), anyhow::Error> 
     run_test_open_chain_then_transfer(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_open_chain_then_transfer<B>(storage_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_open_chain_then_transfer<B>(
+    storage_builder: B,
+) -> Result<(), anyhow::Error>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -1009,27 +1034,34 @@ where
 }
 
 #[test(tokio::test)]
-async fn test_memory_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
+async fn test_memory_initiating_valid_transfer_too_many_faults(
+) -> Result<(), anyhow::Error> {
     run_test_initiating_valid_transfer_too_many_faults(MakeMemoryStorage::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocks_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
+async fn test_rocks_db_initiating_valid_transfer_too_many_faults(
+) -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_initiating_valid_transfer_too_many_faults(MakeRocksDbStorage::default()).await
+    run_test_initiating_valid_transfer_too_many_faults(MakeRocksDbStorage::default())
+        .await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer_too_many_faults(MakeDynamoDbStorage::default()).await
+async fn test_dynamo_db_initiating_valid_transfer_too_many_faults(
+) -> Result<(), anyhow::Error> {
+    run_test_initiating_valid_transfer_too_many_faults(MakeDynamoDbStorage::default())
+        .await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
-async fn test_scylla_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer_too_many_faults(MakeScyllaDbStorage::default()).await
+async fn test_scylla_db_initiating_valid_transfer_too_many_faults(
+) -> Result<(), anyhow::Error> {
+    run_test_initiating_valid_transfer_too_many_faults(MakeScyllaDbStorage::default())
+        .await
 }
 
 async fn run_test_initiating_valid_transfer_too_many_faults<B>(
@@ -1055,7 +1087,9 @@ where
         matches!(
             result,
             Err(ChainClientError::CommunicationError(
-                CommunicationError::Trusted(crate::node::NodeError::ArithmeticError { .. })
+                CommunicationError::Trusted(
+                    crate::node::NodeError::ArithmeticError { .. }
+                )
             ))
         ),
         "Unexpected result {:?}",
@@ -1094,7 +1128,9 @@ async fn test_scylla_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
     run_test_bidirectional_transfer(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_bidirectional_transfer<B>(storage_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_bidirectional_transfer<B>(
+    storage_builder: B,
+) -> Result<(), anyhow::Error>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -1142,7 +1178,11 @@ where
 
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(
+                client1.chain_id,
+                BlockHeight::ZERO,
+                3
+            )
             .await
             .unwrap()
             .value,
@@ -1225,7 +1265,9 @@ async fn test_scylla_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::E
     run_test_receiving_unconfirmed_transfer(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_receiving_unconfirmed_transfer<B>(storage_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_receiving_unconfirmed_transfer<B>(
+    storage_builder: B,
+) -> Result<(), anyhow::Error>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -1594,7 +1636,9 @@ async fn test_scylla_db_request_leader_timeout() -> Result<(), anyhow::Error> {
     run_test_request_leader_timeout(MakeScyllaDbStorage::default()).await
 }
 
-async fn run_test_request_leader_timeout<B>(storage_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_request_leader_timeout<B>(
+    storage_builder: B,
+) -> Result<(), anyhow::Error>
 where
     B: StorageBuilder,
     ViewError: From<<B::Storage as Storage>::ContextError>,
@@ -1642,7 +1686,12 @@ where
 
     let expected_round = Round::SingleLeader(1);
     builder
-        .check_that_validators_are_in_round(chain_id, BlockHeight::from(1), expected_round, 3)
+        .check_that_validators_are_in_round(
+            chain_id,
+            BlockHeight::from(1),
+            expected_round,
+            3,
+        )
         .await;
 
     let round = loop {
@@ -1669,7 +1718,9 @@ where
         .await
         .unwrap();
     let timeout = match result {
-        ClientOutcome::Committed(_) => panic!("Committed a block where we aren't the leader."),
+        ClientOutcome::Committed(_) => {
+            panic!("Committed a block where we aren't the leader.")
+        }
         ClientOutcome::WaitForTimeout(timeout) => timeout,
     };
     assert!(client.request_leader_timeout().await.is_err());
@@ -1677,7 +1728,12 @@ where
     client.request_leader_timeout().await.unwrap();
     let expected_round = Round::SingleLeader(round_number + 1);
     builder
-        .check_that_validators_are_in_round(chain_id, BlockHeight::from(1), expected_round, 3)
+        .check_that_validators_are_in_round(
+            chain_id,
+            BlockHeight::from(1),
+            expected_round,
+            3,
+        )
         .await;
 
     loop {
@@ -1707,7 +1763,12 @@ where
 
     let expected_round = Round::SingleLeader(0);
     builder
-        .check_that_validators_are_in_round(chain_id, BlockHeight::from(2), expected_round, 3)
+        .check_that_validators_are_in_round(
+            chain_id,
+            BlockHeight::from(2),
+            expected_round,
+            3,
+        )
         .await;
 
     Ok(())

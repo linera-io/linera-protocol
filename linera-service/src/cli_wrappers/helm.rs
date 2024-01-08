@@ -19,7 +19,8 @@ impl HelmRelease {
         num_shards: usize,
         cluster_id: u32,
     ) -> Result<()> {
-        let execution_dir = format!("{}/kubernetes/linera-validator", github_root.display());
+        let execution_dir =
+            format!("{}/kubernetes/linera-validator", github_root.display());
 
         let configs_dir = diff_paths(configs_dir, execution_dir.clone())
             .context("Getting relative path failed")?;
@@ -35,7 +36,9 @@ impl HelmRelease {
             .args(["--set", "installCRDs=true"])
             .args([
                 "--set",
-                &format!("validator.serverConfig={configs_dir}/server_{server_config_id}.json"),
+                &format!(
+                    "validator.serverConfig={configs_dir}/server_{server_config_id}.json"
+                ),
             ])
             .args([
                 "--set",

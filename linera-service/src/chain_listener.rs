@@ -165,7 +165,8 @@ where
                 for outgoing_message in &executed_block.messages {
                     if let OutgoingMessage {
                         destination: Destination::Recipient(new_id),
-                        message: Message::System(SystemMessage::OpenChain { ownership, .. }),
+                        message:
+                            Message::System(SystemMessage::OpenChain { ownership, .. }),
                         ..
                     } = outgoing_message
                     {
@@ -177,9 +178,13 @@ where
                                 .map(|(public_key, _)| public_key)
                                 .chain(ownership.super_owners.values())
                                 .find_map(|public_key| {
-                                    context_guard.wallet_state().key_pair_for_pk(public_key)
+                                    context_guard
+                                        .wallet_state()
+                                        .key_pair_for_pk(public_key)
                                 });
-                            context_guard.update_wallet_for_new_chain(*new_id, key_pair, timestamp);
+                            context_guard.update_wallet_for_new_chain(
+                                *new_id, key_pair, timestamp,
+                            );
                         }
                         Self::run_with_chain_id(
                             *new_id,
@@ -197,7 +202,10 @@ where
         Ok(())
     }
 
-    async fn handle_notification(client: &mut ChainClient<P, S>, notification: Notification) {
+    async fn handle_notification(
+        client: &mut ChainClient<P, S>,
+        notification: Notification,
+    ) {
         match &notification.reason {
             Reason::NewBlock { .. } => {
                 if let Err(e) = client.update_validators().await {

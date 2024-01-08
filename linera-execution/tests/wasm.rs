@@ -13,8 +13,8 @@ use linera_base::{
 };
 use linera_execution::{
     policy::ResourceControlPolicy, ExecutionResult, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, ExecutionStateView, Operation, OperationContext, Query, QueryContext,
-    RawExecutionResult, ResourceTracker, Response, SystemExecutionState,
+    ExecutionRuntimeContext, ExecutionStateView, Operation, OperationContext, Query,
+    QueryContext, RawExecutionResult, ResourceTracker, Response, SystemExecutionState,
     TestExecutionRuntimeContext, WasmContractModule, WasmRuntime, WasmServiceModule,
 };
 use linera_views::{memory::MemoryContext, views::View};
@@ -53,15 +53,19 @@ async fn test_fuel_for_counter_wasm_application(
         .register_application(app_desc.clone())
         .await?;
 
-    let contract =
-        WasmContractModule::from_file("tests/fixtures/counter_contract.wasm", wasm_runtime).await?;
+    let contract = WasmContractModule::from_file(
+        "tests/fixtures/counter_contract.wasm",
+        wasm_runtime,
+    )
+    .await?;
     view.context()
         .extra
         .user_contracts()
         .insert(app_id, Arc::new(contract));
 
     let service =
-        WasmServiceModule::from_file("tests/fixtures/counter_service.wasm", wasm_runtime).await?;
+        WasmServiceModule::from_file("tests/fixtures/counter_service.wasm", wasm_runtime)
+            .await?;
     view.context()
         .extra
         .user_services()
@@ -107,8 +111,10 @@ async fn test_fuel_for_counter_wasm_application(
         chain_id: ChainId::root(0),
     };
     let expected_value = async_graphql::Response::new(
-        async_graphql::Value::from_json(json!({"value" : increments.into_iter().sum::<u64>()}))
-            .unwrap(),
+        async_graphql::Value::from_json(
+            json!({"value" : increments.into_iter().sum::<u64>()}),
+        )
+        .unwrap(),
     );
     let request = async_graphql::Request::new("query { value }");
     let Response::User(serialized_value) = view

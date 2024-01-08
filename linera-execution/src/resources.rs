@@ -3,7 +3,9 @@
 
 //! This module tracks the resources used during the execution of a transaction.
 
-use crate::{policy::ResourceControlPolicy, system::SystemExecutionError, ExecutionError};
+use crate::{
+    policy::ResourceControlPolicy, system::SystemExecutionError, ExecutionError,
+};
 
 use custom_debug_derive::Debug;
 use linera_base::data_types::Amount;
@@ -71,12 +73,15 @@ impl Default for RuntimeLimits {
 
 impl ResourceTracker {
     /// Subtracts an amount from a balance and reports an error if that is impossible
-    fn sub_assign_fees(balance: &mut Amount, fees: Amount) -> Result<(), SystemExecutionError> {
-        balance
-            .try_sub_assign(fees)
-            .map_err(|_| SystemExecutionError::InsufficientFunding {
+    fn sub_assign_fees(
+        balance: &mut Amount,
+        fees: Amount,
+    ) -> Result<(), SystemExecutionError> {
+        balance.try_sub_assign(fees).map_err(|_| {
+            SystemExecutionError::InsufficientFunding {
                 current_balance: *balance,
-            })
+            }
+        })
     }
 
     /// Updates the limits for the maximum and updates the balance.
@@ -109,19 +114,29 @@ impl ResourceTracker {
         let bytes_written = runtime_counts.bytes_written;
         self.maximum_bytes_left_to_write -= bytes_written;
         self.bytes_written += bytes_written;
-        Self::sub_assign_fees(balance, policy.storage_bytes_written_price(bytes_written)?)?;
+        Self::sub_assign_fees(
+            balance,
+            policy.storage_bytes_written_price(bytes_written)?,
+        )?;
 
         Ok(())
     }
 
     /// Obtain the limits for the running of the system
-    pub fn limits(&self, policy: &ResourceControlPolicy, balance: &Amount) -> RuntimeLimits {
+    pub fn limits(
+        &self,
+        policy: &ResourceControlPolicy,
+        balance: &Amount,
+    ) -> RuntimeLimits {
         let max_budget_num_reads =
-            u64::try_from(balance.saturating_div(policy.storage_num_reads)).unwrap_or(u64::MAX);
+            u64::try_from(balance.saturating_div(policy.storage_num_reads))
+                .unwrap_or(u64::MAX);
         let max_budget_bytes_read =
-            u64::try_from(balance.saturating_div(policy.storage_bytes_read)).unwrap_or(u64::MAX);
+            u64::try_from(balance.saturating_div(policy.storage_bytes_read))
+                .unwrap_or(u64::MAX);
         let max_budget_bytes_written =
-            u64::try_from(balance.saturating_div(policy.storage_bytes_read)).unwrap_or(u64::MAX);
+            u64::try_from(balance.saturating_div(policy.storage_bytes_read))
+                .unwrap_or(u64::MAX);
         RuntimeLimits {
             max_budget_num_reads,
             max_budget_bytes_read,
@@ -148,7 +163,10 @@ pub struct RuntimeCounts {
 }
 
 impl RuntimeCounts {
-    pub fn increment_num_reads(&mut self, limits: &RuntimeLimits) -> Result<(), ExecutionError> {
+    pub fn increment_num_reads(
+        &mut self,
+        limits: &RuntimeLimits,
+    ) -> Result<(), ExecutionError> {
         self.num_reads += 1;
         if self.num_reads >= limits.max_budget_num_reads {
             return Err(ExecutionError::ExcessiveNumReads);

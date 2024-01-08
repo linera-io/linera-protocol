@@ -42,7 +42,8 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     SimpleFunction: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module::<SimpleFunction>("import", "simple-function");
+    let instance =
+        factory.load_test_module::<SimpleFunction>("import", "simple-function");
 
     Entrypoint::new(instance)
         .entrypoint()

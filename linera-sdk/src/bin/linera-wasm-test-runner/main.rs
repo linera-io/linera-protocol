@@ -124,7 +124,8 @@ impl<'a> Test<'a> {
             let mut store = Store::new(linker.engine(), Resources::default());
             let instance = linker.instantiate_async(&mut store, test_module).await?;
 
-            let function = instance.get_typed_func::<(), (), _>(&mut store, self.function)?;
+            let function =
+                instance.get_typed_func::<(), (), _>(&mut store, self.function)?;
 
             report.result(function.call_async(&mut store, ()).await);
         }

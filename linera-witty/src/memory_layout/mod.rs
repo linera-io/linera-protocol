@@ -12,4 +12,6 @@ mod flat_layout;
 mod join_flat_layouts;
 mod layout;
 
-pub use self::{flat_layout::FlatLayout, join_flat_layouts::JoinFlatLayouts, layout::Layout};
+pub use self::{
+    flat_layout::FlatLayout, join_flat_layouts::JoinFlatLayouts, layout::Layout,
+};

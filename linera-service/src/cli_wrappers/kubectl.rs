@@ -17,7 +17,12 @@ impl KubectlInstance {
         }
     }
 
-    pub fn port_forward(&mut self, pod_name: &str, ports: &str, cluster_id: u32) -> Result<()> {
+    pub fn port_forward(
+        &mut self,
+        pod_name: &str,
+        ports: &str,
+        cluster_id: u32,
+    ) -> Result<()> {
         let port_forward_child = Command::new("kubectl")
             .arg("port-forward")
             .arg(pod_name)

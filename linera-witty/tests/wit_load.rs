@@ -27,7 +27,8 @@ fn test_simple_bool_wrapper() {
 /// properly loaded from memory and lifted from its flat layout.
 #[test]
 fn test_tuple_struct_without_padding() {
-    let expected = TupleWithoutPadding(0x0807_0605_0403_0201_u64, 0x0c0b_0a09_i32, 0x0e0d_i16);
+    let expected =
+        TupleWithoutPadding(0x0807_0605_0403_0201_u64, 0x0c0b_0a09_i32, 0x0e0d_i16);
 
     test_load_from_memory(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], &expected);
     test_lift_from_flat_layout(
@@ -41,7 +42,8 @@ fn test_tuple_struct_without_padding() {
 /// fields is properly loaded from memory and lifted from its flat layout.
 #[test]
 fn test_tuple_struct_with_padding() {
-    let expected = TupleWithPadding(0x0201_u16, 0x0807_0605_u32, 0x100f_0e0d_0c0b_0a09_i64);
+    let expected =
+        TupleWithPadding(0x0201_u16, 0x0807_0605_u32, 0x100f_0e0d_0c0b_0a09_i64);
 
     test_load_from_memory(
         &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
@@ -67,7 +69,8 @@ fn test_named_struct_with_double_padding() {
 
     test_load_from_memory(
         &[
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+            22, 23, 24,
         ],
         &expected,
     );
@@ -101,9 +104,9 @@ fn test_nested_types() {
 
     test_load_from_memory(
         &[
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-            25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46,
-            47, 48, 49, 50, 51, 52, 53, 54, 55, 56,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+            22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+            41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56,
         ],
         &expected,
     );
@@ -133,19 +136,25 @@ fn test_enum_type() {
         &expected,
     );
     test_lift_from_flat_layout(
-        hlist![0_i32, 0_i64, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32],
+        hlist![
+            0_i32, 0_i64, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32
+        ],
         &expected,
         &[],
     );
 
-    let expected = Enum::LargeVariantWithLooseAlignment(7, 8, 9, 10, 11, 12, 13, 14, 15, 16);
+    let expected =
+        Enum::LargeVariantWithLooseAlignment(7, 8, 9, 10, 11, 12, 13, 14, 15, 16);
 
     test_load_from_memory(
         &[1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
         &expected,
     );
     test_lift_from_flat_layout(
-        hlist![1_i32, 7_i64, 8_i32, 9_i32, 10_i32, 11_i32, 12_i32, 13_i32, 14_i32, 15_i32, 16_i32],
+        hlist![
+            1_i32, 7_i64, 8_i32, 9_i32, 10_i32, 11_i32, 12_i32, 13_i32, 14_i32, 15_i32,
+            16_i32
+        ],
         &expected,
         &[],
     );

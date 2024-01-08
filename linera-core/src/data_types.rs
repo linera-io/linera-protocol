@@ -304,7 +304,9 @@ impl<T> ClientOutcome<T> {
     {
         match self {
             ClientOutcome::Committed(t) => ClientOutcome::Committed(f(t)),
-            ClientOutcome::WaitForTimeout(timeout) => ClientOutcome::WaitForTimeout(timeout),
+            ClientOutcome::WaitForTimeout(timeout) => {
+                ClientOutcome::WaitForTimeout(timeout)
+            }
         }
     }
 
@@ -315,7 +317,9 @@ impl<T> ClientOutcome<T> {
     {
         match self {
             ClientOutcome::Committed(t) => Ok(ClientOutcome::Committed(f(t)?)),
-            ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
+            ClientOutcome::WaitForTimeout(timeout) => {
+                Ok(ClientOutcome::WaitForTimeout(timeout))
+            }
         }
     }
 }

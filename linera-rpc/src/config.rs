@@ -86,7 +86,8 @@ impl NetworkProtocol {
 }
 
 /// The network configuration for all shards.
-pub type ValidatorInternalNetworkConfig = ValidatorInternalNetworkPreConfig<NetworkProtocol>;
+pub type ValidatorInternalNetworkConfig =
+    ValidatorInternalNetworkPreConfig<NetworkProtocol>;
 
 /// The public network configuration for a validator.
 pub type ValidatorPublicNetworkConfig = ValidatorPublicNetworkPreConfig<NetworkProtocol>;
@@ -110,7 +111,10 @@ pub struct ValidatorInternalNetworkPreConfig<P> {
 }
 
 impl<P> ValidatorInternalNetworkPreConfig<P> {
-    pub fn clone_with_protocol<Q>(&self, protocol: Q) -> ValidatorInternalNetworkPreConfig<Q> {
+    pub fn clone_with_protocol<Q>(
+        &self,
+        protocol: Q,
+    ) -> ValidatorInternalNetworkPreConfig<Q> {
         ValidatorInternalNetworkPreConfig {
             protocol,
             shards: self.shards.clone(),
@@ -146,7 +150,10 @@ pub struct ValidatorPublicNetworkPreConfig<P> {
 }
 
 impl<P> ValidatorPublicNetworkPreConfig<P> {
-    pub fn clone_with_protocol<Q>(&self, protocol: Q) -> ValidatorPublicNetworkPreConfig<Q> {
+    pub fn clone_with_protocol<Q>(
+        &self,
+        protocol: Q,
+    ) -> ValidatorPublicNetworkPreConfig<Q> {
         ValidatorPublicNetworkPreConfig {
             protocol,
             host: self.host.clone(),

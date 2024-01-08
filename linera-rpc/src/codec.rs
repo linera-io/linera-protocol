@@ -21,7 +21,11 @@ pub struct Codec;
 impl Encoder<RpcMessage> for Codec {
     type Error = Error;
 
-    fn encode(&mut self, message: RpcMessage, buffer: &mut BytesMut) -> Result<(), Self::Error> {
+    fn encode(
+        &mut self,
+        message: RpcMessage,
+        buffer: &mut BytesMut,
+    ) -> Result<(), Self::Error> {
         let mut frame_buffer = buffer.split_off(buffer.len());
 
         frame_buffer.put_u32_le(0);
@@ -53,7 +57,10 @@ impl Decoder for Codec {
     type Item = RpcMessage;
     type Error = Error;
 
-    fn decode(&mut self, buffer: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+    fn decode(
+        &mut self,
+        buffer: &mut BytesMut,
+    ) -> Result<Option<Self::Item>, Self::Error> {
         if buffer.len() < PREFIX_SIZE.into() {
             return Ok(None);
         }
@@ -74,8 +81,8 @@ impl Decoder for Codec {
         let _prefix = buffer.split_to(PREFIX_SIZE.into());
         let payload = buffer.split_to(payload_size);
 
-        let message =
-            bincode::deserialize(&payload).map_err(|error| Error::Deserialization(*error))?;
+        let message = bincode::deserialize(&payload)
+            .map_err(|error| Error::Deserialization(*error))?;
 
         Ok(Some(message))
     }
@@ -124,7 +131,10 @@ mod tests {
         let payload = bincode::serialize(&message).expect("RpcMessage is serializable");
 
         let mut buffer = BytesMut::with_capacity(
-            leading_bytes.len() + PREFIX_SIZE as usize + payload.len() + trailing_bytes.len(),
+            leading_bytes.len()
+                + PREFIX_SIZE as usize
+                + payload.len()
+                + trailing_bytes.len(),
         );
 
         buffer.extend_from_slice(&leading_bytes);

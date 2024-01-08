@@ -16,12 +16,16 @@ use std::{
 
 /// The owner of a chain. This is currently the hash of the owner's public key used to
 /// verify signatures.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize,
+)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct Owner(pub CryptoHash);
 
 /// How to create a chain.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize,
+)]
 pub enum ChainDescription {
     /// The chain was created by the genesis configuration.
     Root(u32),
@@ -42,7 +46,9 @@ impl ChainDescription {
 pub struct ChainId(pub CryptoHash);
 
 /// The index of a message in a chain.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize,
+)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct MessageId {
     pub chain_id: ChainId,
@@ -193,7 +199,8 @@ impl<A> Serialize for BytecodeId<A> {
         S: serde::ser::Serializer,
     {
         if serializer.is_human_readable() {
-            let bytes = bcs::to_bytes(&self.message_id).map_err(serde::ser::Error::custom)?;
+            let bytes =
+                bcs::to_bytes(&self.message_id).map_err(serde::ser::Error::custom)?;
             serializer.serialize_str(&hex::encode(bytes))
         } else {
             SerializableBytecodeId::serialize(
@@ -364,9 +371,11 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
     {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            let application_id_bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+            let application_id_bytes =
+                hex::decode(s).map_err(serde::de::Error::custom)?;
             let application_id: SerializableApplicationId =
-                bcs::from_bytes(&application_id_bytes).map_err(serde::de::Error::custom)?;
+                bcs::from_bytes(&application_id_bytes)
+                    .map_err(serde::de::Error::custom)?;
             Ok(ApplicationId {
                 bytecode_id: application_id.bytecode_id.with_abi(),
                 creation: application_id.creation,
@@ -533,7 +542,10 @@ impl<'de, A> Deserialize<'de> for SessionId<A> {
 }
 
 impl Display for Owner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::result::Result<(), std::fmt::Error> {
         Display::fmt(&self.0, f)
     }
 }
@@ -581,7 +593,10 @@ impl TryFrom<&[u8]> for ChainId {
 }
 
 impl std::fmt::Debug for ChainId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{:?}", self.0)
     }
 }

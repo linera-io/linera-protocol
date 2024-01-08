@@ -5,8 +5,9 @@
 use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, Bytecode, BytecodeLocation, ChainOwnership, ChannelName,
-    ChannelSubscription, Destination, MessageContext, MessageKind, OperationContext, QueryContext,
-    RawExecutionResult, RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
+    ChannelSubscription, Destination, MessageContext, MessageKind, OperationContext,
+    QueryContext, RawExecutionResult, RawOutgoingMessage, UserApplicationDescription,
+    UserApplicationId,
 };
 use async_graphql::Enum;
 use custom_debug_derive::Debug;
@@ -389,7 +390,9 @@ impl FromStr for Account {
 }
 
 /// Optional user message attached to a transfer.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize,
+)]
 pub struct UserData(pub Option<[u8; 32]>);
 
 #[derive(Error, Debug)]
@@ -431,7 +434,9 @@ pub enum SystemExecutionError {
     InvalidAdminSubscription(ChainId, SystemChannel),
     #[error("Attempted to subscribe to self on channel {1} on chain {0}")]
     SelfSubscription(ChainId, SystemChannel),
-    #[error("Attempted to subscribe to a channel which does not exist ({1}) on chain {0}")]
+    #[error(
+        "Attempted to subscribe to a channel which does not exist ({1}) on chain {0}"
+    )]
     NoSuchChannel(ChainId, SystemChannel),
     #[error("Invalid unsubscription request to channel {1} on chain {0}")]
     InvalidUnsubscription(ChainId, SystemChannel),
@@ -447,7 +452,9 @@ pub enum SystemExecutionError {
     CannotRewindEpoch,
     #[error("Cannot decrease the chain's timestamp")]
     TicksOutOfOrder,
-    #[error("Attempt to create an application using unregistered bytecode identifier {0:?}")]
+    #[error(
+        "Attempt to create an application using unregistered bytecode identifier {0:?}"
+    )]
     UnknownBytecodeId(BytecodeId),
     #[error("Application {0:?} is not registered by the chain")]
     UnknownApplicationId(Box<UserApplicationId>),
@@ -558,7 +565,9 @@ where
                         .collect(),
                     owners: owners
                         .into_iter()
-                        .map(|(public_key, weight)| (Owner::from(public_key), (public_key, weight)))
+                        .map(|(public_key, weight)| {
+                            (Owner::from(public_key), (public_key, weight))
+                        })
                         .collect(),
                     multi_leader_rounds,
                 });
@@ -660,13 +669,20 @@ where
                 match admin_operation {
                     AdminOperation::CreateCommittee { epoch, committee } => {
                         ensure!(
-                            epoch == self.epoch.get().expect("chain is active").try_add_one()?,
+                            epoch
+                                == self
+                                    .epoch
+                                    .get()
+                                    .expect("chain is active")
+                                    .try_add_one()?,
                             SystemExecutionError::InvalidCommitteeCreation
                         );
                         self.committees.get_mut().insert(epoch, committee);
                         self.epoch.set(Some(epoch));
                         let message = RawOutgoingMessage {
-                            destination: Destination::Subscribers(SystemChannel::Admin.name()),
+                            destination: Destination::Subscribers(
+                                SystemChannel::Admin.name(),
+                            ),
                             authenticated: false,
                             kind: MessageKind::Protected,
                             message: SystemMessage::SetCommittees {
@@ -682,7 +698,9 @@ where
                             SystemExecutionError::InvalidCommitteeRemoval
                         );
                         let message = RawOutgoingMessage {
-                            destination: Destination::Subscribers(SystemChannel::Admin.name()),
+                            destination: Destination::Subscribers(
+                                SystemChannel::Admin.name(),
+                            ),
                             authenticated: false,
                             kind: MessageKind::Protected,
                             message: SystemMessage::SetCommittees {
@@ -702,7 +720,10 @@ where
                 if channel == SystemChannel::Admin {
                     ensure!(
                         self.admin_id.get().as_ref() == Some(&chain_id),
-                        SystemExecutionError::InvalidAdminSubscription(context.chain_id, channel)
+                        SystemExecutionError::InvalidAdminSubscription(
+                            context.chain_id,
+                            channel
+                        )
                     );
                 }
                 let subscription = ChannelSubscription {
@@ -732,7 +753,10 @@ where
                 };
                 ensure!(
                     self.subscriptions.contains(&subscription).await?,
-                    SystemExecutionError::InvalidUnsubscription(context.chain_id, channel)
+                    SystemExecutionError::InvalidUnsubscription(
+                        context.chain_id,
+                        channel
+                    )
                 );
                 self.subscriptions.remove(&subscription)?;
                 let message = RawOutgoingMessage {
@@ -907,7 +931,9 @@ where
                     .register_published_bytecode(bytecode_id, bytecode_location)?;
                 let locations = self.registry.bytecode_locations().await?;
                 let message = RawOutgoingMessage {
-                    destination: Destination::Subscribers(SystemChannel::PublishedBytecodes.name()),
+                    destination: Destination::Subscribers(
+                        SystemChannel::PublishedBytecodes.name(),
+                    ),
                     authenticated: false,
                     kind: MessageKind::Simple,
                     message: SystemMessage::BytecodeLocations { locations },
@@ -998,7 +1024,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ExecutionRuntimeConfig, ExecutionStateView, TestExecutionRuntimeContext};
+    use crate::{
+        ExecutionRuntimeConfig, ExecutionStateView, TestExecutionRuntimeContext,
+    };
     use linera_base::{
         crypto::{BcsSignable, KeyPair},
         data_types::BlockHeight,
@@ -1032,8 +1060,11 @@ mod tests {
             committees: BTreeMap::new(),
             ..SystemExecutionState::default()
         };
-        let view =
-            ExecutionStateView::from_system_state(state, ExecutionRuntimeConfig::default()).await;
+        let view = ExecutionStateView::from_system_state(
+            state,
+            ExecutionRuntimeConfig::default(),
+        )
+        .await;
         (view, context)
     }
 

@@ -10,8 +10,8 @@ use linera_core::worker::WorkerState;
 use linera_execution::{committee::ValidatorName, WasmRuntime, WithWasmDefault};
 use linera_rpc::{
     config::{
-        CrossChainConfig, NetworkProtocol, NotificationConfig, ShardConfig, ShardId, TlsConfig,
-        ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
+        CrossChainConfig, NetworkProtocol, NotificationConfig, ShardConfig, ShardId,
+        TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
     },
     grpc_network::GrpcServer,
     simple_network,
@@ -19,7 +19,8 @@ use linera_rpc::{
 };
 use linera_service::{
     config::{
-        CommitteeConfig, Export, GenesisConfig, Import, ValidatorConfig, ValidatorServerConfig,
+        CommitteeConfig, Export, GenesisConfig, Import, ValidatorConfig,
+        ValidatorServerConfig,
     },
     prometheus_server,
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfig},
@@ -190,7 +191,9 @@ impl Runnable for ServerContext {
                 info!("Running all shards");
                 let num_shards = self.server_config.internal_network.shards.len();
                 (0..num_shards)
-                    .map(|shard| self.make_shard_state(&listen_address, shard, storage.clone()))
+                    .map(|shard| {
+                        self.make_shard_state(&listen_address, shard, storage.clone())
+                    })
                     .collect()
             }
         };

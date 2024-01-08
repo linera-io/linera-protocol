@@ -32,7 +32,10 @@ impl AppStateStore {
         promise.wait()
     }
 
-    async fn find_key_values_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
+    async fn find_key_values_by_prefix_load(
+        &self,
+        key_prefix: &[u8],
+    ) -> Vec<(Vec<u8>, Vec<u8>)> {
         let promise = wit::FindKeyValues::new(key_prefix);
         yield_once().await;
         promise.wait()
@@ -80,7 +83,10 @@ impl KeyValueStore for AppStateStore {
         Ok(promise.wait())
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, ViewError> {
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, ViewError> {
         ensure!(
             key_prefix.len() <= Self::MAX_KEY_SIZE,
             ViewError::KeyTooLong

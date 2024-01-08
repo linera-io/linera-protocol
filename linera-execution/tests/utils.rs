@@ -9,7 +9,9 @@ use linera_base::{
 use linera_execution::{BytecodeLocation, UserApplicationDescription};
 use serde::{Deserialize, Serialize};
 
-pub fn create_dummy_user_application_description(index: u64) -> UserApplicationDescription {
+pub fn create_dummy_user_application_description(
+    index: u64,
+) -> UserApplicationDescription {
     let chain_id = ChainId::root(1);
     let certificate_hash = CryptoHash::new(&FakeCertificate);
     UserApplicationDescription {

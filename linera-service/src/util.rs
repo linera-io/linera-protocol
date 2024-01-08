@@ -18,7 +18,10 @@ use tracing::{debug, error};
 ///
 /// This is meant for binaries of the Linera repository. We use the current running binary
 /// to locate the parent directory where to look for the given name.
-pub async fn resolve_binary(name: &'static str, package: &'static str) -> Result<PathBuf> {
+pub async fn resolve_binary(
+    name: &'static str,
+    package: &'static str,
+) -> Result<PathBuf> {
     let current_binary = std::env::current_exe()?;
     resolve_binary_in_same_directory_as(&current_binary, name, package).await
 }
@@ -29,9 +32,9 @@ pub fn current_binary_parent() -> Result<PathBuf> {
 }
 
 pub fn binary_parent(current_binary: &Path) -> Result<PathBuf> {
-    let mut current_binary_parent = current_binary
-        .canonicalize()
-        .with_context(|| format!("Failed to canonicalize '{}'", current_binary.display()))?;
+    let mut current_binary_parent = current_binary.canonicalize().with_context(|| {
+        format!("Failed to canonicalize '{}'", current_binary.display())
+    })?;
     current_binary_parent.pop();
 
     #[cfg(any(test, feature = "test"))]
@@ -139,7 +142,8 @@ impl CommandExt for tokio::process::Command {
     fn spawn_into(&mut self) -> anyhow::Result<tokio::process::Child> {
         self.kill_on_drop(true);
         debug!("Spawning {:?}", self);
-        let child = tokio::process::Command::spawn(self).with_context(|| self.description())?;
+        let child =
+            tokio::process::Command::spawn(self).with_context(|| self.description())?;
         Ok(child)
     }
 

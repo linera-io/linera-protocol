@@ -53,7 +53,9 @@ impl From<wit_types::CalleeContext> for CalleeContext {
         CalleeContext {
             chain_id: ChainId(context.chain_id.into()),
             authenticated_signer: context.authenticated_signer.map(Owner::from),
-            authenticated_caller_id: context.authenticated_caller_id.map(ApplicationId::from),
+            authenticated_caller_id: context
+                .authenticated_caller_id
+                .map(ApplicationId::from),
         }
     }
 }

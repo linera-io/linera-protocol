@@ -73,7 +73,11 @@ impl ClientWrapper {
     }
 
     /// Runs `linera project new`.
-    pub async fn project_new(&self, project_name: &str, linera_root: &Path) -> Result<TempDir> {
+    pub async fn project_new(
+        &self,
+        project_name: &str,
+        linera_root: &Path,
+    ) -> Result<TempDir> {
         let tmp = TempDir::new()?;
         let mut command = self.command().await?;
         command
@@ -184,7 +188,8 @@ impl ClientWrapper {
             let mut lines = stdout.split_whitespace();
             let chain_id_str = lines.next().context("missing chain ID")?;
             let message_id_str = lines.next().context("missing message ID")?;
-            let certificate_hash_str = lines.next().context("missing certificate hash")?;
+            let certificate_hash_str =
+                lines.next().context("missing certificate hash")?;
             let outcome = ClaimOutcome {
                 chain_id: chain_id_str.parse().context("invalid chain ID")?,
                 message_id: message_id_str.parse().context("invalid message ID")?,
@@ -297,7 +302,10 @@ impl ClientWrapper {
     }
 
     /// Runs `linera service`.
-    pub async fn run_node_service(&self, port: impl Into<Option<u16>>) -> Result<NodeService> {
+    pub async fn run_node_service(
+        &self,
+        port: impl Into<Option<u16>>,
+    ) -> Result<NodeService> {
         let port = port.into().unwrap_or(8080);
         let mut command = self.command().await?;
         command.arg("service");
@@ -384,7 +392,12 @@ impl ClientWrapper {
     }
 
     /// Runs `linera transfer`.
-    pub async fn transfer(&self, amount: Amount, from: ChainId, to: ChainId) -> Result<()> {
+    pub async fn transfer(
+        &self,
+        amount: Amount,
+        from: ChainId,
+        to: ChainId,
+    ) -> Result<()> {
         self.command()
             .await?
             .arg("transfer")
@@ -427,7 +440,8 @@ impl ClientWrapper {
 
         let stdout = command.spawn_and_wait_for_stdout().await?;
         let mut split = stdout.split('\n');
-        let message_id: MessageId = split.next().context("no message ID in output")?.parse()?;
+        let message_id: MessageId =
+            split.next().context("no message ID in output")?.parse()?;
         let chain_id = ChainId::from_str(split.next().context("no chain ID in output")?)?;
 
         Ok((message_id, chain_id))
@@ -470,7 +484,8 @@ impl ClientWrapper {
 
         let stdout = command.spawn_and_wait_for_stdout().await?;
         let mut split = stdout.split('\n');
-        let message_id: MessageId = split.next().context("no message ID in output")?.parse()?;
+        let message_id: MessageId =
+            split.next().context("no message ID in output")?.parse()?;
         let chain_id = ChainId::from_str(split.next().context("no chain ID in output")?)?;
 
         Ok((message_id, chain_id))
@@ -519,7 +534,12 @@ impl ClientWrapper {
             .map_or(false, |wallet| wallet.get(chain).is_some())
     }
 
-    pub async fn set_validator(&self, name: &str, port: usize, votes: usize) -> Result<()> {
+    pub async fn set_validator(
+        &self,
+        name: &str,
+        port: usize,
+        votes: usize,
+    ) -> Result<()> {
         let address = format!("{}:127.0.0.1:{}", self.network.external_short(), port);
         self.command()
             .await?
@@ -611,8 +631,10 @@ impl ClientWrapper {
             false => path.join("target/wasm32-unknown-unknown/release"),
         };
 
-        let contract = release_dir.join(format!("{}_contract.wasm", name.replace('-', "_")));
-        let service = release_dir.join(format!("{}_service.wasm", name.replace('-', "_")));
+        let contract =
+            release_dir.join(format!("{}_contract.wasm", name.replace('-', "_")));
+        let service =
+            release_dir.join(format!("{}_service.wasm", name.replace('-', "_")));
 
         Ok((contract, service))
     }
@@ -681,7 +703,8 @@ impl NodeService {
         &self,
         chain_id: &ChainId,
     ) -> Result<HashMap<String, String>> {
-        let query = format!("query {{ applications(chainId: \"{chain_id}\") {{ id link }}}}");
+        let query =
+            format!("query {{ applications(chainId: \"{chain_id}\") {{ id link }}}}");
         let data = self.query_node(query).await?;
         data["applications"]
             .as_array()
@@ -739,10 +762,9 @@ impl NodeService {
                 response.status().is_success(),
                 "Query \"{}\" failed: {}",
                 query.get(..200).unwrap_or(query),
-                response
-                    .text()
-                    .await
-                    .unwrap_or_else(|error| format!("Could not get response text: {error}"))
+                response.text().await.unwrap_or_else(|error| format!(
+                    "Could not get response text: {error}"
+                ))
             );
             let value: Value = response.json().await.context("invalid JSON")?;
             if let Some(errors) = value.get("errors") {
@@ -973,8 +995,9 @@ impl Faucet {
         validators
             .into_iter()
             .map(|mut validator| {
-                let name = serde_json::from_value::<ValidatorName>(validator["name"].take())
-                    .context("could not parse current validators: invalid name")?;
+                let name =
+                    serde_json::from_value::<ValidatorName>(validator["name"].take())
+                        .context("could not parse current validators: invalid name")?;
                 let addr = validator["networkAddress"]
                     .as_str()
                     .context("could not parse current validators: invalid address")?
@@ -1026,7 +1049,10 @@ impl<A> ApplicationWrapper<A> {
         self.raw_query(&format!("query {{ {query} }}")).await
     }
 
-    pub async fn query_json<T: DeserializeOwned>(&self, query: impl AsRef<str>) -> Result<T> {
+    pub async fn query_json<T: DeserializeOwned>(
+        &self,
+        query: impl AsRef<str>,
+    ) -> Result<T> {
         let query = query.as_ref().trim();
         let name = query
             .split_once(|ch: char| !ch.is_alphanumeric())

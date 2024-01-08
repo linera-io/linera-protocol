@@ -14,7 +14,10 @@ pub trait Abi: ContractAbi + ServiceAbi {}
 // ANCHOR_END: abi
 
 // T::Parameters is duplicated for simplicity but it must match.
-impl<T> Abi for T where T: ContractAbi + ServiceAbi<Parameters = <T as ContractAbi>::Parameters> {}
+impl<T> Abi for T where
+    T: ContractAbi + ServiceAbi<Parameters = <T as ContractAbi>::Parameters>
+{
+}
 
 // ANCHOR: contract_abi
 /// A trait that includes all the types exported by a Linera application contract.
@@ -27,7 +30,12 @@ pub trait ContractAbi {
     ///
     /// To share configuration data on every chain, use [`ContractAbi::Parameters`]
     /// instead.
-    type InitializationArgument: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
+    type InitializationArgument: Serialize
+        + DeserializeOwned
+        + Send
+        + Sync
+        + Debug
+        + 'static;
 
     /// The type of operation executed by the application.
     ///

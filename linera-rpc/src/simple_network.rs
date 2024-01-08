@@ -15,7 +15,9 @@ use crate::{
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
 use linera_base::identifiers::ChainId;
-use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
+use linera_chain::data_types::{
+    BlockProposal, Certificate, HashedValue, LiteCertificate,
+};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
@@ -108,7 +110,10 @@ where
             // Send the cross-chain query and retry if needed.
             for i in 0..cross_chain_max_retries {
                 // Delay increases linearly with the attempt number.
-                tokio::time::sleep(cross_chain_sender_delay + cross_chain_retry_delay * i).await;
+                tokio::time::sleep(
+                    cross_chain_sender_delay + cross_chain_retry_delay * i,
+                )
+                .await;
 
                 let status = pool.send_message_to(message.clone(), &remote_address).await;
                 match status {
@@ -287,9 +292,9 @@ where
                 // No user to respond to.
                 Ok(None)
             }
-            RpcMessage::Vote(_) | RpcMessage::Error(_) | RpcMessage::ChainInfoResponse(_) => {
-                Err(NodeError::UnexpectedMessage)
-            }
+            RpcMessage::Vote(_)
+            | RpcMessage::Error(_)
+            | RpcMessage::ChainInfoResponse(_) => Err(NodeError::UnexpectedMessage),
         };
 
         self.server.packets_processed += 1;
@@ -333,7 +338,9 @@ where
                 self.server.shard_id,
                 shard_id
             );
-            if let Err(error) = self.cross_chain_sender.try_send((request.into(), shard_id)) {
+            if let Err(error) =
+                self.cross_chain_sender.try_send((request.into(), shard_id))
+            {
                 error!(%error, "dropping cross-chain request");
                 break;
             }
@@ -448,7 +455,10 @@ impl ValidatorNode for SimpleClient {
         self.send_recv_info(query.into()).await
     }
 
-    async fn subscribe(&mut self, _chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+    async fn subscribe(
+        &mut self,
+        _chains: Vec<ChainId>,
+    ) -> Result<NotificationStream, NodeError> {
         Err(NodeError::SubscriptionError {
             transport: self.network.protocol.to_string(),
         })

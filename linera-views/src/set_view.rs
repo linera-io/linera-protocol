@@ -302,7 +302,9 @@ where
         .await
     }
 
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+    async fn compute_hash(
+        &self,
+    ) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0;
         self.for_each_key(|key| {

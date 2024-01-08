@@ -35,17 +35,17 @@ mod conversions_to_wit;
 use super::{module_cache::ModuleCache, WasmExecutionError};
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
-    ApplicationCallResult, BaseRuntime, Bytecode, CalleeContext, ContractRuntime, ExecutionError,
-    MessageContext, OperationContext, QueryContext, RawExecutionResult, ServiceRuntime,
-    SessionCallResult,
+    ApplicationCallResult, BaseRuntime, Bytecode, CalleeContext, ContractRuntime,
+    ExecutionError, MessageContext, OperationContext, QueryContext, RawExecutionResult,
+    ServiceRuntime, SessionCallResult,
 };
 use bytes::Bytes;
 use linera_base::{identifiers::SessionId, sync::Lazy};
 use std::{marker::Unpin, sync::Arc};
 use tokio::sync::Mutex;
 use wasmer::{
-    imports, wasmparser::Operator, CompilerConfig, Engine, EngineBuilder, Instance, Module,
-    Singlepass, Store,
+    imports, wasmparser::Operator, CompilerConfig, Engine, EngineBuilder, Instance,
+    Module, Singlepass, Store,
 };
 use wasmer_middlewares::metering::{self, Metering, MeteringPoints};
 use wit_bindgen_host_wasmer_rust::Le;
@@ -57,7 +57,8 @@ static SERVICE_ENGINE: Lazy<Engine> = Lazy::new(|| {
 });
 
 /// A cache of compiled contract modules, with their respective [`Engine`] instances.
-static CONTRACT_CACHE: Lazy<Mutex<ModuleCache<CachedContractModule>>> = Lazy::new(Mutex::default);
+static CONTRACT_CACHE: Lazy<Mutex<ModuleCache<CachedContractModule>>> =
+    Lazy::new(Mutex::default);
 
 /// A cache of compiled service modules.
 static SERVICE_CACHE: Lazy<Mutex<ModuleCache<Module>>> = Lazy::new(Mutex::default);
@@ -90,10 +91,11 @@ where
     }
 
     fn persist_remaining_fuel(&mut self) -> Result<(), ExecutionError> {
-        let remaining_fuel = match metering::get_remaining_points(&mut self.store, &self.instance) {
-            MeteringPoints::Exhausted => 0,
-            MeteringPoints::Remaining(fuel) => fuel,
-        };
+        let remaining_fuel =
+            match metering::get_remaining_points(&mut self.store, &self.instance) {
+                MeteringPoints::Exhausted => 0,
+                MeteringPoints::Remaining(fuel) => fuel,
+            };
 
         self.runtime.set_remaining_fuel(remaining_fuel)
     }
@@ -110,7 +112,9 @@ pub struct WasmerServiceInstance {
 
 impl WasmContractModule {
     /// Creates a new [`WasmContractModule`] using Wasmer with the provided bytecodes.
-    pub async fn from_wasmer(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
+    pub async fn from_wasmer(
+        contract_bytecode: Bytecode,
+    ) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
         let (engine, module) = contract_cache
             .get_or_insert_with(contract_bytecode, CachedContractModule::new)
@@ -133,16 +137,21 @@ where
     ) -> Result<Self, WasmExecutionError> {
         let mut store = Store::new(contract_engine);
         let mut imports = imports! {};
-        let system_api_setup =
-            contract_system_api::add_to_imports(&mut store, &mut imports, runtime.clone());
+        let system_api_setup = contract_system_api::add_to_imports(
+            &mut store,
+            &mut imports,
+            runtime.clone(),
+        );
         let views_api_setup =
             view_system_api::add_to_imports(&mut store, &mut imports, runtime.clone());
         let (application, instance) =
             contract::Contract::instantiate(&mut store, contract_module, &mut imports)
                 .map_err(WasmExecutionError::LoadContractModule)?;
 
-        system_api_setup(&instance, &store).map_err(WasmExecutionError::LoadContractModule)?;
-        views_api_setup(&instance, &store).map_err(WasmExecutionError::LoadContractModule)?;
+        system_api_setup(&instance, &store)
+            .map_err(WasmExecutionError::LoadContractModule)?;
+        views_api_setup(&instance, &store)
+            .map_err(WasmExecutionError::LoadContractModule)?;
 
         Ok(Self {
             application,
@@ -174,7 +183,9 @@ impl WasmContractModule {
 
 impl WasmServiceModule {
     /// Creates a new [`WasmServiceModule`] using Wasmer with the provided bytecodes.
-    pub async fn from_wasmer(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
+    pub async fn from_wasmer(
+        service_bytecode: Bytecode,
+    ) -> Result<Self, WasmExecutionError> {
         let mut service_cache = SERVICE_CACHE.lock().await;
         let module = service_cache
             .get_or_insert_with(service_bytecode, |bytecode| {
@@ -199,13 +210,16 @@ impl WasmerServiceInstance {
         let mut imports = imports! {};
         let system_api_setup =
             service_system_api::add_to_imports(&mut store, &mut imports, runtime.clone());
-        let views_api_setup = view_system_api::add_to_imports(&mut store, &mut imports, runtime);
+        let views_api_setup =
+            view_system_api::add_to_imports(&mut store, &mut imports, runtime);
         let (application, instance) =
             service::Service::instantiate(&mut store, service_module, &mut imports)
                 .map_err(WasmExecutionError::LoadServiceModule)?;
 
-        system_api_setup(&instance, &store).map_err(WasmExecutionError::LoadServiceModule)?;
-        views_api_setup(&instance, &store).map_err(WasmExecutionError::LoadServiceModule)?;
+        system_api_setup(&instance, &store)
+            .map_err(WasmExecutionError::LoadServiceModule)?;
+        views_api_setup(&instance, &store)
+            .map_err(WasmExecutionError::LoadServiceModule)?;
 
         Ok(Self { application, store })
     }
@@ -348,7 +362,9 @@ impl From<wasmer::RuntimeError> for ExecutionError {
         error
             .downcast::<ExecutionError>()
             .unwrap_or_else(|unknown_error| {
-                ExecutionError::WasmError(WasmExecutionError::ExecuteModuleInWasmer(unknown_error))
+                ExecutionError::WasmError(WasmExecutionError::ExecuteModuleInWasmer(
+                    unknown_error,
+                ))
             })
     }
 }

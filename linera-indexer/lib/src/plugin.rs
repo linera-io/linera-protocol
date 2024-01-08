@@ -48,7 +48,9 @@ async fn handler<Q: ObjectType + 'static>(
     schema.execute(req.into_inner()).await.into()
 }
 
-fn schema<Q: ObjectType + 'static>(query: Q) -> Schema<Q, EmptyMutation, EmptySubscription> {
+fn schema<Q: ObjectType + 'static>(
+    query: Q,
+) -> Schema<Q, EmptyMutation, EmptySubscription> {
     Schema::new(query, EmptyMutation, EmptySubscription)
 }
 

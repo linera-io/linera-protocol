@@ -13,8 +13,10 @@ use std::borrow::Cow;
 /// A GraphQL-visible map item, complete with key.
 #[derive(async_graphql::SimpleObject)]
 #[graphql(name_type)]
-struct Entry<K: async_graphql::OutputType + Send + Sync, V: async_graphql::OutputType + Send + Sync>
-{
+struct Entry<
+    K: async_graphql::OutputType + Send + Sync,
+    V: async_graphql::OutputType + Send + Sync,
+> {
     pub key: K,
     pub value: V,
 }
@@ -73,7 +75,9 @@ impl<K: async_graphql::InputType> async_graphql::InputType for MapFilters<K> {
         )
     }
 
-    fn parse(value: Option<async_graphql::Value>) -> async_graphql::InputValueResult<Self> {
+    fn parse(
+        value: Option<async_graphql::Value>,
+    ) -> async_graphql::InputValueResult<Self> {
         let Some(async_graphql::Value::Object(obj)) = value else {
             return Err(async_graphql::InputValueError::expected_type(
                 value.unwrap_or_default(),
@@ -144,7 +148,9 @@ impl<K: async_graphql::InputType> async_graphql::InputType for MapInput<K> {
         )
     }
 
-    fn parse(value: Option<async_graphql::Value>) -> async_graphql::InputValueResult<Self> {
+    fn parse(
+        value: Option<async_graphql::Value>,
+    ) -> async_graphql::InputValueResult<Self> {
         let Some(async_graphql::Value::Object(obj)) = value else {
             return Err(async_graphql::InputValueError::expected_type(
                 value.unwrap_or_default(),
@@ -180,7 +186,9 @@ impl<K: async_graphql::InputType> async_graphql::InputType for MapInput<K> {
 }
 
 use crate::map_view::ByteMapView;
-impl<C: Send + Sync, V: async_graphql::OutputType> async_graphql::TypeName for ByteMapView<C, V> {
+impl<C: Send + Sync, V: async_graphql::OutputType> async_graphql::TypeName
+    for ByteMapView<C, V>
+{
     fn type_name() -> Cow<'static, str> {
         format!("ByteMapView_{}", V::type_name()).into()
     }
@@ -199,7 +207,10 @@ where
     ViewError: From<C::Error>,
 {
     #[graphql(derived(name = "keys"))]
-    async fn keys_(&self, count: Option<usize>) -> Result<Vec<Vec<u8>>, async_graphql::Error> {
+    async fn keys_(
+        &self,
+        count: Option<usize>,
+    ) -> Result<Vec<Vec<u8>>, async_graphql::Error> {
         let keys = self.keys().await?;
         let it = keys.iter().cloned();
         Ok(if let Some(count) = count {
@@ -209,7 +220,10 @@ where
         })
     }
 
-    async fn entry(&self, key: Vec<u8>) -> Result<Entry<Vec<u8>, Option<V>>, async_graphql::Error> {
+    async fn entry(
+        &self,
+        key: Vec<u8>,
+    ) -> Result<Entry<Vec<u8>, Option<V>>, async_graphql::Error> {
         Ok(Entry {
             value: self.get(&key).await?,
             key,
@@ -459,7 +473,10 @@ where
         Ok(self.indices().await?)
     }
 
-    async fn entry(&self, key: K) -> Result<Entry<K, ReadGuardedView<V>>, async_graphql::Error> {
+    async fn entry(
+        &self,
+        key: K,
+    ) -> Result<Entry<K, ReadGuardedView<V>>, async_graphql::Error> {
         Ok(Entry {
             value: self.try_load_entry(&key).await?,
             key,
@@ -516,7 +533,10 @@ where
         Ok(self.indices().await?)
     }
 
-    async fn entry(&self, key: K) -> Result<Entry<K, ReadGuardedView<V>>, async_graphql::Error> {
+    async fn entry(
+        &self,
+        key: K,
+    ) -> Result<Entry<K, ReadGuardedView<V>>, async_graphql::Error> {
         Ok(Entry {
             value: self.try_load_entry(&key).await?,
             key,
@@ -550,7 +570,9 @@ where
 
 use crate::reentrant_collection_view as reentrant;
 #[async_trait::async_trait]
-impl<T: async_graphql::OutputType> async_graphql::OutputType for reentrant::ReadGuardedView<T> {
+impl<T: async_graphql::OutputType> async_graphql::OutputType
+    for reentrant::ReadGuardedView<T>
+{
     fn type_name() -> Cow<'static, str> {
         T::type_name()
     }
@@ -732,13 +754,20 @@ where
             .await
             .map_err(|e| async_graphql::Error::from(e).into_server_error(ctx.item.pos))?;
         let indices_len = indices.len();
-        async_graphql::resolver_utils::resolve_list(ctx, field, indices, Some(indices_len)).await
+        async_graphql::resolver_utils::resolve_list(
+            ctx,
+            field,
+            indices,
+            Some(indices_len),
+        )
+        .await
     }
 }
 
 use crate::set_view::CustomSetView;
 #[async_trait::async_trait]
-impl<C: Context, I: async_graphql::OutputType> async_graphql::OutputType for CustomSetView<C, I>
+impl<C: Context, I: async_graphql::OutputType> async_graphql::OutputType
+    for CustomSetView<C, I>
 where
     C: Send + Sync,
     I: crate::common::CustomSerialize + Clone + Send + Sync,
@@ -767,12 +796,20 @@ where
             .await
             .map_err(|e| async_graphql::Error::from(e).into_server_error(ctx.item.pos))?;
         let indices_len = indices.len();
-        async_graphql::resolver_utils::resolve_list(ctx, field, indices, Some(indices_len)).await
+        async_graphql::resolver_utils::resolve_list(
+            ctx,
+            field,
+            indices,
+            Some(indices_len),
+        )
+        .await
     }
 }
 
 use crate::log_view::LogView;
-impl<C: Send + Sync, T: async_graphql::OutputType> async_graphql::TypeName for LogView<C, T> {
+impl<C: Send + Sync, T: async_graphql::OutputType> async_graphql::TypeName
+    for LogView<C, T>
+{
     fn type_name() -> Cow<'static, str> {
         format!("LogView_{}", T::type_name()).into()
     }
@@ -827,7 +864,9 @@ where
 }
 
 use crate::queue_view::QueueView;
-impl<C: Send + Sync, T: async_graphql::OutputType> async_graphql::TypeName for QueueView<C, T> {
+impl<C: Send + Sync, T: async_graphql::OutputType> async_graphql::TypeName
+    for QueueView<C, T>
+{
     fn type_name() -> Cow<'static, str> {
         format!("QueueView_{}", T::type_name()).into()
     }

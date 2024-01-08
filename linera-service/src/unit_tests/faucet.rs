@@ -8,7 +8,9 @@ use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::ChainDescription,
 };
-use linera_core::client::client_test_utils::{MakeMemoryStorage, StorageBuilder as _, TestBuilder};
+use linera_core::client::client_test_utils::{
+    MakeMemoryStorage, StorageBuilder as _, TestBuilder,
+};
 use std::sync::Arc;
 
 #[tokio::test]

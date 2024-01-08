@@ -9,8 +9,8 @@ mod private;
 pub mod private;
 
 pub(crate) use self::private::{
-    call_application, call_session, current_application_parameters, load, load_view, store,
-    store_view,
+    call_application, call_session, current_application_parameters, load, load_view,
+    store, store_view,
 };
 use super::contract_system_api as wit;
 use linera_base::{

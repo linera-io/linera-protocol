@@ -33,15 +33,15 @@ mod conversions_from_wit;
 mod conversions_to_wit;
 
 use self::{
-    contract::ContractData, service::ServiceData, service_system_api::ServiceSystemApiTables,
-    view_system_api::ViewSystemApiTables,
+    contract::ContractData, service::ServiceData,
+    service_system_api::ServiceSystemApiTables, view_system_api::ViewSystemApiTables,
 };
 use super::{module_cache::ModuleCache, WasmExecutionError};
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
-    ApplicationCallResult, BaseRuntime, Bytecode, CalleeContext, ContractRuntime, ExecutionError,
-    MessageContext, OperationContext, QueryContext, RawExecutionResult, ServiceRuntime,
-    SessionCallResult, SessionId,
+    ApplicationCallResult, BaseRuntime, Bytecode, CalleeContext, ContractRuntime,
+    ExecutionError, MessageContext, OperationContext, QueryContext, RawExecutionResult,
+    ServiceRuntime, SessionCallResult, SessionId,
 };
 use once_cell::sync::Lazy;
 use std::error::Error;
@@ -125,7 +125,9 @@ where
 
 impl WasmContractModule {
     /// Creates a new [`WasmContractModule`] using Wasmtime with the provided bytecodes.
-    pub async fn from_wasmtime(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
+    pub async fn from_wasmtime(
+        contract_bytecode: Bytecode,
+    ) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
         let module = contract_cache
             .get_or_insert_with(contract_bytecode, |bytecode| {
@@ -141,7 +143,10 @@ where
     Runtime: ContractRuntime + Send + Sync + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm contract.
-    pub fn prepare(contract_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
+    pub fn prepare(
+        contract_module: &Module,
+        runtime: Runtime,
+    ) -> Result<Self, WasmExecutionError> {
         let mut linker = Linker::new(&CONTRACT_ENGINE);
 
         contract_system_api::add_to_linker(&mut linker, ContractState::system_api)
@@ -165,7 +170,9 @@ where
 
 impl WasmServiceModule {
     /// Creates a new [`WasmServiceModule`] using Wasmtime with the provided bytecodes.
-    pub async fn from_wasmtime(service_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
+    pub async fn from_wasmtime(
+        service_bytecode: Bytecode,
+    ) -> Result<Self, WasmExecutionError> {
         let mut service_cache = SERVICE_CACHE.lock().await;
         let module = service_cache
             .get_or_insert_with(service_bytecode, |bytecode| {
@@ -181,7 +188,10 @@ where
     Runtime: ServiceRuntime + Send + Sync + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm service.
-    pub fn prepare(service_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
+    pub fn prepare(
+        service_module: &Module,
+        runtime: Runtime,
+    ) -> Result<Self, WasmExecutionError> {
         let mut linker = Linker::new(&SERVICE_ENGINE);
 
         service_system_api::add_to_linker(&mut linker, ServiceState::system_api)

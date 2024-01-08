@@ -172,7 +172,10 @@ where
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn load_entry_mut(&mut self, short_key: Vec<u8>) -> Result<&mut W, ViewError> {
+    pub async fn load_entry_mut(
+        &mut self,
+        short_key: Vec<u8>,
+    ) -> Result<&mut W, ViewError> {
         self.do_load_entry_mut(short_key).await
     }
 
@@ -275,7 +278,10 @@ where
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn reset_entry_to_default(&mut self, short_key: Vec<u8>) -> Result<(), ViewError> {
+    pub async fn reset_entry_to_default(
+        &mut self,
+        short_key: Vec<u8>,
+    ) -> Result<(), ViewError> {
         let view = self.load_entry_mut(short_key).await?;
         view.clear();
         Ok(())
@@ -313,7 +319,10 @@ where
         self.context.extra()
     }
 
-    async fn do_load_entry_mut(&mut self, short_key: Vec<u8>) -> Result<&mut W, ViewError> {
+    async fn do_load_entry_mut(
+        &mut self,
+        short_key: Vec<u8>,
+    ) -> Result<&mut W, ViewError> {
         *self.hash.get_mut() = None;
         match self.updates.get_mut().entry(short_key.clone()) {
             btree_map::Entry::Occupied(entry) => {
@@ -648,7 +657,10 @@ where
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
+    pub async fn try_load_entry<Q>(
+        &self,
+        index: &Q,
+    ) -> Result<ReadGuardedView<W>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
@@ -956,7 +968,10 @@ where
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
+    pub async fn try_load_entry<Q>(
+        &self,
+        index: &Q,
+    ) -> Result<ReadGuardedView<W>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,

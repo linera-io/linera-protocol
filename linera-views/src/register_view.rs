@@ -47,7 +47,8 @@ where
         let key2 = context.base_tag(KeyTag::Hash as u8);
         let keys = vec![key1, key2];
         let values_bytes = context.read_multi_values_bytes(keys).await?;
-        let stored_value = Box::new(from_bytes_opt(&values_bytes[0])?.unwrap_or_default());
+        let stored_value =
+            Box::new(from_bytes_opt(&values_bytes[0])?.unwrap_or_default());
         let hash = from_bytes_opt(&values_bytes[1])?;
         Ok(Self {
             delete_storage_first: false,
@@ -172,7 +173,9 @@ where
         }
     }
 
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+    async fn compute_hash(
+        &self,
+    ) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         let mut hasher = sha3::Sha3_256::default();
         hasher.update_with_bcs_bytes(self.get())?;
         Ok(hasher.finalize())

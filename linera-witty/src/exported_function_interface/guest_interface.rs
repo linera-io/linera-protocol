@@ -189,14 +189,35 @@ indirect_parameters!(=> Z);
 
 /// Implements [`GuestInterface`] for the cases where the parameters and the results need to be
 /// stored in memory.
-impl<A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, OtherParameters, Y, Z, OtherResults>
-    GuestInterface
+impl<
+        A,
+        B,
+        C,
+        D,
+        E,
+        F,
+        G,
+        H,
+        I,
+        J,
+        K,
+        L,
+        M,
+        N,
+        O,
+        P,
+        OtherParameters,
+        Y,
+        Z,
+        OtherResults,
+    > GuestInterface
     for (
         HList![A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, ...OtherParameters],
         HList![Y, Z, ...OtherResults],
     )
 where
-    HList![A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, ...OtherParameters]: FlatLayout,
+    HList![A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, ...OtherParameters]:
+        FlatLayout,
     HList![Y, Z, ...OtherResults]: FlatLayout,
 {
     type FlatHostParameters =
@@ -217,7 +238,8 @@ where
         let (parameters_layout, result_storage_layout) = guest_parameters.split();
         let parameters_location = GuestPointer::lift_from(parameters_layout, memory)?;
         let parameters = Parameters::load(memory, parameters_location)?;
-        let result_storage = Self::ResultStorage::lift_from(result_storage_layout, memory)?;
+        let result_storage =
+            Self::ResultStorage::lift_from(result_storage_layout, memory)?;
 
         Ok((parameters, result_storage))
     }

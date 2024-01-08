@@ -68,7 +68,10 @@ pub trait ValidatorNode {
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Subscribes to receiving notifications for a collection of chains.
-    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError>;
+    async fn subscribe(
+        &mut self,
+        chains: Vec<ChainId>,
+    ) -> Result<NotificationStream, NodeError>;
 }
 
 /// Turn an address into a validator node.

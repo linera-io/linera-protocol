@@ -12,7 +12,9 @@ mod results;
 pub use self::{parameters::WasmtimeParameters, results::WasmtimeResults};
 use super::traits::{Instance, Runtime};
 pub use anyhow;
-use wasmtime::{AsContext, AsContextMut, Extern, Memory, Store, StoreContext, StoreContextMut};
+use wasmtime::{
+    AsContext, AsContextMut, Extern, Memory, Store, StoreContext, StoreContextMut,
+};
 pub use wasmtime::{Caller, Linker};
 
 /// Representation of the [Wasmtime](https://wasmtime.dev) runtime.

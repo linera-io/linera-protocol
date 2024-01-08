@@ -33,7 +33,8 @@ impl DockerImage {
             let bin_path = if let Some(bin_path) = binaries {
                 // If binaries is set, but with a directory path arg, we'll get the binaries
                 // from that directory path
-                diff_paths(bin_path, github_root).context("Getting relative path failed")?
+                diff_paths(bin_path, github_root)
+                    .context("Getting relative path failed")?
             } else {
                 // If binaries is set, but with no directory path arg, we'll get the binaries
                 // from current_binary_parent

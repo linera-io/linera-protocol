@@ -6,8 +6,9 @@ use crate::{
     execution_state_actor::{ExecutionStateSender, Request},
     resources::{RuntimeCounts, RuntimeLimits},
     util::{ReceiverExt, UnboundedSenderExt},
-    BaseRuntime, CallResult, ContractRuntime, ExecutionError, ExecutionResult, ServiceRuntime,
-    SessionId, UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
+    BaseRuntime, CallResult, ContractRuntime, ExecutionError, ExecutionResult,
+    ServiceRuntime, SessionId, UserApplicationDescription, UserApplicationId,
+    UserContractCode, UserServiceCode,
 };
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -337,7 +338,11 @@ impl<const W: bool> SyncRuntimeInternal<W> {
         // Verify ownership.
         ensure!(
             state.owner == application_id,
-            ExecutionError::invalid_session_owner(session_id, application_id, state.owner,)
+            ExecutionError::invalid_session_owner(
+                session_id,
+                application_id,
+                state.owner,
+            )
         );
         // Lock state and return data.
         state.locked = true;
@@ -363,7 +368,11 @@ impl<const W: bool> SyncRuntimeInternal<W> {
         // Verify ownership.
         ensure!(
             state.owner == application_id,
-            ExecutionError::invalid_session_owner(session_id, application_id, state.owner,)
+            ExecutionError::invalid_session_owner(
+                session_id,
+                application_id,
+                state.owner,
+            )
         );
         // Save data.
         state.data = data;
@@ -389,7 +398,11 @@ impl<const W: bool> SyncRuntimeInternal<W> {
         // Verify ownership.
         ensure!(
             state.owner == application_id,
-            ExecutionError::invalid_session_owner(session_id, application_id, state.owner,)
+            ExecutionError::invalid_session_owner(
+                session_id,
+                application_id,
+                state.owner,
+            )
         );
         // Delete the session entirely.
         self.session_manager
@@ -438,9 +451,11 @@ impl<const W: bool> BaseRuntime for SyncRuntime<W> {
     type Read = <SyncRuntimeInternal<W> as BaseRuntime>::Read;
     type ReadValueBytes = <SyncRuntimeInternal<W> as BaseRuntime>::ReadValueBytes;
     type ContainsKey = <SyncRuntimeInternal<W> as BaseRuntime>::ContainsKey;
-    type ReadMultiValuesBytes = <SyncRuntimeInternal<W> as BaseRuntime>::ReadMultiValuesBytes;
+    type ReadMultiValuesBytes =
+        <SyncRuntimeInternal<W> as BaseRuntime>::ReadMultiValuesBytes;
     type FindKeysByPrefix = <SyncRuntimeInternal<W> as BaseRuntime>::FindKeysByPrefix;
-    type FindKeyValuesByPrefix = <SyncRuntimeInternal<W> as BaseRuntime>::FindKeyValuesByPrefix;
+    type FindKeyValuesByPrefix =
+        <SyncRuntimeInternal<W> as BaseRuntime>::FindKeyValuesByPrefix;
 
     fn chain_id(&mut self) -> Result<ChainId, ExecutionError> {
         self.as_inner().chain_id()
@@ -466,7 +481,10 @@ impl<const W: bool> BaseRuntime for SyncRuntime<W> {
         self.as_inner().try_read_my_state_new()
     }
 
-    fn try_read_my_state_wait(&mut self, promise: &Self::Read) -> Result<Vec<u8>, ExecutionError> {
+    fn try_read_my_state_wait(
+        &mut self,
+        promise: &Self::Read,
+    ) -> Result<Vec<u8>, ExecutionError> {
         self.as_inner().try_read_my_state_wait(promise)
     }
 
@@ -474,11 +492,17 @@ impl<const W: bool> BaseRuntime for SyncRuntime<W> {
         self.as_inner().write_batch(batch)
     }
 
-    fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
+    fn contains_key_new(
+        &mut self,
+        key: Vec<u8>,
+    ) -> Result<Self::ContainsKey, ExecutionError> {
         self.as_inner().contains_key_new(key)
     }
 
-    fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError> {
+    fn contains_key_wait(
+        &mut self,
+        promise: &Self::ContainsKey,
+    ) -> Result<bool, ExecutionError> {
         self.as_inner().contains_key_wait(promise)
     }
 
@@ -581,14 +605,17 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
         Ok(())
     }
 
-    fn try_read_my_state_wait(&mut self, _promise: &Self::Read) -> Result<Vec<u8>, ExecutionError> {
+    fn try_read_my_state_wait(
+        &mut self,
+        _promise: &Self::Read,
+    ) -> Result<Vec<u8>, ExecutionError> {
         let id = self.application_id()?;
         let state = self
             .simple_user_states
             .get_mut(&id)
             .ok_or(ExecutionError::InvalidPromise)?;
-        let receiver =
-            std::mem::take(&mut state.pending_query).ok_or(ExecutionError::InvalidPromise)?;
+        let receiver = std::mem::take(&mut state.pending_query)
+            .ok_or(ExecutionError::InvalidPromise)?;
         receiver.recv_response()
     }
 
@@ -606,7 +633,10 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
         Ok(())
     }
 
-    fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
+    fn contains_key_new(
+        &mut self,
+        key: Vec<u8>,
+    ) -> Result<Self::ContainsKey, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
         self.runtime_counts
@@ -617,7 +647,10 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
         state.contains_key_queries.register(receiver)
     }
 
-    fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError> {
+    fn contains_key_wait(
+        &mut self,
+        promise: &Self::ContainsKey,
+    ) -> Result<bool, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
         let value = state.contains_key_queries.wait(*promise)?;
@@ -632,9 +665,9 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
         let state = self.view_user_states.entry(id).or_default();
         self.runtime_counts
             .increment_num_reads(&self.runtime_limits)?;
-        let receiver = self
-            .execution_state_sender
-            .send_request(move |callback| Request::ReadMultiValuesBytes { id, keys, callback })?;
+        let receiver = self.execution_state_sender.send_request(move |callback| {
+            Request::ReadMultiValuesBytes { id, keys, callback }
+        })?;
         state.read_multi_values_queries.register(receiver)
     }
 
@@ -662,9 +695,9 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
         let state = self.view_user_states.entry(id).or_default();
         self.runtime_counts
             .increment_num_reads(&self.runtime_limits)?;
-        let receiver = self
-            .execution_state_sender
-            .send_request(move |callback| Request::ReadValueBytes { id, key, callback })?;
+        let receiver = self.execution_state_sender.send_request(move |callback| {
+            Request::ReadValueBytes { id, key, callback }
+        })?;
         state.read_value_queries.register(receiver)
     }
 
@@ -778,11 +811,15 @@ impl ContractSyncRuntime {
         let execution_result = {
             let mut code = code.instantiate(runtime.clone())?;
             match action {
-                UserAction::Initialize(context, argument) => code.initialize(context, argument)?,
+                UserAction::Initialize(context, argument) => {
+                    code.initialize(context, argument)?
+                }
                 UserAction::Operation(context, operation) => {
                     code.execute_operation(context, operation)?
                 }
-                UserAction::Message(context, message) => code.execute_message(context, message)?,
+                UserAction::Message(context, message) => {
+                    code.execute_message(context, message)?
+                }
             }
         };
         let mut runtime = runtime
@@ -821,13 +858,13 @@ impl ContractRuntime for ContractSyncRuntime {
         let mut this = self.as_inner();
         let this = this.deref_mut();
         let id = this.application_id()?;
-        let receiver =
-            this.execution_state_sender
-                .send_request(|callback| Request::SaveSimpleUserState {
-                    id,
-                    bytes,
-                    callback,
-                })?;
+        let receiver = this.execution_state_sender.send_request(|callback| {
+            Request::SaveSimpleUserState {
+                id,
+                bytes,
+                callback,
+            }
+        })?;
         receiver.recv_response()?;
         Ok(true)
     }
@@ -883,7 +920,8 @@ impl ContractRuntime for ContractSyncRuntime {
                     .with_authenticated_signer(authenticated_signer),
             ));
             let caller_id = this.application_id()?;
-            let sessions = this.make_sessions(raw_result.create_sessions, callee_id, caller_id);
+            let sessions =
+                this.make_sessions(raw_result.create_sessions, callee_id, caller_id);
             let result = CallResult {
                 value: raw_result.value,
                 sessions,
@@ -932,8 +970,12 @@ impl ContractRuntime for ContractSyncRuntime {
             (callee_context, authenticated_signer, session_state, code)
         };
         let mut code = code.instantiate(self.clone())?;
-        let (raw_result, session_state) =
-            code.handle_session_call(callee_context, session_state, argument, forwarded_sessions)?;
+        let (raw_result, session_state) = code.handle_session_call(
+            callee_context,
+            session_state,
+            argument,
+            forwarded_sessions,
+        )?;
         {
             let mut this = self.as_inner();
             this.pop_application();
@@ -955,7 +997,8 @@ impl ContractRuntime for ContractSyncRuntime {
                     .execution_result
                     .with_authenticated_signer(authenticated_signer),
             ));
-            let sessions = this.make_sessions(inner_result.create_sessions, callee_id, caller_id);
+            let sessions =
+                this.make_sessions(inner_result.create_sessions, callee_id, caller_id);
             let result = CallResult {
                 value: inner_result.value,
                 sessions,

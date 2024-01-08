@@ -77,7 +77,10 @@ impl BlockBuilder {
     }
 
     /// Adds a [`SystemOperation`] to this block.
-    pub(crate) fn with_system_operation(&mut self, operation: SystemOperation) -> &mut Self {
+    pub(crate) fn with_system_operation(
+        &mut self,
+        operation: SystemOperation,
+    ) -> &mut Self {
         self.block.operations.push(operation.into());
         self
     }
@@ -167,7 +170,8 @@ impl BlockBuilder {
 
         let value = HashedValue::new_confirmed(executed_block);
         let vote = LiteVote::new(value.lite(), Round::Fast, self.validator.key_pair());
-        let mut builder = SignatureAggregator::new(value, Round::Fast, self.validator.committee());
+        let mut builder =
+            SignatureAggregator::new(value, Round::Fast, self.validator.committee());
         let certificate = builder
             .append(vote.validator, vote.signature)
             .expect("Failed to sign block")

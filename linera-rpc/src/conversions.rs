@@ -139,7 +139,9 @@ impl TryFrom<grpc::BlockProposal> for BlockProposal {
 impl TryFrom<grpc::CrossChainRequest> for CrossChainRequest {
     type Error = ProtoConversionError;
 
-    fn try_from(cross_chain_request: grpc::CrossChainRequest) -> Result<Self, Self::Error> {
+    fn try_from(
+        cross_chain_request: grpc::CrossChainRequest,
+    ) -> Result<Self, Self::Error> {
         use grpc::cross_chain_request::Inner;
 
         let ccr = match cross_chain_request
@@ -289,7 +291,9 @@ impl TryFrom<grpc::ChainInfoQuery> for ChainInfoQuery {
             request_sent_certificates_in_range,
             request_received_log_excluding_first_nth: chain_info_query
                 .request_received_log_excluding_first_nth,
-            test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
+            test_next_block_height: chain_info_query
+                .test_next_block_height
+                .map(Into::into),
             request_manager_values: chain_info_query.request_manager_values,
             request_leader_timeout: chain_info_query.request_leader_timeout,
             request_blob,
@@ -314,7 +318,9 @@ impl TryFrom<ChainInfoQuery> for grpc::ChainInfoQuery {
             chain_id: Some(chain_info_query.chain_id.into()),
             request_committees: chain_info_query.request_committees,
             request_pending_messages: chain_info_query.request_pending_messages,
-            test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
+            test_next_block_height: chain_info_query
+                .test_next_block_height
+                .map(Into::into),
             request_sent_certificates_in_range,
             request_received_log_excluding_first_nth: chain_info_query
                 .request_received_log_excluding_first_nth,
@@ -405,7 +411,9 @@ impl TryFrom<ChainInfoResponse> for grpc::ChainInfoResponse {
 impl TryFrom<grpc::ChainInfoResponse> for ChainInfoResponse {
     type Error = ProtoConversionError;
 
-    fn try_from(chain_info_response: grpc::ChainInfoResponse) -> Result<Self, Self::Error> {
+    fn try_from(
+        chain_info_response: grpc::ChainInfoResponse,
+    ) -> Result<Self, Self::Error> {
         let signature = chain_info_response
             .signature
             .map(TryInto::try_into)
@@ -567,10 +575,12 @@ pub mod tests {
             test_next_block_height: Some(BlockHeight::from(10)),
             request_committees: false,
             request_pending_messages: false,
-            request_sent_certificates_in_range: Some(linera_core::data_types::BlockHeightRange {
-                start: BlockHeight::from(3),
-                limit: Some(5),
-            }),
+            request_sent_certificates_in_range: Some(
+                linera_core::data_types::BlockHeightRange {
+                    start: BlockHeight::from(3),
+                    limit: Some(5),
+                },
+            ),
             request_received_log_excluding_first_nth: None,
             request_manager_values: false,
             request_leader_timeout: false,
@@ -640,7 +650,9 @@ pub mod tests {
             recipient: ChainId::root(0),
             certificates: vec![],
         };
-        round_trip_check::<_, grpc::CrossChainRequest>(cross_chain_request_update_recipient);
+        round_trip_check::<_, grpc::CrossChainRequest>(
+            cross_chain_request_update_recipient,
+        );
 
         let cross_chain_request_confirm_updated_recipient =
             CrossChainRequest::ConfirmUpdatedRecipient {
