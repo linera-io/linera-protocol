@@ -351,62 +351,70 @@ where
         cross_chain_sender_delay: Duration,
         cross_chain_sender_failure_rate: f32,
         this_shard: ShardId,
-        mut receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
+        receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
         let pool = ConnectionPool::default();
 
-        while let Some((cross_chain_request, shard_id)) = receiver.next().await {
-            if cross_chain_sender_failure_rate > 0.0
-                && rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate
-            {
-                warn!("Dropped 1 cross-chain message intentionally.");
-                continue;
-            }
+        receiver
+            .for_each_concurrent(None, |(cross_chain_request, shard_id)| {
+                let shard = network.shard(shard_id);
+                let remote_address = format!("http://{}", shard.address());
 
-            let shard = network.shard(shard_id);
-            let remote_address = format!("http://{}", shard.address());
+                let pool = pool.clone();
+                let nickname = nickname.clone();
 
-            // Send the cross-chain query and retry if needed.
-            for i in 0..cross_chain_max_retries {
-                // Delay increases linearly with the attempt number.
-                tokio::time::sleep(cross_chain_sender_delay + cross_chain_retry_delay * i).await;
-
-                let result = || async {
-                    let cross_chain_request = cross_chain_request.clone().try_into()?;
-                    let request = Request::new(cross_chain_request);
-                    let mut client =
-                        ValidatorWorkerClient::new(pool.channel(remote_address.clone())?);
-                    let response = client.handle_cross_chain_request(request).await?;
-                    Ok::<_, anyhow::Error>(response)
-                };
-                match result().await {
-                    Err(error) => {
-                        warn!(
-                            nickname,
-                            %error,
-                            i,
-                            from_shard = this_shard,
-                            to_shard = shard_id,
-                            "Failed to send cross-chain query",
-                        );
+                // Send the cross-chain query and retry if needed.
+                async move {
+                    if cross_chain_sender_failure_rate > 0.0
+                        && rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate
+                    {
+                        warn!("Dropped 1 cross-chain message intentionally.");
+                        return;
                     }
-                    _ => {
-                        debug!(
+
+                    for i in 0..cross_chain_max_retries {
+                        // Delay increases linearly with the attempt number.
+                        tokio::time::sleep(cross_chain_sender_delay + cross_chain_retry_delay * i)
+                            .await;
+
+                        let result = || async {
+                            let cross_chain_request = cross_chain_request.clone().try_into()?;
+                            let request = Request::new(cross_chain_request);
+                            let mut client =
+                                ValidatorWorkerClient::new(pool.channel(remote_address.clone())?);
+                            let response = client.handle_cross_chain_request(request).await?;
+                            Ok::<_, anyhow::Error>(response)
+                        };
+                        match result().await {
+                            Err(error) => {
+                                warn!(
+                                    nickname,
+                                    %error,
+                                    i,
+                                    from_shard = this_shard,
+                                    to_shard = shard_id,
+                                    "Failed to send cross-chain query",
+                                );
+                            }
+                            _ => {
+                                debug!(
+                                    from_shard = this_shard,
+                                    to_shard = shard_id,
+                                    "Sent cross-chain query",
+                                );
+                                break;
+                            }
+                        }
+                        error!(
+                            nickname,
                             from_shard = this_shard,
                             to_shard = shard_id,
-                            "Sent cross-chain query",
+                            "Dropping cross-chain query",
                         );
-                        break;
                     }
                 }
-                error!(
-                    nickname,
-                    from_shard = this_shard,
-                    to_shard = shard_id,
-                    "Dropping cross-chain query",
-                );
-            }
-        }
+            })
+            .await;
     }
 
     fn log_request_success_and_latency(start: Instant, method_name: &str) {
