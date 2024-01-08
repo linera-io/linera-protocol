@@ -210,25 +210,23 @@ where
     /// Load the view and insert it into the updates if needed.
     /// If the entry is missing, then it is set to default.
     async fn try_load_view_mut(
-        context: &C,
-        updates: &mut BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
-        delete_storage_first: bool,
+        &mut self,
         short_key: &[u8],
     ) -> Result<Arc<RwLock<W>>, ViewError> {
         use btree_map::Entry::*;
-
+        let updates = self.updates.get_mut();
         Ok(match updates.entry(short_key.to_owned()) {
             Occupied(mut entry) => match entry.get_mut() {
                 Update::Set(view) => view.clone(),
                 entry @ Update::Removed => {
-                    let wrapped_view = Self::wrapped_view(context, true, short_key).await?;
+                    let wrapped_view = Self::wrapped_view(&self.context, true, short_key).await?;
                     *entry = Update::Set(wrapped_view.clone());
                     wrapped_view
                 }
             },
             Vacant(entry) => {
                 let wrapped_view =
-                    Self::wrapped_view(context, delete_storage_first, short_key).await?;
+                    Self::wrapped_view(&self.context, self.delete_storage_first, short_key).await?;
                 entry.insert(Update::Set(wrapped_view.clone()));
                 wrapped_view
             }
@@ -274,10 +272,7 @@ where
     ) -> Result<WriteGuardedView<W>, ViewError> {
         *self.hash.get_mut() = None;
         Ok(WriteGuardedView(
-            Self::try_load_view_mut(
-                &self.context,
-                self.updates.get_mut(),
-                self.delete_storage_first,
+            self.try_load_view_mut(
                 &short_key,
             )
             .await?
@@ -308,10 +303,7 @@ where
     ) -> Result<ReadGuardedView<W>, ViewError> {
         *self.hash.get_mut() = None;
         Ok(ReadGuardedView(
-            Self::try_load_view_mut(
-                &self.context,
-                self.updates.get_mut(),
-                self.delete_storage_first,
+            self.try_load_view_mut(
                 &short_key,
             )
             .await?

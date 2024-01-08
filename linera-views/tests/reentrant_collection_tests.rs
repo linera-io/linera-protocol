@@ -114,7 +114,7 @@ async fn reentrant_collection_view_check() {
                             assert_eq!(value, new_map.get(&pos).unwrap());
                         },
                         false => match subview {
-                            Ok(subview) => {
+                            Ok(_subview) => {
                                 panic!("subview should be missing");
                             },
                             Err(err) => assert_eq!(format!("{:?}", err), format!("{:?}", ViewError::MissingKeyInCollection)),
