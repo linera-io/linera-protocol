@@ -18,11 +18,11 @@ thiserror = "1.0.38"
 webassembly-test = "0.1.0"
 
 [[bin]]
-name = "{project_name}_contract"
+name = "{contract_binary_name}"
 path = "src/contract.rs"
 
 [[bin]]
-name = "{project_name}_service"
+name = "{service_binary_name}"
 path = "src/service.rs"
 
 [profile.release]
