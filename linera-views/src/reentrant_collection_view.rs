@@ -178,6 +178,7 @@ where
     ViewError: From<C::Error>,
     W: View<C> + Send + Sync,
 {
+    /// Reads the view and if missing returns the default view
     async fn wrapped_view(
         context: &C,
         delete_storage_first: bool,
@@ -191,6 +192,19 @@ where
             view.clear();
         }
         Ok(Arc::new(RwLock::new(view)))
+    }
+
+    /// Reads the view if existing, otherwise report an error.
+    async fn wrapped_view_check(
+        context: &C,
+        delete_storage_first: bool,
+        short_key: &[u8],
+    ) -> Result<Arc<RwLock<W>>, ViewError> {
+        let key_index = context.base_tag_index(KeyTag::Index as u8, short_key);
+        if delete_storage_first || !context.contains_key(&key_index).await? {
+            return Err(ViewError::MissingKeyInCollection);
+        }
+        Self::wrapped_view(context, delete_storage_first, short_key).await
     }
 
     /// Load the view and insert it into the updates if needed.
@@ -222,8 +236,8 @@ where
     }
 
     /// Load the view from the update is available.
-    /// If missing, then the entry is loaded and is not inserted
-    /// into updates.
+    /// If missing, then the entry is loaded from storage and if
+    /// missing there an error is reported.
     async fn try_load_view(
         context: &C,
         updates: &BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
@@ -233,9 +247,9 @@ where
         Ok(match updates.get(short_key) {
             Some(entry) => match entry {
                 Update::Set(view) => view.clone(),
-                _entry @ Update::Removed => Self::wrapped_view(context, true, short_key).await?,
+                _entry @ Update::Removed => Self::wrapped_view_check(context, true, short_key).await?,
             },
-            None => Self::wrapped_view(context, delete_storage_first, short_key).await?,
+            None => Self::wrapped_view_check(context, delete_storage_first, short_key).await?,
         })
     }
 
@@ -296,7 +310,7 @@ where
         Ok(ReadGuardedView(
             Self::try_load_view_mut(
                 &self.context,
-                &mut *self.updates.lock().await,
+                self.updates.get_mut(),
                 self.delete_storage_first,
                 &short_key,
             )

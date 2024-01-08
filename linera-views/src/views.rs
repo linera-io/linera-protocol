@@ -74,6 +74,10 @@ pub enum ViewError {
         error: String,
     },
 
+    /// The key is absent from the collection
+    #[error("The key is absent from the collection")]
+    MissingKeyInCollection,
+
     /// The key must not be too long
     #[error("The key must not be too long")]
     KeyTooLong,

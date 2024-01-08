@@ -43,11 +43,13 @@ async fn reentrant_collection_view_check() {
     for _ in 0..n {
         let mut view = StateView::load(context.clone()).await.unwrap();
         let hash = view.crypto_hash().await.unwrap();
-        let save = rng.gen::<bool>();
+        let key_values = view.key_values().await;
+        assert_eq!(key_values, map);
         //
+        let save = rng.gen::<bool>();
         let count_oper = rng.gen_range(0..25);
         let mut new_map = map.clone();
-        for _ in 0..count_oper {
+        for _i_op in 0..count_oper {
             let choice = rng.gen_range(0..7);
             if choice == 0 {
                 // Deleting some random stuff
@@ -100,11 +102,24 @@ async fn reentrant_collection_view_check() {
                 }
             }
             if choice == 4 {
-                // Loading some random entries and doing nothing
+                // Loading some random entries and checking correctness
                 let n_ins = rng.gen_range(0..5);
-                for _i in 0..n_ins {
+                for _i_ins in 0..n_ins {
                     let pos = rng.gen_range(0..nmax);
-                    let _subview = view.v.try_load_entry(&pos).await.unwrap();
+                    let subview = view.v.try_load_entry(&pos).await;
+                    match new_map.contains_key(&pos) {
+                        true => {
+                            let subview = subview.unwrap();
+                            let value = subview.get();
+                            assert_eq!(value, new_map.get(&pos).unwrap());
+                        },
+                        false => match subview {
+                            Ok(subview) => {
+                                panic!("subview should be missing");
+                            },
+                            Err(err) => assert_eq!(format!("{:?}", err), format!("{:?}", ViewError::MissingKeyInCollection)),
+                        },
+                    }
                 }
             }
             if choice == 5 {
