@@ -68,12 +68,13 @@ CHAIN_2=e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3
 ```
 
 Publish and create two `fungible` application whose `application_id` will be used as a
-parameter while creating the `matching engine` example.
+parameter while creating the `matching engine` example. The flag `--wait-for-outgoing-messages` waits until a quorum of validators has confirmed that all sent cross-chain messages have been delivered.
 
 ```bash
 (cd examples/fungible && cargo build --release)
 
-FUN1_APP_ID=$(linera publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
+FUN1_APP_ID=$(linera --wait-for-outgoing-messages \
+  publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
     --json-argument "{ \"accounts\": {
         \"User:$OWNER_1\": \"100.\",
         \"User:$OWNER_2\": \"150.\"
@@ -81,7 +82,8 @@ FUN1_APP_ID=$(linera publish-and-create examples/target/wasm32-unknown-unknown/r
     --json-parameters "{ \"ticker_symbol\": \"FUN1\" }" \
 )
 
-FUN2_APP_ID=$(linera publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
+FUN2_APP_ID=$(linera --wait-for-outgoing-messages \
+  publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
     --json-argument "{ \"accounts\": {
         \"User:$OWNER_1\": \"100.\",
         \"User:$OWNER_2\": \"150.\"
@@ -95,7 +97,7 @@ Now we have to publish and deploy the Matching Engine application:
 
 ```bash
 (cd examples/matching-engine && cargo build --release)
-MATCHING_ENGINE=$(linera publish-and-create examples/target/wasm32-unknown-unknown/release/matching_engine_{contract,service}.wasm --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN1_APP_ID\""]}")
+MATCHING_ENGINE=$(linera --wait-for-outgoing-messages publish-and-create examples/target/wasm32-unknown-unknown/release/matching_engine_{contract,service}.wasm --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN1_APP_ID\""]}")
 ```
 
 ## Using the Matching Engine Application

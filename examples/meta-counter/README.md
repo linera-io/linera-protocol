@@ -47,13 +47,12 @@ CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 OWNER_1=e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316
 ```
 
-Now, publish and create the `counter` application:
+Now, publish and create the `counter` application. The flag `--wait-for-outgoing-messages` waits until a quorum of validators has confirmed that all sent cross-chain messages have been delivered.
 
 ```bash
 (cd examples/counter && cargo build --release)
 
-APPLICATION_ID=$(linera publish-and-create \
-  examples/target/wasm32-unknown-unknown/release/counter_{contract,service}.wasm \
+APPLICATION_ID=$(linera --wait-for-outgoing-messages publish-and-create examples/target/wasm32-unknown-unknown/release/counter_{contract,service}.wasm \
   --json-argument "1")
 ```
 
@@ -61,7 +60,7 @@ Now, compile the `meta-counter` application WebAssembly binaries, publish and cr
 
 ```bash
 (cd examples/meta-counter && cargo build --release)
-META_COUNTER_ID=$(linera publish-and-create \
+META_COUNTER_ID=$(linera --wait-for-outgoing-messages publish-and-create \
   examples/target/wasm32-unknown-unknown/release/meta_counter_{contract,service}.wasm \
   --json-argument="null" --json-parameters '"'"$APPLICATION_ID"'"' --required-application-ids $APPLICATION_ID)
 ```

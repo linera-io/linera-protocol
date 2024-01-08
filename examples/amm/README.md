@@ -57,12 +57,13 @@ CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 CHAIN_2=e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3
 ```
 
-Now we have to publish and create the fungible applications:
+Now we have to publish and create the fungible applications. The flag `--wait-for-outgoing-messages` waits until a quorum of validators has confirmed that all sent cross-chain messages have been delivered.
 
 ```bash
 (cd examples/fungible && cargo build --release)
 
-FUN1_APP_ID=$(linera publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
+FUN1_APP_ID=$(linera --wait-for-outgoing-messages \
+  publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
     --json-argument "{ \"accounts\": {
         \"User:$OWNER_1\": \"100.\",
         \"User:$OWNER_2\": \"150.\"
@@ -70,7 +71,8 @@ FUN1_APP_ID=$(linera publish-and-create examples/target/wasm32-unknown-unknown/r
     --json-parameters "{ \"ticker_symbol\": \"FUN1\" }" \
 )
 
-FUN2_APP_ID=$(linera publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
+FUN2_APP_ID=$(linera --wait-for-outgoing-messages \
+  publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
     --json-argument "{ \"accounts\": {
         \"User:$OWNER_1\": \"100.\",
         \"User:$OWNER_2\": \"150.\"
@@ -79,7 +81,7 @@ FUN2_APP_ID=$(linera publish-and-create examples/target/wasm32-unknown-unknown/r
 )
 
 (cd examples/amm && cargo build --release)
-AMM_APPLICATION_ID=$(linera publish-and-create examples/target/wasm32-unknown-unknown/release/amm_{contract,service}.wasm --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN2_APP_ID\""]}")
+AMM_APPLICATION_ID=$(linera --wait-for-outgoing-messages publish-and-create examples/target/wasm32-unknown-unknown/release/amm_{contract,service}.wasm --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN2_APP_ID\""]}")
 ```
 
 ## Using the AMM Application
