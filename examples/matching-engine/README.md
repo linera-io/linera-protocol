@@ -1,5 +1,3 @@
-<!-- cargo-rdme start -->
-
 # Matching Engine Example Application
 
 This sample application demonstrates a matching engine, showcasing the DeFi capabilities
@@ -143,5 +141,3 @@ query{
   }
 }
 ```
-
-<!-- cargo-rdme end -->

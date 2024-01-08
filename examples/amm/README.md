@@ -1,5 +1,3 @@
-<!-- cargo-rdme start -->
-
 # Automated Market Maker (AMM) Example Application
 
 This example implements an Automated Market Maker (AMM) which demonstrates DeFi capabilities of the 
@@ -162,5 +160,3 @@ mutation{
   )
 }
 ```
-
-<!-- cargo-rdme end -->

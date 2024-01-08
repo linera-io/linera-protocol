@@ -1,5 +1,3 @@
-<!-- cargo-rdme start -->
-
 # Meta-Counter Example Application
 
 This application demonstrates how `cross_application_call` works in Linera. 
@@ -65,7 +63,7 @@ META_COUNTER_ID=$(linera --wait-for-outgoing-messages publish-and-create \
   --json-argument="null" --json-parameters '"'"$APPLICATION_ID"'"' --required-application-ids $APPLICATION_ID)
 ```
 
-## Using the Counter Application
+## Using the Meta Counter Application
 
 First, a node service for the current wallet has to be started:
 
@@ -79,13 +77,13 @@ linera service --port $PORT &
 - Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$META_COUNTER_ID`.
 - To get the current value of `counter`, run the query:
 ```json
-    query{
+    query {
         value
     }
 ```
 - To increase the value of the counter by 3, perform the `increment` operation:
 ```json
-    mutation Increment{
+    mutation Increment {
         increment(value: 3)
     }
 ```
@@ -93,4 +91,3 @@ linera service --port $PORT &
 
 Now, if we check from `counter` application we will also get `4` because eventually we modified the state.
 
-<!-- cargo-rdme end -->

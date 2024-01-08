@@ -1,5 +1,3 @@
-<!-- cargo-rdme start -->
-
 # Counter Example Application
 
 This example application implements a simple counter contract, it is initialized with an 
@@ -106,5 +104,3 @@ The following command will print the URL of the web UI:
 ```bash
 echo "http://localhost:3000/$CHAIN_1?app=$APPLICATION_ID&owner=$OWNER_1&port=$PORT"
 ```
-
-<!-- cargo-rdme end -->
