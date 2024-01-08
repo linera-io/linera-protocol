@@ -348,7 +348,7 @@ where
         &mut self,
         origin: &Origin,
     ) -> Result<BlockHeight, ChainError> {
-        let inbox = self.inboxes.try_load_entry(origin).await?;
+        let inbox = self.inboxes.try_load_entry_or_insert(origin).await?;
         inbox.next_block_height_to_receive()
     }
 
@@ -356,7 +356,7 @@ where
         &mut self,
         origin: &Origin,
     ) -> Result<Option<BlockHeight>, ChainError> {
-        let inbox = self.inboxes.try_load_entry(origin).await?;
+        let inbox = self.inboxes.try_load_entry_or_insert(origin).await?;
         match inbox.removed_events.back().await? {
             Some(event) => Ok(Some(event.height)),
             None => Ok(None),
