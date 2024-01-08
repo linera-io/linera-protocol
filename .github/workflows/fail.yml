@@ -13,18 +13,18 @@ permissions:
 
 jobs:
   test-small:
-    runs-on: arc-runner-set-small
+    runs-on: gcp-small
     steps:
-    - name: Fail loudly, XI
+    - name: Fail loudly, XII
       run: |
         hostname
-        >&2 echo 'SMALL WORKFLOW INTENTIONALLY FAILING (XI)'
+        >&2 echo 'SMALL WORKFLOW INTENTIONALLY FAILING (XII)'
         exit 1
   test-large:
-    runs-on: arc-runner-set-large
+    runs-on: gcp-large
     steps:
-    - name: Fail loudly, XI
+    - name: Fail loudly, XII
       run: |
         hostname
-        >&2 echo 'LARGE WORKFLOW INTENTIONALLY FAILING (XI)'
+        >&2 echo 'LARGE WORKFLOW INTENTIONALLY FAILING (XII)'
         exit 1
