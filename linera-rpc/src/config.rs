@@ -27,9 +27,9 @@ pub struct CrossChainConfig {
     #[arg(long = "cross-chain-sender-failure-rate", default_value = "0.0")]
     pub(crate) sender_failure_rate: f32,
 
-    /// How many parallel tasks to spawn for cross-chain message handling RPCs.
+    /// How many concurrent tasks to spawn for cross-chain message handling RPCs.
     #[arg(long = "cross-chain-max-tasks", default_value = "10")]
-    pub(crate) max_tasks: usize,
+    pub(crate) max_concurrent_tasks: usize,
 }
 
 #[derive(Clone, Debug, clap::Parser)]

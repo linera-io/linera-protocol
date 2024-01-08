@@ -230,7 +230,7 @@ where
                 Duration::from_millis(cross_chain_config.retry_delay_ms),
                 Duration::from_millis(cross_chain_config.sender_delay_ms),
                 cross_chain_config.sender_failure_rate,
-                cross_chain_config.max_tasks,
+                cross_chain_config.max_concurrent_tasks,
                 shard_id,
                 cross_chain_receiver,
             )
@@ -351,15 +351,15 @@ where
         cross_chain_retry_delay: Duration,
         cross_chain_sender_delay: Duration,
         cross_chain_sender_failure_rate: f32,
-        cross_chain_max_tasks: usize,
+        cross_chain_max_concurrent_tasks: usize,
         this_shard: ShardId,
         receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
         let pool = ConnectionPool::default();
-        let max_tasks = Some(cross_chain_max_tasks);
+        let max_concurrent_tasks = Some(cross_chain_max_concurrent_tasks);
 
         receiver
-            .for_each_concurrent(max_tasks, |(cross_chain_request, shard_id)| {
+            .for_each_concurrent(max_concurrent_tasks, |(cross_chain_request, shard_id)| {
                 let shard = network.shard(shard_id);
                 let remote_address = format!("http://{}", shard.address());
 
