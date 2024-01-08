@@ -209,10 +209,7 @@ where
 
     /// Load the view and insert it into the updates if needed.
     /// If the entry is missing, then it is set to default.
-    async fn try_load_view_mut(
-        &mut self,
-        short_key: &[u8],
-    ) -> Result<Arc<RwLock<W>>, ViewError> {
+    async fn try_load_view_mut(&mut self, short_key: &[u8]) -> Result<Arc<RwLock<W>>, ViewError> {
         use btree_map::Entry::*;
         let updates = self.updates.get_mut();
         Ok(match updates.entry(short_key.to_owned()) {
@@ -236,17 +233,19 @@ where
     /// Load the view from the update is available.
     /// If missing, then the entry is loaded from storage and if
     /// missing there an error is reported.
-    async fn try_load_view(
-        &self,
-        short_key: &[u8],
-    ) -> Result<Arc<RwLock<W>>, ViewError> {
+    async fn try_load_view(&self, short_key: &[u8]) -> Result<Arc<RwLock<W>>, ViewError> {
         let updates = self.updates.lock().await;
         Ok(match updates.get(short_key) {
             Some(entry) => match entry {
                 Update::Set(view) => view.clone(),
-                _entry @ Update::Removed => Self::wrapped_view_check(&self.context, true, short_key).await?,
+                _entry @ Update::Removed => {
+                    Self::wrapped_view_check(&self.context, true, short_key).await?
+                }
             },
-            None => Self::wrapped_view_check(&self.context, self.delete_storage_first, short_key).await?,
+            None => {
+                Self::wrapped_view_check(&self.context, self.delete_storage_first, short_key)
+                    .await?
+            }
         })
     }
 
@@ -271,12 +270,10 @@ where
     ) -> Result<WriteGuardedView<W>, ViewError> {
         *self.hash.get_mut() = None;
         Ok(WriteGuardedView(
-            self.try_load_view_mut(
-                &short_key,
-            )
-            .await?
-            .try_write_arc()
-            .ok_or_else(|| ViewError::TryLockError(short_key))?,
+            self.try_load_view_mut(&short_key)
+                .await?
+                .try_write_arc()
+                .ok_or_else(|| ViewError::TryLockError(short_key))?,
         ))
     }
 
@@ -302,12 +299,10 @@ where
     ) -> Result<ReadGuardedView<W>, ViewError> {
         *self.hash.get_mut() = None;
         Ok(ReadGuardedView(
-            self.try_load_view_mut(
-                &short_key,
-            )
-            .await?
-            .try_read_arc()
-            .ok_or_else(|| ViewError::TryLockError(short_key))?,
+            self.try_load_view_mut(&short_key)
+                .await?
+                .try_read_arc()
+                .ok_or_else(|| ViewError::TryLockError(short_key))?,
         ))
     }
 
@@ -332,12 +327,10 @@ where
         short_key: Vec<u8>,
     ) -> Result<ReadGuardedView<W>, ViewError> {
         Ok(ReadGuardedView(
-            self.try_load_view(
-                &short_key,
-            )
-            .await?
-            .try_read_arc()
-            .ok_or_else(|| ViewError::TryLockError(short_key))?,
+            self.try_load_view(&short_key)
+                .await?
+                .try_read_arc()
+                .ok_or_else(|| ViewError::TryLockError(short_key))?,
         ))
     }
 
