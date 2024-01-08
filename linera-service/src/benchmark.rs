@@ -212,6 +212,9 @@ async fn benchmark_with_fungible(
         |((_, context, node_service), expected_balances)| {
             try_join_all(apps.iter().zip(expected_balances).map(
                 |((_, sender_context, _), expected_balance)| async move {
+                    if expected_balance == Amount::ZERO {
+                        return Ok(()); // No transfers: The app won't be registered on this chain.
+                    }
                     let app = FungibleApp(
                         node_service
                             .make_application(
