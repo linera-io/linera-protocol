@@ -5,25 +5,9 @@
 //! that shouldn't be used by applications directly.
 
 use super::super::service_system_api as wit;
-use crate::{util::yield_once, views::ViewStorageContext};
+use crate::views::ViewStorageContext;
 use linera_base::identifiers::ApplicationId;
 use linera_views::views::View;
-use serde::de::DeserializeOwned;
-
-/// Loads the application state, without locking it for writes.
-pub async fn load<State>() -> State
-where
-    State: Default + DeserializeOwned,
-{
-    let promise = wit::Load::new();
-    yield_once().await;
-    let bytes = promise.wait().expect("Failed to load application state");
-    if bytes.is_empty() {
-        State::default()
-    } else {
-        bcs::from_bytes(&bytes).expect("Invalid application state")
-    }
-}
 
 /// Helper function to load the service state or create a new one if it doesn't exist.
 pub async fn load_view<State: View<ViewStorageContext>>() -> State {

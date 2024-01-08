@@ -580,36 +580,6 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
             })
         },
     )?;
-    linker.func_wrap0_async(
-        "service_system_api",
-        "load::new: func() -> handle<load>",
-        move |_: Caller<'_, Resources>| Box::new(async move { 0 }),
-    )?;
-    linker.func_wrap2_async(
-        "service_system_api",
-        "load::wait: func(self: handle<load>) -> result<list<u8>, string>",
-        move |mut caller: Caller<'_, Resources>, _handle: i32, return_offset: i32| {
-            Box::new(async move {
-                let function = get_function(&mut caller, "mocked-load: func() -> list<u8>").expect(
-                    "Missing `mocked-load` function in the module. \
-                    Please ensure `linera_sdk::test::mock_application_state` was called",
-                );
-
-                let (result_offset,) = function
-                    .typed::<(), (i32,), _>(&mut caller)
-                    .expect("Incorrect `mocked-load` function signature")
-                    .call_async(&mut caller, ())
-                    .await
-                    .expect(
-                        "Failed to call `mocked-load` function. \
-                        Please ensure `linera_sdk::test::mock_application_state` was called",
-                    );
-
-                store_in_memory(&mut caller, return_offset, 0_i32);
-                copy_memory_slices(&mut caller, result_offset, return_offset + 4, 8);
-            })
-        },
-    )?;
     linker.func_wrap15_async(
         "service_system_api",
         "try-query-application: func(\
@@ -1099,7 +1069,6 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     )?;
 
     let resource_names = [
-        "load",
         "read-multi-values-bytes",
         "read-value-bytes",
         "find-keys",
