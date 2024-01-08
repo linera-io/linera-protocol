@@ -2132,13 +2132,13 @@ async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) {
     command
         .current_dir(dir)
         .arg("fungible")
-        .args(["--wallets", "2"])
+        .args(["--wallets", "3"])
         .args(["--transactions", "1"])
         .arg("--uniform")
         .args(["--faucet".to_string(), faucet.url()]);
     let stdout = command.spawn_and_wait_for_stdout().await.unwrap();
     let json = serde_json::from_str::<serde_json::Value>(&stdout).unwrap();
-    assert_eq!(json["successes"], 2);
+    assert_eq!(json["successes"], 3);
 
     faucet.ensure_is_running().unwrap();
     faucet.terminate().await.unwrap();
