@@ -5,6 +5,7 @@
 
 mod system_api;
 
+pub(crate) use self::system_api::AppStateStore;
 pub use self::system_api::ViewStorageContext;
 pub use linera_views::{
     self,
