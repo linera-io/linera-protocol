@@ -2,28 +2,28 @@
 
 # Automated Market Maker (AMM) Example Application
 
-This example implements an Automated Market Maker (AMM) which demonstrates DeFi capabilities of the 
+This example implements an Automated Market Maker (AMM) which demonstrates DeFi capabilities of the
 Linera protocol. Prerequisite for the AMM application is the `fungible` application, as we will
 be adding/removing liquidity and also performing a swap.
 
-# How it works 
+# How it works
 
 It supports the following operations.
 
-- Swap: For a given input token and an input amount, it swaps that token amount for an 
-amount of the other token calculated based on the current AMM ratio. Note: The `Swap` operations 
+- Swap: For a given input token and an input amount, it swaps that token amount for an
+amount of the other token calculated based on the current AMM ratio. Note: The `Swap` operations
 need to be performed from a remote chain.
 
-- Add Liquidity: This operation allows adding liquidity to the AMM. Given a maximum 
-`token0` and `token1` amount that you're willing to add, it adds liquidity such that you'll be 
-adding at most `max_token0_amount` of `token0` and `max_token1_amount` of `token1`. The amounts 
-will be calculated based on the current AMM ratio. The owner, in this case, refers to the user 
+- Add Liquidity: This operation allows adding liquidity to the AMM. Given a maximum
+`token0` and `token1` amount that you're willing to add, it adds liquidity such that you'll be
+adding at most `max_token0_amount` of `token0` and `max_token1_amount` of `token1`. The amounts
+will be calculated based on the current AMM ratio. The owner, in this case, refers to the user
 adding liquidity, which currently can only be a chain owner.
 
-- Remove Liquidity: This withdraws tokens from the AMM. Given the index of the token you'd 
-like to remove (can be 0 or 1), and an amount of that token that you'd like to remove, it calculates 
-how much of the other token will also be removed based on the current AMM ratio. Then it removes 
-the amounts from both tokens as a removal of liquidity. The owner, in this context, is the user 
+- Remove Liquidity: This withdraws tokens from the AMM. Given the index of the token you'd
+like to remove (can be 0 or 1), and an amount of that token that you'd like to remove, it calculates
+how much of the other token will also be removed based on the current AMM ratio. Then it removes
+the amounts from both tokens as a removal of liquidity. The owner, in this context, is the user
 removing liquidity, which currently can only be a chain owner.
 
 # Usage
@@ -115,7 +115,7 @@ mutation{
 ```
 
 We can only perform `Swap` from a remote chain i.e. other than the chain on which `AMM` is deployed to,
-we can do it from GraphiQL by perfoming the `requestApplication` mutation so that we can perform the 
+we can do it from GraphiQL by perfoming the `requestApplication` mutation so that we can perform the
 `Swap` operation from the chain.
 
 ```json

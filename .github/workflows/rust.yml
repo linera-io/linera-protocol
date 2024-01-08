@@ -146,7 +146,7 @@ jobs:
       run: |
         (set -e; for I in linera-*; do echo $I; cargo rdme --check --no-fail-on-warnings -w $I; done)
         cd examples
-        (set -e; for I in fungible social crowd-funding; do echo $I; cargo rdme --check --no-fail-on-warnings -w $I; done)
+        (set -e; for I in fungible social crowd-funding amm counter meta-counter matching-engine; do echo $I; cargo rdme --check --no-fail-on-warnings -w $I; done)
     - name: Run Wasm application lints
       run: |
         cd examples

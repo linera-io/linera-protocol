@@ -124,10 +124,10 @@ mutation ExecuteOrder {
         amount: "1",
         nature: Bid,
         price: {
-        	price:5
+            price:5
         }
       }
-  	}
+    }
   )
 }
 ```
