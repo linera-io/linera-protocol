@@ -6,7 +6,10 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Attribute, ItemStruct, Lit, LitStr, MetaNameValue, Type, TypePath};
+use syn::{
+    parse_macro_input, parse_quote, punctuated::Punctuated, Attribute, ItemStruct, Lit, LitStr,
+    MetaNameValue, Token, Type, TypePath, WhereClause,
+};
 
 fn get_seq_parameter(generics: syn::Generics) -> Vec<syn::Ident> {
     let mut generic_vect = Vec::new();
@@ -55,13 +58,13 @@ fn custom_attribute(attributes: &[Attribute], key: &str) -> Option<LitStr> {
 fn context_and_constraints(
     attributes: &[Attribute],
     template_vect: &[syn::Ident],
-) -> (Type, Option<TokenStream2>) {
+) -> (Type, WhereClause) {
     let context;
     let constraints;
 
     if let Some(context_literal) = custom_attribute(attributes, "context") {
         context = context_literal.parse().expect("Invalid context");
-        constraints = None;
+        constraints = empty_where_clause();
     } else {
         context = Type::Path(TypePath {
             qself: None,
@@ -71,14 +74,22 @@ fn context_and_constraints(
                 .clone()
                 .into(),
         });
-        constraints = Some(quote! {
+        constraints = parse_quote! {
             where
                 #context: linera_views::common::Context + Send + Sync + Clone + 'static,
                 linera_views::views::ViewError: From<#context::Error>,
-        });
+        };
     }
 
     (context, constraints)
+}
+
+/// Returns an empty [`WhereClause`].
+fn empty_where_clause() -> WhereClause {
+    WhereClause {
+        where_token: Token![where](Span::call_site()),
+        predicates: Punctuated::new(),
+    }
 }
 
 fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
