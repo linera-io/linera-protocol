@@ -9,11 +9,11 @@
 
 use crate::{
     service::{system_api, wit_types},
-    views::ViewStorageContext,
+    views::{AppStateStore, ViewStorageContext},
     Service, SimpleStateStorage, ViewStateStorage,
 };
 use async_trait::async_trait;
-use linera_views::views::RootView;
+use linera_views::{common::KeyValueStore, views::RootView};
 use serde::{de::DeserializeOwned, Serialize};
 use std::sync::Arc;
 
@@ -36,7 +36,18 @@ where
         context: wit_types::QueryContext,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, String> {
-        let application: Arc<Application> = Arc::new(system_api::load().await);
+        let maybe_bytes = AppStateStore
+            .read_value_bytes(&[])
+            .await
+            .expect("Failed to read application state bytes");
+
+        let state = if let Some(bytes) = maybe_bytes {
+            bcs::from_bytes(&bytes).expect("Failed to deserialize application state")
+        } else {
+            Application::default()
+        };
+
+        let application: Arc<Application> = Arc::new(state);
         let argument: Application::Query =
             serde_json::from_slice(&argument).map_err(|e| e.to_string())?;
         let query_response = application
