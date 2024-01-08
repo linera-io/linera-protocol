@@ -15,16 +15,16 @@ jobs:
   test-small:
     runs-on: arc-runner-set-small
     steps:
-    - name: Fail loudly, X
+    - name: Fail loudly, XI
       run: |
         hostname
-        >&2 echo 'SMALL WORKFLOW INTENTIONALLY FAILING (X)'
+        >&2 echo 'SMALL WORKFLOW INTENTIONALLY FAILING (XI)'
         exit 1
   test-large:
     runs-on: arc-runner-set-large
     steps:
-    - name: Fail loudly, X
+    - name: Fail loudly, XI
       run: |
         hostname
-        >&2 echo 'LARGE WORKFLOW INTENTIONALLY FAILING (X)'
+        >&2 echo 'LARGE WORKFLOW INTENTIONALLY FAILING (XI)'
         exit 1
