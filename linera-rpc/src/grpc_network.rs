@@ -356,7 +356,9 @@ where
         let pool = ConnectionPool::default();
 
         while let Some((cross_chain_request, shard_id)) = receiver.next().await {
-            if rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate {
+            if cross_chain_sender_failure_rate > 0.0
+                && rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate
+            {
                 warn!("Dropped 1 cross-chain message intentionally.");
                 continue;
             }
