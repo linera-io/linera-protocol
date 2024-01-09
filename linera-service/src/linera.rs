@@ -622,7 +622,7 @@ impl ClientContext {
 
         info!("{}", "Bytecode published successfully!".green().bold());
 
-        debug!("Synchronizing...");
+        info!("Synchronizing client and processing inbox...");
         chain_client.synchronize_from_validators().await?;
         self.process_inbox(chain_client).await?;
         Ok(bytecode_id)

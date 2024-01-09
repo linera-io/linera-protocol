@@ -52,6 +52,14 @@ enum Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let env_filter = tracing_subscriber::EnvFilter::builder()
+        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+        .from_env_lossy();
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(env_filter)
+        .init();
+
     let args = Args::parse();
     match args {
         Args::Fungible {
@@ -71,7 +79,7 @@ async fn benchmark_with_fungible(
     seed: u64,
     uniform: bool,
 ) -> Result<()> {
-    // Create the clients and initialize the wallets
+    info!("Creating the clients and initializing the wallets");
     let dir = Arc::new(tempdir().context("cannot create temp dir")?);
     let publisher = ClientWrapper::new(dir, Network::Grpc, None, num_wallets);
     publisher.wallet_init(&[], Some(&faucet)).await?;
@@ -88,7 +96,7 @@ async fn benchmark_with_fungible(
     )
     .await?;
 
-    // Sync their balances (sanity check)
+    info!("Synchronizing balances (sanity check)");
     try_join_all(clients.iter().map(|user| async move {
         let chain = user.default_chain().context("missing default chain")?;
         let balance = user.synchronize_balance(chain).await?;
@@ -97,7 +105,7 @@ async fn benchmark_with_fungible(
     }))
     .await?;
 
-    // Start the node services and subscribe to the publisher chain.
+    info!("Starting the node services and subscribing to the publisher chain.");
     let publisher_chain_id = publisher.default_chain().context("missing default chain")?;
     let mut services = Vec::new();
     for client in &clients {
@@ -111,9 +119,11 @@ async fn benchmark_with_fungible(
         services.push(node_service);
     }
 
-    // Publish the fungible application bytecode.
+    info!("Building the fungible application bytecode.");
     let path = Path::new("examples/fungible").canonicalize().unwrap();
     let (contract, service) = publisher.build_application(&path, "fungible", true).await?;
+
+    info!("Publishing the fungible application bytecode.");
     let bytecode_id = publisher.publish_bytecode(contract, service, None).await?;
 
     struct BenchmarkContext {
@@ -122,7 +132,7 @@ async fn benchmark_with_fungible(
         default_chain: ChainId,
     }
 
-    // Create the fungible applications
+    info!("Creating the fungible applications");
     let apps = try_join_all(clients.iter().zip(services).enumerate().map(
         |(i, (client, node_service))| async move {
             let owner = client.get_owner().context("missing owner")?;
@@ -158,7 +168,7 @@ async fn benchmark_with_fungible(
     ))
     .await?;
 
-    // create transaction futures
+    info!("Creating the transaction futures");
     let mut expected_balances = vec![vec![Amount::ZERO; apps.len()]; apps.len()];
     let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
 
