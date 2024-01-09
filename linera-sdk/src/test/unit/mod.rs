@@ -36,9 +36,8 @@ static mut MOCK_SYSTEM_BALANCE: Option<Amount> = None;
 static mut MOCK_SYSTEM_TIMESTAMP: Option<Timestamp> = None;
 static mut MOCK_LOG_COLLECTOR: Vec<(log::Level, String)> = Vec::new();
 static mut MOCK_KEY_VALUE_STORE: Option<MemoryContext<()>> = None;
-static mut MOCK_TRY_QUERY_APPLICATION: Option<
-    Box<dyn FnMut(ApplicationId, Vec<u8>) -> Result<Vec<u8>, String>>,
-> = None;
+static mut MOCK_TRY_QUERY_APPLICATION: Option<Box<dyn FnMut(ApplicationId, Vec<u8>) -> Vec<u8>>> =
+    None;
 
 /// Sets the mocked chain ID.
 pub fn mock_chain_id(chain_id: impl Into<Option<ChainId>>) {
@@ -81,16 +80,10 @@ pub fn mock_key_value_store() -> MemoryContext<()> {
 }
 
 /// Mocks the `try_query_application` system API.
-pub fn mock_try_query_application<E>(
-    mut handler: impl FnMut(ApplicationId, Vec<u8>) -> Result<Vec<u8>, E> + 'static,
-) where
-    E: ToString + 'static,
-{
-    unsafe {
-        MOCK_TRY_QUERY_APPLICATION = Some(Box::new(move |application, query| {
-            handler(application, query).map_err(|error| error.to_string())
-        }))
-    }
+pub fn mock_try_query_application(
+    handler: impl FnMut(ApplicationId, Vec<u8>) -> Vec<u8> + 'static,
+) {
+    unsafe { MOCK_TRY_QUERY_APPLICATION = Some(Box::new(handler)) }
 }
 
 /// Implementation of type that exports an interface for using the mock system API.
@@ -207,10 +200,7 @@ impl wit::MockSystemApi for MockSystemApi {
             .expect("Failed to write to memory store")
     }
 
-    fn mocked_try_query_application(
-        application: wit::ApplicationId,
-        query: Vec<u8>,
-    ) -> Result<Vec<u8>, String> {
+    fn mocked_try_query_application(application: wit::ApplicationId, query: Vec<u8>) -> Vec<u8> {
         let handler = unsafe { MOCK_TRY_QUERY_APPLICATION.as_mut() }.expect(
             "Unexpected call to `try_query_application` system API. \
             Please call `mock_try_query_application` first",

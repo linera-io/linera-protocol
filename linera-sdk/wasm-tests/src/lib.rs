@@ -363,7 +363,7 @@ fn mock_query() {
             INTERCEPTED_ARGUMENT = Some(query);
         }
 
-        Ok::<_, String>(response.clone())
+        response.clone()
     });
 
     let application_id = ApplicationId {

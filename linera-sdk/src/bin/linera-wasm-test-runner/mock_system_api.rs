@@ -640,7 +640,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                             } \
                         }, \
                         query: list<u8>\
-                    ) -> result<list<u8>, string>",
+                    ) -> list<u8>",
                 )
                 .expect(
                     "Missing `mocked-try-query-application` function in the module. \
@@ -690,7 +690,8 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                         Please ensure `linera_sdk::test::mock_try_call_application` was called",
                     );
 
-                copy_memory_slices(&mut caller, result_offset, return_offset, 12);
+                store_in_memory(&mut caller, return_offset, 0_u8);
+                copy_memory_slices(&mut caller, result_offset, return_offset + 4, 8);
             })
         },
     )?;
