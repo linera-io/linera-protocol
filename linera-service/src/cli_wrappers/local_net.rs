@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use linera_base::data_types::Amount;
 use std::{
     collections::{BTreeMap, HashSet},
-    env, fs,
+    env,
     sync::Arc,
     time::Duration,
 };
@@ -304,7 +304,7 @@ impl LocalNet {
                 "#
             ));
         }
-        fs::write(&path, content)?;
+        fs_err::write(&path, content)?;
         path.into_os_string().into_string().map_err(|error| {
             anyhow!(
                 "could not parse OS string into string: {}",

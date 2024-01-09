@@ -38,6 +38,7 @@ current_platform = "0.2.0"
 dirs = { workspace = true }
 file-lock = "2.1.10"
 fs_extra = { workspace = true, optional = true }
+fs-err = { workspace = true }
 fungible = { workspace = true, optional = true }
 futures = { workspace = true }
 hex = { workspace = true }

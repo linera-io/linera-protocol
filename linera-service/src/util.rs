@@ -214,13 +214,13 @@ pub struct QuotedBashScript {
 #[cfg(any(test, feature = "test"))]
 impl QuotedBashScript {
     pub fn from_markdown<P: AsRef<Path>>(source_path: P) -> Result<Self, std::io::Error> {
-        let file = std::io::BufReader::new(std::fs::File::open(source_path.as_ref())?);
+        let file = std::io::BufReader::new(fs_err::File::open(source_path.as_ref())?);
         let tmp_dir = tempdir()?;
         let quotes = Self::read_bash_quotes(file)?;
 
         let path = tmp_dir.path().join("test.sh");
 
-        let mut test_script = std::fs::File::create(&path)?;
+        let mut test_script = fs_err::File::create(&path)?;
         for quote in quotes {
             writeln!(&mut test_script, "{}", quote)?;
         }

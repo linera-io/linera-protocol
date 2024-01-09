@@ -50,7 +50,7 @@ use rand07::Rng;
 use serde_json::Value;
 use std::{
     collections::HashMap,
-    env, fs, iter,
+    env, iter,
     num::NonZeroU16,
     path::PathBuf,
     sync::Arc,
@@ -187,7 +187,7 @@ impl ClientContext {
         config_dir.push("linera");
         if !config_dir.exists() {
             debug!("{} does not exist, creating...", config_dir.display());
-            fs::create_dir(&config_dir)?;
+            fs_err::create_dir(&config_dir)?;
             debug!("{} created.", config_dir.display());
         }
         Ok(config_dir)
@@ -1348,7 +1348,7 @@ fn read_json(string: Option<String>, path: Option<PathBuf>) -> Result<Vec<u8>, a
         (Some(_), Some(_)) => bail!("cannot have both a json string and file"),
         (Some(s), None) => serde_json::from_str(&s)?,
         (None, Some(path)) => {
-            let s = fs::read_to_string(path)?;
+            let s = fs_err::read_to_string(path)?;
             serde_json::from_str(&s)?
         }
         (None, None) => Value::Null,
