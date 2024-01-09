@@ -604,10 +604,15 @@ where
         &self,
         key: K,
     ) -> Result<Entry<K, reentrant::ReadGuardedView<V>>, async_graphql::Error> {
-        Ok(Entry {
-            value: self.try_load_entry(&key).await?,
-            key,
-        })
+        let value = self
+            .try_load_entry(&key)
+            .await?
+            .ok_or(async_graphql::Error {
+                message: "MissingKeyInCollection".to_string(),
+                source: None,
+                extensions: None,
+            })?;
+        Ok(Entry { value, key })
     }
 
     async fn entries(
@@ -625,10 +630,15 @@ where
 
         let mut values = vec![];
         for key in keys {
-            values.push(Entry {
-                value: self.try_load_entry(&key).await?,
-                key,
-            })
+            let value = self
+                .try_load_entry(&key)
+                .await?
+                .ok_or(async_graphql::Error {
+                    message: "MissingKeyInCollection".to_string(),
+                    source: None,
+                    extensions: None,
+                })?;
+            values.push(Entry { value, key })
         }
 
         Ok(values)
@@ -670,10 +680,15 @@ where
         &self,
         key: K,
     ) -> Result<Entry<K, reentrant::ReadGuardedView<V>>, async_graphql::Error> {
-        Ok(Entry {
-            value: self.try_load_entry(&key).await?,
-            key,
-        })
+        let value = self
+            .try_load_entry(&key)
+            .await?
+            .ok_or(async_graphql::Error {
+                message: "MissingKeyInCollection".to_string(),
+                source: None,
+                extensions: None,
+            })?;
+        Ok(Entry { value, key })
     }
 
     async fn entries(
@@ -691,10 +706,15 @@ where
 
         let mut values = vec![];
         for key in keys {
-            values.push(Entry {
-                value: self.try_load_entry(&key).await?,
-                key,
-            })
+            let value = self
+                .try_load_entry(&key)
+                .await?
+                .ok_or(async_graphql::Error {
+                    message: "MissingKeyInCollection".to_string(),
+                    source: None,
+                    extensions: None,
+                })?;
+            values.push(Entry { value, key })
         }
 
         Ok(values)

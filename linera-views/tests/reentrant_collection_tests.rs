@@ -25,7 +25,7 @@ where
         let mut map = BTreeMap::new();
         let keys = self.v.indices().await.unwrap();
         for key in keys {
-            let subview = self.v.try_load_entry(&key).await.unwrap();
+            let subview = self.v.try_load_entry(&key).await.unwrap().unwrap();
             let value = subview.get();
             map.insert(key, *value);
         }
@@ -106,22 +106,14 @@ async fn reentrant_collection_view_check() {
                 let n_ins = rng.gen_range(0..5);
                 for _i_ins in 0..n_ins {
                     let pos = rng.gen_range(0..nmax);
-                    let subview = view.v.try_load_entry(&pos).await;
+                    let subview: Option<_> = view.v.try_load_entry(&pos).await.unwrap();
                     match new_map.contains_key(&pos) {
                         true => {
                             let subview = subview.unwrap();
                             let value = subview.get();
                             assert_eq!(value, new_map.get(&pos).unwrap());
                         }
-                        false => match subview {
-                            Ok(_subview) => {
-                                panic!("subview should be missing");
-                            }
-                            Err(err) => assert_eq!(
-                                format!("{:?}", err),
-                                format!("{:?}", ViewError::MissingKeyInCollection)
-                            ),
-                        },
+                        false => assert!(subview.is_none()),
                     }
                 }
             }

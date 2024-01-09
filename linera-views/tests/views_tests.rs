@@ -599,7 +599,12 @@ where
                 }
             }
             {
-                let subview = view.collection4.try_load_entry("hola").await.unwrap();
+                let subview = view
+                    .collection4
+                    .try_load_entry("hola")
+                    .await
+                    .unwrap()
+                    .unwrap();
                 assert_eq!(subview.count(), 0);
                 assert!(view.collection4.try_load_entry("hola").await.is_ok());
             }
