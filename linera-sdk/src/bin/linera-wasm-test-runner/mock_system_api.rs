@@ -596,7 +596,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                 } \
             }, \
             query: list<u8>\
-        ) -> result<list<u8>, string>",
+        ) -> list<u8>",
         move |mut caller: Caller<'_, Resources>,
               application_bytecode_chain_id_part1: i64,
               application_bytecode_chain_id_part2: i64,
@@ -690,8 +690,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                         Please ensure `linera_sdk::test::mock_try_call_application` was called",
                     );
 
-                store_in_memory(&mut caller, return_offset, 0_u8);
-                copy_memory_slices(&mut caller, result_offset, return_offset + 4, 8);
+                copy_memory_slices(&mut caller, result_offset, return_offset, 8);
             })
         },
     )?;
