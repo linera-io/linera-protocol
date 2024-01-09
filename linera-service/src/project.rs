@@ -155,9 +155,14 @@ impl Project {
     ) -> Result<()> {
         let toml_path = project_root.join("Cargo.toml");
         let (linera_sdk_dep, linera_sdk_dev_dep) = Self::linera_sdk_dependencies(linera_root);
+        let binary_root_name = project_name.replace('-', "_");
+        let contract_binary_name = format!("{binary_root_name}_contract");
+        let service_binary_name = format!("{binary_root_name}_service");
         let toml_contents = format!(
             include_str!("../template/Cargo.toml.template"),
             project_name = project_name,
+            contract_binary_name = contract_binary_name,
+            service_binary_name = service_binary_name,
             linera_sdk_dep = linera_sdk_dep,
             linera_sdk_dev_dep = linera_sdk_dev_dep,
         );
@@ -253,7 +258,10 @@ impl Project {
     }
 
     pub fn build(&self, name: Option<String>) -> Result<(PathBuf, PathBuf), anyhow::Error> {
-        let name = name.unwrap_or(self.project_package_name()?);
+        let name = match name {
+            Some(name) => name,
+            None => self.project_package_name()?.replace('-', "_"),
+        };
         let contract_name = format!("{}_contract", name);
         let service_name = format!("{}_service", name);
         let cargo_build = Command::new("cargo")
