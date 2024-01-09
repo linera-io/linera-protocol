@@ -19,7 +19,7 @@ wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb", "linera-storage/rocksdb"]
 aws = ["linera-views/aws", "linera-core/aws", "linera-storage/aws"]
 scylladb = ["linera-views/scylladb", "linera-core/scylladb", "linera-storage/scylladb"]
-kubernetes = ["dep:k8s-openapi", "dep:kube", "dep:pathdiff"]
+kubernetes = ["dep:k8s-openapi", "dep:kube", "dep:pathdiff", "dep:fs_extra"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -37,6 +37,7 @@ comfy-table = { workspace = true }
 current_platform = "0.2.0"
 dirs = { workspace = true }
 file-lock = "2.1.10"
+fs_extra = { workspace = true, optional = true }
 fungible = { workspace = true, optional = true }
 futures = { workspace = true }
 hex = { workspace = true }
