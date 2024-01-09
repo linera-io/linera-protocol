@@ -8,6 +8,7 @@ use comfy_table::{
     Table,
 };
 use file_lock::{FileLock, FileOptions};
+use fs_err::{self, File, OpenOptions};
 use linera_base::{
     crypto::{BcsSignable, CryptoHash, CryptoRng, KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, Timestamp},
@@ -26,14 +27,13 @@ use rand07::Rng;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
-    fs::{self, File, OpenOptions},
     io::{BufRead, BufReader, BufWriter, Write},
     path::{Path, PathBuf},
 };
 
 pub trait Import: DeserializeOwned {
     fn read(path: &Path) -> Result<Self, std::io::Error> {
-        let data = fs::read(path)?;
+        let data = fs_err::read(path)?;
         Ok(serde_json::from_slice(data.as_slice())?)
     }
 }
@@ -361,14 +361,14 @@ impl WalletState {
         let backup_file = File::create(&temp_file_path)?;
         let mut temp_file_writer = BufWriter::new(backup_file);
         if let Err(e) = serde_json::to_writer_pretty(&mut temp_file_writer, &self.inner) {
-            fs::remove_file(&temp_file_path)?;
+            fs_err::remove_file(&temp_file_path)?;
             bail!("failed to serialize the wallet state: {}", e)
         }
         if let Err(e) = temp_file_writer.flush() {
-            fs::remove_file(&temp_file_path)?;
+            fs_err::remove_file(&temp_file_path)?;
             bail!("failed to write the wallet state: {}", e);
         }
-        fs::rename(&temp_file_path, &self.wallet_path)?;
+        fs_err::rename(&temp_file_path, &self.wallet_path)?;
         Ok(())
     }
 
