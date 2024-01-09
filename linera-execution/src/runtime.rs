@@ -19,7 +19,6 @@ use linera_views::batch::Batch;
 use oneshot::Receiver;
 use std::{
     collections::{BTreeMap, HashSet},
-    ops::DerefMut,
     sync::{Arc, Mutex},
 };
 
@@ -462,14 +461,6 @@ impl<const W: bool> BaseRuntime for SyncRuntime<W> {
         self.as_inner().read_system_timestamp()
     }
 
-    fn try_read_my_state_new(&mut self) -> Result<Self::Read, ExecutionError> {
-        self.as_inner().try_read_my_state_new()
-    }
-
-    fn try_read_my_state_wait(&mut self, promise: &Self::Read) -> Result<Vec<u8>, ExecutionError> {
-        self.as_inner().try_read_my_state_wait(promise)
-    }
-
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError> {
         self.as_inner().write_batch(batch)
     }
@@ -569,27 +560,6 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
         self.execution_state_sender
             .send_request(|callback| Request::SystemTimestamp { callback })?
             .recv_response()
-    }
-
-    fn try_read_my_state_new(&mut self) -> Result<Self::Read, ExecutionError> {
-        let id = self.application_id()?;
-        let state = self.simple_user_states.entry(id).or_default();
-        let receiver = self
-            .execution_state_sender
-            .send_request(|callback| Request::ReadSimpleUserState { id, callback })?;
-        state.pending_query = Some(receiver);
-        Ok(())
-    }
-
-    fn try_read_my_state_wait(&mut self, _promise: &Self::Read) -> Result<Vec<u8>, ExecutionError> {
-        let id = self.application_id()?;
-        let state = self
-            .simple_user_states
-            .get_mut(&id)
-            .ok_or(ExecutionError::InvalidPromise)?;
-        let receiver =
-            std::mem::take(&mut state.pending_query).ok_or(ExecutionError::InvalidPromise)?;
-        receiver.recv_response()
     }
 
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError> {
@@ -815,21 +785,6 @@ impl ContractRuntime for ContractSyncRuntime {
         let mut this = self.as_inner();
         this.runtime_counts.remaining_fuel = remaining_fuel;
         Ok(())
-    }
-
-    fn save_my_state(&mut self, bytes: Vec<u8>) -> Result<bool, ExecutionError> {
-        let mut this = self.as_inner();
-        let this = this.deref_mut();
-        let id = this.application_id()?;
-        let receiver =
-            this.execution_state_sender
-                .send_request(|callback| Request::SaveSimpleUserState {
-                    id,
-                    bytes,
-                    callback,
-                })?;
-        receiver.recv_response()?;
-        Ok(true)
     }
 
     fn try_call_application(
