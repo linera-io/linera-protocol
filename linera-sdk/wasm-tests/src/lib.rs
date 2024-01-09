@@ -355,7 +355,7 @@ static mut INTERCEPTED_ARGUMENT: Option<Vec<u8>> = None;
 #[webassembly_test]
 fn mock_query() {
     let response = vec![0xff, 0xfe, 0xfd];
-    let expected_response = Ok(response.clone());
+    let expected_response = response.clone();
 
     test::mock_try_query_application(move |application_id, query| {
         unsafe {
@@ -363,7 +363,7 @@ fn mock_query() {
             INTERCEPTED_ARGUMENT = Some(query);
         }
 
-        Ok::<_, String>(response.clone())
+        response.clone()
     });
 
     let application_id = ApplicationId {

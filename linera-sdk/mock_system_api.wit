@@ -20,10 +20,7 @@ mocked-find-keys: func(prefix: list<u8>) -> list<list<u8>>
 mocked-find-key-values: func(prefix: list<u8>) -> list<tuple<list<u8>,list<u8>>>
 mocked-write-batch: func(operations: list<write-operation>)
 
-mocked-try-query-application: func(
-    application: application-id,
-    query: list<u8>,
-) -> result<list<u8>, string>
+mocked-try-query-application: func(application: application-id, query: list<u8>) -> list<u8>
 
 variant write-operation {
     delete(list<u8>),
