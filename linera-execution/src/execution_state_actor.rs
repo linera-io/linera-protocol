@@ -58,30 +58,6 @@ where
                 callback.respond(timestamp);
             }
 
-            ReadSimpleUserState { id, callback } => {
-                let state = self
-                    .simple_users
-                    .try_load_entry_mut(&id)
-                    .await
-                    .unwrap()
-                    .get()
-                    .to_vec();
-                callback.respond(state);
-            }
-
-            SaveSimpleUserState {
-                id,
-                bytes,
-                callback,
-            } => {
-                self.simple_users
-                    .try_load_entry_mut(&id)
-                    .await
-                    .unwrap()
-                    .set(bytes);
-                callback.respond(());
-            }
-
             ContainsKey { id, key, callback } => {
                 let view = self.view_users.try_load_entry(&id).await?;
                 let result = view.contains_key(&key).await?;
@@ -153,17 +129,6 @@ pub enum Request {
 
     SystemTimestamp {
         callback: Sender<Timestamp>,
-    },
-
-    ReadSimpleUserState {
-        id: UserApplicationId,
-        callback: Sender<Vec<u8>>,
-    },
-
-    SaveSimpleUserState {
-        id: UserApplicationId,
-        bytes: Vec<u8>,
-        callback: Sender<()>,
     },
 
     ReadValueBytes {
