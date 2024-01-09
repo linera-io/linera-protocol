@@ -461,7 +461,7 @@ type MutationRoot {
 	Creates (or activates) a new chain by installing the given authentication keys.
 	This will automatically subscribe to the future committees created by `admin_id`.
 	"""
-	openMultiOwnerChain(chainId: ChainId!, publicKeys: [PublicKey!]!, weights: [Int!], multiLeaderRounds: Int, balance: Amount): ChainId!
+	openMultiOwnerChain(chainId: ChainId!, publicKeys: [PublicKey!]!, weights: [Int!], multiLeaderRounds: Int, balance: Amount, fastRoundMs: Int, baseTimeoutMs: Int! = 10000, timeoutIncrementMs: Int! = 1000): ChainId!
 	"""
 	Closes the chain.
 	"""
@@ -473,7 +473,7 @@ type MutationRoot {
 	"""
 	Changes the authentication key of the chain.
 	"""
-	changeMultipleOwners(chainId: ChainId!, newPublicKeys: [PublicKey!]!, newWeights: [Int!]!, multiLeaderRounds: Int!): CryptoHash!
+	changeMultipleOwners(chainId: ChainId!, newPublicKeys: [PublicKey!]!, newWeights: [Int!]!, multiLeaderRounds: Int!, fastRoundMs: Int, baseTimeoutMs: Int! = 10000, timeoutIncrementMs: Int! = 1000): CryptoHash!
 	"""
 	(admin chain only) Registers a new committee. This will notify the subscribers of
 	the admin chain so that they can migrate to the new epoch (by accepting the

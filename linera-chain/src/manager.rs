@@ -65,6 +65,8 @@
 //! round. Then they download the highest `ValidatedBlock` certificate known to any honest validator
 //! and include that in their block proposal, just like in the cooperative case.
 
+use std::time::Duration;
+
 use crate::{
     data_types::{
         BlockAndRound, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
@@ -82,10 +84,7 @@ use linera_execution::{committee::Epoch, ChainOwnership};
 use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 use rand_distr::{Distribution, WeightedAliasIndex};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 use tracing::error;
-
-const TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The result of verifying a (valid) query.
 #[derive(Eq, PartialEq)]
@@ -153,7 +152,10 @@ impl ChainManager {
         } else {
             None
         };
-        let round_timeout = local_time.saturating_add(TIMEOUT);
+
+        let round_micros = ownership.round_timeout_micros(ownership.first_round());
+        let round_timeout = local_time
+            .saturating_add_micros(u64::try_from(round_micros.as_micros()).unwrap_or(u64::MAX));
 
         Ok(ChainManager {
             ownership,
@@ -387,15 +389,17 @@ impl ChainManager {
 
     /// Resets the timer if `round` has just ended.
     fn update_timeout(&mut self, round: Round, local_time: Timestamp) {
-        if self.current_round() <= round {
-            let factor = if let Round::SingleLeader(r) = round {
-                r.saturating_add(2)
-            } else {
-                1
-            };
-            let timeout = TIMEOUT.saturating_mul(factor);
-            self.round_timeout = local_time.saturating_add(timeout);
+        if self.current_round() > round {
+            return;
         }
+        let round_micros = self
+            .ownership
+            .next_round(round)
+            .map_or(Duration::MAX, |round| {
+                self.ownership.round_timeout_micros(round)
+            });
+        self.round_timeout = local_time
+            .saturating_add_micros(u64::try_from(round_micros.as_micros()).unwrap_or(u64::MAX));
     }
 
     /// Updates the round number and timer if the timeout certificate is from a higher round than

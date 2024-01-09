@@ -22,7 +22,7 @@ pub use applications::{
     UserApplicationId,
 };
 pub use execution::ExecutionStateView;
-pub use ownership::ChainOwnership;
+pub use ownership::{ChainOwnership, TimeoutConfig};
 pub use resources::ResourceTracker;
 pub use system::{
     SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation, SystemQuery,

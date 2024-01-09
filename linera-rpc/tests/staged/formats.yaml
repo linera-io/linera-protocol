@@ -256,6 +256,8 @@ ChainOwnership:
               - TYPENAME: PublicKey
               - U64
     - multi_leader_rounds: U32
+    - timeout_config:
+        TYPENAME: TimeoutConfig
 ChannelFullName:
   STRUCT:
     - application_id:
@@ -325,6 +327,10 @@ Destination:
       Subscribers:
         NEWTYPE:
           TYPENAME: ChannelName
+Duration:
+  STRUCT:
+    - secs: U64
+    - nanos: U32
 Epoch:
   NEWTYPESTRUCT: U32
 Event:
@@ -802,6 +808,8 @@ SystemOperation:
                   - TYPENAME: PublicKey
                   - U64
           - multi_leader_rounds: U32
+          - timeout_config:
+              TYPENAME: TimeoutConfig
     5:
       Subscribe:
         STRUCT:
@@ -844,6 +852,14 @@ SystemOperation:
       Admin:
         NEWTYPE:
           TYPENAME: AdminOperation
+TimeoutConfig:
+  STRUCT:
+    - fast_round_duration:
+        TYPENAME: Duration
+    - base_timeout:
+        TYPENAME: Duration
+    - timeout_increment:
+        TYPENAME: Duration
 Timestamp:
   NEWTYPESTRUCT: U64
 UserApplicationDescription:

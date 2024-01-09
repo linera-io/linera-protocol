@@ -32,7 +32,7 @@ use linera_execution::{
     system::{Account, AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation},
     ChainOwnership, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
     ExecutionStateView, GenericApplicationId, Message, MessageKind, Query, Response,
-    SystemExecutionError, SystemExecutionState, SystemQuery, SystemResponse,
+    SystemExecutionError, SystemExecutionState, SystemQuery, SystemResponse, TimeoutConfig,
 };
 use linera_storage::{DbStorage, MemoryStorage, Storage, TestClock};
 use linera_views::{
@@ -3777,6 +3777,7 @@ where
         super_owners: Vec::new(),
         owners: vec![(pub_key0, 100), (pub_key1, 100)],
         multi_leader_rounds: 0,
+        timeout_config: TimeoutConfig::default(),
     });
     let (executed_block0, _) = worker.stage_block_execution(block0).await.unwrap();
     let value0 = HashedValue::new_confirmed(executed_block0);
@@ -4012,6 +4013,7 @@ where
         super_owners: vec![pub_key0],
         owners: vec![(pub_key0, 100), (pub_key1, 100)],
         multi_leader_rounds: 2,
+        timeout_config: TimeoutConfig::default(),
     });
     let (executed_block0, _) = worker.stage_block_execution(block0).await.unwrap();
     let value0 = HashedValue::new_confirmed(executed_block0);

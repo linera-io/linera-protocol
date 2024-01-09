@@ -4,6 +4,7 @@
 
 use crate::{
     committee::{Committee, Epoch},
+    ownership::TimeoutConfig,
     ApplicationRegistryView, Bytecode, BytecodeLocation, ChainOwnership, ChannelName,
     ChannelSubscription, Destination, MessageContext, MessageKind, OperationContext, QueryContext,
     RawExecutionOutcome, RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
@@ -128,6 +129,8 @@ pub enum SystemOperation {
         owners: Vec<(PublicKey, u64)>,
         /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
         multi_leader_rounds: u32,
+        /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
+        timeout_config: TimeoutConfig,
     },
     /// Subscribes to a system channel.
     Subscribe {
@@ -550,6 +553,7 @@ where
                 super_owners,
                 owners,
                 multi_leader_rounds,
+                timeout_config,
             } => {
                 self.ownership.set(ChainOwnership {
                     super_owners: super_owners
@@ -561,6 +565,7 @@ where
                         .map(|(public_key, weight)| (Owner::from(public_key), (public_key, weight)))
                         .collect(),
                     multi_leader_rounds,
+                    timeout_config,
                 });
             }
             CloseChain => {

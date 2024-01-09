@@ -41,7 +41,7 @@ use linera_execution::{
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX, PUBLISH_BYTECODE_MESSAGE_INDEX,
     },
     Bytecode, ChainOwnership, Message, Operation, Query, Response, SystemMessage, SystemQuery,
-    SystemResponse, UserApplicationId,
+    SystemResponse, TimeoutConfig, UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -1758,7 +1758,7 @@ where
         self.transfer_ownership(new_public_key).await
     }
 
-    /// Transfers ownership of the chain.
+    /// Transfers ownership of the chain to a single super owner.
     pub async fn transfer_ownership(
         &mut self,
         new_public_key: PublicKey,
@@ -1767,14 +1767,12 @@ where
             super_owners: vec![new_public_key],
             owners: Vec::new(),
             multi_leader_rounds: 2,
+            timeout_config: TimeoutConfig::default(),
         }))
         .await
     }
 
-    /// Adds another owner to the chain.
-    ///
-    /// If the chain is currently of type `Single`, the existing owner's weight is set to 100, and
-    /// the first two rounds are multi-leader.
+    /// Adds another owner to the chain, and turns existing super owners into regular owners.
     pub async fn share_ownership(
         &mut self,
         new_public_key: PublicKey,
@@ -1800,6 +1798,7 @@ where
                 super_owners: Vec::new(),
                 owners,
                 multi_leader_rounds: ownership.multi_leader_rounds,
+                timeout_config: ownership.timeout_config,
             })];
             match self.execute_block(messages, operations).await? {
                 ExecuteBlockOutcome::Executed(certificate) => {
