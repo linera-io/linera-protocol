@@ -239,7 +239,7 @@ pub struct WorkerState<StorageClient> {
     allow_messages_from_deprecated_epochs: bool,
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
-    grace_period_micros: u64,
+    grace_period_us: u64,
     /// Cached values by hash.
     recent_values: Arc<Mutex<LruCache<CryptoHash, HashedValue>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -261,7 +261,7 @@ impl<StorageClient> WorkerState<StorageClient> {
             storage,
             allow_inactive_chains: false,
             allow_messages_from_deprecated_epochs: false,
-            grace_period_micros: 0,
+            grace_period_us: 0,
             recent_values,
             delivery_notifiers: Arc::default(),
         }
@@ -279,7 +279,7 @@ impl<StorageClient> WorkerState<StorageClient> {
             storage,
             allow_inactive_chains: false,
             allow_messages_from_deprecated_epochs: false,
-            grace_period_micros: 0,
+            grace_period_us: 0,
             recent_values,
             delivery_notifiers,
         }
@@ -299,8 +299,8 @@ impl<StorageClient> WorkerState<StorageClient> {
     ///
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
     /// will wait until that timestamp before voting.
-    pub fn with_grace_period_micros(mut self, grace_period_micros: u64) -> Self {
-        self.grace_period_micros = grace_period_micros;
+    pub fn with_grace_period_us(mut self, grace_period_us: u64) -> Self {
+        self.grace_period_us = grace_period_us;
         self
     }
 
@@ -1056,9 +1056,9 @@ where
         // Write the values so that the bytecode is available during execution.
         self.storage.write_values(blobs).await?;
         let local_time = self.storage.current_time();
-        let time_till_block = block.timestamp.saturating_diff_micros(local_time);
+        let time_till_block = block.timestamp.saturating_diff_us(local_time);
         ensure!(
-            time_till_block <= self.grace_period_micros,
+            time_till_block <= self.grace_period_us,
             WorkerError::InvalidTimestamp
         );
         if time_till_block > 0 {

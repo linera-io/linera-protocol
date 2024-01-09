@@ -36,7 +36,7 @@ macro_rules! impl_contract_system_api {
             fn read_system_timestamp(
                 &mut self,
             ) -> Result<contract_system_api::Timestamp, Self::Error> {
-                BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
+                BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.us())
             }
 
             // TODO(#1152): remove
@@ -148,7 +148,7 @@ macro_rules! impl_service_system_api {
             fn read_system_timestamp(
                 &mut self,
             ) -> Result<service_system_api::Timestamp, Self::Error> {
-                BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
+                BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.us())
             }
 
             // TODO(#1152): remove

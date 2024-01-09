@@ -156,13 +156,12 @@ impl TestClock {
     /// Sets the current time.
     pub fn set(&self, timestamp: Timestamp) {
         self.0
-            .store(timestamp.micros(), std::sync::atomic::Ordering::SeqCst);
+            .store(timestamp.us(), std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Advances the current time by the specified number of microseconds.
-    pub fn add_micros(&self, micros: u64) {
-        self.0
-            .fetch_add(micros, std::sync::atomic::Ordering::SeqCst);
+    pub fn add_us(&self, us: u64) {
+        self.0.fetch_add(us, std::sync::atomic::Ordering::SeqCst);
     }
 }
 

@@ -1836,9 +1836,9 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(storage, chain_id);
                 let end_timestamp = limit_rate_until
                     .map(|et| {
-                        let micros = u64::try_from(et.timestamp_micros())
+                        let us = u64::try_from(et.timestamp_micros())
                             .expect("End timestamp before 1970");
-                        Timestamp::from(micros)
+                        Timestamp::from(us)
                     })
                     .unwrap_or_else(Timestamp::now);
                 let genesis_config = Arc::new(context.wallet_state.genesis_config().clone());
@@ -2424,9 +2424,9 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
             };
             let timestamp = start_timestamp
                 .map(|st| {
-                    let micros =
+                    let us =
                         u64::try_from(st.timestamp_micros()).expect("Start timestamp before 1970");
-                    Timestamp::from(micros)
+                    Timestamp::from(us)
                 })
                 .unwrap_or_else(Timestamp::now);
             let admin_id = ChainId::root(*admin_root);

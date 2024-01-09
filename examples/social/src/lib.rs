@@ -254,7 +254,7 @@ pub struct Key {
 impl CustomSerialize for Key {
     fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError> {
         let data = (
-            (!self.timestamp.micros()).to_be_bytes(),
+            (!self.timestamp.us()).to_be_bytes(),
             &self.author,
             (!self.index).to_be_bytes(),
         );

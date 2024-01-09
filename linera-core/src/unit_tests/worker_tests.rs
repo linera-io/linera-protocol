@@ -98,7 +98,7 @@ where
     let worker = WorkerState::new("Single validator node".to_string(), Some(key_pair), storage)
         .with_allow_inactive_chains(is_client)
         .with_allow_messages_from_deprecated_epochs(is_client)
-        .with_grace_period_micros(TEST_GRACE_PERIOD_MICROS);
+        .with_grace_period_us(TEST_GRACE_PERIOD_MICROS);
     (committee, worker)
 }
 
@@ -584,7 +584,7 @@ where
 
     {
         let block_proposal = make_child_block(&certificate.value)
-            .with_timestamp(block_0_time.saturating_sub_micros(1))
+            .with_timestamp(block_0_time.saturating_sub_us(1))
             .into_fast_proposal(&key_pair);
         // Timestamp older than previous one
         assert!(matches!(

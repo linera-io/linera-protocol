@@ -127,10 +127,8 @@ where
         if self.start_timestamp < self.end_timestamp {
             let local_time = client.storage_client().await.current_time();
             if local_time < self.end_timestamp {
-                let full_duration = self
-                    .end_timestamp
-                    .saturating_diff_micros(self.start_timestamp);
-                let remaining_duration = self.end_timestamp.saturating_diff_micros(local_time);
+                let full_duration = self.end_timestamp.saturating_diff_us(self.start_timestamp);
+                let remaining_duration = self.end_timestamp.saturating_diff_us(local_time);
                 let balance = client.local_balance().await?;
                 let Ok(remaining_balance) = balance.try_sub(self.amount) else {
                     return Err(Error::new("The faucet is empty."));

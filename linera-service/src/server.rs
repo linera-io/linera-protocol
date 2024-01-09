@@ -36,7 +36,7 @@ struct ServerContext {
     cross_chain_config: CrossChainConfig,
     notification_config: NotificationConfig,
     shard: Option<usize>,
-    grace_period_micros: u64,
+    grace_period_us: u64,
 }
 
 impl ServerContext {
@@ -58,7 +58,7 @@ impl ServerContext {
         )
         .with_allow_inactive_chains(false)
         .with_allow_messages_from_deprecated_epochs(false)
-        .with_grace_period_micros(self.grace_period_micros);
+        .with_grace_period_us(self.grace_period_us);
         (state, shard_id, shard.clone())
     }
 
@@ -441,7 +441,7 @@ async fn run(options: ServerOptions) {
                 cross_chain_config,
                 notification_config,
                 shard,
-                grace_period_micros: grace_period,
+                grace_period_us: grace_period,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let common_config = CommonStoreConfig {

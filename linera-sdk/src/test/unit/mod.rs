@@ -138,7 +138,7 @@ impl wit::MockSystemApi for MockSystemApi {
                 "Unexpected call to the `read_system_timestamp` system API. \
                 Please call `mock_system_timestamp` first",
             )
-            .micros()
+            .us()
     }
 
     fn mocked_log(message: String, level: wit::LogLevel) {

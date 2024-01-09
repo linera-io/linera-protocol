@@ -85,32 +85,32 @@ impl Timestamp {
     }
 
     /// Returns the number of microseconds since the Unix epoch.
-    pub fn micros(&self) -> u64 {
+    pub fn us(&self) -> u64 {
         self.0
     }
 
     /// Returns the number of microseconds from `other` until `self`, or `0` if `other` is not
     /// earlier than `self`.
-    pub fn saturating_diff_micros(&self, other: Timestamp) -> u64 {
+    pub fn saturating_diff_us(&self, other: Timestamp) -> u64 {
         self.0.saturating_sub(other.0)
     }
 
     /// Returns the timestamp that is `duration` later than `self`.
     pub fn saturating_add(&self, duration: Duration) -> Timestamp {
-        let micros = u64::try_from(duration.as_micros()).unwrap_or(u64::MAX);
-        Timestamp(self.0.saturating_add(micros))
+        let us = u64::try_from(duration.as_micros()).unwrap_or(u64::MAX);
+        Timestamp(self.0.saturating_add(us))
     }
 
-    /// Returns a timestamp `micros` microseconds later than `self`, or the highest possible value
+    /// Returns a timestamp `us` microseconds later than `self`, or the highest possible value
     /// if it would overflow.
-    pub fn saturating_add_micros(&self, micros: u64) -> Timestamp {
-        Timestamp(self.0.saturating_add(micros))
+    pub fn saturating_add_us(&self, us: u64) -> Timestamp {
+        Timestamp(self.0.saturating_add(us))
     }
 
-    /// Returns a timestamp `micros` microseconds earlier than `self`, or the lowest possible value
+    /// Returns a timestamp `us` microseconds earlier than `self`, or the lowest possible value
     /// if it would underflow.
-    pub fn saturating_sub_micros(&self, micros: u64) -> Timestamp {
-        Timestamp(self.0.saturating_sub(micros))
+    pub fn saturating_sub_us(&self, us: u64) -> Timestamp {
+        Timestamp(self.0.saturating_sub(us))
     }
 }
 

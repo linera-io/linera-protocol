@@ -1019,7 +1019,7 @@ pub async fn wait_for_next_round(stream: NotificationStream, timeout: RoundTimeo
     future::select(
         Box::pin(stream.next()),
         Box::pin(tokio::time::sleep(Duration::from_micros(
-            timeout.timestamp.saturating_diff_micros(Timestamp::now()),
+            timeout.timestamp.saturating_diff_us(Timestamp::now()),
         ))),
     )
     .await;
