@@ -35,7 +35,6 @@ static mut MOCK_APPLICATION_PARAMETERS: Option<Vec<u8>> = None;
 static mut MOCK_SYSTEM_BALANCE: Option<Amount> = None;
 static mut MOCK_SYSTEM_TIMESTAMP: Option<Timestamp> = None;
 static mut MOCK_LOG_COLLECTOR: Vec<(log::Level, String)> = Vec::new();
-static mut MOCK_APPLICATION_STATE: Option<Vec<u8>> = None;
 static mut MOCK_KEY_VALUE_STORE: Option<MemoryContext<()>> = None;
 static mut MOCK_TRY_QUERY_APPLICATION: Option<
     Box<dyn FnMut(ApplicationId, Vec<u8>) -> Result<Vec<u8>, String>>,
@@ -72,11 +71,6 @@ pub fn mock_system_timestamp(system_timestamp: impl Into<Option<Timestamp>>) {
 /// Returns all messages logged so far.
 pub fn log_messages() -> Vec<(log::Level, String)> {
     unsafe { MOCK_LOG_COLLECTOR.clone() }
-}
-
-/// Sets the mocked application state.
-pub fn mock_application_state(state: impl Into<Option<Vec<u8>>>) {
-    unsafe { MOCK_APPLICATION_STATE = state.into() };
 }
 
 /// Initializes and returns a view context for using as the mocked key-value store.
@@ -149,23 +143,6 @@ impl wit::MockSystemApi for MockSystemApi {
 
     fn mocked_log(message: String, level: wit::LogLevel) {
         unsafe { MOCK_LOG_COLLECTOR.push((level.into(), message)) }
-    }
-
-    fn mocked_load() -> Vec<u8> {
-        unsafe { MOCK_APPLICATION_STATE.clone() }.expect(
-            "Unexpected call to the `load` system API. \
-            Please call `mock_application_state` first",
-        )
-    }
-
-    fn mocked_store(state: Vec<u8>) -> bool {
-        assert!(
-            unsafe { MOCK_APPLICATION_STATE.is_some() },
-            "Unexpected call to `store_and_unlock` system API. \
-            Please call `mock_application_state` first."
-        );
-        unsafe { MOCK_APPLICATION_STATE = Some(state) };
-        true
     }
 
     fn mocked_read_multi_values_bytes(keys: Vec<Vec<u8>>) -> Vec<Option<Vec<u8>>> {
