@@ -8,11 +8,13 @@
 //! contract type that implements [`Contract`].
 
 use crate::{
-    contract::system_api, views::ViewStorageContext, Contract, SimpleStateStorage, ViewStateStorage,
+    contract::system_api,
+    views::{AppStateStore, ViewStorageContext},
+    Contract, SimpleStateStorage, ViewStateStorage,
 };
 use async_trait::async_trait;
 use futures::TryFutureExt;
-use linera_views::views::RootView;
+use linera_views::{batch::Batch, common::KeyValueStore, views::RootView};
 use serde::{de::DeserializeOwned, Serialize};
 use std::future::Future;
 
@@ -58,11 +60,29 @@ where
     Application: Contract + Default + DeserializeOwned + Serialize + Send + 'static,
 {
     async fn load() -> Application {
-        system_api::load().expect("Failed to lock contract state")
+        let maybe_bytes = AppStateStore
+            .read_value_bytes(&[])
+            .await
+            .expect("Failed to read application state bytes");
+
+        if let Some(bytes) = maybe_bytes {
+            bcs::from_bytes(&bytes).expect("Failed to deserialize application state")
+        } else {
+            Application::default()
+        }
     }
 
     async fn store(state: Application) {
-        system_api::store(state).await;
+        let mut batch = Batch::new();
+
+        batch
+            .put_key_value(vec![], &state)
+            .expect("Failed to serialize application state");
+
+        AppStateStore
+            .write_batch(batch, &[])
+            .await
+            .expect("Failed to store application state bytes");
     }
 }
 

@@ -8,9 +8,7 @@ mod private;
 #[cfg(any(test, feature = "test"))]
 pub mod private;
 
-pub(crate) use self::private::{
-    current_application_parameters, load, load_view, query_application,
-};
+pub(crate) use self::private::{current_application_parameters, load_view, query_application};
 use super::service_system_api as wit;
 use linera_base::{
     data_types::{Amount, Timestamp},

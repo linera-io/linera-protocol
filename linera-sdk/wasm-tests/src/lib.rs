@@ -146,21 +146,6 @@ fn mock_service_log() {
     assert_eq!(test::log_messages(), expected);
 }
 
-/// Test loading a mocked application state without locking it.
-#[webassembly_test]
-fn mock_load_blob_state() {
-    let state = vec![0, 1, 2, 3, 4, 5, 6];
-
-    test::mock_application_state(
-        bcs::to_bytes(&state).expect("Failed to serialize vector using BCS"),
-    );
-
-    assert_eq!(
-        service::system_api::private::load::<Vec<u8>>().blocking_wait(),
-        state
-    );
-}
-
 /// A dummy view to test the key value store.
 #[derive(RootView)]
 struct DummyView<C> {

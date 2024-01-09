@@ -8,40 +8,10 @@ use super::super::contract_system_api as wit;
 use crate::views::ViewStorageContext;
 use linera_base::identifiers::{ApplicationId, SessionId};
 use linera_views::views::{RootView, View};
-use serde::{de::DeserializeOwned, Serialize};
 
 /// Retrieves the current application parameters.
 pub fn current_application_parameters() -> Vec<u8> {
     wit::application_parameters()
-}
-
-/// Deserializes the application state or creates a new one if the `bytes` vector is empty.
-fn deserialize_state<State>(bytes: Vec<u8>) -> State
-where
-    State: Default + DeserializeOwned,
-{
-    if bytes.is_empty() {
-        State::default()
-    } else {
-        bcs::from_bytes(&bytes).expect("Invalid application state")
-    }
-}
-
-/// Loads the application state.
-pub fn load<State>() -> Option<State>
-where
-    State: Default + DeserializeOwned,
-{
-    let state_bytes = wit::load();
-    Some(deserialize_state(state_bytes))
-}
-
-/// Saves the application state.
-pub async fn store<State>(state: State)
-where
-    State: Serialize,
-{
-    wit::store(&bcs::to_bytes(&state).expect("State serialization failed"));
 }
 
 /// Loads the application state or create a new one if it doesn't exist.
