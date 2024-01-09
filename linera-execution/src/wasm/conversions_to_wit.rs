@@ -10,7 +10,7 @@
 
 use super::{contract, contract_system_api, service, service_system_api};
 use crate::{
-    CallResult, CalleeContext, MessageContext, MessageId, OperationContext, QueryContext,
+    CallOutcome, CalleeContext, MessageContext, MessageId, OperationContext, QueryContext,
     SessionId, UserApplicationId,
 };
 use linera_base::{crypto::CryptoHash, data_types::Amount, identifiers::ChainId};
@@ -205,9 +205,9 @@ impl From<CryptoHash> for contract_system_api::CryptoHash {
     }
 }
 
-impl From<CallResult> for contract_system_api::CallResult {
-    fn from(host: CallResult) -> Self {
-        contract_system_api::CallResult {
+impl From<CallOutcome> for contract_system_api::CallOutcome {
+    fn from(host: CallOutcome) -> Self {
+        contract_system_api::CallOutcome {
             value: host.value,
             sessions: host
                 .sessions

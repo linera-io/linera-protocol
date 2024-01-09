@@ -11,8 +11,8 @@ use linera_base::{
 use linera_execution::{
     policy::ResourceControlPolicy,
     system::{Recipient, UserData},
-    ExecutionResult, ExecutionStateView, Message, MessageContext, Operation, OperationContext,
-    Query, QueryContext, RawExecutionResult, ResourceTracker, Response, SystemExecutionState,
+    ExecutionOutcome, ExecutionStateView, Message, MessageContext, Operation, OperationContext,
+    Query, QueryContext, RawExecutionOutcome, ResourceTracker, Response, SystemExecutionState,
     SystemMessage, SystemOperation, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
 };
 use linera_views::memory::MemoryContext;
@@ -44,14 +44,14 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     };
     let mut tracker = ResourceTracker::default();
     let policy = ResourceControlPolicy::default();
-    let results = view
+    let outcomes = view
         .execute_operation(context, Operation::System(operation), &policy, &mut tracker)
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::ZERO);
     assert_eq!(
-        results,
-        vec![ExecutionResult::System(RawExecutionResult::default())]
+        outcomes,
+        vec![ExecutionOutcome::System(RawExecutionOutcome::default())]
     );
     Ok(())
 }
@@ -90,14 +90,14 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
     };
     let mut tracker = ResourceTracker::default();
     let policy = ResourceControlPolicy::default();
-    let results = view
+    let outcomes = view
         .execute_message(context, Message::System(message), &policy, &mut tracker)
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::from_tokens(4));
     assert_eq!(
-        results,
-        vec![ExecutionResult::System(RawExecutionResult::default())]
+        outcomes,
+        vec![ExecutionOutcome::System(RawExecutionOutcome::default())]
     );
     Ok(())
 }

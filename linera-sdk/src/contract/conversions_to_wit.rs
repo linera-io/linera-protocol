@@ -5,7 +5,7 @@
 //! [`wit-bindgen-guest-rust`].
 
 use super::{contract_system_api as wit_system_api, wit_types};
-use crate::{ApplicationCallResult, ExecutionResult, OutgoingMessage, SessionCallResult};
+use crate::{ApplicationCallOutcome, ExecutionOutcome, OutgoingMessage, SessionCallOutcome};
 use linera_base::{
     crypto::CryptoHash,
     identifiers::{ApplicationId, ChannelName, Destination, MessageId, SessionId},
@@ -79,50 +79,50 @@ impl From<log::Level> for wit_system_api::LogLevel {
     }
 }
 
-impl<Message, Value, SessionState> From<ApplicationCallResult<Message, Value, SessionState>>
-    for wit_types::ApplicationCallResult
+impl<Message, Value, SessionState> From<ApplicationCallOutcome<Message, Value, SessionState>>
+    for wit_types::ApplicationCallOutcome
 where
     Message: Serialize + DeserializeOwned + Debug,
     Value: Serialize,
     SessionState: Serialize,
 {
-    fn from(result: ApplicationCallResult<Message, Value, SessionState>) -> Self {
+    fn from(outcome: ApplicationCallOutcome<Message, Value, SessionState>) -> Self {
         // TODO(#743): Do we need explicit error handling?
-        let value = bcs::to_bytes(&result.value)
-            .expect("failed to serialize Value for ApplicationCallResult");
+        let value = bcs::to_bytes(&outcome.value)
+            .expect("failed to serialize Value for ApplicationCallOutcome");
 
-        let create_sessions = result
+        let create_sessions = outcome
             .create_sessions
             .into_iter()
             .map(|v| {
                 bcs::to_bytes(&v)
-                    .expect("failed to serialize session state for ApplicationCallResult")
+                    .expect("failed to serialize session state for ApplicationCallOutcome")
             })
             .collect();
 
-        wit_types::ApplicationCallResult {
+        wit_types::ApplicationCallOutcome {
             value,
-            execution_result: result.execution_result.into(),
+            execution_outcome: outcome.execution_outcome.into(),
             create_sessions,
         }
     }
 }
 
-impl<Message, Value, SessionState> From<SessionCallResult<Message, Value, SessionState>>
-    for wit_types::SessionCallResult
+impl<Message, Value, SessionState> From<SessionCallOutcome<Message, Value, SessionState>>
+    for wit_types::SessionCallOutcome
 where
     Message: Serialize + DeserializeOwned + Debug,
     Value: Serialize,
     SessionState: Serialize,
 {
-    fn from(result: SessionCallResult<Message, Value, SessionState>) -> Self {
+    fn from(outcome: SessionCallOutcome<Message, Value, SessionState>) -> Self {
         // TODO(#743): Do we need explicit error handling?
-        let new_state = result.new_state.map(|state| {
-            bcs::to_bytes(&state).expect("failed to serialize Value for SessionCallResult")
+        let new_state = outcome.new_state.map(|state| {
+            bcs::to_bytes(&state).expect("failed to serialize Value for SessionCallOutcome")
         });
 
-        wit_types::SessionCallResult {
-            inner: result.inner.into(),
+        wit_types::SessionCallOutcome {
+            inner: outcome.inner.into(),
             new_state,
         }
     }
@@ -142,30 +142,30 @@ where
     }
 }
 
-impl<Message> From<ExecutionResult<Message>> for wit_types::ExecutionResult
+impl<Message> From<ExecutionOutcome<Message>> for wit_types::ExecutionOutcome
 where
     Message: Debug + Serialize + DeserializeOwned,
 {
-    fn from(result: ExecutionResult<Message>) -> Self {
-        let messages = result
+    fn from(outcome: ExecutionOutcome<Message>) -> Self {
+        let messages = outcome
             .messages
             .into_iter()
             .map(wit_types::OutgoingMessage::from)
             .collect();
 
-        let subscribe = result
+        let subscribe = outcome
             .subscribe
             .into_iter()
             .map(|(subscription, chain_id)| (subscription.into(), chain_id.0.into()))
             .collect();
 
-        let unsubscribe = result
+        let unsubscribe = outcome
             .unsubscribe
             .into_iter()
             .map(|(subscription, chain_id)| (subscription.into(), chain_id.0.into()))
             .collect();
 
-        wit_types::ExecutionResult {
+        wit_types::ExecutionOutcome {
             messages,
             subscribe,
             unsubscribe,

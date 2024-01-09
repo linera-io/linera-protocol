@@ -74,20 +74,20 @@ async fn test_topological_sort() {
         .is_err());
     view.import(registry([(3, vec![2]), (2, vec![]), (0, vec![1])]))
         .unwrap();
-    let results = view
+    let app_ids = view
         .find_dependencies(vec![app_id(1)], &Default::default())
         .await
         .unwrap();
-    assert_eq!(results, Vec::from_iter([2, 3, 1].into_iter().map(app_id)));
-    let results = view
+    assert_eq!(app_ids, Vec::from_iter([2, 3, 1].into_iter().map(app_id)));
+    let app_ids = view
         .find_dependencies(vec![app_id(0)], &Default::default())
         .await
         .unwrap();
     assert_eq!(
-        results,
+        app_ids,
         Vec::from_iter([2, 3, 1, 0].into_iter().map(app_id))
     );
-    let results = view
+    let app_ids = view
         .find_dependencies(
             vec![app_id(0), app_id(5)],
             &vec![
@@ -100,7 +100,7 @@ async fn test_topological_sort() {
         .await
         .unwrap();
     assert_eq!(
-        results,
+        app_ids,
         Vec::from_iter([2, 4, 5, 3, 1, 0].into_iter().map(app_id))
     );
 }
@@ -115,17 +115,17 @@ async fn test_topological_sort_with_loop() {
         (0, vec![1]),
     ]))
     .unwrap();
-    let results = view
+    let app_ids = view
         .find_dependencies(vec![app_id(1)], &Default::default())
         .await
         .unwrap();
-    assert_eq!(results, Vec::from_iter([2, 3, 1].into_iter().map(app_id)));
-    let results = view
+    assert_eq!(app_ids, Vec::from_iter([2, 3, 1].into_iter().map(app_id)));
+    let app_ids = view
         .find_dependencies(vec![app_id(0)], &Default::default())
         .await
         .unwrap();
     assert_eq!(
-        results,
+        app_ids,
         Vec::from_iter([2, 3, 1, 0].into_iter().map(app_id))
     );
 }

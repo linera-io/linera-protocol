@@ -9,8 +9,8 @@ use self::state::MetaCounter;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{ApplicationId, ChainId, SessionId, WithContractAbi},
-    ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
-    OperationContext, SessionCallResult, SimpleStateStorage,
+    ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
+    OperationContext, SessionCallOutcome, SimpleStateStorage,
 };
 use thiserror::Error;
 
@@ -35,26 +35,26 @@ impl Contract for MetaCounter {
         &mut self,
         context: &OperationContext,
         _argument: (),
-    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
         assert!(Self::parameters().is_ok());
 
         Self::counter_id()?;
         // Send a no-op message to ourselves. This is only for testing contracts that send messages
         // on initialization. Since the value is 0 it does not change the counter value.
-        Ok(ExecutionResult::default().with_message(context.chain_id, 0))
+        Ok(ExecutionOutcome::default().with_message(context.chain_id, 0))
     }
 
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,
         (recipient_id, value): (ChainId, u64),
-    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         log::trace!("message: {:?}", value);
         if value >= 20000 {
-            Ok(ExecutionResult::default().with_tracked_message(recipient_id, value))
+            Ok(ExecutionOutcome::default().with_tracked_message(recipient_id, value))
         } else {
-            Ok(ExecutionResult::default().with_message(recipient_id, value))
+            Ok(ExecutionOutcome::default().with_message(recipient_id, value))
         }
     }
 
@@ -62,10 +62,10 @@ impl Contract for MetaCounter {
         &mut self,
         context: &MessageContext,
         value: u64,
-    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         if context.is_bouncing {
             log::trace!("receiving a bouncing message {value}");
-            return Ok(ExecutionResult::default());
+            return Ok(ExecutionOutcome::default());
         }
         if value >= 10000 {
             log::trace!("failing message {value} on purpose");
@@ -73,7 +73,7 @@ impl Contract for MetaCounter {
         }
         log::trace!("executing {} via {:?}", value, Self::counter_id()?);
         self.call_application(true, Self::counter_id()?, &value, vec![])?;
-        Ok(ExecutionResult::default())
+        Ok(ExecutionOutcome::default())
     }
 
     async fn handle_application_call(
@@ -81,8 +81,10 @@ impl Contract for MetaCounter {
         _context: &CalleeContext,
         _call: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
-    {
+    ) -> Result<
+        ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>,
+        Self::Error,
+    > {
         Err(Error::CallsNotSupported)
     }
 
@@ -92,7 +94,7 @@ impl Contract for MetaCounter {
         _state: Self::SessionState,
         _call: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
+    ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
     {
         Err(Error::SessionsNotSupported)
     }

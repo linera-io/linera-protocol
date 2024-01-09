@@ -9,8 +9,8 @@ use self::state::Counter;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{SessionId, WithContractAbi},
-    ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
-    OperationContext, SessionCallResult, SimpleStateStorage,
+    ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
+    OperationContext, SessionCallOutcome, SimpleStateStorage,
 };
 use thiserror::Error;
 
@@ -29,29 +29,29 @@ impl Contract for Counter {
         &mut self,
         _context: &OperationContext,
         value: u64,
-    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
         assert!(Self::parameters().is_ok());
 
         self.value = value;
 
-        Ok(ExecutionResult::default())
+        Ok(ExecutionOutcome::default())
     }
 
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,
         operation: u64,
-    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         self.value += operation;
-        Ok(ExecutionResult::default())
+        Ok(ExecutionOutcome::default())
     }
 
     async fn execute_message(
         &mut self,
         _context: &MessageContext,
         _message: (),
-    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         Err(Error::MessagesNotSupported)
     }
 
@@ -60,12 +60,14 @@ impl Contract for Counter {
         _context: &CalleeContext,
         increment: u64,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
-    {
+    ) -> Result<
+        ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>,
+        Self::Error,
+    > {
         self.value += increment;
-        Ok(ApplicationCallResult {
+        Ok(ApplicationCallOutcome {
             value: self.value,
-            ..ApplicationCallResult::default()
+            ..ApplicationCallOutcome::default()
         })
     }
 
@@ -75,7 +77,7 @@ impl Contract for Counter {
         _state: Self::SessionState,
         _call: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
+    ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
     {
         Err(Error::SessionsNotSupported)
     }
@@ -108,7 +110,7 @@ mod tests {
     use linera_sdk::{
         base::{BlockHeight, ChainId, MessageId},
         test::mock_application_parameters,
-        ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
+        ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
         OperationContext,
     };
     use webassembly_test::webassembly_test;
@@ -126,7 +128,7 @@ mod tests {
             .expect("Execution of counter operation should not await anything");
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), ExecutionResult::default());
+        assert_eq!(result.unwrap(), ExecutionOutcome::default());
         assert_eq!(counter.value, initial_value + increment);
     }
 
@@ -157,14 +159,14 @@ mod tests {
             .expect("Execution of counter operation should not await anything");
 
         let expected_value = initial_value + increment;
-        let expected_result = ApplicationCallResult {
+        let expected_outcome = ApplicationCallOutcome {
             value: expected_value,
             create_sessions: vec![],
-            execution_result: ExecutionResult::default(),
+            execution_outcome: ExecutionOutcome::default(),
         };
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), expected_result);
+        assert_eq!(result.unwrap(), expected_outcome);
         assert_eq!(counter.value, expected_value);
     }
 
@@ -193,7 +195,7 @@ mod tests {
             .expect("Initialization of counter state should not await anything");
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), ExecutionResult::default());
+        assert_eq!(result.unwrap(), ExecutionOutcome::default());
         assert_eq!(counter.value, initial_value);
 
         counter

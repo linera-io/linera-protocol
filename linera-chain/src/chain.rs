@@ -21,9 +21,9 @@ use linera_base::{
 };
 use linera_execution::{
     system::{SystemExecutionError, SystemMessage},
-    ExecutionError, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView,
+    ExecutionError, ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView,
     GenericApplicationId, Message, MessageContext, OperationContext, Query, QueryContext,
-    RawExecutionResult, RawOutgoingMessage, ResourceTracker, Response, UserApplicationDescription,
+    RawExecutionOutcome, RawOutgoingMessage, ResourceTracker, Response, UserApplicationDescription,
     UserApplicationId,
 };
 use linera_views::{
@@ -612,7 +612,7 @@ where
                 },
                 authenticated_signer: message.event.authenticated_signer,
             };
-            let results = match message.action {
+            let outcomes = match message.action {
                 MessageAction::Accept => self
                     .execution_state
                     .execute_message(
@@ -647,7 +647,7 @@ where
                 }
             };
             let mut messages_out = self
-                .process_execution_results(context.height, results)
+                .process_execution_outcomes(context.height, outcomes)
                 .await?;
             if let MessageAction::Accept = message.action {
                 let balance = self.execution_state.system.balance.get_mut();
@@ -679,13 +679,13 @@ where
                 authenticated_signer: block.authenticated_signer,
                 next_message_index,
             };
-            let results = self
+            let outcomes = self
                 .execution_state
                 .execute_operation(context, operation.clone(), &policy, &mut tracker)
                 .await
                 .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
             let mut messages_out = self
-                .process_execution_results(context.height, results)
+                .process_execution_outcomes(context.height, outcomes)
                 .await?;
             let balance = self.execution_state.system.balance.get_mut();
             Self::sub_assign_fees(
@@ -748,16 +748,16 @@ where
         })
     }
 
-    async fn process_execution_results(
+    async fn process_execution_outcomes(
         &mut self,
         height: BlockHeight,
-        results: Vec<ExecutionResult>,
+        results: Vec<ExecutionOutcome>,
     ) -> Result<Vec<OutgoingMessage>, ChainError> {
         let mut messages = Vec::new();
         for result in results {
             match result {
-                ExecutionResult::System(result) => {
-                    self.process_raw_execution_result(
+                ExecutionOutcome::System(result) => {
+                    self.process_raw_execution_outcome(
                         GenericApplicationId::System,
                         Message::System,
                         &mut messages,
@@ -766,8 +766,8 @@ where
                     )
                     .await?;
                 }
-                ExecutionResult::User(application_id, result) => {
-                    self.process_raw_execution_result(
+                ExecutionOutcome::User(application_id, result) => {
+                    self.process_raw_execution_outcome(
                         GenericApplicationId::User(application_id),
                         |bytes| Message::User {
                             application_id,
@@ -784,13 +784,13 @@ where
         Ok(messages)
     }
 
-    async fn process_raw_execution_result<E, F>(
+    async fn process_raw_execution_outcome<E, F>(
         &mut self,
         application_id: GenericApplicationId,
         lift: F,
         messages: &mut Vec<OutgoingMessage>,
         height: BlockHeight,
-        raw_result: RawExecutionResult<E>,
+        raw_outcome: RawExecutionOutcome<E>,
     ) -> Result<(), ChainError>
     where
         F: Fn(E) -> Message,
@@ -805,7 +805,7 @@ where
             authenticated,
             kind,
             message,
-        } in raw_result.messages
+        } in raw_outcome.messages
         {
             match &destination {
                 Destination::Recipient(id) => {
@@ -816,7 +816,7 @@ where
                 }
             }
             let authenticated_signer = if authenticated {
-                raw_result.authenticated_signer
+                raw_outcome.authenticated_signer
             } else {
                 None
             };
@@ -842,7 +842,7 @@ where
         }
 
         // Update the channels.
-        let full_names = raw_result
+        let full_names = raw_outcome
             .unsubscribe
             .clone()
             .into_iter()
@@ -852,7 +852,7 @@ where
             })
             .collect::<Vec<_>>();
         let channels = self.channels.try_load_entries_mut(&full_names).await?;
-        for ((_name, id), mut channel) in raw_result.unsubscribe.into_iter().zip(channels) {
+        for ((_name, id), mut channel) in raw_outcome.unsubscribe.into_iter().zip(channels) {
             // Remove subscriber. Do not remove the channel outbox yet.
             channel.subscribers.remove(&id)?;
         }
@@ -884,7 +884,7 @@ where
                 *outbox_counters.entry(height).or_default() += 1;
             }
         }
-        let full_names = raw_result
+        let full_names = raw_outcome
             .subscribe
             .clone()
             .into_iter()
@@ -894,7 +894,7 @@ where
             })
             .collect::<Vec<_>>();
         let channels = self.channels.try_load_entries_mut(&full_names).await?;
-        let stream = raw_result.subscribe.into_iter().zip(channels);
+        let stream = raw_outcome.subscribe.into_iter().zip(channels);
         let stream = stream::iter(stream)
             .map(|((name, id), mut channel)| async move {
                 let mut result = None;

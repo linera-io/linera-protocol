@@ -1,27 +1,27 @@
-initialize: func(context: operation-context, argument: list<u8>) -> result<execution-result, string>
+initialize: func(context: operation-context, argument: list<u8>) -> result<execution-outcome, string>
 
 execute-operation: func(
     context: operation-context,
     operation: list<u8>,
-) -> result<execution-result, string>
+) -> result<execution-outcome, string>
 
 execute-message: func(
     context: message-context,
     message: list<u8>,
-) -> result<execution-result, string>
+) -> result<execution-outcome, string>
 
 handle-application-call: func(
     context: callee-context,
     argument: list<u8>,
     forwarded-sessions: list<session-id>,
-) -> result<application-call-result, string>
+) -> result<application-call-outcome, string>
 
 handle-session-call: func(
     context: callee-context,
     state: session-state,
     argument: list<u8>,
     forwarded-sessions: list<session-id>,
-) -> result<session-call-result, string>
+) -> result<session-call-outcome, string>
 
 record operation-context {
     chain-id: chain-id,
@@ -60,9 +60,9 @@ type owner = crypto-hash
 type block-height = u64
 type bytecode-id = message-id
 
-record application-call-result {
+record application-call-outcome {
     value: list<u8>,
-    execution-result: execution-result,
+    execution-outcome: execution-outcome,
     create-sessions: list<session-state>,
 }
 
@@ -71,8 +71,8 @@ record session-id {
     index: u64,
 }
 
-record session-call-result {
-    inner: application-call-result,
+record session-call-outcome {
+    inner: application-call-outcome,
     new-state: option<session-state>,
 }
 
@@ -83,7 +83,7 @@ record outgoing-message {
     message: list<u8>,
 }
 
-record execution-result {
+record execution-outcome {
     messages: list<outgoing-message>,
     subscribe: list<tuple<channel-name, chain-id>>,
     unsubscribe: list<tuple<channel-name, chain-id>>,

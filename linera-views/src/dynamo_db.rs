@@ -921,7 +921,7 @@ impl DynamoDbStoreInternal {
     }
 }
 
-struct QueryResults {
+struct QueryResponses {
     prefix_len: usize,
     responses: Vec<QueryOutput>,
 }
@@ -961,7 +961,7 @@ impl<'a> Iterator for DynamoDbKeyBlockIterator<'a> {
 
 /// A set of keys returned by a search query on DynamoDB.
 pub struct DynamoDbKeys {
-    result_queries: QueryResults,
+    result_queries: QueryResponses,
 }
 
 impl KeyIterable<DynamoDbContextError> for DynamoDbKeys {
@@ -984,7 +984,7 @@ impl KeyIterable<DynamoDbContextError> for DynamoDbKeys {
 
 /// A set of `(key, value)` returned by a search query on DynamoDb.
 pub struct DynamoDbKeyValues {
-    result_queries: QueryResults,
+    result_queries: QueryResponses,
 }
 
 #[doc(hidden)]
@@ -1089,7 +1089,7 @@ impl DynamoDbStoreInternal {
         &self,
         attribute: &str,
         key_prefix: &[u8],
-    ) -> Result<QueryResults, DynamoDbContextError> {
+    ) -> Result<QueryResponses, DynamoDbContextError> {
         ensure!(
             !key_prefix.is_empty(),
             DynamoDbContextError::ZeroLengthKeyPrefix
@@ -1115,7 +1115,7 @@ impl DynamoDbStoreInternal {
                 }
             }
         }
-        Ok(QueryResults {
+        Ok(QueryResponses {
             prefix_len: key_prefix.len(),
             responses,
         })

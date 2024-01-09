@@ -12,8 +12,8 @@ use fungible::{Account, AccountOwner, Destination, FungibleTokenAbi};
 use linera_sdk::{
     base::{Amount, ApplicationId, Owner, SessionId, WithContractAbi},
     contract::system_api,
-    ensure, ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
-    OperationContext, OutgoingMessage, SessionCallResult, ViewStateStorage,
+    ensure, ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
+    OperationContext, OutgoingMessage, SessionCallOutcome, ViewStateStorage,
 };
 use num_bigint::BigUint;
 use num_traits::{cast::FromPrimitive, ToPrimitive};
@@ -33,33 +33,33 @@ impl Contract for Amm {
         &mut self,
         _context: &OperationContext,
         _argument: (),
-    ) -> Result<ExecutionResult<Self::Message>, AmmError> {
+    ) -> Result<ExecutionOutcome<Self::Message>, AmmError> {
         // Validate that the application parameters were configured correctly.
         assert!(Self::parameters().is_ok());
 
-        Ok(ExecutionResult::default())
+        Ok(ExecutionOutcome::default())
     }
 
     async fn execute_operation(
         &mut self,
         context: &OperationContext,
         operation: Self::Operation,
-    ) -> Result<ExecutionResult<Self::Message>, AmmError> {
-        let mut result = ExecutionResult::default();
+    ) -> Result<ExecutionOutcome<Self::Message>, AmmError> {
+        let mut outcome = ExecutionOutcome::default();
         if context.chain_id == system_api::current_application_id().creation.chain_id {
             self.execute_order_local(operation)?;
         } else {
-            self.execute_order_remote(&mut result, operation)?;
+            self.execute_order_remote(&mut outcome, operation)?;
         }
 
-        Ok(result)
+        Ok(outcome)
     }
 
     async fn execute_message(
         &mut self,
         context: &MessageContext,
         message: Self::Message,
-    ) -> Result<ExecutionResult<Self::Message>, AmmError> {
+    ) -> Result<ExecutionOutcome<Self::Message>, AmmError> {
         ensure!(
             context.chain_id == system_api::current_application_id().creation.chain_id,
             AmmError::AmmChainOnly
@@ -76,7 +76,7 @@ impl Contract for Amm {
             }
         }
 
-        Ok(ExecutionResult::default())
+        Ok(ExecutionOutcome::default())
     }
 
     async fn handle_application_call(
@@ -84,9 +84,9 @@ impl Contract for Amm {
         context: &CalleeContext,
         application_call: ApplicationCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, AmmError>
+    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>, AmmError>
     {
-        let mut result = ApplicationCallResult::default();
+        let mut outcome = ApplicationCallOutcome::default();
         match application_call {
             ApplicationCall::Swap {
                 owner,
@@ -102,14 +102,14 @@ impl Contract for Amm {
                     self.execute_swap(owner, input_token_idx, input_amount)?;
                 } else {
                     self.execute_application_call_remote(
-                        &mut result.execution_result,
+                        &mut outcome.execution_outcome,
                         application_call,
                     )?;
                 }
             }
         }
 
-        Ok(result)
+        Ok(outcome)
     }
 
     async fn handle_session_call(
@@ -118,7 +118,7 @@ impl Contract for Amm {
         _session: (),
         _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, AmmError>
+    ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, AmmError>
     {
         Err(AmmError::SessionsNotSupported)
     }
@@ -302,7 +302,7 @@ impl Amm {
 
     fn execute_order_remote(
         &mut self,
-        result: &mut ExecutionResult<Message>,
+        outcome: &mut ExecutionOutcome<Message>,
         operation: Operation,
     ) -> Result<(), AmmError> {
         match operation {
@@ -317,7 +317,7 @@ impl Amm {
                     input_token_idx,
                     input_amount,
                 };
-                result.messages.push(OutgoingMessage {
+                outcome.messages.push(OutgoingMessage {
                     destination: chain_id.into(),
                     authenticated: true,
                     is_tracked: false,
@@ -345,7 +345,7 @@ impl Amm {
 
     fn execute_application_call_remote(
         &mut self,
-        result: &mut ExecutionResult<Message>,
+        outcome: &mut ExecutionOutcome<Message>,
         application_call: ApplicationCall,
     ) -> Result<(), AmmError> {
         match application_call {
@@ -360,7 +360,7 @@ impl Amm {
                     input_token_idx,
                     input_amount,
                 };
-                result.messages.push(OutgoingMessage {
+                outcome.messages.push(OutgoingMessage {
                     destination: chain_id.into(),
                     authenticated: true,
                     is_tracked: false,

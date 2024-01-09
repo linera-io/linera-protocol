@@ -39,9 +39,9 @@ use self::{
 use super::{module_cache::ModuleCache, WasmExecutionError};
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
-    ApplicationCallResult, BaseRuntime, Bytecode, CalleeContext, ContractRuntime, ExecutionError,
-    MessageContext, OperationContext, QueryContext, RawExecutionResult, ServiceRuntime,
-    SessionCallResult, SessionId,
+    ApplicationCallOutcome, BaseRuntime, Bytecode, CalleeContext, ContractRuntime, ExecutionError,
+    MessageContext, OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime,
+    SessionCallOutcome, SessionId,
 };
 use once_cell::sync::Lazy;
 use std::error::Error;
@@ -295,7 +295,7 @@ where
         &mut self,
         context: OperationContext,
         argument: Vec<u8>,
-    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
         self.configure_initial_fuel()?;
         let result = contract::Contract::initialize(
             &self.application,
@@ -303,7 +303,7 @@ where
             context.into(),
             &argument,
         )
-        .map(|inner| inner.map(RawExecutionResult::from));
+        .map(|inner| inner.map(RawExecutionOutcome::from));
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }
@@ -312,7 +312,7 @@ where
         &mut self,
         context: OperationContext,
         operation: Vec<u8>,
-    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
         self.configure_initial_fuel()?;
         let result = contract::Contract::execute_operation(
             &self.application,
@@ -320,7 +320,7 @@ where
             context.into(),
             &operation,
         )
-        .map(|inner| inner.map(RawExecutionResult::from));
+        .map(|inner| inner.map(RawExecutionOutcome::from));
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }
@@ -329,7 +329,7 @@ where
         &mut self,
         context: MessageContext,
         message: Vec<u8>,
-    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
         self.configure_initial_fuel()?;
         let result = contract::Contract::execute_message(
             &self.application,
@@ -337,7 +337,7 @@ where
             context.into(),
             &message,
         )
-        .map(|inner| inner.map(RawExecutionResult::from));
+        .map(|inner| inner.map(RawExecutionOutcome::from));
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }
@@ -347,7 +347,7 @@ where
         context: CalleeContext,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, ExecutionError> {
+    ) -> Result<ApplicationCallOutcome, ExecutionError> {
         let forwarded_sessions = forwarded_sessions
             .into_iter()
             .map(contract::SessionId::from)
@@ -361,7 +361,7 @@ where
             &argument,
             &forwarded_sessions,
         )
-        .map(|inner| inner.map(ApplicationCallResult::from));
+        .map(|inner| inner.map(ApplicationCallOutcome::from));
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }
@@ -372,7 +372,7 @@ where
         session: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<(SessionCallResult, Vec<u8>), ExecutionError> {
+    ) -> Result<(SessionCallOutcome, Vec<u8>), ExecutionError> {
         let forwarded_sessions = forwarded_sessions
             .into_iter()
             .map(contract::SessionId::from)
@@ -387,7 +387,7 @@ where
             &argument,
             &forwarded_sessions,
         )
-        .map(|inner| inner.map(<(SessionCallResult, Vec<u8>)>::from));
+        .map(|inner| inner.map(<(SessionCallOutcome, Vec<u8>)>::from));
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }

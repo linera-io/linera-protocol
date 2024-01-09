@@ -13,8 +13,8 @@ use linera_sdk::{
     contract::system_api,
     ensure,
     views::View,
-    ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
-    OperationContext, OutgoingMessage, SessionCallResult, ViewStateStorage,
+    ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
+    OperationContext, OutgoingMessage, SessionCallOutcome, ViewStateStorage,
 };
 use state::{CrowdFunding, Status};
 use thiserror::Error;
@@ -34,7 +34,7 @@ impl Contract for CrowdFunding {
         &mut self,
         _context: &OperationContext,
         argument: InitializationArgument,
-    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
         assert!(Self::parameters().is_ok());
 
@@ -45,36 +45,36 @@ impl Contract for CrowdFunding {
             Error::DeadlineInThePast
         );
 
-        Ok(ExecutionResult::default())
+        Ok(ExecutionOutcome::default())
     }
 
     async fn execute_operation(
         &mut self,
         context: &OperationContext,
         operation: Operation,
-    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
-        let mut result = ExecutionResult::default();
+    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+        let mut outcome = ExecutionOutcome::default();
 
         match operation {
             Operation::PledgeWithTransfer { owner, amount } => {
                 if context.chain_id == system_api::current_application_id().creation.chain_id {
                     self.execute_pledge_with_account(owner, amount).await?;
                 } else {
-                    self.execute_pledge_with_transfer(&mut result, owner, amount)?;
+                    self.execute_pledge_with_transfer(&mut outcome, owner, amount)?;
                 }
             }
             Operation::Collect => self.collect_pledges()?,
             Operation::Cancel => self.cancel_campaign().await?,
         }
 
-        Ok(result)
+        Ok(outcome)
     }
 
     async fn execute_message(
         &mut self,
         context: &MessageContext,
         message: Message,
-    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         match message {
             Message::PledgeWithAccount { owner, amount } => {
                 ensure!(
@@ -84,7 +84,7 @@ impl Contract for CrowdFunding {
                 self.execute_pledge_with_account(owner, amount).await?;
             }
         }
-        Ok(ExecutionResult::default())
+        Ok(ExecutionOutcome::default())
     }
 
     async fn handle_application_call(
@@ -92,9 +92,11 @@ impl Contract for CrowdFunding {
         context: &CalleeContext,
         call: ApplicationCall,
         sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
-    {
-        let mut result = ApplicationCallResult::default();
+    ) -> Result<
+        ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>,
+        Self::Error,
+    > {
+        let mut outcome = ApplicationCallOutcome::default();
         match call {
             ApplicationCall::PledgeWithSessions { source } => {
                 // Only sessions on the campaign chain are supported.
@@ -107,13 +109,13 @@ impl Contract for CrowdFunding {
                 self.execute_pledge_with_sessions(source, sessions).await?
             }
             ApplicationCall::PledgeWithTransfer { owner, amount } => {
-                self.execute_pledge_with_transfer(&mut result.execution_result, owner, amount)?;
+                self.execute_pledge_with_transfer(&mut outcome.execution_outcome, owner, amount)?;
             }
             ApplicationCall::Collect => self.collect_pledges()?,
             ApplicationCall::Cancel => self.cancel_campaign().await?,
         }
 
-        Ok(result)
+        Ok(outcome)
     }
 
     async fn handle_session_call(
@@ -122,7 +124,7 @@ impl Contract for CrowdFunding {
         _state: Self::SessionState,
         _call: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
+    ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
     {
         Err(Error::SessionsNotSupported)
     }
@@ -138,7 +140,7 @@ impl CrowdFunding {
     /// Adds a pledge from a local account to the remote campaign chain.
     fn execute_pledge_with_transfer(
         &mut self,
-        result: &mut ExecutionResult<Message>,
+        outcome: &mut ExecutionOutcome<Message>,
         owner: AccountOwner,
         amount: Amount,
     ) -> Result<(), Error> {
@@ -162,7 +164,7 @@ impl CrowdFunding {
         )?;
         // Second, schedule the attribution of the funds to the (remote) campaign.
         let message = Message::PledgeWithAccount { owner, amount };
-        result.messages.push(OutgoingMessage {
+        outcome.messages.push(OutgoingMessage {
             destination: chain_id.into(),
             authenticated: true,
             is_tracked: false,

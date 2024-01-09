@@ -3,9 +3,9 @@
 
 use crate::{
     policy::ResourceControlPolicy, resources::ResourceTracker, system::SystemExecutionStateView,
-    ContractSyncRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeConfig,
+    ContractSyncRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig,
     ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
-    Query, QueryContext, RawExecutionResult, RawOutgoingMessage, Response, ServiceSyncRuntime,
+    Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage, Response, ServiceSyncRuntime,
     SystemMessage, UserApplicationDescription, UserApplicationId,
 };
 use futures::StreamExt;
@@ -169,8 +169,8 @@ where
         action: UserAction,
         policy: &ResourceControlPolicy,
         tracker: &mut ResourceTracker,
-    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
-        let execution_results = match self.context().extra().execution_runtime_config() {
+    ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
+        let execution_outcomes = match self.context().extra().execution_runtime_config() {
             ExecutionRuntimeConfig::Synchronous => {
                 self.run_user_action_with_synchronous_runtime(
                     application_id,
@@ -182,7 +182,7 @@ where
                 .await?
             }
         };
-        self.update_execution_results_with_app_registrations(execution_results)
+        self.update_execution_outcomes_with_app_registrations(execution_outcomes)
             .await
     }
 
@@ -193,13 +193,13 @@ where
         action: UserAction,
         policy: &ResourceControlPolicy,
         tracker: &mut ResourceTracker,
-    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
+    ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
         let balance = self.system.balance.get();
         let runtime_limits = tracker.limits(policy, balance);
         let initial_remaining_fuel = policy.remaining_fuel(*balance);
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let execution_results_future = tokio::task::spawn_blocking(move || {
+        let execution_outcomes_future = tokio::task::spawn_blocking(move || {
             ContractSyncRuntime::run_action(
                 execution_state_sender,
                 application_id,
@@ -212,31 +212,31 @@ where
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;
         }
-        let (execution_results, runtime_counts) = execution_results_future.await??;
+        let (execution_outcomes, runtime_counts) = execution_outcomes_future.await??;
         let balance = self.system.balance.get_mut();
         tracker.update_limits(balance, policy, runtime_counts)?;
-        Ok(execution_results)
+        Ok(execution_outcomes)
     }
 
-    async fn update_execution_results_with_app_registrations(
+    async fn update_execution_outcomes_with_app_registrations(
         &self,
-        mut results: Vec<ExecutionResult>,
-    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
+        mut results: Vec<ExecutionOutcome>,
+    ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
         // TODO(#1417): It looks like we are forgetting about the recipients of messages
         // sent by earlier entries in `results` (i.e. application calls).
-        let Some(ExecutionResult::User(application_id, result)) = results.last() else {
+        let Some(ExecutionOutcome::User(application_id, result)) = results.last() else {
             return Ok(results);
         };
         // Make sure to declare applications before recipients execute messages produced
         // by the user execution results.
-        let mut system_result = RawExecutionResult::default();
+        let mut system_outcome = RawExecutionOutcome::default();
         let applications = self
             .system
             .registry
             .describe_applications_with_dependencies(vec![*application_id], &Default::default())
             .await?;
         for message in &result.messages {
-            system_result.messages.push(RawOutgoingMessage {
+            system_outcome.messages.push(RawOutgoingMessage {
                 destination: message.destination.clone(),
                 authenticated: false,
                 kind: MessageKind::Simple,
@@ -245,8 +245,8 @@ where
                 },
             });
         }
-        if !system_result.messages.is_empty() {
-            results.insert(0, ExecutionResult::System(system_result));
+        if !system_outcome.messages.is_empty() {
+            results.insert(0, ExecutionOutcome::System(system_outcome));
         }
         Ok(results)
     }
@@ -257,17 +257,17 @@ where
         operation: Operation,
         policy: &ResourceControlPolicy,
         tracker: &mut ResourceTracker,
-    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
+    ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
             Operation::System(op) => {
                 let (mut result, new_application) =
                     self.system.execute_operation(context, op).await?;
                 result.authenticated_signer = context.authenticated_signer;
-                let mut results = vec![ExecutionResult::System(result)];
+                let mut outcomes = vec![ExecutionOutcome::System(result)];
                 if let Some((application_id, argument)) = new_application {
                     let user_action = UserAction::Initialize(context, argument);
-                    results.extend(
+                    outcomes.extend(
                         self.run_user_action(
                             application_id,
                             context.chain_id,
@@ -278,7 +278,7 @@ where
                         .await?,
                     );
                 }
-                Ok(results)
+                Ok(outcomes)
             }
             Operation::User {
                 application_id,
@@ -302,12 +302,12 @@ where
         message: Message,
         policy: &ResourceControlPolicy,
         tracker: &mut ResourceTracker,
-    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
+    ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
             Message::System(message) => {
-                let result = self.system.execute_message(context, message).await?;
-                Ok(vec![ExecutionResult::System(result)])
+                let outcome = self.system.execute_message(context, message).await?;
+                Ok(vec![ExecutionOutcome::System(outcome)])
             }
             Message::User {
                 application_id,
@@ -329,37 +329,37 @@ where
         &self,
         context: MessageContext,
         message: Message,
-    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
+    ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
             Message::System(message) => {
-                let mut result = RawExecutionResult {
+                let mut outcome = RawExecutionOutcome {
                     authenticated_signer: context.authenticated_signer,
                     ..Default::default()
                 };
-                result.messages.push(RawOutgoingMessage {
+                outcome.messages.push(RawOutgoingMessage {
                     destination: Destination::Recipient(context.message_id.chain_id),
                     authenticated: true,
                     kind: MessageKind::Bouncing,
                     message,
                 });
-                Ok(vec![ExecutionResult::System(result)])
+                Ok(vec![ExecutionOutcome::System(outcome)])
             }
             Message::User {
                 application_id,
                 bytes,
             } => {
-                let mut result = RawExecutionResult {
+                let mut outcome = RawExecutionOutcome {
                     authenticated_signer: context.authenticated_signer,
                     ..Default::default()
                 };
-                result.messages.push(RawOutgoingMessage {
+                outcome.messages.push(RawOutgoingMessage {
                     destination: Destination::Recipient(context.message_id.chain_id),
                     authenticated: true,
                     kind: MessageKind::Bouncing,
                     message: bytes,
                 });
-                Ok(vec![ExecutionResult::User(application_id, result)])
+                Ok(vec![ExecutionOutcome::User(application_id, outcome)])
             }
         }
     }

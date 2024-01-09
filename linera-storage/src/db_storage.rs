@@ -227,7 +227,7 @@ where
         limit: u32,
     ) -> Result<Vec<HashedValue>, ViewError> {
         let mut hash = Some(from);
-        let mut result = Vec::new();
+        let mut values = Vec::new();
         for _ in 0..limit {
             let Some(next_hash) = hash else {
                 break;
@@ -237,9 +237,9 @@ where
                 break;
             };
             hash = executed_block.block.previous_block_hash;
-            result.push(value);
+            values.push(value);
         }
-        Ok(result)
+        Ok(values)
     }
 
     async fn write_value(&self, value: &HashedValue) -> Result<(), ViewError> {

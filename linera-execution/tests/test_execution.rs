@@ -127,7 +127,7 @@ where
         &mut self,
         context: OperationContext,
         argument: Vec<u8>,
-    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
         assert_eq!(context.authenticated_signer, Some(self.owner));
         assert!(bcs::from_bytes::<UserApplicationId>(&argument).is_ok());
 
@@ -135,7 +135,7 @@ where
         batch.put_key_value_bytes(CALLEE_ID_KEY.to_vec(), argument);
         self.runtime.write_batch(batch)?;
 
-        Ok(RawExecutionResult::default())
+        Ok(RawExecutionOutcome::default())
     }
 
     /// Extend the application state with the `operation` bytes.
@@ -146,7 +146,7 @@ where
         &mut self,
         context: OperationContext,
         operation: Vec<u8>,
-    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
         assert_eq!(operation.len(), 1);
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
@@ -170,17 +170,17 @@ where
         self.runtime.write_batch(batch)?;
 
         // Call ourselves after unlocking the state => ok.
-        let call_result = self.runtime.try_call_application(
+        let call_outcome = self.runtime.try_call_application(
             /* authenticated */ true,
             callee_id,
             operation.clone(),
             vec![],
         )?;
-        assert_eq!(call_result.value, Vec::<u8>::new());
-        assert_eq!(call_result.sessions.len(), 1);
+        assert_eq!(call_outcome.value, Vec::<u8>::new());
+        assert_eq!(call_outcome.sessions.len(), 1);
         if operation[0] != TestOperation::LeakingSession as u8 {
             // Call the session to close it.
-            let session_id = call_result.sessions[0];
+            let session_id = call_outcome.sessions[0];
             self.runtime.try_call_session(
                 /* authenticated */ false,
                 session_id,
@@ -188,7 +188,7 @@ where
                 vec![],
             )?;
         }
-        Ok(RawExecutionResult::default())
+        Ok(RawExecutionOutcome::default())
     }
 
     /// Attempts to call ourself.
@@ -196,7 +196,7 @@ where
         &mut self,
         context: MessageContext,
         message: Vec<u8>,
-    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
         assert_eq!(message.len(), 1);
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
@@ -210,7 +210,7 @@ where
             vec![],
         )?;
 
-        Ok(RawExecutionResult::default())
+        Ok(RawExecutionOutcome::default())
     }
 
     fn handle_application_call(
@@ -218,7 +218,7 @@ where
         _context: CalleeContext,
         _argument: Vec<u8>,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, ExecutionError> {
+    ) -> Result<ApplicationCallOutcome, ExecutionError> {
         unreachable!("Caller test application does not support being called");
     }
 
@@ -228,7 +228,7 @@ where
         _session_state: Vec<u8>,
         _argument: Vec<u8>,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<(SessionCallResult, Vec<u8>), ExecutionError> {
+    ) -> Result<(SessionCallOutcome, Vec<u8>), ExecutionError> {
         unreachable!("Caller test application does not support being called");
     }
 }
@@ -242,16 +242,16 @@ where
         &mut self,
         context: OperationContext,
         _argument: Vec<u8>,
-    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
         assert_eq!(context.authenticated_signer, Some(self.owner));
-        Ok(RawExecutionResult::default())
+        Ok(RawExecutionOutcome::default())
     }
 
     fn execute_operation(
         &mut self,
         _context: OperationContext,
         _operation: Vec<u8>,
-    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
         unreachable!("Callee test application does not support starting transactions");
     }
 
@@ -259,7 +259,7 @@ where
         &mut self,
         _context: MessageContext,
         _message: Vec<u8>,
-    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
+    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
         unreachable!("Callee test application does not support starting transactions");
     }
 
@@ -269,16 +269,16 @@ where
         context: CalleeContext,
         argument: Vec<u8>,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, ExecutionError> {
+    ) -> Result<ApplicationCallOutcome, ExecutionError> {
         assert_eq!(argument.len(), 1);
         assert_eq!(context.authenticated_signer, Some(self.owner));
         ensure!(
             argument[0] != TestOperation::FailingCrossApplicationCall as u8,
             ExecutionError::UserError("Cross-application call failed".to_owned())
         );
-        Ok(ApplicationCallResult {
+        Ok(ApplicationCallOutcome {
             create_sessions: vec![vec![1]],
-            ..ApplicationCallResult::default()
+            ..ApplicationCallOutcome::default()
         })
     }
 
@@ -289,11 +289,11 @@ where
         session_state: Vec<u8>,
         _argument: Vec<u8>,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<(SessionCallResult, Vec<u8>), ExecutionError> {
+    ) -> Result<(SessionCallOutcome, Vec<u8>), ExecutionError> {
         assert_eq!(context.authenticated_signer, None);
         Ok((
-            SessionCallResult {
-                inner: ApplicationCallResult::default(),
+            SessionCallOutcome {
+                inner: ApplicationCallOutcome::default(),
                 close_session: true,
             },
             session_state,
@@ -357,7 +357,7 @@ async fn test_simple_user_operation(
     };
     let mut tracker = ResourceTracker::default();
     let policy = ResourceControlPolicy::default();
-    let result = view
+    let outcomes = view
         .execute_operation(
             context,
             Operation::User {
@@ -370,16 +370,16 @@ async fn test_simple_user_operation(
         .await
         .unwrap();
     assert_eq!(
-        result,
+        outcomes,
         vec![
-            ExecutionResult::User(
+            ExecutionOutcome::User(
                 application_ids[1],
-                RawExecutionResult::default().with_authenticated_signer(Some(owner))
+                RawExecutionOutcome::default().with_authenticated_signer(Some(owner))
             ),
-            ExecutionResult::User(application_ids[1], RawExecutionResult::default()),
-            ExecutionResult::User(
+            ExecutionOutcome::User(application_ids[1], RawExecutionOutcome::default()),
+            ExecutionOutcome::User(
                 application_ids[0],
-                RawExecutionResult::default().with_authenticated_signer(Some(owner))
+                RawExecutionOutcome::default().with_authenticated_signer(Some(owner))
             )
         ]
     );

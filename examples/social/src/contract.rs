@@ -10,8 +10,8 @@ use linera_sdk::{
     base::{ChannelName, Destination, SessionId, WithContractAbi},
     contract::system_api,
     views::ViewError,
-    ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
-    OperationContext, SessionCallResult, ViewStateStorage,
+    ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
+    OperationContext, SessionCallOutcome, ViewStateStorage,
 };
 use social::{Key, Message, Operation, OwnPost};
 use state::Social;
@@ -37,24 +37,24 @@ impl Contract for Social {
         &mut self,
         _context: &OperationContext,
         _argument: (),
-    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
         assert!(Self::parameters().is_ok());
 
-        Ok(ExecutionResult::default())
+        Ok(ExecutionOutcome::default())
     }
 
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,
         operation: Operation,
-    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         match operation {
             Operation::RequestSubscribe(chain_id) => {
-                Ok(ExecutionResult::default().with_message(chain_id, Message::RequestSubscribe))
+                Ok(ExecutionOutcome::default().with_message(chain_id, Message::RequestSubscribe))
             }
             Operation::RequestUnsubscribe(chain_id) => {
-                Ok(ExecutionResult::default().with_message(chain_id, Message::RequestUnsubscribe))
+                Ok(ExecutionOutcome::default().with_message(chain_id, Message::RequestUnsubscribe))
             }
             Operation::Post(text) => self.execute_post_operation(text).await,
         }
@@ -64,20 +64,20 @@ impl Contract for Social {
         &mut self,
         context: &MessageContext,
         message: Message,
-    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
-        let mut result = ExecutionResult::default();
+    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+        let mut outcome = ExecutionOutcome::default();
         match message {
-            Message::RequestSubscribe => result.subscribe.push((
+            Message::RequestSubscribe => outcome.subscribe.push((
                 ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
                 context.message_id.chain_id,
             )),
-            Message::RequestUnsubscribe => result.unsubscribe.push((
+            Message::RequestUnsubscribe => outcome.unsubscribe.push((
                 ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
                 context.message_id.chain_id,
             )),
             Message::Posts { count, posts } => self.execute_posts_message(context, count, posts)?,
         }
-        Ok(result)
+        Ok(outcome)
     }
 
     async fn handle_application_call(
@@ -85,8 +85,10 @@ impl Contract for Social {
         _context: &CalleeContext,
         _call: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
-    {
+    ) -> Result<
+        ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>,
+        Self::Error,
+    > {
         Err(Error::ApplicationCallsNotSupported)
     }
 
@@ -96,7 +98,7 @@ impl Contract for Social {
         _state: Self::SessionState,
         _call: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
+    ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
     {
         Err(Error::SessionsNotSupported)
     }
@@ -106,7 +108,7 @@ impl Social {
     async fn execute_post_operation(
         &mut self,
         text: String,
-    ) -> Result<ExecutionResult<Message>, Error> {
+    ) -> Result<ExecutionOutcome<Message>, Error> {
         let timestamp = system_api::current_system_time();
         self.own_posts.push(OwnPost { timestamp, text });
         let count = self.own_posts.count();
@@ -119,7 +121,7 @@ impl Social {
         }
         let count = count as u64;
         let dest = Destination::Subscribers(ChannelName::from(POSTS_CHANNEL_NAME.to_vec()));
-        Ok(ExecutionResult::default().with_message(dest, Message::Posts { count, posts }))
+        Ok(ExecutionOutcome::default().with_message(dest, Message::Posts { count, posts }))
     }
 
     fn execute_posts_message(

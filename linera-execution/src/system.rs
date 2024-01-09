@@ -6,7 +6,7 @@ use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, Bytecode, BytecodeLocation, ChainOwnership, ChannelName,
     ChannelSubscription, Destination, MessageContext, MessageKind, OperationContext, QueryContext,
-    RawExecutionResult, RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
+    RawExecutionOutcome, RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
 };
 use async_graphql::Enum;
 use custom_debug_derive::Debug;
@@ -481,13 +481,13 @@ where
         operation: SystemOperation,
     ) -> Result<
         (
-            RawExecutionResult<SystemMessage>,
+            RawExecutionOutcome<SystemMessage>,
             Option<(UserApplicationId, Vec<u8>)>,
         ),
         SystemExecutionError,
     > {
         use SystemOperation::*;
-        let mut result = RawExecutionResult::default();
+        let mut outcome = RawExecutionOutcome::default();
         let mut new_application = None;
         match operation {
             OpenChain {
@@ -544,7 +544,7 @@ where
                         subscription,
                     },
                 };
-                result.messages.extend([e1, e2]);
+                outcome.messages.extend([e1, e2]);
             }
             ChangeOwnership {
                 super_owners,
@@ -577,7 +577,7 @@ where
                                 subscription,
                             },
                         };
-                        result.messages.push(message);
+                        outcome.messages.push(message);
                         Ok(())
                     })
                     .await?;
@@ -621,7 +621,7 @@ where
                             target: account.owner,
                         },
                     };
-                    result.messages.push(message);
+                    outcome.messages.push(message);
                 }
             }
             Claim {
@@ -650,7 +650,7 @@ where
                         recipient,
                     },
                 };
-                result.messages.push(message);
+                outcome.messages.push(message);
             }
             Admin(admin_operation) => {
                 ensure!(
@@ -674,7 +674,7 @@ where
                                 committees: self.committees.get().clone(),
                             },
                         };
-                        result.messages.push(message);
+                        outcome.messages.push(message);
                     }
                     AdminOperation::RemoveCommittee { epoch } => {
                         ensure!(
@@ -690,7 +690,7 @@ where
                                 committees: self.committees.get().clone(),
                             },
                         };
-                        result.messages.push(message);
+                        outcome.messages.push(message);
                     }
                 }
             }
@@ -723,7 +723,7 @@ where
                         subscription,
                     },
                 };
-                result.messages.push(message);
+                outcome.messages.push(message);
             }
             Unsubscribe { chain_id, channel } => {
                 let subscription = ChannelSubscription {
@@ -744,7 +744,7 @@ where
                         subscription,
                     },
                 };
-                result.messages.push(message);
+                outcome.messages.push(message);
             }
             PublishBytecode { .. } => {
                 // Send a `BytecodePublished` message to ourself so that we can broadcast
@@ -757,7 +757,7 @@ where
                         operation_index: context.index,
                     },
                 };
-                result.messages.push(message);
+                outcome.messages.push(message);
             }
             CreateApplication {
                 bytecode_id,
@@ -783,7 +783,7 @@ where
                     kind: MessageKind::Protected,
                     message: SystemMessage::ApplicationCreated,
                 };
-                result.messages.push(message);
+                outcome.messages.push(message);
                 new_application = Some((id, initialization_argument.clone()));
             }
             RequestApplication {
@@ -796,11 +796,11 @@ where
                     kind: MessageKind::Simple,
                     message: SystemMessage::RequestApplication(application_id),
                 };
-                result.messages.push(message);
+                outcome.messages.push(message);
             }
         }
 
-        Ok((result, new_application))
+        Ok((outcome, new_application))
     }
 
     /// Executes a cross-chain message that represents the recipient's side of an operation.
@@ -808,8 +808,8 @@ where
         &mut self,
         context: MessageContext,
         message: SystemMessage,
-    ) -> Result<RawExecutionResult<SystemMessage>, SystemExecutionError> {
-        let mut result = RawExecutionResult::default();
+    ) -> Result<RawExecutionOutcome<SystemMessage>, SystemExecutionError> {
+        let mut outcome = RawExecutionOutcome::default();
         use SystemMessage::*;
         match message {
             Credit {
@@ -854,7 +854,7 @@ where
                                 target: account.owner,
                             },
                         };
-                        result.messages.push(message);
+                        outcome.messages.push(message);
                     }
                     Recipient::Burn => (),
                 }
@@ -880,8 +880,8 @@ where
                     kind: MessageKind::Protected,
                     message: SystemMessage::Notify { id },
                 };
-                result.messages.push(message);
-                result.subscribe.push((subscription.name.clone(), id));
+                outcome.messages.push(message);
+                outcome.subscribe.push((subscription.name.clone(), id));
             }
             Unsubscribe { id, subscription } => {
                 ensure!(
@@ -894,8 +894,8 @@ where
                     kind: MessageKind::Protected,
                     message: SystemMessage::Notify { id },
                 };
-                result.messages.push(message);
-                result.unsubscribe.push((subscription.name.clone(), id));
+                outcome.messages.push(message);
+                outcome.unsubscribe.push((subscription.name.clone(), id));
             }
             BytecodePublished { operation_index } => {
                 let bytecode_id = BytecodeId::new(context.message_id);
@@ -912,7 +912,7 @@ where
                     kind: MessageKind::Simple,
                     message: SystemMessage::BytecodeLocations { locations },
                 };
-                result.messages.push(message);
+                outcome.messages.push(message);
             }
             BytecodeLocations { locations } => {
                 for (id, location) in locations {
@@ -940,14 +940,14 @@ where
                     kind: MessageKind::Simple,
                     message: SystemMessage::RegisterApplications { applications },
                 };
-                result.messages.push(message);
+                outcome.messages.push(message);
             }
             OpenChain { .. } => {
                 // This special message is executed immediately when cross-chain requests are received.
             }
             ApplicationCreated | Notify { .. } => (),
         }
-        Ok(result)
+        Ok(outcome)
     }
 
     /// Initializes the system application state on a newly opened chain.

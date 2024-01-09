@@ -10,8 +10,8 @@
 
 use super::{contract, contract_system_api, service_system_api};
 use crate::{
-    ApplicationCallResult, ChannelName, Destination, MessageKind, RawExecutionResult,
-    RawOutgoingMessage, SessionCallResult, SessionId, UserApplicationId,
+    ApplicationCallOutcome, ChannelName, Destination, MessageKind, RawExecutionOutcome,
+    RawOutgoingMessage, SessionCallOutcome, SessionId, UserApplicationId,
 };
 use linera_base::{
     crypto::CryptoHash,
@@ -19,25 +19,25 @@ use linera_base::{
     identifiers::{BytecodeId, ChainId, MessageId},
 };
 
-impl From<contract::SessionCallResult> for (SessionCallResult, Vec<u8>) {
-    fn from(result: contract::SessionCallResult) -> Self {
-        let session_call_result = SessionCallResult {
-            inner: result.inner.into(),
-            close_session: result.new_state.is_some(),
+impl From<contract::SessionCallOutcome> for (SessionCallOutcome, Vec<u8>) {
+    fn from(outcome: contract::SessionCallOutcome) -> Self {
+        let session_call_outcome = SessionCallOutcome {
+            inner: outcome.inner.into(),
+            close_session: outcome.new_state.is_some(),
         };
 
-        let updated_session_state = result.new_state.unwrap_or_default();
+        let updated_session_state = outcome.new_state.unwrap_or_default();
 
-        (session_call_result, updated_session_state)
+        (session_call_outcome, updated_session_state)
     }
 }
 
-impl From<contract::ApplicationCallResult> for ApplicationCallResult {
-    fn from(result: contract::ApplicationCallResult) -> Self {
-        ApplicationCallResult {
-            create_sessions: result.create_sessions,
-            execution_result: result.execution_result.into(),
-            value: result.value,
+impl From<contract::ApplicationCallOutcome> for ApplicationCallOutcome {
+    fn from(outcome: contract::ApplicationCallOutcome) -> Self {
+        ApplicationCallOutcome {
+            create_sessions: outcome.create_sessions,
+            execution_outcome: outcome.execution_outcome.into(),
+            value: outcome.value,
         }
     }
 }
@@ -57,27 +57,27 @@ impl From<contract::OutgoingMessage> for RawOutgoingMessage<Vec<u8>> {
     }
 }
 
-impl From<contract::ExecutionResult> for RawExecutionResult<Vec<u8>> {
-    fn from(result: contract::ExecutionResult) -> Self {
-        let messages = result
+impl From<contract::ExecutionOutcome> for RawExecutionOutcome<Vec<u8>> {
+    fn from(outcome: contract::ExecutionOutcome) -> Self {
+        let messages = outcome
             .messages
             .into_iter()
             .map(RawOutgoingMessage::from)
             .collect();
 
-        let subscribe = result
+        let subscribe = outcome
             .subscribe
             .into_iter()
             .map(|(subscription, chain_id)| (subscription.into(), chain_id.into()))
             .collect();
 
-        let unsubscribe = result
+        let unsubscribe = outcome
             .unsubscribe
             .into_iter()
             .map(|(subscription, chain_id)| (subscription.into(), chain_id.into()))
             .collect();
 
-        RawExecutionResult {
+        RawExecutionOutcome {
             authenticated_signer: None,
             messages,
             subscribe,

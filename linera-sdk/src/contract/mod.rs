@@ -33,7 +33,7 @@ macro_rules! contract {
             fn initialize(
                 context: $crate::contract::wit_types::OperationContext,
                 argument: Vec<u8>,
-            ) -> Result<$crate::contract::wit_types::ExecutionResult, String> {
+            ) -> Result<$crate::contract::wit_types::ExecutionOutcome, String> {
                 $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
                     move |mut application| async move {
                         let argument = serde_json::from_slice(&argument)?;
@@ -49,7 +49,7 @@ macro_rules! contract {
             fn execute_operation(
                 context: $crate::contract::wit_types::OperationContext,
                 operation: Vec<u8>,
-            ) -> Result<$crate::contract::wit_types::ExecutionResult, String> {
+            ) -> Result<$crate::contract::wit_types::ExecutionOutcome, String> {
                 $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
                     move |mut application| async move {
                         let operation: <$application as $crate::abi::ContractAbi>::Operation =
@@ -66,7 +66,7 @@ macro_rules! contract {
             fn execute_message(
                 context: $crate::contract::wit_types::MessageContext,
                 message: Vec<u8>,
-            ) -> Result<$crate::contract::wit_types::ExecutionResult, String> {
+            ) -> Result<$crate::contract::wit_types::ExecutionOutcome, String> {
                 $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
                     move |mut application| async move {
                         let message: <$application as $crate::abi::ContractAbi>::Message =
@@ -84,7 +84,7 @@ macro_rules! contract {
                 context: $crate::contract::wit_types::CalleeContext,
                 argument: Vec<u8>,
                 forwarded_sessions: Vec<$crate::contract::wit_types::SessionId>,
-            ) -> Result<$crate::contract::wit_types::ApplicationCallResult, String> {
+            ) -> Result<$crate::contract::wit_types::ApplicationCallOutcome, String> {
                 $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
                     move |mut application| async move {
                         let argument: <$application as $crate::abi::ContractAbi>::ApplicationCall =
@@ -107,7 +107,7 @@ macro_rules! contract {
                 session_state: Vec<u8>,
                 argument: Vec<u8>,
                 forwarded_sessions: Vec<$crate::contract::wit_types::SessionId>,
-            ) -> Result<$crate::contract::wit_types::SessionCallResult, String> {
+            ) -> Result<$crate::contract::wit_types::SessionCallOutcome, String> {
                 $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
                     move |mut application| async move {
                         let session_state: <$application as $crate::abi::ContractAbi>::SessionState =
