@@ -14,10 +14,7 @@ enum log-level {
     error,
 }
 
-try-query-application: func(
-    application: application-id,
-    query: list<u8>,
-) -> result<list<u8>, string>
+try-query-application: func(application: application-id, query: list<u8>) -> list<u8>
 
 record application-id {
     bytecode-id: bytecode-id,

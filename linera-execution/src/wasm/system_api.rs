@@ -143,10 +143,8 @@ macro_rules! impl_service_system_api {
                 &mut self,
                 application: service_system_api::ApplicationId,
                 argument: &[u8],
-            ) -> Result<Result<Vec<u8>, String>, Self::Error> {
+            ) -> Result<Vec<u8>, Self::Error> {
                 ServiceRuntime::try_query_application(self, application.into(), argument.to_vec())
-                    // TODO(#1153): remove
-                    .map(Ok)
             }
 
             fn log(

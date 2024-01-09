@@ -24,5 +24,5 @@ pub fn current_application_parameters() -> Vec<u8> {
 
 /// Queries another application.
 pub fn query_application(application: ApplicationId, argument: &[u8]) -> Result<Vec<u8>, String> {
-    wit::try_query_application(application.into(), argument)
+    Ok(wit::try_query_application(application.into(), argument))
 }
