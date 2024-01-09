@@ -14,9 +14,6 @@ enum log-level {
     error,
 }
 
-load: func() -> list<u8>
-store: func(value: list<u8>) -> bool
-
 try-call-application: func(
     authenticated: bool,
     application: application-id,

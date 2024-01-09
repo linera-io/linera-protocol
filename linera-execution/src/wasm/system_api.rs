@@ -39,16 +39,6 @@ macro_rules! impl_contract_system_api {
                 BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
             }
 
-            // TODO(#1152): remove
-            fn load(&mut self) -> Result<Vec<u8>, Self::Error> {
-                self.try_read_my_state()
-            }
-
-            // TODO(#1152): remove
-            fn store(&mut self, state: &[u8]) -> Result<bool, Self::Error> {
-                self.save_my_state(state.to_vec())
-            }
-
             fn try_call_application(
                 &mut self,
                 authenticated: bool,
