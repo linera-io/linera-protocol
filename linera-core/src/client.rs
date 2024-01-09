@@ -799,7 +799,7 @@ where
     ) -> Result<Option<Certificate>, ChainClientError> {
         let storage_client = self.storage_client().await;
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(committee)?;
-        let results = communicate_with_quorum(
+        let (maybe_hash_round, votes) = communicate_with_quorum(
             &nodes,
             committee,
             |value: &Option<LiteVote>| -> Option<_> {
@@ -851,18 +851,10 @@ where
                 return Ok(None);
             }
         };
-        let votes = match results {
-            (Some((votes_hash, votes_round)), votes)
-                if votes_hash == value.hash() && votes_round == round =>
-            {
-                votes
-            }
-            _ => {
-                return Err(ChainClientError::ProtocolError(
-                    "Unexpected response from validators",
-                ))
-            }
-        };
+        ensure!(
+            maybe_hash_round == Some((value.hash(), round)),
+            ChainClientError::ProtocolError("Unexpected response from validators")
+        );
         // Certificate is valid because
         // * `communicate_with_quorum` ensured a sufficient "weight" of
         // (non-error) answers were returned by validators.

@@ -6,8 +6,8 @@ use self::state::Application;
 use async_trait::async_trait;
 use linera_sdk::{{
     base::{{SessionId, WithContractAbi}},
-    ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
-    OperationContext, SessionCallResult, ViewStateStorage,
+    ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
+    OperationContext, SessionCallOutcome, ViewStateStorage,
 }};
 use thiserror::Error;
 
@@ -26,24 +26,24 @@ impl Contract for Application {{
         &mut self,
         _context: &OperationContext,
         _argument: Self::InitializationArgument,
-    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {{
-        Ok(ExecutionResult::default())
+    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {{
+        Ok(ExecutionOutcome::default())
     }}
 
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,
         _operation: Self::Operation,
-    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {{
-        Ok(ExecutionResult::default())
+    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {{
+        Ok(ExecutionOutcome::default())
     }}
 
     async fn execute_message(
         &mut self,
         _context: &MessageContext,
         _message: Self::Message,
-    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {{
-        Ok(ExecutionResult::default())
+    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {{
+        Ok(ExecutionOutcome::default())
     }}
 
     async fn handle_application_call(
@@ -51,9 +51,9 @@ impl Contract for Application {{
         _context: &CalleeContext,
         _call: Self::ApplicationCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
+    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
     {{
-        Ok(ApplicationCallResult::default())
+        Ok(ApplicationCallOutcome::default())
     }}
 
     async fn handle_session_call(
@@ -62,9 +62,9 @@ impl Contract for Application {{
         _session: Self::SessionState,
         _call: Self::SessionCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
+    ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
     {{
-        Ok(SessionCallResult::default())
+        Ok(SessionCallOutcome::default())
     }}
 }}
 

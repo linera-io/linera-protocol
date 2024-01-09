@@ -152,21 +152,21 @@ pub trait UserContract {
         &mut self,
         context: OperationContext,
         argument: Vec<u8>,
-    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
+    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>;
 
     /// Applies an operation from the current block.
     fn execute_operation(
         &mut self,
         context: OperationContext,
         operation: Vec<u8>,
-    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
+    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>;
 
     /// Applies a message originating from a cross-chain message.
     fn execute_message(
         &mut self,
         context: MessageContext,
         message: Vec<u8>,
-    ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
+    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>;
 
     /// Executes a call from another application.
     ///
@@ -177,7 +177,7 @@ pub trait UserContract {
         context: CalleeContext,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, ExecutionError>;
+    ) -> Result<ApplicationCallOutcome, ExecutionError>;
 
     /// Executes a call from another application into a session created by this application.
     fn handle_session_call(
@@ -186,7 +186,7 @@ pub trait UserContract {
         session_state: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<(SessionCallResult, Vec<u8>), ExecutionError>;
+    ) -> Result<(SessionCallOutcome, Vec<u8>), ExecutionError>;
 }
 
 /// The public entry points provided by the service part of an application.
@@ -201,20 +201,20 @@ pub trait UserService {
 
 /// The result of calling into a user application.
 #[derive(Default)]
-pub struct ApplicationCallResult {
+pub struct ApplicationCallOutcome {
     /// The return value.
     pub value: Vec<u8>,
     /// The externally-visible result.
-    pub execution_result: RawExecutionResult<Vec<u8>>,
+    pub execution_outcome: RawExecutionOutcome<Vec<u8>>,
     /// The states of the new sessions to be created, if any.
     pub create_sessions: Vec<Vec<u8>>,
 }
 
 /// The result of calling into a session.
 #[derive(Default)]
-pub struct SessionCallResult {
+pub struct SessionCallOutcome {
     /// The application result.
-    pub inner: ApplicationCallResult,
+    pub inner: ApplicationCallOutcome,
     /// If true, the session should be terminated.
     pub close_session: bool,
 }
@@ -441,7 +441,7 @@ pub trait ServiceRuntime: BaseRuntime {
 }
 
 /// The result of calling into an application or a session.
-pub struct CallResult {
+pub struct CallOutcome {
     /// The return value.
     pub value: Vec<u8>,
     /// The new sessions now visible to the caller.
@@ -467,7 +467,7 @@ pub trait ContractRuntime: BaseRuntime {
         callee_id: UserApplicationId,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallResult, ExecutionError>;
+    ) -> Result<CallOutcome, ExecutionError>;
 
     /// Calls into a session that is in our scope. Forwarded sessions will be visible to
     /// the application that runs `session_id`.
@@ -477,7 +477,7 @@ pub trait ContractRuntime: BaseRuntime {
         session_id: SessionId,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallResult, ExecutionError>;
+    ) -> Result<CallOutcome, ExecutionError>;
 }
 
 /// An operation to be executed in a block.
@@ -568,7 +568,7 @@ pub enum MessageKind {
 /// the application that created them.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct RawExecutionResult<Message> {
+pub struct RawExecutionOutcome<Message> {
     /// The signer who created the messages.
     pub authenticated_signer: Option<Owner>,
     /// Sends messages to the given destinations, possibly forwarding the authenticated
@@ -595,28 +595,28 @@ pub struct ChannelSubscription {
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 #[allow(clippy::large_enum_variant)]
-pub enum ExecutionResult {
-    System(RawExecutionResult<SystemMessage>),
-    User(UserApplicationId, RawExecutionResult<Vec<u8>>),
+pub enum ExecutionOutcome {
+    System(RawExecutionOutcome<SystemMessage>),
+    User(UserApplicationId, RawExecutionOutcome<Vec<u8>>),
 }
 
-impl ExecutionResult {
+impl ExecutionOutcome {
     pub fn application_id(&self) -> GenericApplicationId {
         match self {
-            ExecutionResult::System(_) => GenericApplicationId::System,
-            ExecutionResult::User(app_id, _) => GenericApplicationId::User(*app_id),
+            ExecutionOutcome::System(_) => GenericApplicationId::System,
+            ExecutionOutcome::User(app_id, _) => GenericApplicationId::User(*app_id),
         }
     }
 }
 
-impl<Message> RawExecutionResult<Message> {
+impl<Message> RawExecutionOutcome<Message> {
     pub fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
         self.authenticated_signer = authenticated_signer;
         self
     }
 }
 
-impl<Message> Default for RawExecutionResult<Message> {
+impl<Message> Default for RawExecutionOutcome<Message> {
     fn default() -> Self {
         Self {
             authenticated_signer: None,

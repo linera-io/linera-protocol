@@ -6,7 +6,7 @@ use crate::{
     execution_state_actor::{ExecutionStateSender, Request},
     resources::{RuntimeCounts, RuntimeLimits},
     util::{ReceiverExt, UnboundedSenderExt},
-    BaseRuntime, CallResult, ContractRuntime, ExecutionError, ExecutionResult, ServiceRuntime,
+    BaseRuntime, CallOutcome, ContractRuntime, ExecutionError, ExecutionOutcome, ServiceRuntime,
     SessionId, UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
 };
 use custom_debug_derive::Debug;
@@ -43,7 +43,7 @@ pub struct SyncRuntimeInternal<const WRITABLE: bool> {
     /// The set of the IDs of the applications that are in the `call_stack`.
     active_applications: HashSet<UserApplicationId>,
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
-    execution_results: Vec<ExecutionResult>,
+    execution_outcomes: Vec<ExecutionOutcome>,
 
     /// All the sessions and their IDs.
     session_manager: SessionManager,
@@ -210,7 +210,7 @@ impl<const W: bool> SyncRuntimeInternal<W> {
             execution_state_sender,
             call_stack: Vec::new(),
             active_applications: HashSet::new(),
-            execution_results: Vec::default(),
+            execution_outcomes: Vec::default(),
             session_manager: SessionManager::default(),
             simple_user_states: BTreeMap::default(),
             view_user_states: BTreeMap::default(),
@@ -760,7 +760,7 @@ impl ContractSyncRuntime {
         runtime_limits: RuntimeLimits,
         initial_remaining_fuel: u64,
         action: UserAction,
-    ) -> Result<(Vec<ExecutionResult>, RuntimeCounts), ExecutionError> {
+    ) -> Result<(Vec<ExecutionOutcome>, RuntimeCounts), ExecutionError> {
         let mut runtime = SyncRuntimeInternal::new(
             chain_id,
             execution_state_sender,
@@ -775,7 +775,7 @@ impl ContractSyncRuntime {
             signer,
         });
         let runtime = ContractSyncRuntime::new(runtime);
-        let execution_result = {
+        let execution_outcome = {
             let mut code = code.instantiate(runtime.clone())?;
             match action {
                 UserAction::Initialize(context, argument) => code.initialize(context, argument)?,
@@ -797,11 +797,11 @@ impl ContractSyncRuntime {
             return Err(ExecutionError::SessionWasNotClosed(*session_id));
         }
         // Adds the results of the last call to the execution results.
-        runtime.execution_results.push(ExecutionResult::User(
+        runtime.execution_outcomes.push(ExecutionOutcome::User(
             application_id,
-            execution_result.with_authenticated_signer(signer),
+            execution_outcome.with_authenticated_signer(signer),
         ));
-        Ok((runtime.execution_results, runtime.runtime_counts))
+        Ok((runtime.execution_outcomes, runtime.runtime_counts))
     }
 }
 
@@ -838,7 +838,7 @@ impl ContractRuntime for ContractSyncRuntime {
         callee_id: UserApplicationId,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallResult, ExecutionError> {
+    ) -> Result<CallOutcome, ExecutionError> {
         self.check_for_reentrancy(callee_id)?;
         let (callee_context, authenticated_signer, code) = {
             let mut this = self.as_inner();
@@ -869,26 +869,26 @@ impl ContractRuntime for ContractSyncRuntime {
             (callee_context, authenticated_signer, code)
         };
         let mut code = code.instantiate(self.clone())?;
-        let raw_result =
+        let raw_outcome =
             code.handle_application_call(callee_context, argument, forwarded_sessions)?;
         {
             let mut this = self.as_inner();
             this.pop_application();
 
             // Interpret the results of the call.
-            this.execution_results.push(ExecutionResult::User(
+            this.execution_outcomes.push(ExecutionOutcome::User(
                 callee_id,
-                raw_result
-                    .execution_result
+                raw_outcome
+                    .execution_outcome
                     .with_authenticated_signer(authenticated_signer),
             ));
             let caller_id = this.application_id()?;
-            let sessions = this.make_sessions(raw_result.create_sessions, callee_id, caller_id);
-            let result = CallResult {
-                value: raw_result.value,
+            let sessions = this.make_sessions(raw_outcome.create_sessions, callee_id, caller_id);
+            let outcome = CallOutcome {
+                value: raw_outcome.value,
                 sessions,
             };
-            Ok(result)
+            Ok(outcome)
         }
     }
 
@@ -898,7 +898,7 @@ impl ContractRuntime for ContractSyncRuntime {
         session_id: SessionId,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallResult, ExecutionError> {
+    ) -> Result<CallOutcome, ExecutionError> {
         self.check_for_reentrancy(session_id.application_id)?;
         let (callee_context, authenticated_signer, session_state, code) = {
             let mut this = self.as_inner();
@@ -932,7 +932,7 @@ impl ContractRuntime for ContractSyncRuntime {
             (callee_context, authenticated_signer, session_state, code)
         };
         let mut code = code.instantiate(self.clone())?;
-        let (raw_result, session_state) =
+        let (raw_outcome, session_state) =
             code.handle_session_call(callee_context, session_state, argument, forwarded_sessions)?;
         {
             let mut this = self.as_inner();
@@ -940,27 +940,27 @@ impl ContractRuntime for ContractSyncRuntime {
 
             // Interpret the results of the call.
             let caller_id = this.application_id()?;
-            if raw_result.close_session {
+            if raw_outcome.close_session {
                 // Terminate the session.
                 this.try_close_session(session_id, caller_id)?;
             } else {
                 // Save the session.
                 this.try_save_session(session_id, caller_id, session_state)?;
             }
-            let inner_result = raw_result.inner;
+            let inner_outcome = raw_outcome.inner;
             let callee_id = session_id.application_id;
-            this.execution_results.push(ExecutionResult::User(
+            this.execution_outcomes.push(ExecutionOutcome::User(
                 callee_id,
-                inner_result
-                    .execution_result
+                inner_outcome
+                    .execution_outcome
                     .with_authenticated_signer(authenticated_signer),
             ));
-            let sessions = this.make_sessions(inner_result.create_sessions, callee_id, caller_id);
-            let result = CallResult {
-                value: inner_result.value,
+            let sessions = this.make_sessions(inner_outcome.create_sessions, callee_id, caller_id);
+            let outcome = CallOutcome {
+                value: inner_outcome.value,
                 sessions,
             };
-            Ok(result)
+            Ok(outcome)
         }
     }
 }

@@ -130,11 +130,11 @@ impl From<wit_system_api::Amount> for Amount {
     }
 }
 
-impl From<wit_system_api::CallResult> for (Vec<u8>, Vec<SessionId>) {
-    fn from(call_result: wit_system_api::CallResult) -> (Vec<u8>, Vec<SessionId>) {
-        let value = call_result.value;
+impl From<wit_system_api::CallOutcome> for (Vec<u8>, Vec<SessionId>) {
+    fn from(call_outcome: wit_system_api::CallOutcome) -> (Vec<u8>, Vec<SessionId>) {
+        let value = call_outcome.value;
 
-        let sessions = call_result
+        let sessions = call_outcome
             .sessions
             .into_iter()
             .map(SessionId::from)
