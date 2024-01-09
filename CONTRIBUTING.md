@@ -191,6 +191,43 @@ A simple way to use this on a laptop is the following:
 For example if the test blocks, it will show the line in question with `block_on`.
 See the documentation of `tokio-console` for more details.
 
+### Tracking metrics
+
+The prometheus system is used for keeping track of the validator in a Kubernetes setting.
+However, this can also be used locally to run test case and then get metrics to work on.
+This is a little bit more indirect than having runtimes in log file, but works fine.
+The steps are the following:
+
+1. The list of created metric server can be seen in the validator logs with the entries "Starting to serve metrics".
+2. The list of nodes served if 4 validors are used `is 0.0.0.0:XXXXX` with `XXXXX` being 11000, 11001, 11100, 11101, 11200, 11201, 11300, 11301.
+3. Create a `prometheus.yml` file that contains the source of data. Each one of the port has to be present. One example for querying every second is
+
+```
+global:
+  scrape_interval:     1s
+  evaluation_interval: 1s
+
+rule_files:
+  # - "first.rules"
+  # - "second.rules"
+
+scrape_configs:
+  - job_name: linera_test_11000
+    static_configs:
+      - targets: ['0.0.0.0:11000']
+  .
+  .
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+```
+
+4. The Web app on `http://localhost:9090` provides a way to access to the metrics. Another way is to use the API as indicated below and the process the results.
+5. The list of available metrics is available by looking at `http://localhost:9090/api/v1/label/__name__/values`
+6. The instantaneous value of a metric over all sources is accessed via `http://localhost:9090/api/v1/query?query=up` with `up` the metric sought.
+7. The values of metrics over an interval over all sources is accessed via `http://localhost:9090/api/v1/query_range?query=up&start=2023-01-04T12:00:00Z&end=2023-01-04T16:00:00Z&step=1s`.
+
+
 
 ## Adding dependencies to third-party crates
 
