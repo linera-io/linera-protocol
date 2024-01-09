@@ -320,21 +320,6 @@ pub trait BaseRuntime {
     /// Reads the system timestamp.
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError>;
 
-    // TODO(#1152): remove
-    /// Reads the application state.
-    fn try_read_my_state(&mut self) -> Result<Vec<u8>, ExecutionError> {
-        let promise = self.try_read_my_state_new()?;
-        self.try_read_my_state_wait(&promise)
-    }
-
-    // TODO(#1152): remove
-    /// Reads the application state (new).
-    fn try_read_my_state_new(&mut self) -> Result<Self::Read, ExecutionError>;
-
-    // TODO(#1152): remove
-    /// Reads the application state (wait).
-    fn try_read_my_state_wait(&mut self, promise: &Self::Read) -> Result<Vec<u8>, ExecutionError>;
-
     /// Tests whether a key exists in the key-value store
     #[cfg(feature = "test")]
     fn contains_key(&mut self, key: Vec<u8>) -> Result<bool, ExecutionError> {
@@ -454,10 +439,6 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// Sets the amount of execution fuel remaining before execution is aborted.
     fn set_remaining_fuel(&mut self, remaining_fuel: u64) -> Result<(), ExecutionError>;
-
-    // TODO(#1152): remove
-    /// Saves the application state and allows reading/loading the state again.
-    fn save_my_state(&mut self, state: Vec<u8>) -> Result<bool, ExecutionError>;
 
     /// Calls another application. Forwarded sessions will now be visible to
     /// `callee_id` (but not to the caller any more).

@@ -39,16 +39,6 @@ macro_rules! impl_contract_system_api {
                 BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
             }
 
-            // TODO(#1152): remove
-            fn load(&mut self) -> Result<Vec<u8>, Self::Error> {
-                self.try_read_my_state()
-            }
-
-            // TODO(#1152): remove
-            fn store(&mut self, state: &[u8]) -> Result<bool, Self::Error> {
-                self.save_my_state(state.to_vec())
-            }
-
             fn try_call_application(
                 &mut self,
                 authenticated: bool,
@@ -123,8 +113,6 @@ macro_rules! impl_service_system_api {
         {
             type Error = ExecutionError;
 
-            type Load = <Self as BaseRuntime>::Read;
-
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
             }
@@ -149,21 +137,6 @@ macro_rules! impl_service_system_api {
                 &mut self,
             ) -> Result<service_system_api::Timestamp, Self::Error> {
                 BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
-            }
-
-            // TODO(#1152): remove
-            fn load_new(&mut self) -> Result<Self::Load, Self::Error> {
-                self.try_read_my_state_new()
-            }
-
-            // TODO(#1152): remove
-            fn load_wait(
-                &mut self,
-                promise: &Self::Load,
-            ) -> Result<Result<Vec<u8>, String>, Self::Error> {
-                self.try_read_my_state_wait(promise)
-                    // TODO(#1153): remove
-                    .map(Ok)
             }
 
             fn try_query_application(

@@ -14,11 +14,6 @@ enum log-level {
     error,
 }
 
-resource load {
-    static new: func() -> load
-    wait: func() -> result<list<u8>, string>
-}
-
 try-query-application: func(
     application: application-id,
     query: list<u8>,

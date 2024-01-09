@@ -32,10 +32,7 @@ mod conversions_from_wit;
 #[path = "conversions_to_wit.rs"]
 mod conversions_to_wit;
 
-use self::{
-    contract::ContractData, service::ServiceData, service_system_api::ServiceSystemApiTables,
-    view_system_api::ViewSystemApiTables,
-};
+use self::{contract::ContractData, service::ServiceData, view_system_api::ViewSystemApiTables};
 use super::{module_cache::ModuleCache, WasmExecutionError};
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
@@ -220,7 +217,6 @@ where
 {
     data: ServiceData,
     runtime: Runtime,
-    system_tables: ServiceSystemApiTables<Runtime>,
     views_tables: ViewSystemApiTables<Runtime>,
 }
 
@@ -266,7 +262,6 @@ where
         Self {
             data: ServiceData::default(),
             runtime,
-            system_tables: ServiceSystemApiTables::default(),
             views_tables: ViewSystemApiTables::default(),
         }
     }
@@ -277,8 +272,8 @@ where
     }
 
     /// Obtains the data required by the runtime to export the system API.
-    pub fn system_api(&mut self) -> (&mut Runtime, &mut ServiceSystemApiTables<Runtime>) {
-        (&mut self.runtime, &mut self.system_tables)
+    pub fn system_api(&mut self) -> &mut Runtime {
+        &mut self.runtime
     }
 
     /// Obtains the data required by the runtime to export the views API.

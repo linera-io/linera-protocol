@@ -523,10 +523,7 @@ where
         Arc::new(TestModule::<false>::new(owner)),
     );
 
-    let mut caller_application_state = state
-        .view_users
-        .try_load_entry_mut(&application_ids[0])
-        .await?;
+    let mut caller_application_state = state.users.try_load_entry_mut(&application_ids[0]).await?;
     let callee_id =
         bcs::to_bytes(&application_ids[1]).expect("Failed to serialize application ID to call");
 
