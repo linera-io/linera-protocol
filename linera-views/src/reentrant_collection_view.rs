@@ -205,7 +205,7 @@ where
             Ok(None)
         } else {
             Ok(Some(
-                Self::wrapped_view(context, needs_clear, short_key).await?,
+                Self::wrapped_view(context, false, short_key).await?,
             ))
         }
     }
@@ -242,7 +242,7 @@ where
             Some(entry) => match entry {
                 Update::Set(view) => Some(view.clone()),
                 _entry @ Update::Removed => {
-                    Self::checked_wrapped_view(&self.context, true, short_key).await?
+                    None
                 }
             },
             None => {
