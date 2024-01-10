@@ -6,7 +6,7 @@ pub const TEST_CACHE_SIZE: usize = 1000;
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_interval, KeyValueStore},
+    common::{get_interval, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -93,14 +93,13 @@ pub struct LruCachingStore<K> {
 }
 
 #[async_trait]
-impl<K> KeyValueStore for LruCachingStore<K>
+impl<K> ReadableKeyValueStore<K::Error> for LruCachingStore<K>
 where
     K: KeyValueStore + Send + Sync,
 {
     // The LRU cache does not change the underlying client's size limits.
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
-    type Error = K::Error;
     type Keys = K::Keys;
     type KeyValues = K::KeyValues;
 
@@ -108,7 +107,7 @@ where
         self.client.max_stream_queries()
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, K::Error> {
         match &self.lru_read_values {
             None => {
                 return self.client.read_value_bytes(key).await;
@@ -128,7 +127,7 @@ where
         }
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, K::Error> {
         if let Some(values) = &self.lru_read_values {
             let values = values.lock().await;
             if let Some(value) = values.query(key) {
@@ -141,7 +140,7 @@ where
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
+    ) -> Result<Vec<Option<Vec<u8>>>, K::Error> {
         match &self.lru_read_values {
             None => {
                 return self.client.read_multi_values_bytes(keys).await;
@@ -178,18 +177,24 @@ where
         }
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, K::Error> {
         self.client.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::Error> {
+    ) -> Result<Self::KeyValues, K::Error> {
         self.client.find_key_values_by_prefix(key_prefix).await
     }
+}
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
+#[async_trait]
+impl<K> WritableKeyValueStore<K::Error> for LruCachingStore<K>
+where
+    K: KeyValueStore + Send + Sync,
+{
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), K::Error> {
         match &self.lru_read_values {
             None => {
                 return self.client.write_batch(batch, base_key).await;
@@ -215,9 +220,16 @@ where
         }
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), K::Error> {
         self.client.clear_journal(base_key).await
     }
+}
+
+impl<K> KeyValueStore for LruCachingStore<K>
+where
+    K: KeyValueStore + Send + Sync,
+{
+    type Error = K::Error;
 }
 
 impl<K> LruCachingStore<K>

@@ -14,7 +14,11 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::TryFutureExt;
-use linera_views::{batch::Batch, common::KeyValueStore, views::RootView};
+use linera_views::{
+    batch::Batch,
+    common::{ReadableKeyValueStore, WritableKeyValueStore},
+    views::RootView,
+};
 use serde::{de::DeserializeOwned, Serialize};
 use std::future::Future;
 

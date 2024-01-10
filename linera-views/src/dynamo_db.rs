@@ -5,7 +5,7 @@ use crate::{
     batch::{Batch, DeletePrefixExpander, SimpleUnorderedBatch},
     common::{
         CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore,
-        TableStatus, MIN_VIEW_TAG,
+        ReadableKeyValueStore, TableStatus, WritableKeyValueStore, MIN_VIEW_TAG,
     },
     lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
@@ -1123,10 +1123,9 @@ impl DynamoDbStoreInternal {
 }
 
 #[async_trait]
-impl KeyValueStore for DynamoDbStoreInternal {
+impl ReadableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
     const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
-    type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
 
@@ -1178,7 +1177,10 @@ impl KeyValueStore for DynamoDbStoreInternal {
             .await?;
         Ok(DynamoDbKeyValues { result_queries })
     }
+}
 
+#[async_trait]
+impl WritableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
         let block_operations = DynamoDbBatch::from_batch(self, batch).await?;
         if block_operations.is_fastpath_feasible() {
@@ -1199,6 +1201,10 @@ impl KeyValueStore for DynamoDbStoreInternal {
     }
 }
 
+impl KeyValueStore for DynamoDbStoreInternal {
+    type Error = DynamoDbContextError;
+}
+
 /// A shared DB client for DynamoDb implementing LruCaching
 #[derive(Clone)]
 pub struct DynamoDbStore {
@@ -1206,10 +1212,9 @@ pub struct DynamoDbStore {
 }
 
 #[async_trait]
-impl KeyValueStore for DynamoDbStore {
+impl ReadableKeyValueStore<DynamoDbContextError> for DynamoDbStore {
     const MAX_VALUE_SIZE: usize = DynamoDbStoreInternal::MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE - 4;
-    type Error = DynamoDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
@@ -1245,14 +1250,22 @@ impl KeyValueStore for DynamoDbStore {
     ) -> Result<Self::KeyValues, DynamoDbContextError> {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
+}
 
+#[async_trait]
+impl WritableKeyValueStore<DynamoDbContextError> for DynamoDbStore {
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
         self.store.write_batch(batch, base_key).await
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
         self.store.clear_journal(base_key).await
     }
+}
+
+#[async_trait]
+impl KeyValueStore for DynamoDbStore {
+    type Error = DynamoDbContextError;
 }
 
 impl DynamoDbStore {

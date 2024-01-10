@@ -3,7 +3,10 @@
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_interval, CommonStoreConfig, ContextFromStore, KeyValueStore},
+    common::{
+        get_interval, CommonStoreConfig, ContextFromStore, KeyValueStore, ReadableKeyValueStore,
+        WritableKeyValueStore,
+    },
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
 };
@@ -34,10 +37,9 @@ pub struct MemoryStore {
 }
 
 #[async_trait]
-impl KeyValueStore for MemoryStore {
+impl ReadableKeyValueStore<MemoryContextError> for MemoryStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
     const MAX_KEY_SIZE: usize = usize::MAX;
-    type Error = MemoryContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
@@ -93,7 +95,10 @@ impl KeyValueStore for MemoryStore {
         }
         Ok(key_values)
     }
+}
 
+#[async_trait]
+impl WritableKeyValueStore<MemoryContextError> for MemoryStore {
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), MemoryContextError> {
         let mut map = self.map.write().await;
         for ent in batch.operations {
@@ -121,6 +126,10 @@ impl KeyValueStore for MemoryStore {
     async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), MemoryContextError> {
         Ok(())
     }
+}
+
+impl KeyValueStore for MemoryStore {
+    type Error = MemoryContextError;
 }
 
 impl MemoryStore {

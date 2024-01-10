@@ -23,7 +23,9 @@ use std::{
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::common::{ContextFromStore, KeyValueStore},
+    crate::common::{
+        ContextFromStore, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
+    },
     crate::memory::{MemoryContext, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
     async_lock::{MutexGuardArc, RwLock},
     std::sync::Arc,
@@ -969,14 +971,13 @@ pub struct ViewContainer<C> {
 
 #[cfg(any(test, feature = "test"))]
 #[async_trait]
-impl<C> KeyValueStore for ViewContainer<C>
+impl<C> ReadableKeyValueStore<ViewError> for ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
 {
     const MAX_VALUE_SIZE: usize = C::MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = C::MAX_KEY_SIZE;
-    type Error = ViewError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
@@ -1014,7 +1015,14 @@ where
         let view = self.view.read().await;
         view.find_key_values_by_prefix(key_prefix).await
     }
-
+}
+#[cfg(any(test, feature = "test"))]
+#[async_trait]
+impl<C> WritableKeyValueStore<ViewError> for ViewContainer<C>
+where
+    C: Context + Sync + Send + Clone,
+    ViewError: From<C::Error>,
+{
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ViewError> {
         let mut view = self.view.write().await;
         view.write_batch(batch).await?;
@@ -1024,9 +1032,18 @@ where
         Ok(())
     }
 
-    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), Self::Error> {
+    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), ViewError> {
         Ok(())
     }
+}
+
+#[cfg(any(test, feature = "test"))]
+impl<C> KeyValueStore for ViewContainer<C>
+where
+    C: Context + Sync + Send + Clone,
+    ViewError: From<C::Error>,
+{
+    type Error = ViewError;
 }
 
 #[cfg(any(test, feature = "test"))]

@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use linera_base::ensure;
 use linera_views::{
     batch::{Batch, WriteOperation},
-    common::{ContextFromStore, KeyValueStore},
+    common::{ContextFromStore, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
     views::ViewError,
 };
 
@@ -40,12 +40,11 @@ impl AppStateStore {
 }
 
 #[async_trait]
-impl KeyValueStore for AppStateStore {
+impl ReadableKeyValueStore<ViewError> for AppStateStore {
     // The AppStateStore of the system_api does not have limits
     // on the size of its values.
     const MAX_VALUE_SIZE: usize = usize::MAX;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
-    type Error = ViewError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
@@ -53,7 +52,7 @@ impl KeyValueStore for AppStateStore {
         1
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, ViewError> {
         ensure!(key.len() <= Self::MAX_KEY_SIZE, ViewError::KeyTooLong);
         let promise = wit::ContainsKey::new(key);
         yield_once().await;
@@ -63,7 +62,7 @@ impl KeyValueStore for AppStateStore {
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
+    ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
         for key in &keys {
             ensure!(key.len() <= Self::MAX_KEY_SIZE, ViewError::KeyTooLong);
         }
@@ -73,7 +72,7 @@ impl KeyValueStore for AppStateStore {
         Ok(promise.wait())
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         ensure!(key.len() <= Self::MAX_KEY_SIZE, ViewError::KeyTooLong);
         let promise = wit::ReadValueBytes::new(key);
         yield_once().await;
@@ -100,7 +99,10 @@ impl KeyValueStore for AppStateStore {
         let key_values = self.find_key_values_by_prefix_load(key_prefix).await;
         Ok(key_values)
     }
+}
 
+#[async_trait]
+impl WritableKeyValueStore<ViewError> for AppStateStore {
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ViewError> {
         let mut operations = Vec::new();
         for operation in &batch.operations {
@@ -126,9 +128,14 @@ impl KeyValueStore for AppStateStore {
         Ok(())
     }
 
-    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), Self::Error> {
+    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), ViewError> {
         Ok(())
     }
+}
+
+#[async_trait]
+impl KeyValueStore for AppStateStore {
+    type Error = ViewError;
 }
 
 /// Implementation of [`linera_views::common::Context`] to be used for data storage

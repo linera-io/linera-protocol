@@ -3,7 +3,9 @@
 
 use linera_views::{
     batch::{Batch, WriteOperation},
-    common::{KeyIterable, KeyValueIterable, KeyValueStore},
+    common::{
+        KeyIterable, KeyValueIterable, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
+    },
     key_value_store_view::ViewContainer,
     memory::{create_memory_context, create_memory_store},
     test_utils::{
