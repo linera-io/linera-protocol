@@ -301,59 +301,40 @@ pub trait KeyValueIterable<Error> {
     fn into_iterator_owned(self) -> Self::IteratorOwned;
 }
 
-/// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.
+/// Low-level, asynchronous read key-value operations. Useful for storage APIs not based on views.
 #[async_trait]
-pub trait KeyValueStore {
-    /// The maximal size of values that can be stored.
-    const MAX_VALUE_SIZE: usize;
-
+pub trait ReadableKeyValueStore<E> {
     /// The maximal size of keys that can be stored.
     const MAX_KEY_SIZE: usize;
 
-    /// The error type.
-    type Error: Debug;
-
     /// Returns type for key search operations.
-    type Keys: KeyIterable<Self::Error>;
+    type Keys: KeyIterable<E>;
 
     /// Returns type for key-value search operations.
-    type KeyValues: KeyValueIterable<Self::Error>;
+    type KeyValues: KeyValueIterable<E>;
 
     /// Retrieve the number of stream queries.
     fn max_stream_queries(&self) -> usize;
 
     /// Retrieves a `Vec<u8>` from the database using the provided `key`.
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, E>;
 
     /// Test whether a key exists in the database
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error>;
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, E>;
 
     /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
-    async fn read_multi_values_bytes(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
+    async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, E>;
 
     /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error>;
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, E>;
 
     /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
-    async fn find_key_values_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::Error>;
-
-    /// Writes the `batch` in the database with `base_key` the base key of the entries for the journal.
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error>;
-
-    /// Clears any journal entry that may remain.
-    /// The journal is located at the `base_key`.
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error>;
+    async fn find_key_values_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::KeyValues, E>;
 
     /// Reads a single `key` and deserializes the result if present.
-    async fn read_value<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
+    async fn read_value<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, E>
     where
-        Self::Error: From<bcs::Error>,
+        E: From<bcs::Error>,
     {
         from_bytes_opt(&self.read_value_bytes(key).await?)
     }
@@ -362,9 +343,9 @@ pub trait KeyValueStore {
     async fn read_multi_values<V: DeserializeOwned + Send>(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<V>>, Self::Error>
+    ) -> Result<Vec<Option<V>>, E>
     where
-        Self::Error: From<bcs::Error>,
+        E: From<bcs::Error>,
     {
         let mut values = Vec::with_capacity(keys.len());
         for entry in self.read_multi_values_bytes(keys).await? {
@@ -372,6 +353,28 @@ pub trait KeyValueStore {
         }
         Ok(values)
     }
+}
+
+/// Low-level, asynchronous write key-value operations. Useful for storage APIs not based on views.
+#[async_trait]
+pub trait WritableKeyValueStore<E> {
+    /// The maximal size of values that can be stored.
+    const MAX_VALUE_SIZE: usize;
+
+    /// Writes the `batch` in the database with `base_key` the base key of the entries for the journal.
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), E>;
+
+    /// Clears any journal entry that may remain.
+    /// The journal is located at the `base_key`.
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), E>;
+}
+
+/// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
+pub trait KeyValueStore:
+    ReadableKeyValueStore<Self::Error> + WritableKeyValueStore<Self::Error>
+{
+    /// The error type.
+    type Error: Debug;
 }
 
 #[doc(hidden)]

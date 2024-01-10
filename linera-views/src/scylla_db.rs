@@ -21,7 +21,8 @@ use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::get_table_name};
 use crate::{
     batch::{Batch, DeletePrefixExpander},
     common::{
-        get_upper_bound_option, CommonStoreConfig, ContextFromStore, KeyValueStore, TableStatus,
+        get_upper_bound_option, CommonStoreConfig, ContextFromStore, KeyValueStore,
+        ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
     value_splitting::DatabaseConsistencyError,
@@ -117,10 +118,8 @@ impl From<ScyllaDbContextError> for crate::views::ViewError {
 }
 
 #[async_trait]
-impl KeyValueStore for ScyllaDbStoreInternal {
-    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
+impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
-    type Error = ScyllaDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
@@ -128,13 +127,13 @@ impl KeyValueStore for ScyllaDbStoreInternal {
         self.max_stream_queries
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         Self::read_value_internal(store, key.to_vec()).await
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         Self::contains_key_internal(store, key.to_vec()).await
@@ -143,7 +142,7 @@ impl KeyValueStore for ScyllaDbStoreInternal {
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
+    ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         let handles = keys
@@ -153,7 +152,10 @@ impl KeyValueStore for ScyllaDbStoreInternal {
         Ok(result.into_iter().collect::<Result<_, _>>()?)
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         Self::find_keys_by_prefix_internal(store, key_prefix.to_vec()).await
@@ -162,21 +164,34 @@ impl KeyValueStore for ScyllaDbStoreInternal {
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::Error> {
+    ) -> Result<Self::KeyValues, ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         Self::find_key_values_by_prefix_internal(store, key_prefix.to_vec()).await
     }
+}
 
-    async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), Self::Error> {
+#[async_trait]
+impl WritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
+
+    async fn write_batch(
+        &self,
+        batch: Batch,
+        _base_key: &[u8],
+    ) -> Result<(), ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         Self::write_batch_internal(store, batch).await
     }
 
-    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), Self::Error> {
+    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), ScyllaDbContextError> {
         Ok(())
     }
+}
+
+impl KeyValueStore for ScyllaDbStoreInternal {
+    type Error = ScyllaDbContextError;
 }
 
 #[async_trait]
@@ -670,50 +685,61 @@ pub struct ScyllaDbStoreConfig {
 }
 
 #[async_trait]
-impl KeyValueStore for ScyllaDbStore {
-    const MAX_VALUE_SIZE: usize = ScyllaDbStoreInternal::MAX_VALUE_SIZE;
+impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
     const MAX_KEY_SIZE: usize = ScyllaDbStoreInternal::MAX_KEY_SIZE;
-    type Error = <ScyllaDbStoreInternal as KeyValueStore>::Error;
-    type Keys = <ScyllaDbStoreInternal as KeyValueStore>::Keys;
-    type KeyValues = <ScyllaDbStoreInternal as KeyValueStore>::KeyValues;
+    type Keys = <ScyllaDbStoreInternal as ReadableKeyValueStore<ScyllaDbContextError>>::Keys;
+    type KeyValues =
+        <ScyllaDbStoreInternal as ReadableKeyValueStore<ScyllaDbContextError>>::KeyValues;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ScyllaDbContextError> {
         self.store.read_value_bytes(key).await
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, ScyllaDbContextError> {
         self.store.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
+    ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbContextError> {
         self.store.read_multi_values_bytes(keys).await
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, ScyllaDbContextError> {
         self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::Error> {
+    ) -> Result<Self::KeyValues, ScyllaDbContextError> {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
+}
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
+#[async_trait]
+impl WritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
+    const MAX_VALUE_SIZE: usize = ScyllaDbStoreInternal::MAX_VALUE_SIZE;
+
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), ScyllaDbContextError> {
         self.store.write_batch(batch, base_key).await
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), ScyllaDbContextError> {
         self.store.clear_journal(base_key).await
     }
+}
+
+impl KeyValueStore for ScyllaDbStore {
+    type Error = ScyllaDbContextError;
 }
 
 impl ScyllaDbStore {

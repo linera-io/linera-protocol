@@ -3,7 +3,10 @@
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_upper_bound, CommonStoreConfig, ContextFromStore, KeyValueStore, TableStatus},
+    common::{
+        get_upper_bound, CommonStoreConfig, ContextFromStore, KeyValueStore, ReadableKeyValueStore,
+        TableStatus, WritableKeyValueStore,
+    },
     lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
@@ -51,10 +54,8 @@ pub struct RocksDbStoreConfig {
 }
 
 #[async_trait]
-impl KeyValueStore for RocksDbStoreInternal {
-    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
+impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
-    type Error = RocksDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
@@ -156,6 +157,11 @@ impl KeyValueStore for RocksDbStoreInternal {
         .await?;
         Ok(key_values)
     }
+}
+
+#[async_trait]
+impl WritableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
     async fn write_batch(
         &self,
@@ -213,9 +219,13 @@ impl KeyValueStore for RocksDbStoreInternal {
         Ok(())
     }
 
-    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), Self::Error> {
+    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), RocksDbContextError> {
         Ok(())
     }
+}
+
+impl KeyValueStore for RocksDbStoreInternal {
+    type Error = RocksDbContextError;
 }
 
 /// A shared DB client for RocksDB implementing LruCaching
@@ -355,10 +365,8 @@ pub async fn create_rocks_db_test_store() -> RocksDbStore {
 pub type RocksDbContext<E> = ContextFromStore<E, RocksDbStore>;
 
 #[async_trait]
-impl KeyValueStore for RocksDbStore {
-    const MAX_VALUE_SIZE: usize = usize::MAX;
+impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStore {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
-    type Error = RocksDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
@@ -394,14 +402,24 @@ impl KeyValueStore for RocksDbStore {
     ) -> Result<Self::KeyValues, RocksDbContextError> {
         self.store.find_key_values_by_prefix(key_prefix).await
     }
+}
+
+#[async_trait]
+impl WritableKeyValueStore<RocksDbContextError> for RocksDbStore {
+    const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), RocksDbContextError> {
         self.store.write_batch(batch, base_key).await
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), RocksDbContextError> {
         self.store.clear_journal(base_key).await
     }
+}
+
+#[async_trait]
+impl KeyValueStore for RocksDbStore {
+    type Error = RocksDbContextError;
 }
 
 impl<E: Clone + Send + Sync> RocksDbContext<E> {
