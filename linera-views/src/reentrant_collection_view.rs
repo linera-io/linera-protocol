@@ -53,7 +53,7 @@ impl<T> std::ops::DerefMut for WriteGuardedView<T> {
 #[allow(clippy::type_complexity)]
 pub struct ReentrantByteCollectionView<C, W> {
     context: C,
-    delete_storage_first: bool,
+    needs_clear: bool,
     updates: Mutex<BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
@@ -92,7 +92,7 @@ where
         let hash = context.read_value(&key).await?;
         Ok(Self {
             context,
-            delete_storage_first: false,
+            needs_clear: false,
             updates: Mutex::new(BTreeMap::new()),
             stored_hash: hash,
             hash: Mutex::new(hash),
@@ -100,13 +100,13 @@ where
     }
 
     fn rollback(&mut self) {
-        self.delete_storage_first = false;
+        self.needs_clear = false;
         self.updates.get_mut().clear();
         *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.delete_storage_first {
+        if self.needs_clear {
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(self.updates.get_mut()) {
                 if let Update::Set(view) = update {
@@ -146,12 +146,12 @@ where
             }
             self.stored_hash = hash;
         }
-        self.delete_storage_first = false;
+        self.needs_clear = false;
         Ok(())
     }
 
     fn clear(&mut self) {
-        self.delete_storage_first = true;
+        self.needs_clear = true;
         self.updates.get_mut().clear();
         *self.hash.get_mut() = None;
     }
@@ -181,31 +181,31 @@ where
     /// Reads the view and if missing returns the default view
     async fn wrapped_view(
         context: &C,
-        delete_storage_first: bool,
+        needs_clear: bool,
         short_key: &[u8],
     ) -> Result<Arc<RwLock<W>>, ViewError> {
         let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
         let context = context.clone_with_base_key(key);
         // Obtain a view and set its pending state to the default (e.g. empty) state
         let mut view = W::load(context).await?;
-        if delete_storage_first {
+        if needs_clear {
             view.clear();
         }
         Ok(Arc::new(RwLock::new(view)))
     }
 
     /// Reads the view if existing, otherwise report an error.
-    async fn wrapped_view_check(
+    async fn checked_wrapped_view(
         context: &C,
-        delete_storage_first: bool,
+        needs_clear: bool,
         short_key: &[u8],
     ) -> Result<Option<Arc<RwLock<W>>>, ViewError> {
         let key_index = context.base_tag_index(KeyTag::Index as u8, short_key);
-        if delete_storage_first || !context.contains_key(&key_index).await? {
+        if needs_clear || !context.contains_key(&key_index).await? {
             Ok(None)
         } else {
             Ok(Some(
-                Self::wrapped_view(context, delete_storage_first, short_key).await?,
+                Self::wrapped_view(context, needs_clear, short_key).await?,
             ))
         }
     }
@@ -226,7 +226,7 @@ where
             },
             Vacant(entry) => {
                 let wrapped_view =
-                    Self::wrapped_view(&self.context, self.delete_storage_first, short_key).await?;
+                    Self::wrapped_view(&self.context, self.needs_clear, short_key).await?;
                 entry.insert(Update::Set(wrapped_view.clone()));
                 wrapped_view
             }
@@ -242,19 +242,19 @@ where
             Some(entry) => match entry {
                 Update::Set(view) => Some(view.clone()),
                 _entry @ Update::Removed => {
-                    Self::wrapped_view_check(&self.context, true, short_key).await?
+                    Self::checked_wrapped_view(&self.context, true, short_key).await?
                 }
             },
             None => {
-                Self::wrapped_view_check(&self.context, self.delete_storage_first, short_key)
+                Self::checked_wrapped_view(&self.context, self.needs_clear, short_key)
                     .await?
             }
         })
     }
 
     /// Loads a subview for the data at the given index in the collection. If an entry
-    /// was removed before or is missing then a default entry is added to the collection.
-    /// The resulting view can be modified.
+    /// is absent then a default entry is added to the collection. The resulting view
+    /// can be modified.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -282,8 +282,8 @@ where
     }
 
     /// Loads a subview at the given index in the collection and gives read-only access to the data.
-    /// If an entry was removed before or is absent then a default entry is added to the collection.
-    /// The resulting view cannot be modified.
+    /// If an entry is absent then a default entry is added to the collection. The resulting view
+    /// cannot be modified.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -311,7 +311,7 @@ where
     }
 
     /// Loads a subview at the given index in the collection and gives read-only access to the data.
-    /// If an entry was removed before or is absent then None is returned.
+    /// If an entry is absent then `None` is returned.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -358,7 +358,7 @@ where
     /// ```
     pub fn remove_entry(&mut self, short_key: Vec<u8>) {
         *self.hash.get_mut() = None;
-        if self.delete_storage_first {
+        if self.needs_clear {
             // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
             self.updates.get_mut().remove(&short_key);
         } else {
@@ -446,7 +446,7 @@ where
                     }
                 }
                 btree_map::Entry::Vacant(_entry) => {
-                    selected_short_keys.push((short_key, self.delete_storage_first));
+                    selected_short_keys.push((short_key, self.needs_clear));
                 }
             }
         }
@@ -525,7 +525,7 @@ where
                     }
                 }
                 btree_map::Entry::Vacant(_entry) => {
-                    selected_short_keys.push((short_key, self.delete_storage_first));
+                    selected_short_keys.push((short_key, self.needs_clear));
                 }
             }
         }
@@ -629,7 +629,7 @@ where
         let updates = self.updates.lock().await;
         let mut updates = updates.iter();
         let mut update = updates.next();
-        if !self.delete_storage_first {
+        if !self.needs_clear {
             let base = self.get_index_key(&[]);
             for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
                 let index = index?;
@@ -740,7 +740,7 @@ where
                 hasher.update_with_bcs_bytes(&keys.len())?;
                 for key in keys {
                     hasher.update_with_bytes(&key)?;
-                    // We can unwrap since the view is loaded from the keys, so we know it is present
+                    // We can unwrap since key is in keys, so we know it is present.
                     let view = self.try_load_entry(key).await?.unwrap();
                     let hash = view.hash().await?;
                     hasher.write_all(hash.as_ref())?;
@@ -802,8 +802,8 @@ where
     W: View<C> + Send + Sync,
 {
     /// Loads a subview for the data at the given index in the collection. If an entry
-    /// was removed before or is absent then a default entry is put on the collection.
-    /// The obtained view can then be modified.
+    /// is absent then a default entry is put on the collection. The obtained view can
+    /// then be modified.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -830,8 +830,8 @@ where
     }
 
     /// Loads a subview at the given index in the collection and gives read-only access to the data.
-    /// If an entry was removed or is absent, then a default entry is inserted into the collection.
-    /// The obtained view cannot be modified.
+    /// If an entry is absent, then a default entry is inserted into the collection. The obtained view
+    /// cannot be modified.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -858,7 +858,7 @@ where
     }
 
     /// Loads a subview at the given index in the collection and gives read-only access to the data.
-    /// If an entry was removed before or is absent then None is returned.
+    /// If an entry is absent then `None` is returned.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -1192,8 +1192,7 @@ where
     W: View<C> + Send + Sync,
 {
     /// Loads a subview for the data at the given index in the collection. If an entry
-    /// was removed before or is absent then a default entry is put in the collection
-    /// on this index.
+    /// is absent then a default entry is put in the collection on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -1220,8 +1219,8 @@ where
     }
 
     /// Loads a subview at the given index in the collection and gives read-only access to the data.
-    /// If an entry was removed or is absent before then a default entry is put in the collection
-    /// on this index.
+    /// If an entry is absent before then a default entry is put in the collection on this index.
+    /// The obtained view cannot be modified.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -1248,7 +1247,7 @@ where
     }
 
     /// Loads a subview at the given index in the collection and gives read-only access to the data.
-    /// If an entry was removed or is absent then None is returned.
+    /// If an entry is absent then `None` is returned.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
