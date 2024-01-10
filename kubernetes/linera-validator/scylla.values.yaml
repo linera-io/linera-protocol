@@ -1,13 +1,14 @@
+developerMode: true
 datacenter: validator
 racks:
   - name: rack-1
     members: 1
     storage:
-      capacity: 10Gi
+      capacity: 1Gi
     resources:
       limits:
         cpu: 1
-        memory: 4Gi
+        memory: 0.2Gi
       requests:
         cpu: 1
-        memory: 4Gi
+        memory: 0.2Gi
