@@ -2,7 +2,8 @@
 source: linera-views-derive/src/lib.rs
 expression: pretty(generate_clonable_view_code(input))
 ---
-impl linera_views::views::ClonableView<CustomContext> for TestView {
+impl<MyParam> linera_views::views::ClonableView<custom::path::to::ContextType>
+for TestView<MyParam> {
     fn clone_unchecked(&mut self) -> Result<Self, linera_views::views::ViewError> {
         Ok(Self {
             register: self.register.clone_unchecked()?,

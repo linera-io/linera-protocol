@@ -455,6 +455,7 @@ pub mod tests {
         }
     }
 
+    #[derive(Clone)]
     pub struct SpecificContextInfo {
         attribute: Option<TokenStream2>,
         context: Type,
@@ -481,16 +482,32 @@ pub mod tests {
             }
         }
 
+        /// Sets the `where_clause` to a dummy value for test cases with a where clause.
+        ///
+        /// Also adds a `MyParam` generic type parameter to the `generics` field, which is the type
+        /// constrained by the dummy predicate in the `where_clause`.
+        pub fn with_dummy_where_clause(mut self) -> Self {
+            self.generics.args.push(parse_quote! { MyParam });
+            self.where_clause = Some(quote! {
+                where MyParam: Send + Sync + 'static,
+            });
+
+            self
+        }
+
         pub fn test_cases() -> impl Iterator<Item = Self> {
-            Some(Self::empty()).into_iter().chain(
-                [
-                    "CustomContext",
-                    "custom::path::to::ContextType",
-                    "custom::GenericContext<T>",
-                ]
+            Some(Self::empty())
                 .into_iter()
-                .map(Self::new),
-            )
+                .chain(
+                    [
+                        "CustomContext",
+                        "custom::path::to::ContextType",
+                        "custom::GenericContext<T>",
+                    ]
+                    .into_iter()
+                    .map(Self::new),
+                )
+                .flat_map(|case| [case.clone(), case.with_dummy_where_clause()])
         }
 
         pub fn test_view_input(&self) -> ItemStruct {

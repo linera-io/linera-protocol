@@ -3,7 +3,11 @@ source: linera-views-derive/src/lib.rs
 expression: pretty(generate_hash_view_code(input))
 ---
 #[async_trait::async_trait]
-impl linera_views::views::HashableView<CustomContext> for TestView {
+impl<MyParam> linera_views::views::HashableView<custom::GenericContext<T>>
+for TestView<MyParam>
+where
+    MyParam: Send + Sync + 'static,
+{
     type Hasher = linera_views::sha3::Sha3_256;
     async fn hash_mut(
         &mut self,
