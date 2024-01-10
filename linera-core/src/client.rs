@@ -1420,6 +1420,11 @@ where
                     return Ok(ClientOutcome::Committed(certificate));
                 }
                 ExecuteBlockOutcome::Conflict(certificate) => {
+                    if certificate.value().block().map(|block| &block.operations)
+                        == Some(&operations)
+                    {
+                        return Ok(ClientOutcome::Committed(certificate));
+                    }
                     info!(
                         height = %certificate.value().height(),
                         "Another block was committed; retrying."
@@ -1801,11 +1806,16 @@ where
                 owners,
                 multi_leader_rounds: ownership.multi_leader_rounds,
             })];
-            match self.execute_block(messages, operations).await? {
+            match self.execute_block(messages, operations.clone()).await? {
                 ExecuteBlockOutcome::Executed(certificate) => {
                     return Ok(ClientOutcome::Committed(certificate));
                 }
                 ExecuteBlockOutcome::Conflict(certificate) => {
+                    if certificate.value().block().map(|block| &block.operations)
+                        == Some(&operations)
+                    {
+                        return Ok(ClientOutcome::Committed(certificate));
+                    }
                     info!(
                         height = %certificate.value().height(),
                         "Another block was committed; retrying."
@@ -1829,21 +1839,24 @@ where
             let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
             let epoch = epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
             let messages = self.pending_messages().await?;
-            let certificate = match self
-                .execute_block(
-                    messages,
-                    vec![Operation::System(SystemOperation::OpenChain {
-                        ownership: ownership.clone(),
-                        committees,
-                        admin_id: self.admin_id,
-                        epoch,
-                        balance,
-                    })],
-                )
-                .await?
-            {
+            let operations = vec![Operation::System(SystemOperation::OpenChain {
+                ownership: ownership.clone(),
+                committees,
+                admin_id: self.admin_id,
+                epoch,
+                balance,
+            })];
+            let certificate = match self.execute_block(messages, operations.clone()).await? {
                 ExecuteBlockOutcome::Executed(certificate) => certificate,
-                ExecuteBlockOutcome::Conflict(_) => continue,
+                ExecuteBlockOutcome::Conflict(certificate) => {
+                    if certificate.value().block().map(|block| &block.operations)
+                        == Some(&operations)
+                    {
+                        certificate
+                    } else {
+                        continue;
+                    }
+                }
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
                     return Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
@@ -1952,22 +1965,25 @@ where
             self.prepare_chain().await?;
             let epoch = self.epoch().await?;
             let messages = self.pending_messages().await?;
-            match self
-                .execute_block(
-                    messages,
-                    vec![Operation::System(SystemOperation::Admin(
-                        AdminOperation::CreateCommittee {
-                            epoch: epoch.try_add_one()?,
-                            committee: committee.clone(),
-                        },
-                    ))],
-                )
-                .await?
-            {
+            let operations = vec![Operation::System(SystemOperation::Admin(
+                AdminOperation::CreateCommittee {
+                    epoch: epoch.try_add_one()?,
+                    committee: committee.clone(),
+                },
+            ))];
+            match self.execute_block(messages, operations.clone()).await? {
                 ExecuteBlockOutcome::Executed(certificate) => {
                     return Ok(ClientOutcome::Committed(certificate))
                 }
-                ExecuteBlockOutcome::Conflict(_) => continue,
+                ExecuteBlockOutcome::Conflict(certificate) => {
+                    if certificate.value().block().map(|block| &block.operations)
+                        == Some(&operations)
+                    {
+                        certificate
+                    } else {
+                        continue;
+                    }
+                }
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
                     return Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
