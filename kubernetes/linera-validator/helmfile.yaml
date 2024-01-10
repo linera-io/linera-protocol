@@ -21,6 +21,7 @@ releases:
         value: {{ env "LINERA_HELMFILE_SET_GENESIS_CONFIG" | default "working/genesis.json" }}
       - name: numShards
         value: {{ env "LINERA_HELMFILE_SET_NUM_SHARDS" | default 10 }}
+    timeout: 600
   - name: scylla
     namespace: scylla
     chart: scylla/scylla
@@ -29,11 +30,13 @@ releases:
       - scylla-operator/scylla-operator
     values:
       - {{ env "LINERA_HELMFILE_VALUES_SCYLLA" | default "scylla.values.yaml" }}
+    timeout: 600
   - name: scylla-manager
     namespace: scylla-manager
     chart: scylla/scylla-manager
     needs:
       - scylla-operator/scylla-operator
+    timeout: 600
   - name: scylla-operator
     namespace: scylla-operator
     chart: scylla/scylla-operator
@@ -41,10 +44,12 @@ releases:
       - cert-manager/cert-manager
     values:
       - {{ env "LINERA_HELMFILE_VALUES_SCYLLA_OPERATOR" | default "scylla-operator.values.yaml" }}
+    timeout: 600
   - name: cert-manager
     namespace: cert-manager
     chart: jetstack/cert-manager
     set:
       - name: installCRDs
         value: "true"
+    timeout: 600
 
