@@ -49,7 +49,6 @@ where
     K: KeyValueStore + Send + Sync,
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
-    const MAX_VALUE_SIZE: usize = usize::MAX;
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE - 4;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -201,6 +200,8 @@ where
     K: KeyValueStore + Send + Sync,
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
+    const MAX_VALUE_SIZE: usize = usize::MAX;
+
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), K::Error> {
         let mut batch_new = Batch::new();
         for operation in batch.operations {
@@ -302,9 +303,6 @@ pub struct TestMemoryStoreInternal {
 
 #[async_trait]
 impl ReadableKeyValueStore<MemoryContextError> for TestMemoryStoreInternal {
-    // We set up the MAX_VALUE_SIZE to the artificially low value of 100
-    // purely for testing purposes.
-    const MAX_VALUE_SIZE: usize = 100;
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -345,6 +343,10 @@ impl ReadableKeyValueStore<MemoryContextError> for TestMemoryStoreInternal {
 
 #[async_trait]
 impl WritableKeyValueStore<MemoryContextError> for TestMemoryStoreInternal {
+    // We set up the MAX_VALUE_SIZE to the artificially low value of 100
+    // purely for testing purposes.
+    const MAX_VALUE_SIZE: usize = 100;
+
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), MemoryContextError> {
         ensure!(
             batch.check_value_size(Self::MAX_VALUE_SIZE),
@@ -378,7 +380,6 @@ pub struct TestMemoryStore {
 
 #[async_trait]
 impl ReadableKeyValueStore<MemoryContextError> for TestMemoryStore {
-    const MAX_VALUE_SIZE: usize = usize::MAX;
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -419,6 +420,8 @@ impl ReadableKeyValueStore<MemoryContextError> for TestMemoryStore {
 
 #[async_trait]
 impl WritableKeyValueStore<MemoryContextError> for TestMemoryStore {
+    const MAX_VALUE_SIZE: usize = usize::MAX;
+
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), MemoryContextError> {
         self.store.write_batch(batch, base_key).await
     }

@@ -38,7 +38,6 @@ pub struct MemoryStore {
 
 #[async_trait]
 impl ReadableKeyValueStore<MemoryContextError> for MemoryStore {
-    const MAX_VALUE_SIZE: usize = usize::MAX;
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -99,6 +98,8 @@ impl ReadableKeyValueStore<MemoryContextError> for MemoryStore {
 
 #[async_trait]
 impl WritableKeyValueStore<MemoryContextError> for MemoryStore {
+    const MAX_VALUE_SIZE: usize = usize::MAX;
+
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), MemoryContextError> {
         let mut map = self.map.write().await;
         for ent in batch.operations {

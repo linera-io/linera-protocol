@@ -1124,7 +1124,6 @@ impl DynamoDbStoreInternal {
 
 #[async_trait]
 impl ReadableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
-    const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
@@ -1181,6 +1180,8 @@ impl ReadableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
 
 #[async_trait]
 impl WritableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
+    const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
+
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
         let block_operations = DynamoDbBatch::from_batch(self, batch).await?;
         if block_operations.is_fastpath_feasible() {
@@ -1213,7 +1214,6 @@ pub struct DynamoDbStore {
 
 #[async_trait]
 impl ReadableKeyValueStore<DynamoDbContextError> for DynamoDbStore {
-    const MAX_VALUE_SIZE: usize = DynamoDbStoreInternal::MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE - 4;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -1254,6 +1254,8 @@ impl ReadableKeyValueStore<DynamoDbContextError> for DynamoDbStore {
 
 #[async_trait]
 impl WritableKeyValueStore<DynamoDbContextError> for DynamoDbStore {
+    const MAX_VALUE_SIZE: usize = DynamoDbStoreInternal::MAX_VALUE_SIZE;
+
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
         self.store.write_batch(batch, base_key).await
     }

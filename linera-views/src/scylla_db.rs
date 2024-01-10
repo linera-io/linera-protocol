@@ -119,7 +119,6 @@ impl From<ScyllaDbContextError> for crate::views::ViewError {
 
 #[async_trait]
 impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
-    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -174,6 +173,8 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
 
 #[async_trait]
 impl WritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
+
     async fn write_batch(
         &self,
         batch: Batch,
@@ -685,7 +686,6 @@ pub struct ScyllaDbStoreConfig {
 
 #[async_trait]
 impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
-    const MAX_VALUE_SIZE: usize = ScyllaDbStoreInternal::MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = ScyllaDbStoreInternal::MAX_KEY_SIZE;
     type Keys = <ScyllaDbStoreInternal as ReadableKeyValueStore<ScyllaDbContextError>>::Keys;
     type KeyValues =
@@ -727,6 +727,8 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
 
 #[async_trait]
 impl WritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
+    const MAX_VALUE_SIZE: usize = ScyllaDbStoreInternal::MAX_VALUE_SIZE;
+
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), ScyllaDbContextError> {
         self.store.write_batch(batch, base_key).await
     }

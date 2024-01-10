@@ -98,7 +98,6 @@ where
     K: KeyValueStore + Send + Sync,
 {
     // The LRU cache does not change the underlying client's size limits.
-    const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
     type Keys = K::Keys;
     type KeyValues = K::KeyValues;
@@ -194,6 +193,9 @@ impl<K> WritableKeyValueStore<K::Error> for LruCachingStore<K>
 where
     K: KeyValueStore + Send + Sync,
 {
+    // The LRU cache does not change the underlying client's size limits.
+    const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
+
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), K::Error> {
         match &self.lru_read_values {
             None => {

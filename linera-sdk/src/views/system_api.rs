@@ -43,7 +43,6 @@ impl AppStateStore {
 impl ReadableKeyValueStore<ViewError> for AppStateStore {
     // The AppStateStore of the system_api does not have limits
     // on the size of its values.
-    const MAX_VALUE_SIZE: usize = usize::MAX;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -103,6 +102,8 @@ impl ReadableKeyValueStore<ViewError> for AppStateStore {
 
 #[async_trait]
 impl WritableKeyValueStore<ViewError> for AppStateStore {
+    const MAX_VALUE_SIZE: usize = usize::MAX;
+
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ViewError> {
         let mut operations = Vec::new();
         for operation in &batch.operations {

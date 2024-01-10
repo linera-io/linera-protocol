@@ -976,7 +976,6 @@ where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
 {
-    const MAX_VALUE_SIZE: usize = C::MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = C::MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -1023,6 +1022,8 @@ where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
 {
+    const MAX_VALUE_SIZE: usize = C::MAX_VALUE_SIZE;
+
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ViewError> {
         let mut view = self.view.write().await;
         view.write_batch(batch).await?;

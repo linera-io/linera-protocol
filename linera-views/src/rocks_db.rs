@@ -55,7 +55,6 @@ pub struct RocksDbStoreConfig {
 
 #[async_trait]
 impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
-    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -162,6 +161,8 @@ impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
 
 #[async_trait]
 impl WritableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
+
     async fn write_batch(
         &self,
         mut batch: Batch,
@@ -365,7 +366,6 @@ pub type RocksDbContext<E> = ContextFromStore<E, RocksDbStore>;
 
 #[async_trait]
 impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStore {
-    const MAX_VALUE_SIZE: usize = usize::MAX;
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -406,6 +406,8 @@ impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStore {
 
 #[async_trait]
 impl WritableKeyValueStore<RocksDbContextError> for RocksDbStore {
+    const MAX_VALUE_SIZE: usize = usize::MAX;
+
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), RocksDbContextError> {
         self.store.write_batch(batch, base_key).await
     }

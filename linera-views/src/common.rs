@@ -304,9 +304,6 @@ pub trait KeyValueIterable<Error> {
 /// Low-level, asynchronous read key-value operations. Useful for storage APIs not based on views.
 #[async_trait]
 pub trait ReadableKeyValueStore<E> {
-    /// The maximal size of values that can be stored.
-    const MAX_VALUE_SIZE: usize;
-
     /// The maximal size of keys that can be stored.
     const MAX_KEY_SIZE: usize;
 
@@ -361,6 +358,9 @@ pub trait ReadableKeyValueStore<E> {
 /// Low-level, asynchronous write key-value operations. Useful for storage APIs not based on views.
 #[async_trait]
 pub trait WritableKeyValueStore<E> {
+    /// The maximal size of values that can be stored.
+    const MAX_VALUE_SIZE: usize;
+
     /// Writes the `batch` in the database with `base_key` the base key of the entries for the journal.
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), E>;
 
@@ -369,7 +369,7 @@ pub trait WritableKeyValueStore<E> {
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), E>;
 }
 
-/// Low-level, asynchronous write key-value operations. Useful for storage APIs not based on views.
+/// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
 pub trait KeyValueStore:
     ReadableKeyValueStore<Self::Error> + WritableKeyValueStore<Self::Error>
 {
