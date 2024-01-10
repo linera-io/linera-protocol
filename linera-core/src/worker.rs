@@ -832,7 +832,6 @@ where
             return Ok(None);
         };
         // Process the received messages in certificates.
-        self.storage.write_certificates(&certificates).await?;
         for certificate in certificates {
             let hash = certificate.hash();
             match certificate.value.into_inner() {
