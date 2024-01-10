@@ -407,7 +407,7 @@ pub mod tests {
 
     use crate::*;
     use quote::quote;
-    use syn::parse_quote;
+    use syn::{parse_quote, AngleBracketedGenericArguments};
 
     fn pretty(tokens: TokenStream2) -> String {
         prettyplease::unparse(
@@ -458,7 +458,7 @@ pub mod tests {
     pub struct SpecificContextInfo {
         attribute: Option<TokenStream2>,
         context: Type,
-        generics: TokenStream2,
+        generics: AngleBracketedGenericArguments,
         where_clause: Option<TokenStream2>,
     }
 
@@ -467,7 +467,7 @@ pub mod tests {
             SpecificContextInfo {
                 attribute: None,
                 context: syn::parse_str("C").unwrap(),
-                generics: quote! { <C> },
+                generics: parse_quote! { <C> },
                 where_clause: None,
             }
         }
@@ -476,7 +476,7 @@ pub mod tests {
             SpecificContextInfo {
                 attribute: Some(quote! { #[view(context = #context)] }),
                 context: syn::parse_str(context).unwrap(),
-                generics: quote! {},
+                generics: parse_quote! { <> },
                 where_clause: None,
             }
         }
