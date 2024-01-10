@@ -581,6 +581,15 @@ impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
         .into()
     }
 }
+
+fn missing_key_error(key: &impl std::fmt::Debug) -> async_graphql::Error {
+    async_graphql::Error {
+        message: format!("The key={:?} is missing in collection", key),
+        source: None,
+        extensions: None,
+    }
+}
+
 #[async_graphql::Object(name_type)]
 impl<C, K, V> ReentrantCollectionView<C, K, V>
 where
@@ -607,11 +616,7 @@ where
         let value = self
             .try_load_entry(&key)
             .await?
-            .ok_or(async_graphql::Error {
-                message: "MissingKeyInCollection".to_string(),
-                source: None,
-                extensions: None,
-            })?;
+            .ok_or(missing_key_error(&key))?;
         Ok(Entry { value, key })
     }
 
@@ -633,11 +638,7 @@ where
             let value = self
                 .try_load_entry(&key)
                 .await?
-                .ok_or(async_graphql::Error {
-                    message: "MissingKeyInCollection".to_string(),
-                    source: None,
-                    extensions: None,
-                })?;
+                .ok_or(missing_key_error(&key))?;
             values.push(Entry { value, key })
         }
 
@@ -683,11 +684,7 @@ where
         let value = self
             .try_load_entry(&key)
             .await?
-            .ok_or(async_graphql::Error {
-                message: "MissingKeyInCollection".to_string(),
-                source: None,
-                extensions: None,
-            })?;
+            .ok_or(missing_key_error(&key))?;
         Ok(Entry { value, key })
     }
 
@@ -709,11 +706,7 @@ where
             let value = self
                 .try_load_entry(&key)
                 .await?
-                .ok_or(async_graphql::Error {
-                    message: "MissingKeyInCollection".to_string(),
-                    source: None,
-                    extensions: None,
-                })?;
+                .ok_or(missing_key_error(&key))?;
             values.push(Entry { value, key })
         }
 
