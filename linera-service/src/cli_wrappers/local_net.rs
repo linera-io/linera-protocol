@@ -129,6 +129,10 @@ impl LineraNetConfig for LocalNetConfig {
     type Net = LocalNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
+        ensure!(
+            self.num_shards == 1 || self.database != Database::RocksDb,
+            "Multiple shards not supported with RocksDB"
+        );
         let mut net = LocalNet::new(
             self.database,
             self.network,
