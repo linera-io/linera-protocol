@@ -193,14 +193,14 @@ See the documentation of `tokio-console` for more details.
 
 ### Tracking metrics
 
-The prometheus system is used for keeping track of the validator in a Kubernetes setting.
+The prometheus system is used for keeping track of the validators in a Kubernetes setting.
 However, this can also be used locally to run test case and then get metrics to work on.
 This is a little bit more indirect than having runtimes in log file, but works fine.
 The steps are the following:
 
-1. The list of created metric server can be seen in the validator logs with the entries "Starting to serve metrics".
-2. The list of nodes served if 4 validors are used `is 0.0.0.0:XXXXX` with `XXXXX` being 11000, 11001, 11100, 11101, 11200, 11201, 11300, 11301.
-3. Create a `prometheus.yml` file that contains the source of data. Each one of the port has to be present. One example for querying every second is
+1. The list of the metric service ports can be seen in the validator logs with the entries "Starting to serve metrics".
+2. The list of nodes served if 4 validators are used `is 0.0.0.0:XXXXX` with `XXXXX` being 11000, 11001, 11100, 11101, 11200, 11201, 11300, 11301.
+3. Create a `prometheus.yml` file that contains the source of data. Each one of the ports has to be present. One example for querying every second is
 
 ```
 global:
