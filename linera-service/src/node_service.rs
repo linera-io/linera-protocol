@@ -36,14 +36,16 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{AdminOperation, Recipient, SystemChannel, UserData},
-    Bytecode, ChainOwnership, Operation, Query, Response, SystemOperation,
+    Bytecode, ChainOwnership, Operation, Query, Response, SystemOperation, TimeoutConfig,
     UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{
+    collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc, time::Duration,
+};
 use thiserror::Error as ThisError;
 use tokio_stream::StreamExt;
 use tower_http::cors::CorsLayer;
@@ -389,6 +391,7 @@ where
 
     /// Creates (or activates) a new chain by installing the given authentication keys.
     /// This will automatically subscribe to the future committees created by `admin_id`.
+    #[allow(clippy::too_many_arguments)]
     async fn open_multi_owner_chain(
         &self,
         chain_id: ChainId,
@@ -396,6 +399,19 @@ where
         weights: Option<Vec<u64>>,
         multi_leader_rounds: Option<u32>,
         balance: Option<Amount>,
+        #[graphql(desc = "The duration of the fast round, in milliseconds; default: no timeout")]
+        fast_round_ms: Option<u64>,
+        #[graphql(
+            desc = "The duration of the first single-leader and all multi-leader rounds",
+            default = 10_000
+        )]
+        base_timeout_ms: u64,
+        #[graphql(
+            desc = "The number of milliseconds by which the timeout increases after each \
+                    single-leader round",
+            default = 1_000
+        )]
+        timeout_increment_ms: u64,
     ) -> Result<ChainId, Error> {
         let owners = if let Some(weights) = weights {
             if weights.len() != public_keys.len() {
@@ -413,7 +429,12 @@ where
                 .collect::<Vec<_>>()
         };
         let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
-        let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
+        let timeout_config = TimeoutConfig {
+            fast_round_duration: fast_round_ms.map_or(Duration::MAX, Duration::from_millis),
+            base_timeout: Duration::from_millis(base_timeout_ms),
+            timeout_increment: Duration::from_millis(timeout_increment_ms),
+        };
+        let ownership = ChainOwnership::multiple(owners, multi_leader_rounds, timeout_config);
         let balance = balance.unwrap_or(Amount::ZERO);
         let message_id = self
             .apply_client_command(&chain_id, move |mut client| {
@@ -452,22 +473,42 @@ where
             super_owners: vec![new_public_key],
             owners: Vec::new(),
             multi_leader_rounds: 2,
+            timeout_config: TimeoutConfig::default(),
         };
         self.execute_system_operation(operation, chain_id).await
     }
 
     /// Changes the authentication key of the chain.
+    #[allow(clippy::too_many_arguments)]
     async fn change_multiple_owners(
         &self,
         chain_id: ChainId,
         new_public_keys: Vec<PublicKey>,
         new_weights: Vec<u64>,
         multi_leader_rounds: u32,
+        #[graphql(desc = "The duration of the fast round, in milliseconds; default: no timeout")]
+        fast_round_ms: Option<u64>,
+        #[graphql(
+            desc = "The duration of the first single-leader and all multi-leader rounds",
+            default = 10_000
+        )]
+        base_timeout_ms: u64,
+        #[graphql(
+            desc = "The number of milliseconds by which the timeout increases after each \
+                    single-leader round",
+            default = 1_000
+        )]
+        timeout_increment_ms: u64,
     ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeOwnership {
             super_owners: Vec::new(),
             owners: new_public_keys.into_iter().zip(new_weights).collect(),
             multi_leader_rounds,
+            timeout_config: TimeoutConfig {
+                fast_round_duration: fast_round_ms.map_or(Duration::MAX, Duration::from_millis),
+                base_timeout: Duration::from_millis(base_timeout_ms),
+                timeout_increment: Duration::from_millis(timeout_increment_ms),
+            },
         };
         self.execute_system_operation(operation, chain_id).await
     }

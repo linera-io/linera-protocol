@@ -3,7 +3,28 @@
 
 use linera_base::{crypto::PublicKey, data_types::Round, identifiers::Owner};
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, iter};
+use std::{collections::BTreeMap, iter, time::Duration};
+
+/// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
+#[derive(PartialEq, Eq, Clone, Hash, Debug, Serialize, Deserialize)]
+pub struct TimeoutConfig {
+    /// The duration of the fast round.
+    pub fast_round_duration: Duration,
+    /// The duration of the first single-leader and all multi-leader rounds.
+    pub base_timeout: Duration,
+    /// The number of microseconds by which the timeout increases after each single-leader round.
+    pub timeout_increment: Duration,
+}
+
+impl Default for TimeoutConfig {
+    fn default() -> Self {
+        Self {
+            fast_round_duration: Duration::MAX,
+            base_timeout: Duration::from_secs(10),
+            timeout_increment: Duration::from_secs(1),
+        }
+    }
+}
 
 /// Represents the owner(s) of a chain.
 #[derive(PartialEq, Eq, Clone, Hash, Debug, Default, Serialize, Deserialize)]
@@ -14,6 +35,8 @@ pub struct ChainOwnership {
     pub owners: BTreeMap<Owner, (PublicKey, u64)>,
     /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
     pub multi_leader_rounds: u32,
+    /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
+    pub timeout_config: TimeoutConfig,
 }
 
 impl ChainOwnership {
@@ -22,12 +45,14 @@ impl ChainOwnership {
             super_owners: iter::once((Owner::from(public_key), public_key)).collect(),
             owners: BTreeMap::new(),
             multi_leader_rounds: 2,
+            timeout_config: TimeoutConfig::default(),
         }
     }
 
     pub fn multiple(
         keys_and_weights: impl IntoIterator<Item = (PublicKey, u64)>,
         multi_leader_rounds: u32,
+        timeout_config: TimeoutConfig,
     ) -> Self {
         ChainOwnership {
             super_owners: BTreeMap::new(),
@@ -36,6 +61,7 @@ impl ChainOwnership {
                 .map(|(public_key, weight)| (Owner::from(public_key), (public_key, weight)))
                 .collect(),
             multi_leader_rounds,
+            timeout_config,
         }
     }
 
@@ -54,6 +80,21 @@ impl ChainOwnership {
             Some(*public_key)
         } else {
             self.owners.get(owner).map(|(public_key, _)| *public_key)
+        }
+    }
+
+    /// Returns the duration of the given round.
+    pub fn round_timeout(&self, round: Round) -> Duration {
+        let tc = &self.timeout_config;
+        match round {
+            Round::Fast => tc.fast_round_duration,
+            Round::MultiLeader(r) if r.saturating_add(1) == self.multi_leader_rounds => {
+                tc.base_timeout
+            }
+            Round::MultiLeader(_) => Duration::MAX,
+            Round::SingleLeader(r) => tc
+                .base_timeout
+                .saturating_add(tc.timeout_increment.saturating_mul(r)),
         }
     }
 
@@ -109,5 +150,52 @@ impl ChainOwnership {
             }
         };
         Some(previous_round)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use linera_base::crypto::KeyPair;
+
+    #[test]
+    fn test_ownership_round_timeouts() {
+        let super_pub_key = KeyPair::generate().public();
+        let super_owner = Owner::from(super_pub_key);
+        let pub_key = KeyPair::generate().public();
+        let owner = Owner::from(pub_key);
+
+        let ownership = ChainOwnership {
+            super_owners: BTreeMap::from_iter([(super_owner, super_pub_key)]),
+            owners: BTreeMap::from_iter([(owner, (pub_key, 100))]),
+            multi_leader_rounds: 10,
+            timeout_config: TimeoutConfig {
+                fast_round_duration: Duration::from_secs(5),
+                base_timeout: Duration::from_secs(10),
+                timeout_increment: Duration::from_secs(1),
+            },
+        };
+
+        assert_eq!(ownership.round_timeout(Round::Fast), Duration::from_secs(5));
+        assert_eq!(
+            ownership.round_timeout(Round::MultiLeader(8)),
+            Duration::MAX
+        );
+        assert_eq!(
+            ownership.round_timeout(Round::MultiLeader(9)),
+            Duration::from_secs(10)
+        );
+        assert_eq!(
+            ownership.round_timeout(Round::SingleLeader(0)),
+            Duration::from_secs(10)
+        );
+        assert_eq!(
+            ownership.round_timeout(Round::SingleLeader(1)),
+            Duration::from_secs(11)
+        );
+        assert_eq!(
+            ownership.round_timeout(Round::SingleLeader(8)),
+            Duration::from_secs(18)
+        );
     }
 }

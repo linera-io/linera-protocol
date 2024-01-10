@@ -152,6 +152,13 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
+* `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds
+* `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds
+
+  Default value: `10000`
+* `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round
+
+  Default value: `1000`
 
 
 

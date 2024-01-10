@@ -33,7 +33,7 @@ use linera_execution::{
     policy::ResourceControlPolicy,
     system::{Account, Recipient, SystemOperation, UserData},
     ChainOwnership, ExecutionError, Message, Operation, SystemExecutionError, SystemMessage,
-    SystemQuery, SystemResponse,
+    SystemQuery, SystemResponse, TimeoutConfig,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -1613,6 +1613,7 @@ where
         super_owners: Vec::new(),
         owners: vec![(pub_key0, 100), (pub_key1, 100)],
         multi_leader_rounds: 0,
+        timeout_config: TimeoutConfig::default(),
     }
     .into();
     client.execute_operation(owner_change_op).await.unwrap();

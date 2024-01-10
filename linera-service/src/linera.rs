@@ -25,8 +25,8 @@ use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
     policy::ResourceControlPolicy,
     system::{Account, UserData},
-    Bytecode, ChainOwnership, Message, SystemMessage, UserApplicationId, WasmRuntime,
-    WithWasmDefault,
+    Bytecode, ChainOwnership, Message, SystemMessage, TimeoutConfig, UserApplicationId,
+    WasmRuntime, WithWasmDefault,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 #[cfg(feature = "kubernetes")]
@@ -871,6 +871,27 @@ enum ClientCommand {
         /// balance.
         #[arg(long = "initial-balance", default_value = "0")]
         balance: Amount,
+
+        /// The duration of the fast round, in milliseconds.
+        #[arg(long = "fast-round-ms", value_parser = util::parse_millis)]
+        fast_round_duration: Option<Duration>,
+
+        /// The duration of the first single-leader and all multi-leader rounds.
+        #[arg(
+            long = "base-timeout-ms",
+            default_value = "10000",
+            value_parser = util::parse_millis
+        )]
+        base_timeout: Duration,
+
+        /// The number of milliseconds by which the timeout increases after each
+        /// single-leader round.
+        #[arg(
+            long = "timeout-increment-ms",
+            default_value = "1000",
+            value_parser = util::parse_millis
+        )]
+        timeout_increment: Duration,
     },
 
     /// Close (i.e. deactivate) an existing chain.
@@ -1449,6 +1470,9 @@ impl Runnable for Job {
                 weights,
                 multi_leader_rounds,
                 balance,
+                fast_round_duration,
+                base_timeout,
+                timeout_increment,
             } => {
                 let chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting operation to open a new chain");
@@ -1468,10 +1492,18 @@ impl Runnable for Job {
                     public_keys.into_iter().zip(weights).collect::<Vec<_>>()
                 };
                 let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
+                let timeout_config = TimeoutConfig {
+                    fast_round_duration: fast_round_duration.unwrap_or(Duration::MAX),
+                    base_timeout,
+                    timeout_increment,
+                };
                 let ((message_id, certificate), _) = context
                     .apply_client_command(chain_client, |mut chain_client| {
-                        let ownership =
-                            ChainOwnership::multiple(owners.clone(), multi_leader_rounds);
+                        let ownership = ChainOwnership::multiple(
+                            owners.clone(),
+                            multi_leader_rounds,
+                            timeout_config.clone(),
+                        );
                         async move {
                             let result = chain_client
                                 .open_chain(ownership, balance)
