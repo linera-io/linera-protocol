@@ -459,6 +459,7 @@ pub mod tests {
         attribute: Option<TokenStream2>,
         context: Type,
         generics: TokenStream2,
+        where_clause: Option<TokenStream2>,
     }
 
     impl SpecificContextInfo {
@@ -467,6 +468,7 @@ pub mod tests {
                 attribute: None,
                 context: syn::parse_str("C").unwrap(),
                 generics: quote! { <C> },
+                where_clause: None,
             }
         }
 
@@ -475,6 +477,7 @@ pub mod tests {
                 attribute: Some(quote! { #[view(context = #context)] }),
                 context: syn::parse_str(context).unwrap(),
                 generics: quote! {},
+                where_clause: None,
             }
         }
 
@@ -495,12 +498,15 @@ pub mod tests {
                 attribute,
                 context,
                 generics,
+                where_clause,
                 ..
             } = self;
 
             parse_quote! {
                 #attribute
-                struct TestView #generics {
+                struct TestView #generics
+                #where_clause
+                {
                     register: RegisterView<#context, usize>,
                     collection: CollectionView<#context, usize, RegisterView<#context, usize>>,
                 }
