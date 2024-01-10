@@ -436,6 +436,13 @@ async fn run(options: ServerOptions) {
             let server_config = ValidatorServerConfig::read(&server_config_path)
                 .expect("Fail to read server config");
 
+            #[cfg(feature = "rocksdb")]
+            if server_config.internal_network.shards.len() > 1
+                && matches!(storage_config, StorageConfig::RocksDb { .. })
+            {
+                panic!("Multiple shards not supported with RocksDB");
+            }
+
             let job = ServerContext {
                 server_config,
                 cross_chain_config,
