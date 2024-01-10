@@ -104,6 +104,11 @@ FROM builder$copy as binaries
 # Stage 4 - Setup running environment for container
 FROM debian:latest
 
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    openssl
+RUN update-ca-certificates
+
 ARG environment
 ARG target
 
