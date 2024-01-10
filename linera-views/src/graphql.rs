@@ -616,7 +616,7 @@ where
         let value = self
             .try_load_entry(&key)
             .await?
-            .ok_or(missing_key_error(&key))?;
+            .ok_or_else(|| missing_key_error(&key))?;
         Ok(Entry { value, key })
     }
 
@@ -638,7 +638,7 @@ where
             let value = self
                 .try_load_entry(&key)
                 .await?
-                .ok_or(missing_key_error(&key))?;
+                .ok_or_else(|| missing_key_error(&key))?;
             values.push(Entry { value, key })
         }
 
@@ -684,7 +684,7 @@ where
         let value = self
             .try_load_entry(&key)
             .await?
-            .ok_or(missing_key_error(&key))?;
+            .ok_or_else(|| missing_key_error(&key))?;
         Ok(Entry { value, key })
     }
 
@@ -706,7 +706,7 @@ where
             let value = self
                 .try_load_entry(&key)
                 .await?
-                .ok_or(missing_key_error(&key))?;
+                .ok_or_else(|| missing_key_error(&key))?;
             values.push(Entry { value, key })
         }
 
