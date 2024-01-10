@@ -204,9 +204,7 @@ where
         if needs_clear || !context.contains_key(&key_index).await? {
             Ok(None)
         } else {
-            Ok(Some(
-                Self::wrapped_view(context, false, short_key).await?,
-            ))
+            Ok(Some(Self::wrapped_view(context, false, short_key).await?))
         }
     }
 
@@ -241,14 +239,9 @@ where
         Ok(match updates.get(short_key) {
             Some(entry) => match entry {
                 Update::Set(view) => Some(view.clone()),
-                _entry @ Update::Removed => {
-                    None
-                }
+                _entry @ Update::Removed => None,
             },
-            None => {
-                Self::checked_wrapped_view(&self.context, self.needs_clear, short_key)
-                    .await?
-            }
+            None => Self::checked_wrapped_view(&self.context, self.needs_clear, short_key).await?,
         })
     }
 
