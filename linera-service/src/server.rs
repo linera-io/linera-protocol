@@ -23,11 +23,12 @@ use linera_service::{
     },
     prometheus_server,
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfig},
+    util,
 };
 use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
 use serde::Deserialize;
-use std::{net::SocketAddr, path::PathBuf};
+use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use tokio::fs;
 use tracing::{error, info};
 
@@ -36,7 +37,7 @@ struct ServerContext {
     cross_chain_config: CrossChainConfig,
     notification_config: NotificationConfig,
     shard: Option<usize>,
-    grace_period_micros: u64,
+    grace_period: Duration,
 }
 
 impl ServerContext {
@@ -58,7 +59,7 @@ impl ServerContext {
         )
         .with_allow_inactive_chains(false)
         .with_allow_messages_from_deprecated_epochs(false)
-        .with_grace_period_micros(self.grace_period_micros);
+        .with_grace_period(self.grace_period);
         (state, shard_id, shard.clone())
     }
 
@@ -316,8 +317,8 @@ enum ServerCommand {
 
         /// Blocks with a timestamp this far in the future will still be accepted, but the validator
         /// will wait until that timestamp before voting.
-        #[arg(long, default_value = "500ms", value_parser = parse_duration)]
-        grace_period: u64,
+        #[arg(long = "grace-period-ms", default_value = "500", value_parser = util::parse_millis)]
+        grace_period: Duration,
 
         /// The WebAssembly runtime to use.
         #[arg(long)]
@@ -376,14 +377,6 @@ enum ServerCommand {
         #[arg(long, default_value = "1000")]
         cache_size: usize,
     },
-}
-
-/// Parses a string into a duration and returns the duration in microseconds.
-fn parse_duration(s: &str) -> Result<u64, parse_duration::parse::Error> {
-    Ok(parse_duration::parse(s)?
-        .as_micros()
-        .try_into()
-        .unwrap_or(u64::MAX))
 }
 
 fn main() {
@@ -448,7 +441,7 @@ async fn run(options: ServerOptions) {
                 cross_chain_config,
                 notification_config,
                 shard,
-                grace_period_micros: grace_period,
+                grace_period,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let common_config = CommonStoreConfig {

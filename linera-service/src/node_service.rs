@@ -43,9 +43,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{
-    collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc, time::Duration,
-};
+use std::{collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
 use tokio_stream::StreamExt;
 use tower_http::cors::CorsLayer;
@@ -1018,9 +1016,9 @@ pub async fn wait_for_next_round(stream: NotificationStream, timeout: RoundTimeo
     });
     future::select(
         Box::pin(stream.next()),
-        Box::pin(tokio::time::sleep(Duration::from_micros(
-            timeout.timestamp.saturating_diff_micros(Timestamp::now()),
-        ))),
+        Box::pin(tokio::time::sleep(
+            timeout.timestamp.duration_since(Timestamp::now()),
+        )),
     )
     .await;
 }

@@ -45,6 +45,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
+    time::Duration,
 };
 use test_log::test;
 
@@ -98,7 +99,7 @@ where
     let worker = WorkerState::new("Single validator node".to_string(), Some(key_pair), storage)
         .with_allow_inactive_chains(is_client)
         .with_allow_messages_from_deprecated_epochs(is_client)
-        .with_grace_period_micros(TEST_GRACE_PERIOD_MICROS);
+        .with_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
     (committee, worker)
 }
 

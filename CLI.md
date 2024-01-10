@@ -76,12 +76,12 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `--wallet <WALLET_STATE_PATH>` — Sets the file storing the private state of user chains (an empty one will be created if missing)
 * `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
 * `-w`, `--with-wallet <WITH_WALLET>` — Given an integer value N, read the wallet state and the wallet storage config from the environment variables LINERA_WALLET_{N} and LINERA_STORAGE_{N} instead of LINERA_WALLET and LINERA_STORAGE
-* `--send-timeout-us <SEND_TIMEOUT_US>` — Timeout for sending queries (us)
+* `--send-timeout-ms <SEND_TIMEOUT>` — Timeout for sending queries (milliseconds)
 
-  Default value: `4000000`
-* `--recv-timeout-us <RECV_TIMEOUT_US>` — Timeout for receiving responses (us)
+  Default value: `4000`
+* `--recv-timeout-ms <RECV_TIMEOUT>` — Timeout for receiving responses (milliseconds)
 
-  Default value: `4000000`
+  Default value: `4000`
 * `--max-pending-messages <MAX_PENDING_MESSAGES>`
 
   Default value: `10`
@@ -93,9 +93,9 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `--cache-size <CACHE_SIZE>` — The maximal number of entries in the storage cache
 
   Default value: `1000`
-* `--notification-retry-delay-us <NOTIFICATION_RETRY_DELAY_US>` — Delay increment for retrying to connect to a validator for notifications
+* `--notification-retry-delay-ms <NOTIFICATION_RETRY_DELAY>` — Delay increment for retrying to connect to a validator for notifications
 
-  Default value: `1000000`
+  Default value: `1000`
 * `--notification-retries <NOTIFICATION_RETRIES>` — Number of times to retry connecting to a validator for notifications
 
   Default value: `10`

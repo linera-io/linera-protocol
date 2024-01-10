@@ -138,8 +138,8 @@ impl ClientWrapper {
                 "--max-pending-messages",
                 &self.max_pending_messages.to_string(),
             ])
-            .args(["--send-timeout-us", "10000000"])
-            .args(["--recv-timeout-us", "10000000"])
+            .args(["--send-timeout-ms", "10000"])
+            .args(["--recv-timeout-ms", "10000"])
             .arg("--wait-for-outgoing-messages");
         Ok(command)
     }

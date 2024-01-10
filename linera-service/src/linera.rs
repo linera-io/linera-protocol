@@ -43,6 +43,7 @@ use linera_service::{
     node_service::{wait_for_next_round, NodeService},
     project::{self, Project},
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfig},
+    util,
 };
 use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
@@ -155,15 +156,12 @@ impl ClientContext {
     }
 
     fn configure(options: &ClientOptions, wallet_state: WalletState) -> Self {
-        let send_timeout = Duration::from_micros(options.send_timeout_us);
-        let recv_timeout = Duration::from_micros(options.recv_timeout_us);
-        let notification_retry_delay = Duration::from_micros(options.notification_retry_delay_us);
         let prng = wallet_state.make_prng();
 
         let node_options = NodeOptions {
-            send_timeout,
-            recv_timeout,
-            notification_retry_delay,
+            send_timeout: options.send_timeout,
+            recv_timeout: options.recv_timeout,
+            notification_retry_delay: options.notification_retry_delay,
             notification_retries: options.notification_retries,
         };
         let node_provider = NodeProvider::new(node_options);
@@ -173,9 +171,9 @@ impl ClientContext {
         ClientContext {
             chain_client_builder,
             wallet_state,
-            send_timeout,
-            recv_timeout,
-            notification_retry_delay,
+            send_timeout: options.send_timeout,
+            recv_timeout: options.recv_timeout,
+            notification_retry_delay: options.notification_retry_delay,
             notification_retries: options.notification_retries,
             prng,
         }
@@ -701,13 +699,13 @@ struct ClientOptions {
     #[arg(long, short = 'w')]
     with_wallet: Option<u32>,
 
-    /// Timeout for sending queries (us)
-    #[arg(long, default_value = "4000000")]
-    send_timeout_us: u64,
+    /// Timeout for sending queries (milliseconds)
+    #[arg(long = "send-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
+    send_timeout: Duration,
 
-    /// Timeout for receiving responses (us)
-    #[arg(long, default_value = "4000000")]
-    recv_timeout_us: u64,
+    /// Timeout for receiving responses (milliseconds)
+    #[arg(long = "recv-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
+    recv_timeout: Duration,
 
     #[arg(long, default_value = "10")]
     max_pending_messages: usize,
@@ -733,8 +731,12 @@ struct ClientOptions {
     command: ClientCommand,
 
     /// Delay increment for retrying to connect to a validator for notifications.
-    #[arg(long, default_value = "1000000")]
-    notification_retry_delay_us: u64,
+    #[arg(
+        long = "notification-retry-delay-ms",
+        default_value = "1000",
+        value_parser = util::parse_millis
+    )]
+    notification_retry_delay: Duration,
 
     /// Number of times to retry connecting to a validator for notifications.
     #[arg(long, default_value = "10")]
