@@ -83,8 +83,8 @@ impl ChainOwnership {
         }
     }
 
-    /// Returns the duration of the given round in milliseconds.
-    pub fn round_timeout_micros(&self, round: Round) -> Duration {
+    /// Returns the duration of the given round.
+    pub fn round_timeout(&self, round: Round) -> Duration {
         let tc = &self.timeout_config;
         match round {
             Round::Fast => tc.fast_round_duration,
@@ -176,28 +176,25 @@ mod tests {
             },
         };
 
+        assert_eq!(ownership.round_timeout(Round::Fast), Duration::from_secs(5));
         assert_eq!(
-            ownership.round_timeout_micros(Round::Fast),
-            Duration::from_secs(5)
-        );
-        assert_eq!(
-            ownership.round_timeout_micros(Round::MultiLeader(8)),
+            ownership.round_timeout(Round::MultiLeader(8)),
             Duration::MAX
         );
         assert_eq!(
-            ownership.round_timeout_micros(Round::MultiLeader(9)),
+            ownership.round_timeout(Round::MultiLeader(9)),
             Duration::from_secs(10)
         );
         assert_eq!(
-            ownership.round_timeout_micros(Round::SingleLeader(0)),
+            ownership.round_timeout(Round::SingleLeader(0)),
             Duration::from_secs(10)
         );
         assert_eq!(
-            ownership.round_timeout_micros(Round::SingleLeader(1)),
+            ownership.round_timeout(Round::SingleLeader(1)),
             Duration::from_secs(11)
         );
         assert_eq!(
-            ownership.round_timeout_micros(Round::SingleLeader(8)),
+            ownership.round_timeout(Round::SingleLeader(8)),
             Duration::from_secs(18)
         );
     }

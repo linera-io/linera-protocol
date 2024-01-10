@@ -153,9 +153,9 @@ impl ChainManager {
             None
         };
 
-        let round_micros = ownership.round_timeout_micros(ownership.first_round());
+        let round_duration = ownership.round_timeout(ownership.first_round());
         let round_timeout = local_time
-            .saturating_add_micros(u64::try_from(round_micros.as_micros()).unwrap_or(u64::MAX));
+            .saturating_add_micros(u64::try_from(round_duration.as_micros()).unwrap_or(u64::MAX));
 
         Ok(ChainManager {
             ownership,
@@ -392,14 +392,12 @@ impl ChainManager {
         if self.current_round() > round {
             return;
         }
-        let round_micros = self
+        let round_duration = self
             .ownership
             .next_round(round)
-            .map_or(Duration::MAX, |round| {
-                self.ownership.round_timeout_micros(round)
-            });
+            .map_or(Duration::MAX, |round| self.ownership.round_timeout(round));
         self.round_timeout = local_time
-            .saturating_add_micros(u64::try_from(round_micros.as_micros()).unwrap_or(u64::MAX));
+            .saturating_add_micros(u64::try_from(round_duration.as_micros()).unwrap_or(u64::MAX));
     }
 
     /// Updates the round number and timer if the timeout certificate is from a higher round than
