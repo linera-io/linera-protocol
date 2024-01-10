@@ -7,8 +7,10 @@ use async_trait::async_trait;
 use axum::response::{self, IntoResponse};
 use http::Uri;
 use std::{
+    num::ParseIntError,
     path::{Path, PathBuf},
     process::Stdio,
+    time::Duration,
 };
 use tokio::process::Command;
 use tracing::{debug, error};
@@ -268,4 +270,8 @@ pub(crate) async fn graphiql(uri: Uri) -> impl IntoResponse {
         .subscription_endpoint("/ws")
         .finish();
     response::Html(source)
+}
+
+pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
+    Ok(Duration::from_millis(s.parse()?))
 }

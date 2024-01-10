@@ -95,6 +95,12 @@ impl Timestamp {
         self.0.saturating_sub(other.0)
     }
 
+    /// Returns the `Duration` between `other` and `self`, or `0` if `other` is not earlier than
+    /// `self`.
+    pub fn duration_since(&self, other: Timestamp) -> Duration {
+        Duration::from_micros(self.saturating_diff_micros(other))
+    }
+
     /// Returns the timestamp that is `duration` later than `self`.
     pub fn saturating_add(&self, duration: Duration) -> Timestamp {
         let micros = u64::try_from(duration.as_micros()).unwrap_or(u64::MAX);

@@ -15,7 +15,7 @@ use linera_rpc::{
 use linera_service::{
     config::{Import, ValidatorServerConfig},
     grpc_proxy::GrpcProxy,
-    prometheus_server,
+    prometheus_server, util,
 };
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use tracing::{error, info, instrument};
@@ -32,12 +32,12 @@ pub struct ProxyOptions {
     config_path: PathBuf,
 
     /// Timeout for sending queries (us)
-    #[arg(long, default_value = "4000000")]
-    send_timeout_us: u64,
+    #[arg(long = "send-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
+    send_timeout: Duration,
 
     /// Timeout for receiving responses (us)
-    #[arg(long, default_value = "4000000")]
-    recv_timeout_us: u64,
+    #[arg(long = "recv-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
+    recv_timeout: Duration,
 
     /// The number of Tokio worker threads to use.
     #[arg(long, env = "LINERA_PROXY_TOKIO_THREADS")]
@@ -72,8 +72,8 @@ impl Proxy {
                 Self::Grpc(GrpcProxy::new(
                     config.validator.network,
                     config.internal_network,
-                    Duration::from_micros(options.send_timeout_us),
-                    Duration::from_micros(options.recv_timeout_us),
+                    options.send_timeout,
+                    options.recv_timeout,
                     tls,
                 ))
             }
@@ -88,8 +88,8 @@ impl Proxy {
                     .validator
                     .network
                     .clone_with_protocol(public_transport),
-                send_timeout: Duration::from_micros(options.send_timeout_us),
-                recv_timeout: Duration::from_micros(options.recv_timeout_us),
+                send_timeout: options.send_timeout,
+                recv_timeout: options.recv_timeout,
             }),
             _ => {
                 bail!(
