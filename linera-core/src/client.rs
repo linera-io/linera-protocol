@@ -1474,26 +1474,34 @@ where
                         }
                     };
                 }
-                if can_propose {
-                    if let Some(block) = certificate.value().block() {
-                        return match self.propose_block(block.clone()).await {
-                            Ok(certificate) => Ok(ExecuteBlockOutcome::Conflict(certificate)),
-                            Err(error @ ChainClientError::CommunicationError(_))
-                            | Err(error @ ChainClientError::LocalNodeError(_)) => Err(error),
-                            Err(error) => {
-                                tracing::warn!(
-                                    %error, round = %manager.current_round,
-                                    "Failed to re-propose validated block from an earlier round."
-                                );
-                                // TODO(#1423): The round just ended; or are there other errors?
-                                Ok(ExecuteBlockOutcome::wait_for_timeout(&info))
-                            }
-                        };
-                    }
-                }
             }
-            // Otherwise we can propose a block with our own messages and operations.
             if can_propose {
+                // If there is a locked block, we have to propose that one, because validators are
+                // not allowed to sign anything else.
+                if let Some(block) = manager
+                    .highest_validated()
+                    .and_then(|certificate| certificate.value().block())
+                    .or(manager
+                        .requested_proposed
+                        .as_ref()
+                        .filter(|proposal| proposal.content.round.is_fast())
+                        .map(|proposal| &proposal.content.block))
+                {
+                    return match self.propose_block(block.clone()).await {
+                        Ok(certificate) => Ok(ExecuteBlockOutcome::Conflict(certificate)),
+                        Err(error @ ChainClientError::CommunicationError(_))
+                        | Err(error @ ChainClientError::LocalNodeError(_)) => Err(error),
+                        Err(error) => {
+                            tracing::warn!(
+                                %error, round = %manager.current_round,
+                                "Failed to re-propose validated block from an earlier round."
+                            );
+                            // TODO(#1423): The round just ended; or are there other errors?
+                            Ok(ExecuteBlockOutcome::wait_for_timeout(&info))
+                        }
+                    };
+                }
+                // Otherwise we can propose a block with our own messages and operations.
                 if let Some(block) = &self.pending_block {
                     if block.height == self.next_block_height {
                         return match self.propose_block(block.clone()).await {

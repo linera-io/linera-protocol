@@ -4008,12 +4008,15 @@ where
     let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
     let (committee, mut worker) = init_worker_with_chains(storage, balances).await;
 
-    // Add another owner and use the leader-based protocol in all rounds.
+    // Add another owner and configure two multi-leader rounds.
     let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
         super_owners: vec![pub_key0],
         owners: vec![(pub_key0, 100), (pub_key1, 100)],
         multi_leader_rounds: 2,
-        timeout_config: TimeoutConfig::default(),
+        timeout_config: TimeoutConfig {
+            fast_round_duration: Duration::from_millis(5),
+            ..TimeoutConfig::default()
+        },
     });
     let (executed_block0, _) = worker.stage_block_execution(block0).await.unwrap();
     let value0 = HashedValue::new_confirmed(executed_block0);
@@ -4054,8 +4057,7 @@ where
     let value_timeout =
         HashedValue::new_leader_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
 
-    // Once we provide the validator with a timeout certificate, the next round starts, where owner
-    // 0 happens to be the leader.
+    // Once we provide the validator with a timeout certificate, the next round starts.
     let certificate_timeout = vote
         .with_value(value_timeout.clone())
         .unwrap()
@@ -4084,4 +4086,133 @@ where
         response.info.manager.next_round(),
         Some(Round::SingleLeader(0))
     );
+}
+
+#[test(tokio::test)]
+async fn test_memory_fast_proposal_is_locked() {
+    let storage = MemoryStorage::make_test_storage(None).await;
+    run_test_fast_proposal_is_locked(storage).await;
+}
+
+#[cfg(feature = "rocksdb")]
+#[test(tokio::test)]
+async fn test_rocks_db_fast_proposal_is_locked() {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let storage = RocksDbStorage::make_test_storage(None).await;
+    run_test_fast_proposal_is_locked(storage).await;
+}
+
+#[cfg(feature = "aws")]
+#[test(tokio::test)]
+async fn test_dynamo_db_fast_proposal_is_locked() {
+    let storage = DynamoDbStorage::make_test_storage(None).await;
+    run_test_fast_proposal_is_locked(storage).await;
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_fast_proposal_is_locked() {
+    let storage = ScyllaDbStorage::make_test_storage(None).await;
+    run_test_fast_proposal_is_locked(storage).await;
+}
+
+async fn run_test_fast_proposal_is_locked<C>(storage: DbStorage<C, TestClock>)
+where
+    C: KeyValueStore + Clone + Send + Sync + 'static,
+    ViewError: From<<C as KeyValueStore>::Error>,
+    <C as KeyValueStore>::Error:
+        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+{
+    let chain_id = ChainId::root(0);
+    let key_pairs = generate_key_pairs(2);
+    let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());
+    let clock = storage.clock.clone();
+    let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
+    let (committee, mut worker) = init_worker_with_chains(storage, balances).await;
+
+    // Add another owner and configure two multi-leader rounds.
+    let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
+        super_owners: vec![pub_key0],
+        owners: vec![(pub_key0, 100), (pub_key1, 100)],
+        multi_leader_rounds: 2,
+        timeout_config: TimeoutConfig {
+            fast_round_duration: Duration::from_millis(5),
+            ..TimeoutConfig::default()
+        },
+    });
+    let (executed_block0, _) = worker.stage_block_execution(block0).await.unwrap();
+    let value0 = HashedValue::new_confirmed(executed_block0);
+    let certificate0 = make_certificate(&committee, &worker, value0.clone());
+    let response = worker
+        .fully_handle_certificate(certificate0, vec![])
+        .await
+        .unwrap();
+
+    // The first round is the fast-block round, and owner 0 is a super owner.
+    assert_eq!(response.info.manager.current_round, Round::Fast);
+    assert_eq!(response.info.manager.next_round(), Some(Round::Fast));
+    assert_eq!(response.info.manager.leader, None);
+
+    // Owner 0 proposes another block. The validator votes to confirm.
+    let block1 = make_child_block(&value0);
+    let proposal1 = block1
+        .clone()
+        .into_proposal_with_round(&key_pairs[0], Round::Fast);
+    let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await.unwrap();
+    let value1 = HashedValue::new_confirmed(executed_block1);
+    let (response, _) = worker.handle_block_proposal(proposal1).await.unwrap();
+    let vote = response.info.manager.pending.as_ref().unwrap();
+    assert_eq!(vote.value.value_hash, value1.hash());
+
+    // Set the clock to the end of the round.
+    clock.set(response.info.manager.round_timeout);
+
+    // Once we provide the validator with a timeout certificate, the next round starts.
+    let value_timeout =
+        HashedValue::new_leader_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
+    let certificate_timeout =
+        make_certificate_with_round(&committee, &worker, value_timeout.clone(), Round::Fast);
+    let (response, _) = worker
+        .handle_certificate(certificate_timeout, vec![], None)
+        .await
+        .unwrap();
+    assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
+    assert_eq!(
+        response.info.manager.next_round(),
+        Some(Round::MultiLeader(0))
+    );
+    assert_eq!(response.info.manager.leader, None);
+
+    // Now any owner can propose a block. But block1 is locked.
+    let block2 = make_child_block(&value0).with_simple_transfer(ChainId::root(1), Amount::ONE);
+    let proposal2 = block2
+        .clone()
+        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
+    let result = worker.handle_block_proposal(proposal2).await;
+    assert!(matches!(result, Err(WorkerError::ChainError(err))
+        if matches!(*err, ChainError::HasLockedBlock(_, Round::Fast))
+    ));
+    let proposal3 = block1
+        .clone()
+        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
+    assert!(worker.handle_block_proposal(proposal3).await.is_ok());
+
+    // A validated block certificate from a later round can override the locked fast block.
+    let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await.unwrap();
+    let value2 = HashedValue::new_validated(executed_block2.clone());
+    let mut proposal = block2.into_proposal_with_round(&key_pairs[1], Round::MultiLeader(1));
+    let lite_value2 = value2.lite();
+    let certificate2 =
+        make_certificate_with_round(&committee, &worker, value2, Round::MultiLeader(0));
+    proposal.validated = Some(certificate2.clone());
+    let (_, _) = worker.handle_block_proposal(proposal).await.unwrap();
+    let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
+    let (response, _) = worker.handle_chain_info_query(query_values).await.unwrap();
+    assert_eq!(
+        response.info.manager.requested_locked,
+        Some(Box::new(certificate2))
+    );
+    let vote = response.info.manager.pending.as_ref().unwrap();
+    assert_eq!(vote.value, lite_value2);
+    assert_eq!(vote.round, Round::MultiLeader(1));
 }
