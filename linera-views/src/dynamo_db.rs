@@ -919,17 +919,17 @@ impl DirectWritableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal
     // be downloaded for making a list.
     // Also we remove the deletes that are followed by inserts on the same key because
     // the TransactWriteItem and BatchWriteItem are not going to work that way.
-    type SimpBatch = SimpleUnorderedBatch;
+    type Batch = SimpleUnorderedBatch;
 
     async fn write_simplified_batch(
         &self,
-        simp_batch: &mut Self::SimpBatch,
+        batch: &mut Self::Batch,
     ) -> Result<(), DynamoDbContextError> {
         let mut tb = TransactionBuilder::default();
-        for key in mem::take(&mut simp_batch.deletions) {
+        for key in mem::take(&mut batch.deletions) {
             tb.insert_delete_request(key, self)?;
         }
-        for (key, value) in mem::take(&mut simp_batch.insertions) {
+        for (key, value) in mem::take(&mut batch.insertions) {
             tb.insert_put_request(key, value, self)?;
         }
         if !tb.transacts.is_empty() {

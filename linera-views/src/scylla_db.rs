@@ -189,15 +189,15 @@ impl DirectWritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal
     // the delete takes priority. See the sentence "The first tie-breaking rule when two
     // cells have the same write timestamp is that dead cells win over live cells"
     // from https://github.com/scylladb/scylladb/blob/master/docs/dev/timestamp-conflict-resolution.md
-    type SimpBatch = UnorderedBatch;
+    type Batch = UnorderedBatch;
 
     async fn write_simplified_batch(
         &self,
-        simp_batch: &mut Self::SimpBatch,
+        batch: &mut Self::Batch,
     ) -> Result<(), ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        Self::write_simplified_batch_internal(store, simp_batch).await
+        Self::write_simplified_batch_internal(store, batch).await
     }
 }
 
@@ -269,7 +269,7 @@ impl ScyllaDbStoreInternal {
 
     async fn write_simplified_batch_internal(
         store: &ScyllaDbStorePair,
-        simp_batch: &mut UnorderedBatch,
+        batch: &mut UnorderedBatch,
     ) -> Result<(), ScyllaDbContextError> {
         let session = &store.0;
         let table_name = &store.1;
@@ -280,7 +280,7 @@ impl ScyllaDbStoreInternal {
             "DELETE FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ?",
             table_name
         );
-        for key_prefix in mem::take(&mut simp_batch.key_prefix_deletions) {
+        for key_prefix in mem::take(&mut batch.key_prefix_deletions) {
             ensure!(
                 key_prefix.len() <= MAX_KEY_SIZE,
                 ScyllaDbContextError::KeyTooLong
@@ -299,7 +299,7 @@ impl ScyllaDbStoreInternal {
             }
         }
         let query3 = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k = ?", table_name);
-        for key in mem::take(&mut simp_batch.simple_unordered_batch.deletions) {
+        for key in mem::take(&mut batch.simple_unordered_batch.deletions) {
             let values = vec![key];
             batch_values.push(values);
             batch_query.append_statement(Query::new(query3.clone()));
@@ -308,7 +308,7 @@ impl ScyllaDbStoreInternal {
             "INSERT INTO kv.{} (dummy, k, v) VALUES (0, ?, ?)",
             table_name
         );
-        for (key, value) in mem::take(&mut simp_batch.simple_unordered_batch.insertions) {
+        for (key, value) in mem::take(&mut batch.simple_unordered_batch.insertions) {
             ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
             let values = vec![key, value];
             batch_values.push(values);
