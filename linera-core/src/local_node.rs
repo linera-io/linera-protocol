@@ -467,13 +467,8 @@ where
                 return Ok(());
             }
         };
-        if self
-            .try_process_certificates(name, &mut node, chain_id, info.requested_sent_certificates)
-            .await
-            .is_none()
-        {
-            return Ok(());
-        };
+        self.try_process_certificates(name, &mut node, chain_id, info.requested_sent_certificates)
+            .await;
         if let Some(proposal) = info.manager.requested_proposed {
             if proposal.content.block.chain_id == chain_id {
                 let owner = proposal.owner;

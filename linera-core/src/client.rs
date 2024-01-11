@@ -748,6 +748,10 @@ where
                 "A different operation was executed in parallel (consider retrying the operation)"
             )
         );
+        // Since `handle_block_proposal` succeeded, we have the needed bytecode.
+        // Leaving blobs empty.
+        self.process_certificate(certificate.clone(), vec![])
+            .await?;
         Ok(certificate)
     }
 
@@ -779,6 +783,8 @@ where
                 certificate.value().is_confirmed(),
                 ChainClientError::InternalError("Certificate is not for a confirmed block")
             );
+            self.process_certificate(certificate.clone(), vec![])
+                .await?;
             Ok(certificate)
         } else {
             ensure!(
@@ -1292,13 +1298,6 @@ where
     /// Executes (or retries) a regular block proposal. Updates local balance.
     async fn propose_block(&mut self, block: Block) -> Result<Certificate, ChainClientError> {
         ensure!(
-            self.pending_block.is_none() || self.pending_block.as_ref() == Some(&block),
-            ChainClientError::BlockProposalError(
-                "Client state has a different pending block; \
-                use the `linera retry-pending-block` command to commit that first"
-            )
-        );
-        ensure!(
             block.height == self.next_block_height,
             ChainClientError::BlockProposalError("Unexpected block height")
         );
@@ -1308,15 +1307,31 @@ where
         );
         // Gather information on the current local state.
         let manager = self.chain_info_with_manager_values().await?.manager;
-        let next_round = if let Some(next_round) = manager.next_round() {
+        // Find the lowest round where we can propose this block.
+        let round = if let Some(next_round) = manager.next_round() {
             next_round
-        } else if self.pending_block.is_some() {
-            manager.current_round
+        } else if (self.pending_block.is_some() || manager.requested_proposed.is_some())
+            && manager.current_round.is_fast()
+        {
+            // If the current round is fast, we should try re-proposing the pending block.
+            Round::Fast
         } else {
             return Err(ChainClientError::BlockProposalError(
                 "Cannot propose a block; there is already a proposal in the current round",
             ));
         };
+        // In the fast round, we must never make any conflicting proposals.
+        if round.is_fast() {
+            if let Some(pending) = &self.pending_block {
+                ensure!(
+                    pending == &block,
+                    ChainClientError::BlockProposalError(
+                        "Client state has a different pending block; \
+                         use the `linera retry-pending-block` command to commit that first"
+                    )
+                );
+            }
+        }
         // Make sure that we follow the steps in the multi-round protocol.
         let validated = manager.highest_validated().cloned();
         if let Some(validated) = &validated {
@@ -1326,6 +1341,15 @@ where
                     "A different block has already been validated at this height"
                 )
             );
+        } else if let Some(proposal) = &manager.requested_proposed {
+            if proposal.content.round.is_fast() {
+                ensure!(
+                    proposal.content.block == block,
+                    ChainClientError::BlockProposalError(
+                        "Chain manager has a different pending block in the fast round"
+                    )
+                );
+            }
         }
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
@@ -1333,7 +1357,7 @@ where
             .stage_block_execution_and_discard_failing_messages(block)
             .await?;
         let block = executed_block.block.clone();
-        let hashed_value = if next_round.is_fast() {
+        let hashed_value = if round.is_fast() {
             HashedValue::new_confirmed(executed_block)
         } else {
             HashedValue::new_validated(executed_block)
@@ -1350,7 +1374,7 @@ where
         let proposal = BlockProposal::new(
             BlockAndRound {
                 block: block.clone(),
-                round: next_round,
+                round,
             },
             key_pair,
             blobs,
@@ -1365,10 +1389,6 @@ where
         // Send the query to validators.
         let certificate = self
             .submit_block_proposal(&committee, proposal, hashed_value)
-            .await?;
-        // Since `handle_block_proposal` succeeded, we have the needed bytecode.
-        // Leaving blobs empty.
-        self.process_certificate(certificate.clone(), vec![])
             .await?;
         self.pending_block = None;
         // Communicate the new certificate now.
@@ -1499,7 +1519,7 @@ where
                         }
                     };
                 }
-                // Otherwise we can propose a block with our own messages and operations.
+                // If we have a pending block, propose that one first.
                 if let Some(block) = &self.pending_block {
                     if block.height == self.next_block_height {
                         return match self.propose_block(block.clone()).await {
@@ -1517,6 +1537,7 @@ where
                         };
                     }
                 }
+                // Otherwise we can propose a block with our own messages and operations.
                 let timestamp = self.next_timestamp(&incoming_messages).await;
                 let block = Block {
                     epoch: self.epoch().await?,
@@ -1541,35 +1562,6 @@ where
                         Ok(ExecuteBlockOutcome::wait_for_timeout(&info)?)
                     }
                 };
-            }
-            // If there is already a valid proposal in this round, try to finalize it.
-            if let Some(proposal) = &manager.requested_proposed {
-                if proposal.content.round == manager.current_round {
-                    let committee = self.local_committee().await?;
-                    let (executed_block, _) = self
-                        .node_client
-                        .stage_block_execution(proposal.content.block.clone())
-                        .await?;
-                    let hashed_value = if proposal.content.round.is_fast() {
-                        HashedValue::new_confirmed(executed_block)
-                    } else {
-                        HashedValue::new_validated(executed_block)
-                    };
-                    return match self
-                        .submit_block_proposal(&committee, (**proposal).clone(), hashed_value)
-                        .await
-                    {
-                        Ok(certificate) => Ok(ExecuteBlockOutcome::Conflict(certificate)),
-                        Err(error) => {
-                            tracing::warn!(
-                                %error, round = %manager.current_round,
-                                "Failed to propose pending block."
-                            );
-                            // TODO(#1423): The round just ended; or are there other errors?
-                            Ok(ExecuteBlockOutcome::wait_for_timeout(&info)?)
-                        }
-                    };
-                }
             }
             // If the current round has timed out, we request a timeout certificate and retry in
             // the next round.
