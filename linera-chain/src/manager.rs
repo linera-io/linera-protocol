@@ -248,6 +248,14 @@ impl ChainManager {
                 // We already accepted a proposal in this round or in a higher round.
                 return Err(ChainError::InsufficientRound(old_proposal.content.round));
             }
+            // Any proposal in the fast round is considered locked, because validators vote to
+            // confirm it immediately.
+            if old_proposal.content.round.is_fast() && validated.is_none() {
+                ensure!(
+                    old_proposal.content.block == *new_block,
+                    ChainError::HasLockedBlock(new_block.height, Round::Fast)
+                )
+            }
         }
         // If we have a locked block, it must either match the proposal, or the proposal must
         // include a higher certificate that validates the proposed block.
