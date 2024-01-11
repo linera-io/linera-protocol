@@ -541,6 +541,87 @@ async fn test_leaking_session() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Tests if a session is called correctly during execution.
+#[tokio::test]
+async fn test_simple_session() -> anyhow::Result<()> {
+    let mut state = SystemExecutionState::default();
+    state.description = Some(ChainDescription::Root(0));
+    let mut view =
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            ExecutionRuntimeConfig::Synchronous,
+        )
+        .await;
+
+    let mut applications = register_mock_applications(&mut view, 2).await?;
+    let (caller_id, caller_application) = applications
+        .next()
+        .expect("Missing caller mock application");
+    let (target_id, target_application) = applications
+        .next()
+        .expect("Missing target mock application");
+
+    caller_application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            let outcome = runtime.try_call_application(false, target_id, vec![], vec![])?;
+            runtime.try_call_session(false, outcome.sessions[0], vec![], vec![])?;
+            Ok(RawExecutionOutcome::default())
+        },
+    ));
+
+    target_application.expect_call(ExpectedCall::handle_application_call(
+        |_runtime, _context, _argument, _forwarded_sessions| {
+            Ok(ApplicationCallOutcome {
+                create_sessions: vec![vec![]],
+                ..ApplicationCallOutcome::default()
+            })
+        },
+    ));
+
+    target_application.expect_call(ExpectedCall::handle_session_call(
+        |_runtime, _context, _session_state, _argument, _forwarded_sessions| {
+            Ok((
+                SessionCallOutcome {
+                    close_session: true,
+                    ..SessionCallOutcome::default()
+                },
+                vec![],
+            ))
+        },
+    ));
+
+    let context = OperationContext {
+        chain_id: ChainId::root(0),
+        height: BlockHeight(0),
+        index: 0,
+        authenticated_signer: None,
+        next_message_index: 0,
+    };
+    let mut tracker = ResourceTracker::default();
+    let policy = ResourceControlPolicy::default();
+    let outcomes = view
+        .execute_operation(
+            context,
+            Operation::User {
+                application_id: caller_id,
+                bytes: vec![],
+            },
+            &policy,
+            &mut tracker,
+        )
+        .await?;
+
+    assert_eq!(
+        outcomes,
+        vec![
+            ExecutionOutcome::User(target_id, RawExecutionOutcome::default()),
+            ExecutionOutcome::User(target_id, RawExecutionOutcome::default()),
+            ExecutionOutcome::User(caller_id, RawExecutionOutcome::default()),
+        ]
+    );
+    Ok(())
+}
+
 /// Tests if user application errors when handling cross-application calls are handled correctly.
 ///
 /// Errors in [`UserContract::handle_application_call`] should be handled correctly without
