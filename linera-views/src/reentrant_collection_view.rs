@@ -194,20 +194,6 @@ where
         Ok(Arc::new(RwLock::new(view)))
     }
 
-    /// Reads the view if existing, otherwise report an error.
-    async fn checked_wrapped_view(
-        context: &C,
-        needs_clear: bool,
-        short_key: &[u8],
-    ) -> Result<Option<Arc<RwLock<W>>>, ViewError> {
-        let key_index = context.base_tag_index(KeyTag::Index as u8, short_key);
-        if needs_clear || !context.contains_key(&key_index).await? {
-            Ok(None)
-        } else {
-            Ok(Some(Self::wrapped_view(context, false, short_key).await?))
-        }
-    }
-
     /// Load the view and insert it into the updates if needed.
     /// If the entry is missing, then it is set to default.
     async fn try_load_view_mut(&mut self, short_key: &[u8]) -> Result<Arc<RwLock<W>>, ViewError> {
@@ -241,7 +227,14 @@ where
                 Update::Set(view) => Some(view.clone()),
                 _entry @ Update::Removed => None,
             },
-            None => Self::checked_wrapped_view(&self.context, self.needs_clear, short_key).await?,
+            None => {
+                let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
+                if self.needs_clear || !self.context.contains_key(&key_index).await? {
+                    None
+                } else {
+                    Some(Self::wrapped_view(&self.context, false, short_key).await?)
+                }
+            }
         })
     }
 
@@ -733,7 +726,7 @@ where
                 hasher.update_with_bcs_bytes(&keys.len())?;
                 for key in keys {
                     hasher.update_with_bytes(&key)?;
-                    // We can unwrap since key is in keys, so we know it is present.
+                    // We can unwrap since `key` is in `keys`, so we know it is present and cannot be modifed with `&self` methods.
                     let view = self.try_load_entry(key).await?.unwrap();
                     let hash = view.hash().await?;
                     hasher.write_all(hash.as_ref())?;
