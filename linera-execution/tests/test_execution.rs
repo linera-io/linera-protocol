@@ -5,7 +5,7 @@
 
 mod utils;
 
-use self::utils::create_dummy_user_application_description;
+use self::utils::{create_dummy_user_application_description, ExpectedCall, MockApplication};
 use linera_base::{
     crypto::PublicKey,
     data_types::BlockHeight,
@@ -19,7 +19,7 @@ use linera_views::{
     memory::MemoryContext,
     views::{View, ViewError},
 };
-use std::sync::Arc;
+use std::{sync::Arc, vec};
 
 #[tokio::test]
 async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
@@ -400,7 +400,6 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()> {
-    let owner = Owner::from(PublicKey::debug(0));
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
@@ -409,13 +408,36 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
             ExecutionRuntimeConfig::Synchronous,
         )
         .await;
-    let application_ids = register_test_applications(owner, &mut view).await?;
+
+    let mut applications = register_mock_applications(&mut view, 2).await?;
+    let (caller_id, caller_application) = applications
+        .next()
+        .expect("Missing caller mock application");
+    let (target_id, target_application) = applications
+        .next()
+        .expect("Missing target mock application");
+
+    caller_application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            runtime.try_call_application(false, target_id, vec![], vec![])?;
+            Ok(RawExecutionOutcome::default())
+        },
+    ));
+
+    target_application.expect_call(ExpectedCall::handle_application_call(
+        |_runtime, _context, _argument, _forwarded_sessions| {
+            Ok(ApplicationCallOutcome {
+                create_sessions: vec![vec![]],
+                ..ApplicationCallOutcome::default()
+            })
+        },
+    ));
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
         index: 0,
-        authenticated_signer: Some(owner),
+        authenticated_signer: None,
         next_message_index: 0,
     };
     let mut tracker = ResourceTracker::default();
@@ -424,8 +446,8 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
         .execute_operation(
             context,
             Operation::User {
-                application_id: application_ids[0],
-                bytes: vec![TestOperation::LeakingSession as u8],
+                application_id: caller_id,
+                bytes: vec![],
             },
             &policy,
             &mut tracker,
@@ -481,6 +503,38 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
     ));
 
     Ok(())
+}
+
+/// Creates `count` [`MockApplication`]s and registers them in the provided [`ExecutionStateView`].
+///
+/// Returns an iterator over pairs of [`UserApplicationId`]s and their respective
+/// [`MockApplication`]s.
+pub async fn register_mock_applications<C>(
+    state: &mut ExecutionStateView<C>,
+    count: u64,
+) -> anyhow::Result<vec::IntoIter<(UserApplicationId, MockApplication<()>)>>
+where
+    C: Context<Extra = TestExecutionRuntimeContext> + Clone + Send + Sync + 'static,
+    ViewError: From<C::Error>,
+{
+    let mock_applications: Vec<_> =
+        create_dummy_user_application_registrations(&mut state.system.registry, count)
+            .await?
+            .into_iter()
+            .map(|(id, _description)| (id, MockApplication::default()))
+            .collect();
+    let extra = state.context().extra();
+
+    for (id, mock_application) in &mock_applications {
+        extra
+            .user_contracts()
+            .insert(*id, Arc::new(mock_application.clone()));
+        extra
+            .user_services()
+            .insert(*id, Arc::new(mock_application.clone()));
+    }
+
+    Ok(mock_applications.into_iter())
 }
 
 pub async fn register_test_applications<C>(
