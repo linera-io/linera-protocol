@@ -925,18 +925,18 @@ impl DirectWritableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal
         &self,
         batch: &mut Self::Batch,
     ) -> Result<(), DynamoDbContextError> {
-        let mut tb = TransactionBuilder::default();
+        let mut builder = TransactionBuilder::default();
         for key in mem::take(&mut batch.deletions) {
-            tb.insert_delete_request(key, self)?;
+            builder.insert_delete_request(key, self)?;
         }
         for (key, value) in mem::take(&mut batch.insertions) {
-            tb.insert_put_request(key, value, self)?;
+            builder.insert_put_request(key, value, self)?;
         }
-        if !tb.transacts.is_empty() {
+        if !builder.transacts.is_empty() {
             let _guard = self.acquire().await;
             self.client
                 .transact_write_items()
-                .set_transact_items(Some(tb.transacts))
+                .set_transact_items(Some(builder.transacts))
                 .send()
                 .await?;
         }
