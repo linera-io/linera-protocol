@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Define the cryptographic primitives used by the Linera protocol.
+
 use ed25519_dalek::{self as dalek, Signer, Verifier};
 use generic_array::typenum::Unsigned;
 use serde::{Deserialize, Serialize};
@@ -39,8 +41,9 @@ pub struct CryptoHash(HasherOutput);
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Signature(pub dalek::Signature);
 
-#[derive(Error, Debug)]
 /// Error type for cryptographic errors.
+#[derive(Error, Debug)]
+#[allow(missing_docs)]
 pub enum CryptoError {
     #[error("Signature for object {type_name} is not valid: {error}")]
     InvalidSignature { error: String, type_name: String },
@@ -61,6 +64,7 @@ pub enum CryptoError {
 }
 
 impl PublicKey {
+    /// A fake public key used for testing.
     #[cfg(any(test, feature = "test"))]
     pub fn debug(name: u8) -> PublicKey {
         let addr = [name; dalek::PUBLIC_KEY_LENGTH];
@@ -356,11 +360,13 @@ impl std::fmt::Debug for CryptoHash {
 
 /// Something that we know how to hash.
 pub trait Hashable<Hasher> {
+    /// Send the content of `Self` to the given hasher.
     fn write(&self, hasher: &mut Hasher);
 }
 
 /// Something that we know how to hash and sign.
 pub trait HasTypeName {
+    /// The name of the type.
     fn type_name() -> &'static str;
 }
 
@@ -408,6 +414,7 @@ where
 }
 
 impl CryptoHash {
+    /// Computes a hash.
     pub fn new<T: ?Sized>(value: &T) -> Self
     where
         T: BcsHashable,
@@ -419,12 +426,14 @@ impl CryptoHash {
         CryptoHash(hasher.finalize())
     }
 
+    /// Reads the bytes of the hash value.
     pub fn as_bytes(&self) -> &HasherOutput {
         &self.0
     }
 }
 
 impl Signature {
+    /// Computes a signature.
     pub fn new<T>(value: &T, secret: &KeyPair) -> Self
     where
         T: BcsSignable,
@@ -445,6 +454,7 @@ impl Signature {
         public_key.verify(&message, &self.0)
     }
 
+    /// Checks a signature.
     pub fn check<T>(&self, value: &T, author: PublicKey) -> Result<(), CryptoError>
     where
         T: BcsSignable + std::fmt::Debug,
@@ -474,6 +484,7 @@ impl Signature {
         dalek::verify_batch(&messages[..], &signatures[..], &public_keys[..])
     }
 
+    /// Verifies a batch of signatures.
     pub fn verify_batch<'a, T, I>(value: &'a T, votes: I) -> Result<(), CryptoError>
     where
         T: BcsSignable,
