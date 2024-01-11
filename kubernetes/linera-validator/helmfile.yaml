@@ -3,11 +3,16 @@ repositories:
     url: https://scylla-operator-charts.storage.googleapis.com/stable
   - name: jetstack
     url: https://charts.jetstack.io
+  - name: prometheus-community
+    url: https://prometheus-community.github.io/helm-charts
+  - name: grafana
+    url: https://grafana.github.io/helm-charts
 
 releases:
   - name: linera-core
     namespace: default
     chart: .
+    timeout: 900
     needs:
       - scylla/scylla
     values:
@@ -25,6 +30,7 @@ releases:
   - name: scylla
     namespace: scylla
     chart: scylla/scylla
+    timeout: 900
     needs:
       - scylla-manager/scylla-manager
       - scylla-operator/scylla-operator
@@ -34,12 +40,14 @@ releases:
   - name: scylla-manager
     namespace: scylla-manager
     chart: scylla/scylla-manager
+    timeout: 900
     needs:
       - scylla-operator/scylla-operator
     timeout: 600
   - name: scylla-operator
     namespace: scylla-operator
     chart: scylla/scylla-operator
+    timeout: 900
     needs:
       - cert-manager/cert-manager
     values:
@@ -48,6 +56,7 @@ releases:
   - name: cert-manager
     namespace: cert-manager
     chart: jetstack/cert-manager
+    timeout: 900
     set:
       - name: installCRDs
         value: "true"
