@@ -581,6 +581,15 @@ impl<C: Send + Sync, K: async_graphql::OutputType, V: async_graphql::OutputType>
         .into()
     }
 }
+
+fn missing_key_error(key: &impl std::fmt::Debug) -> async_graphql::Error {
+    async_graphql::Error {
+        message: format!("The key={:?} is missing in collection", key),
+        source: None,
+        extensions: None,
+    }
+}
+
 #[async_graphql::Object(name_type)]
 impl<C, K, V> ReentrantCollectionView<C, K, V>
 where
@@ -604,10 +613,11 @@ where
         &self,
         key: K,
     ) -> Result<Entry<K, reentrant::ReadGuardedView<V>>, async_graphql::Error> {
-        Ok(Entry {
-            value: self.try_load_entry(&key).await?,
-            key,
-        })
+        let value = self
+            .try_load_entry(&key)
+            .await?
+            .ok_or_else(|| missing_key_error(&key))?;
+        Ok(Entry { value, key })
     }
 
     async fn entries(
@@ -625,10 +635,11 @@ where
 
         let mut values = vec![];
         for key in keys {
-            values.push(Entry {
-                value: self.try_load_entry(&key).await?,
-                key,
-            })
+            let value = self
+                .try_load_entry(&key)
+                .await?
+                .ok_or_else(|| missing_key_error(&key))?;
+            values.push(Entry { value, key })
         }
 
         Ok(values)
@@ -670,10 +681,11 @@ where
         &self,
         key: K,
     ) -> Result<Entry<K, reentrant::ReadGuardedView<V>>, async_graphql::Error> {
-        Ok(Entry {
-            value: self.try_load_entry(&key).await?,
-            key,
-        })
+        let value = self
+            .try_load_entry(&key)
+            .await?
+            .ok_or_else(|| missing_key_error(&key))?;
+        Ok(Entry { value, key })
     }
 
     async fn entries(
@@ -691,10 +703,11 @@ where
 
         let mut values = vec![];
         for key in keys {
-            values.push(Entry {
-                value: self.try_load_entry(&key).await?,
-                key,
-            })
+            let value = self
+                .try_load_entry(&key)
+                .await?
+                .ok_or_else(|| missing_key_error(&key))?;
+            values.push(Entry { value, key })
         }
 
         Ok(values)

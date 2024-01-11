@@ -4,7 +4,7 @@
 use linera_views::{
     memory::create_memory_context,
     queue_view::QueueView,
-    views::{CryptoHashRootView, RootView, View},
+    views::{CryptoHashRootView, CryptoHashView, RootView, View},
 };
 use rand::{Rng, SeedableRng};
 
@@ -21,6 +21,7 @@ async fn queue_view_mutability_check() {
     let n = 20;
     for _ in 0..n {
         let mut view = StateView::load(context.clone()).await.unwrap();
+        let hash = view.crypto_hash().await.unwrap();
         let save = rng.gen::<bool>();
         let elements = view.queue.elements().await.unwrap();
         assert_eq!(elements, vector);
@@ -76,6 +77,13 @@ async fn queue_view_mutability_check() {
                 new_vector = vector.clone();
             }
             let new_elements = view.queue.elements().await.unwrap();
+            let new_hash = view.crypto_hash().await.unwrap();
+            if elements == new_elements {
+                assert_eq!(new_hash, hash);
+            } else {
+                // If equal it is a bug or a hash collision (unlikely)
+                assert_ne!(new_hash, hash);
+            }
             assert_eq!(new_elements, new_vector);
         }
         if save {
