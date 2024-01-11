@@ -21,7 +21,7 @@ use std::{path::PathBuf, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
 #[cfg(any(test, feature = "test"))]
-use tokio::sync::OnceCell;
+use {crate::util::current_binary_parent, tokio::sync::OnceCell};
 
 #[cfg(any(test, feature = "test"))]
 static SHARED_LOCAL_KUBERNETES_TESTING_NET: OnceCell<(
@@ -62,7 +62,29 @@ pub struct LocalKubernetesNet {
 #[cfg(any(test, feature = "test"))]
 impl SharedLocalKubernetesNetTestingConfig {
     pub fn new(network: Network, binaries: Option<Option<PathBuf>>) -> Self {
-        Self { network, binaries }
+        if binaries.is_none() {
+            // For cargo test, current binary should be in debug mode
+            let current_binary_parent =
+                current_binary_parent().expect("Fetching current binaries path should not fail");
+            // But binaries for cluster should be release mode
+            let binaries_dir = current_binary_parent
+                .parent()
+                .expect("Getting parent shuold not fail")
+                .join("release");
+            if binaries_dir.exists() {
+                // If release exists, use those binaries
+                Self {
+                    network,
+                    binaries: Some(Some(binaries_dir)),
+                }
+            } else {
+                // If release doesn't exist, pass None to build binaries
+                // from within Docker container
+                Self { network, binaries }
+            }
+        } else {
+            Self { network, binaries }
+        }
     }
 }
 
