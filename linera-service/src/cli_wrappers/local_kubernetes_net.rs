@@ -18,7 +18,7 @@ use kube::{
     Client,
 };
 use linera_base::data_types::Amount;
-use std::{fs, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
 #[cfg(any(test, feature = "test"))]
@@ -340,7 +340,7 @@ impl LocalKubernetesNet {
                 "#
             ));
         }
-        fs::write(&path, content)?;
+        fs_err::write(&path, content)?;
         path.into_os_string().into_string().map_err(|error| {
             anyhow!(
                 "could not parse OS string into string: {}",
@@ -381,7 +381,7 @@ impl LocalKubernetesNet {
             .join("kubernetes")
             .join("linera-validator")
             .join("working");
-        fs::copy(
+        fs_err::copy(
             self.tmp_dir.path().join("genesis.json"),
             base_dir.join("genesis.json"),
         )?;
@@ -404,7 +404,7 @@ impl LocalKubernetesNet {
                 kind_cluster.load_docker_image(&docker_image_name).await?;
 
                 let server_config_filename = format!("server_{}.json", i);
-                fs::copy(
+                fs_err::copy(
                     tmp_dir_path.join(&server_config_filename),
                     base_dir.join(&server_config_filename),
                 )?;

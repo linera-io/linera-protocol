@@ -5,8 +5,8 @@ use crate::util;
 use anyhow::{ensure, Context, Result};
 use cargo_toml::Manifest;
 use current_platform::CURRENT_PLATFORM;
+use fs_err::File;
 use std::{
-    fs::File,
     io::Write,
     path::{Path, PathBuf},
     process::Command,
@@ -37,7 +37,7 @@ impl Project {
             "Project name {name} should not have a file extension",
         );
         debug!("Creating directory at {}", root.display());
-        std::fs::create_dir_all(&root)?;
+        fs_err::create_dir_all(&root)?;
 
         debug!("Creating the source directory");
         let source_directory = Self::create_source_directory(&root)?;
@@ -125,7 +125,7 @@ impl Project {
 
     fn create_source_directory(project_root: &Path) -> Result<PathBuf> {
         let source_directory = project_root.join("src");
-        std::fs::create_dir(&source_directory)?;
+        fs_err::create_dir(&source_directory)?;
         Ok(source_directory)
     }
 
@@ -209,7 +209,7 @@ impl Project {
     fn create_cargo_config(project_root: &Path) -> Result<()> {
         let config_dir_path = project_root.join(".cargo");
         let config_file_path = config_dir_path.join("config.toml");
-        std::fs::create_dir(&config_dir_path)?;
+        fs_err::create_dir(&config_dir_path)?;
         Self::write_string_to_file(
             &config_file_path,
             include_str!("../template/config.toml.template"),

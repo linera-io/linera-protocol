@@ -60,6 +60,7 @@ ed25519 = "1.5.3"
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 either = "1.9.0"
 frunk = "0.4.2"
+fs-err = { version = "2.11.0", features = ["tokio"] }
 futures = "0.3.29"
 generic-array = { version = "0.14.7", features = ["serde"] }
 hex = "0.4.3"

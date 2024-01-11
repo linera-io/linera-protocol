@@ -29,7 +29,6 @@ use linera_storage::Storage;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
 use serde::Deserialize;
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
-use tokio::fs;
 use tracing::{error, info};
 
 struct ServerContext {
@@ -466,7 +465,7 @@ async fn run(options: ServerOptions) {
             let mut config_validators = Vec::new();
             let mut rng = Box::<dyn CryptoRng>::from(testing_prng_seed);
             for options_path in validators {
-                let options_string = fs::read_to_string(options_path)
+                let options_string = fs_err::tokio::read_to_string(options_path)
                     .await
                     .expect("Unable to read validator options file");
                 let options: ValidatorOptions =
