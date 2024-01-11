@@ -463,12 +463,10 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
 
 /// Tests if user application errors when handling cross-application calls are handled correctly.
 ///
-/// Sends an operation to the [`TestApplication`] requesting it to fail a cross-application call.
-/// It is then forwarded to the reentrant call, where the cross-application call handler fails and
-/// the execution error should be handled correctly (without panicking).
+/// Errors in [`UserContract::handle_application_call`] should be handled correctly without
+/// panicking.
 #[tokio::test]
 async fn test_cross_application_error() -> anyhow::Result<()> {
-    let owner = Owner::from(PublicKey::debug(0));
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
@@ -477,13 +475,40 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
             ExecutionRuntimeConfig::Synchronous,
         )
         .await;
-    let application_ids = register_test_applications(owner, &mut view).await?;
+
+    let mut applications = register_mock_applications(&mut view, 2).await?;
+    let (caller_id, caller_application) = applications
+        .next()
+        .expect("Missing caller mock application");
+    let (target_id, target_application) = applications
+        .next()
+        .expect("Missing target mock application");
+
+    caller_application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            runtime.try_call_application(
+                /* authenticated */ false,
+                target_id,
+                vec![],
+                vec![],
+            )?;
+            Ok(RawExecutionOutcome::default())
+        },
+    ));
+
+    let error_message = "Cross-application call failed";
+
+    target_application.expect_call(ExpectedCall::handle_application_call(
+        |_runtime, _context, _argument, _forwarded_sessions| {
+            Err(ExecutionError::UserError(error_message.to_owned()))
+        },
+    ));
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
         index: 0,
-        authenticated_signer: Some(owner),
+        authenticated_signer: None,
         next_message_index: 0,
     };
     let mut tracker = ResourceTracker::default();
@@ -492,14 +517,14 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
         view.execute_operation(
             context,
             Operation::User {
-                application_id: application_ids[0],
-                bytes: vec![TestOperation::FailingCrossApplicationCall as u8],
+                application_id: caller_id,
+                bytes: vec![],
             },
             &policy,
             &mut tracker,
         )
         .await,
-        Err(ExecutionError::UserError(_))
+        Err(ExecutionError::UserError(message)) if message == error_message
     ));
 
     Ok(())
