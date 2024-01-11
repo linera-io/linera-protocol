@@ -477,8 +477,9 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Tests if execution fails if a session is created and leaked by its owner.
 #[tokio::test]
-async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()> {
+async fn test_leaking_session() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
