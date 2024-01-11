@@ -333,7 +333,6 @@ where
 
 #[tokio::test]
 async fn test_simple_user_operation() -> anyhow::Result<()> {
-    let owner = Owner::from(PublicKey::debug(0));
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
@@ -342,7 +341,82 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
             ExecutionRuntimeConfig::Synchronous,
         )
         .await;
-    let application_ids = register_test_applications(owner, &mut view).await?;
+
+    let mut applications = register_mock_applications(&mut view, 2).await?;
+    let (caller_id, caller_application) = applications
+        .next()
+        .expect("Missing caller mock application");
+    let (target_id, target_application) = applications
+        .next()
+        .expect("Missing target mock application");
+
+    let owner = Owner::from(PublicKey::debug(0));
+    let state_key = vec![];
+    let dummy_operation = vec![1];
+
+    caller_application.expect_call({
+        let state_key = state_key.clone();
+        let dummy_operation = dummy_operation.clone();
+        ExpectedCall::execute_operation(move |runtime, _context, operation| {
+            assert_eq!(operation, dummy_operation);
+            // Modify our state.
+            let mut state = runtime
+                .read_value_bytes(state_key.clone())?
+                .unwrap_or_default();
+            state.extend(operation.clone());
+            let mut batch = Batch::new();
+            batch.put_key_value_bytes(state_key, state);
+            runtime.write_batch(batch)?;
+
+            // Call the target application to create a session
+            let call_outcome = runtime.try_call_application(
+                /* authenticated */ true,
+                target_id,
+                vec![],
+                vec![],
+            )?;
+            assert!(call_outcome.value.is_empty());
+            assert_eq!(call_outcome.sessions.len(), 1);
+
+            // Call the session to close it.
+            let session_id = call_outcome.sessions[0];
+            runtime.try_call_session(/* authenticated */ false, session_id, vec![], vec![])?;
+
+            Ok(RawExecutionOutcome::default())
+        })
+    });
+
+    let dummy_session_state = vec![1];
+
+    target_application.expect_call({
+        let dummy_session_state = dummy_session_state.clone();
+        ExpectedCall::handle_application_call(
+            move |_runtime, context, argument, forwarded_sessions| {
+                assert_eq!(context.authenticated_signer, Some(owner));
+                assert!(argument.is_empty());
+                assert!(forwarded_sessions.is_empty());
+                Ok(ApplicationCallOutcome {
+                    create_sessions: vec![dummy_session_state],
+                    ..ApplicationCallOutcome::default()
+                })
+            },
+        )
+    });
+    target_application.expect_call(ExpectedCall::handle_session_call(
+        move |_runtime, context, session_state, argument, forwarded_sessions| {
+            assert_eq!(context.authenticated_signer, None);
+            assert_eq!(session_state, dummy_session_state);
+            assert!(argument.is_empty());
+            assert!(forwarded_sessions.is_empty());
+            Ok((
+                SessionCallOutcome {
+                    inner: ApplicationCallOutcome::default(),
+                    close_session: true,
+                },
+                session_state,
+            ))
+        },
+    ));
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
@@ -357,8 +431,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         .execute_operation(
             context,
             Operation::User {
-                application_id: application_ids[0],
-                bytes: vec![TestOperation::Completely as u8],
+                application_id: caller_id,
+                bytes: dummy_operation.clone(),
             },
             &policy,
             &mut tracker,
@@ -369,16 +443,21 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         outcomes,
         vec![
             ExecutionOutcome::User(
-                application_ids[1],
+                target_id,
                 RawExecutionOutcome::default().with_authenticated_signer(Some(owner))
             ),
-            ExecutionOutcome::User(application_ids[1], RawExecutionOutcome::default()),
+            ExecutionOutcome::User(target_id, RawExecutionOutcome::default()),
             ExecutionOutcome::User(
-                application_ids[0],
+                caller_id,
                 RawExecutionOutcome::default().with_authenticated_signer(Some(owner))
             )
         ]
     );
+
+    caller_application.expect_call(ExpectedCall::handle_query(|runtime, _context, _query| {
+        let state = runtime.read_value_bytes(state_key)?.unwrap_or_default();
+        Ok(state)
+    }));
 
     let context = QueryContext {
         chain_id: ChainId::root(0),
@@ -387,13 +466,13 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         view.query_application(
             context,
             Query::User {
-                application_id: application_ids[0],
+                application_id: caller_id,
                 bytes: vec![]
             }
         )
         .await
         .unwrap(),
-        Response::User(vec![TestOperation::Completely as u8])
+        Response::User(dummy_operation)
     );
     Ok(())
 }
