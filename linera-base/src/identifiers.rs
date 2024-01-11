@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Core identifiers used by the Linera protocol.
+
 use crate::{
     bcs_scalar,
     crypto::{BcsHashable, CryptoError, CryptoHash, PublicKey},
@@ -30,6 +32,7 @@ pub enum ChainDescription {
 }
 
 impl ChainDescription {
+    /// Whether the chain was created by another chain.
     pub fn is_child(&self) -> bool {
         matches!(self, ChainDescription::Child(_))
     }
@@ -45,8 +48,11 @@ pub struct ChainId(pub CryptoHash);
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct MessageId {
+    /// The chain ID that created the message.
     pub chain_id: ChainId,
+    /// The height of the block that created the message.
     pub height: BlockHeight,
+    /// The index of the message inside the block.
     pub index: u32,
 }
 
@@ -62,6 +68,7 @@ pub struct ApplicationId<A = ()> {
 /// A unique identifier for an application bytecode.
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct BytecodeId<A = ()> {
+    /// The message ID that published the bytecode.
     pub message_id: MessageId,
     _phantom: std::marker::PhantomData<A>,
 }
@@ -89,6 +96,7 @@ pub enum Destination {
 }
 
 impl Destination {
+    /// Whether the destination is a broadcast channel.
     pub fn is_channel(&self) -> bool {
         matches!(self, Destination::Subscribers(_))
     }
@@ -113,6 +121,7 @@ impl From<Vec<u8>> for ChannelName {
 }
 
 impl ChannelName {
+    /// Turns the channel into bytes.
     pub fn into_bytes(self) -> Vec<u8> {
         self.0
     }
@@ -231,6 +240,7 @@ impl<'de, A> Deserialize<'de> for BytecodeId<A> {
 }
 
 impl BytecodeId {
+    /// Creates a bytecode ID from a message ID.
     pub fn new(message_id: MessageId) -> Self {
         BytecodeId {
             message_id,
@@ -238,6 +248,7 @@ impl BytecodeId {
         }
     }
 
+    /// Specializes a bytecode ID for a given ABI.
     pub fn with_abi<A>(self) -> BytecodeId<A> {
         BytecodeId {
             message_id: self.message_id,
@@ -247,6 +258,7 @@ impl BytecodeId {
 }
 
 impl<A> BytecodeId<A> {
+    /// Forgets the ABI of a bytecode ID (if any).
     pub fn forget_abi(self) -> BytecodeId {
         BytecodeId {
             message_id: self.message_id,
@@ -382,6 +394,7 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
 }
 
 impl ApplicationId {
+    /// Specializes an application ID for a given ABI.
     pub fn with_abi<A>(self) -> ApplicationId<A> {
         ApplicationId {
             bytecode_id: self.bytecode_id.with_abi(),
@@ -391,6 +404,7 @@ impl ApplicationId {
 }
 
 impl<A> ApplicationId<A> {
+    /// Forgets the ABI of a bytecode ID (if any).
     pub fn forget_abi(self) -> ApplicationId {
         ApplicationId {
             bytecode_id: self.bytecode_id.forget_abi(),
@@ -460,6 +474,7 @@ impl<A> Debug for SessionId<A> {
 }
 
 impl SessionId {
+    /// Specializes a session ID for a given ABI.
     pub fn with_abi<A>(self) -> SessionId<A> {
         SessionId {
             application_id: self.application_id.with_abi(),
@@ -469,6 +484,7 @@ impl SessionId {
 }
 
 impl<A> SessionId<A> {
+    /// Forgets the ABI of a session ID (if any).
     pub fn forget_abi(self) -> SessionId {
         SessionId {
             application_id: self.application_id.forget_abi(),
@@ -593,10 +609,12 @@ impl From<ChainDescription> for ChainId {
 }
 
 impl ChainId {
+    /// The chain ID representing the N-th chain created at genesis time.
     pub fn root(index: u32) -> Self {
         Self(CryptoHash::new(&ChainDescription::Root(index)))
     }
 
+    /// The chain ID representing the chain created by the given message.
     pub fn child(id: MessageId) -> Self {
         Self(CryptoHash::new(&ChainDescription::Child(id)))
     }

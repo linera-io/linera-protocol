@@ -18,6 +18,7 @@ macro_rules! doc_scalar {
 
 /// An error trying to parse the hex-digits of a BCS-encoded value.
 #[derive(thiserror::Error, Debug)]
+#[allow(missing_docs)]
 pub enum BcsHexParseError {
     #[error("Invalid BCS: {0}")]
     Bcs(#[from] bcs::Error),

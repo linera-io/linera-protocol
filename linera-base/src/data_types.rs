@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Core data-types used in the Linera protocol.
+
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,
@@ -59,9 +61,12 @@ pub struct BlockHeight(pub u64);
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
 pub enum Round {
+    /// The initial fast round.
     #[default]
     Fast,
+    /// The N-th multi-leader round.
     MultiLeader(u32),
+    /// The N-th single-leader round.
     SingleLeader(u32),
 }
 
@@ -139,8 +144,9 @@ impl fmt::Display for Timestamp {
     }
 }
 
-#[derive(Debug, Error)]
 /// An error type for arithmetic errors.
+#[derive(Debug, Error)]
+#[allow(missing_docs)]
 pub enum ArithmeticError {
     #[error("Number overflow")]
     Overflow,
@@ -151,9 +157,13 @@ pub enum ArithmeticError {
 macro_rules! impl_wrapped_number {
     ($name:ident, $wrapped:ident) => {
         impl $name {
+            /// The zero value.
             pub const ZERO: Self = Self(0);
+
+            /// The maximum value.
             pub const MAX: Self = Self($wrapped::MAX);
 
+            /// Checked addition.
             pub fn try_add(self, other: Self) -> Result<Self, ArithmeticError> {
                 let val = self
                     .0
@@ -162,16 +172,19 @@ macro_rules! impl_wrapped_number {
                 Ok(Self(val))
             }
 
+            /// Checked increment.
             pub fn try_add_one(self) -> Result<Self, ArithmeticError> {
                 let val = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
                 Ok(Self(val))
             }
 
+            /// Saturating addition.
             pub fn saturating_add(self, other: Self) -> Self {
                 let val = self.0.saturating_add(other.0);
                 Self(val)
             }
 
+            /// Checked subtraction.
             pub fn try_sub(self, other: Self) -> Result<Self, ArithmeticError> {
                 let val = self
                     .0
@@ -180,16 +193,19 @@ macro_rules! impl_wrapped_number {
                 Ok(Self(val))
             }
 
+            /// Checked decrement.
             pub fn try_sub_one(self) -> Result<Self, ArithmeticError> {
                 let val = self.0.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
                 Ok(Self(val))
             }
 
+            /// Saturating subtraction.
             pub fn saturating_sub(self, other: Self) -> Self {
                 let val = self.0.saturating_sub(other.0);
                 Self(val)
             }
 
+            /// Checked in-place addition.
             pub fn try_add_assign(&mut self, other: Self) -> Result<(), ArithmeticError> {
                 self.0 = self
                     .0
@@ -198,15 +214,18 @@ macro_rules! impl_wrapped_number {
                 Ok(())
             }
 
+            /// Checked in-place increment.
             pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
                 self.0 = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
                 Ok(())
             }
 
+            /// Saturating in-place addition.
             pub fn saturating_add_assign(&mut self, other: Self) {
                 self.0 = self.0.saturating_add(other.0);
             }
 
+            /// Checked in-place subtraction.
             pub fn try_sub_assign(&mut self, other: Self) -> Result<(), ArithmeticError> {
                 self.0 = self
                     .0
@@ -215,15 +234,18 @@ macro_rules! impl_wrapped_number {
                 Ok(())
             }
 
+            /// Saturating multiplication.
             pub fn saturating_mul(&self, other: $wrapped) -> Self {
                 Self(self.0.saturating_mul(other))
             }
 
+            /// Checked multiplication.
             pub fn try_mul(self, other: $wrapped) -> Result<Self, ArithmeticError> {
                 let val = self.0.checked_mul(other).ok_or(ArithmeticError::Overflow)?;
                 Ok(Self(val))
             }
 
+            /// Checked in-place multiplication.
             pub fn try_mul_assign(&mut self, other: $wrapped) -> Result<(), ArithmeticError> {
                 self.0 = self.0.checked_mul(other).ok_or(ArithmeticError::Overflow)?;
                 Ok(())
@@ -299,6 +321,7 @@ impl fmt::Display for Amount {
 }
 
 #[derive(Error, Debug)]
+#[allow(missing_docs)]
 pub enum ParseAmountError {
     #[error("cannot parse amount")]
     Parse,
@@ -367,14 +390,17 @@ impl fmt::Display for Round {
 }
 
 impl Round {
+    /// Whether the round is a multi-leader round.
     pub fn is_multi_leader(&self) -> bool {
         matches!(self, Round::MultiLeader(_))
     }
 
+    /// Whether the round is the fast round.
     pub fn is_fast(&self) -> bool {
         matches!(self, Round::Fast)
     }
 
+    /// The index of a round amongst the rounds of the same category.
     pub fn number(&self) -> u32 {
         match self {
             Round::Fast => 0,
@@ -382,6 +408,7 @@ impl Round {
         }
     }
 
+    /// The category of the round as a string.
     pub fn type_name(&self) -> &'static str {
         match self {
             Round::Fast => "fast",
@@ -398,7 +425,10 @@ impl<'a> std::iter::Sum<&'a Amount> for Amount {
 }
 
 impl Amount {
+    /// The base-10 exponent representing how much a token can be divided.
     pub const DECIMAL_PLACES: u8 = 18;
+
+    /// One token.
     pub const ONE: Amount = Amount(10u128.pow(Amount::DECIMAL_PLACES as u32));
 
     /// Returns an `Amount` corresponding to that many tokens, or `Amount::MAX` if saturated.
