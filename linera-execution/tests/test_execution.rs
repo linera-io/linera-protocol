@@ -20,7 +20,6 @@ use linera_views::{
     views::{View, ViewError},
 };
 use std::sync::Arc;
-use test_case::test_case;
 
 #[tokio::test]
 async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
@@ -332,18 +331,15 @@ where
     }
 }
 
-#[test_case(ExecutionRuntimeConfig::Synchronous ; "synchronous")]
 #[tokio::test]
-async fn test_simple_user_operation(
-    execution_runtime_config: ExecutionRuntimeConfig,
-) -> anyhow::Result<()> {
+async fn test_simple_user_operation() -> anyhow::Result<()> {
     let owner = Owner::from(PublicKey::debug(0));
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
             state,
-            execution_runtime_config,
+            ExecutionRuntimeConfig::Synchronous,
         )
         .await;
     let application_ids = register_test_applications(owner, &mut view).await?;
@@ -402,18 +398,15 @@ async fn test_simple_user_operation(
     Ok(())
 }
 
-#[test_case(ExecutionRuntimeConfig::Synchronous ; "synchronous")]
 #[tokio::test]
-async fn test_simple_user_operation_with_leaking_session(
-    execution_runtime_config: ExecutionRuntimeConfig,
-) -> anyhow::Result<()> {
+async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()> {
     let owner = Owner::from(PublicKey::debug(0));
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
             state,
-            execution_runtime_config,
+            ExecutionRuntimeConfig::Synchronous,
         )
         .await;
     let application_ids = register_test_applications(owner, &mut view).await?;
@@ -451,18 +444,15 @@ async fn test_simple_user_operation_with_leaking_session(
 /// Sends an operation to the [`TestApplication`] requesting it to fail a cross-application call.
 /// It is then forwarded to the reentrant call, where the cross-application call handler fails and
 /// the execution error should be handled correctly (without panicking).
-#[test_case(ExecutionRuntimeConfig::Synchronous ; "synchronous")]
 #[tokio::test]
-async fn test_cross_application_error(
-    execution_runtime_config: ExecutionRuntimeConfig,
-) -> anyhow::Result<()> {
+async fn test_cross_application_error() -> anyhow::Result<()> {
     let owner = Owner::from(PublicKey::debug(0));
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
             state,
-            execution_runtime_config,
+            ExecutionRuntimeConfig::Synchronous,
         )
         .await;
     let application_ids = register_test_applications(owner, &mut view).await?;
