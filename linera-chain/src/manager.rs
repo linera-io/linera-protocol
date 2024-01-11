@@ -64,8 +64,6 @@
 //! round. Then they download the highest `ValidatedBlock` certificate known to any honest validator
 //! and include that in their block proposal, just like in the cooperative case.
 
-use std::time::Duration;
-
 use crate::{
     data_types::{
         BlockAndRound, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
@@ -114,7 +112,7 @@ pub struct ChainManager {
     /// Latest timeout vote we cast.
     pub timeout_vote: Option<Vote>,
     /// The time after which we are ready to sign a timeout certificate for the current round.
-    pub round_timeout: Timestamp,
+    pub round_timeout: Option<Timestamp>,
 }
 
 doc_scalar!(
@@ -157,8 +155,8 @@ impl ChainManager {
         };
 
         let round_duration = ownership.round_timeout(ownership.first_round());
-        let round_micros = u64::try_from(round_duration.as_micros()).unwrap_or(u64::MAX);
-        let round_timeout = local_time.saturating_add_micros(round_micros);
+        let round_micros = round_duration.and_then(|rd| u64::try_from(rd.as_micros()).ok());
+        let round_timeout = round_micros.map(|rm| local_time.saturating_add_micros(rm));
 
         Ok(ChainManager {
             ownership,
@@ -289,7 +287,10 @@ impl ChainManager {
         let Some(key_pair) = key_pair else {
             return false; // We are not a validator.
         };
-        if local_time < self.round_timeout || self.ownership.owners.is_empty() {
+        let Some(round_timeout) = self.round_timeout else {
+            return false; // The current round does not time out.
+        };
+        if local_time < round_timeout || self.ownership.owners.is_empty() {
             return false; // Round has not timed out yet, or there are no regular owners.
         }
         let current_round = self.current_round();
@@ -407,10 +408,9 @@ impl ChainManager {
             return;
         }
         let new_round = self.ownership.next_round(round);
-        let round_duration =
-            new_round.map_or(Duration::MAX, |round| self.ownership.round_timeout(round));
-        let round_micros = u64::try_from(round_duration.as_micros()).unwrap_or(u64::MAX);
-        self.round_timeout = local_time.saturating_add_micros(round_micros);
+        let round_duration = new_round.and_then(|round| self.ownership.round_timeout(round));
+        let round_micros = round_duration.and_then(|rd| u64::try_from(rd.as_micros()).ok());
+        self.round_timeout = round_micros.map(|rm| local_time.saturating_add_micros(rm));
     }
 
     /// Updates the round number and timer if the timeout certificate is from a higher round than
@@ -505,7 +505,7 @@ pub struct ChainManagerInfo {
     /// `None` if everyone is allowed to propose.
     pub leader: Option<Owner>,
     /// The timestamp when the current round times out.
-    pub round_timeout: Timestamp,
+    pub round_timeout: Option<Timestamp>,
 }
 
 impl From<&ChainManager> for ChainManagerInfo {

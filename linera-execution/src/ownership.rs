@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, iter, time::Duration};
 #[derive(PartialEq, Eq, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct TimeoutConfig {
     /// The duration of the fast round.
-    pub fast_round_duration: Duration,
+    pub fast_round_duration: Option<Duration>,
     /// The duration of the first single-leader and all multi-leader rounds.
     pub base_timeout: Duration,
     /// The number of microseconds by which the timeout increases after each single-leader round.
@@ -19,7 +19,7 @@ pub struct TimeoutConfig {
 impl Default for TimeoutConfig {
     fn default() -> Self {
         Self {
-            fast_round_duration: Duration::MAX,
+            fast_round_duration: None,
             base_timeout: Duration::from_secs(10),
             timeout_increment: Duration::from_secs(1),
         }
@@ -84,17 +84,18 @@ impl ChainOwnership {
     }
 
     /// Returns the duration of the given round.
-    pub fn round_timeout(&self, round: Round) -> Duration {
+    pub fn round_timeout(&self, round: Round) -> Option<Duration> {
         let tc = &self.timeout_config;
         match round {
             Round::Fast => tc.fast_round_duration,
             Round::MultiLeader(r) if r.saturating_add(1) == self.multi_leader_rounds => {
-                tc.base_timeout
+                Some(tc.base_timeout)
             }
-            Round::MultiLeader(_) => Duration::MAX,
-            Round::SingleLeader(r) => tc
-                .base_timeout
-                .saturating_add(tc.timeout_increment.saturating_mul(r)),
+            Round::MultiLeader(_) => None,
+            Round::SingleLeader(r) => {
+                let increment = tc.timeout_increment.saturating_mul(r);
+                Some(tc.base_timeout.saturating_add(increment))
+            }
         }
     }
 
@@ -170,32 +171,32 @@ mod tests {
             owners: BTreeMap::from_iter([(owner, (pub_key, 100))]),
             multi_leader_rounds: 10,
             timeout_config: TimeoutConfig {
-                fast_round_duration: Duration::from_secs(5),
+                fast_round_duration: Some(Duration::from_secs(5)),
                 base_timeout: Duration::from_secs(10),
                 timeout_increment: Duration::from_secs(1),
             },
         };
 
-        assert_eq!(ownership.round_timeout(Round::Fast), Duration::from_secs(5));
         assert_eq!(
-            ownership.round_timeout(Round::MultiLeader(8)),
-            Duration::MAX
+            ownership.round_timeout(Round::Fast),
+            Some(Duration::from_secs(5))
         );
+        assert_eq!(ownership.round_timeout(Round::MultiLeader(8)), None);
         assert_eq!(
             ownership.round_timeout(Round::MultiLeader(9)),
-            Duration::from_secs(10)
+            Some(Duration::from_secs(10))
         );
         assert_eq!(
             ownership.round_timeout(Round::SingleLeader(0)),
-            Duration::from_secs(10)
+            Some(Duration::from_secs(10))
         );
         assert_eq!(
             ownership.round_timeout(Round::SingleLeader(1)),
-            Duration::from_secs(11)
+            Some(Duration::from_secs(11))
         );
         assert_eq!(
             ownership.round_timeout(Round::SingleLeader(8)),
-            Duration::from_secs(18)
+            Some(Duration::from_secs(18))
         );
     }
 }

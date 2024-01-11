@@ -1627,7 +1627,7 @@ where
         ))
     ));
 
-    clock.set(manager.round_timeout);
+    clock.set(manager.round_timeout.unwrap());
 
     // After the timeout they will.
     let certificate = client.request_leader_timeout().await.unwrap();
@@ -1651,7 +1651,7 @@ where
         if manager.leader == Some(Owner::from(pub_key1)) {
             break manager.current_round;
         }
-        clock.set(manager.round_timeout);
+        clock.set(manager.round_timeout.unwrap());
         assert!(client.request_leader_timeout().await.is_ok());
     };
     let round_number = match round {
@@ -1686,7 +1686,7 @@ where
         if manager.leader == Some(Owner::from(pub_key0)) {
             break;
         }
-        clock.set(manager.round_timeout);
+        clock.set(manager.round_timeout.unwrap());
         assert!(client.request_leader_timeout().await.is_ok());
     }
 

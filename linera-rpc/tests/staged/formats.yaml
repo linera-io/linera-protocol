@@ -238,7 +238,8 @@ ChainManagerInfo:
         OPTION:
           TYPENAME: Owner
     - round_timeout:
-        TYPENAME: Timestamp
+        OPTION:
+          TYPENAME: Timestamp
 ChainOwnership:
   STRUCT:
     - super_owners:
@@ -855,7 +856,8 @@ SystemOperation:
 TimeoutConfig:
   STRUCT:
     - fast_round_duration:
-        TYPENAME: Duration
+        OPTION:
+          TYPENAME: Duration
     - base_timeout:
         TYPENAME: Duration
     - timeout_increment:

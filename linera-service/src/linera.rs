@@ -1493,7 +1493,7 @@ impl Runnable for Job {
                 };
                 let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
                 let timeout_config = TimeoutConfig {
-                    fast_round_duration: fast_round_duration.unwrap_or(Duration::MAX),
+                    fast_round_duration,
                     base_timeout,
                     timeout_increment,
                 };
