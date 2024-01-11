@@ -1476,17 +1476,15 @@ where
                 }
             }
             if can_propose {
-                // If there is a locked block, we have to propose that one, because validators are
-                // not allowed to sign anything else.
-                if let Some(block) = manager
+                let locked_block = manager
                     .highest_validated()
                     .and_then(|certificate| certificate.value().block())
                     .or(manager
                         .requested_proposed
                         .as_ref()
                         .filter(|proposal| proposal.content.round.is_fast())
-                        .map(|proposal| &proposal.content.block))
-                {
+                        .map(|proposal| &proposal.content.block));
+                if let Some(block) = locked_block {
                     return match self.propose_block(block.clone()).await {
                         Ok(certificate) => Ok(ExecuteBlockOutcome::Conflict(certificate)),
                         Err(error @ ChainClientError::CommunicationError(_))
