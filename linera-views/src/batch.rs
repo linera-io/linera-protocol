@@ -57,28 +57,30 @@ pub enum WriteOperation {
     },
 }
 
-/// A batch of writes inside a transaction.
+/// A batch of write operations.
 #[derive(Default)]
 pub struct Batch {
-    /// The entries of the batch to be consumed when processed.
+    /// The write operations.
     pub operations: Vec<WriteOperation>,
 }
 
-/// Unordered list of deletes and puts being written.
+/// A batch of deletions and insertions that operate on disjoint keys, thus can be
+/// executed in any order.
 #[derive(Default, Serialize, Deserialize)]
 pub struct SimpleUnorderedBatch {
-    /// List of deletions unordered
+    /// The deletions.
     pub deletions: Vec<Vec<u8>>,
-    /// List of insertions unordered
+    /// The insertions.
     pub insertions: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
-/// An unordered batch of deletes/puts and a collection of key prefix deletions.
+/// An unordered batch of deletions and insertions, together with a set of key-prefixes to
+/// delete. Key-prefix deletions must happen before the insertions and the deletions.
 #[derive(Default, Serialize, Deserialize)]
 pub struct UnorderedBatch {
-    /// key prefix deletions.
+    /// The key-prefix deletions.
     pub key_prefix_deletions: Vec<Vec<u8>>,
-    /// The delete and lists.
+    /// The batch of deletions and insertions.
     pub simple_unordered_batch: SimpleUnorderedBatch,
 }
 
@@ -110,10 +112,9 @@ impl UnorderedBatch {
         })
     }
 
-    /// From an `UnorderedBatch`, creates a [`UnorderedBatch`] doesn't contain
-    /// prefix deletions that collide with an insertion.
-    /// This requires accessing the database to read them and translate them
-    /// as collection of deletes.
+    /// Modifies an [`UnorderedBatch`] so that the key-prefix deletions do not conflict
+    /// with subsequent insertions. This may require accessing the database to compute
+    /// lists of deleted keys.
     pub async fn expand_colliding_prefix_deletions<DB: DeletePrefixExpander>(
         &mut self,
         db: &DB,
@@ -208,12 +209,12 @@ impl Batch {
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
-    ///   batch.put_key_value(vec![0,1], &(34 as u128));
-    ///   batch.delete_key(vec![0,1]);
-    ///   let unord_batch = batch.simplify();
-    ///   assert_eq!(unord_batch.key_prefix_deletions.len(), 0);
-    ///   assert_eq!(unord_batch.simple_unordered_batch.insertions.len(), 0);
-    ///   assert_eq!(unord_batch.simple_unordered_batch.deletions.len(), 1);
+    ///   batch.put_key_value(vec![0, 1], &(34 as u128));
+    ///   batch.delete_key(vec![0, 1]);
+    ///   let unordered_batch = batch.simplify();
+    ///   assert_eq!(unordered_batch.key_prefix_deletions.len(), 0);
+    ///   assert_eq!(unordered_batch.simple_unordered_batch.insertions.len(), 0);
+    ///   assert_eq!(unordered_batch.simple_unordered_batch.deletions.len(), 1);
     /// ```
     pub fn simplify(self) -> UnorderedBatch {
         let mut delete_and_insert_map = BTreeMap::new();
@@ -221,50 +222,47 @@ impl Batch {
         for operation in self.operations {
             match operation {
                 WriteOperation::Delete { key } => {
-                    // We delete a key. However if said key was already matched by a delete_prefix then
-                    // nothing needs to be done.
-                    if !is_prefix_matched(&delete_prefix_set, &key) {
-                        delete_and_insert_map.insert(key, None);
-                    } else {
+                    // If `key` is matched by a deleted prefix, then remove any inserted
+                    // value. Otherwise, add the key to the set of deletions.
+                    if is_prefix_matched(&delete_prefix_set, &key) {
                         delete_and_insert_map.remove(&key);
+                    } else {
+                        delete_and_insert_map.insert(key, None);
                     }
                 }
                 WriteOperation::Put { key, value } => {
-                    // Simple insert
+                    // Record the insertion.
                     delete_and_insert_map.insert(key, Some(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    // First identify all the deletions and insertions and then remove them
-                    let key_list = delete_and_insert_map
+                    // Remove the previous deletions and insertions covered by `key_prefix`.
+                    let keys = delete_and_insert_map
                         .range(get_interval(key_prefix.clone()))
                         .map(|x| x.0.to_vec())
                         .collect::<Vec<_>>();
-                    for key in key_list {
+                    for key in keys {
                         delete_and_insert_map.remove(&key);
                     }
-                    // If that key is matched by something already present, then nothing to be done
-                    if !is_prefix_matched(&delete_prefix_set, &key_prefix) {
-                        // Find the existing key_prefixes that are matched
-                        let key_prefix_list = delete_prefix_set
-                            .range(get_interval(key_prefix.clone()))
-                            .map(|x: &Vec<u8>| x.to_vec())
-                            .collect::<Vec<_>>();
-                        // Delete them
-                        for key_prefix in key_prefix_list {
-                            delete_prefix_set.remove(&key_prefix);
-                        }
-                        // Then insert the dominant entry in the database
-                        delete_prefix_set.insert(key_prefix);
+                    // If `key_prefix` is covered by a previous deleted prefix, then we're done.
+                    if is_prefix_matched(&delete_prefix_set, &key_prefix) {
+                        continue;
                     }
+                    // Otherwise, find the prefixes that are covered by the new key
+                    // prefix.
+                    let key_prefixes = delete_prefix_set
+                        .range(get_interval(key_prefix.clone()))
+                        .map(|x: &Vec<u8>| x.to_vec())
+                        .collect::<Vec<_>>();
+                    // Delete them.
+                    for key_prefix in key_prefixes {
+                        delete_prefix_set.remove(&key_prefix);
+                    }
+                    // Then, insert the new key prefix.
+                    delete_prefix_set.insert(key_prefix);
                 }
             }
         }
-        // It is important to note that DeletePrefix operations have to be done before other
-        // insert operations.
-        let mut key_prefix_deletions = Vec::new();
-        for key_prefix in delete_prefix_set {
-            key_prefix_deletions.push(key_prefix);
-        }
+        let key_prefix_deletions = delete_prefix_set.into_iter().collect();
         let mut deletions = Vec::new();
         let mut insertions = Vec::new();
         for (key, val) in delete_and_insert_map {
@@ -283,7 +281,7 @@ impl Batch {
         }
     }
 
-    /// check the size of the values of the batch.
+    /// Checks the size of the values of the batch.
     pub fn check_value_size(&self, max_value_size: usize) -> bool {
         for operation in &self.operations {
             if let WriteOperation::Put { key: _, value } = operation {
@@ -299,7 +297,7 @@ impl Batch {
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
-    ///   batch.put_key_value(vec![0,1], &(34 as u128));
+    ///   batch.put_key_value(vec![0, 1], &(34 as u128));
     /// ```
     #[inline]
     pub fn put_key_value(
@@ -316,7 +314,7 @@ impl Batch {
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
-    ///   batch.put_key_value_bytes(vec![0,1], vec![3,4,5]);
+    ///   batch.put_key_value_bytes(vec![0, 1], vec![3, 4, 5]);
     /// ```
     #[inline]
     pub fn put_key_value_bytes(&mut self, key: Vec<u8>, value: Vec<u8>) {
@@ -327,7 +325,7 @@ impl Batch {
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
-    ///   batch.delete_key(vec![0,1]);
+    ///   batch.delete_key(vec![0, 1]);
     /// ```
     #[inline]
     pub fn delete_key(&mut self, key: Vec<u8>) {
@@ -338,7 +336,7 @@ impl Batch {
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
-    ///   batch.delete_key_prefix(vec![0,1]);
+    ///   batch.delete_key_prefix(vec![0, 1]);
     /// ```
     #[inline]
     pub fn delete_key_prefix(&mut self, key_prefix: Vec<u8>) {
@@ -355,6 +353,7 @@ impl Batch {
 pub trait DeletePrefixExpander {
     /// The error type that can happen when expanding the key_prefix.
     type Error: Debug;
+
     /// Returns the list of keys to be appended to the list.
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 }
@@ -362,6 +361,7 @@ pub trait DeletePrefixExpander {
 #[async_trait]
 impl DeletePrefixExpander for MemoryContext<()> {
     type Error = MemoryContextError;
+
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         let mut vector_list = Vec::new();
         for key in <Vec<Vec<u8>> as KeyIterable<Self::Error>>::iterator(
@@ -441,6 +441,7 @@ pub struct SimpleUnorderedBatchIter {
 #[async_trait]
 impl SimplifiedBatch for SimpleUnorderedBatch {
     type Iter = SimpleUnorderedBatchIter;
+
     fn into_iter(self) -> Self::Iter {
         let delete_iter = self.deletions.into_iter().peekable();
         let insert_iter = self.insertions.into_iter().peekable();
@@ -550,6 +551,7 @@ pub struct UnorderedBatchIter {
 #[async_trait]
 impl SimplifiedBatch for UnorderedBatch {
     type Iter = UnorderedBatchIter;
+
     fn into_iter(self) -> Self::Iter {
         let delete_prefix_iter = self.key_prefix_deletions.into_iter().peekable();
         let insert_deletion_iter = self.simple_unordered_batch.into_iter();
