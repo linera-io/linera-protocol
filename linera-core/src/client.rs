@@ -1470,7 +1470,7 @@ where
                                 "Failed to finalize pending validated block."
                             );
                             // TODO(#1423): The round just ended; or are there other errors?
-                            Ok(ExecuteBlockOutcome::wait_for_timeout(&info))
+                            Ok(ExecuteBlockOutcome::wait_for_timeout(&info)?)
                         }
                     };
                 }
@@ -1495,7 +1495,7 @@ where
                                 "Failed to re-propose validated block from an earlier round."
                             );
                             // TODO(#1423): The round just ended; or are there other errors?
-                            Ok(ExecuteBlockOutcome::wait_for_timeout(&info))
+                            Ok(ExecuteBlockOutcome::wait_for_timeout(&info)?)
                         }
                     };
                 }
@@ -1512,7 +1512,7 @@ where
                                     "Failed to re-propose local pending block."
                                 );
                                 // TODO(#1423): The round just ended; or are there other errors?
-                                Ok(ExecuteBlockOutcome::wait_for_timeout(&info))
+                                Ok(ExecuteBlockOutcome::wait_for_timeout(&info)?)
                             }
                         };
                     }
@@ -1538,7 +1538,7 @@ where
                             "Failed to propose new block."
                         );
                         // TODO(#1423): The round just ended; or are there other errors?
-                        Ok(ExecuteBlockOutcome::wait_for_timeout(&info))
+                        Ok(ExecuteBlockOutcome::wait_for_timeout(&info)?)
                     }
                 };
             }
@@ -1566,28 +1566,21 @@ where
                                 "Failed to propose pending block."
                             );
                             // TODO(#1423): The round just ended; or are there other errors?
-                            Ok(ExecuteBlockOutcome::wait_for_timeout(&info))
+                            Ok(ExecuteBlockOutcome::wait_for_timeout(&info)?)
                         }
                     };
                 }
             }
-            // But if the current round has not timed out yet, we have to wait.
+            // If the current round has timed out, we request a timeout certificate and retry in
+            // the next round.
             if let Some(round_timeout) = manager.round_timeout {
-                if round_timeout > self.storage_client().await.current_time() {
-                    let timeout = RoundTimeout {
-                        timestamp: round_timeout,
-                        current_round: manager.current_round,
-                        next_block_height: info.next_block_height,
-                    };
-                    return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout));
+                if round_timeout <= self.storage_client().await.current_time() {
+                    self.request_leader_timeout().await?;
+                    continue;
                 }
-                // If it has timed out, we request a timeout certificate and retry in the next round.
-                self.request_leader_timeout().await?;
-            } else {
-                return Err(ChainClientError::BlockProposalError(
-                    "Cannot propose in the current round.",
-                ));
             }
+            // Otherwise we have to wait for the round to time out.
+            return ExecuteBlockOutcome::wait_for_timeout(&info);
         }
     }
 
@@ -2146,12 +2139,18 @@ enum ExecuteBlockOutcome {
 }
 
 impl ExecuteBlockOutcome {
-    fn wait_for_timeout(info: &ChainInfo) -> Self {
+    /// Creates an outcome indicating that the caller needs to wait for the current round to time
+    /// out. If there is no timeout, an error is returned.
+    #[allow(clippy::result_large_err)]
+    fn wait_for_timeout(info: &ChainInfo) -> Result<Self, ChainClientError> {
         // TODO(#1424): Local timeout might not match validators' exactly.
-        Self::WaitForTimeout(RoundTimeout {
-            timestamp: info.manager.round_timeout.unwrap(),
+        let timestamp = info.manager.round_timeout.ok_or_else(|| {
+            ChainClientError::BlockProposalError("Cannot propose in the current round.")
+        })?;
+        Ok(Self::WaitForTimeout(RoundTimeout {
+            timestamp,
             current_round: info.manager.current_round,
             next_block_height: info.next_block_height,
-        })
+        }))
     }
 }
