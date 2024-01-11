@@ -614,14 +614,8 @@ impl ClientWrapper {
         let contract = release_dir.join(format!("{}_contract.wasm", name.replace('-', "_")));
         let service = release_dir.join(format!("{}_service.wasm", name.replace('-', "_")));
 
-        let contract_size = tokio::fs::metadata(&contract)
-            .await
-            .with_context(|| format!("Cannot find bytecode file {contract:?}"))?
-            .len();
-        let service_size = tokio::fs::metadata(&service)
-            .await
-            .with_context(|| format!("Cannot find bytecode file {service:?}"))?
-            .len();
+        let contract_size = fs_err::tokio::metadata(&contract).await?.len();
+        let service_size = fs_err::tokio::metadata(&service).await?.len();
         info!("Done building application {name}: contract_size={contract_size}, service_size={service_size}");
 
         Ok((contract, service))
