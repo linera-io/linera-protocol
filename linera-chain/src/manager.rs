@@ -40,7 +40,6 @@
 //! block in a later round. So if there are two different `ConfirmedBlock` certificates, they may
 //! be from different rounds, but they are guaranteed to contain the same block.
 //!
-//!
 //! ## Liveness, i.e. some block will eventually be confirmed
 //!
 //! In `Round::Fast`, liveness depends on the super owners coordinating, and proposing at most one
@@ -102,7 +101,8 @@ pub struct ChainManager {
     pub seed: u64,
     /// The probability distribution for choosing a round leader.
     pub distribution: Option<WeightedAliasIndex<u64>>,
-    /// Latest authenticated block that we have received and checked.
+    /// Highest-round authenticated block that we have received and checked. If there are multiple
+    /// proposals in the same round, this contains only the first one.
     pub proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
     /// validator).
@@ -123,6 +123,7 @@ doc_scalar!(
 );
 
 impl ChainManager {
+    /// Replaces `self` with a new chain manager.
     pub fn reset(
         &mut self,
         ownership: &ChainOwnership,
@@ -133,10 +134,12 @@ impl ChainManager {
         Ok(())
     }
 
+    /// Whether this chain is active, i.e. has any owners.
     pub fn is_active(&self) -> bool {
         self.ownership.is_active()
     }
 
+    /// Creates a new `ChainManager`, and starts the first round.
     fn new(
         ownership: ChainOwnership,
         seed: u64,
@@ -154,8 +157,8 @@ impl ChainManager {
         };
 
         let round_duration = ownership.round_timeout(ownership.first_round());
-        let round_timeout = local_time
-            .saturating_add_micros(u64::try_from(round_duration.as_micros()).unwrap_or(u64::MAX));
+        let round_micros = u64::try_from(round_duration.as_micros()).unwrap_or(u64::MAX);
+        let round_timeout = local_time.saturating_add_micros(round_micros);
 
         Ok(ChainManager {
             ownership,
@@ -314,6 +317,9 @@ impl ChainManager {
                 }
             }
         }
+        // We don't compare to `current_round` here: Non-validators must update their locked block
+        // even if it is older than the current round. Validators will only sign in the current
+        // round, though. (See `create_final_vote` below.)
         if let Some(locked) = &self.locked {
             ensure!(
                 new_round > locked.round,
@@ -392,12 +398,11 @@ impl ChainManager {
         if self.current_round() > round {
             return;
         }
-        let round_duration = self
-            .ownership
-            .next_round(round)
-            .map_or(Duration::MAX, |round| self.ownership.round_timeout(round));
-        self.round_timeout = local_time
-            .saturating_add_micros(u64::try_from(round_duration.as_micros()).unwrap_or(u64::MAX));
+        let new_round = self.ownership.next_round(round);
+        let round_duration =
+            new_round.map_or(Duration::MAX, |round| self.ownership.round_timeout(round));
+        let round_micros = u64::try_from(round_duration.as_micros()).unwrap_or(u64::MAX);
+        self.round_timeout = local_time.saturating_add_micros(round_micros);
     }
 
     /// Updates the round number and timer if the timeout certificate is from a higher round than
@@ -514,6 +519,7 @@ impl From<&ChainManager> for ChainManagerInfo {
 }
 
 impl ChainManagerInfo {
+    /// Adds requested certificate values and proposals to the `ChainManagerInfo`.
     pub fn add_values(&mut self, manager: &ChainManager) {
         self.requested_proposed = manager.proposed.clone().map(Box::new);
         self.requested_locked = manager.locked.clone().map(Box::new);
@@ -523,6 +529,7 @@ impl ChainManagerInfo {
             .map(|vote| Box::new(vote.value.clone()));
     }
 
+    /// Returns the highest known validated block certificate.
     pub fn highest_validated(&self) -> Option<&Certificate> {
         self.requested_locked
             .iter()
@@ -535,6 +542,11 @@ impl ChainManagerInfo {
             .max_by_key(|cert| cert.round)
     }
 
+    /// Returns the next round in which a proposal could be accepted.
+    ///
+    /// This is the current round if there is no proposal or validated block certificate in the
+    /// current round yet. If there is, and we are in multi-leader mode, this is the next round.
+    /// Otherwise it is `None`, because no new proposal can be made before the round times out.
     pub fn next_round(&self) -> Option<Round> {
         let proposal_round = self
             .requested_proposed
