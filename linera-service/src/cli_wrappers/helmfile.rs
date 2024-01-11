@@ -27,7 +27,6 @@ impl HelmFile {
                 "LINERA_HELMFILE_SET_SERVER_CONFIG",
                 &format!("working/server_{server_config_id}.json"),
             )
-            .env("LINERA_HELMFILE_SET_GENESIS_CONFIG", "working/genesis.json")
             .env("LINERA_HELMFILE_SET_NUM_SHARDS", num_shards.to_string())
             .arg("sync")
             .arg("--wait")

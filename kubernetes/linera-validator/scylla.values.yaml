@@ -1,4 +1,6 @@
 developerMode: true
+sysctls:
+  - "fs.aio-max-nr=4082080"
 datacenter: validator
 racks:
   - name: rack-1
