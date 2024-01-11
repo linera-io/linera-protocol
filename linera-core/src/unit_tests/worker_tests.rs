@@ -3808,7 +3808,7 @@ where
     assert!(response.info.manager.timeout_vote.is_none());
 
     // Set the clock to the end of the round.
-    clock.set(response.info.manager.round_timeout);
+    clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
     let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
@@ -4014,7 +4014,7 @@ where
         owners: vec![(pub_key0, 100), (pub_key1, 100)],
         multi_leader_rounds: 2,
         timeout_config: TimeoutConfig {
-            fast_round_duration: Duration::from_millis(5),
+            fast_round_duration: Some(Duration::from_secs(5)),
             ..TimeoutConfig::default()
         },
     });
@@ -4048,7 +4048,7 @@ where
     assert!(response.info.manager.timeout_vote.is_none());
 
     // Set the clock to the end of the round.
-    clock.set(response.info.manager.round_timeout);
+    clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
     let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
@@ -4136,7 +4136,7 @@ where
         owners: vec![(pub_key0, 100), (pub_key1, 100)],
         multi_leader_rounds: 2,
         timeout_config: TimeoutConfig {
-            fast_round_duration: Duration::from_millis(5),
+            fast_round_duration: Some(Duration::from_millis(5)),
             ..TimeoutConfig::default()
         },
     });
@@ -4165,7 +4165,7 @@ where
     assert_eq!(vote.value.value_hash, value1.hash());
 
     // Set the clock to the end of the round.
-    clock.set(response.info.manager.round_timeout);
+    clock.set(response.info.manager.round_timeout.unwrap());
 
     // Once we provide the validator with a timeout certificate, the next round starts.
     let value_timeout =

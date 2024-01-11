@@ -1572,16 +1572,22 @@ where
                 }
             }
             // But if the current round has not timed out yet, we have to wait.
-            if manager.round_timeout > self.storage_client().await.current_time() {
-                let timeout = RoundTimeout {
-                    timestamp: manager.round_timeout,
-                    current_round: manager.current_round,
-                    next_block_height: info.next_block_height,
-                };
-                return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout));
+            if let Some(round_timeout) = manager.round_timeout {
+                if round_timeout > self.storage_client().await.current_time() {
+                    let timeout = RoundTimeout {
+                        timestamp: round_timeout,
+                        current_round: manager.current_round,
+                        next_block_height: info.next_block_height,
+                    };
+                    return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout));
+                }
+                // If it has timed out, we request a timeout certificate and retry in the next round.
+                self.request_leader_timeout().await?;
+            } else {
+                return Err(ChainClientError::BlockProposalError(
+                    "Cannot propose in the current round.",
+                ));
             }
-            // If it has timed out, we request a timeout certificate and retry in the next round.
-            self.request_leader_timeout().await?;
         }
     }
 
@@ -2143,7 +2149,7 @@ impl ExecuteBlockOutcome {
     fn wait_for_timeout(info: &ChainInfo) -> Self {
         // TODO(#1424): Local timeout might not match validators' exactly.
         Self::WaitForTimeout(RoundTimeout {
-            timestamp: info.manager.round_timeout,
+            timestamp: info.manager.round_timeout.unwrap(),
             current_round: info.manager.current_round,
             next_block_height: info.next_block_height,
         })

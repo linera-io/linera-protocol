@@ -430,7 +430,7 @@ where
         };
         let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
         let timeout_config = TimeoutConfig {
-            fast_round_duration: fast_round_ms.map_or(Duration::MAX, Duration::from_millis),
+            fast_round_duration: fast_round_ms.map(Duration::from_millis),
             base_timeout: Duration::from_millis(base_timeout_ms),
             timeout_increment: Duration::from_millis(timeout_increment_ms),
         };
@@ -505,7 +505,7 @@ where
             owners: new_public_keys.into_iter().zip(new_weights).collect(),
             multi_leader_rounds,
             timeout_config: TimeoutConfig {
-                fast_round_duration: fast_round_ms.map_or(Duration::MAX, Duration::from_millis),
+                fast_round_duration: fast_round_ms.map(Duration::from_millis),
                 base_timeout: Duration::from_millis(base_timeout_ms),
                 timeout_increment: Duration::from_millis(timeout_increment_ms),
             },
