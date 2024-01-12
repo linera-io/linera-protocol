@@ -185,16 +185,18 @@ impl DirectWritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal
     /// The total size is 16M
     const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = 16000000;
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
-    // We cannot directly write the batch because if a delete is followed by a write then
-    // the delete takes priority. See the sentence "The first tie-breaking rule when two
-    // cells have the same write timestamp is that dead cells win over live cells"
-    // from https://github.com/scylladb/scylladb/blob/master/docs/dev/timestamp-conflict-resolution.md
+
+    // ScyllaDb cannot take a `crate::batch::Batch` directly. Indeed, if a delete is
+    // followed by a write, then the delete takes priority. See the sentence "The first
+    // tie-breaking rule when two cells have the same write timestamp is that dead cells
+    // win over live cells" from
+    // https://github.com/scylladb/scylladb/blob/master/docs/dev/timestamp-conflict-resolution.md
     type Batch = UnorderedBatch;
 
-    async fn write_simplified_batch(&self, batch: Self::Batch) -> Result<(), ScyllaDbContextError> {
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        Self::write_simplified_batch_internal(store, batch).await
+        Self::write_batch_internal(store, batch).await
     }
 }
 
@@ -264,7 +266,7 @@ impl ScyllaDbStoreInternal {
         Ok(false)
     }
 
-    async fn write_simplified_batch_internal(
+    async fn write_batch_internal(
         store: &ScyllaDbStorePair,
         batch: UnorderedBatch,
     ) -> Result<(), ScyllaDbContextError> {

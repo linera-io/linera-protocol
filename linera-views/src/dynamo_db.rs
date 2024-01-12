@@ -914,14 +914,11 @@ impl DirectWritableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal
     const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_SIZE;
     const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
     const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
-    // The DynamoDB does not support the `DeletePrefix` operation.
-    // Therefore it does not make sense to have a delete prefix and they have to
-    // be downloaded for making a list.
-    // Also we remove the deletes that are followed by inserts on the same key because
-    // the TransactWriteItem and BatchWriteItem are not going to work that way.
+
+    // DynamoDB does not support the `DeletePrefix` operation.
     type Batch = SimpleUnorderedBatch;
 
-    async fn write_simplified_batch(&self, batch: Self::Batch) -> Result<(), DynamoDbContextError> {
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), DynamoDbContextError> {
         let mut builder = TransactionBuilder::default();
         for key in batch.deletions {
             builder.insert_delete_request(key, self)?;

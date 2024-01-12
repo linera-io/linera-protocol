@@ -62,10 +62,10 @@ fn get_journaling_key(base_key: &[u8], tag: u8, pos: u32) -> Result<Vec<u8>, bcs
 /// Low-level, asynchronous direct write key-value operations with simplified batch
 #[async_trait]
 pub trait DirectWritableKeyValueStore<E> {
-    /// The maximal number of items in a simplified transaction
+    /// The maximal number of items in a batch.
     const MAX_TRANSACT_WRITE_ITEM_SIZE: usize;
 
-    /// The maximal number of bytes of a simplified transaction
+    /// The maximal number of bytes of a batch.
     const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize;
 
     /// The maximal size of values that can be stored.
@@ -75,7 +75,7 @@ pub trait DirectWritableKeyValueStore<E> {
     type Batch: SimplifiedBatch + Serialize + DeserializeOwned + Default;
 
     /// Writes the simplified batch in the database.
-    async fn write_simplified_batch(&self, batch: Self::Batch) -> Result<(), E>;
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), E>;
 }
 
 /// Low-level, asynchronous direct read/write key-value operations with simplified batch
@@ -171,7 +171,7 @@ where
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), K::Error> {
         let batch = K::Batch::from_batch(self, batch).await?;
         if Self::is_fastpath_feasible(&batch) {
-            self.store.write_simplified_batch(batch).await
+            self.store.write_batch(batch).await
         } else {
             let header = self.write_journal(batch, base_key).await?;
             self.coherently_resolve_journal(header, base_key).await
@@ -223,7 +223,7 @@ where
                 } else {
                     batch.add_delete(key);
                 }
-                self.store.write_simplified_batch(batch).await?;
+                self.store.write_batch(batch).await?;
             } else {
                 return Err(JournalConsistencyError::FailureToRetrieveJournalBlock.into());
             }
@@ -253,14 +253,12 @@ where
                 } else {
                     let next_block_size = iter.next_batch_size(&block, block_size)?;
                     let next_transaction_size = transaction_size + next_block_size;
-                    let block_flush =
-                        if next_transaction_size > K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE {
-                            true
-                        } else {
-                            next_block_size > K::MAX_VALUE_SIZE
-                        };
-                    let transaction_flush =
-                        next_transaction_size > K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
+                    let block_flush = if next_transaction_size > K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE {
+                        true
+                    } else {
+                        next_block_size > K::MAX_VALUE_SIZE
+                    };
+                    let transaction_flush = next_transaction_size > K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
                     (block_flush, transaction_flush)
                 }
             };
@@ -277,7 +275,7 @@ where
             }
             if transaction_flush {
                 let batch = std::mem::take(&mut transaction);
-                self.store.write_simplified_batch(batch).await?;
+                self.store.write_batch(batch).await?;
                 transaction_size = 0;
             }
         }
@@ -287,7 +285,7 @@ where
             let value = bcs::to_bytes(&header)?;
             let mut batch = K::Batch::default();
             batch.add_insert(key, value);
-            self.store.write_simplified_batch(batch).await?;
+            self.store.write_batch(batch).await?;
         }
         Ok(header)
     }
