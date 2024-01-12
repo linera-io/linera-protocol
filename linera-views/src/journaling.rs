@@ -18,7 +18,7 @@
 //! transaction to mark the block as processed.
 
 use crate::{
-    batch::{Batch, DeletePrefixExpander, SimplifiedBatch, SimplifiedBatchIter},
+    batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     common::{
         KeyIterable, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore, MIN_VIEW_TAG,
     },
@@ -238,47 +238,47 @@ where
         base_key: &[u8],
     ) -> Result<JournalHeader, K::Error> {
         let mut iter = simplified_batch.into_iter();
-        let mut value_size = 0;
-        let mut transact_size = 0;
-        let mut batch = K::Batch::default();
+        let mut block = K::Batch::default();
+        let mut block_size = 0;
         let mut block_count = 0;
-        let mut transacts = K::Batch::default();
+        let mut transaction = K::Batch::default();
+        let mut transaction_size = 0;
         loop {
-            let result = batch.try_append(&mut iter, &mut value_size)?;
-            if !result {
+            if !iter.write_next_value(&mut block, &mut block_size)? {
                 break;
             }
-            let (value_flush, transact_flush) = if (iter.remaining_len() == 0)
-                || batch.len() == K::MAX_TRANSACT_WRITE_ITEM_SIZE - 2
-            {
-                (true, true)
-            } else {
-                let next_value_size = batch.next_value_size(value_size, &mut iter)?;
-                let next_transact_size = transact_size + next_value_size;
-                let value_flush = if next_transact_size > K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE {
-                    true
+            let (block_flush, transaction_flush) = {
+                if iter.is_empty() || block.len() == K::MAX_TRANSACT_WRITE_ITEM_SIZE - 2 {
+                    (true, true)
                 } else {
-                    next_value_size > K::MAX_VALUE_SIZE
-                };
-                let transact_flush = next_transact_size > K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
-                (value_flush, transact_flush)
+                    let next_block_size = iter.next_batch_size(&block, block_size)?;
+                    let next_transaction_size = transaction_size + next_block_size;
+                    let block_flush =
+                        if next_transaction_size > K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE {
+                            true
+                        } else {
+                            next_block_size > K::MAX_VALUE_SIZE
+                        };
+                    let transaction_flush =
+                        next_transaction_size > K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
+                    (block_flush, transaction_flush)
+                }
             };
-            if value_flush {
-                value_size += batch.overhead_size();
-                let value = bcs::to_bytes(&batch)?;
-                batch = K::Batch::default();
-                assert_eq!(value.len(), value_size);
+            if block_flush {
+                block_size += block.overhead_size();
+                let value = bcs::to_bytes(&block)?;
+                block = K::Batch::default();
+                assert_eq!(value.len(), block_size);
                 let key = get_journaling_key(base_key, KeyTag::Entry as u8, block_count)?;
-                transacts.add_insert(key, value);
+                transaction.add_insert(key, value);
                 block_count += 1;
-                transact_size += value_size;
-                value_size = 0;
+                transaction_size += block_size;
+                block_size = 0;
             }
-            if transact_flush {
-                self.store
-                    .write_simplified_batch(std::mem::take(&mut transacts))
-                    .await?;
-                transact_size = 0;
+            if transaction_flush {
+                let batch = std::mem::take(&mut transaction);
+                self.store.write_simplified_batch(batch).await?;
+                transaction_size = 0;
             }
         }
         let header = JournalHeader { block_count };
