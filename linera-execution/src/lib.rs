@@ -216,6 +216,12 @@ impl ApplicationCallOutcome {
         self.execution_outcome.messages.push(message);
         self
     }
+
+    /// Registers a new session to be created with the provided `session_state`.
+    pub fn with_new_session(mut self, session_state: Vec<u8>) -> Self {
+        self.create_sessions.push(session_state);
+        self
+    }
 }
 
 /// The result of calling into a session.
