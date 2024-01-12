@@ -265,7 +265,8 @@ where
             };
             if value_flush {
                 value_size += batch.overhead_size();
-                let value = batch.to_bytes()?;
+                let value = bcs::to_bytes(&batch)?;
+                batch = K::Batch::default();
                 assert_eq!(value.len(), value_size);
                 let key = get_journaling_key(base_key, KeyTag::Entry as u8, block_count)?;
                 transacts.add_insert(key, value);

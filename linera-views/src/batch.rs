@@ -398,9 +398,6 @@ pub trait SimplifiedBatch: Sized + Send + Sync {
         value_size: &mut usize,
     ) -> Result<bool, bcs::Error>;
 
-    /// Returns the serialization and clears the simplified batch
-    fn to_bytes(&mut self) -> Result<Vec<u8>, bcs::Error>;
-
     /// Adds an individual delete operation
     fn add_delete(&mut self, key: Vec<u8>);
 
@@ -486,13 +483,6 @@ impl SimplifiedBatch for SimpleUnorderedBatch {
         } else {
             Ok(false)
         }
-    }
-
-    fn to_bytes(&mut self) -> Result<Vec<u8>, bcs::Error> {
-        let value = bcs::to_bytes(&self)?;
-        self.deletions.clear();
-        self.insertions.clear();
-        Ok(value)
     }
 
     fn add_delete(&mut self, key: Vec<u8>) {
@@ -591,14 +581,6 @@ impl SimplifiedBatch for UnorderedBatch {
             self.simple_unordered_batch
                 .try_append(&mut iter.insert_deletion_iter, value_size)
         }
-    }
-
-    fn to_bytes(&mut self) -> Result<Vec<u8>, bcs::Error> {
-        let value = bcs::to_bytes(&self)?;
-        self.key_prefix_deletions.clear();
-        self.simple_unordered_batch.deletions.clear();
-        self.simple_unordered_batch.insertions.clear();
-        Ok(value)
     }
 
     fn add_delete(&mut self, key: Vec<u8>) {
