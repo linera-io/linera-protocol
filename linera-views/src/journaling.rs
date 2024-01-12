@@ -1,14 +1,24 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! The Key Value Store and a simplified Key Value Store
-//! The most important traits are:
-//! * [`KeyValueStore`][trait1] which manages the access to a database and is clonable. It has a minimal interface
+//! Journaling aims to allow writing arbitrarily large batches of data in an atomic way.
+//! This is useful for database backends that limit the number of keys and/or the size of
+//! the data that can be written atomically (i.e. in the same database transaction).
 //!
-//! [trait1]: common::KeyValueStore
+//! Journaling requires to set aside a range of keys to hold a possible "header" and an
+//! array of unwritten entries called "blocks".
+//!
+//! When a new batch to be written exceeds the capacity of the underlying storage, the
+//! "slow path" is taken: the batch of operations is first written into blocks, then the
+//! journal header is (atomically) updated to make the batch of updates persistent.
+//!
+//! Before any new read or write operation, if a journal is present, it must first be
+//! cleared. This is done by processing every block of the journal successively. Every
+//! time the data in a block are written, the journal header is updated in the same
+//! transaction to mark the block as processed.
 
 use crate::{
-    batch::{Batch, DeletePrefixExpander, SimplifiedBatch, SimplifiedBatchIter},
+    batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     common::{
         KeyIterable, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore, MIN_VIEW_TAG,
     },
@@ -21,6 +31,8 @@ use thiserror::Error;
 
 /// The tag used for the journal stuff.
 const JOURNAL_TAG: u8 = 0;
+// To prevent collisions, the tag value 0 is reserved for journals.
+// The tags used by views must be greater or equal than `MIN_VIEW_TAG`.
 sa::const_assert!(JOURNAL_TAG < MIN_VIEW_TAG);
 
 /// Data type indicating that the database is not consistent
@@ -40,8 +52,6 @@ enum KeyTag {
 }
 
 fn get_journaling_key(base_key: &[u8], tag: u8, pos: u32) -> Result<Vec<u8>, bcs::Error> {
-    // We used the value 0 because it does not collide with other key values.
-    // since other tags are starting from 1.
     let mut key = base_key.to_vec();
     key.extend([JOURNAL_TAG]);
     key.extend([tag]);
@@ -52,21 +62,20 @@ fn get_journaling_key(base_key: &[u8], tag: u8, pos: u32) -> Result<Vec<u8>, bcs
 /// Low-level, asynchronous direct write key-value operations with simplified batch
 #[async_trait]
 pub trait DirectWritableKeyValueStore<E> {
-    /// The maximal number of items in a simplified transaction
-    const MAX_TRANSACT_WRITE_ITEM_SIZE: usize;
+    /// The maximal number of items in a batch.
+    const MAX_BATCH_SIZE: usize;
 
-    /// The maximal number of bytes of a simplified transaction
-    const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize;
+    /// The maximal number of bytes of a batch.
+    const MAX_BATCH_TOTAL_SIZE: usize;
 
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 
     /// The batch type.
-    type SimpBatch: SimplifiedBatch + Serialize + DeserializeOwned + Default;
+    type Batch: SimplifiedBatch + Serialize + DeserializeOwned + Default;
 
-    /// Writes the simplified `batch` in the database. After the writing, the
-    /// simplified batch must be empty.
-    async fn write_simplified_batch(&self, simp_batch: &mut Self::SimpBatch) -> Result<(), E>;
+    /// Writes the batch to the database.
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), E>;
 }
 
 /// Low-level, asynchronous direct read/write key-value operations with simplified batch
@@ -83,12 +92,11 @@ struct JournalHeader {
     block_count: u32,
 }
 
-/// A KeyValueStore built from a SimplifiedKeyValueStore by using journaling
-/// for bypassing the limits on the batch size
+/// A journaling [`KeyValueStore`] built from an inner [`DirectKeyValueStore`].
 #[derive(Clone)]
 pub struct JournalingKeyValueStore<K> {
-    /// The inner client that is called by the LRU cache one
-    pub client: K,
+    /// The inner store.
+    pub store: K,
 }
 
 #[async_trait]
@@ -99,12 +107,7 @@ where
     type Error = K::Error;
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         let mut vector_list = Vec::new();
-        for key in self
-            .client
-            .find_keys_by_prefix(key_prefix)
-            .await?
-            .iterator()
-        {
+        for key in self.store.find_keys_by_prefix(key_prefix).await?.iterator() {
             vector_list.push(key?.to_vec());
         }
         Ok(vector_list)
@@ -125,33 +128,33 @@ where
 
     /// The read stuff does not change
     fn max_stream_queries(&self) -> usize {
-        self.client.max_stream_queries()
+        self.store.max_stream_queries()
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, K::Error> {
-        self.client.read_value_bytes(key).await
+        self.store.read_value_bytes(key).await
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, K::Error> {
-        self.client.contains_key(key).await
+        self.store.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, K::Error> {
-        self.client.read_multi_values_bytes(keys).await
+        self.store.read_multi_values_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, K::Error> {
-        self.client.find_keys_by_prefix(key_prefix).await
+        self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, K::Error> {
-        self.client.find_key_values_by_prefix(key_prefix).await
+        self.store.find_key_values_by_prefix(key_prefix).await
     }
 }
 
@@ -165,11 +168,11 @@ where
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), K::Error> {
-        let mut simp_batch = K::SimpBatch::from_batch(self, batch).await?;
-        if Self::is_fastpath_feasible(&simp_batch) {
-            self.client.write_simplified_batch(&mut simp_batch).await
+        let batch = K::Batch::from_batch(self, batch).await?;
+        if Self::is_fastpath_feasible(&batch) {
+            self.store.write_batch(batch).await
         } else {
-            let header = self.write_journal(simp_batch, base_key).await?;
+            let header = self.write_journal(batch, base_key).await?;
             self.coherently_resolve_journal(header, base_key).await
         }
     }
@@ -203,26 +206,27 @@ where
         mut header: JournalHeader,
         base_key: &[u8],
     ) -> Result<(), K::Error> {
-        loop {
-            if header.block_count == 0 {
-                break;
-            }
-            let key = get_journaling_key(base_key, KeyTag::Entry as u8, header.block_count - 1)?;
-            let simp_batch = self.client.read_value::<K::SimpBatch>(&key).await?;
-            if let Some(mut simp_batch) = simp_batch {
-                simp_batch.add_delete(key); // Delete the journal entry
-                header.block_count -= 1;
-                let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
-                if header.block_count > 0 {
-                    let value = bcs::to_bytes(&header)?;
-                    simp_batch.add_insert(key, value);
-                } else {
-                    simp_batch.add_delete(key);
-                }
-                self.client.write_simplified_batch(&mut simp_batch).await?;
+        let header_key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
+
+        while header.block_count > 0 {
+            let block_key =
+                get_journaling_key(base_key, KeyTag::Entry as u8, header.block_count - 1)?;
+            // Read the batch of updates (aka. "block") previously saved in the journal.
+            let mut batch = self
+                .store
+                .read_value::<K::Batch>(&block_key)
+                .await?
+                .ok_or(JournalConsistencyError::FailureToRetrieveJournalBlock)?;
+            // Execute the block and delete it from the journal atomically.
+            batch.add_delete(block_key);
+            header.block_count -= 1;
+            if header.block_count > 0 {
+                let value = bcs::to_bytes(&header)?;
+                batch.add_insert(header_key.clone(), value);
             } else {
-                return Err(JournalConsistencyError::FailureToRetrieveJournalBlock.into());
+                batch.add_delete(header_key.clone());
             }
+            self.store.write_batch(batch).await?;
         }
         Ok(())
     }
@@ -230,72 +234,64 @@ where
     /// Writes blocks to the database and resolves them later.
     async fn write_journal(
         &self,
-        simplified_batch: K::SimpBatch,
+        simplified_batch: K::Batch,
         base_key: &[u8],
     ) -> Result<JournalHeader, K::Error> {
         let mut iter = simplified_batch.into_iter();
-        let mut value_size = 0;
-        let mut transact_size = 0;
-        let mut simp_batch = K::SimpBatch::default();
+        let mut block_batch = K::Batch::default();
+        let mut block_size = 0;
         let mut block_count = 0;
-        let mut transacts = K::SimpBatch::default();
-        loop {
-            let result = simp_batch.try_append(&mut iter, &mut value_size)?;
-            if !result {
-                break;
-            }
-            let (value_flush, transact_flush) = if (iter.remaining_len() == 0)
-                || simp_batch.len() == K::MAX_TRANSACT_WRITE_ITEM_SIZE - 2
-            {
-                (true, true)
-            } else {
-                let next_value_size = simp_batch.next_value_size(value_size, &mut iter)?;
-                let next_transact_size = transact_size + next_value_size;
-                let value_flush = if next_transact_size > K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE {
-                    true
+        let mut transaction_batch = K::Batch::default();
+        let mut transaction_size = 0;
+        while iter.write_next_value(&mut block_batch, &mut block_size)? {
+            let (block_flush, transaction_flush) = {
+                if iter.is_empty() || block_batch.len() == K::MAX_BATCH_SIZE - 2 {
+                    (true, true)
                 } else {
-                    next_value_size > K::MAX_VALUE_SIZE
-                };
-                let transact_flush = next_transact_size > K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
-                (value_flush, transact_flush)
+                    let next_block_size =
+                        block_size + iter.next_value_size()? + block_batch.overhead_size();
+                    let next_transaction_size = transaction_size + next_block_size;
+                    let transaction_flush = next_transaction_size > K::MAX_BATCH_TOTAL_SIZE;
+                    let block_flush = transaction_flush || next_block_size > K::MAX_VALUE_SIZE;
+                    (block_flush, transaction_flush)
+                }
             };
-            if value_flush {
-                value_size += simp_batch.overhead_size();
-                let value = simp_batch.to_bytes()?;
-                assert_eq!(value.len(), value_size);
+            if block_flush {
+                block_size += block_batch.overhead_size();
+                let value = bcs::to_bytes(&block_batch)?;
+                block_batch = K::Batch::default();
+                assert_eq!(value.len(), block_size);
                 let key = get_journaling_key(base_key, KeyTag::Entry as u8, block_count)?;
-                transacts.add_insert(key, value);
+                transaction_batch.add_insert(key, value);
                 block_count += 1;
-                transact_size += value_size;
-                value_size = 0;
+                transaction_size += block_size;
+                block_size = 0;
             }
-            if transact_flush {
-                self.client.write_simplified_batch(&mut transacts).await?;
-                transact_size = 0;
+            if transaction_flush {
+                let batch = std::mem::take(&mut transaction_batch);
+                self.store.write_batch(batch).await?;
+                transaction_size = 0;
             }
         }
         let header = JournalHeader { block_count };
         if block_count > 0 {
             let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
             let value = bcs::to_bytes(&header)?;
-            let mut sing_oper = K::SimpBatch::default();
-            sing_oper.add_insert(key, value);
-            self.client.write_simplified_batch(&mut sing_oper).await?;
+            let mut batch = K::Batch::default();
+            batch.add_insert(key, value);
+            self.store.write_batch(batch).await?;
         }
         Ok(header)
     }
 
-    fn is_fastpath_feasible(simp_batch: &K::SimpBatch) -> bool {
-        if simp_batch.len() > K::MAX_TRANSACT_WRITE_ITEM_SIZE {
-            return false;
-        }
-        simp_batch.bytes() <= K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE
+    fn is_fastpath_feasible(batch: &K::Batch) -> bool {
+        batch.len() <= K::MAX_BATCH_SIZE && batch.num_bytes() <= K::MAX_BATCH_TOTAL_SIZE
     }
 }
 
 impl<K> JournalingKeyValueStore<K> {
-    /// Creates a new store from a simplified one.
+    /// Creates a new journaling store.
     pub fn new(store: K) -> Self {
-        Self { client: store }
+        Self { store }
     }
 }

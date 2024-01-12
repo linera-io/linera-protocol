@@ -7,11 +7,11 @@ use crate::{
         CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore,
         ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
     },
-    lru_caching::LruCachingStore,
-    simple_store::{
+    journaling::{
         DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
         JournalingKeyValueStore,
     },
+    lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
 use async_lock::{Semaphore, SemaphoreGuard};
@@ -37,7 +37,7 @@ use aws_sdk_dynamodb::{
 use aws_smithy_types::error::operation::BuildError;
 use futures::future::join_all;
 use linera_base::ensure;
-use std::{collections::HashMap, env, mem, str::FromStr, sync::Arc};
+use std::{collections::HashMap, env, str::FromStr, sync::Arc};
 use thiserror::Error;
 
 #[cfg(any(test, feature = "test"))]
@@ -911,32 +911,26 @@ impl ReadableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
 
 #[async_trait]
 impl DirectWritableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
-    const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_SIZE;
-    const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
+    const MAX_BATCH_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_SIZE;
+    const MAX_BATCH_TOTAL_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
     const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
-    // The DynamoDB does not support the `DeletePrefix` operation.
-    // Therefore it does not make sense to have a delete prefix and they have to
-    // be downloaded for making a list.
-    // Also we remove the deletes that are followed by inserts on the same key because
-    // the TransactWriteItem and BatchWriteItem are not going to work that way.
-    type SimpBatch = SimpleUnorderedBatch;
 
-    async fn write_simplified_batch(
-        &self,
-        simp_batch: &mut Self::SimpBatch,
-    ) -> Result<(), DynamoDbContextError> {
-        let mut tb = TransactionBuilder::default();
-        for key in mem::take(&mut simp_batch.deletions) {
-            tb.insert_delete_request(key, self)?;
+    // DynamoDB does not support the `DeletePrefix` operation.
+    type Batch = SimpleUnorderedBatch;
+
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), DynamoDbContextError> {
+        let mut builder = TransactionBuilder::default();
+        for key in batch.deletions {
+            builder.insert_delete_request(key, self)?;
         }
-        for (key, value) in mem::take(&mut simp_batch.insertions) {
-            tb.insert_put_request(key, value, self)?;
+        for (key, value) in batch.insertions {
+            builder.insert_put_request(key, value, self)?;
         }
-        if !tb.transacts.is_empty() {
+        if !builder.transacts.is_empty() {
             let _guard = self.acquire().await;
             self.client
                 .transact_write_items()
-                .set_transact_items(Some(tb.transacts))
+                .set_transact_items(Some(builder.transacts))
                 .send()
                 .await?;
         }

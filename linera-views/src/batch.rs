@@ -57,28 +57,30 @@ pub enum WriteOperation {
     },
 }
 
-/// A batch of writes inside a transaction.
+/// A batch of write operations.
 #[derive(Default)]
 pub struct Batch {
-    /// The entries of the batch to be consumed when processed.
+    /// The write operations.
     pub operations: Vec<WriteOperation>,
 }
 
-/// Unordered list of deletes and puts being written.
+/// A batch of deletions and insertions that operate on disjoint keys, thus can be
+/// executed in any order.
 #[derive(Default, Serialize, Deserialize)]
 pub struct SimpleUnorderedBatch {
-    /// List of deletions unordered
+    /// The deletions.
     pub deletions: Vec<Vec<u8>>,
-    /// List of insertions unordered
+    /// The insertions.
     pub insertions: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
-/// An unordered batch of deletes/puts and a collection of key prefix deletions.
+/// An unordered batch of deletions and insertions, together with a set of key-prefixes to
+/// delete. Key-prefix deletions must happen before the insertions and the deletions.
 #[derive(Default, Serialize, Deserialize)]
 pub struct UnorderedBatch {
-    /// key prefix deletions.
+    /// The key-prefix deletions.
     pub key_prefix_deletions: Vec<Vec<u8>>,
-    /// The delete and lists.
+    /// The batch of deletions and insertions.
     pub simple_unordered_batch: SimpleUnorderedBatch,
 }
 
@@ -110,10 +112,9 @@ impl UnorderedBatch {
         })
     }
 
-    /// From an `UnorderedBatch`, creates a [`UnorderedBatch`] doesn't contain
-    /// prefix deletions that collide with an insertion.
-    /// This requires accessing the database to read them and translate them
-    /// as collection of deletes.
+    /// Modifies an [`UnorderedBatch`] so that the key-prefix deletions do not conflict
+    /// with subsequent insertions. This may require accessing the database to compute
+    /// lists of deleted keys.
     pub async fn expand_colliding_prefix_deletions<DB: DeletePrefixExpander>(
         &mut self,
         db: &DB,
@@ -208,12 +209,12 @@ impl Batch {
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
-    ///   batch.put_key_value(vec![0,1], &(34 as u128));
-    ///   batch.delete_key(vec![0,1]);
-    ///   let unord_batch = batch.simplify();
-    ///   assert_eq!(unord_batch.key_prefix_deletions.len(), 0);
-    ///   assert_eq!(unord_batch.simple_unordered_batch.insertions.len(), 0);
-    ///   assert_eq!(unord_batch.simple_unordered_batch.deletions.len(), 1);
+    ///   batch.put_key_value(vec![0, 1], &(34 as u128));
+    ///   batch.delete_key(vec![0, 1]);
+    ///   let unordered_batch = batch.simplify();
+    ///   assert_eq!(unordered_batch.key_prefix_deletions.len(), 0);
+    ///   assert_eq!(unordered_batch.simple_unordered_batch.insertions.len(), 0);
+    ///   assert_eq!(unordered_batch.simple_unordered_batch.deletions.len(), 1);
     /// ```
     pub fn simplify(self) -> UnorderedBatch {
         let mut delete_and_insert_map = BTreeMap::new();
@@ -221,50 +222,47 @@ impl Batch {
         for operation in self.operations {
             match operation {
                 WriteOperation::Delete { key } => {
-                    // We delete a key. However if said key was already matched by a delete_prefix then
-                    // nothing needs to be done.
-                    if !is_prefix_matched(&delete_prefix_set, &key) {
-                        delete_and_insert_map.insert(key, None);
-                    } else {
+                    // If `key` is matched by a deleted prefix, then remove any inserted
+                    // value. Otherwise, add the key to the set of deletions.
+                    if is_prefix_matched(&delete_prefix_set, &key) {
                         delete_and_insert_map.remove(&key);
+                    } else {
+                        delete_and_insert_map.insert(key, None);
                     }
                 }
                 WriteOperation::Put { key, value } => {
-                    // Simple insert
+                    // Record the insertion.
                     delete_and_insert_map.insert(key, Some(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    // First identify all the deletions and insertions and then remove them
-                    let key_list = delete_and_insert_map
+                    // Remove the previous deletions and insertions covered by `key_prefix`.
+                    let keys = delete_and_insert_map
                         .range(get_interval(key_prefix.clone()))
                         .map(|x| x.0.to_vec())
                         .collect::<Vec<_>>();
-                    for key in key_list {
+                    for key in keys {
                         delete_and_insert_map.remove(&key);
                     }
-                    // If that key is matched by something already present, then nothing to be done
-                    if !is_prefix_matched(&delete_prefix_set, &key_prefix) {
-                        // Find the existing key_prefixes that are matched
-                        let key_prefix_list = delete_prefix_set
-                            .range(get_interval(key_prefix.clone()))
-                            .map(|x: &Vec<u8>| x.to_vec())
-                            .collect::<Vec<_>>();
-                        // Delete them
-                        for key_prefix in key_prefix_list {
-                            delete_prefix_set.remove(&key_prefix);
-                        }
-                        // Then insert the dominant entry in the database
-                        delete_prefix_set.insert(key_prefix);
+                    // If `key_prefix` is covered by a previous deleted prefix, then we're done.
+                    if is_prefix_matched(&delete_prefix_set, &key_prefix) {
+                        continue;
                     }
+                    // Otherwise, find the prefixes that are covered by the new key
+                    // prefix.
+                    let key_prefixes = delete_prefix_set
+                        .range(get_interval(key_prefix.clone()))
+                        .map(|x: &Vec<u8>| x.to_vec())
+                        .collect::<Vec<_>>();
+                    // Delete them.
+                    for key_prefix in key_prefixes {
+                        delete_prefix_set.remove(&key_prefix);
+                    }
+                    // Then, insert the new key prefix.
+                    delete_prefix_set.insert(key_prefix);
                 }
             }
         }
-        // It is important to note that DeletePrefix operations have to be done before other
-        // insert operations.
-        let mut key_prefix_deletions = Vec::new();
-        for key_prefix in delete_prefix_set {
-            key_prefix_deletions.push(key_prefix);
-        }
+        let key_prefix_deletions = delete_prefix_set.into_iter().collect();
         let mut deletions = Vec::new();
         let mut insertions = Vec::new();
         for (key, val) in delete_and_insert_map {
@@ -283,7 +281,7 @@ impl Batch {
         }
     }
 
-    /// check the size of the values of the batch.
+    /// Checks the size of the values of the batch.
     pub fn check_value_size(&self, max_value_size: usize) -> bool {
         for operation in &self.operations {
             if let WriteOperation::Put { key: _, value } = operation {
@@ -295,11 +293,11 @@ impl Batch {
         true
     }
 
-    /// Adds the insertion of a `(key,value)` pair into the batch with a serializable value.
+    /// Adds the insertion of a key-value pair into the batch with a serializable value.
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
-    ///   batch.put_key_value(vec![0,1], &(34 as u128));
+    ///   batch.put_key_value(vec![0, 1], &(34 as u128));
     /// ```
     #[inline]
     pub fn put_key_value(
@@ -316,7 +314,7 @@ impl Batch {
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
-    ///   batch.put_key_value_bytes(vec![0,1], vec![3,4,5]);
+    ///   batch.put_key_value_bytes(vec![0, 1], vec![3, 4, 5]);
     /// ```
     #[inline]
     pub fn put_key_value_bytes(&mut self, key: Vec<u8>, value: Vec<u8>) {
@@ -327,7 +325,7 @@ impl Batch {
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
-    ///   batch.delete_key(vec![0,1]);
+    ///   batch.delete_key(vec![0, 1]);
     /// ```
     #[inline]
     pub fn delete_key(&mut self, key: Vec<u8>) {
@@ -338,7 +336,7 @@ impl Batch {
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
-    ///   batch.delete_key_prefix(vec![0,1]);
+    ///   batch.delete_key_prefix(vec![0, 1]);
     /// ```
     #[inline]
     pub fn delete_key_prefix(&mut self, key_prefix: Vec<u8>) {
@@ -355,6 +353,7 @@ impl Batch {
 pub trait DeletePrefixExpander {
     /// The error type that can happen when expanding the key_prefix.
     type Error: Debug;
+
     /// Returns the list of keys to be appended to the list.
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 }
@@ -362,6 +361,7 @@ pub trait DeletePrefixExpander {
 #[async_trait]
 impl DeletePrefixExpander for MemoryContext<()> {
     type Error = MemoryContextError;
+
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         let mut vector_list = Vec::new();
         for key in <Vec<Vec<u8>> as KeyIterable<Self::Error>>::iterator(
@@ -373,63 +373,59 @@ impl DeletePrefixExpander for MemoryContext<()> {
     }
 }
 
-/// The simplified batch used for the computation.
+/// A notion of batch useful for certain computations (notably journaling).
 #[async_trait]
 pub trait SimplifiedBatch: Sized + Send + Sync {
-    /// The Iterator type used for the batch
-    type Iter: SimplifiedBatchIter;
+    /// The iterator type used to process values from the batch.
+    type Iter: BatchValueWriter<Self>;
 
-    /// Returns an owning iterator on the simplified batch.
-    fn into_iter(self) -> Self::Iter;
-
-    /// Returns the total number of entries of the simplified batch
-    fn len(&self) -> usize;
-
-    /// Returns the total number of bytes of the simplified batch
-    fn bytes(&self) -> usize;
-
-    /// Returns the overhead size of the simplified batch
-    fn overhead_size(&self) -> usize;
-
-    /// Appends the iterator to the simplified batch
-    fn try_append(
-        &mut self,
-        iter: &mut Self::Iter,
-        value_size: &mut usize,
-    ) -> Result<bool, bcs::Error>;
-
-    /// Returns the serialization and clears the simplified batch
-    fn to_bytes(&mut self) -> Result<Vec<u8>, bcs::Error>;
-
-    /// Adds an individual delete operation
-    fn add_delete(&mut self, key: Vec<u8>);
-
-    /// Adds an individual insert of (key,value)
-    fn add_insert(&mut self, key: Vec<u8>, value: Vec<u8>);
-
-    /// Gets the next size of iterator
-    fn next_value_size(
-        &self,
-        value_size: usize,
-        iter: &mut Self::Iter,
-    ) -> Result<usize, bcs::Error>;
-
-    /// Creates a simplified batch from an existing batch
+    /// Creates a simplified batch from a standard one.
     async fn from_batch<S: DeletePrefixExpander + Send + Sync>(
         store: S,
         batch: Batch,
     ) -> Result<Self, S::Error>;
 
-    /// Returns true if the Simplified batch is empty
+    /// Returns an owning iterator over the values in the batch.
+    fn into_iter(self) -> Self::Iter;
+
+    /// Returns the total number of entries in the batch.
+    fn len(&self) -> usize;
+
+    /// Returns the total number of bytes in the batch.
+    fn num_bytes(&self) -> usize;
+
+    /// Returns the overhead size of the batch.
+    fn overhead_size(&self) -> usize;
+
+    /// Adds the deletion of key to the batch.
+    fn add_delete(&mut self, key: Vec<u8>);
+
+    /// Adds the insertion of a key-value pair to the batch.
+    fn add_insert(&mut self, key: Vec<u8>, value: Vec<u8>);
+
+    /// Returns true if the batch is empty.
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
 }
 
-/// The iterator over the simplified batch
-pub trait SimplifiedBatchIter: Send + Sync {
-    /// Returns the number of remaining entries in the iterator.
-    fn remaining_len(&self) -> usize;
+/// An iterator-like object that can write values one by one to a batch while updating the
+/// total size of the batch.
+pub trait BatchValueWriter<Batch>: Send + Sync {
+    /// Returns true if there are no more values to write.
+    fn is_empty(&self) -> bool;
+
+    /// Writes the next value (if any) to the batch and updates the batch size accordingly.
+    ///
+    /// Returns false if there was no value to write.
+    fn write_next_value(
+        &mut self,
+        batch: &mut Batch,
+        batch_size: &mut usize,
+    ) -> Result<bool, bcs::Error>;
+
+    /// Computes the size of the next value (if any) without consuming the value.
+    fn next_value_size(&mut self) -> Result<usize, bcs::Error>;
 }
 
 /// The iterator that corresponds to a SimpleUnorderedBatch
@@ -441,6 +437,7 @@ pub struct SimpleUnorderedBatchIter {
 #[async_trait]
 impl SimplifiedBatch for SimpleUnorderedBatch {
     type Iter = SimpleUnorderedBatchIter;
+
     fn into_iter(self) -> Self::Iter {
         let delete_iter = self.deletions.into_iter().peekable();
         let insert_iter = self.insertions.into_iter().peekable();
@@ -454,7 +451,7 @@ impl SimplifiedBatch for SimpleUnorderedBatch {
         self.deletions.len() + self.insertions.len()
     }
 
-    fn bytes(&self) -> usize {
+    fn num_bytes(&self) -> usize {
         let mut total_size = 0;
         for (key, value) in &self.insertions {
             total_size += key.len() + value.len();
@@ -469,61 +466,12 @@ impl SimplifiedBatch for SimpleUnorderedBatch {
         get_uleb128_size(self.deletions.len()) + get_uleb128_size(self.insertions.len())
     }
 
-    fn try_append(
-        &mut self,
-        iter: &mut Self::Iter,
-        value_size: &mut usize,
-    ) -> Result<bool, bcs::Error> {
-        if let Some(delete) = iter.delete_iter.next() {
-            *value_size += serialized_size(&delete)?;
-            self.deletions.push(delete);
-            Ok(true)
-        } else if let Some((key, value)) = iter.insert_iter.next() {
-            *value_size += serialized_size(&key)? + serialized_size(&value)?;
-            self.insertions.push((key, value));
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
-    fn to_bytes(&mut self) -> Result<Vec<u8>, bcs::Error> {
-        let value = bcs::to_bytes(&self)?;
-        self.deletions.clear();
-        self.insertions.clear();
-        Ok(value)
-    }
-
     fn add_delete(&mut self, key: Vec<u8>) {
         self.deletions.push(key)
     }
 
     fn add_insert(&mut self, key: Vec<u8>, value: Vec<u8>) {
         self.insertions.push((key, value))
-    }
-
-    fn next_value_size(
-        &self,
-        value_size: usize,
-        iter: &mut SimpleUnorderedBatchIter,
-    ) -> Result<usize, bcs::Error> {
-        if let Some(delete) = iter.delete_iter.peek() {
-            let next_size = serialized_size(&delete)?;
-            Ok(value_size
-                + next_size
-                + get_uleb128_size(self.deletions.len() + 1)
-                + get_uleb128_size(self.insertions.len()))
-        } else if let Some((key, value)) = iter.insert_iter.peek() {
-            let next_size = serialized_size(&key)? + serialized_size(&value)?;
-            Ok(value_size
-                + next_size
-                + get_uleb128_size(self.deletions.len())
-                + get_uleb128_size(self.insertions.len() + 1))
-        } else {
-            Ok(value_size
-                + get_uleb128_size(self.deletions.len())
-                + get_uleb128_size(self.insertions.len()))
-        }
     }
 
     async fn from_batch<S: DeletePrefixExpander + Send + Sync>(
@@ -535,9 +483,38 @@ impl SimplifiedBatch for SimpleUnorderedBatch {
     }
 }
 
-impl SimplifiedBatchIter for SimpleUnorderedBatchIter {
-    fn remaining_len(&self) -> usize {
-        self.delete_iter.len() + self.insert_iter.len()
+impl BatchValueWriter<SimpleUnorderedBatch> for SimpleUnorderedBatchIter {
+    fn is_empty(&self) -> bool {
+        self.delete_iter.len() == 0 && self.insert_iter.len() == 0
+    }
+
+    fn write_next_value(
+        &mut self,
+        batch: &mut SimpleUnorderedBatch,
+        batch_size: &mut usize,
+    ) -> Result<bool, bcs::Error> {
+        if let Some(delete) = self.delete_iter.next() {
+            *batch_size += serialized_size(&delete)?;
+            batch.deletions.push(delete);
+            Ok(true)
+        } else if let Some((key, value)) = self.insert_iter.next() {
+            *batch_size += serialized_size(&key)? + serialized_size(&value)?;
+            batch.insertions.push((key, value));
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn next_value_size(&mut self) -> Result<usize, bcs::Error> {
+        if let Some(delete) = self.delete_iter.peek() {
+            serialized_size(&delete)
+        } else if let Some((key, value)) = self.insert_iter.peek() {
+            let next_size = serialized_size(&key)? + serialized_size(&value)?;
+            Ok(next_size)
+        } else {
+            Ok(0)
+        }
     }
 }
 
@@ -550,6 +527,7 @@ pub struct UnorderedBatchIter {
 #[async_trait]
 impl SimplifiedBatch for UnorderedBatch {
     type Iter = UnorderedBatchIter;
+
     fn into_iter(self) -> Self::Iter {
         let delete_prefix_iter = self.key_prefix_deletions.into_iter().peekable();
         let insert_deletion_iter = self.simple_unordered_batch.into_iter();
@@ -563,8 +541,8 @@ impl SimplifiedBatch for UnorderedBatch {
         self.key_prefix_deletions.len() + self.simple_unordered_batch.len()
     }
 
-    fn bytes(&self) -> usize {
-        let mut total_size = self.simple_unordered_batch.bytes();
+    fn num_bytes(&self) -> usize {
+        let mut total_size = self.simple_unordered_batch.num_bytes();
         for prefix_deletion in &self.key_prefix_deletions {
             total_size += prefix_deletion.len();
         }
@@ -576,53 +554,12 @@ impl SimplifiedBatch for UnorderedBatch {
             + self.simple_unordered_batch.overhead_size()
     }
 
-    fn try_append(
-        &mut self,
-        iter: &mut Self::Iter,
-        value_size: &mut usize,
-    ) -> Result<bool, bcs::Error> {
-        if let Some(delete_prefix) = iter.delete_prefix_iter.next() {
-            *value_size += serialized_size(&delete_prefix)?;
-            self.key_prefix_deletions.push(delete_prefix);
-            Ok(true)
-        } else {
-            self.simple_unordered_batch
-                .try_append(&mut iter.insert_deletion_iter, value_size)
-        }
-    }
-
-    fn to_bytes(&mut self) -> Result<Vec<u8>, bcs::Error> {
-        let value = bcs::to_bytes(&self)?;
-        self.key_prefix_deletions.clear();
-        self.simple_unordered_batch.deletions.clear();
-        self.simple_unordered_batch.insertions.clear();
-        Ok(value)
-    }
-
     fn add_delete(&mut self, key: Vec<u8>) {
         self.simple_unordered_batch.add_delete(key)
     }
 
     fn add_insert(&mut self, key: Vec<u8>, value: Vec<u8>) {
         self.simple_unordered_batch.add_insert(key, value)
-    }
-
-    fn next_value_size(
-        &self,
-        value_size: usize,
-        iter: &mut UnorderedBatchIter,
-    ) -> Result<usize, bcs::Error> {
-        if let Some(delete_prefix) = iter.delete_prefix_iter.peek() {
-            let next_size = serialized_size(&delete_prefix)?;
-            Ok(value_size
-                + next_size
-                + get_uleb128_size(self.key_prefix_deletions.len() + 1)
-                + self.simple_unordered_batch.overhead_size())
-        } else {
-            let value_size_shift = value_size + get_uleb128_size(self.key_prefix_deletions.len());
-            self.simple_unordered_batch
-                .next_value_size(value_size_shift, &mut iter.insert_deletion_iter)
-        }
     }
 
     async fn from_batch<S: DeletePrefixExpander + Send + Sync>(
@@ -637,9 +574,32 @@ impl SimplifiedBatch for UnorderedBatch {
     }
 }
 
-impl SimplifiedBatchIter for UnorderedBatchIter {
-    fn remaining_len(&self) -> usize {
-        self.delete_prefix_iter.len() + self.insert_deletion_iter.remaining_len()
+impl BatchValueWriter<UnorderedBatch> for UnorderedBatchIter {
+    fn is_empty(&self) -> bool {
+        self.delete_prefix_iter.len() == 0 && self.insert_deletion_iter.is_empty()
+    }
+
+    fn write_next_value(
+        &mut self,
+        batch: &mut UnorderedBatch,
+        batch_size: &mut usize,
+    ) -> Result<bool, bcs::Error> {
+        if let Some(delete_prefix) = self.delete_prefix_iter.next() {
+            *batch_size += serialized_size(&delete_prefix)?;
+            batch.key_prefix_deletions.push(delete_prefix);
+            Ok(true)
+        } else {
+            self.insert_deletion_iter
+                .write_next_value(&mut batch.simple_unordered_batch, batch_size)
+        }
+    }
+
+    fn next_value_size(&mut self) -> Result<usize, bcs::Error> {
+        if let Some(delete_prefix) = self.delete_prefix_iter.peek() {
+            serialized_size(&delete_prefix)
+        } else {
+            self.insert_deletion_iter.next_value_size()
+        }
     }
 }
 

@@ -24,11 +24,11 @@ use crate::{
         get_upper_bound_option, CommonStoreConfig, ContextFromStore, KeyValueStore,
         ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
     },
-    lru_caching::LruCachingStore,
-    simple_store::{
+    journaling::{
         DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
         JournalingKeyValueStore,
     },
+    lru_caching::LruCachingStore,
     value_splitting::DatabaseConsistencyError,
 };
 use async_lock::{Semaphore, SemaphoreGuard};
@@ -41,7 +41,7 @@ use scylla::{
     transport::errors::{DbError, QueryError},
     IntoTypedRows, Session, SessionBuilder,
 };
-use std::{mem, ops::Deref, sync::Arc};
+use std::{ops::Deref, sync::Arc};
 use thiserror::Error;
 
 /// The creation of a ScyllaDB client that can be used for accessing it.
@@ -181,23 +181,22 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
 
 #[async_trait]
 impl DirectWritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
-    const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = usize::MAX;
+    const MAX_BATCH_SIZE: usize = usize::MAX;
     /// The total size is 16M
-    const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = 16000000;
+    const MAX_BATCH_TOTAL_SIZE: usize = 16000000;
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
-    // We cannot directly write the batch because if a delete is followed by a write then
-    // the delete takes priority. See the sentence "The first tie-breaking rule when two
-    // cells have the same write timestamp is that dead cells win over live cells"
-    // from https://github.com/scylladb/scylladb/blob/master/docs/dev/timestamp-conflict-resolution.md
-    type SimpBatch = UnorderedBatch;
 
-    async fn write_simplified_batch(
-        &self,
-        simp_batch: &mut Self::SimpBatch,
-    ) -> Result<(), ScyllaDbContextError> {
+    // ScyllaDB cannot take a `crate::batch::Batch` directly. Indeed, if a delete is
+    // followed by a write, then the delete takes priority. See the sentence "The first
+    // tie-breaking rule when two cells have the same write timestamp is that dead cells
+    // win over live cells" from
+    // https://github.com/scylladb/scylladb/blob/master/docs/dev/timestamp-conflict-resolution.md
+    type Batch = UnorderedBatch;
+
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        Self::write_simplified_batch_internal(store, simp_batch).await
+        Self::write_batch_internal(store, batch).await
     }
 }
 
@@ -208,6 +207,7 @@ impl DirectKeyValueStore for ScyllaDbStoreInternal {
 #[async_trait]
 impl DeletePrefixExpander for ScyllaDbStorePair {
     type Error = ScyllaDbContextError;
+
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         ScyllaDbStoreInternal::find_keys_by_prefix_internal(self, key_prefix.to_vec()).await
     }
@@ -267,9 +267,9 @@ impl ScyllaDbStoreInternal {
         Ok(false)
     }
 
-    async fn write_simplified_batch_internal(
+    async fn write_batch_internal(
         store: &ScyllaDbStorePair,
-        simp_batch: &mut UnorderedBatch,
+        batch: UnorderedBatch,
     ) -> Result<(), ScyllaDbContextError> {
         let session = &store.0;
         let table_name = &store.1;
@@ -280,7 +280,7 @@ impl ScyllaDbStoreInternal {
             "DELETE FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ?",
             table_name
         );
-        for key_prefix in mem::take(&mut simp_batch.key_prefix_deletions) {
+        for key_prefix in batch.key_prefix_deletions {
             ensure!(
                 key_prefix.len() <= MAX_KEY_SIZE,
                 ScyllaDbContextError::KeyTooLong
@@ -299,7 +299,7 @@ impl ScyllaDbStoreInternal {
             }
         }
         let query3 = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k = ?", table_name);
-        for key in mem::take(&mut simp_batch.simple_unordered_batch.deletions) {
+        for key in batch.simple_unordered_batch.deletions {
             let values = vec![key];
             batch_values.push(values);
             batch_query.append_statement(Query::new(query3.clone()));
@@ -308,7 +308,7 @@ impl ScyllaDbStoreInternal {
             "INSERT INTO kv.{} (dummy, k, v) VALUES (0, ?, ?)",
             table_name
         );
-        for (key, value) in mem::take(&mut simp_batch.simple_unordered_batch.insertions) {
+        for (key, value) in batch.simple_unordered_batch.insertions {
             ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
             let values = vec![key, value];
             batch_values.push(values);
@@ -676,7 +676,7 @@ pub struct ScyllaDbStore {
     store: LruCachingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>,
 }
 
-/// The type for building a new ScyllaDb Key Value Store
+/// The type for building a new ScyllaDB Key Value Store
 #[derive(Debug)]
 pub struct ScyllaDbStoreConfig {
     /// The url to which the requests have to be sent
@@ -690,7 +690,9 @@ pub struct ScyllaDbStoreConfig {
 #[async_trait]
 impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
     const MAX_KEY_SIZE: usize = ScyllaDbStoreInternal::MAX_KEY_SIZE;
+
     type Keys = <ScyllaDbStoreInternal as ReadableKeyValueStore<ScyllaDbContextError>>::Keys;
+
     type KeyValues =
         <ScyllaDbStoreInternal as ReadableKeyValueStore<ScyllaDbContextError>>::KeyValues;
 
@@ -746,9 +748,9 @@ impl KeyValueStore for ScyllaDbStore {
 }
 
 impl ScyllaDbStore {
-    /// Gets the table name of a store
+    /// Gets the table name of the ScyllaDB store.
     pub async fn get_table_name(&self) -> String {
-        self.store.client.client.get_table_name().await
+        self.store.store.store.get_table_name().await
     }
 
     /// Creates a [`ScyllaDbStore`] from the input parameters.
@@ -816,7 +818,7 @@ impl ScyllaDbStore {
     }
 }
 
-/// Creates the common initialization for RocksDB
+/// Creates the common initialization for RocksDB.
 #[cfg(any(test, feature = "test"))]
 pub fn create_scylla_db_common_config() -> CommonStoreConfig {
     CommonStoreConfig {
@@ -826,7 +828,7 @@ pub fn create_scylla_db_common_config() -> CommonStoreConfig {
     }
 }
 
-/// Creates a ScyllaDB test store
+/// Creates a ScyllaDB test store.
 #[cfg(any(test, feature = "test"))]
 pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
     let uri = "localhost:9042".to_string();
