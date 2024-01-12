@@ -614,6 +614,140 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Tests if a message is scheduled to be sent while an application is handling a session call.
+#[tokio::test]
+async fn test_message_from_session_call() -> anyhow::Result<()> {
+    let mut state = SystemExecutionState::default();
+    state.description = Some(ChainDescription::Root(0));
+    let mut view =
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            ExecutionRuntimeConfig::Synchronous,
+        )
+        .await;
+
+    let mut applications = register_mock_applications(&mut view, 3).await?;
+    let (caller_id, caller_application) = applications
+        .next()
+        .expect("Caller mock application should be registered");
+    let (middle_id, middle_application) = applications
+        .next()
+        .expect("Middle mock application should be registered");
+    let (target_id, target_application) = applications
+        .next()
+        .expect("Target mock application should be registered");
+
+    caller_application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            runtime.try_call_application(
+                /* authenticated */ false,
+                middle_id,
+                vec![],
+                vec![],
+            )?;
+            Ok(RawExecutionOutcome::default())
+        },
+    ));
+
+    middle_application.expect_call(ExpectedCall::handle_application_call(
+        move |runtime, _context, _argument, _forwarded_sessions| {
+            let outcome = runtime.try_call_application(
+                /* authenticated */ false,
+                target_id,
+                vec![],
+                vec![],
+            )?;
+            assert_eq!(outcome.sessions.len(), 1);
+            runtime.try_call_session(
+                /* authenticated */ false,
+                outcome.sessions[0],
+                vec![],
+                vec![],
+            )?;
+            Ok(ApplicationCallOutcome::default())
+        },
+    ));
+
+    let dummy_session = b"session".to_vec();
+
+    let destination_chain = ChainId::from(ChainDescription::Root(1));
+    let dummy_message = RawOutgoingMessage {
+        destination: Destination::from(destination_chain),
+        authenticated: false,
+        kind: MessageKind::Simple,
+        message: b"msg".to_vec(),
+    };
+
+    target_application.expect_call(ExpectedCall::handle_application_call({
+        let dummy_session = dummy_session.clone();
+        move |_runtime, _context, _argument, _forwarded_sessions| {
+            Ok(ApplicationCallOutcome::default().with_new_session(dummy_session))
+        }
+    }));
+    target_application.expect_call(ExpectedCall::handle_session_call({
+        let dummy_message = dummy_message.clone();
+        move |_runtime, _context, session_state, _argument, _forwarded_sessions| {
+            assert_eq!(session_state, dummy_session);
+            Ok((
+                SessionCallOutcome {
+                    inner: ApplicationCallOutcome::default().with_message(dummy_message),
+                    close_session: true,
+                },
+                session_state,
+            ))
+        }
+    }));
+
+    let context = OperationContext {
+        chain_id: ChainId::root(0),
+        height: BlockHeight(0),
+        index: 0,
+        authenticated_signer: None,
+        next_message_index: 0,
+    };
+    let mut tracker = ResourceTracker::default();
+    let policy = ResourceControlPolicy::default();
+    let outcomes = view
+        .execute_operation(
+            context,
+            Operation::User {
+                application_id: caller_id,
+                bytes: vec![],
+            },
+            &policy,
+            &mut tracker,
+        )
+        .await?;
+
+    let target_description = view.system.registry.describe_application(target_id).await?;
+    let registration_message = RawOutgoingMessage {
+        destination: Destination::from(destination_chain),
+        authenticated: false,
+        kind: MessageKind::Simple,
+        message: SystemMessage::RegisterApplications {
+            applications: vec![target_description],
+        },
+    };
+
+    assert_eq!(
+        outcomes,
+        &[
+            ExecutionOutcome::System(
+                RawExecutionOutcome::default().with_message(registration_message)
+            ),
+            ExecutionOutcome::User(target_id, RawExecutionOutcome::default()),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default().with_message(dummy_message)
+            ),
+            ExecutionOutcome::User(middle_id, RawExecutionOutcome::default()),
+            ExecutionOutcome::User(caller_id, RawExecutionOutcome::default()),
+        ]
+    );
+
+    Ok(())
+}
+
 /// Creates `count` [`MockApplication`]s and registers them in the provided [`ExecutionStateView`].
 ///
 /// Returns an iterator over pairs of [`UserApplicationId`]s and their respective
