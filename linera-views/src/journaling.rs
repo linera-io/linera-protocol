@@ -206,26 +206,27 @@ where
         mut header: JournalHeader,
         base_key: &[u8],
     ) -> Result<(), K::Error> {
-        loop {
-            if header.block_count == 0 {
-                break;
-            }
-            let key = get_journaling_key(base_key, KeyTag::Entry as u8, header.block_count - 1)?;
-            let batch = self.store.read_value::<K::Batch>(&key).await?;
-            if let Some(mut batch) = batch {
-                batch.add_delete(key); // Delete the journal entry
-                header.block_count -= 1;
-                let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
-                if header.block_count > 0 {
-                    let value = bcs::to_bytes(&header)?;
-                    batch.add_insert(key, value);
-                } else {
-                    batch.add_delete(key);
-                }
-                self.store.write_batch(batch).await?;
+        let header_key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
+
+        while header.block_count > 0 {
+            let block_key =
+                get_journaling_key(base_key, KeyTag::Entry as u8, header.block_count - 1)?;
+            // Read the batch of updates (aka. "block") previously saved in the journal.
+            let mut batch = self
+                .store
+                .read_value::<K::Batch>(&block_key)
+                .await?
+                .ok_or(JournalConsistencyError::FailureToRetrieveJournalBlock)?;
+            // Execute the block and delete it from the journal atomically.
+            batch.add_delete(block_key);
+            header.block_count -= 1;
+            if header.block_count > 0 {
+                let value = bcs::to_bytes(&header)?;
+                batch.add_insert(header_key.clone(), value);
             } else {
-                return Err(JournalConsistencyError::FailureToRetrieveJournalBlock.into());
+                batch.add_delete(header_key.clone());
             }
+            self.store.write_batch(batch).await?;
         }
         Ok(())
     }
