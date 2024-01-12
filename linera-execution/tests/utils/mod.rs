@@ -1,6 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod mock_application;
+
+pub use self::mock_application::{ExpectedCall, MockApplication};
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
     data_types::BlockHeight,
