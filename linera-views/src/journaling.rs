@@ -74,7 +74,7 @@ pub trait DirectWritableKeyValueStore<E> {
     /// The batch type.
     type Batch: SimplifiedBatch + Serialize + DeserializeOwned + Default;
 
-    /// Writes the simplified batch in the database.
+    /// Writes the batch to the database.
     async fn write_batch(&self, batch: Self::Batch) -> Result<(), E>;
 }
 
@@ -92,11 +92,10 @@ struct JournalHeader {
     block_count: u32,
 }
 
-/// A KeyValueStore built from a SimplifiedKeyValueStore by using journaling
-/// for bypassing the limits on the batch size
+/// A journaling [`KeyValueStore`] built from an inner [`DirectKeyValueStore`].
 #[derive(Clone)]
 pub struct JournalingKeyValueStore<K> {
-    /// The inner store that is called by the LRU cache one
+    /// The inner store.
     pub store: K,
 }
 
@@ -238,43 +237,37 @@ where
         base_key: &[u8],
     ) -> Result<JournalHeader, K::Error> {
         let mut iter = simplified_batch.into_iter();
-        let mut block = K::Batch::default();
+        let mut block_batch = K::Batch::default();
         let mut block_size = 0;
         let mut block_count = 0;
-        let mut transaction = K::Batch::default();
+        let mut transaction_batch = K::Batch::default();
         let mut transaction_size = 0;
-        loop {
-            if !iter.write_next_value(&mut block, &mut block_size)? {
-                break;
-            }
+        while iter.write_next_value(&mut block_batch, &mut block_size)? {
             let (block_flush, transaction_flush) = {
-                if iter.is_empty() || block.len() == K::MAX_BATCH_SIZE - 2 {
+                if iter.is_empty() || block_batch.len() == K::MAX_BATCH_SIZE - 2 {
                     (true, true)
                 } else {
-                    let next_block_size = iter.next_batch_size(&block, block_size)?;
+                    let next_block_size =
+                        block_size + iter.next_value_size()? + block_batch.overhead_size();
                     let next_transaction_size = transaction_size + next_block_size;
-                    let block_flush = if next_transaction_size > K::MAX_BATCH_TOTAL_SIZE {
-                        true
-                    } else {
-                        next_block_size > K::MAX_VALUE_SIZE
-                    };
                     let transaction_flush = next_transaction_size > K::MAX_BATCH_TOTAL_SIZE;
+                    let block_flush = transaction_flush || next_block_size > K::MAX_VALUE_SIZE;
                     (block_flush, transaction_flush)
                 }
             };
             if block_flush {
-                block_size += block.overhead_size();
-                let value = bcs::to_bytes(&block)?;
-                block = K::Batch::default();
+                block_size += block_batch.overhead_size();
+                let value = bcs::to_bytes(&block_batch)?;
+                block_batch = K::Batch::default();
                 assert_eq!(value.len(), block_size);
                 let key = get_journaling_key(base_key, KeyTag::Entry as u8, block_count)?;
-                transaction.add_insert(key, value);
+                transaction_batch.add_insert(key, value);
                 block_count += 1;
                 transaction_size += block_size;
                 block_size = 0;
             }
             if transaction_flush {
-                let batch = std::mem::take(&mut transaction);
+                let batch = std::mem::take(&mut transaction_batch);
                 self.store.write_batch(batch).await?;
                 transaction_size = 0;
             }
@@ -291,15 +284,12 @@ where
     }
 
     fn is_fastpath_feasible(batch: &K::Batch) -> bool {
-        if batch.len() > K::MAX_BATCH_SIZE {
-            return false;
-        }
-        batch.num_bytes() <= K::MAX_BATCH_TOTAL_SIZE
+        batch.len() <= K::MAX_BATCH_SIZE && batch.num_bytes() <= K::MAX_BATCH_TOTAL_SIZE
     }
 }
 
 impl<K> JournalingKeyValueStore<K> {
-    /// Creates a new store from a simplified one.
+    /// Creates a new journaling store.
     pub fn new(store: K) -> Self {
         Self { store }
     }

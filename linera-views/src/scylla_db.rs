@@ -186,7 +186,7 @@ impl DirectWritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal
     const MAX_BATCH_TOTAL_SIZE: usize = 16000000;
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
-    // ScyllaDb cannot take a `crate::batch::Batch` directly. Indeed, if a delete is
+    // ScyllaDB cannot take a `crate::batch::Batch` directly. Indeed, if a delete is
     // followed by a write, then the delete takes priority. See the sentence "The first
     // tie-breaking rule when two cells have the same write timestamp is that dead cells
     // win over live cells" from
@@ -207,6 +207,7 @@ impl DirectKeyValueStore for ScyllaDbStoreInternal {
 #[async_trait]
 impl DeletePrefixExpander for ScyllaDbStorePair {
     type Error = ScyllaDbContextError;
+
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         ScyllaDbStoreInternal::find_keys_by_prefix_internal(self, key_prefix.to_vec()).await
     }
@@ -675,7 +676,7 @@ pub struct ScyllaDbStore {
     store: LruCachingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>,
 }
 
-/// The type for building a new ScyllaDb Key Value Store
+/// The type for building a new ScyllaDB Key Value Store
 #[derive(Debug)]
 pub struct ScyllaDbStoreConfig {
     /// The url to which the requests have to be sent
@@ -689,7 +690,9 @@ pub struct ScyllaDbStoreConfig {
 #[async_trait]
 impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
     const MAX_KEY_SIZE: usize = ScyllaDbStoreInternal::MAX_KEY_SIZE;
+
     type Keys = <ScyllaDbStoreInternal as ReadableKeyValueStore<ScyllaDbContextError>>::Keys;
+
     type KeyValues =
         <ScyllaDbStoreInternal as ReadableKeyValueStore<ScyllaDbContextError>>::KeyValues;
 
@@ -745,7 +748,7 @@ impl KeyValueStore for ScyllaDbStore {
 }
 
 impl ScyllaDbStore {
-    /// Gets the table name of the ScyllaDb store
+    /// Gets the table name of the ScyllaDB store.
     pub async fn get_table_name(&self) -> String {
         self.store.store.store.get_table_name().await
     }
@@ -815,7 +818,7 @@ impl ScyllaDbStore {
     }
 }
 
-/// Creates the common initialization for RocksDB
+/// Creates the common initialization for RocksDB.
 #[cfg(any(test, feature = "test"))]
 pub fn create_scylla_db_common_config() -> CommonStoreConfig {
     CommonStoreConfig {
@@ -825,7 +828,7 @@ pub fn create_scylla_db_common_config() -> CommonStoreConfig {
     }
 }
 
-/// Creates a ScyllaDB test store
+/// Creates a ScyllaDB test store.
 #[cfg(any(test, feature = "test"))]
 pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
     let uri = "localhost:9042".to_string();

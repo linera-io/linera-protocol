@@ -293,7 +293,7 @@ impl Batch {
         true
     }
 
-    /// Adds the insertion of a `(key,value)` pair into the batch with a serializable value.
+    /// Adds the insertion of a key-value pair into the batch with a serializable value.
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
@@ -373,11 +373,17 @@ impl DeletePrefixExpander for MemoryContext<()> {
     }
 }
 
-/// A simplified batch used for the computation.
+/// A notion of batch useful for certain computations (notably journaling).
 #[async_trait]
 pub trait SimplifiedBatch: Sized + Send + Sync {
     /// The iterator type used to process values from the batch.
     type Iter: BatchValueWriter<Self>;
+
+    /// Creates a simplified batch from a standard one.
+    async fn from_batch<S: DeletePrefixExpander + Send + Sync>(
+        store: S,
+        batch: Batch,
+    ) -> Result<Self, S::Error>;
 
     /// Returns an owning iterator over the values in the batch.
     fn into_iter(self) -> Self::Iter;
@@ -391,17 +397,11 @@ pub trait SimplifiedBatch: Sized + Send + Sync {
     /// Returns the overhead size of the batch.
     fn overhead_size(&self) -> usize;
 
-    /// Adds an individual delete operation.
+    /// Adds the deletion of key to the batch.
     fn add_delete(&mut self, key: Vec<u8>);
 
-    /// Adds an individual insert of (key,value).
+    /// Adds the insertion of a key-value pair to the batch.
     fn add_insert(&mut self, key: Vec<u8>, value: Vec<u8>);
-
-    /// Creates a simplified batch from an existing batch.
-    async fn from_batch<S: DeletePrefixExpander + Send + Sync>(
-        store: S,
-        batch: Batch,
-    ) -> Result<Self, S::Error>;
 
     /// Returns true if the batch is empty.
     fn is_empty(&self) -> bool {
@@ -412,7 +412,7 @@ pub trait SimplifiedBatch: Sized + Send + Sync {
 /// An iterator-like object that can write values one by one to a batch while updating the
 /// total size of the batch.
 pub trait BatchValueWriter<Batch>: Send + Sync {
-    /// Returns true if there is no more values to write.
+    /// Returns true if there are no more values to write.
     fn is_empty(&self) -> bool;
 
     /// Writes the next value (if any) to the batch and updates the batch size accordingly.
@@ -424,9 +424,8 @@ pub trait BatchValueWriter<Batch>: Send + Sync {
         batch_size: &mut usize,
     ) -> Result<bool, bcs::Error>;
 
-    /// Computes the batch size that we would obtain if we wrote the next value (if any)
-    /// without consuming the value.
-    fn next_batch_size(&mut self, batch: &Batch, batch_size: usize) -> Result<usize, bcs::Error>;
+    /// Computes the size of the next value (if any) without consuming the value.
+    fn next_value_size(&mut self) -> Result<usize, bcs::Error>;
 }
 
 /// The iterator that corresponds to a SimpleUnorderedBatch
@@ -507,27 +506,14 @@ impl BatchValueWriter<SimpleUnorderedBatch> for SimpleUnorderedBatchIter {
         }
     }
 
-    fn next_batch_size(
-        &mut self,
-        batch: &SimpleUnorderedBatch,
-        batch_size: usize,
-    ) -> Result<usize, bcs::Error> {
+    fn next_value_size(&mut self) -> Result<usize, bcs::Error> {
         if let Some(delete) = self.delete_iter.peek() {
-            let next_size = serialized_size(&delete)?;
-            Ok(batch_size
-                + next_size
-                + get_uleb128_size(batch.deletions.len() + 1)
-                + get_uleb128_size(batch.insertions.len()))
+            serialized_size(&delete)
         } else if let Some((key, value)) = self.insert_iter.peek() {
             let next_size = serialized_size(&key)? + serialized_size(&value)?;
-            Ok(batch_size
-                + next_size
-                + get_uleb128_size(batch.deletions.len())
-                + get_uleb128_size(batch.insertions.len() + 1))
+            Ok(next_size)
         } else {
-            Ok(batch_size
-                + get_uleb128_size(batch.deletions.len())
-                + get_uleb128_size(batch.insertions.len()))
+            Ok(0)
         }
     }
 }
@@ -608,21 +594,11 @@ impl BatchValueWriter<UnorderedBatch> for UnorderedBatchIter {
         }
     }
 
-    fn next_batch_size(
-        &mut self,
-        batch: &UnorderedBatch,
-        batch_size: usize,
-    ) -> Result<usize, bcs::Error> {
+    fn next_value_size(&mut self) -> Result<usize, bcs::Error> {
         if let Some(delete_prefix) = self.delete_prefix_iter.peek() {
-            let next_size = serialized_size(&delete_prefix)?;
-            Ok(batch_size
-                + next_size
-                + get_uleb128_size(batch.key_prefix_deletions.len() + 1)
-                + batch.simple_unordered_batch.overhead_size())
+            serialized_size(&delete_prefix)
         } else {
-            let batch_size = batch_size + get_uleb128_size(batch.key_prefix_deletions.len());
-            self.insert_deletion_iter
-                .next_batch_size(&batch.simple_unordered_batch, batch_size)
+            self.insert_deletion_iter.next_value_size()
         }
     }
 }

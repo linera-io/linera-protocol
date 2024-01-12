@@ -238,7 +238,7 @@ impl<K> LruCachingStore<K>
 where
     K: KeyValueStore,
 {
-    /// Creates a new key-value store that implements an LRU cache.
+    /// Creates a new key-value store that provides LRU caching at top of the given store.
     pub fn new(store: K, max_size: usize) -> Self {
         if max_size == 0 {
             Self {
