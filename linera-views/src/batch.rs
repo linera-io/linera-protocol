@@ -16,13 +16,14 @@
 //! not have to deal with batches.
 
 use crate::{
-    common::{Context, KeyIterable},
+    common::{get_uleb128_size, Context, KeyIterable},
     memory::{MemoryContext, MemoryContextError},
     views::ViewError,
 };
 use async_trait::async_trait;
+use bcs::serialized_size;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::{fmt::Debug, iter::Peekable, vec::IntoIter};
 
 use crate::common::get_interval;
 use std::{
@@ -73,7 +74,7 @@ pub struct SimpleUnorderedBatch {
 }
 
 /// An unordered batch of deletes/puts and a collection of key prefix deletions.
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct UnorderedBatch {
     /// key prefix deletions.
     pub key_prefix_deletions: Vec<Vec<u8>>,
@@ -369,6 +370,276 @@ impl DeletePrefixExpander for MemoryContext<()> {
             vector_list.push(key?.to_vec());
         }
         Ok(vector_list)
+    }
+}
+
+/// The simplified batch used for the computation.
+#[async_trait]
+pub trait SimplifiedBatch: Sized + Send + Sync {
+    /// The Iterator type used for the batch
+    type Iter: SimplifiedBatchIter;
+
+    /// Returns an owning iterator on the simplified batch.
+    fn into_iter(self) -> Self::Iter;
+
+    /// Returns the total number of entries of the simplified batch
+    fn len(&self) -> usize;
+
+    /// Returns the total number of bytes of the simplified batch
+    fn bytes(&self) -> usize;
+
+    /// Returns the overhead size of the simplified batch
+    fn overhead_size(&self) -> usize;
+
+    /// Appends the iterator to the simplified batch
+    fn try_append(
+        &mut self,
+        iter: &mut Self::Iter,
+        value_size: &mut usize,
+    ) -> Result<bool, bcs::Error>;
+
+    /// Returns the serialization and clears the simplified batch
+    fn to_bytes(&mut self) -> Result<Vec<u8>, bcs::Error>;
+
+    /// Adds an individual delete operation
+    fn add_delete(&mut self, key: Vec<u8>);
+
+    /// Adds an individual insert of (key,value)
+    fn add_insert(&mut self, key: Vec<u8>, value: Vec<u8>);
+
+    /// Gets the next size of iterator
+    fn next_value_size(
+        &self,
+        value_size: usize,
+        iter: &mut Self::Iter,
+    ) -> Result<usize, bcs::Error>;
+
+    /// Creates a simplified batch from an existing batch
+    async fn from_batch<S: DeletePrefixExpander + Send + Sync>(
+        store: S,
+        batch: Batch,
+    ) -> Result<Self, S::Error>;
+
+    /// Returns true if the Simplified batch is empty
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+/// The iterator over the simplified batch
+pub trait SimplifiedBatchIter: Send + Sync {
+    /// Returns the number of remaining entries in the iterator.
+    fn remaining_len(&self) -> usize;
+}
+
+/// The iterator that corresponds to a SimpleUnorderedBatch
+pub struct SimpleUnorderedBatchIter {
+    delete_iter: Peekable<IntoIter<Vec<u8>>>,
+    insert_iter: Peekable<IntoIter<(Vec<u8>, Vec<u8>)>>,
+}
+
+#[async_trait]
+impl SimplifiedBatch for SimpleUnorderedBatch {
+    type Iter = SimpleUnorderedBatchIter;
+    fn into_iter(self) -> Self::Iter {
+        let delete_iter = self.deletions.into_iter().peekable();
+        let insert_iter = self.insertions.into_iter().peekable();
+        Self::Iter {
+            delete_iter,
+            insert_iter,
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.deletions.len() + self.insertions.len()
+    }
+
+    fn bytes(&self) -> usize {
+        let mut total_size = 0;
+        for (key, value) in &self.insertions {
+            total_size += key.len() + value.len();
+        }
+        for deletion in &self.deletions {
+            total_size += deletion.len();
+        }
+        total_size
+    }
+
+    fn overhead_size(&self) -> usize {
+        get_uleb128_size(self.deletions.len()) + get_uleb128_size(self.insertions.len())
+    }
+
+    fn try_append(
+        &mut self,
+        iter: &mut Self::Iter,
+        value_size: &mut usize,
+    ) -> Result<bool, bcs::Error> {
+        if let Some(delete) = iter.delete_iter.next() {
+            *value_size += serialized_size(&delete)?;
+            self.deletions.push(delete);
+            Ok(true)
+        } else if let Some((key, value)) = iter.insert_iter.next() {
+            *value_size += serialized_size(&key)? + serialized_size(&value)?;
+            self.insertions.push((key, value));
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn to_bytes(&mut self) -> Result<Vec<u8>, bcs::Error> {
+        let value = bcs::to_bytes(&self)?;
+        self.deletions.clear();
+        self.insertions.clear();
+        Ok(value)
+    }
+
+    fn add_delete(&mut self, key: Vec<u8>) {
+        self.deletions.push(key)
+    }
+
+    fn add_insert(&mut self, key: Vec<u8>, value: Vec<u8>) {
+        self.insertions.push((key, value))
+    }
+
+    fn next_value_size(
+        &self,
+        value_size: usize,
+        iter: &mut SimpleUnorderedBatchIter,
+    ) -> Result<usize, bcs::Error> {
+        if let Some(delete) = iter.delete_iter.peek() {
+            let next_size = serialized_size(&delete)?;
+            Ok(value_size
+                + next_size
+                + get_uleb128_size(self.deletions.len() + 1)
+                + get_uleb128_size(self.insertions.len()))
+        } else if let Some((key, value)) = iter.insert_iter.peek() {
+            let next_size = serialized_size(&key)? + serialized_size(&value)?;
+            Ok(value_size
+                + next_size
+                + get_uleb128_size(self.deletions.len())
+                + get_uleb128_size(self.insertions.len() + 1))
+        } else {
+            Ok(value_size
+                + get_uleb128_size(self.deletions.len())
+                + get_uleb128_size(self.insertions.len()))
+        }
+    }
+
+    async fn from_batch<S: DeletePrefixExpander + Send + Sync>(
+        store: S,
+        batch: Batch,
+    ) -> Result<Self, S::Error> {
+        let unordered_batch = batch.simplify();
+        unordered_batch.expand_delete_prefixes(&store).await
+    }
+}
+
+impl SimplifiedBatchIter for SimpleUnorderedBatchIter {
+    fn remaining_len(&self) -> usize {
+        self.delete_iter.len() + self.insert_iter.len()
+    }
+}
+
+/// The iterator that corresponds to a SimpleUnorderedBatch
+pub struct UnorderedBatchIter {
+    delete_prefix_iter: Peekable<IntoIter<Vec<u8>>>,
+    insert_deletion_iter: SimpleUnorderedBatchIter,
+}
+
+#[async_trait]
+impl SimplifiedBatch for UnorderedBatch {
+    type Iter = UnorderedBatchIter;
+    fn into_iter(self) -> Self::Iter {
+        let delete_prefix_iter = self.key_prefix_deletions.into_iter().peekable();
+        let insert_deletion_iter = self.simple_unordered_batch.into_iter();
+        Self::Iter {
+            delete_prefix_iter,
+            insert_deletion_iter,
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.key_prefix_deletions.len() + self.simple_unordered_batch.len()
+    }
+
+    fn bytes(&self) -> usize {
+        let mut total_size = self.simple_unordered_batch.bytes();
+        for prefix_deletion in &self.key_prefix_deletions {
+            total_size += prefix_deletion.len();
+        }
+        total_size
+    }
+
+    fn overhead_size(&self) -> usize {
+        get_uleb128_size(self.key_prefix_deletions.len())
+            + self.simple_unordered_batch.overhead_size()
+    }
+
+    fn try_append(
+        &mut self,
+        iter: &mut Self::Iter,
+        value_size: &mut usize,
+    ) -> Result<bool, bcs::Error> {
+        if let Some(delete_prefix) = iter.delete_prefix_iter.next() {
+            *value_size += serialized_size(&delete_prefix)?;
+            self.key_prefix_deletions.push(delete_prefix);
+            Ok(true)
+        } else {
+            self.simple_unordered_batch
+                .try_append(&mut iter.insert_deletion_iter, value_size)
+        }
+    }
+
+    fn to_bytes(&mut self) -> Result<Vec<u8>, bcs::Error> {
+        let value = bcs::to_bytes(&self)?;
+        self.key_prefix_deletions.clear();
+        self.simple_unordered_batch.deletions.clear();
+        self.simple_unordered_batch.insertions.clear();
+        Ok(value)
+    }
+
+    fn add_delete(&mut self, key: Vec<u8>) {
+        self.simple_unordered_batch.add_delete(key)
+    }
+
+    fn add_insert(&mut self, key: Vec<u8>, value: Vec<u8>) {
+        self.simple_unordered_batch.add_insert(key, value)
+    }
+
+    fn next_value_size(
+        &self,
+        value_size: usize,
+        iter: &mut UnorderedBatchIter,
+    ) -> Result<usize, bcs::Error> {
+        if let Some(delete_prefix) = iter.delete_prefix_iter.peek() {
+            let next_size = serialized_size(&delete_prefix)?;
+            Ok(value_size
+                + next_size
+                + get_uleb128_size(self.key_prefix_deletions.len() + 1)
+                + self.simple_unordered_batch.overhead_size())
+        } else {
+            let value_size_shift = value_size + get_uleb128_size(self.key_prefix_deletions.len());
+            self.simple_unordered_batch
+                .next_value_size(value_size_shift, &mut iter.insert_deletion_iter)
+        }
+    }
+
+    async fn from_batch<S: DeletePrefixExpander + Send + Sync>(
+        store: S,
+        batch: Batch,
+    ) -> Result<Self, S::Error> {
+        let mut unordered_batch = batch.simplify();
+        unordered_batch
+            .expand_colliding_prefix_deletions(&store)
+            .await?;
+        Ok(unordered_batch)
+    }
+}
+
+impl SimplifiedBatchIter for UnorderedBatchIter {
+    fn remaining_len(&self) -> usize {
+        self.delete_prefix_iter.len() + self.insert_deletion_iter.remaining_len()
     }
 }
 
