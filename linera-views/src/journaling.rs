@@ -74,9 +74,8 @@ pub trait DirectWritableKeyValueStore<E> {
     /// The batch type.
     type Batch: SimplifiedBatch + Serialize + DeserializeOwned + Default;
 
-    /// Writes the simplified batch in the database. After the writing, the
-    /// simplified batch must be empty.
-    async fn write_simplified_batch(&self, batch: &mut Self::Batch) -> Result<(), E>;
+    /// Writes the simplified batch in the database.
+    async fn write_simplified_batch(&self, batch: Self::Batch) -> Result<(), E>;
 }
 
 /// Low-level, asynchronous direct read/write key-value operations with simplified batch
@@ -175,9 +174,9 @@ where
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), K::Error> {
-        let mut batch = K::Batch::from_batch(self, batch).await?;
+        let batch = K::Batch::from_batch(self, batch).await?;
         if Self::is_fastpath_feasible(&batch) {
-            self.client.write_simplified_batch(&mut batch).await
+            self.client.write_simplified_batch(batch).await
         } else {
             let header = self.write_journal(batch, base_key).await?;
             self.coherently_resolve_journal(header, base_key).await
@@ -229,7 +228,7 @@ where
                 } else {
                     batch.add_delete(key);
                 }
-                self.client.write_simplified_batch(&mut batch).await?;
+                self.client.write_simplified_batch(batch).await?;
             } else {
                 return Err(JournalConsistencyError::FailureToRetrieveJournalBlock.into());
             }
@@ -280,7 +279,9 @@ where
                 value_size = 0;
             }
             if transact_flush {
-                self.client.write_simplified_batch(&mut transacts).await?;
+                self.client
+                    .write_simplified_batch(std::mem::take(&mut transacts))
+                    .await?;
                 transact_size = 0;
             }
         }
@@ -290,7 +291,7 @@ where
             let value = bcs::to_bytes(&header)?;
             let mut batch = K::Batch::default();
             batch.add_insert(key, value);
-            self.client.write_simplified_batch(&mut batch).await?;
+            self.client.write_simplified_batch(batch).await?;
         }
         Ok(header)
     }

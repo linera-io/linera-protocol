@@ -37,7 +37,7 @@ use aws_sdk_dynamodb::{
 use aws_smithy_types::error::operation::BuildError;
 use futures::future::join_all;
 use linera_base::ensure;
-use std::{collections::HashMap, env, mem, str::FromStr, sync::Arc};
+use std::{collections::HashMap, env, str::FromStr, sync::Arc};
 use thiserror::Error;
 
 #[cfg(any(test, feature = "test"))]
@@ -921,15 +921,12 @@ impl DirectWritableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal
     // the TransactWriteItem and BatchWriteItem are not going to work that way.
     type Batch = SimpleUnorderedBatch;
 
-    async fn write_simplified_batch(
-        &self,
-        batch: &mut Self::Batch,
-    ) -> Result<(), DynamoDbContextError> {
+    async fn write_simplified_batch(&self, batch: Self::Batch) -> Result<(), DynamoDbContextError> {
         let mut builder = TransactionBuilder::default();
-        for key in mem::take(&mut batch.deletions) {
+        for key in batch.deletions {
             builder.insert_delete_request(key, self)?;
         }
-        for (key, value) in mem::take(&mut batch.insertions) {
+        for (key, value) in batch.insertions {
             builder.insert_put_request(key, value, self)?;
         }
         if !builder.transacts.is_empty() {
