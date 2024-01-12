@@ -531,7 +531,7 @@ pub enum Response {
 }
 
 /// A message together with routing information.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct RawOutgoingMessage<Message> {
     /// The destination of the message.
