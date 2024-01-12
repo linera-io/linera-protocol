@@ -386,7 +386,7 @@ pub trait SimplifiedBatch: Sized + Send + Sync {
     fn len(&self) -> usize;
 
     /// Returns the total number of bytes of the simplified batch
-    fn bytes(&self) -> usize;
+    fn num_bytes(&self) -> usize;
 
     /// Returns the overhead size of the simplified batch
     fn overhead_size(&self) -> usize;
@@ -455,7 +455,7 @@ impl SimplifiedBatch for SimpleUnorderedBatch {
         self.deletions.len() + self.insertions.len()
     }
 
-    fn bytes(&self) -> usize {
+    fn num_bytes(&self) -> usize {
         let mut total_size = 0;
         for (key, value) in &self.insertions {
             total_size += key.len() + value.len();
@@ -565,8 +565,8 @@ impl SimplifiedBatch for UnorderedBatch {
         self.key_prefix_deletions.len() + self.simple_unordered_batch.len()
     }
 
-    fn bytes(&self) -> usize {
-        let mut total_size = self.simple_unordered_batch.bytes();
+    fn num_bytes(&self) -> usize {
+        let mut total_size = self.simple_unordered_batch.num_bytes();
         for prefix_deletion in &self.key_prefix_deletions {
             total_size += prefix_deletion.len();
         }

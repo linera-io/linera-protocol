@@ -300,7 +300,7 @@ where
         if batch.len() > K::MAX_TRANSACT_WRITE_ITEM_SIZE {
             return false;
         }
-        batch.bytes() <= K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE
+        batch.num_bytes() <= K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE
     }
 }
 
