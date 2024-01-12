@@ -69,6 +69,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+// TODO(#1484): Split this test into multiple more specialized tests.
 async fn test_simple_user_operation() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
