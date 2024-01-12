@@ -87,7 +87,7 @@ pub trait DirectKeyValueStore:
 }
 
 /// The header that contains the current state of the journal.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 struct JournalHeader {
     block_count: u32,
 }
@@ -200,7 +200,26 @@ where
     K: DirectKeyValueStore + Send + Sync,
     K::Error: From<JournalConsistencyError>,
 {
-    /// Resolves the database by using the header that has been retrieved
+    /// Resolves the pending operations that were previously stored in the database
+    /// journal.
+    ///
+    /// For each block processed, we atomically update the journal header as well. When
+    /// the last block is processed, this atomically clears the journal and make the store
+    /// finally available again (for the range of keys managed by the journal).
+    ///
+    /// This function respects the constraints of the underlying key-value store `K` if
+    /// the following conditions are met:
+    ///
+    /// (1) each block contains at most `K::MAX_BATCH_SIZE - 2` operations;
+    ///
+    /// (2) the total size of the all operations in a block doesn't exceed:
+    ///     `K::MAX_BATCH_TOTAL_SIZE - sizeof(block_key) - sizeof(header_key) - sizeof(bcs_header)`
+    ///
+    /// (3) every operation in a block satisfies the contraints on individual database operations
+    ///     represented by `K::MAX_KEY_SIZE` and `K::MAX_VALUE_SIZE`.
+    ///
+    /// (4) `block_key` and `header_key` don't exceed `K::MAX_KEY_SIZE` and `bcs_header`
+    /// doesn't exceed `K::MAX_VALUE_SIZE`.
     async fn coherently_resolve_journal(
         &self,
         mut header: JournalHeader,
@@ -231,13 +250,58 @@ where
         Ok(())
     }
 
-    /// Writes blocks to the database and resolves them later.
+    /// Writes the content of `batch` to the journal as a succession of blocks that can be
+    /// interpreted later by `coherently_resolve_journal`.
+    ///
+    /// Starting with a batch of operations that is typically too large to be executed in
+    /// one go (see `is_fastpath_feasible()` below), the goal of this function is to split
+    /// the batch into smaller blocks so that `coherently_resolve_journal` respects the
+    /// constraints of the underlying key-value store (see analysis above)
+    ///
+    /// For efficiency reasons, we write as many blocks as possible in each "transaction"
+    /// batch, using one write-operation per block. The last transaction also updates the
+    /// journal header with the final number of blocks. As a result, the constraints of
+    /// the underlying database are respected when a transaction is written if the
+    /// following conditions are met:
+    ///
+    /// (1) the number of blocks per transaction doesn't exceed `K::MAX_BATCH_SIZE - 1`;
+    ///
+    /// (2) the total size of BCS-serialized blocks in a transaction doesn't exceed
+    /// `K::MAX_BATCH_TOTAL_SIZE - (K::MAX_BATCH_SIZE - 1) * sizeof(block_key) - sizeof(header_key) - sizeof(bcs_header)`
+    ///
+    /// (3) the size of each BCS-serialized block doesn't exceed `K::MAX_VALUE_SIZE`.
+    ///
+    /// (4) `block_key` and `header_key` don't exceed `K::MAX_KEY_SIZE` and `bcs_header`
+    /// doesn't exceed `K::MAX_VALUE_SIZE`.
+    ///
+    /// NOTE:
+    /// * Since a block must contain at least one operation and M bytes of the
+    /// serialization overhead (typically M = 2 or 3 bytes of vector sizes), condition (3)
+    /// requires that each operation in the original batch satisfies:
+    ///     `sizeof(key) + sizeof(value) + M <= K::MAX_VALUE_SIZE`
+    ///
+    /// * Similarly, a transaction must contain at least one block so it is desirable that
+    /// the maximum size of a block insertion `1 + sizeof(block_key) + K::MAX_VALUE_SIZE`
+    /// plus M bytes of overhead doesn't exceed the threshold of condition (2).
     async fn write_journal(
         &self,
-        simplified_batch: K::Batch,
+        batch: K::Batch,
         base_key: &[u8],
     ) -> Result<JournalHeader, K::Error> {
-        let mut iter = simplified_batch.into_iter();
+        let header_key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
+        let header_key_len = header_key.len();
+        let header_len = bcs::serialized_size(&JournalHeader::default())?;
+        let block_key_len = header_key.len(); // currently the same length.
+        let max_transaction_size = K::MAX_BATCH_TOTAL_SIZE
+            - (K::MAX_BATCH_SIZE - 1) * block_key_len
+            - header_key_len
+            - header_len;
+        let max_block_size = std::cmp::min(
+            K::MAX_VALUE_SIZE,
+            K::MAX_BATCH_TOTAL_SIZE - block_key_len - header_key_len - header_len,
+        );
+
+        let mut iter = batch.into_iter();
         let mut block_batch = K::Batch::default();
         let mut block_size = 0;
         let mut block_count = 0;
@@ -245,13 +309,15 @@ where
         let mut transaction_size = 0;
         while iter.write_next_value(&mut block_batch, &mut block_size)? {
             let (block_flush, transaction_flush) = {
-                if iter.is_empty() || block_batch.len() == K::MAX_BATCH_SIZE - 2 {
+                if iter.is_empty() || transaction_batch.len() == K::MAX_BATCH_SIZE - 1 {
                     (true, true)
                 } else {
                     let next_block_size = iter.next_batch_size(&block_batch, block_size)?;
                     let next_transaction_size = transaction_size + next_block_size;
-                    let transaction_flush = next_transaction_size > K::MAX_BATCH_TOTAL_SIZE;
-                    let block_flush = transaction_flush || next_block_size > K::MAX_VALUE_SIZE;
+                    let transaction_flush = next_transaction_size > max_transaction_size;
+                    let block_flush = transaction_flush
+                        || block_batch.len() == K::MAX_BATCH_SIZE - 2
+                        || next_block_size > max_block_size;
                     (block_flush, transaction_flush)
                 }
             };
@@ -274,10 +340,9 @@ where
         }
         let header = JournalHeader { block_count };
         if block_count > 0 {
-            let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
             let value = bcs::to_bytes(&header)?;
             let mut batch = K::Batch::default();
-            batch.add_insert(key, value);
+            batch.add_insert(header_key, value);
             self.store.write_batch(batch).await?;
         }
         Ok(header)
