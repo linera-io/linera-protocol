@@ -181,9 +181,9 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
 
 #[async_trait]
 impl DirectWritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
-    const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = usize::MAX;
+    const MAX_BATCH_SIZE: usize = usize::MAX;
     /// The total size is 16M
-    const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = 16000000;
+    const MAX_BATCH_TOTAL_SIZE: usize = 16000000;
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
     // ScyllaDb cannot take a `crate::batch::Batch` directly. Indeed, if a delete is

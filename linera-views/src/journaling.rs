@@ -63,10 +63,10 @@ fn get_journaling_key(base_key: &[u8], tag: u8, pos: u32) -> Result<Vec<u8>, bcs
 #[async_trait]
 pub trait DirectWritableKeyValueStore<E> {
     /// The maximal number of items in a batch.
-    const MAX_TRANSACT_WRITE_ITEM_SIZE: usize;
+    const MAX_BATCH_SIZE: usize;
 
     /// The maximal number of bytes of a batch.
-    const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize;
+    const MAX_BATCH_TOTAL_SIZE: usize;
 
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
@@ -248,17 +248,17 @@ where
                 break;
             }
             let (block_flush, transaction_flush) = {
-                if iter.is_empty() || block.len() == K::MAX_TRANSACT_WRITE_ITEM_SIZE - 2 {
+                if iter.is_empty() || block.len() == K::MAX_BATCH_SIZE - 2 {
                     (true, true)
                 } else {
                     let next_block_size = iter.next_batch_size(&block, block_size)?;
                     let next_transaction_size = transaction_size + next_block_size;
-                    let block_flush = if next_transaction_size > K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE {
+                    let block_flush = if next_transaction_size > K::MAX_BATCH_TOTAL_SIZE {
                         true
                     } else {
                         next_block_size > K::MAX_VALUE_SIZE
                     };
-                    let transaction_flush = next_transaction_size > K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
+                    let transaction_flush = next_transaction_size > K::MAX_BATCH_TOTAL_SIZE;
                     (block_flush, transaction_flush)
                 }
             };
@@ -291,10 +291,10 @@ where
     }
 
     fn is_fastpath_feasible(batch: &K::Batch) -> bool {
-        if batch.len() > K::MAX_TRANSACT_WRITE_ITEM_SIZE {
+        if batch.len() > K::MAX_BATCH_SIZE {
             return false;
         }
-        batch.num_bytes() <= K::MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE
+        batch.num_bytes() <= K::MAX_BATCH_TOTAL_SIZE
     }
 }
 

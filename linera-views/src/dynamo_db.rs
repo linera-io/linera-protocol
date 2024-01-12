@@ -911,8 +911,8 @@ impl ReadableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
 
 #[async_trait]
 impl DirectWritableKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
-    const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_SIZE;
-    const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
+    const MAX_BATCH_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_SIZE;
+    const MAX_BATCH_TOTAL_SIZE: usize = MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE;
     const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
 
     // DynamoDB does not support the `DeletePrefix` operation.
