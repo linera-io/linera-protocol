@@ -743,9 +743,9 @@ impl KeyValueStore for ScyllaDbStore {
 }
 
 impl ScyllaDbStore {
-    /// Gets the table name of a store
+    /// Gets the table name of the ScyllaDb store
     pub async fn get_table_name(&self) -> String {
-        self.store.client.client.get_table_name().await
+        self.store.store.store.get_table_name().await
     }
 
     /// Creates a [`ScyllaDbStore`] from the input parameters.

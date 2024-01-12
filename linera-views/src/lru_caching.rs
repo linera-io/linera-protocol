@@ -84,11 +84,11 @@ impl<'a> LruPrefixCache {
     }
 }
 
-/// We take a client, a maximum size and build a LRU-based system.
+/// We take a store, a maximum size and build a LRU-based system.
 #[derive(Clone)]
 pub struct LruCachingStore<K> {
-    /// The inner client that is called by the LRU cache one
-    pub client: K,
+    /// The inner store that is called by the LRU cache one
+    pub store: K,
     lru_read_values: Option<Arc<Mutex<LruPrefixCache>>>,
 }
 
@@ -97,19 +97,19 @@ impl<K> ReadableKeyValueStore<K::Error> for LruCachingStore<K>
 where
     K: KeyValueStore + Send + Sync,
 {
-    // The LRU cache does not change the underlying client's size limits.
+    // The LRU cache does not change the underlying store's size limits.
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
     type Keys = K::Keys;
     type KeyValues = K::KeyValues;
 
     fn max_stream_queries(&self) -> usize {
-        self.client.max_stream_queries()
+        self.store.max_stream_queries()
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, K::Error> {
         match &self.lru_read_values {
             None => {
-                return self.client.read_value_bytes(key).await;
+                return self.store.read_value_bytes(key).await;
             }
             Some(lru_read_values) => {
                 // First inquiring in the read_value_bytes LRU
@@ -118,7 +118,7 @@ where
                     return Ok(value.clone());
                 }
                 drop(lru_read_values_container);
-                let value = self.client.read_value_bytes(key).await?;
+                let value = self.store.read_value_bytes(key).await?;
                 let mut lru_read_values = lru_read_values.lock().await;
                 lru_read_values.insert(key.to_vec(), value.clone());
                 Ok(value)
@@ -133,7 +133,7 @@ where
                 return Ok(value.is_some());
             }
         }
-        self.client.contains_key(key).await
+        self.store.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(
@@ -142,7 +142,7 @@ where
     ) -> Result<Vec<Option<Vec<u8>>>, K::Error> {
         match &self.lru_read_values {
             None => {
-                return self.client.read_multi_values_bytes(keys).await;
+                return self.store.read_multi_values_bytes(keys).await;
             }
             Some(lru_read_values) => {
                 let mut result = Vec::with_capacity(keys.len());
@@ -160,7 +160,7 @@ where
                 }
                 drop(lru_read_values_container);
                 let values = self
-                    .client
+                    .store
                     .read_multi_values_bytes(miss_keys.clone())
                     .await?;
                 let mut lru_read_values = lru_read_values.lock().await;
@@ -177,14 +177,14 @@ where
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, K::Error> {
-        self.client.find_keys_by_prefix(key_prefix).await
+        self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, K::Error> {
-        self.client.find_key_values_by_prefix(key_prefix).await
+        self.store.find_key_values_by_prefix(key_prefix).await
     }
 }
 
@@ -193,13 +193,13 @@ impl<K> WritableKeyValueStore<K::Error> for LruCachingStore<K>
 where
     K: KeyValueStore + Send + Sync,
 {
-    // The LRU cache does not change the underlying client's size limits.
+    // The LRU cache does not change the underlying store's size limits.
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), K::Error> {
         match &self.lru_read_values {
             None => {
-                return self.client.write_batch(batch, base_key).await;
+                return self.store.write_batch(batch, base_key).await;
             }
             Some(lru_read_values) => {
                 let mut lru_read_values = lru_read_values.lock().await;
@@ -217,13 +217,13 @@ where
                     }
                 }
                 drop(lru_read_values);
-                self.client.write_batch(batch, base_key).await
+                self.store.write_batch(batch, base_key).await
             }
         }
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), K::Error> {
-        self.client.clear_journal(base_key).await
+        self.store.clear_journal(base_key).await
     }
 }
 
@@ -238,17 +238,17 @@ impl<K> LruCachingStore<K>
 where
     K: KeyValueStore,
 {
-    /// Creates a new key-value store client that implements an LRU cache.
-    pub fn new(client: K, max_size: usize) -> Self {
+    /// Creates a new key-value store that implements an LRU cache.
+    pub fn new(store: K, max_size: usize) -> Self {
         if max_size == 0 {
             Self {
-                client,
+                store,
                 lru_read_values: None,
             }
         } else {
             let lru_read_values = Some(Arc::new(Mutex::new(LruPrefixCache::new(max_size))));
             Self {
-                client,
+                store,
                 lru_read_values,
             }
         }

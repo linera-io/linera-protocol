@@ -96,8 +96,8 @@ struct JournalHeader {
 /// for bypassing the limits on the batch size
 #[derive(Clone)]
 pub struct JournalingKeyValueStore<K> {
-    /// The inner client that is called by the LRU cache one
-    pub client: K,
+    /// The inner store that is called by the LRU cache one
+    pub store: K,
 }
 
 #[async_trait]
@@ -108,12 +108,7 @@ where
     type Error = K::Error;
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         let mut vector_list = Vec::new();
-        for key in self
-            .client
-            .find_keys_by_prefix(key_prefix)
-            .await?
-            .iterator()
-        {
+        for key in self.store.find_keys_by_prefix(key_prefix).await?.iterator() {
             vector_list.push(key?.to_vec());
         }
         Ok(vector_list)
@@ -134,33 +129,33 @@ where
 
     /// The read stuff does not change
     fn max_stream_queries(&self) -> usize {
-        self.client.max_stream_queries()
+        self.store.max_stream_queries()
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, K::Error> {
-        self.client.read_value_bytes(key).await
+        self.store.read_value_bytes(key).await
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, K::Error> {
-        self.client.contains_key(key).await
+        self.store.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, K::Error> {
-        self.client.read_multi_values_bytes(keys).await
+        self.store.read_multi_values_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, K::Error> {
-        self.client.find_keys_by_prefix(key_prefix).await
+        self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, K::Error> {
-        self.client.find_key_values_by_prefix(key_prefix).await
+        self.store.find_key_values_by_prefix(key_prefix).await
     }
 }
 
@@ -176,7 +171,7 @@ where
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), K::Error> {
         let batch = K::Batch::from_batch(self, batch).await?;
         if Self::is_fastpath_feasible(&batch) {
-            self.client.write_simplified_batch(batch).await
+            self.store.write_simplified_batch(batch).await
         } else {
             let header = self.write_journal(batch, base_key).await?;
             self.coherently_resolve_journal(header, base_key).await
@@ -217,7 +212,7 @@ where
                 break;
             }
             let key = get_journaling_key(base_key, KeyTag::Entry as u8, header.block_count - 1)?;
-            let batch = self.client.read_value::<K::Batch>(&key).await?;
+            let batch = self.store.read_value::<K::Batch>(&key).await?;
             if let Some(mut batch) = batch {
                 batch.add_delete(key); // Delete the journal entry
                 header.block_count -= 1;
@@ -228,7 +223,7 @@ where
                 } else {
                     batch.add_delete(key);
                 }
-                self.client.write_simplified_batch(batch).await?;
+                self.store.write_simplified_batch(batch).await?;
             } else {
                 return Err(JournalConsistencyError::FailureToRetrieveJournalBlock.into());
             }
@@ -279,7 +274,7 @@ where
                 value_size = 0;
             }
             if transact_flush {
-                self.client
+                self.store
                     .write_simplified_batch(std::mem::take(&mut transacts))
                     .await?;
                 transact_size = 0;
@@ -291,7 +286,7 @@ where
             let value = bcs::to_bytes(&header)?;
             let mut batch = K::Batch::default();
             batch.add_insert(key, value);
-            self.client.write_simplified_batch(batch).await?;
+            self.store.write_simplified_batch(batch).await?;
         }
         Ok(header)
     }
@@ -307,6 +302,6 @@ where
 impl<K> JournalingKeyValueStore<K> {
     /// Creates a new store from a simplified one.
     pub fn new(store: K) -> Self {
-        Self { client: store }
+        Self { store }
     }
 }
