@@ -7,11 +7,11 @@ use crate::{
         CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore,
         ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
     },
-    lru_caching::LruCachingStore,
-    simple_store::{
+    journaling::{
         DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
         JournalingKeyValueStore,
     },
+    lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
 use async_lock::{Semaphore, SemaphoreGuard};

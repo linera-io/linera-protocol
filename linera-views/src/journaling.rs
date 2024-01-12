@@ -1,11 +1,21 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! The Key Value Store and a simplified Key Value Store
-//! The most important traits are:
-//! * [`KeyValueStore`][trait1] which manages the access to a database and is clonable. It has a minimal interface
+//! Journaling aims to allow writing arbitrarily large batches of data in an atomic way.
+//! This is useful for database backends that limit the number of keys and/or the size of
+//! the data that can be written atomically (i.e. in the same database transaction).
 //!
-//! [trait1]: common::KeyValueStore
+//! Journaling requires to set aside a range of keys to hold a possible "header" and an
+//! array of unwritten entries called "blocks".
+//!
+//! When a new batch to be written exceeds the capacity of the underlying storage, the
+//! "slow path" is taken: the batch of operations is first written into blocks, then the
+//! journal header is (atomically) updated to make the batch of updates persistent.
+//!
+//! Before any new read or write operation, if a journal is present, it must first be
+//! cleared. This is done by processing every block of the journal successively. Every
+//! time the data in a block are written, the journal header is updated in the same
+//! transaction to mark the block as processed.
 
 use crate::{
     batch::{Batch, DeletePrefixExpander, SimplifiedBatch, SimplifiedBatchIter},
@@ -21,6 +31,8 @@ use thiserror::Error;
 
 /// The tag used for the journal stuff.
 const JOURNAL_TAG: u8 = 0;
+// To prevent collisions, the tag value 0 is reserved for journals.
+// The tags used by views must be greater or equal than `MIN_VIEW_TAG`.
 sa::const_assert!(JOURNAL_TAG < MIN_VIEW_TAG);
 
 /// Data type indicating that the database is not consistent
@@ -40,8 +52,6 @@ enum KeyTag {
 }
 
 fn get_journaling_key(base_key: &[u8], tag: u8, pos: u32) -> Result<Vec<u8>, bcs::Error> {
-    // We used the value 0 because it does not collide with other key values.
-    // since other tags are starting from 1.
     let mut key = base_key.to_vec();
     key.extend([JOURNAL_TAG]);
     key.extend([tag]);
@@ -64,7 +74,7 @@ pub trait DirectWritableKeyValueStore<E> {
     /// The batch type.
     type Batch: SimplifiedBatch + Serialize + DeserializeOwned + Default;
 
-    /// Writes the simplified `batch` in the database. After the writing, the
+    /// Writes the simplified batch in the database. After the writing, the
     /// simplified batch must be empty.
     async fn write_simplified_batch(&self, batch: &mut Self::Batch) -> Result<(), E>;
 }
@@ -278,9 +288,9 @@ where
         if block_count > 0 {
             let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
             let value = bcs::to_bytes(&header)?;
-            let mut sing_oper = K::Batch::default();
-            sing_oper.add_insert(key, value);
-            self.client.write_simplified_batch(&mut sing_oper).await?;
+            let mut batch = K::Batch::default();
+            batch.add_insert(key, value);
+            self.client.write_simplified_batch(&mut batch).await?;
         }
         Ok(header)
     }

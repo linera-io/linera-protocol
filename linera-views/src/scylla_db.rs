@@ -24,11 +24,11 @@ use crate::{
         get_upper_bound_option, CommonStoreConfig, ContextFromStore, KeyValueStore,
         ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
     },
-    lru_caching::LruCachingStore,
-    simple_store::{
+    journaling::{
         DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
         JournalingKeyValueStore,
     },
+    lru_caching::LruCachingStore,
     value_splitting::DatabaseConsistencyError,
 };
 use async_lock::{Semaphore, SemaphoreGuard};
