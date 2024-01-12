@@ -9,13 +9,14 @@ use self::utils::{create_dummy_user_application_description, ExpectedCall, MockA
 use linera_base::{
     crypto::PublicKey,
     data_types::BlockHeight,
-    identifiers::{ChainDescription, ChainId, Owner},
+    identifiers::{ChainDescription, ChainId, Destination, Owner},
 };
 use linera_execution::{
-    policy::ResourceControlPolicy, ApplicationCallOutcome, ApplicationRegistryView, BaseRuntime,
-    ContractRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, ExecutionStateView, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, ResourceTracker, Response, SessionCallOutcome, SystemExecutionState,
+    policy::ResourceControlPolicy, system::SystemMessage, ApplicationCallOutcome,
+    ApplicationRegistryView, BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, ExecutionStateView, MessageKind, Operation,
+    OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
+    ResourceTracker, Response, SessionCallOutcome, SystemExecutionState,
     TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
@@ -425,6 +426,90 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
         .await,
         Err(ExecutionError::UserError(message)) if message == error_message
     ));
+
+    Ok(())
+}
+
+/// Tests if an application is scheduled to be registered together with any messages it sends to
+/// other chains.
+#[tokio::test]
+async fn test_simple_message() -> anyhow::Result<()> {
+    let mut state = SystemExecutionState::default();
+    state.description = Some(ChainDescription::Root(0));
+    let mut view =
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            ExecutionRuntimeConfig::Synchronous,
+        )
+        .await;
+
+    let mut applications = register_mock_applications(&mut view, 1).await?;
+    let (application_id, application) = applications
+        .next()
+        .expect("Caller mock application should be registered");
+
+    let destination_chain = ChainId::from(ChainDescription::Root(1));
+    let dummy_message = RawOutgoingMessage {
+        destination: Destination::from(destination_chain),
+        authenticated: false,
+        kind: MessageKind::Simple,
+        message: b"msg".to_vec(),
+    };
+
+    application.expect_call(ExpectedCall::execute_operation({
+        let dummy_message = dummy_message.clone();
+        move |_runtime, _context, _operation| {
+            Ok(RawExecutionOutcome::default().with_message(dummy_message))
+        }
+    }));
+
+    let context = OperationContext {
+        chain_id: ChainId::root(0),
+        height: BlockHeight(0),
+        index: 0,
+        authenticated_signer: None,
+        next_message_index: 0,
+    };
+    let mut tracker = ResourceTracker::default();
+    let policy = ResourceControlPolicy::default();
+    let outcomes = view
+        .execute_operation(
+            context,
+            Operation::User {
+                application_id,
+                bytes: vec![],
+            },
+            &policy,
+            &mut tracker,
+        )
+        .await?;
+
+    let application_description = view
+        .system
+        .registry
+        .describe_application(application_id)
+        .await?;
+    let registration_message = RawOutgoingMessage {
+        destination: Destination::from(destination_chain),
+        authenticated: false,
+        kind: MessageKind::Simple,
+        message: SystemMessage::RegisterApplications {
+            applications: vec![application_description],
+        },
+    };
+
+    assert_eq!(
+        outcomes,
+        &[
+            ExecutionOutcome::System(
+                RawExecutionOutcome::default().with_message(registration_message)
+            ),
+            ExecutionOutcome::User(
+                application_id,
+                RawExecutionOutcome::default().with_message(dummy_message)
+            )
+        ]
+    );
 
     Ok(())
 }
