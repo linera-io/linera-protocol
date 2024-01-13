@@ -56,7 +56,7 @@ use serde::{Deserialize, Serialize};
 use std::{fmt, io, path::Path, str::FromStr, sync::Arc};
 use thiserror::Error;
 
-/// An implementation of [`UserContractModule`]
+/// An implementation of [`UserContractModule`].
 pub type UserContractCode = Arc<dyn UserContractModule + Send + Sync + 'static>;
 
 /// An implementation of [`UserServiceModule`].
