@@ -9,6 +9,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera open-chain`↴](#linera-open-chain)
 * [`linera open-multi-owner-chain`↴](#linera-open-multi-owner-chain)
 * [`linera close-chain`↴](#linera-close-chain)
+* [`linera subscribe`↴](#linera-subscribe)
 * [`linera query-balance`↴](#linera-query-balance)
 * [`linera sync-balance`↴](#linera-sync-balance)
 * [`linera query-validators`↴](#linera-query-validators)
@@ -50,6 +51,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `open-chain` — Open (i.e. activate) a new chain deriving the UID from an existing one
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
 * `close-chain` — Close (i.e. deactivate) an existing chain
+* `subscribe` - Subscribes to a system channel
 * `query-balance` — Read the balance of the chain from the local state of the client
 * `sync-balance` — Synchronize the local state of the chain (including a conservative estimation of the available balance) with a quorum validators
 * `query-validators` — Show the current set of validators for a chain
@@ -172,6 +174,16 @@ Close (i.e. deactivate) an existing chain
 
 * `--from <CHAIN_ID>` — Chain id (must be one of our chains)
 
+## `linera subscribe`
+
+Subscribes to a system channel, available channels in the application are admin and published-bytecodes
+
+**Usage:** `linera subscribe [OPTIONS] --subscriber <CHAIN_ID> --publisher <CHAIN_ID>`
+
+###### **Options:**
+* `--subscriber <CHAIN_ID>` — Chain id (must be one of our chains)
+* `--publisher <CHAIN_ID>` — Chain id (must be one of our chains)
+* `--channel <SYSTEM_CHANNEL>` - System Channel (admin or published-bytecodes)
 
 
 ## `linera query-balance`

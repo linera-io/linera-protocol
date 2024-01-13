@@ -24,7 +24,7 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
     policy::ResourceControlPolicy,
-    system::{Account, UserData},
+    system::{Account, UserData, SystemChannel},
     Bytecode, ChainOwnership, Message, SystemMessage, TimeoutConfig, UserApplicationId,
     WasmRuntime, WithWasmDefault,
 };
@@ -848,6 +848,20 @@ enum ClientCommand {
         balance: Amount,
     },
 
+    /// Subscribes to a system channel, available channels in the application are ADMIN and PUBLISHED_BYTECODES
+    Subscribe{
+
+        #[arg(long = "subscriber")]
+        subscriber: ChainId,
+
+        #[arg(long = "publisher")]
+        publisher: ChainId,
+
+        #[arg(long = "channel")]
+        channel: SystemChannel,
+
+    },
+
     /// Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one.
     OpenMultiOwnerChain {
         /// Chain id (must be one of our chains).
@@ -1543,6 +1557,31 @@ impl Runnable for Job {
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
                 debug!("{:?}", certificate);
+            }
+
+            Subscribe {
+                subscriber,
+                publisher,
+                channel
+            } => {
+                let mut chain_client = context.make_chain_client(storage, subscriber);
+                let time_start = Instant::now();
+                info!("Subscribing");
+            
+                let subscribe_result = match channel {
+                    SystemChannel::Admin => {
+                        chain_client.subscribe_to_new_committees().await
+                    },
+                    SystemChannel::PublishedBytecodes => {
+                        chain_client.subscribe_to_published_bytecodes(publisher).await
+                    },
+                };
+        
+                context.update_and_save_wallet(&mut chain_client).await;
+                let subscribe = subscribe_result.context("Failed to subscribe")?;
+                let time_total = time_start.elapsed().as_micros();
+                info!("Subscription confirmed after {} us", time_total);
+                debug!("{:?}", subscribe);
             }
 
             QueryBalance { chain_id } => {
