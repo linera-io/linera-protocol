@@ -26,7 +26,7 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
     policy::ResourceControlPolicy,
-    system::UserData,
+    system::{SystemChannel, UserData},
     ChainOwnership, Message, SystemMessage, TimeoutConfig,
 };
 use linera_service::{
@@ -263,6 +263,31 @@ impl Runnable for Job {
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
+            }
+
+            Subscribe {
+                subscriber,
+                publisher,
+                channel,
+            } => {
+                let mut chain_client = context.make_chain_client(storage, subscriber);
+                let time_start = Instant::now();
+                info!("Subscribing");
+
+                let subscribe_result = match channel {
+                    SystemChannel::Admin => chain_client.subscribe_to_new_committees().await,
+                    SystemChannel::PublishedBytecodes => {
+                        chain_client
+                            .subscribe_to_published_bytecodes(publisher)
+                            .await
+                    }
+                };
+
+                context.update_and_save_wallet(&mut chain_client).await;
+                let subscribe = subscribe_result.context("Failed to subscribe")?;
+                let time_total = time_start.elapsed().as_micros();
+                info!("Subscription confirmed after {} us", time_total);
+                debug!("{:?}", subscribe);
             }
 
             QueryBalance { chain_id } => {

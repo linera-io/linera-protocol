@@ -3185,6 +3185,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "bytes",
+ "clap 4.4.11",
  "counter",
  "custom_debug_derive",
  "dashmap",

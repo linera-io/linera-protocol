@@ -10,7 +10,9 @@ use linera_base::{
     identifiers::{BytecodeId, ChainId, MessageId},
 };
 use linera_execution::{
-    committee::ValidatorName, system::Account, UserApplicationId, WasmRuntime, WithWasmDefault,
+    committee::ValidatorName,
+    system::{Account, SystemChannel},
+    UserApplicationId, WasmRuntime, WithWasmDefault,
 };
 use linera_service::{
     chain_listener::{ChainListenerConfig, ClientContext as _},
@@ -190,6 +192,18 @@ pub enum ClientCommand {
         /// balance.
         #[arg(long = "initial-balance", default_value = "0")]
         balance: Amount,
+    },
+
+    /// Subscribes to a system channel, available channels in the application are ADMIN and PUBLISHED_BYTECODES
+    Subscribe {
+        #[arg(long = "subscriber")]
+        subscriber: ChainId,
+
+        #[arg(long = "publisher")]
+        publisher: ChainId,
+
+        #[arg(long = "channel")]
+        channel: SystemChannel,
     },
 
     /// Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one.
