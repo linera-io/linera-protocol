@@ -62,12 +62,18 @@ pub type UserContractCode = Arc<dyn UserContractModule + Send + Sync + 'static>;
 /// An implementation of [`UserServiceModule`].
 pub type UserServiceCode = Arc<dyn UserServiceModule + Send + Sync + 'static>;
 
+/// An implementation of [`UserContract`].
+pub type UserContractInstance = Box<dyn UserContract + Send + Sync + 'static>;
+
+/// An implementation of [`UserService`].
+pub type UserServiceInstance = Box<dyn UserService + Send + Sync + 'static>;
+
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
 pub trait UserContractModule {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntime,
-    ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError>;
+    ) -> Result<UserContractInstance, ExecutionError>;
 }
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
@@ -75,7 +81,7 @@ pub trait UserServiceModule {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntime,
-    ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError>;
+    ) -> Result<UserServiceInstance, ExecutionError>;
 }
 
 /// A type for errors happening during execution.
