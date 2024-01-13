@@ -1,0 +1,16 @@
+developerMode: true
+sysctls:
+  - "fs.aio-max-nr=4082080"
+datacenter: validator
+racks:
+  - name: rack-1
+    members: 1
+    storage:
+      capacity: 1Gi
+    resources:
+      limits:
+        cpu: 1
+        memory: 0.2Gi
+      requests:
+        cpu: 1
+        memory: 0.2Gi

@@ -7,9 +7,10 @@
 #[cfg(feature = "kubernetes")]
 /// How to run docker operations
 mod docker;
+
 #[cfg(feature = "kubernetes")]
-/// How to run helm operations
-mod helm;
+/// How to run helmfile operations
+mod helmfile;
 #[cfg(feature = "kubernetes")]
 /// How to run kind operations
 mod kind;

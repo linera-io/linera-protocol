@@ -46,6 +46,8 @@ jobs:
           strip target/release/linera-proxy
           strip target/release/linera-server
           strip target/release/linera-db
+      - name: Setup helmfile
+        uses: mamezou-tech/setup-helmfile@v1.3.0
       - name: Run Wasm e2e test
         uses: nick-fields/retry@v2
         with:

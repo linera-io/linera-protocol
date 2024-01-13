@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    docker::DockerImage, helm::HelmRelease, kind::KindCluster, kubectl::KubectlInstance,
-    util::get_github_root,
+    docker::DockerImage, kind::KindCluster, kubectl::KubectlInstance, util::get_github_root,
 };
 use crate::{
-    cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
+    cli_wrappers::{helmfile::HelmFile, ClientWrapper, LineraNet, LineraNetConfig, Network},
     util::{self, CommandExt},
 };
 use anyhow::{anyhow, bail, ensure, Result};
@@ -22,7 +21,7 @@ use std::{path::PathBuf, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
 #[cfg(any(test, feature = "test"))]
-use tokio::sync::OnceCell;
+use {crate::util::current_binary_parent, tokio::sync::OnceCell};
 
 #[cfg(any(test, feature = "test"))]
 static SHARED_LOCAL_KUBERNETES_TESTING_NET: OnceCell<(
@@ -63,7 +62,29 @@ pub struct LocalKubernetesNet {
 #[cfg(any(test, feature = "test"))]
 impl SharedLocalKubernetesNetTestingConfig {
     pub fn new(network: Network, binaries: Option<Option<PathBuf>>) -> Self {
-        Self { network, binaries }
+        if binaries.is_none() {
+            // For cargo test, current binary should be in debug mode
+            let current_binary_parent =
+                current_binary_parent().expect("Fetching current binaries path should not fail");
+            // But binaries for cluster should be release mode
+            let binaries_dir = current_binary_parent
+                .parent()
+                .expect("Getting parent shuold not fail")
+                .join("release");
+            if binaries_dir.exists() {
+                // If release exists, use those binaries
+                Self {
+                    network,
+                    binaries: Some(Some(binaries_dir)),
+                }
+            } else {
+                // If release doesn't exist, pass None to build binaries
+                // from within Docker container
+                Self { network, binaries }
+            }
+        } else {
+            Self { network, binaries }
+        }
     }
 }
 
@@ -409,15 +430,7 @@ impl LocalKubernetesNet {
                     base_dir.join(&server_config_filename),
                 )?;
 
-                HelmRelease::install(
-                    String::from("linera-core"),
-                    &base_dir,
-                    i,
-                    &github_root,
-                    num_shards,
-                    cluster_id,
-                )
-                .await?;
+                HelmFile::sync(i, &github_root, num_shards, cluster_id).await?;
 
                 let mut kubectl_instance = kubectl_instance.lock().await;
                 let output = kubectl_instance.get_pods(cluster_id).await?;
