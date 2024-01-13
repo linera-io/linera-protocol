@@ -274,7 +274,7 @@ impl Runnable for Job {
                 let time_start = Instant::now();
                 info!("Subscribing");
 
-                let subscribe_result = match channel {
+                let result = match channel {
                     SystemChannel::Admin => chain_client.subscribe_to_new_committees().await,
                     SystemChannel::PublishedBytecodes => {
                         chain_client
@@ -284,10 +284,37 @@ impl Runnable for Job {
                 };
 
                 context.update_and_save_wallet(&mut chain_client).await;
-                let subscribe = subscribe_result.context("Failed to subscribe")?;
+                let subscribe = result.context("Failed to subscribe")?;
                 let time_total = time_start.elapsed().as_micros();
                 info!("Subscription confirmed after {} us", time_total);
                 debug!("{:?}", subscribe);
+            }
+
+            Unsubscribe {
+                subscriber,
+                publisher,
+                channel,
+            } => {
+                let mut chain_client = context.make_chain_client(storage, subscriber);
+                let time_start = Instant::now();
+                let result = match channel {
+                    SystemChannel::Admin => {
+                        info!("Unsubscribing from admin channel");
+                        chain_client.unsubscribe_from_new_committees().await
+                    }
+                    SystemChannel::PublishedBytecodes => {
+                        info!("Unsubscribing from publisher {}", publisher);
+                        chain_client
+                            .unsubscribe_from_published_bytecodes(publisher)
+                            .await
+                    }
+                };
+
+                context.update_and_save_wallet(&mut chain_client).await;
+                let unsubscribe = result.context("Failed to unsubscribe")?;
+                let time_total = time_start.elapsed().as_micros();
+                info!("Unsubscribed in {} us", time_total);
+                debug!("{:?}", unsubscribe);
             }
 
             QueryBalance { chain_id } => {

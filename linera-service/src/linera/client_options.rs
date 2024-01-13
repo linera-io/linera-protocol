@@ -194,8 +194,20 @@ pub enum ClientCommand {
         balance: Amount,
     },
 
-    /// Subscribes to a system channel, available channels in the application are ADMIN and PUBLISHED_BYTECODES
+    /// Subscribes to a system channel, available channels in the application are admin and published-bytecodes
     Subscribe {
+        #[arg(long = "subscriber")]
+        subscriber: ChainId,
+
+        #[arg(long = "publisher")]
+        publisher: ChainId,
+
+        #[arg(long = "channel")]
+        channel: SystemChannel,
+    },
+
+    /// Unsubscribes from a system channel.
+    Unsubscribe {
         #[arg(long = "subscriber")]
         subscriber: ChainId,
 
