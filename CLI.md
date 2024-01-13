@@ -10,6 +10,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera open-multi-owner-chain`↴](#linera-open-multi-owner-chain)
 * [`linera close-chain`↴](#linera-close-chain)
 * [`linera subscribe`↴](#linera-subscribe)
+* [`linera unsubscribe`↴](#linera-unsubscribe)
 * [`linera query-balance`↴](#linera-query-balance)
 * [`linera sync-balance`↴](#linera-sync-balance)
 * [`linera query-validators`↴](#linera-query-validators)
@@ -178,7 +179,18 @@ Close (i.e. deactivate) an existing chain
 
 Subscribes to a system channel, available channels in the application are admin and published-bytecodes
 
-**Usage:** `linera subscribe [OPTIONS] --subscriber <CHAIN_ID> --publisher <CHAIN_ID>`
+**Usage:** `linera subscribe [OPTIONS] --subscriber <CHAIN_ID> --publisher <CHAIN_ID> --channel <SYSTEM_CHANNEL>`
+
+###### **Options:**
+* `--subscriber <CHAIN_ID>` — Chain id (must be one of our chains)
+* `--publisher <CHAIN_ID>` — Chain id (must be one of our chains)
+* `--channel <SYSTEM_CHANNEL>` - System Channel (admin or published-bytecodes)
+
+## `linera unsubscribe`
+
+Unsubscribes from a system channel 
+
+**Usage:** `linera unsubscribe [OPTIONS] --subscriber <CHAIN_ID> --publisher <CHAIN_ID> --channel <SYSTEM_CHANNEL>`
 
 ###### **Options:**
 * `--subscriber <CHAIN_ID>` — Chain id (must be one of our chains)
