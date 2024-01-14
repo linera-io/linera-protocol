@@ -1,0 +1,42 @@
+[package]
+name = "linera-shared-storage"
+version = "0.6.0"
+description = "RPC shared key value store."
+authors = ["Linera <contact@linera.io>"]
+readme = "README.md"
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.dev"
+documentation = "https://docs.rs/linera-shared-storage/latest/linera_shared_storage/"
+license = "Apache-2.0"
+edition = "2021"
+
+[[bin]]
+name = "composed_trait_experiment"
+path = "src/shared_store.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+bincode = { workspace = true }
+bytes = { workspace = true }
+clap = { workspace = true }
+linera-views = { workspace = true }
+prometheus = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true, features = ["codec", "net"] }
+tonic = { workspace = true }
+tonic-health = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+serde-reflection = { workspace = true }
+serde_yaml = { workspace = true }
+similar-asserts = { workspace = true }
+test-strategy = { workspace = true }
+
+[build-dependencies]
+tonic-build = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["proptest", "prost"]
