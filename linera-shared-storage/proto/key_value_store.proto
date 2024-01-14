@@ -1,0 +1,71 @@
+syntax = "proto3";
+package key_value_store.v1;
+
+message KeyValue {
+  bytes key = 1;
+  bytes value = 2;
+}
+
+message Statement {
+  oneof Value {
+    bytes delete_key = 1;
+    KeyValue insert_key_value = 2;
+    bytes delete_key_prefix = 3;
+  }
+}
+
+message Batch {
+  repeated Statement statements = 1;
+}
+
+message ReadMultiKey {
+  repeated bytes keys = 1;
+}
+
+message UnitType {
+}
+
+service StoreProcessor {
+  rpc StoreProcess (StoreRequest) returns (StoreResponse) {}
+}
+
+message StoreRequest {
+  oneof pattern {
+    bytes read_key = 1;
+    bytes contains_key = 2;
+    ReadMultiKey read_multi_keys = 3;
+    bytes find_keys_by_prefix = 4;
+    bytes find_key_values_by_prefix = 5;
+    Batch write_batch = 6;
+    UnitType clear_journal = 7;
+  }
+}
+
+message ReadKeyResponse {
+  optional bytes response = 1;
+}
+
+message ReadMultiKeyResponse {
+  repeated ReadKeyResponse responses = 1;
+}
+
+message FindKeysByPrefixResponse {
+  repeated bytes keys = 1;
+}
+
+message FindKeyValuesByPrefixResponse {
+  repeated KeyValue keys = 1;
+}
+
+message StoreResponse {
+  oneof pattern {
+    ReadKeyResponse value = 1;
+    bool contains_key = 2;
+    ReadMultiKeyResponse values = 3;
+    ReadMultiKeyResponse keys = 4;
+    FindKeyValuesByPrefixResponse key_values = 5;
+    UnitType write_batch = 6;
+    UnitType clear_journal = 7;
+  }
+}
+
