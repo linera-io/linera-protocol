@@ -3561,6 +3561,7 @@ dependencies = [
  "linera-views",
  "prometheus",
  "proptest",
+ "prost",
  "serde",
  "serde-reflection",
  "serde_yaml 0.8.26",

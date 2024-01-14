@@ -20,6 +20,7 @@ async-trait = { workspace = true }
 bincode = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true }
+prost = { workspace = true }
 linera-views = { workspace = true }
 linera-service = { workspace = true }
 prometheus = { workspace = true }

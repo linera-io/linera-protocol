@@ -64,8 +64,7 @@ message StoreResponse {
     ReadMultiKeyResponse values = 3;
     ReadMultiKeyResponse keys = 4;
     FindKeyValuesByPrefixResponse key_values = 5;
-    UnitType write_batch = 6;
-    UnitType clear_journal = 7;
+    UnitType unit = 6;
   }
 }
 
