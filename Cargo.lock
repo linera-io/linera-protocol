@@ -3557,6 +3557,7 @@ dependencies = [
  "bincode",
  "bytes",
  "clap 4.4.11",
+ "linera-service",
  "linera-views",
  "prometheus",
  "proptest",

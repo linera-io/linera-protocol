@@ -21,6 +21,7 @@ bincode = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true }
 linera-views = { workspace = true }
+linera-service = { workspace = true }
 prometheus = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }

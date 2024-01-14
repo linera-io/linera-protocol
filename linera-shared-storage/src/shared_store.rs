@@ -1,17 +1,23 @@
 use tonic::{transport::Server, Request, Response, Status};
+use linera_service::storage::StorageConfig;
+use linera_views::common::CommonStoreConfig;
+//use std::process;
+use linera_views::memory::MemoryStore;
+use linera_views::memory::create_memory_store;
 
-
-
-pub mod hello_world {
-    tonic::include_proto!("key_value_store");
+#[allow(clippy::derive_partial_eq_without_eq)]
+// https://github.com/hyperium/tonic/issues/1056
+pub mod key_value_store {
+    tonic::include_proto!("key_value_store.v1");
 }
+
+use key_value_store::{
+    StoreProcessorServer,
+};
 
 pub struct Storage {
     memory_store: MemoryStore,
 }
-
-
-
 
 
 struct SharedStoreOptions {
@@ -23,7 +29,7 @@ struct SharedStoreOptions {
     endpoint: String,
 }
 
-
+#[tonic::async_trait]
 impl StoreProcessor for Storage {
     async fn process(
         &self,
@@ -61,6 +67,7 @@ impl StoreProcessor for Storage {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /*
     let env_filter = tracing_subscriber::EnvFilter::builder()
         .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
         .from_env_lossy();
@@ -68,7 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_writer(std::io::stderr)
         .with_env_filter(env_filter)
         .init();
-
+*/
     let options = <SharedStoreOptions as clap::Parser>::parse();
 
 
@@ -85,7 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let storage = Storage { memory_store };
 
     Server::builder()
-        .add_service(GreeterServer::new(greeter))
+        .add_service(StoreProcessorServer::new(storage))
         .serve(addr)
         .await?;
 
