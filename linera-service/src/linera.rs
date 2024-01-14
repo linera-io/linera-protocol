@@ -24,7 +24,7 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
     policy::ResourceControlPolicy,
-    system::{Account, UserData, SystemChannel},
+    system::{Account, SystemChannel, UserData},
     Bytecode, ChainOwnership, Message, SystemMessage, TimeoutConfig, UserApplicationId,
     WasmRuntime, WithWasmDefault,
 };
@@ -848,32 +848,34 @@ enum ClientCommand {
         balance: Amount,
     },
 
-    /// Subscribes to a system channel, available channels in the application are admin and published-bytecodes
+    /// Subscribes to a system channel.
     Subscribe {
-
+        /// Chain id (must be one of our chains).
         #[arg(long = "subscriber")]
         subscriber: ChainId,
 
+        /// Chain id (must be one of our chains).
         #[arg(long = "publisher")]
         publisher: ChainId,
 
+        /// System channel available in the system application.
         #[arg(long = "channel")]
         channel: SystemChannel,
-
     },
 
     /// Unsubscribes from a system channel.
     Unsubscribe {
-
+        /// Chain id (must be one of our chains).
         #[arg(long = "subscriber")]
         subscriber: ChainId,
 
+        /// Chain id (must be one of our chains).
         #[arg(long = "publisher")]
         publisher: ChainId,
 
+        /// System channel available in the system application.
         #[arg(long = "channel")]
         channel: SystemChannel,
-
     },
 
     /// Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one.
@@ -1576,21 +1578,19 @@ impl Runnable for Job {
             Subscribe {
                 subscriber,
                 publisher,
-                channel
+                channel,
             } => {
                 let mut chain_client = context.make_chain_client(storage, subscriber);
                 let time_start = Instant::now();
                 info!("Subscribing");
-            
                 let result = match channel {
-                    SystemChannel::Admin => {
-                        chain_client.subscribe_to_new_committees().await
-                    },
+                    SystemChannel::Admin => chain_client.subscribe_to_new_committees().await,
                     SystemChannel::PublishedBytecodes => {
-                        chain_client.subscribe_to_published_bytecodes(publisher).await
-                    },
+                        chain_client
+                            .subscribe_to_published_bytecodes(publisher)
+                            .await
+                    }
                 };
-        
                 context.update_and_save_wallet(&mut chain_client).await;
                 let subscribe = result.context("Failed to subscribe")?;
                 let time_total = time_start.elapsed().as_micros();
@@ -1601,7 +1601,7 @@ impl Runnable for Job {
             Unsubscribe {
                 subscriber,
                 publisher,
-                channel
+                channel,
             } => {
                 let mut chain_client = context.make_chain_client(storage, subscriber);
                 let time_start = Instant::now();
@@ -1609,19 +1609,19 @@ impl Runnable for Job {
                     SystemChannel::Admin => {
                         info!("Unsubscribing from admin channel");
                         chain_client.unsubscribe_from_new_committees().await
-                    },
+                    }
                     SystemChannel::PublishedBytecodes => {
                         info!("Unsubscribing from publisher {}", publisher);
-                        chain_client.unsubscribe_from_published_bytecodes(publisher).await
-                    },
+                        chain_client
+                            .unsubscribe_from_published_bytecodes(publisher)
+                            .await
+                    }
                 };
-        
                 context.update_and_save_wallet(&mut chain_client).await;
                 let unsubscribe = result.context("Failed to unsubscribe")?;
                 let time_total = time_start.elapsed().as_micros();
                 info!("Unsubscribed in {} us", time_total);
                 debug!("{:?}", unsubscribe);
-
             }
 
             QueryBalance { chain_id } => {
