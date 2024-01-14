@@ -287,7 +287,9 @@ pub struct SystemResponse {
 }
 
 /// The channels available in the system application.
-#[derive(Enum, Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, clap::ValueEnum)]
+#[derive(
+    Enum, Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, clap::ValueEnum,
+)]
 pub enum SystemChannel {
     /// Channel used to broadcast reconfigurations.
     Admin,

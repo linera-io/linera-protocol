@@ -273,7 +273,6 @@ impl Runnable for Job {
                 let mut chain_client = context.make_chain_client(storage, subscriber);
                 let time_start = Instant::now();
                 info!("Subscribing");
-
                 let result = match channel {
                     SystemChannel::Admin => chain_client.subscribe_to_new_committees().await,
                     SystemChannel::PublishedBytecodes => {
@@ -282,7 +281,6 @@ impl Runnable for Job {
                             .await
                     }
                 };
-
                 context.update_and_save_wallet(&mut chain_client).await;
                 let subscribe = result.context("Failed to subscribe")?;
                 let time_total = time_start.elapsed().as_micros();
@@ -309,7 +307,6 @@ impl Runnable for Job {
                             .await
                     }
                 };
-
                 context.update_and_save_wallet(&mut chain_client).await;
                 let unsubscribe = result.context("Failed to unsubscribe")?;
                 let time_total = time_start.elapsed().as_micros();
