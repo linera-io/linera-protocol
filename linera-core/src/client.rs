@@ -748,10 +748,11 @@ where
                 "A different operation was executed in parallel (consider retrying the operation)"
             )
         );
-        // Since `handle_block_proposal` succeeded, we have the needed bytecode.
-        // Leaving blobs empty.
-        self.process_certificate(certificate.clone(), vec![])
-            .await?;
+        self.receive_certificate_internal(
+            certificate.clone(),
+            ReceiveCertificateMode::AlreadyChecked,
+        )
+        .await?;
         Ok(certificate)
     }
 
