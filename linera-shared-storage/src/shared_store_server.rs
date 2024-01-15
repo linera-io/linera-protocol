@@ -141,8 +141,8 @@ impl StoreProcessor for SharedStoreServer {
         request: Request<StoreRequest>,
     ) -> Result<Response<StoreReply>, Status> {
         use crate::key_value_store::UnitType;
-        let request = request.get_ref();
-        let response = match request.query.clone().unwrap() {
+        let request = request.into_inner();
+        let response = match request.query.unwrap() {
             Query::ReadValue(key) => {
                 let value = self.read_value_bytes(&key).await.unwrap();
                 let value = OptValue { value };

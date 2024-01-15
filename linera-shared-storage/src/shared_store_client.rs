@@ -48,12 +48,12 @@ impl ReadableKeyValueStore<ViewError> for SharedStoreClient {
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
         let response = client.store_process(request).await.unwrap();
-        let response = response.get_ref();
+        let response = response.into_inner();
         let StoreReply { reply } = response;
         let Some(Reply::ContainsKey(value)) = reply else {
             unreachable!();
         };
-        Ok(*value)
+        Ok(value)
     }
 
     async fn read_multi_values_bytes(
@@ -64,14 +64,13 @@ impl ReadableKeyValueStore<ViewError> for SharedStoreClient {
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
         let response = client.store_process(request).await.unwrap();
-        let response = response.get_ref();
+        let response = response.into_inner();
         let StoreReply { reply } = response;
         let Some(Reply::ReadMultiValues(values)) = reply else {
             unreachable!();
         };
         let values = values
             .values
-            .clone()
             .into_iter()
             .map(|x| x.value)
             .collect::<Vec<_>>();
@@ -83,12 +82,12 @@ impl ReadableKeyValueStore<ViewError> for SharedStoreClient {
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
         let response = client.store_process(request).await.unwrap();
-        let response = response.get_ref();
+        let response = response.into_inner();
         let StoreReply { reply } = response;
         let Some(Reply::FindKeysByPrefix(keys)) = reply else {
             unreachable!();
         };
-        Ok(keys.keys.clone())
+        Ok(keys.keys)
     }
 
     async fn find_key_values_by_prefix(
@@ -99,14 +98,13 @@ impl ReadableKeyValueStore<ViewError> for SharedStoreClient {
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
         let response = client.store_process(request).await.unwrap();
-        let response = response.get_ref();
+        let response = response.into_inner();
         let StoreReply { reply } = response;
         let Some(Reply::FindKeyValuesByPrefix(key_values)) = reply else {
             unreachable!();
         };
         let key_values = key_values
             .key_values
-            .clone()
             .into_iter()
             .map(|x| (x.key, x.value))
             .collect::<Vec<_>>();
