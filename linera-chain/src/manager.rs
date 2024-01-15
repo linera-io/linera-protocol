@@ -330,6 +330,9 @@ impl ChainManager {
         // even if it is older than the current round. Validators will only sign in the current
         // round, though. (See `create_final_vote` below.)
         if let Some(locked) = &self.locked {
+            if locked.hash() == certificate.hash() {
+                return Ok(Outcome::Skip);
+            }
             ensure!(
                 new_round > locked.round,
                 ChainError::InsufficientRound(locked.round)

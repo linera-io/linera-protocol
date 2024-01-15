@@ -467,10 +467,16 @@ where
                 return Ok(());
             }
         };
-        if self
-            .try_process_certificates(name, &mut node, chain_id, info.requested_sent_certificates)
-            .await
-            .is_none()
+        if !info.requested_sent_certificates.is_empty()
+            && self
+                .try_process_certificates(
+                    name,
+                    &mut node,
+                    chain_id,
+                    info.requested_sent_certificates,
+                )
+                .await
+                .is_none()
         {
             return Ok(());
         };

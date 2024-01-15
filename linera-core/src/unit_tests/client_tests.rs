@@ -37,7 +37,7 @@ use linera_execution::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use test_log::test;
 
 #[cfg(feature = "rocksdb")]
@@ -528,6 +528,7 @@ where
             UserData::default(),
         )
         .await
+        .unwrap()
         .unwrap();
 
     // The other client doesn't know the new round number yet:
@@ -1711,5 +1712,116 @@ where
         .check_that_validators_are_in_round(chain_id, BlockHeight::from(2), expected_round, 3)
         .await;
 
+    Ok(())
+}
+
+#[test(tokio::test)]
+async fn test_memory_propose_validated() -> Result<(), anyhow::Error> {
+    run_test_propose_validated(MakeMemoryStorage::default()).await
+}
+
+#[cfg(feature = "rocksdb")]
+#[test(tokio::test)]
+async fn test_rocks_db_propose_validated() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_propose_validated(MakeRocksDbStorage::default()).await
+}
+
+#[cfg(feature = "aws")]
+#[test(tokio::test)]
+async fn test_dynamo_db_propose_validated() -> Result<(), anyhow::Error> {
+    run_test_propose_validated(MakeDynamoDbStorage::default()).await
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_propose_validated() -> Result<(), anyhow::Error> {
+    run_test_propose_validated(MakeScyllaDbStorage::default()).await
+}
+
+async fn run_test_propose_validated<B>(storage_builder: B) -> Result<(), anyhow::Error>
+where
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
+{
+    // Configure a chain with two regular and no super owners.
+    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
+    let description = ChainDescription::Root(1);
+    let chain_id = ChainId::from(description);
+    let mut client0 = builder
+        .add_initial_chain(description, Amount::from_tokens(10))
+        .await?;
+    let pub_key0 = client0.public_key().await.unwrap();
+    let key_pair1 = KeyPair::generate();
+    let pub_key1 = key_pair1.public();
+    let owner_change_op = SystemOperation::ChangeOwnership {
+        super_owners: Vec::new(),
+        owners: vec![(pub_key0, 100), (pub_key1, 100)],
+        multi_leader_rounds: 10,
+        timeout_config: TimeoutConfig {
+            fast_round_duration: Some(Duration::from_secs(5)),
+            ..TimeoutConfig::default()
+        },
+    }
+    .into();
+    client0.execute_operation(owner_change_op).await.unwrap();
+    let mut client1 = builder
+        .make_client(
+            chain_id,
+            key_pair1,
+            client0.block_hash,
+            BlockHeight::from(1),
+        )
+        .await?;
+
+    // Client 0 tries to burn 3 tokens. Two validators are offline, so nothing will get
+    // validated or confirmed. However, client 0 now has a pending block.
+    builder
+        .set_fault_type(2..3, FaultType::OfflineWithInfo)
+        .await;
+    let result = client0
+        .burn(None, Amount::from_tokens(3), UserData::default())
+        .await;
+    assert!(result.is_err());
+
+    // Client 1 thinks it is madness to burn 3 tokens! They want to only burn 2.
+    // The validators are still faulty: They validate blocks but don't confirm them.
+    builder.set_fault_type(2..3, FaultType::NoConfirm).await;
+    client1.synchronize_from_validators().await.unwrap();
+    let manager = client1
+        .chain_info_with_manager_values()
+        .await
+        .unwrap()
+        .manager;
+    assert!(manager.requested_proposed.is_some());
+    assert_eq!(manager.next_round().unwrap(), Round::MultiLeader(1));
+    let result = client1
+        .burn(None, Amount::from_tokens(2), UserData::default())
+        .await;
+    assert!(result.is_err());
+
+    // Finally, the validators are online and honest again.
+    builder.set_fault_type(1..3, FaultType::Honest).await;
+    client0.synchronize_from_validators().await.unwrap();
+    let manager = client0
+        .chain_info_with_manager_values()
+        .await
+        .unwrap()
+        .manager;
+    assert_eq!(
+        manager.highest_validated().unwrap().round,
+        Round::MultiLeader(1)
+    );
+
+    // Client 0 now only tries to burn 1 token. Before that, they automatically finalize the
+    // pending block, which burns 2 tokens, leaving 10 - 2 - 1 = 7.
+    client0
+        .burn(None, Amount::from_tokens(1), UserData::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        client0.synchronize_from_validators().await.unwrap(),
+        Amount::from_tokens(7)
+    );
     Ok(())
 }

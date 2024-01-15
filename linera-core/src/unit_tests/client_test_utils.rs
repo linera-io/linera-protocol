@@ -58,7 +58,9 @@ use linera_views::test_utils::get_table_name;
 pub enum FaultType {
     Honest,
     Offline,
+    OfflineWithInfo,
     Malicious,
+    NoConfirm,
 }
 
 /// A validator used for testing. "Faulty" validators ignore block proposals (but not
@@ -185,11 +187,11 @@ where
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.client.lock().await;
         let result = match validator.fault_type {
-            FaultType::Offline => Err(NodeError::ClientIoError {
+            FaultType::Offline | FaultType::OfflineWithInfo => Err(NodeError::ClientIoError {
                 error: "offline".to_string(),
             }),
             FaultType::Malicious => Err(ArithmeticError::Overflow.into()),
-            FaultType::Honest => validator
+            FaultType::Honest | FaultType::NoConfirm => validator
                 .state
                 .handle_block_proposal(proposal)
                 .await
@@ -208,15 +210,30 @@ where
         let result = async move {
             let mut notifications = Vec::new();
             let cert = validator.state.full_certificate(certificate).await?;
-            let result = validator
-                .state
-                .fully_handle_certificate_with_notifications(cert, vec![], Some(&mut notifications))
-                .await;
+            let result = match validator.fault_type {
+                FaultType::NoConfirm if cert.value().is_validated() => {
+                    Err(NodeError::ClientIoError {
+                        error: "refusing to confirm".to_string(),
+                    })
+                }
+                FaultType::Honest | FaultType::NoConfirm | FaultType::Malicious => validator
+                    .state
+                    .fully_handle_certificate_with_notifications(
+                        cert,
+                        vec![],
+                        Some(&mut notifications),
+                    )
+                    .await
+                    .map_err(Into::into),
+                FaultType::Offline | FaultType::OfflineWithInfo => Err(NodeError::ClientIoError {
+                    error: "offline".to_string(),
+                }),
+            };
             validator.notifier.handle_notifications(&notifications);
             result
         }
         .await;
-        sender.send(result.map_err(Into::into))
+        sender.send(result)
     }
 
     async fn do_handle_certificate(
@@ -227,16 +244,27 @@ where
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.client.lock().await;
         let mut notifications = Vec::new();
-        let result = validator
-            .state
-            .fully_handle_certificate_with_notifications(
-                certificate,
-                blobs,
-                Some(&mut notifications),
-            )
-            .await;
+        let result = match validator.fault_type {
+            FaultType::NoConfirm if certificate.value().is_validated() => {
+                Err(NodeError::ClientIoError {
+                    error: "refusing to confirm".to_string(),
+                })
+            }
+            FaultType::Honest | FaultType::NoConfirm | FaultType::Malicious => validator
+                .state
+                .fully_handle_certificate_with_notifications(
+                    certificate,
+                    blobs,
+                    Some(&mut notifications),
+                )
+                .await
+                .map_err(Into::into),
+            FaultType::Offline | FaultType::OfflineWithInfo => Err(NodeError::ClientIoError {
+                error: "offline".to_string(),
+            }),
+        };
         validator.notifier.handle_notifications(&notifications);
-        sender.send(result.map_err(Into::into))
+        sender.send(result)
     }
 
     async fn do_handle_chain_info_query(
@@ -245,9 +273,19 @@ where
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let validator = self.client.lock().await;
-        let result = validator.state.handle_chain_info_query(query).await;
+        let result = if validator.fault_type == FaultType::Offline {
+            Err(NodeError::ClientIoError {
+                error: "offline".to_string(),
+            })
+        } else {
+            validator
+                .state
+                .handle_chain_info_query(query)
+                .await
+                .map_err(Into::into)
+        };
         // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
-        sender.send(result.map_err(Into::into).map(|(info, _actions)| info))
+        sender.send(result.map(|(info, _actions)| info))
     }
 
     async fn do_subscribe(
