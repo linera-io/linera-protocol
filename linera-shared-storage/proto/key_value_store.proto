@@ -8,9 +8,9 @@ message KeyValue {
 
 message Statement {
   oneof Operation {
-    bytes delete_key = 1;
-    KeyValue insert_key_value = 2;
-    bytes delete_key_prefix = 3;
+    bytes delete = 1;
+    KeyValue put = 2;
+    bytes delete_prefix = 3;
   }
 }
 

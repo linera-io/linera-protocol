@@ -192,13 +192,13 @@ impl StoreProcessor for SharedStoreServer {
                 let mut new_batch = linera_views::batch::Batch::default();
                 for statement in batch.statements {
                     match statement.operation.unwrap() {
-                        Operation::DeleteKey(key) => {
+                        Operation::Delete(key) => {
                             new_batch.delete_key(key);
                         }
-                        Operation::InsertKeyValue(key_value) => {
+                        Operation::Put(key_value) => {
                             new_batch.put_key_value_bytes(key_value.key, key_value.value);
                         }
-                        Operation::DeleteKeyPrefix(key_prefix) => {
+                        Operation::DeletePrefix(key_prefix) => {
                             new_batch.delete_key_prefix(key_prefix);
                         }
                     }

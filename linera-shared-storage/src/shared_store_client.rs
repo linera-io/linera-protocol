@@ -124,12 +124,12 @@ impl WritableKeyValueStore<ViewError> for SharedStoreClient {
         let mut statements = Vec::new();
         for operation in batch.operations {
             let operation = match operation {
-                WriteOperation::Delete { key } => Operation::DeleteKey(key),
+                WriteOperation::Delete { key } => Operation::Delete(key),
                 WriteOperation::Put { key, value } => {
-                    Operation::InsertKeyValue(KeyValue { key, value })
+                    Operation::Put(KeyValue { key, value })
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    Operation::DeleteKeyPrefix(key_prefix)
+                    Operation::DeletePrefix(key_prefix)
                 }
             };
             let statement = Statement {
