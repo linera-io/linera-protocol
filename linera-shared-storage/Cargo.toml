@@ -23,6 +23,7 @@ name = "shared_store_server"
 path = "src/shared_store_server.rs"
 
 [dependencies]
+async-lock = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bincode = { workspace = true }

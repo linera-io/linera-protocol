@@ -3553,6 +3553,7 @@ name = "linera-shared-storage"
 version = "0.6.0"
 dependencies = [
  "anyhow",
+ "async-lock",
  "async-trait",
  "bincode",
  "bytes",

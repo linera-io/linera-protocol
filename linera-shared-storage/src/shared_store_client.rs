@@ -1,28 +1,29 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use tonic::{transport::Server, Request, Response, Status};
+//use tonic::{transport::Server, Request, Response, Status};
 use crate::key_value_store::{
     statement::Operation,
-    store_processor_server::{StoreProcessor, StoreProcessorServer},
+    store_processor_client::{StoreProcessorClient},
     store_reply::Reply,
     store_request::Query,
     KeyValue, KeyValues, Keys, OptValue, OptValues, StoreReply, StoreRequest,
 };
-use linera_service::storage::StoreConfig;
+use async_lock::RwLock;
+use std::sync::Arc;
+use tonic::transport::Channel;
+//use linera_service::storage::StoreConfig;
 use linera_views::views::ViewError;
-use linera_views::common::{ReadableKeyValueStore, WritableKeyValueStore};
-
-#[allow(clippy::derive_partial_eq_without_eq)]
-// https://github.com/hyperium/tonic/issues/1056
-pub mod key_value_store {
-    tonic::include_proto!("key_value_store.v1");
-}
+use linera_views::common::{KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore};
+use linera_views::batch::Batch;
+use async_trait::async_trait;
 
 pub struct SharedStoreClient {
+    client: Arc<RwLock<StoreProcessorClient<Channel>>>,
     max_stream_queries: usize,
 }
 
+#[async_trait]
 impl ReadableKeyValueStore<ViewError> for SharedStoreClient {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
@@ -33,11 +34,33 @@ impl ReadableKeyValueStore<ViewError> for SharedStoreClient {
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
-        todo!()
+        let mut client = self.client.write().await;
+        let query = Some(Query::ReadValue(key.to_vec()));
+        let request = tonic::Request::new(StoreRequest {
+            query
+        });
+        let response = client.store_process(request).await.unwrap();
+        let response = response.get_ref();
+        let StoreReply { reply } = response;
+        let Some(Reply::ReadValue(value)) = reply else {
+            unreachable!();
+        };
+        Ok(value.value.clone())
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, ViewError> {
-        todo!()
+        let mut client = self.client.write().await;
+        let query = Some(Query::ContainsKey(key.to_vec()));
+        let request = tonic::Request::new(StoreRequest {
+            query
+        });
+        let response = client.store_process(request).await.unwrap();
+        let response = response.get_ref();
+        let StoreReply { reply } = response;
+        let Some(Reply::ContainsKey(value)) = reply else {
+            unreachable!();
+        };
+        Ok(*value)
     }
 
     async fn read_multi_values_bytes(
@@ -62,16 +85,37 @@ impl ReadableKeyValueStore<ViewError> for SharedStoreClient {
     }
 }
 
+#[async_trait]
 impl WritableKeyValueStore<ViewError> for SharedStoreClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ViewError> {
+        todo!()
     }
 
     async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), ViewError> {
+        todo!()
     }
 }
 
 impl KeyValueStore for SharedStoreClient {
     type Error = ViewError;
 }
+
+
+
+
+
+
+
+impl SharedStoreClient {
+    pub async fn new(endpoint: String) -> Result<Self, ViewError> {
+        // endpoint can be for example "http://[::1]:50051"
+        let input = "http://[::1]:50051";
+        let client = StoreProcessorClient::connect(input).await.unwrap();
+        let client = Arc::new(RwLock::new(client));
+        let max_stream_queries = 10;
+        Ok(SharedStoreClient { client, max_stream_queries })
+    }
+}
+
