@@ -553,7 +553,7 @@ impl ChainManagerInfo {
             .max_by_key(|cert| cert.round)
     }
 
-    /// Returns the next round in which a proposal could be accepted.
+    /// Returns the next round in which a new proposal could be accepted.
     ///
     /// This is the current round if there is no proposal or validated block certificate in the
     /// current round yet. If there is, and we are in multi-leader mode, this is the next round.

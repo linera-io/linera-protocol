@@ -1477,7 +1477,15 @@ where
                 Some(Round::Fast) => manager.ownership.super_owners.contains_key(&identity),
                 Some(Round::MultiLeader(_)) => true,
                 Some(Round::SingleLeader(_)) => manager.leader == Some(identity),
-                None => false,
+                None => {
+                    // If we have a pending block in the fast round, we can retry our proposal.
+                    manager.current_round.is_fast()
+                        && manager
+                            .requested_proposed
+                            .as_ref()
+                            .map(|proposal| &proposal.content.block)
+                            == self.pending_block.as_ref()
+                }
             };
             // If blocks are already validated, try to finalize the highest one.
             if let Some(certificate) = manager.highest_validated() {
