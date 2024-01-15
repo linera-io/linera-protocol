@@ -12,10 +12,7 @@ use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use futures::{future, lock::Mutex};
 use k8s_openapi::api::core::v1::Pod;
-use kube::{
-    api::{Api, ListParams},
-    Client,
-};
+use kube::{api::ListParams, Api, Client};
 use linera_base::data_types::Amount;
 use std::{path::PathBuf, sync::Arc};
 use tempfile::{tempdir, TempDir};
@@ -167,7 +164,7 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
                 if num_validators > 0 {
                     net.generate_initial_validator_config().await.unwrap();
                     initial_client
-                        .create_genesis_config(Amount::from_tokens(1000))
+                        .create_genesis_config(Amount::from_tokens(2000))
                         .await
                         .unwrap();
                     net.run().await.unwrap();
@@ -179,9 +176,12 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
 
         let mut net = net.clone();
         let client = net.make_client().await;
+        // The tests assume we've created a genesis config with 10
+        // chains with 10 tokens each. We create the first chain here
         client.wallet_init(&[], FaucetOption::None).await.unwrap();
 
-        for _ in 0..2 {
+        // And the remaining 9 here
+        for _ in 0..9 {
             initial_client
                 .open_and_assign(&client, Amount::from_tokens(10))
                 .await
