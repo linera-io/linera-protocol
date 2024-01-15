@@ -12,6 +12,7 @@ use crate::key_value_store::{
 use linera_views::memory::{MemoryStore};
 use linera_service::storage::StoreConfig;
 use linera_views::views::ViewError;
+use linera_views::rocks_db::RocksDbStore;
 use linera_views::common::{ReadableKeyValueStore, WritableKeyValueStore};
 //use crate::key_value_store::store_response::Pattern::Unit;
 
@@ -41,11 +42,11 @@ impl SharedStore {
                 Ok(SharedStore::RocksDb(store.0))
             },
             #[cfg(feature = "aws")]
-            StoreConfig::DynamoDb(dynamodb_store_config) => {
+            StoreConfig::DynamoDb(_dynamodb_store_config) => {
                 panic!("DynamoDb not supported in the shared system since it is already shared");
             },
             #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(scylladb_store_config) => {
+            StoreConfig::ScyllaDb(_scylladb_store_config) => {
                 panic!("ScyllaDb not supported in the shared system since it is already shared");
             },
         }

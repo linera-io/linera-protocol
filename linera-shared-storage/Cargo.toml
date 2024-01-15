@@ -10,6 +10,14 @@ documentation = "https://docs.rs/linera-shared-storage/latest/linera_shared_stor
 license = "Apache-2.0"
 edition = "2021"
 
+#[features]
+
+[features]
+default = ["rocksdb"]
+rocksdb = ["linera-views/rocksdb", "linera-service/rocksdb"]
+aws = ["linera-views/aws", "linera-service/aws"]
+scylladb = ["linera-views/scylladb", "linera-service/scylladb"]
+
 [[bin]]
 name = "composed_trait_experiment"
 path = "src/shared_store.rs"
