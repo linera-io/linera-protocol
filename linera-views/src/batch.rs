@@ -424,8 +424,9 @@ pub trait BatchValueWriter<Batch>: Send + Sync {
         batch_size: &mut usize,
     ) -> Result<bool, bcs::Error>;
 
-    /// Computes the size of the next value (if any) without consuming the value.
-    fn next_value_size(&mut self) -> Result<usize, bcs::Error>;
+    /// Computes the batch size that we would obtain if we wrote the next value (if any)
+    /// without consuming the value.
+    fn next_batch_size(&mut self, batch: &Batch, batch_size: usize) -> Result<usize, bcs::Error>;
 }
 
 /// The iterator that corresponds to a SimpleUnorderedBatch
@@ -506,14 +507,27 @@ impl BatchValueWriter<SimpleUnorderedBatch> for SimpleUnorderedBatchIter {
         }
     }
 
-    fn next_value_size(&mut self) -> Result<usize, bcs::Error> {
+    fn next_batch_size(
+        &mut self,
+        batch: &SimpleUnorderedBatch,
+        batch_size: usize,
+    ) -> Result<usize, bcs::Error> {
         if let Some(delete) = self.delete_iter.peek() {
-            serialized_size(&delete)
+            let next_size = serialized_size(&delete)?;
+            Ok(batch_size
+                + next_size
+                + get_uleb128_size(batch.deletions.len() + 1)
+                + get_uleb128_size(batch.insertions.len()))
         } else if let Some((key, value)) = self.insert_iter.peek() {
             let next_size = serialized_size(&key)? + serialized_size(&value)?;
-            Ok(next_size)
+            Ok(batch_size
+                + next_size
+                + get_uleb128_size(batch.deletions.len())
+                + get_uleb128_size(batch.insertions.len() + 1))
         } else {
-            Ok(0)
+            Ok(batch_size
+                + get_uleb128_size(batch.deletions.len())
+                + get_uleb128_size(batch.insertions.len()))
         }
     }
 }
@@ -594,11 +608,21 @@ impl BatchValueWriter<UnorderedBatch> for UnorderedBatchIter {
         }
     }
 
-    fn next_value_size(&mut self) -> Result<usize, bcs::Error> {
+    fn next_batch_size(
+        &mut self,
+        batch: &UnorderedBatch,
+        batch_size: usize,
+    ) -> Result<usize, bcs::Error> {
         if let Some(delete_prefix) = self.delete_prefix_iter.peek() {
-            serialized_size(&delete_prefix)
+            let next_size = serialized_size(&delete_prefix)?;
+            Ok(batch_size
+                + next_size
+                + get_uleb128_size(batch.key_prefix_deletions.len() + 1)
+                + batch.simple_unordered_batch.overhead_size())
         } else {
-            self.insert_deletion_iter.next_value_size()
+            let batch_size = batch_size + get_uleb128_size(batch.key_prefix_deletions.len());
+            self.insert_deletion_iter
+                .next_batch_size(&batch.simple_unordered_batch, batch_size)
         }
     }
 }

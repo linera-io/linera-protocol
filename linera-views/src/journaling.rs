@@ -248,8 +248,7 @@ where
                 if iter.is_empty() || block_batch.len() == K::MAX_BATCH_SIZE - 2 {
                     (true, true)
                 } else {
-                    let next_block_size =
-                        block_size + iter.next_value_size()? + block_batch.overhead_size();
+                    let next_block_size = iter.next_batch_size(&block_batch, block_size)?;
                     let next_transaction_size = transaction_size + next_block_size;
                     let transaction_flush = next_transaction_size > K::MAX_BATCH_TOTAL_SIZE;
                     let block_flush = transaction_flush || next_block_size > K::MAX_VALUE_SIZE;
