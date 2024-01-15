@@ -50,7 +50,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 
 * `transfer` — Transfer funds
 * `open-chain` — Open (i.e. activate) a new chain deriving the UID from an existing one
-* `subscribe` — Subscribes to a system channel, available channels in the application are admin and published-bytecodes
+* `subscribe` — Subscribes to a system channel
 * `unsubscribe` — Unsubscribes from a system channel
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
 * `close-chain` — Close (i.e. deactivate) an existing chain
@@ -104,9 +104,6 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 
   Default value: `10`
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
-
-  Possible values: `true`, `false`
-
 * `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use
 
 
@@ -146,15 +143,15 @@ Open (i.e. activate) a new chain deriving the UID from an existing one
 
 ## `linera subscribe`
 
-Subscribes to a system channel, available channels in the application are admin and published-bytecodes
+Subscribes to a system channel
 
-**Usage:** `linera subscribe --subscriber <SUBSCRIBER> --publisher <PUBLISHER> --channel <CHANNEL>`
+**Usage:** `linera subscribe [OPTIONS] --channel <CHANNEL>`
 
 ###### **Options:**
 
-* `--subscriber <SUBSCRIBER>`
-* `--publisher <PUBLISHER>`
-* `--channel <CHANNEL>`
+* `--subscriber <SUBSCRIBER>` — Chain id (must be one of our chains)
+* `--publisher <PUBLISHER>` — Chain id (must be one of our chains)
+* `--channel <CHANNEL>` — System channel available in the system application
 
   Possible values:
   - `admin`:
@@ -169,13 +166,13 @@ Subscribes to a system channel, available channels in the application are admin 
 
 Unsubscribes from a system channel
 
-**Usage:** `linera unsubscribe --subscriber <SUBSCRIBER> --publisher <PUBLISHER> --channel <CHANNEL>`
+**Usage:** `linera unsubscribe [OPTIONS] --channel <CHANNEL>`
 
 ###### **Options:**
 
-* `--subscriber <SUBSCRIBER>`
-* `--publisher <PUBLISHER>`
-* `--channel <CHANNEL>`
+* `--subscriber <SUBSCRIBER>` — Chain id (must be one of our chains)
+* `--publisher <PUBLISHER>` — Chain id (must be one of our chains)
+* `--channel <CHANNEL>` — System channel available in the system application
 
   Possible values:
   - `admin`:
@@ -369,9 +366,6 @@ Watch the network for notifications
 ###### **Options:**
 
 * `--raw` — Show all notifications from all validators
-
-  Possible values: `true`, `false`
-
 
 
 
