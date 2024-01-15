@@ -198,11 +198,11 @@ pub enum ClientCommand {
     Subscribe {
         /// Chain id (must be one of our chains).
         #[arg(long = "subscriber")]
-        subscriber: ChainId,
+        subscriber: Option<ChainId>,
 
         /// Chain id (must be one of our chains).
         #[arg(long = "publisher")]
-        publisher: ChainId,
+        publisher: Option<ChainId>,
 
         /// System channel available in the system application.
         #[arg(long = "channel")]
@@ -213,11 +213,11 @@ pub enum ClientCommand {
     Unsubscribe {
         /// Chain id (must be one of our chains).
         #[arg(long = "subscriber")]
-        subscriber: ChainId,
+        subscriber: Option<ChainId>,
 
         /// Chain id (must be one of our chains).
         #[arg(long = "publisher")]
-        publisher: ChainId,
+        publisher: Option<ChainId>,
 
         /// System channel available in the system application.
         #[arg(long = "channel")]

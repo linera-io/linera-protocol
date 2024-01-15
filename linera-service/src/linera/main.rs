@@ -16,7 +16,7 @@ use linera_base::{
 };
 use linera_chain::data_types::{CertificateValue, ExecutedBlock};
 use linera_core::{
-    client::ChainClient,
+    client::{ChainClient, ChainClientError},
     data_types::{ChainInfoQuery, ClientOutcome},
     local_node::LocalNodeClient,
     node::ValidatorNodeProvider,
@@ -275,11 +275,14 @@ impl Runnable for Job {
                 info!("Subscribing");
                 let result = match channel {
                     SystemChannel::Admin => chain_client.subscribe_to_new_committees().await,
-                    SystemChannel::PublishedBytecodes => {
-                        chain_client
-                            .subscribe_to_published_bytecodes(publisher)
-                            .await
-                    }
+                    SystemChannel::PublishedBytecodes => match publisher {
+                        Some(publisher_chainid) => {
+                            chain_client
+                                .subscribe_to_published_bytecodes(publisher_chainid)
+                                .await
+                        }
+                        None => Err(ChainClientError::InternalError("Incorrect chain ID")),
+                    },
                 };
                 context.update_and_save_wallet(&mut chain_client).await;
                 let subscribe = result.context("Failed to subscribe")?;
@@ -300,12 +303,15 @@ impl Runnable for Job {
                         info!("Unsubscribing from admin channel");
                         chain_client.unsubscribe_from_new_committees().await
                     }
-                    SystemChannel::PublishedBytecodes => {
-                        info!("Unsubscribing from publisher {}", publisher);
-                        chain_client
-                            .unsubscribe_from_published_bytecodes(publisher)
-                            .await
-                    }
+                    SystemChannel::PublishedBytecodes => match publisher {
+                        Some(publisher_chainid) => {
+                            info!("Unsubscribing from publisher {}", publisher_chainid);
+                            chain_client
+                                .unsubscribe_from_published_bytecodes(publisher_chainid)
+                                .await
+                        }
+                        None => Err(ChainClientError::InternalError("Incorrect chain ID")),
+                    },
                 };
                 context.update_and_save_wallet(&mut chain_client).await;
                 let unsubscribe = result.context("Failed to unsubscribe")?;
