@@ -411,7 +411,7 @@ impl<const W: bool> SyncRuntime<W> {
         Some(runtime)
     }
 
-    fn as_inner(&mut self) -> std::sync::MutexGuard<'_, SyncRuntimeInternal<W>> {
+    fn inner(&mut self) -> std::sync::MutexGuard<'_, SyncRuntimeInternal<W>> {
         self.0
             .try_lock()
             .expect("Synchronous runtimes run on a single execution thread")
@@ -424,7 +424,7 @@ impl<const W: bool> SyncRuntime<W> {
         &mut self,
         application_id: UserApplicationId,
     ) -> Result<(), ExecutionError> {
-        let this = self.as_inner();
+        let this = self.inner();
         ensure!(
             !this.active_applications.contains(&application_id),
             ExecutionError::ReentrantCall(application_id)
@@ -442,91 +442,91 @@ impl<const W: bool> BaseRuntime for SyncRuntime<W> {
     type FindKeyValuesByPrefix = <SyncRuntimeInternal<W> as BaseRuntime>::FindKeyValuesByPrefix;
 
     fn chain_id(&mut self) -> Result<ChainId, ExecutionError> {
-        self.as_inner().chain_id()
+        self.inner().chain_id()
     }
 
     fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError> {
-        self.as_inner().application_id()
+        self.inner().application_id()
     }
 
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError> {
-        self.as_inner().application_parameters()
+        self.inner().application_parameters()
     }
 
     fn read_system_balance(&mut self) -> Result<Amount, ExecutionError> {
-        self.as_inner().read_system_balance()
+        self.inner().read_system_balance()
     }
 
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
-        self.as_inner().read_system_timestamp()
+        self.inner().read_system_timestamp()
     }
 
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError> {
-        self.as_inner().write_batch(batch)
+        self.inner().write_batch(batch)
     }
 
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
-        self.as_inner().contains_key_new(key)
+        self.inner().contains_key_new(key)
     }
 
     fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError> {
-        self.as_inner().contains_key_wait(promise)
+        self.inner().contains_key_wait(promise)
     }
 
     fn read_multi_values_bytes_new(
         &mut self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Self::ReadMultiValuesBytes, ExecutionError> {
-        self.as_inner().read_multi_values_bytes_new(keys)
+        self.inner().read_multi_values_bytes_new(keys)
     }
 
     fn read_multi_values_bytes_wait(
         &mut self,
         promise: &Self::ReadMultiValuesBytes,
     ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError> {
-        self.as_inner().read_multi_values_bytes_wait(promise)
+        self.inner().read_multi_values_bytes_wait(promise)
     }
 
     fn read_value_bytes_new(
         &mut self,
         key: Vec<u8>,
     ) -> Result<Self::ReadValueBytes, ExecutionError> {
-        self.as_inner().read_value_bytes_new(key)
+        self.inner().read_value_bytes_new(key)
     }
 
     fn read_value_bytes_wait(
         &mut self,
         promise: &Self::ReadValueBytes,
     ) -> Result<Option<Vec<u8>>, ExecutionError> {
-        self.as_inner().read_value_bytes_wait(promise)
+        self.inner().read_value_bytes_wait(promise)
     }
 
     fn find_keys_by_prefix_new(
         &mut self,
         key_prefix: Vec<u8>,
     ) -> Result<Self::FindKeysByPrefix, ExecutionError> {
-        self.as_inner().find_keys_by_prefix_new(key_prefix)
+        self.inner().find_keys_by_prefix_new(key_prefix)
     }
 
     fn find_keys_by_prefix_wait(
         &mut self,
         promise: &Self::FindKeysByPrefix,
     ) -> Result<Vec<Vec<u8>>, ExecutionError> {
-        self.as_inner().find_keys_by_prefix_wait(promise)
+        self.inner().find_keys_by_prefix_wait(promise)
     }
 
     fn find_key_values_by_prefix_new(
         &mut self,
         key_prefix: Vec<u8>,
     ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError> {
-        self.as_inner().find_key_values_by_prefix_new(key_prefix)
+        self.inner().find_key_values_by_prefix_new(key_prefix)
     }
 
     fn find_key_values_by_prefix_wait(
         &mut self,
         promise: &Self::FindKeyValuesByPrefix,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
-        self.as_inner().find_key_values_by_prefix_wait(promise)
+        self.inner().find_key_values_by_prefix_wait(promise)
     }
 }
 
@@ -777,12 +777,12 @@ impl ContractSyncRuntime {
 
 impl ContractRuntime for ContractSyncRuntime {
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError> {
-        let this = self.as_inner();
+        let this = self.inner();
         Ok(this.runtime_counts.remaining_fuel)
     }
 
     fn set_remaining_fuel(&mut self, remaining_fuel: u64) -> Result<(), ExecutionError> {
-        let mut this = self.as_inner();
+        let mut this = self.inner();
         this.runtime_counts.remaining_fuel = remaining_fuel;
         Ok(())
     }
@@ -796,7 +796,7 @@ impl ContractRuntime for ContractSyncRuntime {
     ) -> Result<CallOutcome, ExecutionError> {
         self.check_for_reentrancy(callee_id)?;
         let (callee_context, authenticated_signer, code) = {
-            let mut this = self.as_inner();
+            let mut this = self.inner();
             let caller = this.current_application();
             let caller_id = caller.id;
             let caller_signer = caller.signer;
@@ -827,7 +827,7 @@ impl ContractRuntime for ContractSyncRuntime {
         let raw_outcome =
             code.handle_application_call(callee_context, argument, forwarded_sessions)?;
         {
-            let mut this = self.as_inner();
+            let mut this = self.inner();
             this.pop_application();
 
             // Interpret the results of the call.
@@ -856,7 +856,7 @@ impl ContractRuntime for ContractSyncRuntime {
     ) -> Result<CallOutcome, ExecutionError> {
         self.check_for_reentrancy(session_id.application_id)?;
         let (callee_context, authenticated_signer, session_state, code) = {
-            let mut this = self.as_inner();
+            let mut this = self.inner();
             let callee_id = session_id.application_id;
             let caller = this.current_application();
             let caller_id = caller.id;
@@ -890,7 +890,7 @@ impl ContractRuntime for ContractSyncRuntime {
         let (raw_outcome, session_state) =
             code.handle_session_call(callee_context, session_state, argument, forwarded_sessions)?;
         {
-            let mut this = self.as_inner();
+            let mut this = self.inner();
             this.pop_application();
 
             // Interpret the results of the call.
@@ -945,7 +945,7 @@ impl ServiceRuntime for ServiceSyncRuntime {
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let (query_context, code) = {
-            let mut this = self.as_inner();
+            let mut this = self.inner();
 
             // Load the application.
             let (code, description) = this.load_service(queried_id)?;
@@ -963,7 +963,7 @@ impl ServiceRuntime for ServiceSyncRuntime {
         let mut code = code.instantiate(self.clone())?;
         let response = code.handle_query(query_context, argument)?;
         {
-            let mut this = self.as_inner();
+            let mut this = self.inner();
             this.pop_application();
         }
         Ok(response)
