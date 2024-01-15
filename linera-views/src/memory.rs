@@ -135,12 +135,22 @@ impl KeyValueStore for MemoryStore {
 
 impl MemoryStore {
     /// constructor of MemoryStore
-    pub fn new(guard: MutexGuardArc<MemoryStoreMap>, max_stream_queries: usize) -> Self {
+    pub fn new_from_guard(guard: MutexGuardArc<MemoryStoreMap>, max_stream_queries: usize) -> Self {
         let map = Arc::new(RwLock::new(guard));
         MemoryStore {
             map,
             max_stream_queries,
         }
+    }
+
+    /// Creates a `MemoryStore` from a `MemoryStoreConfig`.
+    pub fn new(memory_store_config: MemoryStoreConfig) -> Self {
+        let state = Arc::new(Mutex::new(BTreeMap::new()));
+        let guard = state
+            .try_lock_arc()
+            .expect("We should acquire the lock just after creating the object");
+        let max_stream_queries = memory_store_config.common_config.max_stream_queries;
+        MemoryStore::new_from_guard(guard, max_stream_queries)
     }
 }
 
@@ -150,7 +160,7 @@ pub type MemoryContext<E> = ContextFromStore<E, MemoryStore>;
 impl<E> MemoryContext<E> {
     /// Creates a [`MemoryContext`].
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>, max_stream_queries: usize, extra: E) -> Self {
-        let store = MemoryStore::new(guard, max_stream_queries);
+        let store = MemoryStore::new_from_guard(guard, max_stream_queries);
         let base_key = Vec::new();
         Self {
             store,
@@ -177,7 +187,7 @@ pub fn create_memory_store_stream_queries(max_stream_queries: usize) -> MemorySt
     let guard = state
         .try_lock_arc()
         .expect("We should acquire the lock just after creating the object");
-    MemoryStore::new(guard, max_stream_queries)
+    MemoryStore::new_from_guard(guard, max_stream_queries)
 }
 
 /// Creates a test memory store for working.

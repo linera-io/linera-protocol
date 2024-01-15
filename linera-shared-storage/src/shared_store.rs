@@ -9,8 +9,9 @@ use crate::key_value_store::{
     store_request::Query,
     KeyValue, KeyValues, Keys, OptValue, OptValues, StoreReply, StoreRequest,
 };
-use linera_views::memory::{create_memory_store, MemoryStore};
-
+use linera_views::memory::{MemoryStore};
+use linera_service::storage::StoreConfig;
+use linera_views::views::ViewError;
 use linera_views::common::{ReadableKeyValueStore, WritableKeyValueStore};
 //use crate::key_value_store::store_response::Pattern::Unit;
 
@@ -20,9 +21,122 @@ pub mod key_value_store {
     tonic::include_proto!("key_value_store.v1");
 }
 
-pub struct Storage {
-    memory_store: MemoryStore,
+pub enum SharedStore {
+    Memory(MemoryStore),
+    /// The RocksDb key value store
+    #[cfg(feature = "rocksdb")]
+    RocksDb(RocksDbStore),
 }
+
+impl SharedStore {
+    async fn new(store_config: StoreConfig) -> Result<Self,ViewError> {
+        match store_config {
+            StoreConfig::Memory(memory_store_config) => {
+                let store = MemoryStore::new(memory_store_config);
+                Ok(SharedStore::Memory(store))
+            }
+            #[cfg(feature = "rocksdb")]
+            StoreConfig::RocksDb(rocksdb_store_config) => {
+                let store = RocksDbStore::new(rocksdb_store_config).await?;
+                Ok(SharedStore::RocksDb(store.0))
+            },
+            #[cfg(feature = "aws")]
+            StoreConfig::DynamoDb(dynamodb_store_config) => {
+                panic!("DynamoDb not supported in the shared system since it is already shared");
+            },
+            #[cfg(feature = "scylladb")]
+            StoreConfig::ScyllaDb(scylladb_store_config) => {
+                panic!("ScyllaDb not supported in the shared system since it is already shared");
+            },
+        }
+    }
+
+    pub async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
+        Ok(match self {
+            SharedStore::Memory(store) => {
+                store.read_value_bytes(key).await?
+            },
+            #[cfg(feature = "rocksdb")]
+            SharedStore::RocksDb(store) => {
+                store.read_value_bytes(key).await?
+            },
+        })
+    }
+
+    pub async fn contains_key(&self, key: &[u8]) -> Result<bool, ViewError> {
+        Ok(match self {
+            SharedStore::Memory(store) => {
+                store.contains_key(key).await?
+            },
+            #[cfg(feature = "rocksdb")]
+            SharedStore::RocksDb(store) => {
+                store.contains_key(key).await?
+            },
+        })
+    }
+
+    pub async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
+        Ok(match self {
+            SharedStore::Memory(store) => {
+                store.read_multi_values_bytes(keys).await?
+            },
+            #[cfg(feature = "rocksdb")]
+            SharedStore::RocksDb(store) => {
+                store.read_multi_values_bytes(keys).await?
+            },
+        })
+    }
+
+    pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
+        Ok(match self {
+            SharedStore::Memory(store) => {
+                store.find_keys_by_prefix(key_prefix).await?
+            },
+            #[cfg(feature = "rocksdb")]
+            SharedStore::RocksDb(store) => {
+                store.find_keys_by_prefix(key_prefix).await?
+            },
+        })
+    }
+
+    pub async fn find_key_values_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<(Vec<u8>,Vec<u8>)>, ViewError> {
+        Ok(match self {
+            SharedStore::Memory(store) => {
+                store.find_key_values_by_prefix(key_prefix).await?
+            },
+            #[cfg(feature = "rocksdb")]
+            SharedStore::RocksDb(store) => {
+                store.find_key_values_by_prefix(key_prefix).await?
+            },
+        })
+    }
+
+    pub async fn write_batch(&self, batch: linera_views::batch::Batch, base_key: &[u8]) -> Result<(), ViewError> {
+        Ok(match self {
+            SharedStore::Memory(store) => {
+                store.write_batch(batch, base_key).await?
+            },
+            #[cfg(feature = "rocksdb")]
+            SharedStore::RocksDb(store) => {
+                store.write_batch(batch, base_key).await?
+            },
+        })
+    }
+
+    pub async fn clear_journal(&self, base_key: &[u8]) -> Result<(), ViewError> {
+        Ok(match self {
+            SharedStore::Memory(store) => {
+                store.clear_journal(base_key).await?
+            },
+            #[cfg(feature = "rocksdb")]
+            SharedStore::RocksDb(store) => {
+                store.clear_journal(base_key).await?
+            },
+        })
+    }
+}
+
+
 
 #[derive(clap::Parser)]
 struct SharedStoreOptions {
@@ -35,7 +149,7 @@ struct SharedStoreOptions {
 }
 
 #[tonic::async_trait]
-impl StoreProcessor for Storage {
+impl StoreProcessor for SharedStore {
     async fn store_process(
         &self,
         request: Request<StoreRequest>,
@@ -44,21 +158,20 @@ impl StoreProcessor for Storage {
         let request = request.get_ref();
         let response = match request.query.clone().unwrap() {
             Query::ReadValue(key) => {
-                let value = self.memory_store.read_value_bytes(&key).await.unwrap();
+                let value = self.read_value_bytes(&key).await.unwrap();
                 let value = OptValue { value };
                 StoreReply {
                     reply: Some(Reply::ReadValue(value)),
                 }
             }
             Query::ContainsKey(key) => {
-                let test = self.memory_store.contains_key(&key).await.unwrap();
+                let test = self.contains_key(&key).await.unwrap();
                 StoreReply {
                     reply: Some(Reply::ContainsKey(test)),
                 }
             }
             Query::ReadMultiValues(keys) => {
                 let values = self
-                    .memory_store
                     .read_multi_values_bytes(keys.keys)
                     .await
                     .unwrap();
@@ -73,7 +186,6 @@ impl StoreProcessor for Storage {
             }
             Query::FindKeysByPrefix(key_prefix) => {
                 let keys = self
-                    .memory_store
                     .find_keys_by_prefix(&key_prefix)
                     .await
                     .unwrap();
@@ -84,7 +196,6 @@ impl StoreProcessor for Storage {
             }
             Query::FindKeyValuesByPrefix(key_prefix) => {
                 let key_values = self
-                    .memory_store
                     .find_key_values_by_prefix(&key_prefix)
                     .await
                     .unwrap();
@@ -116,8 +227,7 @@ impl StoreProcessor for Storage {
                     }
                 }
                 let base_key = batch.base_key;
-                self.memory_store
-                    .write_batch(new_batch, &base_key)
+                self.write_batch(new_batch, &base_key)
                     .await
                     .unwrap();
                 StoreReply {
@@ -125,7 +235,7 @@ impl StoreProcessor for Storage {
                 }
             }
             Query::ClearJournal(base_key) => {
-                self.memory_store.clear_journal(&base_key).await.unwrap();
+                self.clear_journal(&base_key).await.unwrap();
                 StoreReply {
                     reply: Some(Reply::ClearJournal(UnitType {})),
                 }
@@ -146,12 +256,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let endpoint = options.endpoint;
     let endpoint = endpoint.parse().unwrap();
-
-    let memory_store = create_memory_store();
-    let storage = Storage { memory_store };
+    let shared_store = SharedStore::new(full_storage_config).await.unwrap();
 
     Server::builder()
-        .add_service(StoreProcessorServer::new(storage))
+        .add_service(StoreProcessorServer::new(shared_store))
         .serve(endpoint)
         .await?;
 

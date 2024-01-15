@@ -296,7 +296,7 @@ impl<E> LruCachingMemoryContext<E> {
         extra: E,
         n: usize,
     ) -> Result<Self, ViewError> {
-        let store = MemoryStore::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES);
+        let store = MemoryStore::new_from_guard(guard, TEST_MEMORY_MAX_STREAM_QUERIES);
         let store = LruCachingStore::new(store, n);
         Ok(Self {
             store,

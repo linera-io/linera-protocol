@@ -367,7 +367,7 @@ impl KeyValueStore for TestMemoryStoreInternal {
 impl TestMemoryStoreInternal {
     /// Creates a `TestMemoryStore` from the guard
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>) -> Self {
-        let store = MemoryStore::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES);
+        let store = MemoryStore::new_from_guard(guard, TEST_MEMORY_MAX_STREAM_QUERIES);
         TestMemoryStoreInternal { store }
     }
 }
