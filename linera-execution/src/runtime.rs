@@ -6,9 +6,9 @@ use crate::{
     execution_state_actor::{ExecutionStateSender, Request},
     resources::{RuntimeCounts, RuntimeLimits},
     util::{ReceiverExt, UnboundedSenderExt},
-    BaseRuntime, CallOutcome, ContractRuntime, ExecutionError, ExecutionOutcome, ServiceRuntime,
-    SessionId, UserApplicationDescription, UserApplicationId, UserContractCode,
-    UserContractInstance, UserServiceCode,
+    ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
+    ExecutionError, ExecutionOutcome, ServiceRuntime, SessionId, UserApplicationDescription,
+    UserApplicationId, UserContractCode, UserContractInstance, UserServiceCode,
 };
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -251,12 +251,27 @@ impl<const W: bool> SyncRuntimeInternal<W> {
     /// # Panics
     ///
     /// If the call stack is empty.
-    fn pop_application(&mut self) {
+    fn pop_application(&mut self) -> ApplicationStatus {
         let status = self
             .call_stack
             .pop()
             .expect("Can't remove application from empty call stack");
         assert!(self.active_applications.remove(&status.id));
+        status
+    }
+
+    /// Ensures that a call to `application_id` is not-reentrant.
+    ///
+    /// Returns an error if there already is an entry for `application_id` in the call stack.
+    fn check_for_reentrancy(
+        &mut self,
+        application_id: UserApplicationId,
+    ) -> Result<(), ExecutionError> {
+        ensure!(
+            !self.active_applications.contains(&application_id),
+            ExecutionError::ReentrantCall(application_id)
+        );
+        Ok(())
     }
 }
 
@@ -282,6 +297,70 @@ impl SyncRuntimeInternal<true> {
                 .expect("`SyncRuntimeInner` should only be used by `SyncRuntime`"),
         ))?;
         Ok((instance, description))
+    }
+
+    /// Configures the runtime for executing a call to a different contract.
+    fn prepare_for_call(
+        &mut self,
+        authenticated: bool,
+        callee_id: UserApplicationId,
+        forwarded_sessions: &[SessionId],
+    ) -> Result<(UserContractInstance, CalleeContext), ExecutionError> {
+        self.check_for_reentrancy(callee_id)?;
+
+        // Load the application.
+        let (contract, description) = self.load_contract_instance(callee_id)?;
+
+        let caller = self.current_application();
+        let caller_id = caller.id;
+        let caller_signer = caller.signer;
+        // Change the owners of forwarded sessions.
+        self.forward_sessions(forwarded_sessions, caller_id, callee_id)?;
+        // Make the call to user code.
+        let authenticated_signer = match caller_signer {
+            Some(signer) if authenticated => Some(signer),
+            _ => None,
+        };
+        let authenticated_caller_id = authenticated.then_some(caller_id);
+        let callee_context = CalleeContext {
+            chain_id: self.chain_id,
+            authenticated_signer,
+            authenticated_caller_id,
+        };
+        self.push_application(ApplicationStatus {
+            id: callee_id,
+            parameters: description.parameters,
+            // Allow further nested calls to be authenticated if this one is.
+            signer: authenticated_signer,
+        });
+        Ok((contract, callee_context))
+    }
+
+    /// Cleans up the runtime after the execution of a call to a different contract.
+    fn finish_call(
+        &mut self,
+        raw_outcome: ApplicationCallOutcome,
+    ) -> Result<CallOutcome, ExecutionError> {
+        let ApplicationStatus {
+            id: callee_id,
+            signer,
+            ..
+        } = self.pop_application();
+
+        // Interpret the results of the call.
+        self.execution_outcomes.push(ExecutionOutcome::User(
+            callee_id,
+            raw_outcome
+                .execution_outcome
+                .with_authenticated_signer(signer),
+        ));
+        let caller_id = self.application_id()?;
+        let sessions = self.make_sessions(raw_outcome.create_sessions, callee_id, caller_id);
+        let outcome = CallOutcome {
+            value: raw_outcome.value,
+            sessions,
+        };
+        Ok(outcome)
     }
 
     fn forward_sessions(
@@ -440,21 +519,6 @@ impl<const W: bool> SyncRuntime<W> {
         self.0
             .try_lock()
             .expect("Synchronous runtimes run on a single execution thread")
-    }
-
-    /// Ensures that a call to `application_id` is not-reentrant.
-    ///
-    /// Returns an error if there already is an entry for `application_id` in the call stack.
-    fn check_for_reentrancy(
-        &mut self,
-        application_id: UserApplicationId,
-    ) -> Result<(), ExecutionError> {
-        let this = self.inner();
-        ensure!(
-            !this.active_applications.contains(&application_id),
-            ExecutionError::ReentrantCall(application_id)
-        );
-        Ok(())
     }
 }
 
@@ -817,55 +881,14 @@ impl ContractRuntime for ContractSyncRuntime {
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallOutcome, ExecutionError> {
-        self.check_for_reentrancy(callee_id)?;
-        let (callee_context, authenticated_signer, mut contract) = {
-            let mut this = self.inner();
-            let (contract, description) = this.load_contract_instance(callee_id)?;
-            let caller = this.current_application();
-            let caller_id = caller.id;
-            let caller_signer = caller.signer;
-            // Change the owners of forwarded sessions.
-            this.forward_sessions(&forwarded_sessions, caller_id, callee_id)?;
-            // Make the call to user code.
-            let authenticated_signer = match caller_signer {
-                Some(signer) if authenticated => Some(signer),
-                _ => None,
-            };
-            let authenticated_caller_id = authenticated.then_some(caller_id);
-            let callee_context = crate::CalleeContext {
-                chain_id: this.chain_id,
-                authenticated_signer,
-                authenticated_caller_id,
-            };
-            this.push_application(ApplicationStatus {
-                id: callee_id,
-                parameters: description.parameters,
-                // Allow further nested calls to be authenticated if this one is.
-                signer: authenticated_signer,
-            });
-            (callee_context, authenticated_signer, contract)
-        };
+        let (mut contract, callee_context) =
+            self.inner()
+                .prepare_for_call(authenticated, callee_id, &forwarded_sessions)?;
+
         let raw_outcome =
             contract.handle_application_call(callee_context, argument, forwarded_sessions)?;
-        {
-            let mut this = self.inner();
-            this.pop_application();
 
-            // Interpret the results of the call.
-            this.execution_outcomes.push(ExecutionOutcome::User(
-                callee_id,
-                raw_outcome
-                    .execution_outcome
-                    .with_authenticated_signer(authenticated_signer),
-            ));
-            let caller_id = this.application_id()?;
-            let sessions = this.make_sessions(raw_outcome.create_sessions, callee_id, caller_id);
-            let outcome = CallOutcome {
-                value: raw_outcome.value,
-                sessions,
-            };
-            Ok(outcome)
-        }
+        self.inner().finish_call(raw_outcome)
     }
 
     fn try_call_session(
@@ -875,53 +898,34 @@ impl ContractRuntime for ContractSyncRuntime {
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallOutcome, ExecutionError> {
-        self.check_for_reentrancy(session_id.application_id)?;
-        let (callee_context, authenticated_signer, session_state, mut contract) = {
+        let callee_id = session_id.application_id;
+
+        let (mut contract, callee_context, session_state) = {
             let mut this = self.inner();
-            let callee_id = session_id.application_id;
-            let (contract, description) = this.load_contract_instance(callee_id)?;
-            let caller = this.current_application();
-            let caller_id = caller.id;
-            let caller_signer = caller.signer;
-            // Change the owners of forwarded sessions.
-            this.forward_sessions(&forwarded_sessions, caller_id, callee_id)?;
+
             // Load the session.
+            let caller_id = this.application_id()?;
             let session_state = this.try_load_session(session_id, caller_id)?;
-            // Make the call to user code.
-            let authenticated_signer = match caller_signer {
-                Some(signer) if authenticated => Some(signer),
-                _ => None,
-            };
-            let authenticated_caller_id = authenticated.then_some(caller_id);
-            let callee_context = crate::CalleeContext {
-                chain_id: this.chain_id,
-                authenticated_signer,
-                authenticated_caller_id,
-            };
-            this.push_application(ApplicationStatus {
-                id: callee_id,
-                parameters: description.parameters,
-                // Allow further nested calls to be authenticated if this one is.
-                signer: authenticated_signer,
-            });
-            (
-                callee_context,
-                authenticated_signer,
-                session_state,
-                contract,
-            )
-        };
+
+            let (contract, callee_context) =
+                this.prepare_for_call(authenticated, callee_id, &forwarded_sessions)?;
+
+            Ok::<_, ExecutionError>((contract, callee_context, session_state))
+        }?;
+
         let (raw_outcome, session_state) = contract.handle_session_call(
             callee_context,
             session_state,
             argument,
             forwarded_sessions,
         )?;
+
         {
             let mut this = self.inner();
-            this.pop_application();
 
-            // Interpret the results of the call.
+            let outcome = this.finish_call(raw_outcome.inner)?;
+
+            // Update the session.
             let caller_id = this.application_id()?;
             if raw_outcome.close_session {
                 // Terminate the session.
@@ -930,19 +934,7 @@ impl ContractRuntime for ContractSyncRuntime {
                 // Save the session.
                 this.try_save_session(session_id, caller_id, session_state)?;
             }
-            let inner_outcome = raw_outcome.inner;
-            let callee_id = session_id.application_id;
-            this.execution_outcomes.push(ExecutionOutcome::User(
-                callee_id,
-                inner_outcome
-                    .execution_outcome
-                    .with_authenticated_signer(authenticated_signer),
-            ));
-            let sessions = this.make_sessions(inner_outcome.create_sessions, callee_id, caller_id);
-            let outcome = CallOutcome {
-                value: inner_outcome.value,
-                sessions,
-            };
+
             Ok(outcome)
         }
     }
