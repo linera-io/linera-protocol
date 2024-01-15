@@ -1369,7 +1369,12 @@ where
         Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }), ChainExecutionContext::Operation(_)))
     ));
     // There is no pending block, since the proposal wasn't valid at the time.
-    assert!(client2.retry_pending_block().await.unwrap().is_none());
+    assert!(client2
+        .retry_pending_block()
+        .await
+        .unwrap()
+        .unwrap()
+        .is_none());
     // Retrying the whole command works after synchronization.
     assert_eq!(
         client2.synchronize_from_validators().await.unwrap(),

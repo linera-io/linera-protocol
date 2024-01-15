@@ -301,9 +301,16 @@ where
     /// Retries the pending block that was unsuccessfully proposed earlier.
     async fn retry_pending_block(&self, chain_id: ChainId) -> Result<Option<CryptoHash>, Error> {
         let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let maybe_certificate = client.retry_pending_block().await?;
+        let outcome = client.retry_pending_block().await?;
         self.context.lock().await.update_wallet(&mut *client).await;
-        Ok(maybe_certificate.map(|cert| cert.hash()))
+        match outcome {
+            ClientOutcome::Committed(Some(certificate)) => Ok(Some(certificate.hash())),
+            ClientOutcome::Committed(None) => Ok(None),
+            ClientOutcome::WaitForTimeout(timeout) => Err(Error::from(format!(
+                "Please try again at {}",
+                timeout.timestamp
+            ))),
+        }
     }
 
     /// Transfers `amount` units of value from the given owner's account to the recipient.
