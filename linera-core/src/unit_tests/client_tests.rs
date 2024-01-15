@@ -1825,3 +1825,64 @@ where
     );
     Ok(())
 }
+
+#[test(tokio::test)]
+async fn test_memory_propose_pending_block() -> Result<(), anyhow::Error> {
+    run_test_propose_pending_block(MakeMemoryStorage::default()).await
+}
+
+#[cfg(feature = "rocksdb")]
+#[test(tokio::test)]
+async fn test_rocks_db_propose_pending_block() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_propose_pending_block(MakeRocksDbStorage::default()).await
+}
+
+#[cfg(feature = "aws")]
+#[test(tokio::test)]
+async fn test_dynamo_db_propose_pending_block() -> Result<(), anyhow::Error> {
+    run_test_propose_pending_block(MakeDynamoDbStorage::default()).await
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_propose_pending_block() -> Result<(), anyhow::Error> {
+    run_test_propose_pending_block(MakeScyllaDbStorage::default()).await
+}
+
+async fn run_test_propose_pending_block<B>(storage_builder: B) -> Result<(), anyhow::Error>
+where
+    B: StorageBuilder,
+    ViewError: From<<B::Storage as Storage>::ContextError>,
+{
+    let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
+    let description = ChainDescription::Root(1);
+    let mut client = builder
+        .add_initial_chain(description, Amount::from_tokens(10))
+        .await?;
+
+    // The client tries to burn 3 tokens. Two validators are offline, so nothing will get
+    // validated or confirmed. However, the client now has a pending block.
+    builder
+        .set_fault_type(2..3, FaultType::OfflineWithInfo)
+        .await;
+    let result = client
+        .burn(None, Amount::from_tokens(3), UserData::default())
+        .await;
+    assert!(result.is_err());
+
+    // Now three validators are online again.
+    builder.set_fault_type(2..3, FaultType::Honest).await;
+
+    // The client tries to burn another token. Before that, they automatically finalize the
+    // pending block, which burns 3 tokens, leaving 10 - 3 - 1 = 6.
+    client
+        .burn(None, Amount::ONE, UserData::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        client.synchronize_from_validators().await.unwrap(),
+        Amount::from_tokens(6)
+    );
+    Ok(())
+}
