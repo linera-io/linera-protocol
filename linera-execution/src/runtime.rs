@@ -218,24 +218,6 @@ impl<const W: bool> SyncRuntimeInternal<W> {
         }
     }
 
-    fn load_contract(
-        &mut self,
-        id: UserApplicationId,
-    ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
-        self.execution_state_sender
-            .send_request(|callback| Request::LoadContract { id, callback })?
-            .recv_response()
-    }
-
-    fn load_service(
-        &mut self,
-        id: UserApplicationId,
-    ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
-        self.execution_state_sender
-            .send_request(|callback| Request::LoadService { id, callback })?
-            .recv_response()
-    }
-
     /// Returns the [`ApplicationStatus`] of the current application.
     ///
     /// The current application is the last to be pushed to the `call_stack`.
@@ -270,6 +252,17 @@ impl<const W: bool> SyncRuntimeInternal<W> {
             .pop()
             .expect("Can't remove application from empty call stack");
         assert!(self.active_applications.remove(&status.id));
+    }
+}
+
+impl SyncRuntimeInternal<true> {
+    fn load_contract(
+        &mut self,
+        id: UserApplicationId,
+    ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
+        self.execution_state_sender
+            .send_request(|callback| Request::LoadContract { id, callback })?
+            .recv_response()
     }
 
     fn forward_sessions(
@@ -396,6 +389,17 @@ impl<const W: bool> SyncRuntimeInternal<W> {
             .remove(&session_id)
             .ok_or(ExecutionError::InvalidSession(session_id))?;
         Ok(())
+    }
+}
+
+impl SyncRuntimeInternal<false> {
+    fn load_service(
+        &mut self,
+        id: UserApplicationId,
+    ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
+        self.execution_state_sender
+            .send_request(|callback| Request::LoadService { id, callback })?
+            .recv_response()
     }
 }
 
