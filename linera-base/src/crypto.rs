@@ -47,6 +47,8 @@ pub struct Signature(pub dalek::Signature);
 pub enum CryptoError {
     #[error("Signature for object {type_name} is not valid: {error}")]
     InvalidSignature { error: String, type_name: String },
+    #[error("Signature for object {type_name} is missing")]
+    MissingSignature { type_name: String },
     #[error("String contains non-hexadecimal digits")]
     NonHexDigits(#[from] hex::FromHexError),
     #[error(
@@ -464,6 +466,23 @@ impl Signature {
                 error: error.to_string(),
                 type_name: T::type_name().to_string(),
             })
+    }
+
+    /// Checks an optional signature.
+    pub fn check_optional_signature<T>(
+        signature: Option<&Self>,
+        value: &T,
+        author: PublicKey,
+    ) -> Result<(), CryptoError>
+    where
+        T: BcsSignable + std::fmt::Debug,
+    {
+        match signature {
+            Some(sig) => sig.check(value, author),
+            None => Err(CryptoError::MissingSignature {
+                type_name: T::type_name().to_string(),
+            }),
+        }
     }
 
     fn verify_batch_internal<'a, T, I>(value: &'a T, votes: I) -> Result<(), dalek::SignatureError>

@@ -2,9 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{client::ChainClientError, node::NodeError};
+use crate::client::ChainClientError;
 use linera_base::{
-    crypto::{BcsSignable, CryptoHash, KeyPair, Signature},
+    crypto::{BcsSignable, CryptoError, CryptoHash, KeyPair, Signature},
     data_types::{Amount, BlockHeight, Round, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
@@ -248,12 +248,8 @@ impl ChainInfoResponse {
         Self { info, signature }
     }
 
-    #[allow(clippy::result_large_err)]
-    pub fn check(&self, name: ValidatorName) -> Result<(), NodeError> {
-        match self.signature {
-            Some(sig) => Ok(sig.check(&*self.info, name.0)?),
-            None => Err(NodeError::InvalidChainInfoResponse),
-        }
+    pub fn check(&self, name: ValidatorName) -> Result<(), CryptoError> {
+        Signature::check_optional_signature(self.signature.as_ref(), &*self.info, name.0)
     }
 
     /// Returns the committee in the latest epoch.
