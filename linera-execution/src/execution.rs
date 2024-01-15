@@ -8,7 +8,7 @@ use crate::{
     Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage, Response, ServiceSyncRuntime,
     SystemMessage, UserApplicationDescription, UserApplicationId,
 };
-use futures::StreamExt;
+use futures::{stream::FuturesUnordered, StreamExt, TryStreamExt};
 use linera_base::identifiers::{ChainId, Destination, Owner};
 use linera_views::{
     common::Context,
@@ -17,6 +17,7 @@ use linera_views::{
     views::{View, ViewError},
 };
 use linera_views_derive::CryptoHashView;
+use std::collections::{BTreeSet, HashMap};
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -215,36 +216,64 @@ where
         Ok(execution_outcomes)
     }
 
+    /// Schedules application registration messages when needed.
+    ///
+    /// Ensures that the outgoing messages in `results` are preceded by a system message that
+    /// registers the application that will handle the messages.
     async fn update_execution_outcomes_with_app_registrations(
         &self,
         mut results: Vec<ExecutionOutcome>,
     ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
-        // TODO(#1417): It looks like we are forgetting about the recipients of messages
-        // sent by earlier entries in `results` (i.e. application calls).
-        let Some(ExecutionOutcome::User(application_id, result)) = results.last() else {
+        let user_application_outcomes = results.iter().filter_map(|outcome| match outcome {
+            ExecutionOutcome::User(application_id, result) => Some((application_id, result)),
+            _ => None,
+        });
+
+        let mut applications_to_register_per_destination = HashMap::<_, BTreeSet<_>>::new();
+
+        for (application_id, result) in user_application_outcomes {
+            for message in &result.messages {
+                applications_to_register_per_destination
+                    .entry(&message.destination)
+                    .or_default()
+                    .insert(*application_id);
+            }
+        }
+
+        if applications_to_register_per_destination.is_empty() {
             return Ok(results);
-        };
-        // Make sure to declare applications before recipients execute messages produced
-        // by the user execution results.
-        let mut system_outcome = RawExecutionOutcome::default();
-        let applications = self
-            .system
-            .registry
-            .describe_applications_with_dependencies(vec![*application_id], &Default::default())
+        }
+
+        let messages = applications_to_register_per_destination
+            .into_iter()
+            .map(|(destination, applications_to_describe)| async {
+                let applications = self
+                    .system
+                    .registry
+                    .describe_applications_with_dependencies(
+                        applications_to_describe.into_iter().collect(),
+                        &HashMap::new(),
+                    )
+                    .await?;
+
+                Ok::<_, ExecutionError>(RawOutgoingMessage {
+                    destination: destination.clone(),
+                    authenticated: false,
+                    kind: MessageKind::Simple,
+                    message: SystemMessage::RegisterApplications { applications },
+                })
+            })
+            .collect::<FuturesUnordered<_>>()
+            .try_collect::<Vec<_>>()
             .await?;
-        for message in &result.messages {
-            system_outcome.messages.push(RawOutgoingMessage {
-                destination: message.destination.clone(),
-                authenticated: false,
-                kind: MessageKind::Simple,
-                message: SystemMessage::RegisterApplications {
-                    applications: applications.clone(),
-                },
-            });
-        }
-        if !system_outcome.messages.is_empty() {
-            results.insert(0, ExecutionOutcome::System(system_outcome));
-        }
+
+        let system_outcome = RawExecutionOutcome {
+            messages,
+            ..RawExecutionOutcome::default()
+        };
+
+        results.insert(0, ExecutionOutcome::System(system_outcome));
+
         Ok(results)
     }
 

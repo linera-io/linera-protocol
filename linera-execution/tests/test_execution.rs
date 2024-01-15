@@ -9,13 +9,14 @@ use self::utils::{create_dummy_user_application_description, ExpectedCall, MockA
 use linera_base::{
     crypto::PublicKey,
     data_types::BlockHeight,
-    identifiers::{ChainDescription, ChainId, Owner},
+    identifiers::{ChainDescription, ChainId, Destination, Owner},
 };
 use linera_execution::{
-    policy::ResourceControlPolicy, ApplicationCallOutcome, ApplicationRegistryView, BaseRuntime,
-    ContractRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, ExecutionStateView, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, ResourceTracker, Response, SessionCallOutcome, SystemExecutionState,
+    policy::ResourceControlPolicy, system::SystemMessage, ApplicationCallOutcome,
+    ApplicationRegistryView, BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, ExecutionStateView, MessageKind, Operation,
+    OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
+    ResourceTracker, Response, SessionCallOutcome, SystemExecutionState,
     TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
@@ -83,10 +84,10 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     let mut applications = register_mock_applications(&mut view, 2).await?;
     let (caller_id, caller_application) = applications
         .next()
-        .expect("Missing caller mock application");
+        .expect("Caller mock application should be registered");
     let (target_id, target_application) = applications
         .next()
-        .expect("Missing target mock application");
+        .expect("Target mock application should be registered");
 
     let owner = Owner::from(PublicKey::debug(0));
     let state_key = vec![];
@@ -230,10 +231,10 @@ async fn test_leaking_session() -> anyhow::Result<()> {
     let mut applications = register_mock_applications(&mut view, 2).await?;
     let (caller_id, caller_application) = applications
         .next()
-        .expect("Missing caller mock application");
+        .expect("Caller mock application should be registered");
     let (target_id, target_application) = applications
         .next()
-        .expect("Missing target mock application");
+        .expect("Target mock application should be registered");
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -294,10 +295,10 @@ async fn test_simple_session() -> anyhow::Result<()> {
     let mut applications = register_mock_applications(&mut view, 2).await?;
     let (caller_id, caller_application) = applications
         .next()
-        .expect("Missing caller mock application");
+        .expect("Caller mock application should be registered");
     let (target_id, target_application) = applications
         .next()
-        .expect("Missing target mock application");
+        .expect("Target mock application should be registered");
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -378,10 +379,10 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
     let mut applications = register_mock_applications(&mut view, 2).await?;
     let (caller_id, caller_application) = applications
         .next()
-        .expect("Missing caller mock application");
+        .expect("Caller mock application should be registered");
     let (target_id, target_application) = applications
         .next()
-        .expect("Missing target mock application");
+        .expect("Target mock application should be registered");
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -425,6 +426,507 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
         .await,
         Err(ExecutionError::UserError(message)) if message == error_message
     ));
+
+    Ok(())
+}
+
+/// Tests if an application is scheduled to be registered together with any messages it sends to
+/// other chains.
+#[tokio::test]
+async fn test_simple_message() -> anyhow::Result<()> {
+    let mut state = SystemExecutionState::default();
+    state.description = Some(ChainDescription::Root(0));
+    let mut view =
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            ExecutionRuntimeConfig::Synchronous,
+        )
+        .await;
+
+    let mut applications = register_mock_applications(&mut view, 1).await?;
+    let (application_id, application) = applications
+        .next()
+        .expect("Caller mock application should be registered");
+
+    let destination_chain = ChainId::from(ChainDescription::Root(1));
+    let dummy_message = RawOutgoingMessage {
+        destination: Destination::from(destination_chain),
+        authenticated: false,
+        kind: MessageKind::Simple,
+        message: b"msg".to_vec(),
+    };
+
+    application.expect_call(ExpectedCall::execute_operation({
+        let dummy_message = dummy_message.clone();
+        move |_runtime, _context, _operation| {
+            Ok(RawExecutionOutcome::default().with_message(dummy_message))
+        }
+    }));
+
+    let context = OperationContext {
+        chain_id: ChainId::root(0),
+        height: BlockHeight(0),
+        index: 0,
+        authenticated_signer: None,
+        next_message_index: 0,
+    };
+    let mut tracker = ResourceTracker::default();
+    let policy = ResourceControlPolicy::default();
+    let outcomes = view
+        .execute_operation(
+            context,
+            Operation::User {
+                application_id,
+                bytes: vec![],
+            },
+            &policy,
+            &mut tracker,
+        )
+        .await?;
+
+    let application_description = view
+        .system
+        .registry
+        .describe_application(application_id)
+        .await?;
+    let registration_message = RawOutgoingMessage {
+        destination: Destination::from(destination_chain),
+        authenticated: false,
+        kind: MessageKind::Simple,
+        message: SystemMessage::RegisterApplications {
+            applications: vec![application_description],
+        },
+    };
+
+    assert_eq!(
+        outcomes,
+        &[
+            ExecutionOutcome::System(
+                RawExecutionOutcome::default().with_message(registration_message)
+            ),
+            ExecutionOutcome::User(
+                application_id,
+                RawExecutionOutcome::default().with_message(dummy_message)
+            )
+        ]
+    );
+
+    Ok(())
+}
+
+/// Tests if a message is scheduled to be sent while an application is handling a cross-application
+/// call.
+#[tokio::test]
+async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
+    let mut state = SystemExecutionState::default();
+    state.description = Some(ChainDescription::Root(0));
+    let mut view =
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            ExecutionRuntimeConfig::Synchronous,
+        )
+        .await;
+
+    let mut applications = register_mock_applications(&mut view, 2).await?;
+    let (caller_id, caller_application) = applications
+        .next()
+        .expect("Caller mock application should be registered");
+    let (target_id, target_application) = applications
+        .next()
+        .expect("Target mock application should be registered");
+
+    caller_application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            runtime.try_call_application(
+                /* authenticated */ false,
+                target_id,
+                vec![],
+                vec![],
+            )?;
+            Ok(RawExecutionOutcome::default())
+        },
+    ));
+
+    let destination_chain = ChainId::from(ChainDescription::Root(1));
+    let dummy_message = RawOutgoingMessage {
+        destination: Destination::from(destination_chain),
+        authenticated: false,
+        kind: MessageKind::Simple,
+        message: b"msg".to_vec(),
+    };
+
+    target_application.expect_call(ExpectedCall::handle_application_call({
+        let dummy_message = dummy_message.clone();
+        |_runtime, _context, _argument, _forwarded_sessions| {
+            Ok(ApplicationCallOutcome {
+                value: vec![],
+                execution_outcome: RawExecutionOutcome::default().with_message(dummy_message),
+                create_sessions: vec![],
+            })
+        }
+    }));
+
+    let context = OperationContext {
+        chain_id: ChainId::root(0),
+        height: BlockHeight(0),
+        index: 0,
+        authenticated_signer: None,
+        next_message_index: 0,
+    };
+    let mut tracker = ResourceTracker::default();
+    let policy = ResourceControlPolicy::default();
+    let outcomes = view
+        .execute_operation(
+            context,
+            Operation::User {
+                application_id: caller_id,
+                bytes: vec![],
+            },
+            &policy,
+            &mut tracker,
+        )
+        .await?;
+
+    let target_description = view.system.registry.describe_application(target_id).await?;
+    let registration_message = RawOutgoingMessage {
+        destination: Destination::from(destination_chain),
+        authenticated: false,
+        kind: MessageKind::Simple,
+        message: SystemMessage::RegisterApplications {
+            applications: vec![target_description],
+        },
+    };
+
+    assert_eq!(
+        outcomes,
+        &[
+            ExecutionOutcome::System(
+                RawExecutionOutcome::default().with_message(registration_message)
+            ),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default().with_message(dummy_message)
+            ),
+            ExecutionOutcome::User(caller_id, RawExecutionOutcome::default()),
+        ]
+    );
+
+    Ok(())
+}
+
+/// Tests if a message is scheduled to be sent while an application is handling a session call.
+#[tokio::test]
+async fn test_message_from_session_call() -> anyhow::Result<()> {
+    let mut state = SystemExecutionState::default();
+    state.description = Some(ChainDescription::Root(0));
+    let mut view =
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            ExecutionRuntimeConfig::Synchronous,
+        )
+        .await;
+
+    let mut applications = register_mock_applications(&mut view, 3).await?;
+    let (caller_id, caller_application) = applications
+        .next()
+        .expect("Caller mock application should be registered");
+    let (middle_id, middle_application) = applications
+        .next()
+        .expect("Middle mock application should be registered");
+    let (target_id, target_application) = applications
+        .next()
+        .expect("Target mock application should be registered");
+
+    caller_application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            runtime.try_call_application(
+                /* authenticated */ false,
+                middle_id,
+                vec![],
+                vec![],
+            )?;
+            Ok(RawExecutionOutcome::default())
+        },
+    ));
+
+    middle_application.expect_call(ExpectedCall::handle_application_call(
+        move |runtime, _context, _argument, _forwarded_sessions| {
+            let outcome = runtime.try_call_application(
+                /* authenticated */ false,
+                target_id,
+                vec![],
+                vec![],
+            )?;
+            assert_eq!(outcome.sessions.len(), 1);
+            runtime.try_call_session(
+                /* authenticated */ false,
+                outcome.sessions[0],
+                vec![],
+                vec![],
+            )?;
+            Ok(ApplicationCallOutcome::default())
+        },
+    ));
+
+    let dummy_session = b"session".to_vec();
+
+    let destination_chain = ChainId::from(ChainDescription::Root(1));
+    let dummy_message = RawOutgoingMessage {
+        destination: Destination::from(destination_chain),
+        authenticated: false,
+        kind: MessageKind::Simple,
+        message: b"msg".to_vec(),
+    };
+
+    target_application.expect_call(ExpectedCall::handle_application_call({
+        let dummy_session = dummy_session.clone();
+        move |_runtime, _context, _argument, _forwarded_sessions| {
+            Ok(ApplicationCallOutcome::default().with_new_session(dummy_session))
+        }
+    }));
+    target_application.expect_call(ExpectedCall::handle_session_call({
+        let dummy_message = dummy_message.clone();
+        move |_runtime, _context, session_state, _argument, _forwarded_sessions| {
+            assert_eq!(session_state, dummy_session);
+            Ok((
+                SessionCallOutcome {
+                    inner: ApplicationCallOutcome::default().with_message(dummy_message),
+                    close_session: true,
+                },
+                session_state,
+            ))
+        }
+    }));
+
+    let context = OperationContext {
+        chain_id: ChainId::root(0),
+        height: BlockHeight(0),
+        index: 0,
+        authenticated_signer: None,
+        next_message_index: 0,
+    };
+    let mut tracker = ResourceTracker::default();
+    let policy = ResourceControlPolicy::default();
+    let outcomes = view
+        .execute_operation(
+            context,
+            Operation::User {
+                application_id: caller_id,
+                bytes: vec![],
+            },
+            &policy,
+            &mut tracker,
+        )
+        .await?;
+
+    let target_description = view.system.registry.describe_application(target_id).await?;
+    let registration_message = RawOutgoingMessage {
+        destination: Destination::from(destination_chain),
+        authenticated: false,
+        kind: MessageKind::Simple,
+        message: SystemMessage::RegisterApplications {
+            applications: vec![target_description],
+        },
+    };
+
+    assert_eq!(
+        outcomes,
+        &[
+            ExecutionOutcome::System(
+                RawExecutionOutcome::default().with_message(registration_message)
+            ),
+            ExecutionOutcome::User(target_id, RawExecutionOutcome::default()),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default().with_message(dummy_message)
+            ),
+            ExecutionOutcome::User(middle_id, RawExecutionOutcome::default()),
+            ExecutionOutcome::User(caller_id, RawExecutionOutcome::default()),
+        ]
+    );
+
+    Ok(())
+}
+
+/// Tests if multiple messages are scheduled to be sent by different applications to different
+/// chains.
+///
+/// Ensures that in a more complex scenario, chains receive application registration messages only
+/// for the applications that will receive messages on them.
+#[tokio::test]
+async fn test_multiple_messages_from_different_applications() -> anyhow::Result<()> {
+    let mut state = SystemExecutionState::default();
+    state.description = Some(ChainDescription::Root(0));
+    let mut view =
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
+            state,
+            ExecutionRuntimeConfig::Synchronous,
+        )
+        .await;
+
+    let mut applications = register_mock_applications(&mut view, 3).await?;
+    // The entrypoint application, which sends a message and calls other applications
+    let (caller_id, caller_application) = applications
+        .next()
+        .expect("Caller mock application should be registered");
+    // An application that does not send any messages
+    let (silent_target_id, silent_target_application) = applications
+        .next()
+        .expect("Target mock application that doesn't send messages should be registered");
+    // An application that sends a message when handling a cross-application call
+    let (sending_target_id, sending_target_application) = applications
+        .next()
+        .expect("Target mock application that sends a message should be registered");
+
+    // The first destination chain receives messages from the caller and the sending applications
+    let first_destination_chain = ChainId::from(ChainDescription::Root(1));
+    // The second destination chain only receives a message from the sending application
+    let second_destination_chain = ChainId::from(ChainDescription::Root(2));
+
+    // The message sent to the first destination chain by the caller and the sending applications
+    let first_message = RawOutgoingMessage {
+        destination: Destination::from(first_destination_chain),
+        authenticated: false,
+        kind: MessageKind::Simple,
+        message: b"first".to_vec(),
+    };
+
+    // The entrypoint sends a message to the first chain and calls the silent and the sending
+    // applications
+    caller_application.expect_call(ExpectedCall::execute_operation({
+        let first_message = first_message.clone();
+        move |runtime, _context, _operation| {
+            runtime.try_call_application(
+                /* authenticated */ false,
+                silent_target_id,
+                vec![],
+                vec![],
+            )?;
+            runtime.try_call_application(
+                /* authenticated */ false,
+                sending_target_id,
+                vec![],
+                vec![],
+            )?;
+            Ok(RawExecutionOutcome::default().with_message(first_message))
+        }
+    }));
+
+    // The silent application does nothing
+    silent_target_application.expect_call(ExpectedCall::handle_application_call(
+        |_runtime, _context, _argument, _forwarded_sessions| Ok(ApplicationCallOutcome::default()),
+    ));
+
+    // The message sent to the second destination chain by the sending application
+    let second_message = RawOutgoingMessage {
+        destination: Destination::from(second_destination_chain),
+        authenticated: false,
+        kind: MessageKind::Simple,
+        message: b"second".to_vec(),
+    };
+
+    // The sending application sends two messages, one to each of the destination chains
+    sending_target_application.expect_call(ExpectedCall::handle_application_call({
+        let first_message = first_message.clone();
+        let second_message = second_message.clone();
+        |_runtime, _context, _argument, _forwarded_sessions| {
+            Ok(ApplicationCallOutcome {
+                value: vec![],
+                execution_outcome: RawExecutionOutcome::default()
+                    .with_message(first_message)
+                    .with_message(second_message),
+                create_sessions: vec![],
+            })
+        }
+    }));
+
+    // Execute the operation, starting the test scenario
+    let context = OperationContext {
+        chain_id: ChainId::root(0),
+        height: BlockHeight(0),
+        index: 0,
+        authenticated_signer: None,
+        next_message_index: 0,
+    };
+    let mut tracker = ResourceTracker::default();
+    let policy = ResourceControlPolicy::default();
+    let mut outcomes = view
+        .execute_operation(
+            context,
+            Operation::User {
+                application_id: caller_id,
+                bytes: vec![],
+            },
+            &policy,
+            &mut tracker,
+        )
+        .await?;
+
+    // Describe the two applications that sent messages, and will therefore handle them in the
+    // other chains
+    let caller_description = view.system.registry.describe_application(caller_id).await?;
+    let sending_target_description = view
+        .system
+        .registry
+        .describe_application(sending_target_id)
+        .await?;
+
+    // The registration message for the first destination chain
+    let first_registration_message = RawOutgoingMessage {
+        destination: Destination::from(first_destination_chain),
+        authenticated: false,
+        kind: MessageKind::Simple,
+        message: SystemMessage::RegisterApplications {
+            applications: vec![sending_target_description.clone(), caller_description],
+        },
+    };
+    // The registration message for the second destination chain
+    let second_registration_message = RawOutgoingMessage {
+        destination: Destination::from(second_destination_chain),
+        authenticated: false,
+        kind: MessageKind::Simple,
+        message: SystemMessage::RegisterApplications {
+            applications: vec![sending_target_description],
+        },
+    };
+
+    // Need to deconstruct the outcome and verify each field individually because the messages are
+    // built from a `HashMap`, which may produce a different order every run
+    let ExecutionOutcome::System(system_outcome) = outcomes.remove(0) else {
+        panic!(
+            "First execution outcome is not the system outcome with messages to \
+            register applications"
+        );
+    };
+    assert!(system_outcome.authenticated_signer.is_none());
+    assert!(system_outcome.subscribe.is_empty());
+    assert!(system_outcome.unsubscribe.is_empty());
+    // Check for the two registration messages
+    assert_eq!(system_outcome.messages.len(), 2);
+    assert!(system_outcome
+        .messages
+        .contains(&first_registration_message));
+    assert!(system_outcome
+        .messages
+        .contains(&second_registration_message));
+
+    // Return to checking the user application outcomes
+    assert_eq!(
+        outcomes,
+        &[
+            ExecutionOutcome::User(silent_target_id, RawExecutionOutcome::default(),),
+            ExecutionOutcome::User(
+                sending_target_id,
+                RawExecutionOutcome::default()
+                    .with_message(first_message.clone())
+                    .with_message(second_message)
+            ),
+            ExecutionOutcome::User(
+                caller_id,
+                RawExecutionOutcome::default().with_message(first_message)
+            ),
+        ]
+    );
 
     Ok(())
 }

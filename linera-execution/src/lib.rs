@@ -210,6 +210,20 @@ pub struct ApplicationCallOutcome {
     pub create_sessions: Vec<Vec<u8>>,
 }
 
+impl ApplicationCallOutcome {
+    /// Adds a `message` to this [`ApplicationCallOutcome`].
+    pub fn with_message(mut self, message: RawOutgoingMessage<Vec<u8>>) -> Self {
+        self.execution_outcome.messages.push(message);
+        self
+    }
+
+    /// Registers a new session to be created with the provided `session_state`.
+    pub fn with_new_session(mut self, session_state: Vec<u8>) -> Self {
+        self.create_sessions.push(session_state);
+        self
+    }
+}
+
 /// The result of calling into a session.
 #[derive(Default)]
 pub struct SessionCallOutcome {
@@ -517,7 +531,7 @@ pub enum Response {
 }
 
 /// A message together with routing information.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct RawOutgoingMessage<Message> {
     /// The destination of the message.
@@ -593,6 +607,12 @@ impl ExecutionOutcome {
 impl<Message> RawExecutionOutcome<Message> {
     pub fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
         self.authenticated_signer = authenticated_signer;
+        self
+    }
+
+    /// Adds a `message` to this [`RawExecutionOutcome`].
+    pub fn with_message(mut self, message: RawOutgoingMessage<Message>) -> Self {
+        self.messages.push(message);
         self
     }
 }
