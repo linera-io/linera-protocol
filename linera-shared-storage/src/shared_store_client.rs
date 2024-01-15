@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//use tonic::{transport::Server, Request, Response, Status};
 use crate::key_value_store::{
     statement::Operation,
     store_processor_client::{StoreProcessorClient},
@@ -11,10 +10,10 @@ use crate::key_value_store::{
 };
 use crate::key_value_store::BatchBaseKey;
 use crate::key_value_store::Statement;
+use tonic::transport::Endpoint;
 use async_lock::RwLock;
 use std::sync::Arc;
 use tonic::transport::Channel;
-//use linera_service::storage::StoreConfig;
 use linera_views::views::ViewError;
 use linera_views::common::{KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore};
 use linera_views::batch::Batch;
@@ -188,9 +187,8 @@ impl KeyValueStore for SharedStoreClient {
 
 impl SharedStoreClient {
     pub async fn new(endpoint: String) -> Result<Self, ViewError> {
-        // endpoint can be for example "http://[::1]:50051"
-        let input = "http://[::1]:50051";
-        let client = StoreProcessorClient::connect(input).await.unwrap();
+        let endpoint = Endpoint::from_shared(endpoint).unwrap();
+        let client = StoreProcessorClient::connect(endpoint).await.unwrap();
         let client = Arc::new(RwLock::new(client));
         let max_stream_queries = 10;
         Ok(SharedStoreClient { client, max_stream_queries })

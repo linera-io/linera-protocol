@@ -114,7 +114,7 @@ impl SharedStoreServer {
     }
 
     pub async fn write_batch(&self, batch: linera_views::batch::Batch, base_key: &[u8]) -> Result<(), ViewError> {
-        Ok(match self {
+        match self {
             SharedStoreServer::Memory(store) => {
                 store.write_batch(batch, base_key).await?
             },
@@ -122,11 +122,12 @@ impl SharedStoreServer {
             SharedStoreServer::RocksDb(store) => {
                 store.write_batch(batch, base_key).await?
             },
-        })
+        };
+        Ok(())
     }
 
     pub async fn clear_journal(&self, base_key: &[u8]) -> Result<(), ViewError> {
-        Ok(match self {
+        match self {
             SharedStoreServer::Memory(store) => {
                 store.clear_journal(base_key).await?
             },
@@ -134,7 +135,8 @@ impl SharedStoreServer {
             SharedStoreServer::RocksDb(store) => {
                 store.clear_journal(base_key).await?
             },
-        })
+        };
+        Ok(())
     }
 }
 
