@@ -83,10 +83,10 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     let mut applications = register_mock_applications(&mut view, 2).await?;
     let (caller_id, caller_application) = applications
         .next()
-        .expect("Missing caller mock application");
+        .expect("Caller mock application should be registered");
     let (target_id, target_application) = applications
         .next()
-        .expect("Missing target mock application");
+        .expect("Target mock application should be registered");
 
     let owner = Owner::from(PublicKey::debug(0));
     let state_key = vec![];
@@ -230,10 +230,10 @@ async fn test_leaking_session() -> anyhow::Result<()> {
     let mut applications = register_mock_applications(&mut view, 2).await?;
     let (caller_id, caller_application) = applications
         .next()
-        .expect("Missing caller mock application");
+        .expect("Caller mock application should be registered");
     let (target_id, target_application) = applications
         .next()
-        .expect("Missing target mock application");
+        .expect("Target mock application should be registered");
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -294,10 +294,10 @@ async fn test_simple_session() -> anyhow::Result<()> {
     let mut applications = register_mock_applications(&mut view, 2).await?;
     let (caller_id, caller_application) = applications
         .next()
-        .expect("Missing caller mock application");
+        .expect("Caller mock application should be registered");
     let (target_id, target_application) = applications
         .next()
-        .expect("Missing target mock application");
+        .expect("Target mock application should be registered");
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
@@ -378,10 +378,10 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
     let mut applications = register_mock_applications(&mut view, 2).await?;
     let (caller_id, caller_application) = applications
         .next()
-        .expect("Missing caller mock application");
+        .expect("Caller mock application should be registered");
     let (target_id, target_application) = applications
         .next()
-        .expect("Missing target mock application");
+        .expect("Target mock application should be registered");
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
