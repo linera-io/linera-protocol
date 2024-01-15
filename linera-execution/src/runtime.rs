@@ -7,7 +7,8 @@ use crate::{
     resources::{RuntimeCounts, RuntimeLimits},
     util::{ReceiverExt, UnboundedSenderExt},
     BaseRuntime, CallOutcome, ContractRuntime, ExecutionError, ExecutionOutcome, ServiceRuntime,
-    SessionId, UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
+    SessionId, UserApplicationDescription, UserApplicationId, UserContractCode,
+    UserContractInstance, UserServiceCode,
 };
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -19,7 +20,7 @@ use linera_views::batch::Batch;
 use oneshot::Receiver;
 use std::{
     collections::{BTreeMap, HashSet},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, Weak},
 };
 
 #[derive(Clone, Debug)]
@@ -55,6 +56,9 @@ pub struct SyncRuntimeInternal<const WRITABLE: bool> {
     runtime_counts: RuntimeCounts,
     /// The runtime limits.
     runtime_limits: RuntimeLimits,
+
+    /// A reference to the runtime shared by the instantiated contracts and services.
+    reference: Weak<Mutex<SyncRuntimeInternal<WRITABLE>>>,
 }
 
 /// The runtime status of an application.
@@ -215,6 +219,7 @@ impl<const W: bool> SyncRuntimeInternal<W> {
             view_user_states: BTreeMap::default(),
             runtime_counts,
             runtime_limits,
+            reference: Weak::new(),
         }
     }
 
@@ -263,6 +268,20 @@ impl SyncRuntimeInternal<true> {
         self.execution_state_sender
             .send_request(|callback| Request::LoadContract { id, callback })?
             .recv_response()
+    }
+
+    /// Initializes a contract instance with this runtime.
+    fn load_contract_instance(
+        &mut self,
+        id: UserApplicationId,
+    ) -> Result<(UserContractInstance, UserApplicationDescription), ExecutionError> {
+        let (code, description) = self.load_contract(id)?;
+        let instance = code.instantiate(SyncRuntime(
+            self.reference
+                .upgrade()
+                .expect("`SyncRuntimeInner` should only be used by `SyncRuntime`"),
+        ))?;
+        Ok((instance, description))
     }
 
     fn forward_sessions(
@@ -405,7 +424,9 @@ impl SyncRuntimeInternal<false> {
 
 impl<const W: bool> SyncRuntime<W> {
     fn new(runtime: SyncRuntimeInternal<W>) -> Self {
-        SyncRuntime(Arc::new(Mutex::new(runtime)))
+        let mut this = SyncRuntime(Arc::new(Mutex::new(runtime)));
+        this.inner().reference = Arc::downgrade(&this.0);
+        this
     }
 
     fn into_inner(self) -> Option<SyncRuntimeInternal<W>> {
@@ -797,13 +818,12 @@ impl ContractRuntime for ContractSyncRuntime {
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallOutcome, ExecutionError> {
         self.check_for_reentrancy(callee_id)?;
-        let (callee_context, authenticated_signer, code) = {
+        let (callee_context, authenticated_signer, mut contract) = {
             let mut this = self.inner();
+            let (contract, description) = this.load_contract_instance(callee_id)?;
             let caller = this.current_application();
             let caller_id = caller.id;
             let caller_signer = caller.signer;
-            // Load the application.
-            let (code, description) = this.load_contract(callee_id)?;
             // Change the owners of forwarded sessions.
             this.forward_sessions(&forwarded_sessions, caller_id, callee_id)?;
             // Make the call to user code.
@@ -823,11 +843,10 @@ impl ContractRuntime for ContractSyncRuntime {
                 // Allow further nested calls to be authenticated if this one is.
                 signer: authenticated_signer,
             });
-            (callee_context, authenticated_signer, code)
+            (callee_context, authenticated_signer, contract)
         };
-        let mut code = code.instantiate(self.clone())?;
         let raw_outcome =
-            code.handle_application_call(callee_context, argument, forwarded_sessions)?;
+            contract.handle_application_call(callee_context, argument, forwarded_sessions)?;
         {
             let mut this = self.inner();
             this.pop_application();
@@ -857,14 +876,13 @@ impl ContractRuntime for ContractSyncRuntime {
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallOutcome, ExecutionError> {
         self.check_for_reentrancy(session_id.application_id)?;
-        let (callee_context, authenticated_signer, session_state, code) = {
+        let (callee_context, authenticated_signer, session_state, mut contract) = {
             let mut this = self.inner();
             let callee_id = session_id.application_id;
+            let (contract, description) = this.load_contract_instance(callee_id)?;
             let caller = this.current_application();
             let caller_id = caller.id;
             let caller_signer = caller.signer;
-            // Load the application.
-            let (code, description) = this.load_contract(callee_id)?;
             // Change the owners of forwarded sessions.
             this.forward_sessions(&forwarded_sessions, caller_id, callee_id)?;
             // Load the session.
@@ -886,11 +904,19 @@ impl ContractRuntime for ContractSyncRuntime {
                 // Allow further nested calls to be authenticated if this one is.
                 signer: authenticated_signer,
             });
-            (callee_context, authenticated_signer, session_state, code)
+            (
+                callee_context,
+                authenticated_signer,
+                session_state,
+                contract,
+            )
         };
-        let mut code = code.instantiate(self.clone())?;
-        let (raw_outcome, session_state) =
-            code.handle_session_call(callee_context, session_state, argument, forwarded_sessions)?;
+        let (raw_outcome, session_state) = contract.handle_session_call(
+            callee_context,
+            session_state,
+            argument,
+            forwarded_sessions,
+        )?;
         {
             let mut this = self.inner();
             this.pop_application();
