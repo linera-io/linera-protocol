@@ -213,10 +213,10 @@ where
     /// (1) each block contains at most `K::MAX_BATCH_SIZE - 2` operations;
     ///
     /// (2) the total size of the all operations in a block doesn't exceed:
-    ///     `K::MAX_BATCH_TOTAL_SIZE - sizeof(block_key) - sizeof(header_key) - sizeof(bcs_header)`
+    /// `K::MAX_BATCH_TOTAL_SIZE - sizeof(block_key) - sizeof(header_key) - sizeof(bcs_header)`
     ///
-    /// (3) every operation in a block satisfies the contraints on individual database operations
-    ///     represented by `K::MAX_KEY_SIZE` and `K::MAX_VALUE_SIZE`.
+    /// (3) every operation in a block satisfies the contraints on individual database
+    /// operations represented by `K::MAX_KEY_SIZE` and `K::MAX_VALUE_SIZE`.
     ///
     /// (4) `block_key` and `header_key` don't exceed `K::MAX_KEY_SIZE` and `bcs_header`
     /// doesn't exceed `K::MAX_VALUE_SIZE`.
@@ -259,15 +259,16 @@ where
     /// constraints of the underlying key-value store (see analysis above)
     ///
     /// For efficiency reasons, we write as many blocks as possible in each "transaction"
-    /// batch, using one write-operation per block. The last transaction also updates the
-    /// journal header with the final number of blocks. As a result, the constraints of
-    /// the underlying database are respected when a transaction is written if the
-    /// following conditions are met:
+    /// batch, using one write-operation per block. Then we also update the journal header
+    /// with the final number of blocks.
     ///
-    /// (1) the number of blocks per transaction doesn't exceed `K::MAX_BATCH_SIZE - 1`;
+    /// As a result, the constraints of the underlying database are respected if the
+    /// following conditions are met while a "transaction" batch is being built:
+    ///
+    /// (1) the number of blocks per transaction doesn't exceed `K::MAX_BATCH_SIZE`;
     ///
     /// (2) the total size of BCS-serialized blocks in a transaction doesn't exceed
-    /// `K::MAX_BATCH_TOTAL_SIZE - (K::MAX_BATCH_SIZE - 1) * sizeof(block_key) - sizeof(header_key) - sizeof(bcs_header)`
+    /// `K::MAX_BATCH_TOTAL_SIZE - K::MAX_BATCH_SIZE * sizeof(block_key)`
     ///
     /// (3) the size of each BCS-serialized block doesn't exceed `K::MAX_VALUE_SIZE`.
     ///
@@ -291,13 +292,15 @@ where
         let header_key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
         let header_key_len = header_key.len();
         let header_len = bcs::serialized_size(&JournalHeader::default())?;
-        let block_key_len = header_key.len(); // currently the same length.
-        let max_transaction_size = K::MAX_BATCH_TOTAL_SIZE
-            - (K::MAX_BATCH_SIZE - 1) * block_key_len
-            - header_key_len
-            - header_len;
+        // Currently the same length.
+        let block_key_len = header_key.len();
+        // Each block in a transaction comes with a key.
+        let max_transaction_size = K::MAX_BATCH_TOTAL_SIZE - K::MAX_BATCH_SIZE * block_key_len;
         let max_block_size = std::cmp::min(
+            // Each block is written as value.
             K::MAX_VALUE_SIZE,
+            // When a block is executed, we also atomically remove the block and write the
+            // header.
             K::MAX_BATCH_TOTAL_SIZE - block_key_len - header_key_len - header_len,
         );
 
