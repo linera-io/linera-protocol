@@ -7,16 +7,19 @@ use linera_views::memory::create_memory_store;
 use crate::key_value_store::store_processor_server::StoreProcessorServer;
 use crate::key_value_store::store_processor_server::StoreProcessor;
 use crate::key_value_store::StoreRequest;
-use crate::key_value_store::StoreResponse;
-use crate::key_value_store::store_request::Pattern::ReadKey;
-use crate::key_value_store::store_request::Pattern::FindKeysByPrefix;
-use crate::key_value_store::store_request::Pattern::FindKeyValuesByPrefix;
-use crate::key_value_store::store_request::Pattern::ReadMultiKeys;
-use crate::key_value_store::store_request::Pattern::WriteBatch;
-use crate::key_value_store::store_request::Pattern::ContainsKey;
-use crate::key_value_store::store_request::Pattern::ClearJournal;
+use crate::key_value_store::StoreReply;
+use crate::key_value_store::OptValue;
+use crate::key_value_store::OptValues;
+use crate::key_value_store::KeyValue;
+use crate::key_value_store::KeyValues;
+use crate::key_value_store::Keys;
+use crate::key_value_store::statement::Operation;
+use crate::key_value_store::store_request::Query;
+use crate::key_value_store::store_reply::Reply;
 
-use crate::key_value_store::store_response::Pattern::Unit;
+use linera_views::common::ReadableKeyValueStore;
+use linera_views::common::WritableKeyValueStore;
+//use crate::key_value_store::store_response::Pattern::Unit;
 
 
 
@@ -49,30 +52,58 @@ impl StoreProcessor for Storage {
     async fn store_process(
         &self,
         request: Request<StoreRequest>,
-    ) -> Result<Response<StoreResponse>, Status> {
+    ) -> Result<Response<StoreReply>, Status> {
         use crate::key_value_store::UnitType;
         let request = request.get_ref();
-        let response = match request.pattern.clone().unwrap() {
-            ReadKey(_read_key) => {
-                StoreResponse { pattern: Some(Unit(UnitType{})) }
+        let response = match request.query.clone().unwrap() {
+            Query::ReadValue(key) => {
+                let value = self.memory_store.read_value_bytes(&key).await.unwrap();
+                let value = OptValue { value };
+                StoreReply { reply: Some(Reply::ReadValue(value)) }
             },
-            ContainsKey(_contains_key) => {
-                StoreResponse { pattern: Some(Unit(UnitType{})) }
+            Query::ContainsKey(key) => {
+                let test = self.memory_store.contains_key(&key).await.unwrap();
+                StoreReply { reply: Some(Reply::ContainsKey(test)) }
             },
-            ReadMultiKeys(_read_multi_keys) => {
-                StoreResponse { pattern: Some(Unit(UnitType{})) }
+            Query::ReadMultiValues(keys) => {
+                let values = self.memory_store.read_multi_values_bytes(keys.keys).await.unwrap();
+                let values = values.into_iter().map(|value| OptValue { value }).collect::<Vec<_>>();
+                let values = OptValues { values };
+                StoreReply { reply: Some(Reply::ReadMultiValues(values)) }
             },
-            FindKeysByPrefix(_find_keys_by_prefix) => {
-                StoreResponse { pattern: Some(Unit(UnitType{})) }
+            Query::FindKeysByPrefix(key_prefix) => {
+                let keys = self.memory_store.find_keys_by_prefix(&key_prefix).await.unwrap();
+                let keys = Keys { keys };
+                StoreReply { reply: Some(Reply::FindKeysByPrefix(keys)) }
             },
-            FindKeyValuesByPrefix(_find_key_values_by_prefix) => {
-                StoreResponse { pattern: Some(Unit(UnitType{})) }
+            Query::FindKeyValuesByPrefix(key_prefix) => {
+                let key_values = self.memory_store.find_key_values_by_prefix(&key_prefix).await.unwrap();
+                let key_values = key_values.into_iter().map(|x| KeyValue { key: x.0, value: x.1 }).collect::<Vec<_>>();
+                let key_values = KeyValues { key_values };
+                StoreReply { reply: Some(Reply::FindKeyValuesByPrefix(key_values)) }
             },
-            WriteBatch(_write_batch) => {
-                StoreResponse { pattern: Some(Unit(UnitType{})) }
+            Query::WriteBatch(batch) => {
+                let mut new_batch = linera_views::batch::Batch::default();
+                for statement in batch.statements {
+                    match statement.operation.unwrap() {
+                        Operation::DeleteKey(key) => {
+                            new_batch.delete_key(key);
+                        },
+                        Operation::InsertKeyValue(key_value) => {
+                            new_batch.put_key_value_bytes(key_value.key, key_value.value);
+                        },
+                        Operation::DeleteKeyPrefix(key_prefix) => {
+                            new_batch.delete_key_prefix(key_prefix);
+                        },
+                    }
+                }
+                let base_key = batch.base_key;
+                self.memory_store.write_batch(new_batch, &base_key).await.unwrap();
+                StoreReply { reply: Some(Reply::ClearJournal(UnitType{})) }
             },
-            ClearJournal(_clear_journal) => {
-                StoreResponse { pattern: Some(Unit(UnitType{})) }
+            Query::ClearJournal(base_key) => {
+                self.memory_store.clear_journal(&base_key).await.unwrap();
+                StoreReply { reply: Some(Reply::ClearJournal(UnitType{})) }
             }
         };
         Ok(Response::new(response))

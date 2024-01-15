@@ -7,64 +7,61 @@ message KeyValue {
 }
 
 message Statement {
-  oneof Value {
+  oneof Operation {
     bytes delete_key = 1;
     KeyValue insert_key_value = 2;
     bytes delete_key_prefix = 3;
   }
 }
 
-message Batch {
+message BatchBaseKey {
   repeated Statement statements = 1;
-}
-
-message ReadMultiKey {
-  repeated bytes keys = 1;
+  bytes base_key = 2;
 }
 
 message UnitType {
 }
 
-service StoreProcessor {
-  rpc StoreProcess (StoreRequest) returns (StoreResponse) {}
-}
-
 message StoreRequest {
-  oneof pattern {
-    bytes read_key = 1;
+  oneof query {
+    bytes read_value = 1;
     bytes contains_key = 2;
-    ReadMultiKey read_multi_keys = 3;
+    Keys read_multi_values = 3;
     bytes find_keys_by_prefix = 4;
     bytes find_key_values_by_prefix = 5;
-    Batch write_batch = 6;
+    BatchBaseKey write_batch = 6;
+    bytes clear_journal = 7;
+  }
+}
+
+message OptValue {
+  optional bytes value = 1;
+}
+
+message OptValues {
+  repeated OptValue values = 1;
+}
+
+message Keys {
+  repeated bytes keys = 1;
+}
+
+message KeyValues {
+  repeated KeyValue key_values = 1;
+}
+
+message StoreReply {
+  oneof reply {
+    OptValue read_value = 1;
+    bool contains_key = 2;
+    OptValues read_multi_values = 3;
+    Keys find_keys_by_prefix = 4;
+    KeyValues find_key_values_by_prefix = 5;
+    UnitType write_batch = 6;
     UnitType clear_journal = 7;
   }
 }
 
-message ReadKeyResponse {
-  optional bytes response = 1;
+service StoreProcessor {
+  rpc StoreProcess (StoreRequest) returns (StoreReply) {}
 }
-
-message ReadMultiKeyResponse {
-  repeated ReadKeyResponse responses = 1;
-}
-
-message FindKeysByPrefixResponse {
-  repeated bytes keys = 1;
-}
-
-message FindKeyValuesByPrefixResponse {
-  repeated KeyValue keys = 1;
-}
-
-message StoreResponse {
-  oneof pattern {
-    ReadKeyResponse value = 1;
-    bool contains_key = 2;
-    ReadMultiKeyResponse values = 3;
-    ReadMultiKeyResponse keys = 4;
-    FindKeyValuesByPrefixResponse key_values = 5;
-    UnitType unit = 6;
-  }
-}
-
