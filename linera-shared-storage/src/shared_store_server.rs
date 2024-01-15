@@ -1,9 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_service::storage::StorageConfig;
-use linera_views::common::CommonStoreConfig;
-use tonic::{transport::Server, Request, Response, Status};
 use crate::key_value_store::{
     statement::Operation,
     store_processor_server::{StoreProcessor, StoreProcessorServer},
@@ -11,11 +8,14 @@ use crate::key_value_store::{
     store_request::Query,
     KeyValue, KeyValues, Keys, OptValue, OptValues, StoreReply, StoreRequest,
 };
-use linera_views::memory::{MemoryStore};
-use linera_service::storage::StoreConfig;
-use linera_views::views::ViewError;
-use linera_views::rocks_db::RocksDbStore;
-use linera_views::common::{ReadableKeyValueStore, WritableKeyValueStore};
+use linera_service::storage::{StorageConfig, StoreConfig};
+use linera_views::{
+    common::{CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
+    memory::MemoryStore,
+    rocks_db::RocksDbStore,
+    views::ViewError,
+};
+use tonic::{transport::Server, Request, Response, Status};
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 // https://github.com/hyperium/tonic/issues/1056
@@ -31,7 +31,7 @@ pub enum SharedStoreServer {
 }
 
 impl SharedStoreServer {
-    async fn new(store_config: StoreConfig) -> Result<Self,ViewError> {
+    async fn new(store_config: StoreConfig) -> Result<Self, ViewError> {
         match store_config {
             StoreConfig::Memory(memory_store_config) => {
                 let store = MemoryStore::new(memory_store_config);
@@ -41,106 +41,88 @@ impl SharedStoreServer {
             StoreConfig::RocksDb(rocksdb_store_config) => {
                 let store = RocksDbStore::new(rocksdb_store_config).await?;
                 Ok(SharedStoreServer::RocksDb(store.0))
-            },
+            }
             #[cfg(feature = "aws")]
             StoreConfig::DynamoDb(_dynamodb_store_config) => {
                 panic!("DynamoDb not supported in the shared system since it is already shared");
-            },
+            }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(_scylladb_store_config) => {
                 panic!("ScyllaDb not supported in the shared system since it is already shared");
-            },
+            }
         }
     }
 
     pub async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         Ok(match self {
-            SharedStoreServer::Memory(store) => {
-                store.read_value_bytes(key).await?
-            },
+            SharedStoreServer::Memory(store) => store.read_value_bytes(key).await?,
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => {
-                store.read_value_bytes(key).await?
-            },
+            SharedStoreServer::RocksDb(store) => store.read_value_bytes(key).await?,
         })
     }
 
     pub async fn contains_key(&self, key: &[u8]) -> Result<bool, ViewError> {
         Ok(match self {
-            SharedStoreServer::Memory(store) => {
-                store.contains_key(key).await?
-            },
+            SharedStoreServer::Memory(store) => store.contains_key(key).await?,
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => {
-                store.contains_key(key).await?
-            },
+            SharedStoreServer::RocksDb(store) => store.contains_key(key).await?,
         })
     }
 
-    pub async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
+    pub async fn read_multi_values_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
         Ok(match self {
-            SharedStoreServer::Memory(store) => {
-                store.read_multi_values_bytes(keys).await?
-            },
+            SharedStoreServer::Memory(store) => store.read_multi_values_bytes(keys).await?,
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => {
-                store.read_multi_values_bytes(keys).await?
-            },
+            SharedStoreServer::RocksDb(store) => store.read_multi_values_bytes(keys).await?,
         })
     }
 
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
         Ok(match self {
-            SharedStoreServer::Memory(store) => {
-                store.find_keys_by_prefix(key_prefix).await?
-            },
+            SharedStoreServer::Memory(store) => store.find_keys_by_prefix(key_prefix).await?,
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => {
-                store.find_keys_by_prefix(key_prefix).await?
-            },
+            SharedStoreServer::RocksDb(store) => store.find_keys_by_prefix(key_prefix).await?,
         })
     }
 
-    pub async fn find_key_values_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<(Vec<u8>,Vec<u8>)>, ViewError> {
+    pub async fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
         Ok(match self {
-            SharedStoreServer::Memory(store) => {
-                store.find_key_values_by_prefix(key_prefix).await?
-            },
+            SharedStoreServer::Memory(store) => store.find_key_values_by_prefix(key_prefix).await?,
             #[cfg(feature = "rocksdb")]
             SharedStoreServer::RocksDb(store) => {
                 store.find_key_values_by_prefix(key_prefix).await?
-            },
+            }
         })
     }
 
-    pub async fn write_batch(&self, batch: linera_views::batch::Batch, base_key: &[u8]) -> Result<(), ViewError> {
+    pub async fn write_batch(
+        &self,
+        batch: linera_views::batch::Batch,
+        base_key: &[u8],
+    ) -> Result<(), ViewError> {
         match self {
-            SharedStoreServer::Memory(store) => {
-                store.write_batch(batch, base_key).await?
-            },
+            SharedStoreServer::Memory(store) => store.write_batch(batch, base_key).await?,
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => {
-                store.write_batch(batch, base_key).await?
-            },
+            SharedStoreServer::RocksDb(store) => store.write_batch(batch, base_key).await?,
         };
         Ok(())
     }
 
     pub async fn clear_journal(&self, base_key: &[u8]) -> Result<(), ViewError> {
         match self {
-            SharedStoreServer::Memory(store) => {
-                store.clear_journal(base_key).await?
-            },
+            SharedStoreServer::Memory(store) => store.clear_journal(base_key).await?,
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => {
-                store.clear_journal(base_key).await?
-            },
+            SharedStoreServer::RocksDb(store) => store.clear_journal(base_key).await?,
         };
         Ok(())
     }
 }
-
-
 
 #[derive(clap::Parser)]
 struct SharedStoreServerOptions {
@@ -175,10 +157,7 @@ impl StoreProcessor for SharedStoreServer {
                 }
             }
             Query::ReadMultiValues(keys) => {
-                let values = self
-                    .read_multi_values_bytes(keys.keys)
-                    .await
-                    .unwrap();
+                let values = self.read_multi_values_bytes(keys.keys).await.unwrap();
                 let values = values
                     .into_iter()
                     .map(|value| OptValue { value })
@@ -189,20 +168,14 @@ impl StoreProcessor for SharedStoreServer {
                 }
             }
             Query::FindKeysByPrefix(key_prefix) => {
-                let keys = self
-                    .find_keys_by_prefix(&key_prefix)
-                    .await
-                    .unwrap();
+                let keys = self.find_keys_by_prefix(&key_prefix).await.unwrap();
                 let keys = Keys { keys };
                 StoreReply {
                     reply: Some(Reply::FindKeysByPrefix(keys)),
                 }
             }
             Query::FindKeyValuesByPrefix(key_prefix) => {
-                let key_values = self
-                    .find_key_values_by_prefix(&key_prefix)
-                    .await
-                    .unwrap();
+                let key_values = self.find_key_values_by_prefix(&key_prefix).await.unwrap();
                 let key_values = key_values
                     .into_iter()
                     .map(|x| KeyValue {
@@ -231,9 +204,7 @@ impl StoreProcessor for SharedStoreServer {
                     }
                 }
                 let base_key = batch.base_key;
-                self.write_batch(new_batch, &base_key)
-                    .await
-                    .unwrap();
+                self.write_batch(new_batch, &base_key).await.unwrap();
                 StoreReply {
                     reply: Some(Reply::WriteBatch(UnitType {})),
                 }
