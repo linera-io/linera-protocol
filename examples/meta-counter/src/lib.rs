@@ -17,7 +17,7 @@ To perform the `increment` operation it sends a message along with the value to 
 On receiving the cross-chain message it makes a cross-application call to the counter application
 whose application id we already provided at the time of creation.
 
-When the counter application recieves a cross-application call it increments the value by the specified
+When the counter application receives a cross-application call it increments the value by the specified
 amount.
 
 # Usage
