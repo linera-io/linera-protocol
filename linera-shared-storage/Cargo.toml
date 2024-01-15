@@ -19,8 +19,8 @@ aws = ["linera-views/aws", "linera-service/aws"]
 scylladb = ["linera-views/scylladb", "linera-service/scylladb"]
 
 [[bin]]
-name = "composed_trait_experiment"
-path = "src/shared_store.rs"
+name = "shared_store_server"
+path = "src/shared_store_server.rs"
 
 [dependencies]
 anyhow = { workspace = true }
