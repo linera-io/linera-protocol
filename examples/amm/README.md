@@ -115,7 +115,7 @@ mutation{
 ```
 
 We can only perform `Swap` from a remote chain i.e. other than the chain on which `AMM` is deployed to,
-we can do it from GraphiQL by perfoming the `requestApplication` mutation so that we can perform the
+we can do it from GraphiQL by performing the `requestApplication` mutation so that we can perform the
 `Swap` operation from the chain.
 
 ```json

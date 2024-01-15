@@ -289,7 +289,7 @@ mod tests {
         };
         let ser_key = key
             .to_custom_bytes()
-            .expect("serialization of Key should succeeed");
+            .expect("serialization of Key should succeed");
         let deser_key =
             Key::from_custom_bytes(&ser_key).expect("deserialization of Key should succeed");
         assert_eq!(key, deser_key);
