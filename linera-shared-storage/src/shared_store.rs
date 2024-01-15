@@ -34,7 +34,7 @@ pub struct Storage {
     memory_store: MemoryStore,
 }
 
-
+#[derive(clap::Parser)]
 struct SharedStoreOptions {
     /// Subcommands. Acceptable values are run and generate.
     #[arg(long = "storage")]
@@ -50,27 +50,29 @@ impl StoreProcessor for Storage {
         &self,
         request: Request<StoreRequest>,
     ) -> Result<Response<StoreResponse>, Status> {
-        let response = match request {
-            ReadKey(read_key) => {
-                StoreResponse { clear_journal: Unit { } }
+        use crate::key_value_store::UnitType;
+        let request = request.get_ref();
+        let response = match request.pattern.clone().unwrap() {
+            ReadKey(_read_key) => {
+                StoreResponse { pattern: Some(Unit(UnitType{})) }
             },
-            ContainsKey(contains_key) => {
-                StoreResponse { clear_journal: Unit { } }
+            ContainsKey(_contains_key) => {
+                StoreResponse { pattern: Some(Unit(UnitType{})) }
             },
-            ReadMultiKeys(read_multi_keys) => {
-                StoreResponse { clear_journal: Unit { } }
+            ReadMultiKeys(_read_multi_keys) => {
+                StoreResponse { pattern: Some(Unit(UnitType{})) }
             },
-            FindKeysByPrefix(find_keys_by_prefix) => {
-                StoreResponse { clear_journal: Unit { } }
+            FindKeysByPrefix(_find_keys_by_prefix) => {
+                StoreResponse { pattern: Some(Unit(UnitType{})) }
             },
-            FindKeyValuesByPrefix(find_key_values_by_prefix) => {
-                StoreResponse { clear_journal: Unit { } }
+            FindKeyValuesByPrefix(_find_key_values_by_prefix) => {
+                StoreResponse { pattern: Some(Unit(UnitType{})) }
             },
-            WriteBatch(write_batch) => {
-                StoreResponse { clear_journal: Unit { } }
+            WriteBatch(_write_batch) => {
+                StoreResponse { pattern: Some(Unit(UnitType{})) }
             },
-            ClearJournal(clear_journal) => {
-                StoreResponse { clear_journal: Unit { } }
+            ClearJournal(_clear_journal) => {
+                StoreResponse { pattern: Some(Unit(UnitType{})) }
             }
         };
         Ok(Response::new(response))
