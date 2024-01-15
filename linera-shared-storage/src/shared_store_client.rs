@@ -67,7 +67,11 @@ impl ReadableKeyValueStore<ViewError> for SharedStoreClient {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
-        todo!()
+        let mut client = self.client.write().await;
+        
+
+
+        
     }
 
     async fn find_keys_by_prefix(
