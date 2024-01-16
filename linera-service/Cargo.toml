@@ -16,10 +16,19 @@ test = ["linera-views/test"]
 benchmark = ["linera-base/test", "dep:fungible", "dep:port-selector"]
 wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
-rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb", "linera-storage/rocksdb"]
+rocksdb = [
+    "linera-views/rocksdb",
+    "linera-core/rocksdb",
+    "linera-storage/rocksdb",
+]
 aws = ["linera-views/aws", "linera-core/aws", "linera-storage/aws"]
-scylladb = ["linera-views/scylladb", "linera-core/scylladb", "linera-storage/scylladb"]
+scylladb = [
+    "linera-views/scylladb",
+    "linera-core/scylladb",
+    "linera-storage/scylladb",
+]
 kubernetes = ["dep:k8s-openapi", "dep:kube", "dep:pathdiff", "dep:fs_extra"]
+remote_net = ["dep:k8s-openapi", "dep:kube"]
 
 [dependencies]
 anyhow = { workspace = true }
