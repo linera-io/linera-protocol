@@ -130,7 +130,7 @@ Then the web frontend:
 
 ```bash
 cd examples/fungible/web-frontend
-npm install
+npm install --no-save
 
 # Start the server but not open the web page right away.
 BROWSER=none npm start &
