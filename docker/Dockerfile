@@ -86,8 +86,6 @@ RUN mv \
     target/"$target"/release/linera-db \
     ./
 
-RUN strip linera linera-proxy linera-server linera-db
-
 # Stage 3.5 - Optionally copy binaries instead of using the build
 # images above
 FROM scratch as builder_copy
