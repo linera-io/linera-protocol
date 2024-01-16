@@ -777,13 +777,11 @@ impl ContractSyncRuntime {
 
 impl ContractRuntime for ContractSyncRuntime {
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError> {
-        let this = self.inner();
-        Ok(this.runtime_counts.remaining_fuel)
+        Ok(self.inner().runtime_counts.remaining_fuel)
     }
 
     fn set_remaining_fuel(&mut self, remaining_fuel: u64) -> Result<(), ExecutionError> {
-        let mut this = self.inner();
-        this.runtime_counts.remaining_fuel = remaining_fuel;
+        self.inner().runtime_counts.remaining_fuel = remaining_fuel;
         Ok(())
     }
 
@@ -962,10 +960,7 @@ impl ServiceRuntime for ServiceSyncRuntime {
         };
         let mut code = code.instantiate(self.clone())?;
         let response = code.handle_query(query_context, argument)?;
-        {
-            let mut this = self.inner();
-            this.pop_application();
-        }
+        self.inner().pop_application();
         Ok(response)
     }
 }
