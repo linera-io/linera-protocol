@@ -2626,12 +2626,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 let timestamp = genesis_config.timestamp;
                 let chains = with_other_chains
                     .iter()
-                    .filter_map(|chain_id| {
-                        let i = (0..(genesis_config.chains.len() as u32))
-                            .find(|i| ChainId::root(*i) == *chain_id)?;
-                        let description = ChainDescription::Root(i);
-                        Some(UserChain::make_other(description, timestamp))
-                    })
+                    .map(|chain_id| UserChain::make_other(*chain_id, timestamp))
                     .collect();
                 let mut context =
                     ClientContext::create(&options, genesis_config, *testing_prng_seed, chains)?;
