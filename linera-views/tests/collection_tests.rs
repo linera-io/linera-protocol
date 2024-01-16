@@ -104,7 +104,7 @@ async fn classic_collection_view_check() {
             // Checking the behavior of "try_load_entry"
             for _ in 0..10 {
                 let pos = rng.gen::<u8>();
-                let test_view = !view.v.try_load_entry(&pos).await.unwrap().is_none();
+                let test_view = view.v.try_load_entry(&pos).await.unwrap().is_some();
                 let test_map = new_map.contains_key(&pos);
                 assert_eq!(test_view, test_map);
             }

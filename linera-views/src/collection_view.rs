@@ -236,9 +236,7 @@ where
                         let guard = RwLockWriteGuard::downgrade(updates);
                         Ok(Some(ReadGuardedView { guard, short_key }))
                     }
-                    Update::Removed => {
-                        Ok(None)
-                    }
+                    Update::Removed => Ok(None),
                 }
             }
             btree_map::Entry::Vacant(entry) => {
@@ -693,7 +691,10 @@ where
     ///   assert!(view.try_load_entry(&24).await.unwrap().is_none());
     /// # })
     /// ```
-    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<Option<ReadGuardedView<W>>, ViewError>
+    pub async fn try_load_entry<Q>(
+        &self,
+        index: &Q,
+    ) -> Result<Option<ReadGuardedView<W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
@@ -1010,7 +1011,10 @@ where
     ///   assert!(view.try_load_entry(&24).await.unwrap().is_none());
     /// # })
     /// ```
-    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<Option<ReadGuardedView<W>>, ViewError>
+    pub async fn try_load_entry<Q>(
+        &self,
+        index: &Q,
+    ) -> Result<Option<ReadGuardedView<W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,

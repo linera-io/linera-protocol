@@ -445,7 +445,12 @@ where
                     .unwrap();
                 assert_eq!(count, 1);
             }
-            let subview = view.collection.try_load_entry("hola").await.unwrap().unwrap();
+            let subview = view
+                .collection
+                .try_load_entry("hola")
+                .await
+                .unwrap()
+                .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
         }
     };
@@ -551,7 +556,12 @@ where
             assert!(!view.set.contains(&59).await.unwrap());
         }
         if config.with_collection {
-            let subview = view.collection.try_load_entry("hola").await.unwrap().unwrap();
+            let subview = view
+                .collection
+                .try_load_entry("hola")
+                .await
+                .unwrap()
+                .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
             assert_eq!(subview.read(..).await.unwrap(), vec![17, 18]);
             assert_eq!(subview.read(1..).await.unwrap(), vec![18]);
