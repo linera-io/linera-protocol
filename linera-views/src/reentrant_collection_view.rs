@@ -335,8 +335,8 @@ where
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
     ///   let _subview = view.try_load_entry_or_insert(vec![0, 1]).await.unwrap();
-    ///   assert_eq!(view.contains_key(&[0, 1]).await.unwrap());
-    ///   assert_eq!(!view.contains_key(&[0, 2]).await.unwrap());
+    ///   assert!(view.contains_key(&[0, 1]).await.unwrap());
+    ///   assert!(!view.contains_key(&[0, 2]).await.unwrap());
     /// # })
     /// ```
     pub async fn contains_key(&self, short_key: &[u8]) -> Result<bool, ViewError> {
@@ -909,8 +909,8 @@ where
     /// # let context = create_memory_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
     ///   let _subview = view.try_load_entry_or_insert(&23).await.unwrap();
-    ///   assert_eq!(view.contains_key(&23).await.unwrap());
-    ///   assert_eq!(!view.contains_key(&24).await.unwrap());
+    ///   assert!(view.contains_key(&23).await.unwrap());
+    ///   assert!(!view.contains_key(&24).await.unwrap());
     /// # })
     /// ```
     pub async fn contains_key<Q>(&self, index: &Q) -> Result<bool, ViewError>

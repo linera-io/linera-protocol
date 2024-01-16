@@ -218,7 +218,7 @@ where
     ///   let mut map = ByteMapView::load(context).await.unwrap();
     ///   map.insert(vec![0, 1], String::from("Hello"));
     ///   assert!(map.contains_key(&[0,1]).await.unwrap());
-    ///   assert!(!map.contains_key(&[0,1]).await.unwrap());
+    ///   assert!(!map.contains_key(&[0,2]).await.unwrap());
     /// # })
     /// ```
     pub async fn contains_key(&self, short_key: &[u8]) -> Result<bool, ViewError> {
