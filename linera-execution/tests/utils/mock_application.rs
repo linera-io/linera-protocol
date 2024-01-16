@@ -14,38 +14,28 @@ use linera_execution::{
 use std::{
     collections::VecDeque,
     fmt::{self, Display, Formatter},
+    mem,
     sync::{Arc, Mutex},
 };
 
 /// A mocked implementation of a user application.
 ///
-/// Implements [`UserContractModule`], [`UserServiceModule`], [`UserContract`] and [`UserService`].
-#[derive(Clone)]
-pub struct MockApplication<Runtime> {
-    runtime: Runtime,
+/// Should be configured with any expected calls, and can then be used to create a
+/// [`MockApplicationInstance`] that implements [`UserContract`] and [`UserService`].
+#[derive(Clone, Default)]
+pub struct MockApplication {
     expected_calls: Arc<Mutex<VecDeque<ExpectedCall>>>,
 }
 
-impl Default for MockApplication<()> {
-    fn default() -> Self {
-        MockApplication {
-            runtime: (),
-            expected_calls: Arc::new(Mutex::new(VecDeque::new())),
-        }
-    }
+/// A mocked implementation of a user application instance.
+///
+/// Will expect certain calls previously configured through [`MockApplication`].
+pub struct MockApplicationInstance<Runtime> {
+    expected_calls: VecDeque<ExpectedCall>,
+    runtime: Runtime,
 }
 
-impl MockApplication<()> {
-    /// Configures the `runtime` to use with the [`MockApplication`] instance.
-    pub fn with_runtime<NewRuntime>(self, runtime: NewRuntime) -> MockApplication<NewRuntime> {
-        MockApplication {
-            runtime,
-            expected_calls: self.expected_calls,
-        }
-    }
-}
-
-impl<Runtime> MockApplication<Runtime> {
+impl MockApplication {
     /// Queues an expected call to the [`MockApplication`].
     pub fn expect_call(&self, expected_call: ExpectedCall) {
         self.expected_calls
@@ -53,15 +43,16 @@ impl<Runtime> MockApplication<Runtime> {
             .expect("Mutex is poisoned")
             .push_back(expected_call);
     }
-}
 
-impl<Runtime> MockApplication<Runtime> {
-    /// Retrieves the next [`ExpectedCall`] in the queue.
-    fn next_expected_call(&mut self) -> Option<ExpectedCall> {
-        self.expected_calls
-            .lock()
-            .expect("Mutex is poisoned")
-            .pop_front()
+    /// Creates a new [`MockApplicationInstance`], forwarding the configured expected calls.
+    pub fn create_mock_instance<Runtime>(
+        &self,
+        runtime: Runtime,
+    ) -> MockApplicationInstance<Runtime> {
+        MockApplicationInstance {
+            expected_calls: mem::take(&mut self.expected_calls.lock().expect("Mutex is poisoned")),
+            runtime,
+        }
     }
 }
 
@@ -119,7 +110,7 @@ type HandleQueryHandler = Box<
         + Sync,
 >;
 
-/// An expected call to a [`MockApplication`].
+/// An expected call to a [`MockApplicationInstance`].
 pub enum ExpectedCall {
     /// An expected call to [`UserContract::initialize`].
     Initialize(InitializeHandler),
@@ -151,8 +142,8 @@ impl Display for ExpectedCall {
 }
 
 impl ExpectedCall {
-    /// Creates an [`ExpectedCall`] to the [`MockApplication`]'s [`UserContract::initialize`]
-    /// implementation, which is handled by the provided `handler`.
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
+    /// [`UserContract::initialize`] implementation, which is handled by the provided `handler`.
     pub fn initialize(
         handler: impl FnOnce(
                 &mut ContractSyncRuntime,
@@ -166,7 +157,7 @@ impl ExpectedCall {
         ExpectedCall::Initialize(Box::new(handler))
     }
 
-    /// Creates an [`ExpectedCall`] to the [`MockApplication`]'s
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
     /// [`UserContract::execute_operation`] implementation, which is handled by the provided
     /// `handler`.
     pub fn execute_operation(
@@ -182,7 +173,7 @@ impl ExpectedCall {
         ExpectedCall::ExecuteOperation(Box::new(handler))
     }
 
-    /// Creates an [`ExpectedCall`] to the [`MockApplication`]'s
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
     /// [`UserContract::execute_message`] implementation, which is handled by the provided
     /// `handler`.
     pub fn execute_message(
@@ -198,7 +189,7 @@ impl ExpectedCall {
         ExpectedCall::ExecuteMessage(Box::new(handler))
     }
 
-    /// Creates an [`ExpectedCall`] to the [`MockApplication`]'s
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
     /// [`UserContract::handle_application_call`] implementation, which is handled by the provided
     /// `handler`.
     pub fn handle_application_call(
@@ -215,7 +206,7 @@ impl ExpectedCall {
         ExpectedCall::HandleApplicationCall(Box::new(handler))
     }
 
-    /// Creates an [`ExpectedCall`] to the [`MockApplication`]'s
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
     /// [`UserContract::handle_session_call`] implementation, which is handled by the provided
     /// `handler`.
     pub fn handle_session_call(
@@ -233,8 +224,8 @@ impl ExpectedCall {
         ExpectedCall::HandleSessionCall(Box::new(handler))
     }
 
-    /// Creates an [`ExpectedCall`] to the [`MockApplication`]'s [`UserService::handle_query`]
-    /// implementation, which is handled by the provided `handler`.
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
+    /// [`UserService::handle_query`] implementation, which is handled by the provided `handler`.
     pub fn handle_query(
         handler: impl FnOnce(
                 &mut ServiceSyncRuntime,
@@ -249,25 +240,32 @@ impl ExpectedCall {
     }
 }
 
-impl UserContractModule for MockApplication<()> {
+impl UserContractModule for MockApplication {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntime,
     ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError> {
-        Ok(Box::new(self.clone().with_runtime(runtime)))
+        Ok(Box::new(self.create_mock_instance(runtime)))
     }
 }
 
-impl UserServiceModule for MockApplication<()> {
+impl UserServiceModule for MockApplication {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntime,
     ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError> {
-        Ok(Box::new(self.clone().with_runtime(runtime)))
+        Ok(Box::new(self.create_mock_instance(runtime)))
     }
 }
 
-impl UserContract for MockApplication<ContractSyncRuntime> {
+impl<Runtime> MockApplicationInstance<Runtime> {
+    /// Retrieves the next [`ExpectedCall`] in the queue.
+    fn next_expected_call(&mut self) -> Option<ExpectedCall> {
+        self.expected_calls.pop_front()
+    }
+}
+
+impl UserContract for MockApplicationInstance<ContractSyncRuntime> {
     fn initialize(
         &mut self,
         context: OperationContext,
@@ -352,7 +350,7 @@ impl UserContract for MockApplication<ContractSyncRuntime> {
     }
 }
 
-impl UserService for MockApplication<ServiceSyncRuntime> {
+impl UserService for MockApplicationInstance<ServiceSyncRuntime> {
     fn handle_query(
         &mut self,
         context: QueryContext,

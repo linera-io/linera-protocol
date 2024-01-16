@@ -938,7 +938,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
 pub async fn register_mock_applications<C>(
     state: &mut ExecutionStateView<C>,
     count: u64,
-) -> anyhow::Result<vec::IntoIter<(UserApplicationId, MockApplication<()>)>>
+) -> anyhow::Result<vec::IntoIter<(UserApplicationId, MockApplication)>>
 where
     C: Context<Extra = TestExecutionRuntimeContext> + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
