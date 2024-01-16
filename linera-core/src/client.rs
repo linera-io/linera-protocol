@@ -2003,7 +2003,7 @@ where
         loop {
             let incoming_messages = self.pending_messages().await?;
             if incoming_messages.is_empty() {
-                break;
+                return Ok((certificates, None));
             }
             match self.execute_block(incoming_messages, vec![]).await {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
@@ -2014,7 +2014,6 @@ where
                 Err(error) => return Err(error),
             };
         }
-        Ok((certificates, None))
     }
 
     /// Creates an empty block to process all incoming messages. This may require several blocks.
