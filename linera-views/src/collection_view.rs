@@ -157,8 +157,9 @@ where
         batch.put_key_value_bytes(key, vec![]);
     }
 
-    /// Loads a subview for the data at the given index in the collection. If the entry
-    /// at that index was absent or had not been assigned then the default value is provided.
+    /// Loads a subview for the data at the given index in the collection. If an entry
+    /// is absent then a default entry is added to the collection. The resulting view
+    /// can be modified.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -177,7 +178,8 @@ where
     }
 
     /// Loads a subview for the data at the given index in the collection. If an entry
-    /// was removed before or it was absent then a default entry is put on this index.
+    /// is absent then a default entry is added to the collection. The resulting view
+    /// is read-only.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -196,8 +198,9 @@ where
         Ok(self.do_load_entry_mut(short_key).await?)
     }
 
-    /// Same as `load_entry_mut` but for read-only access. May fail if one subview is
-    /// already being visited.
+    /// Loads a subview for the data at the given index in the collection. If an entry
+    /// is absent then `None` is returned. The resulting view cannot be modified.
+    /// May fail if one subview is already being visited.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -206,15 +209,21 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
-    ///   let subview = view.try_load_entry(vec![0, 1]).await.unwrap();
-    ///   let value = subview.get();
-    ///   assert_eq!(*value, String::default());
+    ///   {
+    ///     let _subview = view.load_entry_or_insert(vec![0, 1]).await.unwrap();
+    ///   }
+    ///   {
+    ///     let subview = view.try_load_entry(vec![0, 1]).await.unwrap().unwrap();
+    ///     let value = subview.get();
+    ///     assert_eq!(*value, String::default());
+    ///   }
+    ///   assert!(view.try_load_entry(vec![0, 2]).await.unwrap().is_none());
     /// # })
     /// ```
     pub async fn try_load_entry(
         &self,
         short_key: Vec<u8>,
-    ) -> Result<ReadGuardedView<W>, ViewError> {
+    ) -> Result<Option<ReadGuardedView<W>>, ViewError> {
         let mut updates = self
             .updates
             .try_write()
@@ -225,34 +234,30 @@ where
                 match entry {
                     Update::Set(_) => {
                         let guard = RwLockWriteGuard::downgrade(updates);
-                        Ok(ReadGuardedView { guard, short_key })
+                        Ok(Some(ReadGuardedView { guard, short_key }))
                     }
                     Update::Removed => {
-                        let key = self
-                            .context
-                            .base_tag_index(KeyTag::Subview as u8, &short_key);
-                        let context = self.context.clone_with_base_key(key);
-                        // Obtain a view and set its pending state to the default (e.g. empty) state
-                        let mut view = W::load(context).await?;
-                        view.clear();
-                        *entry = Update::Set(view);
-                        let guard = RwLockWriteGuard::downgrade(updates);
-                        Ok(ReadGuardedView { guard, short_key })
+                        Ok(None)
                     }
                 }
             }
             btree_map::Entry::Vacant(entry) => {
-                let key = self
-                    .context
-                    .base_tag_index(KeyTag::Subview as u8, &short_key);
-                let context = self.context.clone_with_base_key(key);
-                let mut view = W::load(context).await?;
-                if self.delete_storage_first {
-                    view.clear();
+                let key_index = self.context.base_tag_index(KeyTag::Index as u8, &short_key);
+                if !self.delete_storage_first && self.context.contains_key(&key_index).await? {
+                    let key = self
+                        .context
+                        .base_tag_index(KeyTag::Subview as u8, &short_key);
+                    let context = self.context.clone_with_base_key(key);
+                    let mut view = W::load(context).await?;
+                    if self.delete_storage_first {
+                        view.clear();
+                    }
+                    entry.insert(Update::Set(view));
+                    let guard = RwLockWriteGuard::downgrade(updates);
+                    Ok(Some(ReadGuardedView { guard, short_key }))
+                } else {
+                    Ok(None)
                 }
-                entry.insert(Update::Set(view));
-                let guard = RwLockWriteGuard::downgrade(updates);
-                Ok(ReadGuardedView { guard, short_key })
             }
         }
     }
@@ -554,7 +559,8 @@ where
                 hasher.update_with_bcs_bytes(&keys.len())?;
                 for key in keys {
                     hasher.update_with_bytes(&key)?;
-                    let view = self.try_load_entry(key).await?;
+                    // We can unwrap since `key` is in `keys`, so we know it is present and cannot be modifed with `&self` methods.
+                    let view = self.try_load_entry(key).await?.unwrap();
                     let hash = view.hash().await?;
                     hasher.write_all(hash.as_ref())?;
                 }
@@ -615,7 +621,8 @@ where
     W: View<C>,
 {
     /// Loads a subview for the data at the given index in the collection. If an entry
-    /// was removed before then a default entry is put on this index.
+    /// is absent then a default entry is added to the collection. The resulting view
+    /// can be modified.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -639,7 +646,8 @@ where
     }
 
     /// Loads a subview for the data at the given index in the collection. If an entry
-    /// was removed before then a default entry is put on this index.
+    /// is absent then a default entry is added to the collection. The resulting view
+    /// is read-only.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -663,8 +671,9 @@ where
         self.collection.load_entry_or_insert(short_key).await
     }
 
-    /// Same as `load_entry_mut` but for read-only access. May fail if one subview is
-    /// already being visited.
+    /// Loads a subview for the data at the given index in the collection. If an entry
+    /// is absent then `None` is returned. The resulting view cannot be modified.
+    /// May fail if one subview is already being visited.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -673,12 +682,18 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
-    ///   let subview = view.try_load_entry(&23).await.unwrap();
-    ///   let value = subview.get();
-    ///   assert_eq!(*value, String::default());
+    ///   {
+    ///     let _subview = view.load_entry_or_insert(&23).await.unwrap();
+    ///   }
+    ///   {
+    ///     let subview = view.try_load_entry(&23).await.unwrap().unwrap();
+    ///     let value = subview.get();
+    ///     assert_eq!(*value, String::default());
+    ///   }
+    ///   assert!(view.try_load_entry(&24).await.unwrap().is_none());
     /// # })
     /// ```
-    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
+    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<Option<ReadGuardedView<W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
@@ -923,7 +938,8 @@ where
     W: View<C>,
 {
     /// Loads a subview for the data at the given index in the collection. If an entry
-    /// was removed before then a default entry is put on this index.
+    /// is absent then a default entry is added to the collection. The resulting view
+    /// can be modified.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -947,7 +963,8 @@ where
     }
 
     /// Loads a subview for the data at the given index in the collection. If an entry
-    /// was removed before then a default entry is put on this index.
+    /// is absent then a default entry is added to the collection. The resulting view
+    /// is read-only.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -971,8 +988,9 @@ where
         self.collection.load_entry_or_insert(short_key).await
     }
 
-    /// Same as `load_entry_mut` but for read-only access. May fail if one subview is
-    /// already being visited.
+    /// Loads a subview for the data at the given index in the collection. If an entry
+    /// is absent then `None` is returned. The resulting view cannot be modified.
+    /// May fail if one subview is already being visited.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -981,12 +999,18 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_memory_context();
     ///   let mut view : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
-    ///   let subview = view.try_load_entry(&23).await.unwrap();
-    ///   let value = subview.get();
-    ///   assert_eq!(*value, String::default());
+    ///   {
+    ///     let _subview = view.load_entry_or_insert(&23).await.unwrap();
+    ///   }
+    ///   {
+    ///     let subview = view.try_load_entry(&23).await.unwrap().unwrap();
+    ///     let value = subview.get();
+    ///     assert_eq!(*value, String::default());
+    ///   }
+    ///   assert!(view.try_load_entry(&24).await.unwrap().is_none());
     /// # })
     /// ```
-    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
+    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<Option<ReadGuardedView<W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,

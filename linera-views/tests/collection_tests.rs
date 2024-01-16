@@ -25,7 +25,7 @@ where
         let mut map = BTreeMap::new();
         let keys = self.v.indices().await.unwrap();
         for key in keys {
-            let subview = self.v.try_load_entry(&key).await.unwrap();
+            let subview = self.v.try_load_entry(&key).await.unwrap().unwrap();
             let value = subview.get();
             map.insert(key, *value);
         }

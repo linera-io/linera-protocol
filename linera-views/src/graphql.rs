@@ -460,10 +460,11 @@ where
     }
 
     async fn entry(&self, key: K) -> Result<Entry<K, ReadGuardedView<V>>, async_graphql::Error> {
-        Ok(Entry {
-            value: self.try_load_entry(&key).await?,
-            key,
-        })
+        let value = self
+            .try_load_entry(&key)
+            .await?
+            .ok_or_else(|| missing_key_error(&key))?;
+        Ok(Entry { value, key })
     }
 
     async fn entries(
@@ -481,10 +482,11 @@ where
 
         let mut values = vec![];
         for key in keys {
-            values.push(Entry {
-                value: self.try_load_entry(&key).await?,
-                key,
-            })
+            let value = self
+                .try_load_entry(&key)
+                .await?
+                .ok_or_else(|| missing_key_error(&key))?;
+            values.push(Entry { value, key })
         }
 
         Ok(values)
@@ -517,10 +519,11 @@ where
     }
 
     async fn entry(&self, key: K) -> Result<Entry<K, ReadGuardedView<V>>, async_graphql::Error> {
-        Ok(Entry {
-            value: self.try_load_entry(&key).await?,
-            key,
-        })
+        let value = self
+            .try_load_entry(&key)
+            .await?
+            .ok_or_else(|| missing_key_error(&key))?;
+        Ok(Entry { value, key })
     }
 
     async fn entries(
@@ -538,10 +541,11 @@ where
 
         let mut values = vec![];
         for key in keys {
-            values.push(Entry {
-                value: self.try_load_entry(&key).await?,
-                key,
-            })
+            let value = self
+                .try_load_entry(&key)
+                .await?
+                .ok_or_else(|| missing_key_error(&key))?;
+            values.push(Entry { value, key })
         }
 
         Ok(values)
