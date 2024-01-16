@@ -246,7 +246,7 @@ where
                         .context
                         .base_tag_index(KeyTag::Subview as u8, &short_key);
                     let context = self.context.clone_with_base_key(key);
-                    let mut view = W::load(context).await?;
+                    let view = W::load(context).await?;
                     entry.insert(Update::Set(view));
                     let guard = RwLockWriteGuard::downgrade(updates);
                     Ok(Some(ReadGuardedView { guard, short_key }))
