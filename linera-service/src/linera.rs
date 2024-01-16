@@ -2079,7 +2079,7 @@ impl Runnable for Job {
 
             RetryPendingBlock { chain_id } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
-                match chain_client.retry_pending_block().await? {
+                match chain_client.process_pending_block().await? {
                     ClientOutcome::Committed(Some(certificate)) => {
                         info!("Pending block committed successfully.");
                         println!("{}", certificate.hash());

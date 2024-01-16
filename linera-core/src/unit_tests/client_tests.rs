@@ -1370,7 +1370,7 @@ where
     ));
     // There is no pending block, since the proposal wasn't valid at the time.
     assert!(client2
-        .retry_pending_block()
+        .process_pending_block()
         .await
         .unwrap()
         .unwrap()

@@ -301,7 +301,7 @@ where
     /// Retries the pending block that was unsuccessfully proposed earlier.
     async fn retry_pending_block(&self, chain_id: ChainId) -> Result<Option<CryptoHash>, Error> {
         let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let outcome = client.retry_pending_block().await?;
+        let outcome = client.process_pending_block().await?;
         self.context.lock().await.update_wallet(&mut *client).await;
         match outcome {
             ClientOutcome::Committed(Some(certificate)) => Ok(Some(certificate.hash())),

@@ -1460,7 +1460,7 @@ where
         incoming_messages: Vec<IncomingMessage>,
         operations: Vec<Operation>,
     ) -> Result<ExecuteBlockOutcome, ChainClientError> {
-        match self.retry_pending_block_without_prepare().await? {
+        match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) => {
                 return Ok(ExecuteBlockOutcome::Conflict(certificate))
             }
@@ -1472,7 +1472,7 @@ where
         let confirmed_value = self
             .set_pending_block(incoming_messages, operations)
             .await?;
-        match self.retry_pending_block_without_prepare().await? {
+        match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate))
                 if certificate.hash() == confirmed_value.hash() =>
             {
@@ -1656,17 +1656,17 @@ where
         self.local_balance().await
     }
 
-    /// Retries the last pending block
-    pub async fn retry_pending_block(
+    /// Processes the last pending block
+    pub async fn process_pending_block(
         &mut self,
     ) -> Result<ClientOutcome<Option<Certificate>>, ChainClientError> {
         self.find_received_certificates().await?;
         self.prepare_chain().await?;
-        self.retry_pending_block_without_prepare().await
+        self.process_pending_block_without_prepare().await
     }
 
-    /// Retries the last pending block. Assumes that the local chain is up to date.
-    async fn retry_pending_block_without_prepare(
+    /// Processes the last pending block. Assumes that the local chain is up to date.
+    async fn process_pending_block_without_prepare(
         &mut self,
     ) -> Result<ClientOutcome<Option<Certificate>>, ChainClientError> {
         let identity = self.identity().await?;
