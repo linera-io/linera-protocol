@@ -97,6 +97,9 @@ async fn reentrant_collection_view_check() {
                 let n_ins = rng.gen_range(0..5);
                 for _i in 0..n_ins {
                     let pos = rng.gen_range(0..nmax);
+                    let test_view = view.v.contains_key(&pos).await.unwrap();
+                    let test_map = new_map.contains_key(&pos);
+                    assert_eq!(test_view, test_map);
                     let _subview = view.v.try_load_entry_or_insert(&pos).await.unwrap();
                     new_map.entry(pos).or_insert(0);
                 }
