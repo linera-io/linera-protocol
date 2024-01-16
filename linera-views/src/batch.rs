@@ -15,11 +15,7 @@
 //! is public because some other libraries require it. But the users using views should
 //! not have to deal with batches.
 
-use crate::{
-    common::{get_uleb128_size, Context, KeyIterable},
-    memory::{MemoryContext, MemoryContextError},
-    views::ViewError,
-};
+use crate::{common::get_uleb128_size, views::ViewError};
 use async_trait::async_trait;
 use bcs::serialized_size;
 use serde::{Deserialize, Serialize};
@@ -354,21 +350,6 @@ pub trait DeletePrefixExpander {
 
     /// Returns the list of keys to be appended to the list.
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
-}
-
-#[async_trait]
-impl DeletePrefixExpander for MemoryContext<()> {
-    type Error = MemoryContextError;
-
-    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let mut vector_list = Vec::new();
-        for key in <Vec<Vec<u8>> as KeyIterable<Self::Error>>::iterator(
-            &self.find_keys_by_prefix(key_prefix).await?,
-        ) {
-            vector_list.push(key?.to_vec());
-        }
-        Ok(vector_list)
-    }
 }
 
 /// A notion of batch useful for certain computations (notably journaling).
