@@ -134,7 +134,7 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
         let seed = 37;
-        let (ref net_arc, initial_client) = SHARED_LOCAL_KUBERNETES_TESTING_NET
+        let (net, initial_client) = SHARED_LOCAL_KUBERNETES_TESTING_NET
             .get_or_init(|| async {
                 let num_validators = 4;
                 let num_shards = 4;
@@ -171,8 +171,8 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
             })
             .await;
 
-        let mut net_arc_clone = net_arc.clone();
-        let client = net_arc_clone.make_client().await;
+        let mut net = net.clone();
+        let client = net.make_client().await;
         client.wallet_init(&[], None).await.unwrap();
 
         for _ in 0..2 {
@@ -182,7 +182,7 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
                 .unwrap();
         }
 
-        Ok((net_arc_clone, client))
+        Ok((net, client))
     }
 }
 
