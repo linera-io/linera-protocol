@@ -207,6 +207,37 @@ where
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }
+
+    /// Tests if a key is contained in the container.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::map_view::ByteMapView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut map = ByteMapView::load(context).await.unwrap();
+    ///   map.insert(vec![0, 1], String::from("Hello"));
+    ///   assert!(map.contains_key(&[0,1]).await.unwrap());
+    ///   assert!(!map.contains_key(&[0,1]).await.unwrap());
+    /// # })
+    /// ```
+    pub async fn contains_key(&self, short_key: &[u8]) -> Result<bool, ViewError> {
+        if let Some(update) = self.updates.get(short_key) {
+            let test = match update {
+                Update::Removed => false,
+                Update::Set(_value) => true,
+            };
+            return Ok(test);
+        }
+        if self.delete_storage_first {
+            return Ok(false);
+        }
+        if contains_key(&self.deleted_prefixes, short_key) {
+            return Ok(false);
+        }
+        let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
+        Ok(self.context.contains_key(&key).await?)
+    }
 }
 
 impl<C, V> ByteMapView<C, V>
@@ -855,6 +886,28 @@ where
     pub fn extra(&self) -> &C::Extra {
         self.map.extra()
     }
+
+    /// Tests if a key is contained in the container.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::map_view::MapView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut map = MapView::<_,u32,String>::load(context).await.unwrap();
+    ///   map.insert(&(37 as u32), String::from("Hello"));
+    ///   assert!(map.contains_key(&(37 as u32)).await.unwrap());
+    ///   assert!(!map.contains_key(&(34 as u32)).await.unwrap());
+    /// # })
+    /// ```
+    pub async fn contains_key<Q>(&self, index: &Q) -> Result<bool, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        self.map.contains_key(&short_key).await
+    }
 }
 
 impl<C, I, V> MapView<C, I, V>
@@ -1231,6 +1284,28 @@ where
     /// Obtains the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.map.extra()
+    }
+
+    /// Tests if a key is contained in the container.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_memory_context;
+    /// # use linera_views::map_view::MapView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut map = MapView::<_,u128,String>::load(context).await.unwrap();
+    ///   map.insert(&(37 as u128), String::from("Hello"));
+    ///   assert!(map.contains_key(&(37 as u128)).await.unwrap());
+    ///   assert!(!map.contains_key(&(34 as u128)).await.unwrap());
+    /// # })
+    /// ```
+    pub async fn contains_key<Q>(&self, index: &Q) -> Result<bool, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        self.map.contains_key(&short_key).await
     }
 }
 
