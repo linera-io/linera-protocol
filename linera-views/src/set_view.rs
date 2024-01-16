@@ -174,10 +174,7 @@ where
             return Ok(false);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
-        match self.context.read_value_bytes(&key).await? {
-            None => Ok(false),
-            Some(_) => Ok(true),
-        }
+        Ok(self.context.contains_key(&key).await?)
     }
 }
 
