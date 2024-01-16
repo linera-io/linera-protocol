@@ -12,12 +12,10 @@ use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::ChainId,
 };
-#[cfg(feature = "kubernetes")]
-use linera_service::cli_wrappers::local_kubernetes_net::SharedLocalKubernetesNetTestingConfig;
 use linera_service::{
     cli_wrappers::{
         local_net::{Database, LocalNet, LocalNetConfig, LocalNetTestingConfig},
-        ApplicationWrapper, ClientWrapper, LineraNet, LineraNetConfig, Network,
+        ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     util,
 };
@@ -26,6 +24,9 @@ use serde_json::{json, Value};
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 use test_case::test_case;
 use tracing::{info, warn};
+
+#[cfg(feature = "kubernetes")]
+use linera_service::cli_wrappers::local_kubernetes_net::SharedLocalKubernetesNetTestingConfig;
 
 fn get_fungible_account_owner(client: &ClientWrapper) -> fungible::AccountOwner {
     let owner = client.get_owner().unwrap();
@@ -267,7 +268,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client().await;
-    client2.wallet_init(&[], None).await.unwrap();
+    client2.wallet_init(&[], FaucetOption::None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1
@@ -362,7 +363,7 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
     let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client().await;
-    client2.wallet_init(&[], None).await.unwrap();
+    client2.wallet_init(&[], FaucetOption::None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1
@@ -574,7 +575,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
     let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client().await;
-    client2.wallet_init(&[], None).await.unwrap();
+    client2.wallet_init(&[], FaucetOption::None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1
@@ -708,8 +709,8 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     let client_a = net.make_client().await;
     let client_b = net.make_client().await;
 
-    client_a.wallet_init(&[], None).await.unwrap();
-    client_b.wallet_init(&[], None).await.unwrap();
+    client_a.wallet_init(&[], FaucetOption::None).await.unwrap();
+    client_b.wallet_init(&[], FaucetOption::None).await.unwrap();
 
     // Create initial server and client config.
     let (contract_fungible_a, service_fungible_a) =
@@ -988,8 +989,8 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
 
     let client0 = net.make_client().await;
     let client1 = net.make_client().await;
-    client0.wallet_init(&[], None).await.unwrap();
-    client1.wallet_init(&[], None).await.unwrap();
+    client0.wallet_init(&[], FaucetOption::None).await.unwrap();
+    client1.wallet_init(&[], FaucetOption::None).await.unwrap();
 
     let (contract_fungible, service_fungible) =
         client_admin.build_example("fungible").await.unwrap();
@@ -1334,7 +1335,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
     let (mut net, client) = config.instantiate().await.unwrap();
 
     let client_2 = net.make_client().await;
-    client_2.wallet_init(&[], None).await.unwrap();
+    client_2.wallet_init(&[], FaucetOption::None).await.unwrap();
     let chain_1 = client.get_wallet().unwrap().default_chain().unwrap();
 
     let (node_service_2, chain_2) = match network {
@@ -1577,7 +1578,10 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetTestingConfig
     let client2 = net.make_client().await;
     let chain = ChainId::root(0);
     let mut height = 0;
-    client2.wallet_init(&[chain], None).await.unwrap();
+    client2
+        .wallet_init(&[chain], FaucetOption::None)
+        .await
+        .unwrap();
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
     let mut node_service2 = client2.run_node_service(8081).await.unwrap();
@@ -1637,7 +1641,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
     let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client().await;
-    client2.wallet_init(&[], None).await.unwrap();
+    client2.wallet_init(&[], FaucetOption::None).await.unwrap();
 
     // Get some chain owned by Client 1.
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
@@ -1874,7 +1878,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client().await;
-    client2.wallet_init(&[], None).await.unwrap();
+    client2.wallet_init(&[], FaucetOption::None).await.unwrap();
 
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
 
@@ -1966,7 +1970,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client().await;
-    client2.wallet_init(&[], None).await.unwrap();
+    client2.wallet_init(&[], FaucetOption::None).await.unwrap();
 
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
 
@@ -2031,7 +2035,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     let (mut net, client1) = config.instantiate().await.unwrap();
 
     let client2 = net.make_client().await;
-    client2.wallet_init(&[], None).await.unwrap();
+    client2.wallet_init(&[], FaucetOption::None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
 
@@ -2048,7 +2052,10 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
 
     // Use the faucet directly to initialize client 3.
     let client3 = net.make_client().await;
-    let outcome = client3.wallet_init(&[], Some(&faucet.url())).await.unwrap();
+    let outcome = client3
+        .wallet_init(&[], FaucetOption::NewChain(&faucet.url()))
+        .await
+        .unwrap();
     let chain3 = outcome.unwrap().chain_id;
     assert_eq!(
         chain3,

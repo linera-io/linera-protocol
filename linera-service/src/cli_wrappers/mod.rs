@@ -28,7 +28,7 @@ mod util;
 /// How to run a linera wallet and its GraphQL service.
 mod wallet;
 
-pub use wallet::{ApplicationWrapper, ClientWrapper, Faucet, NodeService};
+pub use wallet::{ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, NodeService};
 
 use anyhow::Result;
 use async_trait::async_trait;

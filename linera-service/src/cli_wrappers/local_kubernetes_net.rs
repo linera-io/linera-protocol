@@ -1,11 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{
-    docker::DockerImage, kind::KindCluster, kubectl::KubectlInstance, util::get_github_root,
-};
 use crate::{
-    cli_wrappers::{helmfile::HelmFile, ClientWrapper, LineraNet, LineraNetConfig, Network},
+    cli_wrappers::{
+        docker::DockerImage, helmfile::HelmFile, kind::KindCluster, kubectl::KubectlInstance,
+        util::get_github_root, ClientWrapper, LineraNet, LineraNetConfig, Network,
+    },
     util::{self, CommandExt},
 };
 use anyhow::{anyhow, bail, ensure, Result};
@@ -20,8 +20,12 @@ use linera_base::data_types::Amount;
 use std::{path::PathBuf, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
+
 #[cfg(any(test, feature = "test"))]
-use {crate::util::current_binary_parent, tokio::sync::OnceCell};
+use {
+    crate::{cli_wrappers::wallet::FaucetOption, util::current_binary_parent},
+    tokio::sync::OnceCell,
+};
 
 #[cfg(any(test, feature = "test"))]
 static SHARED_LOCAL_KUBERNETES_TESTING_NET: OnceCell<(
@@ -175,7 +179,7 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
 
         let mut net = net.clone();
         let client = net.make_client().await;
-        client.wallet_init(&[], None).await.unwrap();
+        client.wallet_init(&[], FaucetOption::None).await.unwrap();
 
         for _ in 0..2 {
             initial_client

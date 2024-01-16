@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, bail, Context, Error};
+use anyhow::{anyhow, bail, ensure, Context, Error};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
@@ -29,14 +29,12 @@ use linera_execution::{
     WasmRuntime, WithWasmDefault,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
-#[cfg(feature = "kubernetes")]
-use linera_service::cli_wrappers::local_kubernetes_net::LocalKubernetesNetConfig;
 use linera_service::{
     chain_listener::{self, ChainListenerConfig},
     cli_wrappers::{
         self,
         local_net::{Database, LocalNetConfig},
-        ClientWrapper, LineraNet, LineraNetConfig, Network,
+        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     faucet::FaucetService,
@@ -59,6 +57,9 @@ use std::{
 };
 use tokio::{signal::unix, sync::mpsc};
 use tracing::{debug, info, warn};
+
+#[cfg(feature = "kubernetes")]
+use linera_service::cli_wrappers::local_kubernetes_net::LocalKubernetesNetConfig;
 
 #[cfg(feature = "benchmark")]
 use {
@@ -1292,10 +1293,13 @@ enum WalletCommand {
         #[arg(long = "genesis")]
         genesis_config_path: Option<PathBuf>,
 
-        /// The address of a faucet. If this is specified, the default chain will be newly created,
-        /// and credited with tokens.
+        /// The address of a faucet.
         #[arg(long = "faucet")]
         faucet: Option<String>,
+
+        /// Request a new chain from the faucet, credited with tokens. This requires `--faucet`.
+        #[arg(long)]
+        with_new_chain: bool,
 
         /// Other chains to follow.
         #[arg(long, num_args(0..))]
@@ -2094,6 +2098,7 @@ impl Runnable for Job {
 
             Wallet(WalletCommand::Init {
                 faucet: Some(faucet_url),
+                with_new_chain: true,
                 with_other_chains,
                 ..
             }) => {
@@ -2349,7 +2354,7 @@ async fn net_up(
     if let Some(extra_wallets) = *extra_wallets {
         for wallet in 1..=extra_wallets {
             let extra_wallet = net.make_client().await;
-            extra_wallet.wallet_init(&[], None).await?;
+            extra_wallet.wallet_init(&[], FaucetOption::None).await?;
             let unassigned_key = extra_wallet.keygen().await?;
             let new_chain_msg_id = client1
                 .open_chain(default_chain, Some(unassigned_key), Amount::ZERO)
@@ -2609,6 +2614,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
             WalletCommand::Init {
                 genesis_config_path,
                 faucet,
+                with_new_chain,
                 with_other_chains,
                 testing_prng_seed,
             } => {
@@ -2631,7 +2637,11 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                     ClientContext::create(&options, genesis_config, *testing_prng_seed, chains)?;
                 context.save_wallet();
                 options.initialize_storage().await?;
-                if faucet.is_some() {
+                if *with_new_chain {
+                    ensure!(
+                        faucet.is_some(),
+                        "Using --with-new-chain requires --faucet to be set"
+                    );
                     options.run_command_with_storage().await?;
                 }
                 Ok(())

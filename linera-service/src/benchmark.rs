@@ -11,7 +11,7 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId, Owner},
 };
 use linera_execution::system::SystemChannel;
-use linera_service::cli_wrappers::{ApplicationWrapper, ClientWrapper, Network};
+use linera_service::cli_wrappers::{ApplicationWrapper, ClientWrapper, FaucetOption, Network};
 use port_selector::random_free_tcp_port;
 use rand::{Rng as _, SeedableRng};
 use serde_json::Value;
@@ -82,7 +82,9 @@ async fn benchmark_with_fungible(
     info!("Creating the clients and initializing the wallets");
     let dir = Arc::new(tempdir().context("cannot create temp dir")?);
     let publisher = ClientWrapper::new(dir, Network::Grpc, None, num_wallets);
-    publisher.wallet_init(&[], Some(&faucet)).await?;
+    publisher
+        .wallet_init(&[], FaucetOption::NewChain(&faucet))
+        .await?;
     let clients = (0..num_wallets)
         .map(|n| {
             let dir = Arc::new(tempdir().context("cannot create temp dir")?);
@@ -92,7 +94,7 @@ async fn benchmark_with_fungible(
     try_join_all(
         clients
             .iter()
-            .map(|client| client.wallet_init(&[], Some(&faucet))),
+            .map(|client| client.wallet_init(&[], FaucetOption::NewChain(&faucet))),
     )
     .await?;
 
