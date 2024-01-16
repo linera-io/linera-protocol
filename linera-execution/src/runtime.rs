@@ -8,8 +8,7 @@ use crate::{
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
     ExecutionError, ExecutionOutcome, ServiceRuntime, SessionId, UserApplicationDescription,
-    UserApplicationId, UserContractCode, UserContractInstance, UserServiceCode,
-    UserServiceInstance,
+    UserApplicationId, UserContractCode, UserContractInstance, UserServiceInstance,
 };
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -534,28 +533,29 @@ impl SyncRuntimeInternal<UserContractInstance> {
 }
 
 impl SyncRuntimeInternal<UserServiceInstance> {
-    fn load_service(
-        &mut self,
-        id: UserApplicationId,
-    ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
-        self.execution_state_sender
-            .send_request(|callback| Request::LoadService { id, callback })?
-            .recv_response()
-    }
-
     /// Initializes a service instance with this runtime.
     fn load_service_instance(
         &mut self,
         id: UserApplicationId,
     ) -> Result<LoadedApplication<UserServiceInstance>, ExecutionError> {
-        let (code, description) = self.load_service(id)?;
-        let instance = code.instantiate(SyncRuntime(
-            self.reference
-                .upgrade()
-                .expect("`SyncRuntimeInner` should only be used by `SyncRuntime`"),
-        ))?;
+        match self.loaded_applications.entry(id) {
+            hash_map::Entry::Vacant(entry) => {
+                let (code, description) = self
+                    .execution_state_sender
+                    .send_request(|callback| Request::LoadService { id, callback })?
+                    .recv_response()?;
 
-        Ok(LoadedApplication::new(instance, description))
+                let instance = code.instantiate(SyncRuntime(
+                    self.reference
+                        .upgrade()
+                        .expect("`SyncRuntimeInner` should only be used by `SyncRuntime`"),
+                ))?;
+                Ok(entry
+                    .insert(LoadedApplication::new(instance, description))
+                    .clone())
+            }
+            hash_map::Entry::Occupied(entry) => Ok(entry.get().clone()),
+        }
     }
 }
 
