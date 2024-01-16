@@ -4,8 +4,7 @@
 use crate::{
     cli_wrappers::{
         docker::DockerImage, helmfile::HelmFile, kind::KindCluster, kubectl::KubectlInstance,
-        util::get_github_root, wallet::FaucetOption, ClientWrapper, LineraNet, LineraNetConfig,
-        Network,
+        util::get_github_root, ClientWrapper, LineraNet, LineraNetConfig, Network,
     },
     util::{self, CommandExt},
 };
@@ -21,8 +20,12 @@ use linera_base::data_types::Amount;
 use std::{path::PathBuf, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
+
 #[cfg(any(test, feature = "test"))]
-use {crate::util::current_binary_parent, tokio::sync::OnceCell};
+use {
+    crate::cli_wrappers::wallet::FaucetOption, crate::util::current_binary_parent,
+    tokio::sync::OnceCell,
+};
 
 #[cfg(any(test, feature = "test"))]
 static SHARED_LOCAL_KUBERNETES_TESTING_NET: OnceCell<(
