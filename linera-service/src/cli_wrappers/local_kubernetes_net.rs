@@ -23,7 +23,7 @@ use tokio::process::Command;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::cli_wrappers::wallet::FaucetOption, crate::util::current_binary_parent,
+    crate::{cli_wrappers::wallet::FaucetOption, util::current_binary_parent},
     tokio::sync::OnceCell,
 };
 
