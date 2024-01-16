@@ -325,7 +325,7 @@ where
         }
     }
 
-    /// Tests if the collection contains a specified key and returns a boolean.
+    /// Returns `true` if the collection contains a value for the specified key.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -344,7 +344,7 @@ where
         Ok(match updates.get(short_key) {
             Some(entry) => match entry {
                 Update::Set(_view) => true,
-                _entry @ Update::Removed => false,
+                Update::Removed => false,
             },
             None => {
                 let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
@@ -899,7 +899,7 @@ where
         self.collection.try_load_entry(short_key).await
     }
 
-    /// Tests if the collection contains a specified key and returns a boolean.
+    /// Returns `true` if the collection contains a value for the specified key.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};
@@ -1311,7 +1311,7 @@ where
         self.collection.try_load_entry(short_key).await
     }
 
-    /// Tests if the collection contains a specified key and returns a boolean.
+    /// Returns `true` if the collection contains a value for the specified key.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_memory_context, MemoryContext};

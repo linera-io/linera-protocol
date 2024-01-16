@@ -208,7 +208,7 @@ where
         self.context.extra()
     }
 
-    /// Tests if a key is contained in the container.
+    /// Returns `true` if the map contains a value for the specified key.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_memory_context;
@@ -887,7 +887,7 @@ where
         self.map.extra()
     }
 
-    /// Tests if a key is contained in the container.
+    /// Returns `true` if the map contains a value for the specified key.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_memory_context;
@@ -1286,7 +1286,7 @@ where
         self.map.extra()
     }
 
-    /// Tests if a key is contained in the container.
+    /// Returns `true` if the map contains a value for the specified key.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_memory_context;
