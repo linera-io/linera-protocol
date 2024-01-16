@@ -62,14 +62,16 @@ pub struct LocalKubernetesNet {
 #[cfg(any(test, feature = "test"))]
 impl SharedLocalKubernetesNetTestingConfig {
     pub fn new(network: Network, binaries: Option<Option<PathBuf>>) -> Self {
-        if binaries.is_none() {
+        if std::env::var("LINERA_TRY_RELEASE_BINARIES").unwrap_or_default() == "true"
+            && binaries.is_none()
+        {
             // For cargo test, current binary should be in debug mode
             let current_binary_parent =
                 current_binary_parent().expect("Fetching current binaries path should not fail");
             // But binaries for cluster should be release mode
             let binaries_dir = current_binary_parent
                 .parent()
-                .expect("Getting parent shuold not fail")
+                .expect("Getting parent should not fail")
                 .join("release");
             if binaries_dir.exists() {
                 // If release exists, use those binaries

@@ -22,6 +22,7 @@ env:
   RUST_BACKTRACE: short
   RUSTFLAGS: "-D warnings"
   RUSTUP_MAX_RETRIES: 10
+  LINERA_TRY_RELEASE_BINARIES: "true"
 
 permissions:
   contents: read
