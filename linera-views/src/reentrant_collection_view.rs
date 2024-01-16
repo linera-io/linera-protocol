@@ -325,6 +325,42 @@ where
         }
     }
 
+
+    /// Tests if the collection contains a specified key and returns a boolean.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::reentrant_collection_view::ReentrantByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view : ReentrantByteCollectionView<_, RegisterView<_,String>> = ReentrantByteCollectionView::load(context).await.unwrap();
+    ///   let _subview = view.try_load_entry_or_insert(vec![0, 1]).await.unwrap();
+    ///   assert_eq!(view.contains_key(&[0, 1]).await.unwrap());
+    ///   assert_eq!(!view.contains_key(&[0, 2]).await.unwrap());
+    /// # })
+    /// ```
+    pub async fn contains_key(
+        &self,
+        short_key: &[u8],
+    ) -> Result<bool, ViewError> {
+        let updates = self.updates.lock().await;
+        Ok(match updates.get(short_key) {
+            Some(entry) => match entry {
+                Update::Set(_view) => true,
+                _entry @ Update::Removed => false,
+            },
+            None => {
+                let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
+                if self.needs_clear || !self.context.contains_key(&key_index).await? {
+                    false
+                } else {
+                    true
+                }
+            }
+        })
+    }
+
     /// Removes an entry. If absent then nothing happens.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -871,6 +907,32 @@ where
         self.collection.try_load_entry(short_key).await
     }
 
+    /// Tests if the collection contains a specified key and returns a boolean.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::reentrant_collection_view::ReentrantCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
+    ///   let _subview = view.try_load_entry_or_insert(&23).await.unwrap();
+    ///   assert_eq!(view.contains_key(&23).await.unwrap());
+    ///   assert_eq!(!view.contains_key(&24).await.unwrap());
+    /// # })
+    /// ```
+    pub async fn contains_key<Q>(
+        &self,
+        index: &Q,
+    ) -> Result<bool,  ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        self.collection.contains_key(&short_key).await
+    }
+
     /// Marks the entry so that it is removed in the next flush.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1258,6 +1320,32 @@ where
     {
         let short_key = index.to_custom_bytes()?;
         self.collection.try_load_entry(short_key).await
+    }
+
+    /// Tests if the collection contains a specified key and returns a boolean.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::reentrant_collection_view::ReentrantCustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view : ReentrantCustomCollectionView<_, u128, RegisterView<_,String>> = ReentrantCustomCollectionView::load(context).await.unwrap();
+    ///   let _subview = view.try_load_entry_or_insert(&23).await.unwrap();
+    ///   assert!(view.contains_key(&23).await.unwrap());
+    ///   assert!(!view.contains_key(&24).await.unwrap());
+    /// # })
+    /// ```
+    pub async fn contains_key<Q>(
+        &self,
+        index: &Q,
+    ) -> Result<bool,  ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + ?Sized,
+    {
+        let short_key = index.to_custom_bytes()?;
+        self.collection.contains_key(&short_key).await
     }
 
     /// Removes an entry. If absent then nothing happens.
