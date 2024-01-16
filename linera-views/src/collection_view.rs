@@ -281,6 +281,36 @@ where
         Ok(())
     }
 
+    /// Tests if the collection contains a specified key and returns a boolean.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
+    /// # use linera_views::collection_view::ByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_memory_context();
+    ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
+    ///   {
+    ///     let _subview = view.load_entry_mut(vec![0, 1]).await.unwrap();
+    ///   }
+    ///   assert!(view.contains_key(&[0, 1]).await.unwrap());
+    ///   assert!(!view.contains_key(&[0, 2]).await.unwrap());
+    /// # })
+    /// ```
+    pub async fn contains_key(&self, short_key: &[u8]) -> Result<bool, ViewError> {
+        let updates = self.updates.write().await;
+        Ok(match updates.get(short_key) {
+            Some(entry) => match entry {
+                Update::Set(_view) => true,
+                _entry @ Update::Removed => false,
+            },
+            None => {
+                let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
+                !self.delete_storage_first && self.context.contains_key(&key_index).await?
+            }
+        })
+    }
+
     /// Marks the entry as removed. If absent then nothing is done.
     /// ```rust
     /// # tokio_test::block_on(async {
