@@ -168,7 +168,7 @@ impl ClientWrapper {
         let mut command = self.command().await?;
         command.args(["wallet", "init"]);
         if let Some(faucet_url) = faucet {
-            command.args(["--faucet", faucet_url]);
+            command.args(["--with-new-chain", "--faucet", faucet_url]);
         } else {
             command.args(["--genesis", "genesis.json"]);
         }
