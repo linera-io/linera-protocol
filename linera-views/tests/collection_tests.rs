@@ -25,7 +25,7 @@ where
         let mut map = BTreeMap::new();
         let keys = self.v.indices().await.unwrap();
         for key in keys {
-            let subview = self.v.try_load_entry(&key).await.unwrap();
+            let subview = self.v.try_load_entry(&key).await.unwrap().unwrap();
             let value = subview.get();
             map.insert(key, *value);
         }
@@ -71,7 +71,7 @@ async fn classic_collection_view_check() {
                 let n_load = rng.gen_range(0..5);
                 for _i in 0..n_load {
                     let pos = rng.gen_range(0..nmax);
-                    let _subview = view.v.load_entry(&pos).await.unwrap();
+                    let _subview = view.v.load_entry_or_insert(&pos).await.unwrap();
                     new_map.entry(pos).or_insert(0);
                 }
             }
@@ -100,6 +100,13 @@ async fn classic_collection_view_check() {
                 assert_eq!(new_hash, hash);
             } else {
                 assert_ne!(new_hash, hash);
+            }
+            // Checking the behavior of "try_load_entry"
+            for _ in 0..10 {
+                let pos = rng.gen::<u8>();
+                let test_view = view.v.try_load_entry(&pos).await.unwrap().is_some();
+                let test_map = new_map.contains_key(&pos);
+                assert_eq!(test_view, test_map);
             }
             // Checking the keys
             let key_values = view.key_values().await;

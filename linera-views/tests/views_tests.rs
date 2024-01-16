@@ -445,7 +445,12 @@ where
                     .unwrap();
                 assert_eq!(count, 1);
             }
-            let subview = view.collection.try_load_entry("hola").await.unwrap();
+            let subview = view
+                .collection
+                .try_load_entry("hola")
+                .await
+                .unwrap()
+                .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
         }
     };
@@ -471,7 +476,7 @@ where
             assert!(!view.set.contains(&42).await.unwrap());
         }
         if config.with_collection {
-            let subview = view.collection.try_load_entry("hola").await.unwrap();
+            let subview = view.collection.load_entry_or_insert("hola").await.unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), Vec::<u32>::new());
             let subview = view.collection2.load_entry_mut("ciao").await.unwrap();
             let subsubview = subview.load_entry_mut("!").await.unwrap();
@@ -551,7 +556,12 @@ where
             assert!(!view.set.contains(&59).await.unwrap());
         }
         if config.with_collection {
-            let subview = view.collection.try_load_entry("hola").await.unwrap();
+            let subview = view
+                .collection
+                .try_load_entry("hola")
+                .await
+                .unwrap()
+                .unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
             assert_eq!(subview.read(..).await.unwrap(), vec![17, 18]);
             assert_eq!(subview.read(1..).await.unwrap(), vec![18]);
@@ -562,7 +572,7 @@ where
         }
         if config.with_collection {
             let subview = view.collection2.load_entry_mut("ciao").await.unwrap();
-            let subsubview = subview.try_load_entry("!").await.unwrap();
+            let subsubview = subview.try_load_entry("!").await.unwrap().unwrap();
             assert!(subview.try_load_entry("!").await.is_err());
             assert_eq!(subsubview.get(), &3);
             assert_eq!(
@@ -650,7 +660,7 @@ where
     {
         let mut view = store.load(1).await.unwrap();
         if config.with_collection {
-            let subview = view.collection.try_load_entry("hola").await.unwrap();
+            let subview = view.collection.load_entry_or_insert("hola").await.unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), Vec::<u32>::new());
         }
         if config.with_queue {
