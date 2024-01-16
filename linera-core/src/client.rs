@@ -1297,7 +1297,11 @@ where
     }
 
     /// Executes (or retries) a regular block proposal. Updates local balance.
-    async fn propose_block(&mut self, block: Block) -> Result<Certificate, ChainClientError> {
+    async fn propose_block(
+        &mut self,
+        block: Block,
+        round: Round,
+    ) -> Result<Certificate, ChainClientError> {
         ensure!(
             block.height == self.next_block_height,
             ChainClientError::BlockProposalError("Unexpected block height")
@@ -1308,19 +1312,6 @@ where
         );
         // Gather information on the current local state.
         let manager = self.chain_info_with_manager_values().await?.manager;
-        // Find the lowest round where we can propose this block.
-        let round = if let Some(next_round) = manager.next_round() {
-            next_round
-        } else if (self.pending_block.is_some() || manager.requested_proposed.is_some())
-            && manager.current_round.is_fast()
-        {
-            // If the current round is fast, we should try re-proposing the pending block.
-            Round::Fast
-        } else {
-            return Err(ChainClientError::BlockProposalError(
-                "Cannot propose a block; there is already a proposal in the current round",
-            ));
-        };
         // In the fast round, we must never make any conflicting proposals.
         if round.is_fast() {
             if let Some(pending) = &self.pending_block {
@@ -1469,120 +1460,60 @@ where
         incoming_messages: Vec<IncomingMessage>,
         operations: Vec<Operation>,
     ) -> Result<ExecuteBlockOutcome, ChainClientError> {
-        let identity = self.identity().await?;
-        loop {
-            let info = self.chain_info_with_manager_values().await?;
-            let manager = &*info.manager;
-            let can_propose = match manager.next_round() {
-                Some(Round::Fast) => manager.ownership.super_owners.contains_key(&identity),
-                Some(Round::MultiLeader(_)) => true,
-                Some(Round::SingleLeader(_)) => manager.leader == Some(identity),
-                None => {
-                    // If we have a pending block in the fast round, we can retry our proposal.
-                    manager.current_round.is_fast()
-                        && manager
-                            .requested_proposed
-                            .as_ref()
-                            .map(|proposal| &proposal.content.block)
-                            == self.pending_block.as_ref()
-                }
-            };
-            // If blocks are already validated, try to finalize the highest one.
-            if let Some(certificate) = manager.highest_validated() {
-                if certificate.round == manager.current_round {
-                    let committee = self.local_committee().await?;
-                    return match self.finalize_block(&committee, certificate.clone()).await {
-                        Ok(certificate) => Ok(ExecuteBlockOutcome::Conflict(certificate)),
-                        Err(error) => {
-                            tracing::warn!(
-                                %error, round = %manager.current_round,
-                                "Failed to finalize pending validated block."
-                            );
-                            // TODO(#1423): The round just ended; or are there other errors?
-                            Ok(ExecuteBlockOutcome::wait_for_timeout(&info)?)
-                        }
-                    };
-                }
+        match self.retry_pending_block_without_prepare().await? {
+            ClientOutcome::Committed(Some(certificate)) => {
+                return Ok(ExecuteBlockOutcome::Conflict(certificate))
             }
-            if can_propose {
-                let locked_block = manager
-                    .highest_validated()
-                    .and_then(|certificate| certificate.value().block())
-                    .or(manager
-                        .requested_proposed
-                        .as_ref()
-                        .filter(|proposal| proposal.content.round.is_fast())
-                        .map(|proposal| &proposal.content.block));
-                if let Some(block) = locked_block {
-                    return match self.propose_block(block.clone()).await {
-                        Ok(certificate) => Ok(ExecuteBlockOutcome::Conflict(certificate)),
-                        Err(error @ ChainClientError::CommunicationError(_))
-                        | Err(error @ ChainClientError::LocalNodeError(_)) => Err(error),
-                        Err(error) => {
-                            tracing::warn!(
-                                %error, round = %manager.current_round,
-                                "Failed to re-propose validated block from an earlier round."
-                            );
-                            // TODO(#1423): The round just ended; or are there other errors?
-                            Ok(ExecuteBlockOutcome::wait_for_timeout(&info)?)
-                        }
-                    };
-                }
-                // If we have a pending block, propose that one first.
-                if let Some(block) = &self.pending_block {
-                    if block.height == self.next_block_height {
-                        return match self.propose_block(block.clone()).await {
-                            Ok(certificate) => Ok(ExecuteBlockOutcome::Conflict(certificate)),
-                            Err(error @ ChainClientError::CommunicationError(_))
-                            | Err(error @ ChainClientError::LocalNodeError(_)) => Err(error),
-                            Err(error) => {
-                                tracing::warn!(
-                                    %error, round = %manager.current_round,
-                                    "Failed to re-propose local pending block."
-                                );
-                                // TODO(#1423): The round just ended; or are there other errors?
-                                Ok(ExecuteBlockOutcome::wait_for_timeout(&info)?)
-                            }
-                        };
-                    }
-                }
-                // Otherwise we can propose a block with our own messages and operations.
-                let timestamp = self.next_timestamp(&incoming_messages).await;
-                let block = Block {
-                    epoch: self.epoch().await?,
-                    chain_id: self.chain_id,
-                    incoming_messages,
-                    operations,
-                    previous_block_hash: self.block_hash,
-                    height: self.next_block_height,
-                    authenticated_signer: Some(self.identity().await?),
-                    timestamp,
-                };
-                return match self.propose_block(block.clone()).await {
-                    Ok(certificate) => Ok(ExecuteBlockOutcome::Executed(certificate)),
-                    Err(error @ ChainClientError::CommunicationError(_))
-                    | Err(error @ ChainClientError::LocalNodeError(_)) => Err(error),
-                    Err(error) => {
-                        tracing::warn!(
-                            %error, round = %manager.current_round,
-                            "Failed to propose new block."
-                        );
-                        // TODO(#1423): The round just ended; or are there other errors?
-                        Ok(ExecuteBlockOutcome::wait_for_timeout(&info)?)
-                    }
-                };
+            ClientOutcome::Committed(None) => {}
+            ClientOutcome::WaitForTimeout(timeout) => {
+                return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
             }
-            // If the current round has timed out, we request a timeout certificate and retry in
-            // the next round.
-            if let Some(round_timeout) = manager.round_timeout {
-                if round_timeout <= self.storage_client().await.current_time() {
-                    self.request_leader_timeout().await?;
-                    continue;
-                }
-            }
-            // Otherwise we have to wait for the round to time out.
-            return ExecuteBlockOutcome::wait_for_timeout(&info);
         }
+        let confirmed_value = self
+            .set_pending_block(incoming_messages, operations)
+            .await?;
+        match self.retry_pending_block_without_prepare().await? {
+            ClientOutcome::Committed(Some(certificate))
+                if certificate.hash() == confirmed_value.hash() =>
+            {
+                Ok(ExecuteBlockOutcome::Executed(certificate))
+            }
+            ClientOutcome::Committed(Some(certificate)) => {
+                Ok(ExecuteBlockOutcome::Conflict(certificate))
+            }
+            // Should be unreachable: We did set a pending block.
+            ClientOutcome::Committed(None) => Err(ChainClientError::BlockProposalError(
+                "Unexpected block proposal error",
+            )),
+            ClientOutcome::WaitForTimeout(timeout) => {
+                Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
+            }
+        }
+    }
+
+    async fn set_pending_block(
+        &mut self,
+        incoming_messages: Vec<IncomingMessage>,
+        operations: Vec<Operation>,
+    ) -> Result<HashedValue, ChainClientError> {
+        let timestamp = self.next_timestamp(&incoming_messages).await;
+        let block = Block {
+            epoch: self.epoch().await?,
+            chain_id: self.chain_id,
+            incoming_messages,
+            operations,
+            previous_block_hash: self.block_hash,
+            height: self.next_block_height,
+            authenticated_signer: Some(self.identity().await?),
+            timestamp,
+        };
+        // Make sure every incoming message succeeds and otherwise remove them.
+        // Also, compute the final certified hash while we're at it.
+        let executed_block = self
+            .stage_block_execution_and_discard_failing_messages(block)
+            .await?;
+        self.pending_block = Some(executed_block.block.clone());
+        Ok(HashedValue::new_confirmed(executed_block))
     }
 
     /// Returns a suitable timestamp for the next block.
@@ -1731,100 +1662,97 @@ where
     ) -> Result<ClientOutcome<Option<Certificate>>, ChainClientError> {
         self.find_received_certificates().await?;
         self.prepare_chain().await?;
+        self.retry_pending_block_without_prepare().await
+    }
+
+    /// Retries the last pending block. Assumes that the local chain is up to date.
+    async fn retry_pending_block_without_prepare(
+        &mut self,
+    ) -> Result<ClientOutcome<Option<Certificate>>, ChainClientError> {
         let identity = self.identity().await?;
-        loop {
-            let info = self.chain_info_with_manager_values().await?;
-            let manager = &*info.manager;
-            let can_propose = match manager.next_round() {
-                Some(Round::Fast) => manager.ownership.super_owners.contains_key(&identity),
-                Some(Round::MultiLeader(_)) => true,
-                Some(Round::SingleLeader(_)) => manager.leader == Some(identity),
-                None => {
-                    // If we have a pending block in the fast round, we can retry our proposal.
-                    manager.current_round.is_fast()
-                        && manager
-                            .requested_proposed
-                            .as_ref()
-                            .map(|proposal| &proposal.content.block)
-                            == self.pending_block.as_ref()
-                }
-            };
-            // If blocks are already validated, try to finalize the highest one.
-            if let Some(certificate) = manager.highest_validated() {
-                if certificate.round == manager.current_round {
-                    let committee = self.local_committee().await?;
-                    return match self.finalize_block(&committee, certificate.clone()).await {
-                        Ok(certificate) => Ok(ClientOutcome::Committed(Some(certificate))),
-                        Err(error) => {
-                            tracing::warn!(
-                                %error, round = %manager.current_round,
-                                "Failed to finalize pending validated block."
-                            );
-                            // TODO(#1423): The round just ended; or are there other errors?
-                            Ok(ClientOutcome::WaitForTimeout(to_timeout(&info)?))
-                        }
-                    };
-                }
+        let mut info = self.chain_info_with_manager_values().await?;
+        // If the current round has timed out, we request a timeout certificate and retry in
+        // the next round.
+        if let Some(round_timeout) = info.manager.round_timeout {
+            if round_timeout <= self.storage_client().await.current_time() {
+                self.request_leader_timeout().await?;
+                info = self.chain_info_with_manager_values().await?;
             }
-            if can_propose {
-                let locked_block = manager
-                    .highest_validated()
-                    .and_then(|certificate| certificate.value().block())
-                    .or(manager
-                        .requested_proposed
-                        .as_ref()
-                        .filter(|proposal| proposal.content.round.is_fast())
-                        .map(|proposal| &proposal.content.block));
-                if let Some(block) = locked_block {
-                    return match self.propose_block(block.clone()).await {
-                        Ok(certificate) => Ok(ClientOutcome::Committed(Some(certificate))),
-                        Err(error @ ChainClientError::CommunicationError(_))
-                        | Err(error @ ChainClientError::LocalNodeError(_)) => Err(error),
-                        Err(error) => {
-                            tracing::warn!(
-                                %error, round = %manager.current_round,
-                                "Failed to re-propose validated block from an earlier round."
-                            );
-                            // TODO(#1423): The round just ended; or are there other errors?
-                            Ok(ClientOutcome::WaitForTimeout(to_timeout(&info)?))
-                        }
-                    };
-                }
-                // If we have a pending block, propose that one first.
-                if let Some(block) = &self.pending_block {
-                    if block.height == self.next_block_height {
-                        return match self.propose_block(block.clone()).await {
-                            Ok(certificate) => Ok(ClientOutcome::Committed(Some(certificate))),
-                            Err(error @ ChainClientError::CommunicationError(_))
-                            | Err(error @ ChainClientError::LocalNodeError(_)) => Err(error),
-                            Err(error) => {
-                                tracing::warn!(
-                                    %error, round = %manager.current_round,
-                                    "Failed to re-propose local pending block."
-                                );
-                                // TODO(#1423): The round just ended; or are there other errors?
-                                Ok(ClientOutcome::WaitForTimeout(to_timeout(&info)?))
-                            }
-                        };
-                    }
-                }
-                return Ok(ClientOutcome::Committed(None));
+        }
+        let manager = *info.manager;
+        // Drop the pending block if it is outdated.
+        if let Some(block) = &self.pending_block {
+            if block.height != info.next_block_height {
+                self.pending_block = None;
             }
-            // If the current round has timed out, we request a timeout certificate and retry in
-            // the next round.
-            if let Some(round_timeout) = manager.round_timeout {
-                if round_timeout <= self.storage_client().await.current_time() {
-                    self.request_leader_timeout().await?;
-                    continue;
-                }
+        }
+        // If there is a validated block in the current round, finalize it.
+        if let Some(certificate) = &manager.requested_locked {
+            if certificate.round == manager.current_round {
+                let committee = self.local_committee().await?;
+                let certificate = self
+                    .finalize_block(&committee, *certificate.clone())
+                    .await?;
+                return Ok(ClientOutcome::Committed(Some(certificate)));
             }
-            // Otherwise we have to wait for the round to time out.
-            return Ok(ClientOutcome::WaitForTimeout(to_timeout(&info)?));
+        }
+        // The block we want to propose is either the highest validated, or our pending one.
+        let maybe_block = manager
+            .highest_validated()
+            .and_then(|certificate| certificate.value().block())
+            .or(manager
+                .requested_proposed
+                .as_ref()
+                .filter(|proposal| proposal.content.round.is_fast())
+                .map(|proposal| &proposal.content.block))
+            .or(self.pending_block.as_ref());
+        let Some(block) = maybe_block else {
+            return Ok(ClientOutcome::Committed(None)); // Nothing to propose.
+        };
+        // If there is a conflicting proposal in the current round, we can only propose if the
+        // next round can be started without a timeout, i.e. if we are in a multi-leader round.
+        let conflicting_proposal = manager
+            .requested_proposed
+            .as_ref()
+            .map_or(false, |proposal| {
+                proposal.content.round == manager.current_round && proposal.content.block != *block
+            });
+        let round = if conflicting_proposal {
+            manager
+                .ownership
+                .next_round(manager.current_round)
+                .filter(|_| manager.current_round.is_multi_leader())
+                .ok_or_else(|| {
+                    ChainClientError::BlockProposalError(
+                        "Conflicting proposal in the current round",
+                    )
+                })?
+        } else {
+            manager.current_round
+        };
+        let can_propose = match round {
+            Round::Fast => manager.ownership.super_owners.contains_key(&identity),
+            Round::MultiLeader(_) => true,
+            Round::SingleLeader(_) => manager.leader == Some(identity),
+        };
+        if can_propose {
+            let certificate = self.propose_block(block.clone(), round).await?;
+            Ok(ClientOutcome::Committed(Some(certificate)))
+        } else {
+            // TODO(#1424): Local timeout might not match validators' exactly.
+            let timestamp = manager.round_timeout.ok_or_else(|| {
+                ChainClientError::BlockProposalError("Cannot propose in the current round.")
+            })?;
+            Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
+                timestamp,
+                current_round: manager.current_round,
+                next_block_height: info.next_block_height,
+            }))
         }
     }
 
     /// Clears the information on any operation that previously failed.
-    pub async fn clear_pending_block(&mut self) {
+    pub fn clear_pending_block(&mut self) {
         self.pending_block = None;
     }
 
@@ -2220,33 +2148,4 @@ enum ExecuteBlockOutcome {
     /// We are not the round leader and cannot do anything. Try again at the specified time or
     /// or whenever the round or block height changes.
     WaitForTimeout(RoundTimeout),
-}
-
-impl ExecuteBlockOutcome {
-    /// Creates an outcome indicating that the caller needs to wait for the current round to time
-    /// out. If there is no timeout, an error is returned.
-    #[allow(clippy::result_large_err)]
-    fn wait_for_timeout(info: &ChainInfo) -> Result<Self, ChainClientError> {
-        // TODO(#1424): Local timeout might not match validators' exactly.
-        let timestamp = info.manager.round_timeout.ok_or_else(|| {
-            ChainClientError::BlockProposalError("Cannot propose in the current round.")
-        })?;
-        Ok(Self::WaitForTimeout(RoundTimeout {
-            timestamp,
-            current_round: info.manager.current_round,
-            next_block_height: info.next_block_height,
-        }))
-    }
-}
-
-fn to_timeout(info: &ChainInfo) -> Result<RoundTimeout, ChainClientError> {
-    // TODO(#1424): Local timeout might not match validators' exactly.
-    let timestamp = info.manager.round_timeout.ok_or_else(|| {
-        ChainClientError::BlockProposalError("Cannot propose in the current round.")
-    })?;
-    Ok(RoundTimeout {
-        timestamp,
-        current_round: info.manager.current_round,
-        next_block_height: info.next_block_height,
-    })
 }

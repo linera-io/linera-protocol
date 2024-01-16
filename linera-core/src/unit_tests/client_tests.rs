@@ -519,7 +519,7 @@ where
         client.synchronize_from_validators().await.unwrap(),
         Amount::from_tokens(2)
     );
-    client.clear_pending_block().await;
+    client.clear_pending_block();
     client
         .transfer_to_account(
             None,
@@ -536,7 +536,7 @@ where
         sender.synchronize_from_validators().await.unwrap(),
         Amount::ONE
     );
-    sender.clear_pending_block().await;
+    sender.clear_pending_block();
     sender
         .transfer_to_account(
             None,
@@ -1667,18 +1667,14 @@ where
 
     // The other owner is leader now. Trying to submit a block should return `WaitForTimeout`.
     let result = client
-        .transfer(
-            None,
-            Amount::from(1),
-            Recipient::root(2),
-            UserData::default(),
-        )
+        .transfer(None, Amount::ONE, Recipient::root(2), UserData::default())
         .await
         .unwrap();
     let timeout = match result {
         ClientOutcome::Committed(_) => panic!("Committed a block where we aren't the leader."),
         ClientOutcome::WaitForTimeout(timeout) => timeout,
     };
+    client.clear_pending_block();
     assert!(client.request_leader_timeout().await.is_err());
     clock.set(timeout.timestamp);
     client.request_leader_timeout().await.unwrap();
@@ -1698,12 +1694,7 @@ where
 
     // Now we are the leader, and the transfer should succeed.
     let _certificate = client
-        .transfer(
-            None,
-            Amount::from_tokens(1),
-            Recipient::root(2),
-            UserData::default(),
-        )
+        .transfer(None, Amount::ONE, Recipient::root(2), UserData::default())
         .await
         .unwrap()
         .unwrap();
@@ -1799,7 +1790,7 @@ where
         .unwrap()
         .manager;
     assert!(manager.requested_proposed.is_some());
-    assert_eq!(manager.next_round().unwrap(), Round::MultiLeader(1));
+    assert_eq!(manager.current_round, Round::MultiLeader(0));
     let result = client1
         .burn(None, Amount::from_tokens(2), UserData::default())
         .await;
