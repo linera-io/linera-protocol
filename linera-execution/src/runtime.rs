@@ -900,20 +900,24 @@ impl ContractSyncRuntime {
             parameters: description.parameters,
             signer,
         });
-        let runtime = ContractSyncRuntime::new(runtime);
-        let execution_outcome = {
+        let mut runtime = ContractSyncRuntime::new(runtime);
+        let execution_result = {
             let mut code = code.instantiate(runtime.clone())?;
             match action {
-                UserAction::Initialize(context, argument) => code.initialize(context, argument)?,
+                UserAction::Initialize(context, argument) => code.initialize(context, argument),
                 UserAction::Operation(context, operation) => {
-                    code.execute_operation(context, operation)?
+                    code.execute_operation(context, operation)
                 }
-                UserAction::Message(context, message) => code.execute_message(context, message)?,
+                UserAction::Message(context, message) => code.execute_message(context, message),
             }
         };
+        // Ensure the `loaded_applications` are cleared to prevent circular references in the
+        // `runtime`
+        runtime.inner().loaded_applications.clear();
         let mut runtime = runtime
             .into_inner()
             .expect("Runtime clones should have been freed by now");
+        let execution_outcome = execution_result?;
         assert_eq!(runtime.call_stack.len(), 1);
         assert_eq!(runtime.call_stack[0].id, application_id);
         assert_eq!(runtime.active_applications.len(), 1);
@@ -1014,13 +1018,20 @@ impl ServiceSyncRuntime {
         context: crate::QueryContext,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let runtime = SyncRuntimeInternal::new(
+        let runtime_internal = SyncRuntimeInternal::new(
             context.chain_id,
             execution_state_sender,
             RuntimeLimits::default(),
             0,
         );
-        ServiceSyncRuntime::new(runtime).try_query_application(application_id, query)
+        let mut runtime = ServiceSyncRuntime::new(runtime_internal);
+
+        let result = runtime.try_query_application(application_id, query);
+
+        // Ensure the `loaded_applications` are cleared to remove circular references in
+        // `runtime_internal`
+        runtime.inner().loaded_applications.clear();
+        result
     }
 }
 
