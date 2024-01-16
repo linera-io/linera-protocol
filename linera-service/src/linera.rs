@@ -29,14 +29,12 @@ use linera_execution::{
     WasmRuntime, WithWasmDefault,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
-#[cfg(feature = "kubernetes")]
-use linera_service::cli_wrappers::local_kubernetes_net::LocalKubernetesNetConfig;
 use linera_service::{
     chain_listener::{self, ChainListenerConfig},
     cli_wrappers::{
         self,
         local_net::{Database, LocalNetConfig},
-        ClientWrapper, LineraNet, LineraNetConfig, Network,
+        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     faucet::FaucetService,
@@ -59,6 +57,9 @@ use std::{
 };
 use tokio::{signal::unix, sync::mpsc};
 use tracing::{debug, info, warn};
+
+#[cfg(feature = "kubernetes")]
+use linera_service::cli_wrappers::local_kubernetes_net::LocalKubernetesNetConfig;
 
 #[cfg(feature = "benchmark")]
 use {
@@ -2353,7 +2354,7 @@ async fn net_up(
     if let Some(extra_wallets) = *extra_wallets {
         for wallet in 1..=extra_wallets {
             let extra_wallet = net.make_client().await;
-            extra_wallet.wallet_init(&[], None).await?;
+            extra_wallet.wallet_init(&[], FaucetOption::None).await?;
             let unassigned_key = extra_wallet.keygen().await?;
             let new_chain_msg_id = client1
                 .open_chain(default_chain, Some(unassigned_key), Amount::ZERO)

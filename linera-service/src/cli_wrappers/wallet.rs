@@ -163,14 +163,20 @@ impl ClientWrapper {
     pub async fn wallet_init(
         &self,
         chain_ids: &[ChainId],
-        faucet: Option<&str>,
+        faucet: FaucetOption<'_>,
     ) -> Result<Option<ClaimOutcome>> {
         let mut command = self.command().await?;
         command.args(["wallet", "init"]);
-        if let Some(faucet_url) = faucet {
-            command.args(["--with-new-chain", "--faucet", faucet_url]);
-        } else {
-            command.args(["--genesis", "genesis.json"]);
+        match faucet {
+            FaucetOption::None => {
+                command.args(["--genesis", "genesis.json"]);
+            }
+            FaucetOption::GenesisOnly(url) => {
+                command.args(["--faucet", url]);
+            }
+            FaucetOption::NewChain(url) => {
+                command.args(["--with-new-chain", "--faucet", url]);
+            }
         }
         if let Some(seed) = self.testing_prng_seed {
             command.arg("--testing-prng-seed").arg(seed.to_string());
@@ -180,7 +186,7 @@ impl ClientWrapper {
             command.arg("--with-other-chains").args(ids);
         }
         let stdout = command.spawn_and_wait_for_stdout().await?;
-        if faucet.is_some() {
+        if matches!(faucet, FaucetOption::NewChain(_)) {
             let mut lines = stdout.split_whitespace();
             let chain_id_str = lines.next().context("missing chain ID")?;
             let message_id_str = lines.next().context("missing message ID")?;
@@ -620,6 +626,14 @@ impl ClientWrapper {
 
         Ok((contract, service))
     }
+}
+
+/// Whether `wallet_init` should use a faucet.
+#[derive(Clone, Copy, Debug)]
+pub enum FaucetOption<'a> {
+    None,
+    GenesisOnly(&'a str),
+    NewChain(&'a str),
 }
 
 #[cfg(any(test, feature = "test"))]
