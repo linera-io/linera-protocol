@@ -37,6 +37,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
+name = "adler32"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aae1277d39aeec15cb388266ecc24b11c80469deae6067e17a1a7aa9e5c1f234"
+
+[[package]]
 name = "ahash"
 version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1144,9 +1150,14 @@ version = "3.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ea181bf566f71cb9a5d17a59e1871af638180a18fb0035c92ae62b705207123"
 dependencies = [
+ "atty",
  "bitflags 1.3.2",
+ "clap_derive 3.2.25",
  "clap_lex 0.2.4",
  "indexmap 1.9.3",
+ "once_cell",
+ "strsim",
+ "termcolor",
  "textwrap",
 ]
 
@@ -1157,7 +1168,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfaff671f6b22ca62406885ece523383b9b64022e341e53e009a62ebc47a45f2"
 dependencies = [
  "clap_builder",
- "clap_derive",
+ "clap_derive 4.4.7",
 ]
 
 [[package]]
@@ -1179,6 +1190,19 @@ dependencies = [
  "anstyle",
  "clap_lex 0.6.0",
  "strsim",
+]
+
+[[package]]
+name = "clap_derive"
+version = "3.2.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae6371b8bdc8b7d3959e9cf7b22d4435ef3e79e138688421ec654acf8c81b008"
+dependencies = [
+ "heck 0.4.1",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -1341,6 +1365,15 @@ name = "cpp_demangle"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eeaa953eaad386a53111e47172c2fedba671e5684c8dd601a5f474f4f118710f"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
+name = "cpp_demangle"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e8227005286ec39567949b33df9896bcadfa6051bccca2488129f108ca23119"
 dependencies = [
  "cfg-if",
 ]
@@ -1797,6 +1830,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e962a19be5cfc3f3bf6dd8f61eb50107f356ad6270fbb3ed41476571db78be5"
 
 [[package]]
+name = "debugid"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bef552e6f588e446098f6ba40d89ac146c8c7b64aade83c051ee00bb5d2bc18d"
+dependencies = [
+ "uuid",
+]
+
+[[package]]
 name = "der"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1913,7 +1955,7 @@ checksum = "64fba5a42bd76a17cad4bfa00de168ee1cbfa06a5e8ce992ae880218c05641a9"
 dependencies = [
  "byteorder",
  "dynasm",
- "memmap2",
+ "memmap2 0.5.10",
 ]
 
 [[package]]
@@ -2141,6 +2183,18 @@ checksum = "84f2e425d9790201ba4af4630191feac6dcc98765b118d4d18e91d23c2353866"
 dependencies = [
  "env_logger",
  "log",
+]
+
+[[package]]
+name = "findshlibs"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40b9e59cd0f7e0806cca4be089683ecb6434e602038df21fe6bf6711b2f07f64"
+dependencies = [
+ "cc",
+ "lazy_static",
+ "libc",
+ "winapi",
 ]
 
 [[package]]
@@ -2919,6 +2973,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "json"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
+
+[[package]]
 name = "jsonpath_lib"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3038,6 +3098,26 @@ name = "libc"
 version = "0.2.150"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "89d92a4743f9a61002fae18374ed11e7973f530cb3a3255fb354818118b2203c"
+
+[[package]]
+name = "libflate"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ff4ae71b685bbad2f2f391fe74f6b7659a34871c08b210fdc039e43bee07d18"
+dependencies = [
+ "adler32",
+ "crc32fast",
+ "libflate_lz77",
+]
+
+[[package]]
+name = "libflate_lz77"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a52d3a8bfc85f250440e4424db7d857e241a3aebbbe301f3eb606ab15c39acbf"
+dependencies = [
+ "rle-decode-fast",
+]
 
 [[package]]
 name = "libloading"
@@ -3460,6 +3540,8 @@ dependencies = [
  "port-selector",
  "prometheus",
  "proptest",
+ "pyroscope",
+ "pyroscope_pprofrs",
  "rand 0.7.3",
  "rand 0.8.5",
  "rcgen",
@@ -3899,6 +3981,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "memmap2"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45fd3a57831bf88bc63f8cebc0cf956116276e97fef3966103e96416209f7c92"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "memoffset"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4005,6 +4096,27 @@ name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
+
+[[package]]
+name = "names"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7bddcd3bf5144b6392de80e04c347cd7fab2508f6df16a85fc496ecd5cec39bc"
+dependencies = [
+ "clap 3.2.25",
+ "rand 0.8.5",
+]
+
+[[package]]
+name = "nix"
+version = "0.26.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "598beaf3cc6fdd9a5dfb1630c2800c7acd31df7aaf0f565796fba2b53ca1af1b"
+dependencies = [
+ "bitflags 1.3.2",
+ "cfg-if",
+ "libc",
+]
 
 [[package]]
 name = "nom"
@@ -4411,6 +4523,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 
 [[package]]
+name = "pprof"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "978385d59daf9269189d052ca8a84c1acfd0715c0599a5d5188d4acc078ca46a"
+dependencies = [
+ "backtrace",
+ "cfg-if",
+ "findshlibs",
+ "libc",
+ "log",
+ "nix",
+ "once_cell",
+ "parking_lot",
+ "smallvec",
+ "symbolic-demangle",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4612,6 +4744,36 @@ dependencies = [
  "bitflags 1.3.2",
  "memchr",
  "unicase",
+]
+
+[[package]]
+name = "pyroscope"
+version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac8a53ce01af1087eaeee6ce7c4fbf50ea4040ab1825c0115c4bafa039644ba9"
+dependencies = [
+ "json",
+ "libc",
+ "libflate",
+ "log",
+ "names",
+ "prost",
+ "reqwest",
+ "thiserror",
+ "url",
+ "winapi",
+]
+
+[[package]]
+name = "pyroscope_pprofrs"
+version = "0.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43f010b2a981a7f8449a650f25f309e520b5206ea2d89512dcb146aaa5518ff4"
+dependencies = [
+ "log",
+ "pprof",
+ "pyroscope",
+ "thiserror",
 ]
 
 [[package]]
@@ -4974,6 +5136,12 @@ dependencies = [
  "quote",
  "syn 1.0.109",
 ]
+
+[[package]]
+name = "rle-decode-fast"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3582f63211428f83597b51b2ddb88e2a91a9d52d12831f9d08f5e624e8977422"
 
 [[package]]
 name = "rocksdb"
@@ -5725,6 +5893,29 @@ name = "subtle"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81cdd64d312baedb58e21336b31bc043b77e01cc99033ce76ef539f78e965ebc"
+
+[[package]]
+name = "symbolic-common"
+version = "12.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cccfffbc6bb3bb2d3a26cd2077f4d055f6808d266f9d4d158797a4c60510dfe"
+dependencies = [
+ "debugid",
+ "memmap2 0.9.3",
+ "stable_deref_trait",
+ "uuid",
+]
+
+[[package]]
+name = "symbolic-demangle"
+version = "12.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76a99812da4020a67e76c4eb41f08c87364c14170495ff780f30dd519c221a68"
+dependencies = [
+ "cpp_demangle 0.4.3",
+ "rustc-demangle",
+ "symbolic-common",
+]
 
 [[package]]
 name = "syn"
@@ -6756,7 +6947,7 @@ dependencies = [
  "enumset",
  "lazy_static",
  "leb128",
- "memmap2",
+ "memmap2 0.5.10",
  "more-asserts",
  "region",
  "rustc-demangle",
@@ -7026,7 +7217,7 @@ dependencies = [
  "anyhow",
  "bincode",
  "cfg-if",
- "cpp_demangle",
+ "cpp_demangle 0.3.5",
  "gimli 0.26.2",
  "ittapi",
  "log",

@@ -64,6 +64,8 @@ linera-views = { workspace = true }
 pathdiff = { workspace = true, optional = true }
 port-selector = { workspace = true, optional = true }
 prometheus = { workspace = true }
+pyroscope = { workspace = true }
+pyroscope_pprofrs = { workspace = true }
 rand = { workspace = true }
 rand07 = { workspace = true }
 rcgen = { workspace = true }

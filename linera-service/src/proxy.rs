@@ -54,6 +54,27 @@ enum Proxy {
 
 impl Proxy {
     /// Run the proxy.
+    #[cfg(feature = "kubernetes")]
+    async fn run(self) -> Result<()> {
+        use pyroscope::PyroscopeAgent;
+        use pyroscope_pprofrs::{pprof_backend, PprofConfig};
+        let agent = PyroscopeAgent::builder(
+            "http://pyroscope.pyroscope.svc.cluster.local:4040",
+            "proxy-profile",
+        )
+        .backend(pprof_backend(PprofConfig::new().sample_rate(100)))
+        .build()?;
+        let agent_running = agent.start()?;
+        let proxy_res = match self {
+            Proxy::Simple(simple_proxy) => simple_proxy.run().await,
+            Proxy::Grpc(grpc_proxy) => grpc_proxy.run().await,
+        };
+        agent_running.shutdown();
+        proxy_res
+    }
+
+    /// Run the proxy with profiling.
+    #[cfg(not(feature = "kubernetes"))]
     async fn run(self) -> Result<()> {
         match self {
             Proxy::Simple(simple_proxy) => simple_proxy.run().await,

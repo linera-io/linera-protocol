@@ -405,7 +405,7 @@ fn main() {
         .enable_all()
         .build()
         .expect("Failed to create Tokio runtime")
-        .block_on(run(options))
+        .block_on(run(options));
 }
 
 async fn run(options: ServerOptions) {
@@ -452,9 +452,29 @@ async fn run(options: ServerOptions) {
                 .add_common_config(common_config)
                 .await
                 .unwrap();
-            run_with_storage(full_storage_config, &genesis_config, wasm_runtime, job)
-                .await
-                .unwrap();
+            #[cfg(feature = "kubernetes")]
+            {
+                use pyroscope::PyroscopeAgent;
+                use pyroscope_pprofrs::{pprof_backend, PprofConfig};
+                let agent = PyroscopeAgent::builder(
+                    "http://pyroscope.pyroscope.svc.cluster.local:4040",
+                    &format!("shard-{}-profile", shard.unwrap_or(0)),
+                )
+                .backend(pprof_backend(PprofConfig::new().sample_rate(100)))
+                .build()
+                .expect("failed to build pyroscope agent");
+                let agent_running = agent.start().expect("failed to start pyroscope agent");
+                run_with_storage(full_storage_config, &genesis_config, wasm_runtime, job)
+                    .await
+                    .unwrap();
+                agent_running.shutdown();
+            }
+            #[cfg(not(feature = "kubernetes"))]
+            {
+                run_with_storage(full_storage_config, &genesis_config, wasm_runtime, job)
+                    .await
+                    .unwrap();
+            }
         }
 
         ServerCommand::Generate {
