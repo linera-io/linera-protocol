@@ -519,7 +519,7 @@ where
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await
         .is_err());
-    receiver.clear_pending_block().await;
+    receiver.clear_pending_block();
 
     // Try another transfer in the other direction with the correct amount.
     let transfer = fungible::Operation::Transfer {

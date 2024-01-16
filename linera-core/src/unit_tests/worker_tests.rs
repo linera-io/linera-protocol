@@ -4028,7 +4028,6 @@ where
 
     // The first round is the fast-block round, and owner 0 is a super owner.
     assert_eq!(response.info.manager.current_round, Round::Fast);
-    assert_eq!(response.info.manager.next_round(), Some(Round::Fast));
     assert_eq!(response.info.manager.leader, None);
 
     // So owner 1 cannot propose a block in this round. And the next round hasn't started yet.
@@ -4067,10 +4066,6 @@ where
         .await
         .unwrap();
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
-    assert_eq!(
-        response.info.manager.next_round(),
-        Some(Round::MultiLeader(0))
-    );
     assert_eq!(response.info.manager.leader, None);
 
     // Now any owner can propose a block. And multi-leader rounds can be skipped without timeout.
@@ -4082,10 +4077,6 @@ where
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let (response, _) = worker.handle_chain_info_query(query_values).await.unwrap();
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(1));
-    assert_eq!(
-        response.info.manager.next_round(),
-        Some(Round::SingleLeader(0))
-    );
 }
 
 #[test(tokio::test)]
@@ -4150,7 +4141,6 @@ where
 
     // The first round is the fast-block round, and owner 0 is a super owner.
     assert_eq!(response.info.manager.current_round, Round::Fast);
-    assert_eq!(response.info.manager.next_round(), Some(Round::Fast));
     assert_eq!(response.info.manager.leader, None);
 
     // Owner 0 proposes another block. The validator votes to confirm.
@@ -4177,10 +4167,6 @@ where
         .await
         .unwrap();
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
-    assert_eq!(
-        response.info.manager.next_round(),
-        Some(Round::MultiLeader(0))
-    );
     assert_eq!(response.info.manager.leader, None);
 
     // Now any owner can propose a block. But block1 is locked.

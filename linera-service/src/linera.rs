@@ -2079,11 +2079,15 @@ impl Runnable for Job {
 
             RetryPendingBlock { chain_id } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
-                if let Some(certificate) = chain_client.retry_pending_block().await? {
-                    info!("Pending block committed successfully.");
-                    println!("{}", certificate.hash());
-                } else {
-                    info!("No block is currently pending.");
+                match chain_client.process_pending_block().await? {
+                    ClientOutcome::Committed(Some(certificate)) => {
+                        info!("Pending block committed successfully.");
+                        println!("{}", certificate.hash());
+                    }
+                    ClientOutcome::Committed(None) => info!("No block is currently pending."),
+                    ClientOutcome::WaitForTimeout(timeout) => {
+                        info!("Please try again at {}", timeout.timestamp)
+                    }
                 }
                 context.update_and_save_wallet(&mut chain_client).await;
             }
