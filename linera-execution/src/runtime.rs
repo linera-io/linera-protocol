@@ -290,14 +290,15 @@ impl SyncRuntimeInternal<UserContractInstance> {
     fn load_contract_instance(
         &mut self,
         id: UserApplicationId,
-    ) -> Result<(UserContractInstance, UserApplicationDescription), ExecutionError> {
+    ) -> Result<(Arc<Mutex<UserContractInstance>>, UserApplicationDescription), ExecutionError>
+    {
         let (code, description) = self.load_contract(id)?;
         let instance = code.instantiate(SyncRuntime(
             self.reference
                 .upgrade()
                 .expect("`SyncRuntimeInner` should only be used by `SyncRuntime`"),
         ))?;
-        Ok((instance, description))
+        Ok((Arc::new(Mutex::new(instance)), description))
     }
 
     /// Configures the runtime for executing a call to a different contract.
@@ -306,7 +307,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
         authenticated: bool,
         callee_id: UserApplicationId,
         forwarded_sessions: &[SessionId],
-    ) -> Result<(UserContractInstance, CalleeContext), ExecutionError> {
+    ) -> Result<(Arc<Mutex<UserContractInstance>>, CalleeContext), ExecutionError> {
         self.check_for_reentrancy(callee_id)?;
 
         // Load the application.
@@ -891,12 +892,14 @@ impl ContractRuntime for ContractSyncRuntime {
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallOutcome, ExecutionError> {
-        let (mut contract, callee_context) =
+        let (contract, callee_context) =
             self.inner()
                 .prepare_for_call(authenticated, callee_id, &forwarded_sessions)?;
 
-        let raw_outcome =
-            contract.handle_application_call(callee_context, argument, forwarded_sessions)?;
+        let raw_outcome = contract
+            .try_lock()
+            .expect("Applications should not have reentrant calls")
+            .handle_application_call(callee_context, argument, forwarded_sessions)?;
 
         self.inner().finish_call(raw_outcome)
     }
@@ -910,7 +913,7 @@ impl ContractRuntime for ContractSyncRuntime {
     ) -> Result<CallOutcome, ExecutionError> {
         let callee_id = session_id.application_id;
 
-        let (mut contract, callee_context, session_state) = {
+        let (contract, callee_context, session_state) = {
             let mut this = self.inner();
 
             // Load the session.
@@ -923,12 +926,10 @@ impl ContractRuntime for ContractSyncRuntime {
             Ok::<_, ExecutionError>((contract, callee_context, session_state))
         }?;
 
-        let (raw_outcome, session_state) = contract.handle_session_call(
-            callee_context,
-            session_state,
-            argument,
-            forwarded_sessions,
-        )?;
+        let (raw_outcome, session_state) = contract
+            .try_lock()
+            .expect("Applications should not have reentrant calls")
+            .handle_session_call(callee_context, session_state, argument, forwarded_sessions)?;
 
         {
             let mut this = self.inner();
