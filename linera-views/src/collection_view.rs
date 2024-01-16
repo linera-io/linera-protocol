@@ -187,12 +187,12 @@ where
     /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
     ///   view.load_entry_mut(vec![0, 1]).await.unwrap();
-    ///   let subview = view.load_entry(vec![0, 1]).await.unwrap();
+    ///   let subview = view.load_entry_or_insert(vec![0, 1]).await.unwrap();
     ///   let value = subview.get();
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn load_entry(&mut self, short_key: Vec<u8>) -> Result<&W, ViewError> {
+    pub async fn load_entry_or_insert(&mut self, short_key: Vec<u8>) -> Result<&W, ViewError> {
         Ok(self.do_load_entry_mut(short_key).await?)
     }
 
@@ -619,18 +619,18 @@ where
     /// # let context = create_memory_context();
     ///   let mut view : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
     ///   view.load_entry_mut(&23).await.unwrap();
-    ///   let subview = view.load_entry(&23).await.unwrap();
+    ///   let subview = view.load_entry_or_insert(&23).await.unwrap();
     ///   let value = subview.get();
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn load_entry<Q>(&mut self, index: &Q) -> Result<&W, ViewError>
+    pub async fn load_entry_or_insert<Q>(&mut self, index: &Q) -> Result<&W, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
         let short_key = C::derive_short_key(index)?;
-        self.collection.load_entry(short_key).await
+        self.collection.load_entry_or_insert(short_key).await
     }
 
     /// Same as `load_entry_mut` but for read-only access. May fail if one subview is
@@ -927,18 +927,18 @@ where
     /// # let context = create_memory_context();
     ///   let mut view : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
     ///   view.load_entry_mut(&23).await.unwrap();
-    ///   let subview = view.load_entry(&23).await.unwrap();
+    ///   let subview = view.load_entry_or_insert(&23).await.unwrap();
     ///   let value = subview.get();
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn load_entry<Q>(&mut self, index: &Q) -> Result<&W, ViewError>
+    pub async fn load_entry_or_insert<Q>(&mut self, index: &Q) -> Result<&W, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
     {
         let short_key = index.to_custom_bytes()?;
-        self.collection.load_entry(short_key).await
+        self.collection.load_entry_or_insert(short_key).await
     }
 
     /// Same as `load_entry_mut` but for read-only access. May fail if one subview is
