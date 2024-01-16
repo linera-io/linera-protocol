@@ -325,7 +325,6 @@ where
         }
     }
 
-
     /// Tests if the collection contains a specified key and returns a boolean.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -340,10 +339,7 @@ where
     ///   assert_eq!(!view.contains_key(&[0, 2]).await.unwrap());
     /// # })
     /// ```
-    pub async fn contains_key(
-        &self,
-        short_key: &[u8],
-    ) -> Result<bool, ViewError> {
+    pub async fn contains_key(&self, short_key: &[u8]) -> Result<bool, ViewError> {
         let updates = self.updates.lock().await;
         Ok(match updates.get(short_key) {
             Some(entry) => match entry {
@@ -921,10 +917,7 @@ where
     ///   assert_eq!(!view.contains_key(&24).await.unwrap());
     /// # })
     /// ```
-    pub async fn contains_key<Q>(
-        &self,
-        index: &Q,
-    ) -> Result<bool,  ViewError>
+    pub async fn contains_key<Q>(&self, index: &Q) -> Result<bool, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
@@ -1336,10 +1329,7 @@ where
     ///   assert!(!view.contains_key(&24).await.unwrap());
     /// # })
     /// ```
-    pub async fn contains_key<Q>(
-        &self,
-        index: &Q,
-    ) -> Result<bool,  ViewError>
+    pub async fn contains_key<Q>(&self, index: &Q) -> Result<bool, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
