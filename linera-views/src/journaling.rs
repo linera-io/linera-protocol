@@ -256,7 +256,7 @@ where
     /// Starting with a batch of operations that is typically too large to be executed in
     /// one go (see `is_fastpath_feasible()` below), the goal of this function is to split
     /// the batch into smaller blocks so that `coherently_resolve_journal` respects the
-    /// constraints of the underlying key-value store (see analysis above)
+    /// constraints of the underlying key-value store (see analysis above).
     ///
     /// For efficiency reasons, we write as many blocks as possible in each "transaction"
     /// batch, using one write-operation per block. Then we also update the journal header
