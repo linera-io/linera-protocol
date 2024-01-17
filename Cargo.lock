@@ -3568,6 +3568,7 @@ dependencies = [
  "serde_yaml 0.8.26",
  "similar-asserts",
  "test-strategy",
+ "thiserror",
  "tokio",
  "tokio-util 0.6.10",
  "tonic",
