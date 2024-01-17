@@ -53,8 +53,7 @@ linera_spawn_and_read_wallet_variables \
 Compile the `social` example and create an application with it:
 
 ```bash
-linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0" \
-    project publish-and-create examples/social
+linera --with-wallet 0 project publish-and-create examples/social
 ```
 
 This will output the new application ID, e.g.:
@@ -66,23 +65,22 @@ e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a650100000000000000
 With the `wallet show` command you can find the ID of the application creator's chain:
 
 ```bash
-linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0" wallet show
+linera --with-wallet 0 wallet show
 ```
 
 ```ignore
 e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 ```
 
-
 Now start a node service for each wallet, using two different ports:
 
 ```bash
-linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0" service --port 8080 &
+linera --with-wallet 0 service --port 8080 &
 
 # Wait for it to complete
 sleep 2
 
-linera --wallet "$LINERA_WALLET_1" --storage "$LINERA_STORAGE_1" service --port 8081 &
+linera --with-wallet 1 service --port 8081 &
 ```
 
 Point your browser to http://localhost:8081. This is the wallet that didn't create the
@@ -113,22 +111,23 @@ query {
 ```
 
 Open both URLs under the entry `link`. Now you can use the application on each chain.
-E.g. in the 8081 tab subscribe to the other chain:
+E.g. [in the 8081 tab](http://localhost:8081/chains/1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000)
+subscribe to the other chain:
 
 ```json
 mutation {
-    subscribe(
-        chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+    requestSubscribe(
+        field0: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
     )
 }
 ```
 
-Now make a post in the 8080 tab:
+Now make a post [in the 8080 tab](http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000):
 
 ```json
 mutation {
     post(
-        text: "Linera Social is the new Mastodon!"
+        field0: "Linera Social is the new Mastodon!"
     )
 }
 ```
@@ -144,14 +143,15 @@ entry, we can see the posted text:
 
 ```json
 query {
-receivedPosts {
-    entry(
-        key: {
-            timestamp: 1685626618522492,
-            author: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
-            index: 0
-        }
-    ) { value }
+    receivedPosts {
+        entry(
+            key: {
+                timestamp: 1705504131018960,
+                author: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+                index: 0
+            }
+        ) { value }
+    }
 }
 ```
 
