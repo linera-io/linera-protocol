@@ -73,6 +73,34 @@ struct ApplicationStatus {
     signer: Option<Owner>,
 }
 
+/// A loaded application instance.
+#[derive(Debug)]
+struct LoadedApplication<Instance> {
+    instance: Arc<Mutex<Instance>>,
+    parameters: Vec<u8>,
+}
+
+impl<Instance> LoadedApplication<Instance> {
+    /// Creates a new [`LoadedApplication`] entry from the `instance` and its `description`.
+    fn new(instance: Instance, description: UserApplicationDescription) -> Self {
+        LoadedApplication {
+            instance: Arc::new(Mutex::new(instance)),
+            parameters: description.parameters,
+        }
+    }
+}
+
+impl<Instance> Clone for LoadedApplication<Instance> {
+    // Manual implementation is needed to prevent the derive macro from adding an `Instance: Clone`
+    // bound
+    fn clone(&self) -> Self {
+        LoadedApplication {
+            instance: self.instance.clone(),
+            parameters: self.parameters.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 struct SessionManager {
     /// Track the next session index to be used for each application.
