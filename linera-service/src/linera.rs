@@ -135,7 +135,7 @@ impl ClientContext {
         };
         anyhow::ensure!(
             !wallet_state_path.exists(),
-            "Wallet already exists at {}. Aborting...",
+            "Wallet already exists at {}. Aborting",
             wallet_state_path.display()
         );
         let mut wallet_state =
@@ -185,7 +185,7 @@ impl ClientContext {
             .context("Default configuration directory not supported. Please specify a path.")?;
         config_dir.push("linera");
         if !config_dir.exists() {
-            debug!("{} does not exist, creating...", config_dir.display());
+            debug!("{} does not exist, creating", config_dir.display());
             fs_err::create_dir(&config_dir)?;
             debug!("{} created.", config_dir.display());
         }
@@ -594,7 +594,7 @@ impl ClientContext {
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
-        info!("Loading bytecode files...");
+        info!("Loading bytecode files");
         let contract_bytecode = Bytecode::load_from_file(&contract).await.context(format!(
             "failed to load contract bytecode from {:?}",
             &contract
@@ -604,7 +604,7 @@ impl ClientContext {
             &service
         ))?;
 
-        info!("Publishing bytecode...");
+        info!("Publishing bytecode");
         let bytecode_id = loop {
             let stream = chain_client.subscribe().await?;
             match chain_client
@@ -621,7 +621,7 @@ impl ClientContext {
 
         info!("{}", "Bytecode published successfully!".green().bold());
 
-        info!("Synchronizing client and processing inbox...");
+        info!("Synchronizing client and processing inbox");
         chain_client.synchronize_from_validators().await?;
         self.process_inbox(chain_client).await?;
         Ok(bytecode_id)
@@ -1418,8 +1418,8 @@ impl Runnable for Job {
                         (result, chain_client)
                     })
                     .await?;
-                let time_total = time_start.elapsed().as_micros();
-                info!("Operation confirmed after {} us", time_total);
+                let time_total = time_start.elapsed();
+                info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
             }
 
@@ -1460,8 +1460,8 @@ impl Runnable for Job {
                 };
                 context.update_wallet_for_new_chain(id, key_pair, timestamp);
                 context.save_wallet();
-                let time_total = time_start.elapsed().as_micros();
-                info!("Operation confirmed after {} us", time_total);
+                let time_total = time_start.elapsed();
+                info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
                 // Print the new chain ID and message ID on stdout for scripting purposes.
                 println!("{}", message_id);
@@ -1529,8 +1529,8 @@ impl Runnable for Job {
                 };
                 context.update_wallet_for_new_chain(id, key_pair, timestamp);
                 context.save_wallet();
-                let time_total = time_start.elapsed().as_micros();
-                info!("Operation confirmed after {} us", time_total);
+                let time_total = time_start.elapsed();
+                info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
                 // Print the new chain ID and message ID on stdout for scripting purposes.
                 println!("{}", message_id);
@@ -1544,8 +1544,8 @@ impl Runnable for Job {
                 let result = chain_client.close_chain().await;
                 context.update_and_save_wallet(&mut chain_client).await;
                 let certificate = result.context("failed to close chain")?;
-                let time_total = time_start.elapsed().as_micros();
-                info!("Operation confirmed after {} us", time_total);
+                let time_total = time_start.elapsed();
+                info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
             }
 
@@ -1556,20 +1556,20 @@ impl Runnable for Job {
                 let result = chain_client.local_balance().await;
                 context.update_and_save_wallet(&mut chain_client).await;
                 let balance = result.context("Use sync_balance instead")?;
-                let time_total = time_start.elapsed().as_micros();
-                info!("Local balance obtained after {} us", time_total);
+                let time_total = time_start.elapsed();
+                info!("Local balance obtained after {} ms", time_total.as_millis());
                 println!("{}", balance);
             }
 
             SyncBalance { chain_id } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
-                info!("Synchronize chain information");
+                info!("Synchronizing chain information");
                 let time_start = Instant::now();
                 let result = chain_client.synchronize_from_validators().await;
                 context.update_and_save_wallet(&mut chain_client).await;
                 let balance = result.context("Failed to synchronize from validators")?;
-                let time_total = time_start.elapsed().as_micros();
-                info!("Chain balance synchronized after {} us", time_total);
+                let time_total = time_start.elapsed();
+                info!("Operation confirmed after {} ms", time_total.as_millis());
                 println!("{}", balance);
             }
 
@@ -1580,8 +1580,8 @@ impl Runnable for Job {
                 let result = chain_client.local_committee().await;
                 context.update_and_save_wallet(&mut chain_client).await;
                 let committee = result.context("Failed to get local committee")?;
-                let time_total = time_start.elapsed().as_micros();
-                info!("Validators obtained after {} us", time_total);
+                let time_total = time_start.elapsed();
+                info!("Validators obtained after {} ms", time_total.as_millis());
                 info!("{:?}", committee.validators());
             }
 
@@ -1747,8 +1747,8 @@ impl Runnable for Job {
                 context.push_to_all_chains(&storage, &certificate).await;
                 context.save_wallet();
 
-                let time_total = time_start.elapsed().as_micros();
-                info!("Operations confirmed after {} us", time_total);
+                let time_total = time_start.elapsed();
+                info!("Operations confirmed after {} ms", time_total.as_millis());
             }
 
             #[cfg(feature = "benchmark")]
@@ -1871,6 +1871,7 @@ impl Runnable for Job {
                 amount,
                 limit_rate_until,
             } => {
+                info!("Starting faucet service");
                 let chain_client = context.make_chain_client(storage, chain_id);
                 let end_timestamp = limit_rate_until
                     .map(|et| {
@@ -1891,6 +1892,7 @@ impl Runnable for Job {
                 service,
                 publisher,
             } => {
+                info!("Publishing bytecode");
                 let start_time = Instant::now();
                 let mut chain_client = context.make_chain_client(storage, publisher);
                 let result = context
@@ -1899,7 +1901,8 @@ impl Runnable for Job {
                 context.update_and_save_wallet(&mut chain_client).await;
                 let bytecode_id = result.context("failed to publish bytecode")?;
                 println!("{}", bytecode_id);
-                info!("Time elapsed: {}s", start_time.elapsed().as_secs());
+                info!("{}", "Bytecode published successfully!".green().bold());
+                info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
             }
 
             CreateApplication {
@@ -1911,18 +1914,16 @@ impl Runnable for Job {
                 json_argument_path,
                 required_application_ids,
             } => {
+                info!("Creating application");
                 let start_time = Instant::now();
                 let mut chain_client = context.make_chain_client(storage, creator);
-
-                info!("Processing arguments...");
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
 
-                info!("Synchronizing...");
+                info!("Synchronizing");
                 chain_client.synchronize_from_validators().await?;
                 context.process_inbox(&mut chain_client).await?;
 
-                info!("Creating application...");
                 let (application_id, _) = context
                     .apply_client_command(chain_client, move |mut chain_client| {
                         let parameters = parameters.clone();
@@ -1944,8 +1945,8 @@ impl Runnable for Job {
                     })
                     .await?;
                 info!("{}", "Application created successfully!".green().bold());
+                info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
                 println!("{}", application_id);
-                info!("Time elapsed: {}s", start_time.elapsed().as_secs());
             }
 
             PublishAndCreate {
@@ -1958,10 +1959,9 @@ impl Runnable for Job {
                 json_argument_path,
                 required_application_ids,
             } => {
+                info!("Creating application");
                 let start_time = Instant::now();
                 let mut chain_client = context.make_chain_client(storage, publisher);
-
-                info!("Processing arguments...");
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
 
@@ -1971,7 +1971,6 @@ impl Runnable for Job {
                 context.update_and_save_wallet(&mut chain_client).await;
                 let bytecode_id = result.context("failed to publish bytecode")?;
 
-                info!("Creating application...");
                 let ((application_id, _), _) = context
                     .apply_client_command(chain_client, move |mut chain_client| {
                         let parameters = parameters.clone();
@@ -1992,8 +1991,8 @@ impl Runnable for Job {
                     })
                     .await?;
                 info!("{}", "Application published successfully!".green().bold());
+                info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
                 println!("{}", application_id);
-                info!("Time elapsed: {}s", start_time.elapsed().as_secs());
             }
 
             RequestApplication {
@@ -2037,10 +2036,10 @@ impl Runnable for Job {
                     json_argument_path,
                     required_application_ids,
                 } => {
+                    info!("Creating application");
                     let start_time = Instant::now();
                     let mut chain_client = context.make_chain_client(storage, publisher);
 
-                    info!("Processing arguments...");
                     let parameters = read_json(json_parameters, json_parameters_path)?;
                     let argument = read_json(json_argument, json_argument_path)?;
                     let project_path = path.unwrap_or_else(|| env::current_dir().unwrap());
@@ -2054,7 +2053,6 @@ impl Runnable for Job {
                     context.update_and_save_wallet(&mut chain_client).await;
                     let bytecode_id = result.context("failed to publish bytecode")?;
 
-                    info!("Creating application...");
                     let ((application_id, _), _) = context
                         .apply_client_command(chain_client, move |mut chain_client| {
                             let parameters = parameters.clone();
@@ -2075,8 +2073,8 @@ impl Runnable for Job {
                         })
                         .await?;
                     info!("{}", "Application published successfully!".green().bold());
+                    info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
                     println!("{}", application_id);
-                    info!("Time elapsed: {}s", start_time.elapsed().as_secs());
                 }
                 _ => unreachable!("other project commands do not require storage"),
             },
@@ -2295,7 +2293,7 @@ async fn listen_for_signals(
     net: &mut impl LineraNet,
 ) -> anyhow::Result<()> {
     if shutdown_receiver.recv().await.is_some() {
-        eprintln!("\nTerminating the local test network...");
+        eprintln!("\nTerminating the local test network");
         net.terminate().await?;
         eprintln!("\nDone.");
     }
