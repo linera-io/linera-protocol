@@ -15,6 +15,9 @@
 //! [trait1]: common::KeyValueStore
 //! [trait2]: common::Context
 
+#[cfg(feature = "metrics")]
+use crate::metered_wrapper::MeteredStore;
+
 #[cfg(any(test, feature = "test"))]
 use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::get_table_name};
 
@@ -673,6 +676,9 @@ impl ScyllaDbStoreInternal {
 /// A shared DB store for ScyllaDB implementing LruCaching
 #[derive(Clone)]
 pub struct ScyllaDbStore {
+    #[cfg(feature = "metrics")]
+    store: MeteredStore<LruCachingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>>,
+    #[cfg(not(feature = "metrics"))]
     store: LruCachingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>,
 }
 
@@ -749,8 +755,29 @@ impl KeyValueStore for ScyllaDbStore {
 
 impl ScyllaDbStore {
     /// Gets the table name of the ScyllaDB store.
+    #[cfg(not(feature = "metrics"))]
     pub async fn get_table_name(&self) -> String {
         self.store.store.store.get_table_name().await
+    }
+
+    /// Gets the table name of the ScyllaDB store.
+    #[cfg(feature = "metrics")]
+    pub async fn get_table_name(&self) -> String {
+        self.store.store.store.store.store.get_table_name().await
+    }
+
+    #[cfg(not(feature = "metrics"))]
+    fn get_complete_store(store: JournalingKeyValueStore<ScyllaDbStoreInternal>, cache_size: usize) -> Self {
+	let store = LruCachingStore::new(store, cache_size);
+        Self { store }
+    }
+
+    #[cfg(feature = "metrics")]
+    fn get_complete_store(store: JournalingKeyValueStore<ScyllaDbStoreInternal>, cache_size: usize) -> Self {
+	let store = MeteredStore::new("DynamoDbInternal".to_string(), store);
+        let store = LruCachingStore::new(store, cache_size);
+	let store = MeteredStore::new("LruCaching".to_string(), store);
+        Self { store }
     }
 
     /// Creates a [`ScyllaDbStore`] from the input parameters.
@@ -762,8 +789,7 @@ impl ScyllaDbStore {
         let (simple_store, table_status) =
             ScyllaDbStoreInternal::new_for_testing(store_config).await?;
         let store = JournalingKeyValueStore::new(simple_store);
-        let store = LruCachingStore::new(store, cache_size);
-        let store = ScyllaDbStore { store };
+        let store = Self::get_complete_store(store, cache_size);
         Ok((store, table_status))
     }
 
@@ -774,8 +800,7 @@ impl ScyllaDbStore {
         let cache_size = store_config.common_config.cache_size;
         let simple_store = ScyllaDbStoreInternal::initialize(store_config).await?;
         let store = JournalingKeyValueStore::new(simple_store);
-        let store = LruCachingStore::new(store, cache_size);
-        let store = ScyllaDbStore { store };
+        let store = Self::get_complete_store(store, cache_size);
         Ok(store)
     }
 
@@ -812,8 +837,7 @@ impl ScyllaDbStore {
         let cache_size = store_config.common_config.cache_size;
         let (simple_store, table_status) = ScyllaDbStoreInternal::new(store_config).await?;
         let store = JournalingKeyValueStore::new(simple_store);
-        let store = LruCachingStore::new(store, cache_size);
-        let store = ScyllaDbStore { store };
+        let store = Self::get_complete_store(store, cache_size);
         Ok((store, table_status))
     }
 }

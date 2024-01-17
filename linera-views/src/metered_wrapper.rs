@@ -13,7 +13,7 @@ use std::time::{Instant};
 use crate::common::ReadableKeyValueStore;
 use crate::common::WritableKeyValueStore;
 use crate::batch::Batch;
-use crate::journaling::DirectWritableKeyValueStore;
+//use crate::journaling::DirectWritableKeyValueStore;
 
 #[derive(Clone)]
 struct MeteredCounter {
@@ -75,7 +75,7 @@ impl MeteredCounter {
 #[derive(Clone)]
 pub struct MeteredStore<K> {
     /// the metrics being stored
-    pub counter: MeteredCounter,
+    counter: MeteredCounter,
     /// The underlying store of the metered store
     pub store: K,
 }

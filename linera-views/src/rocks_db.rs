@@ -19,6 +19,10 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
+
+#[cfg(feature = "metrics")]
+use crate::metered_wrapper::MeteredStore;
+
 #[cfg(any(test, feature = "test"))]
 use {crate::lru_caching::TEST_CACHE_SIZE, tempfile::TempDir};
 
@@ -231,6 +235,9 @@ impl KeyValueStore for RocksDbStoreInternal {
 /// A shared DB client for RocksDB implementing LruCaching
 #[derive(Clone)]
 pub struct RocksDbStore {
+    #[cfg(feature = "metrics")]
+    store: MeteredStore<LruCachingStore<MeteredStore<ValueSplittingStore<MeteredStore<RocksDbStoreInternal>>>>>,
+    #[cfg(not(feature = "metrics"))]
     store: LruCachingStore<ValueSplittingStore<RocksDbStoreInternal>>,
 }
 
@@ -295,6 +302,23 @@ impl RocksDbStore {
         Ok(client)
     }
 
+    #[cfg(not(feature = "metrics"))]
+    fn get_complete_store(store: RocksDbStoreInternal, cache_size: usize) -> Self {
+        let store = ValueSplittingStore::new(store);
+        let store = LruCachingStore::new(store, cache_size);
+        Self { store }
+    }
+
+    #[cfg(feature = "metrics")]
+    fn get_complete_store(store: RocksDbStoreInternal, cache_size: usize) -> Self {
+        let store = MeteredStore::new("RocksDbInternal".to_string(), store);
+        let store = ValueSplittingStore::new(store);
+        let store = MeteredStore::new("ValueSplitting".to_string(), store);
+	let store = LruCachingStore::new(store, cache_size);
+        let store = MeteredStore::new("LruCaching".to_string(), store);
+	Self { store }
+    }
+
     /// Creates a RocksDB database from a specified path.
     async fn new_internal(
         store_config: RocksDbStoreConfig,
@@ -328,9 +352,7 @@ impl RocksDbStore {
             db: Arc::new(db),
             max_stream_queries,
         };
-        let store = ValueSplittingStore::new(store);
-        let store = LruCachingStore::new(store, cache_size);
-        let store = Self { store };
+        let store = Self::get_complete_store(store, cache_size);
         Ok((store, table_status))
     }
 }
