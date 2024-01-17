@@ -166,7 +166,7 @@ sleep 2
 
 Point your browser to http://localhost:8080, and enter the query:
 
-```gql,ignore
+```gql,uri=http://localhost:8080
 query { applications(
     chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
 ) { id link } }
@@ -178,7 +178,7 @@ If you do the same with the other chain ID in http://localhost:8081, the node se
 other wallet, it will have no entries at all, because the applications haven't been registered
 there yet. Request `crowd-funding` from the other chain. As an application ID, use `$APP_ID2`:
 
-```gql,ignore
+```gql,uri=http://localhost:8081
 mutation { requestApplication(
     chainId: "1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03"
     applicationId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65040000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000"
@@ -196,7 +196,12 @@ see the GraphQL API for that application on that chain.
 Let's pledge 30 tokens by the campaign creator themself, i.e.
 [`$OWNER_0` on 8080](http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65040000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000):
 
-```gql,ignore
+Let's give it a variable for testing (for instance with `curl -g -X POST -H "Content-Type: application/json" -d '{ "query": "'$QUERY'" }' $URI | jq -e .data`):
+```bash
+CAMPAIGN=http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65040000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000
+```
+
+```gql,uri=$CAMPAIGN
 mutation { pledgeWithTransfer(
     owner:"User:e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316",
     amount:"30."
@@ -205,7 +210,7 @@ mutation { pledgeWithTransfer(
 
 This will make the owner show up if we list everyone who has made a pledge so far:
 
-```gql,ignore
+```gql,uri=$CAMPAIGN
 query { pledges { keys } }
 ```
 
@@ -214,7 +219,11 @@ on the other chain, where the application was created. Find the [link on 8081
 for the fungible application](http://localhost:8081/chains/1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000),
 open it and run the following query.
 
-```gql,ignore
+```bash
+TOKEN1=http://localhost:8081/chains/1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
+```
+
+```gql,uri=$TOKEN1
 mutation { claim(
   sourceAccount: {
     owner: "User:5d1b22ce0fe6a8bd45aa7d10e753a29bf569a2e39f22a63c462300f7dd41f7da",
@@ -230,7 +239,7 @@ mutation { claim(
 
 You can check that the 200 tokens have arrived:
 
-```gql,ignore
+```gql,uri=$TOKEN1
 query {
     accounts { entry(key: "User:5d1b22ce0fe6a8bd45aa7d10e753a29bf569a2e39f22a63c462300f7dd41f7da") { value } }
 }
@@ -240,7 +249,11 @@ Now, also on 8081, you can open the [link for the crowd-funding
 application](http://localhost:8081/chains/1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65040000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000)
 and run:
 
-```gql,ignore
+```bash
+PLEDGE1=http://localhost:8081/chains/1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65040000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000
+```
+
+```gql,uri=$PLEDGE1
 mutation { pledgeWithTransfer(
   owner:"User:5d1b22ce0fe6a8bd45aa7d10e753a29bf569a2e39f22a63c462300f7dd41f7da",
   amount:"80."
@@ -250,7 +263,7 @@ mutation { pledgeWithTransfer(
 This pledges another 80 tokens. With 110 pledged in total, we have now reached the campaign
 goal. Now the campaign owner (on 8080) can collect the funds:
 
-```gql,ignore
+```gql,uri=$CAMPAIGN
 mutation { collect }
 ```
 
@@ -259,7 +272,7 @@ mutation { collect }
 check that we have received 110 tokens, in addition to the
 70 that we had left after pledging 30:
 
-```gql,ignore
+```gql,uri=http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
 query {
     accounts {
         entry(
