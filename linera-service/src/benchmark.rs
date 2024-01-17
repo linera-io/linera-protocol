@@ -122,7 +122,9 @@ async fn benchmark_with_fungible(
     }
 
     info!("Building the fungible application bytecode.");
-    let path = Path::new("examples/fungible").canonicalize().unwrap();
+    let path = Path::new("examples/fungible").canonicalize().context(
+        "`linera-benchmark` is meant to run from the root of the `linera-protocol` repository",
+    )?;
     let (contract, service) = publisher.build_application(&path, "fungible", true).await?;
 
     info!("Publishing the fungible application bytecode.");
