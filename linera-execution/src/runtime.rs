@@ -24,14 +24,14 @@ use std::{
 };
 
 #[derive(Debug)]
-pub struct SyncRuntime<ContractOrService>(Arc<Mutex<SyncRuntimeInternal<ContractOrService>>>);
+pub struct SyncRuntime<UserInstance>(Arc<Mutex<SyncRuntimeInternal<UserInstance>>>);
 
 pub type ContractSyncRuntime = SyncRuntime<UserContractInstance>;
 pub type ServiceSyncRuntime = SyncRuntime<UserServiceInstance>;
 
 /// Runtime data tracked during the execution of a transaction on the synchronous thread.
 #[derive(Debug)]
-pub struct SyncRuntimeInternal<ContractOrService> {
+pub struct SyncRuntimeInternal<UserInstance> {
     /// The current chain ID.
     chain_id: ChainId,
 
@@ -39,7 +39,7 @@ pub struct SyncRuntimeInternal<ContractOrService> {
     execution_state_sender: ExecutionStateSender,
 
     /// Application instances loaded in this transaction.
-    loaded_applications: HashMap<UserApplicationId, LoadedApplication<ContractOrService>>,
+    loaded_applications: HashMap<UserApplicationId, LoadedApplication<UserInstance>>,
     /// The current stack of application descriptions.
     call_stack: Vec<ApplicationStatus>,
     /// The set of the IDs of the applications that are in the `call_stack`.
@@ -60,7 +60,7 @@ pub struct SyncRuntimeInternal<ContractOrService> {
     runtime_limits: RuntimeLimits,
 
     /// A reference to the runtime shared by the instantiated contracts and services.
-    reference: Weak<Mutex<SyncRuntimeInternal<ContractOrService>>>,
+    reference: Weak<Mutex<SyncRuntimeInternal<UserInstance>>>,
 }
 
 /// The runtime status of an application.
@@ -227,7 +227,7 @@ struct SessionState {
     data: Vec<u8>,
 }
 
-impl<ContractOrService> SyncRuntimeInternal<ContractOrService> {
+impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     fn new(
         chain_id: ChainId,
         execution_state_sender: ExecutionStateSender,
@@ -559,37 +559,36 @@ impl SyncRuntimeInternal<UserServiceInstance> {
     }
 }
 
-impl<ContractOrService> SyncRuntime<ContractOrService> {
-    fn new(runtime: SyncRuntimeInternal<ContractOrService>) -> Self {
+impl<UserInstance> SyncRuntime<UserInstance> {
+    fn new(runtime: SyncRuntimeInternal<UserInstance>) -> Self {
         let mut this = SyncRuntime(Arc::new(Mutex::new(runtime)));
         this.inner().reference = Arc::downgrade(&this.0);
         this
     }
 
-    fn into_inner(self) -> Option<SyncRuntimeInternal<ContractOrService>> {
+    fn into_inner(self) -> Option<SyncRuntimeInternal<UserInstance>> {
         let runtime = Arc::into_inner(self.0)?
             .into_inner()
             .expect("thread should not have panicked");
         Some(runtime)
     }
 
-    fn inner(&mut self) -> std::sync::MutexGuard<'_, SyncRuntimeInternal<ContractOrService>> {
+    fn inner(&mut self) -> std::sync::MutexGuard<'_, SyncRuntimeInternal<UserInstance>> {
         self.0
             .try_lock()
             .expect("Synchronous runtimes run on a single execution thread")
     }
 }
 
-impl<ContractOrService> BaseRuntime for SyncRuntime<ContractOrService> {
-    type Read = <SyncRuntimeInternal<ContractOrService> as BaseRuntime>::Read;
-    type ReadValueBytes = <SyncRuntimeInternal<ContractOrService> as BaseRuntime>::ReadValueBytes;
-    type ContainsKey = <SyncRuntimeInternal<ContractOrService> as BaseRuntime>::ContainsKey;
+impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
+    type Read = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::Read;
+    type ReadValueBytes = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ReadValueBytes;
+    type ContainsKey = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ContainsKey;
     type ReadMultiValuesBytes =
-        <SyncRuntimeInternal<ContractOrService> as BaseRuntime>::ReadMultiValuesBytes;
-    type FindKeysByPrefix =
-        <SyncRuntimeInternal<ContractOrService> as BaseRuntime>::FindKeysByPrefix;
+        <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ReadMultiValuesBytes;
+    type FindKeysByPrefix = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::FindKeysByPrefix;
     type FindKeyValuesByPrefix =
-        <SyncRuntimeInternal<ContractOrService> as BaseRuntime>::FindKeyValuesByPrefix;
+        <SyncRuntimeInternal<UserInstance> as BaseRuntime>::FindKeyValuesByPrefix;
 
     fn chain_id(&mut self) -> Result<ChainId, ExecutionError> {
         self.inner().chain_id()
@@ -680,7 +679,7 @@ impl<ContractOrService> BaseRuntime for SyncRuntime<ContractOrService> {
     }
 }
 
-impl<ContractOrService> BaseRuntime for SyncRuntimeInternal<ContractOrService> {
+impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     type Read = ();
     type ReadValueBytes = u32;
     type ContainsKey = u32;
@@ -871,7 +870,7 @@ impl<ContractOrService> BaseRuntime for SyncRuntimeInternal<ContractOrService> {
     }
 }
 
-impl<ContractOrService> Clone for SyncRuntime<ContractOrService> {
+impl<UserInstance> Clone for SyncRuntime<UserInstance> {
     fn clone(&self) -> Self {
         SyncRuntime(self.0.clone())
     }
