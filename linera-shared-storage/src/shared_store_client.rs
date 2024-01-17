@@ -34,7 +34,7 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         let query = Some(Query::ReadValue(key.to_vec()));
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
-        let response = client.store_process(request).await.unwrap();
+        let response = client.store_process(request).await?;
         let response = response.get_ref();
         let StoreReply { reply } = response;
         let Some(Reply::ReadValue(value)) = reply else {
@@ -47,7 +47,7 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         let query = Some(Query::ContainsKey(key.to_vec()));
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
-        let response = client.store_process(request).await.unwrap();
+        let response = client.store_process(request).await?;
         let response = response.into_inner();
         let StoreReply { reply } = response;
         let Some(Reply::ContainsKey(value)) = reply else {
@@ -63,7 +63,7 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         let query = Some(Query::ReadMultiValues(Keys { keys }));
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
-        let response = client.store_process(request).await.unwrap();
+        let response = client.store_process(request).await?;
         let response = response.into_inner();
         let StoreReply { reply } = response;
         let Some(Reply::ReadMultiValues(values)) = reply else {
@@ -81,7 +81,7 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         let query = Some(Query::FindKeysByPrefix(key_prefix.to_vec()));
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
-        let response = client.store_process(request).await.unwrap();
+        let response = client.store_process(request).await?;
         let response = response.into_inner();
         let StoreReply { reply } = response;
         let Some(Reply::FindKeysByPrefix(keys)) = reply else {
@@ -97,7 +97,7 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         let query = Some(Query::FindKeyValuesByPrefix(key_prefix.to_vec()));
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
-        let response = client.store_process(request).await.unwrap();
+        let response = client.store_process(request).await?;
         let response = response.into_inner();
         let StoreReply { reply } = response;
         let Some(Reply::FindKeyValuesByPrefix(key_values)) = reply else {
@@ -142,7 +142,7 @@ impl WritableKeyValueStore<SharedContextError> for SharedStoreClient {
         let query = Some(Query::WriteBatch(batch_base_key));
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
-        let response = client.store_process(request).await.unwrap();
+        let response = client.store_process(request).await?;
         let response = response.get_ref();
         let StoreReply { reply } = response;
         let Some(Reply::WriteBatch(_unit)) = reply else {
@@ -155,7 +155,7 @@ impl WritableKeyValueStore<SharedContextError> for SharedStoreClient {
         let query = Some(Query::ClearJournal(base_key.to_vec()));
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
-        let response = client.store_process(request).await.unwrap();
+        let response = client.store_process(request).await?;
         let response = response.get_ref();
         let StoreReply { reply } = response;
         let Some(Reply::WriteBatch(_unit)) = reply else {
