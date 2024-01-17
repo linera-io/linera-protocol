@@ -1,21 +1,21 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::key_value_store::{
-    statement::Operation, store_processor_client::StoreProcessorClient, store_reply::Reply,
-    store_request::Query, BatchBaseKey, KeyValue, Keys, Statement, StoreReply, StoreRequest,
+use crate::{
+    common::{SharedContextError, SharedStoreConfig},
+    key_value_store::{
+        statement::Operation, store_processor_client::StoreProcessorClient, store_reply::Reply,
+        store_request::Query, BatchBaseKey, KeyValue, Keys, Statement, StoreReply, StoreRequest,
+    },
 };
-use async_lock::RwLock;
-use crate::common::SharedContextError;
+use async_lock::{RwLock, Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use linera_views::{
     batch::Batch,
-    common::{KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
+    common::{CommonStoreConfig, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
 };
 use std::sync::Arc;
 use tonic::transport::{Channel, Endpoint};
-use async_lock::{Semaphore, SemaphoreGuard};
-use linera_views::common::CommonStoreConfig;
 
 pub struct SharedStoreClient {
     client: Arc<RwLock<StoreProcessorClient<Channel>>>,
@@ -83,7 +83,10 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         Ok(values)
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, SharedContextError> {
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Vec<Vec<u8>>, SharedContextError> {
         let query = Some(Query::FindKeysByPrefix(key_prefix.to_vec()));
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
@@ -131,12 +134,8 @@ impl WritableKeyValueStore<SharedContextError> for SharedStoreClient {
         for operation in batch.operations {
             let operation = match operation {
                 WriteOperation::Delete { key } => Operation::Delete(key),
-                WriteOperation::Put { key, value } => {
-                    Operation::Put(KeyValue { key, value })
-                }
-                WriteOperation::DeletePrefix { key_prefix } => {
-                    Operation::DeletePrefix(key_prefix)
-                }
+                WriteOperation::Put { key, value } => Operation::Put(KeyValue { key, value }),
+                WriteOperation::DeletePrefix { key_prefix } => Operation::DeletePrefix(key_prefix),
             };
             let statement = Statement {
                 operation: Some(operation),
@@ -188,8 +187,9 @@ impl SharedStoreClient {
         }
     }
 
-    pub async fn new_internal(endpoint: String,
-                              common_config: CommonStoreConfig,
+    pub async fn new_internal(
+        endpoint: String,
+        common_config: CommonStoreConfig,
     ) -> Result<Self, SharedContextError> {
         let endpoint = Endpoint::from_shared(endpoint)?;
         let client = StoreProcessorClient::connect(endpoint).await?;
@@ -203,5 +203,9 @@ impl SharedStoreClient {
             semaphore,
             max_stream_queries,
         })
+    }
+
+    pub async fn new(config: SharedStoreConfig) -> Result<Self, SharedContextError> {
+        Self::new_internal(config.endpoint, config.common_config).await
     }
 }
