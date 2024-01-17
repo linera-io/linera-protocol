@@ -268,7 +268,9 @@ impl QuotedBashScript {
                 }
                 let json = serde_json::to_string(&quote).unwrap();
                 let command = format!(
-                    "curl -g -X POST -H \"Content-Type: application/json\" -d '{{ \"query\": {json} }}' {uri} | jq -e .data \n"
+                    "curl -w '\\n' -g -X POST -H \"Content-Type: application/json\" -d '{{ \"query\": {json} }}' {uri} \
+                     | tee /dev/stderr \
+                     | jq -e .data \n"
                 );
                 result.push(command);
             }
