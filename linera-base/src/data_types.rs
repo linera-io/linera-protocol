@@ -268,11 +268,11 @@ macro_rules! impl_wrapped_number {
     };
 }
 
-impl TryInto<usize> for BlockHeight {
+impl TryFrom<BlockHeight> for usize {
     type Error = ArithmeticError;
 
-    fn try_into(self) -> Result<usize, ArithmeticError> {
-        usize::try_from(self.0).map_err(|_| ArithmeticError::Overflow)
+    fn try_from(height: BlockHeight) -> Result<usize, ArithmeticError> {
+        usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)
     }
 }
 

@@ -464,13 +464,20 @@ where
     ) -> Result<CrossChainRequest, WorkerError> {
         let heights =
             BTreeSet::from_iter(height_map.iter().flat_map(|(_, heights)| heights).copied());
-        let mut heights_usize = Vec::new();
-        for height in heights {
-            heights_usize.push(height.try_into()?);
-        }
-        let values = confirmed_log.multi_get(heights_usize).await?;
-        let keys = values.into_iter().flatten();
-        let certificates = self.storage.read_certificates(keys).await?;
+        let heights_usize = heights
+            .into_iter()
+            .map(usize::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        let hashes = confirmed_log
+            .multi_get(heights_usize.clone())
+            .await?
+            .into_iter()
+            .zip(heights_usize)
+            .map(|(maybe_hash, height)| {
+                maybe_hash.ok_or_else(|| ViewError::not_found("confirmed log entry", height))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let certificates = self.storage.read_certificates(hashes).await?;
         Ok(CrossChainRequest::UpdateRecipient {
             height_map,
             sender,
