@@ -20,7 +20,7 @@ use linera_views::batch::Batch;
 use oneshot::Receiver;
 use std::{
     collections::{hash_map, BTreeMap, HashMap, HashSet},
-    sync::{Arc, Mutex, Weak},
+    sync::{Arc, Mutex},
 };
 
 #[derive(Debug)]
@@ -58,9 +58,6 @@ pub struct SyncRuntimeInternal<UserInstance> {
     runtime_counts: RuntimeCounts,
     /// The runtime limits.
     runtime_limits: RuntimeLimits,
-
-    /// A reference to the runtime shared by the instantiated contracts and services.
-    reference: Weak<Mutex<SyncRuntimeInternal<UserInstance>>>,
 }
 
 /// The runtime status of an application.
@@ -250,7 +247,6 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             view_user_states: BTreeMap::default(),
             runtime_counts,
             runtime_limits,
-            reference: Weak::new(),
         }
     }
 
@@ -319,6 +315,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
     /// Loads a contract instance, initializing it with this runtime if needed.
     fn load_contract_instance(
         &mut self,
+        this: Arc<Mutex<Self>>,
         id: UserApplicationId,
     ) -> Result<LoadedApplication<UserContractInstance>, ExecutionError> {
         match self.loaded_applications.entry(id) {
@@ -328,11 +325,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
                     .send_request(|callback| Request::LoadContract { id, callback })?
                     .recv_response()?;
 
-                let instance = code.instantiate(SyncRuntime(
-                    self.reference
-                        .upgrade()
-                        .expect("`SyncRuntimeInternal` should only be used by `SyncRuntime`"),
-                ))?;
+                let instance = code.instantiate(SyncRuntime(this))?;
                 Ok(entry
                     .insert(LoadedApplication::new(instance, description))
                     .clone())
@@ -344,6 +337,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
     /// Configures the runtime for executing a call to a different contract.
     fn prepare_for_call(
         &mut self,
+        this: Arc<Mutex<Self>>,
         authenticated: bool,
         callee_id: UserApplicationId,
         forwarded_sessions: &[SessionId],
@@ -351,7 +345,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
         self.check_for_reentrancy(callee_id)?;
 
         // Load the application.
-        let application = self.load_contract_instance(callee_id)?;
+        let application = self.load_contract_instance(this, callee_id)?;
 
         let caller = self.current_application();
         let caller_id = caller.id;
@@ -536,6 +530,7 @@ impl SyncRuntimeInternal<UserServiceInstance> {
     /// Initializes a service instance with this runtime.
     fn load_service_instance(
         &mut self,
+        this: Arc<Mutex<Self>>,
         id: UserApplicationId,
     ) -> Result<LoadedApplication<UserServiceInstance>, ExecutionError> {
         match self.loaded_applications.entry(id) {
@@ -545,11 +540,7 @@ impl SyncRuntimeInternal<UserServiceInstance> {
                     .send_request(|callback| Request::LoadService { id, callback })?
                     .recv_response()?;
 
-                let instance = code.instantiate(SyncRuntime(
-                    self.reference
-                        .upgrade()
-                        .expect("`SyncRuntimeInner` should only be used by `SyncRuntime`"),
-                ))?;
+                let instance = code.instantiate(SyncRuntime(this))?;
                 Ok(entry
                     .insert(LoadedApplication::new(instance, description))
                     .clone())
@@ -561,9 +552,7 @@ impl SyncRuntimeInternal<UserServiceInstance> {
 
 impl<UserInstance> SyncRuntime<UserInstance> {
     fn new(runtime: SyncRuntimeInternal<UserInstance>) -> Self {
-        let mut this = SyncRuntime(Arc::new(Mutex::new(runtime)));
-        this.inner().reference = Arc::downgrade(&this.0);
-        this
+        SyncRuntime(Arc::new(Mutex::new(runtime)))
     }
 
     fn into_inner(self) -> Option<SyncRuntimeInternal<UserInstance>> {
@@ -951,9 +940,13 @@ impl ContractRuntime for ContractSyncRuntime {
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallOutcome, ExecutionError> {
-        let (contract, callee_context) =
-            self.inner()
-                .prepare_for_call(authenticated, callee_id, &forwarded_sessions)?;
+        let cloned_self = self.clone().0;
+        let (contract, callee_context) = self.inner().prepare_for_call(
+            cloned_self,
+            authenticated,
+            callee_id,
+            &forwarded_sessions,
+        )?;
 
         let raw_outcome = contract
             .try_lock()
@@ -973,6 +966,7 @@ impl ContractRuntime for ContractSyncRuntime {
         let callee_id = session_id.application_id;
 
         let (contract, callee_context, session_state) = {
+            let cloned_self = self.clone().0;
             let mut this = self.inner();
 
             // Load the session.
@@ -980,7 +974,7 @@ impl ContractRuntime for ContractSyncRuntime {
             let session_state = this.try_load_session(session_id, caller_id)?;
 
             let (contract, callee_context) =
-                this.prepare_for_call(authenticated, callee_id, &forwarded_sessions)?;
+                this.prepare_for_call(cloned_self, authenticated, callee_id, &forwarded_sessions)?;
 
             Ok::<_, ExecutionError>((contract, callee_context, session_state))
         }?;
@@ -1042,10 +1036,11 @@ impl ServiceRuntime for ServiceSyncRuntime {
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let (query_context, service) = {
+            let cloned_self = self.clone().0;
             let mut this = self.inner();
 
             // Load the application.
-            let application = this.load_service_instance(queried_id)?;
+            let application = this.load_service_instance(cloned_self, queried_id)?;
             // Make the call to user code.
             let query_context = crate::QueryContext {
                 chain_id: this.chain_id,
