@@ -12,6 +12,8 @@
 
 use crate::{batch::Batch, views::ViewError};
 use async_trait::async_trait;
+use linera_base::sync::Lazy;
+use prometheus::HistogramVec;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     collections::BTreeSet,
@@ -642,6 +644,23 @@ where
         let (out, duration) = time_async(f).await;
         let duration = duration.as_nanos();
         println!("|{name}|={duration:?}");
+        out
+    } else {
+        f.await
+    }
+}
+
+/// Computing the runtime and pushing the result to the counter if the metrics
+/// feature is enabled.
+pub async fn prometheus_async<F, O>(f: F, counter: &Lazy<HistogramVec>) -> O
+where
+    F: Future<Output = O>,
+{
+    if cfg!(feature = "metrics") {
+        let (out, duration) = time_async(f).await;
+        counter
+            .with_label_values(&[])
+            .observe(duration.as_micros() as f64);
         out
     } else {
         f.await

@@ -4,14 +4,15 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_upper_bound, CommonStoreConfig, ContextFromStore, KeyValueStore, ReadableKeyValueStore,
-        TableStatus, WritableKeyValueStore,
+        get_upper_bound, prometheus_async, CommonStoreConfig, ContextFromStore, KeyValueStore,
+        ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
 use async_trait::async_trait;
-use linera_base::ensure;
+use linera_base::{ensure, sync::Lazy};
+use prometheus::{register_histogram_vec, HistogramVec};
 use std::{
     fs,
     ops::{Bound, Bound::Excluded},
@@ -19,6 +20,7 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
+
 #[cfg(any(test, feature = "test"))]
 use {crate::lru_caching::TEST_CACHE_SIZE, tempfile::TempDir};
 
@@ -33,6 +35,54 @@ const MAX_VALUE_SIZE: usize = 3221225072;
 // The maximum size of keys in RocksDB is 8 MB
 // 8388608 and so for offset reason we decrease by 400
 const MAX_KEY_SIZE: usize = 8388208;
+
+/// The RocksDb histogram for the read value bytes
+pub static ROCKS_DB_READ_VALUE_BYTES: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!("rocks_db_read_value_bytes", "RocksDb read value bytes", &[])
+        .expect("Counter can be created")
+});
+
+/// The RocksDb histogram for contains_key
+pub static ROCKS_DB_CONTAINS_KEY: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!("rocks_db_contains_key", "RocksDb contains key", &[])
+        .expect("Counter can be created")
+});
+
+/// The RocksDb histogram for read multi values bytes
+pub static ROCKS_DB_READ_MULTI_VALUES_BYTES: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "rocks_db_read_multi_values_bytes",
+        "RocksDb read multi values bytes",
+        &[]
+    )
+    .expect("Counter can be created")
+});
+
+/// The RocksDb histogram for find keys by prefix
+pub static ROCKS_DB_FIND_KEYS_BY_PREFIX: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "rocks_db_find_keys_by_prefix",
+        "RocksDb find keys by prefix",
+        &[]
+    )
+    .expect("Counter can be created")
+});
+
+/// The RocksDb histogram for find key values by prefix
+pub static ROCKS_DB_FIND_KEY_VALUES_BY_PREFIX: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "rocks_db_find_key_values_by_prefix",
+        "RocksDb find key values by prefix",
+        &[]
+    )
+    .expect("Counter can be created")
+});
+
+/// The RocksDb histogram for writing batches
+pub static ROCKS_DB_WRITE_BATCH: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!("rocks_db_write_batch", "RocksDb write batch", &[])
+        .expect("Counter can be created")
+});
 
 /// The RocksDB client that we use.
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
@@ -53,24 +103,18 @@ pub struct RocksDbStoreConfig {
     pub common_config: CommonStoreConfig,
 }
 
-#[async_trait]
-impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
-    const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
-    type Keys = Vec<Vec<u8>>;
-    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
-
-    fn max_stream_queries(&self) -> usize {
-        self.max_stream_queries
-    }
-
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
+impl RocksDbStoreInternal {
+    async fn read_value_bytes_internal(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, RocksDbContextError> {
         ensure!(key.len() <= MAX_KEY_SIZE, RocksDbContextError::KeyTooLong);
         let client = self.clone();
         let key = key.to_vec();
         Ok(tokio::task::spawn_blocking(move || client.db.get(&key)).await??)
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, RocksDbContextError> {
+    async fn contains_key_internal(&self, key: &[u8]) -> Result<bool, RocksDbContextError> {
         ensure!(key.len() <= MAX_KEY_SIZE, RocksDbContextError::KeyTooLong);
         let client = self.clone();
         let key_may_exist = {
@@ -83,7 +127,7 @@ impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
         Ok(self.read_value_bytes(key).await?.is_some())
     }
 
-    async fn read_multi_values_bytes(
+    async fn read_multi_values_bytes_internal(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbContextError> {
@@ -95,10 +139,10 @@ impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
         Ok(entries.into_iter().collect::<Result<_, _>>()?)
     }
 
-    async fn find_keys_by_prefix(
+    async fn find_keys_by_prefix_internal(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::Keys, RocksDbContextError> {
+    ) -> Result<Vec<Vec<u8>>, RocksDbContextError> {
         ensure!(
             key_prefix.len() <= MAX_KEY_SIZE,
             RocksDbContextError::KeyTooLong
@@ -125,10 +169,10 @@ impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
         Ok(keys)
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_by_prefix_internal(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, RocksDbContextError> {
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, RocksDbContextError> {
         ensure!(
             key_prefix.len() <= MAX_KEY_SIZE,
             RocksDbContextError::KeyTooLong
@@ -157,13 +201,8 @@ impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
         .await?;
         Ok(key_values)
     }
-}
 
-#[async_trait]
-impl WritableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
-    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
-
-    async fn write_batch(
+    async fn write_batch_internal(
         &self,
         mut batch: Batch,
         _base_key: &[u8],
@@ -217,6 +256,75 @@ impl WritableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
         })
         .await??;
         Ok(())
+    }
+}
+
+#[async_trait]
+impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
+    const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
+    type Keys = Vec<Vec<u8>>;
+    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    fn max_stream_queries(&self) -> usize {
+        self.max_stream_queries
+    }
+
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
+        prometheus_async(
+            self.read_value_bytes_internal(key),
+            &ROCKS_DB_READ_VALUE_BYTES,
+        )
+        .await
+    }
+
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, RocksDbContextError> {
+        prometheus_async(self.contains_key_internal(key), &ROCKS_DB_CONTAINS_KEY).await
+    }
+
+    async fn read_multi_values_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, RocksDbContextError> {
+        prometheus_async(
+            self.read_multi_values_bytes_internal(keys),
+            &ROCKS_DB_READ_MULTI_VALUES_BYTES,
+        )
+        .await
+    }
+
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, RocksDbContextError> {
+        prometheus_async(
+            self.find_keys_by_prefix_internal(key_prefix),
+            &ROCKS_DB_FIND_KEYS_BY_PREFIX,
+        )
+        .await
+    }
+
+    async fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValues, RocksDbContextError> {
+        prometheus_async(
+            self.find_key_values_by_prefix_internal(key_prefix),
+            &ROCKS_DB_FIND_KEY_VALUES_BY_PREFIX,
+        )
+        .await
+    }
+}
+
+#[async_trait]
+impl WritableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
+
+    async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), RocksDbContextError> {
+        prometheus_async(
+            self.write_batch_internal(batch, _base_key),
+            &ROCKS_DB_WRITE_BATCH,
+        )
+        .await
     }
 
     async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), RocksDbContextError> {
