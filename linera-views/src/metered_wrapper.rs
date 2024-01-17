@@ -13,6 +13,7 @@ use std::time::{Instant};
 use crate::common::ReadableKeyValueStore;
 use crate::common::WritableKeyValueStore;
 use crate::batch::Batch;
+use crate::journaling::DirectWritableKeyValueStore;
 
 #[derive(Clone)]
 struct MeteredCounter {
@@ -25,9 +26,8 @@ struct MeteredCounter {
     clear_journal: HistogramVec,
 }
 
-
 impl MeteredCounter {
-    fn new(name: String) -> Self {
+    pub fn new(name: String) -> Self {
         // name can be "rocks db". Then var_name = "rocks_db" and title_name = "RocksDb"
         let var_name = name.replace(" ", "_");
         let title_name = name.to_case(Case::Snake);
@@ -93,9 +93,9 @@ where
 
 
 #[async_trait]
-impl<K> ReadableKeyValueStore<K::Error> for MeteredStore<K>
+impl<K, E> ReadableKeyValueStore<E> for MeteredStore<K>
 where
-    K: KeyValueStore + Send + Sync,
+    K: ReadableKeyValueStore<E> + Send + Sync,
 {
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
     type Keys = K::Keys;
@@ -105,45 +105,45 @@ where
         self.store.max_stream_queries()
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, K::Error> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, E> {
         prometheus_async(self.store.read_value_bytes(key), &self.counter.read_value_bytes).await
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, K::Error> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, E> {
         prometheus_async(self.store.contains_key(key), &self.counter.contains_key).await
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, K::Error> {
+    ) -> Result<Vec<Option<Vec<u8>>>, E> {
         prometheus_async(self.store.read_multi_values_bytes(keys), &self.counter.read_multi_values_bytes).await
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, K::Error> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, E> {
         prometheus_async(self.store.find_keys_by_prefix(key_prefix), &self.counter.find_keys_by_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, K::Error> {
+    ) -> Result<Self::KeyValues, E> {
         prometheus_async(self.store.find_key_values_by_prefix(key_prefix), &self.counter.find_key_values_by_prefix).await
     }
 }
 
 #[async_trait]
-impl<K> WritableKeyValueStore<K::Error> for MeteredStore<K>
+impl<K, E> WritableKeyValueStore<E> for MeteredStore<K>
 where
-    K: KeyValueStore + Send + Sync,
+    K: WritableKeyValueStore<E> + Send + Sync,
 {
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), K::Error> {
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), E> {
         prometheus_async(self.store.write_batch(batch, base_key), &self.counter.write_batch).await
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), K::Error> {
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), E> {
         prometheus_async(self.store.clear_journal(base_key), &self.counter.clear_journal).await
     }
 }
@@ -154,3 +154,11 @@ where
 {
     type Error = K::Error;
 }
+
+impl<K> MeteredStore<K> {
+    pub fn new(name: String, store: K) -> Self {
+        let counter = MeteredCounter::new(name);
+        Self { counter, store }
+    }
+}
+
