@@ -157,6 +157,22 @@ pub struct Target {
     pub medium: Medium,
 }
 
+/// A set of messages from a single block, for a single destination.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct MessageBundle {
+    /// The block height.
+    pub height: BlockHeight,
+    /// The block's epoch.
+    pub epoch: Epoch,
+    /// The block's timestamp.
+    pub timestamp: Timestamp,
+    /// The confirmed block certificate hash.
+    pub hash: CryptoHash,
+    /// The relevant messages, with their index.
+    pub messages: Vec<(u32, OutgoingMessage)>,
+}
+
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 /// A channel name together with its application id.
 pub struct ChannelFullName {
@@ -199,6 +215,26 @@ pub struct OutgoingMessage {
     pub kind: MessageKind,
     /// The message itself.
     pub message: Message,
+}
+
+impl OutgoingMessage {
+    /// Returns whether this message is sent via the given medium to the specified
+    /// recipient. If the medium is a channel, does not verify that the recipient is
+    /// actually subscribed to that channel.
+    pub fn has_destination(&self, medium: &Medium, recipient: ChainId) -> bool {
+        match (&self.destination, medium) {
+            (Destination::Recipient(_), Medium::Channel(_))
+            | (Destination::Subscribers(_), Medium::Direct) => false,
+            (Destination::Recipient(id), Medium::Direct) => *id == recipient,
+            (
+                Destination::Subscribers(dest_name),
+                Medium::Channel(ChannelFullName {
+                    application_id,
+                    name,
+                }),
+            ) => *application_id == self.message.application_id() && name == dest_name,
+        }
+    }
 }
 
 /// A block, together with the messages and the state hash resulting from its execution.
@@ -928,6 +964,25 @@ impl Certificate {
         self.signatures
             .binary_search_by(|(name, _)| name.cmp(validator_name))
             .is_ok()
+    }
+
+    /// Returns the bundle of messages sent via the given medium to the specified
+    /// recipient. If the medium is a channel, does not verify that the recipient is
+    /// actually subscribed to that channel.
+    pub fn message_bundle_for(&self, medium: &Medium, recipient: ChainId) -> Option<MessageBundle> {
+        let executed_block = self.value().executed_block()?;
+        let messages = (0u32..)
+            .zip(&executed_block.messages)
+            .filter(|(_, message)| message.has_destination(medium, recipient))
+            .map(|(idx, message)| (idx, message.clone()))
+            .collect();
+        Some(MessageBundle {
+            height: executed_block.block.height,
+            epoch: executed_block.block.epoch,
+            timestamp: executed_block.block.timestamp,
+            hash: self.hash(),
+            messages,
+        })
     }
 }
 

@@ -288,19 +288,16 @@ CrossChainRequest:
     0:
       UpdateRecipient:
         STRUCT:
-          - height_map:
-              SEQ:
-                TUPLE:
-                  - TYPENAME: Medium
-                  - SEQ:
-                      TYPENAME: BlockHeight
           - sender:
               TYPENAME: ChainId
           - recipient:
               TYPENAME: ChainId
-          - certificates:
+          - bundle_vecs:
               SEQ:
-                TYPENAME: Certificate
+                TUPLE:
+                  - TYPENAME: Medium
+                  - SEQ:
+                      TYPENAME: MessageBundle
     1:
       ConfirmUpdatedRecipient:
         STRUCT:
@@ -443,6 +440,21 @@ MessageAction:
       Accept: UNIT
     1:
       Reject: UNIT
+MessageBundle:
+  STRUCT:
+    - height:
+        TYPENAME: BlockHeight
+    - epoch:
+        TYPENAME: Epoch
+    - timestamp:
+        TYPENAME: Timestamp
+    - hash:
+        TYPENAME: CryptoHash
+    - messages:
+        SEQ:
+          TUPLE:
+            - U32
+            - TYPENAME: OutgoingMessage
 MessageId:
   STRUCT:
     - chain_id:
