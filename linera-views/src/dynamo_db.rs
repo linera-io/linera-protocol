@@ -1023,11 +1023,11 @@ impl DynamoDbStore {
 
     #[cfg(feature = "metrics")]
     fn get_complete_store(store: JournalingKeyValueStore<DynamoDbStoreInternal>, cache_size: usize) -> Self {
-        let store = MeteredStore::new("DynamoDbInternal".to_string(), store);
+        let store = MeteredStore::new("dynamo db internal".to_string(), store);
         let store = ValueSplittingStore::new(store);
-        let store = MeteredStore::new("ValueSplitting".to_string(), store);
+        let store = MeteredStore::new("value splitting".to_string(), store);
         let store = LruCachingStore::new(store, cache_size);
-        let store = MeteredStore::new("LruCaching".to_string(), store);
+        let store = MeteredStore::new("lru caching".to_string(), store);
         Self { store }
     }
 

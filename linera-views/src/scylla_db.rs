@@ -774,9 +774,9 @@ impl ScyllaDbStore {
 
     #[cfg(feature = "metrics")]
     fn get_complete_store(store: JournalingKeyValueStore<ScyllaDbStoreInternal>, cache_size: usize) -> Self {
-	let store = MeteredStore::new("DynamoDbInternal".to_string(), store);
+	let store = MeteredStore::new("scylla db internal".to_string(), store);
         let store = LruCachingStore::new(store, cache_size);
-	let store = MeteredStore::new("LruCaching".to_string(), store);
+	let store = MeteredStore::new("lru caching".to_string(), store);
         Self { store }
     }
 
