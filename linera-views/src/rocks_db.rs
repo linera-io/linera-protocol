@@ -236,7 +236,9 @@ impl KeyValueStore for RocksDbStoreInternal {
 #[derive(Clone)]
 pub struct RocksDbStore {
     #[cfg(feature = "metrics")]
-    store: MeteredStore<LruCachingStore<MeteredStore<ValueSplittingStore<MeteredStore<RocksDbStoreInternal>>>>>,
+    store: MeteredStore<
+        LruCachingStore<MeteredStore<ValueSplittingStore<MeteredStore<RocksDbStoreInternal>>>>,
+    >,
     #[cfg(not(feature = "metrics"))]
     store: LruCachingStore<ValueSplittingStore<RocksDbStoreInternal>>,
 }
@@ -314,9 +316,9 @@ impl RocksDbStore {
         let store = MeteredStore::new("rocks db internal".to_string(), store);
         let store = ValueSplittingStore::new(store);
         let store = MeteredStore::new("value splitting".to_string(), store);
-	let store = LruCachingStore::new(store, cache_size);
+        let store = LruCachingStore::new(store, cache_size);
         let store = MeteredStore::new("lru caching".to_string(), store);
-	Self { store }
+        Self { store }
     }
 
     /// Creates a RocksDB database from a specified path.

@@ -677,7 +677,8 @@ impl ScyllaDbStoreInternal {
 #[derive(Clone)]
 pub struct ScyllaDbStore {
     #[cfg(feature = "metrics")]
-    store: MeteredStore<LruCachingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>>,
+    store:
+        MeteredStore<LruCachingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>>,
     #[cfg(not(feature = "metrics"))]
     store: LruCachingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>,
 }
@@ -767,16 +768,22 @@ impl ScyllaDbStore {
     }
 
     #[cfg(not(feature = "metrics"))]
-    fn get_complete_store(store: JournalingKeyValueStore<ScyllaDbStoreInternal>, cache_size: usize) -> Self {
-	let store = LruCachingStore::new(store, cache_size);
+    fn get_complete_store(
+        store: JournalingKeyValueStore<ScyllaDbStoreInternal>,
+        cache_size: usize,
+    ) -> Self {
+        let store = LruCachingStore::new(store, cache_size);
         Self { store }
     }
 
     #[cfg(feature = "metrics")]
-    fn get_complete_store(store: JournalingKeyValueStore<ScyllaDbStoreInternal>, cache_size: usize) -> Self {
-	let store = MeteredStore::new("scylla db internal".to_string(), store);
+    fn get_complete_store(
+        store: JournalingKeyValueStore<ScyllaDbStoreInternal>,
+        cache_size: usize,
+    ) -> Self {
+        let store = MeteredStore::new("scylla db internal".to_string(), store);
         let store = LruCachingStore::new(store, cache_size);
-	let store = MeteredStore::new("lru caching".to_string(), store);
+        let store = MeteredStore::new("lru caching".to_string(), store);
         Self { store }
     }
 

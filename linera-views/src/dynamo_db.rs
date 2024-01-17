@@ -43,7 +43,6 @@ use thiserror::Error;
 #[cfg(feature = "metrics")]
 use crate::metered_wrapper::MeteredStore;
 
-
 #[cfg(any(test, feature = "test"))]
 use {
     crate::lru_caching::TEST_CACHE_SIZE,
@@ -948,9 +947,16 @@ impl DirectKeyValueStore for DynamoDbStoreInternal {
 
 /// A shared DB client for DynamoDb implementing LruCaching
 #[derive(Clone)]
+#[allow(clippy::type_complexity)]
 pub struct DynamoDbStore {
     #[cfg(feature = "metrics")]
-    store: MeteredStore<LruCachingStore<MeteredStore<ValueSplittingStore<MeteredStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>>>>,
+    store: MeteredStore<
+        LruCachingStore<
+            MeteredStore<
+                ValueSplittingStore<MeteredStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
+            >,
+        >,
+    >,
     #[cfg(not(feature = "metrics"))]
     store: LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
 }
@@ -1015,14 +1021,20 @@ impl KeyValueStore for DynamoDbStore {
 
 impl DynamoDbStore {
     #[cfg(not(feature = "metrics"))]
-    fn get_complete_store(store: JournalingKeyValueStore<DynamoDbStoreInternal>, cache_size: usize) -> Self {
+    fn get_complete_store(
+        store: JournalingKeyValueStore<DynamoDbStoreInternal>,
+        cache_size: usize,
+    ) -> Self {
         let store = ValueSplittingStore::new(store);
         let store = LruCachingStore::new(store, cache_size);
         Self { store }
     }
 
     #[cfg(feature = "metrics")]
-    fn get_complete_store(store: JournalingKeyValueStore<DynamoDbStoreInternal>, cache_size: usize) -> Self {
+    fn get_complete_store(
+        store: JournalingKeyValueStore<DynamoDbStoreInternal>,
+        cache_size: usize,
+    ) -> Self {
         let store = MeteredStore::new("dynamo db internal".to_string(), store);
         let store = ValueSplittingStore::new(store);
         let store = MeteredStore::new("value splitting".to_string(), store);

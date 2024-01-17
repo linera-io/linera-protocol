@@ -3,16 +3,14 @@
 
 //use std::time::{Duration, Instant};
 //use linera_base::sync::Lazy;
-use convert_case::{Case, Casing};
-use prometheus::HistogramVec;
-use prometheus::register_histogram_vec;
-use crate::common::KeyValueStore;
+use crate::{
+    batch::Batch,
+    common::{KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
+};
 use async_trait::async_trait;
-use std::future::Future;
-use std::time::{Instant};
-use crate::common::ReadableKeyValueStore;
-use crate::common::WritableKeyValueStore;
-use crate::batch::Batch;
+use convert_case::{Case, Casing};
+use prometheus::{register_histogram_vec, HistogramVec};
+use std::{future::Future, time::Instant};
 //use crate::journaling::DirectWritableKeyValueStore;
 
 #[derive(Clone)]
@@ -29,7 +27,7 @@ struct MeteredCounter {
 impl MeteredCounter {
     pub fn new(name: String) -> Self {
         // name can be "rocks db". Then var_name = "rocks_db" and title_name = "RocksDb"
-        let var_name = name.replace(" ", "_");
+        let var_name = name.replace(' ', "_");
         let title_name = name.to_case(Case::Snake);
 
         let read_value1 = format!("{}_read_value_bytes", var_name);
@@ -44,8 +42,9 @@ impl MeteredCounter {
 
         let read_multi_values1 = format!("{}_read_multi_value_bytes", var_name);
         let read_multi_values2 = format!("{} read multi value bytes", title_name);
-        let read_multi_values_bytes = register_histogram_vec!(read_multi_values1, read_multi_values2, &[])
-            .expect("Counter creation should not fail");
+        let read_multi_values_bytes =
+            register_histogram_vec!(read_multi_values1, read_multi_values2, &[])
+                .expect("Counter creation should not fail");
 
         let find_keys1 = format!("{}_find_keys_by_prefix", var_name);
         let find_keys2 = format!("{} find keys by prefix", title_name);
@@ -54,8 +53,9 @@ impl MeteredCounter {
 
         let find_key_values1 = format!("{}_find_key_values_by_prefix", var_name);
         let find_key_values2 = format!("{} find key values by prefix", title_name);
-        let find_key_values_by_prefix = register_histogram_vec!(find_key_values1, find_key_values2, &[])
-            .expect("Counter creation should not fail");
+        let find_key_values_by_prefix =
+            register_histogram_vec!(find_key_values1, find_key_values2, &[])
+                .expect("Counter creation should not fail");
 
         let write_batch1 = format!("{}_write_batch", var_name);
         let write_batch2 = format!("{} write batch", title_name);
@@ -67,7 +67,15 @@ impl MeteredCounter {
         let clear_journal = register_histogram_vec!(clear_journal1, clear_journal2, &[])
             .expect("Counter creation should not fail");
 
-        MeteredCounter { read_value_bytes, contains_key, read_multi_values_bytes, find_keys_by_prefix, find_key_values_by_prefix, write_batch, clear_journal }
+        MeteredCounter {
+            read_value_bytes,
+            contains_key,
+            read_multi_values_bytes,
+            find_keys_by_prefix,
+            find_key_values_by_prefix,
+            write_batch,
+            clear_journal,
+        }
     }
 }
 
@@ -92,7 +100,6 @@ where
     out
 }
 
-
 #[async_trait]
 impl<K, E> ReadableKeyValueStore<E> for MeteredStore<K>
 where
@@ -107,29 +114,39 @@ where
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, E> {
-        prometheus_async(self.store.read_value_bytes(key), &self.counter.read_value_bytes).await
+        prometheus_async(
+            self.store.read_value_bytes(key),
+            &self.counter.read_value_bytes,
+        )
+        .await
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, E> {
         prometheus_async(self.store.contains_key(key), &self.counter.contains_key).await
     }
 
-    async fn read_multi_values_bytes(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, E> {
-        prometheus_async(self.store.read_multi_values_bytes(keys), &self.counter.read_multi_values_bytes).await
+    async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, E> {
+        prometheus_async(
+            self.store.read_multi_values_bytes(keys),
+            &self.counter.read_multi_values_bytes,
+        )
+        .await
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, E> {
-        prometheus_async(self.store.find_keys_by_prefix(key_prefix), &self.counter.find_keys_by_prefix).await
+        prometheus_async(
+            self.store.find_keys_by_prefix(key_prefix),
+            &self.counter.find_keys_by_prefix,
+        )
+        .await
     }
 
-    async fn find_key_values_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, E> {
-        prometheus_async(self.store.find_key_values_by_prefix(key_prefix), &self.counter.find_key_values_by_prefix).await
+    async fn find_key_values_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::KeyValues, E> {
+        prometheus_async(
+            self.store.find_key_values_by_prefix(key_prefix),
+            &self.counter.find_key_values_by_prefix,
+        )
+        .await
     }
 }
 
@@ -141,11 +158,19 @@ where
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), E> {
-        prometheus_async(self.store.write_batch(batch, base_key), &self.counter.write_batch).await
+        prometheus_async(
+            self.store.write_batch(batch, base_key),
+            &self.counter.write_batch,
+        )
+        .await
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), E> {
-        prometheus_async(self.store.clear_journal(base_key), &self.counter.clear_journal).await
+        prometheus_async(
+            self.store.clear_journal(base_key),
+            &self.counter.clear_journal,
+        )
+        .await
     }
 }
 
@@ -163,4 +188,3 @@ impl<K> MeteredStore<K> {
         Self { counter, store }
     }
 }
-
