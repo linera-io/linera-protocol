@@ -1,11 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-
 use tonic::Status;
 use thiserror::Error;
 use linera_views::common::CommonStoreConfig;
-
 
 /// The shared store is potentially handling an infinite number of connections.
 /// However, for testing or some other purpose we really need to decrease the number of

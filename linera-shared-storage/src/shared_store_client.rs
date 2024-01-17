@@ -14,9 +14,12 @@ use linera_views::{
 };
 use std::sync::Arc;
 use tonic::transport::{Channel, Endpoint};
+use async_lock::{Semaphore, SemaphoreGuard};
+use linera_views::common::CommonStoreConfig;
 
 pub struct SharedStoreClient {
     client: Arc<RwLock<StoreProcessorClient<Channel>>>,
+    semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
 }
 
@@ -34,6 +37,7 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         let query = Some(Query::ReadValue(key.to_vec()));
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
+        let _guard = self.acquire().await;
         let response = client.store_process(request).await?;
         let response = response.get_ref();
         let StoreReply { reply } = response;
@@ -47,6 +51,7 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         let query = Some(Query::ContainsKey(key.to_vec()));
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
+        let _guard = self.acquire().await;
         let response = client.store_process(request).await?;
         let response = response.into_inner();
         let StoreReply { reply } = response;
@@ -63,6 +68,7 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         let query = Some(Query::ReadMultiValues(Keys { keys }));
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
+        let _guard = self.acquire().await;
         let response = client.store_process(request).await?;
         let response = response.into_inner();
         let StoreReply { reply } = response;
@@ -81,6 +87,7 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         let query = Some(Query::FindKeysByPrefix(key_prefix.to_vec()));
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
+        let _guard = self.acquire().await;
         let response = client.store_process(request).await?;
         let response = response.into_inner();
         let StoreReply { reply } = response;
@@ -97,6 +104,7 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         let query = Some(Query::FindKeyValuesByPrefix(key_prefix.to_vec()));
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
+        let _guard = self.acquire().await;
         let response = client.store_process(request).await?;
         let response = response.into_inner();
         let StoreReply { reply } = response;
@@ -142,6 +150,7 @@ impl WritableKeyValueStore<SharedContextError> for SharedStoreClient {
         let query = Some(Query::WriteBatch(batch_base_key));
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
+        let _guard = self.acquire().await;
         let response = client.store_process(request).await?;
         let response = response.get_ref();
         let StoreReply { reply } = response;
@@ -155,6 +164,7 @@ impl WritableKeyValueStore<SharedContextError> for SharedStoreClient {
         let query = Some(Query::ClearJournal(base_key.to_vec()));
         let request = tonic::Request::new(StoreRequest { query });
         let mut client = self.client.write().await;
+        let _guard = self.acquire().await;
         let response = client.store_process(request).await?;
         let response = response.get_ref();
         let StoreReply { reply } = response;
@@ -170,13 +180,27 @@ impl KeyValueStore for SharedStoreClient {
 }
 
 impl SharedStoreClient {
-    pub async fn new(endpoint: String) -> Result<Self, SharedContextError> {
+    /// Obtains the semaphore lock on the database if needed.
+    async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
+        match &self.semaphore {
+            None => None,
+            Some(count) => Some(count.acquire().await),
+        }
+    }
+
+    pub async fn new_internal(endpoint: String,
+                              common_config: CommonStoreConfig,
+    ) -> Result<Self, SharedContextError> {
         let endpoint = Endpoint::from_shared(endpoint)?;
         let client = StoreProcessorClient::connect(endpoint).await?;
         let client = Arc::new(RwLock::new(client));
-        let max_stream_queries = 10;
+        let semaphore = common_config
+            .max_concurrent_queries
+            .map(|n| Arc::new(Semaphore::new(n)));
+        let max_stream_queries = common_config.max_stream_queries;
         Ok(SharedStoreClient {
             client,
+            semaphore,
             max_stream_queries,
         })
     }
