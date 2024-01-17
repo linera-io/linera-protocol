@@ -74,7 +74,7 @@ predictable.
 CHAIN_0=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 OWNER_0=e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316
 CHAIN_1=1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03
-OWNER_1=481ac53cc3171261fe6185a070390b6f74e7b264b99fcdb012e0bd5e2ea0685f
+OWNER_1=5d1b22ce0fe6a8bd45aa7d10e753a29bf569a2e39f22a63c462300f7dd41f7da
 ```
 
 Alternatively, the command below can be used to list the chains created for the test as
@@ -91,8 +91,8 @@ A table will be shown with the chains registered in the wallet and their meta-da
 ╭──────────────────────────────────────────────────────────────────┬──────────────────────────────────────────────────────────────────────────────────────╮
 │ Chain Id                                                         ┆ Latest Block                                                                         │
 ╞══════════════════════════════════════════════════════════════════╪══════════════════════════════════════════════════════════════════════════════════════╡
-│ 1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03 ┆ Public Key:         6555b1c9152e4dd57ecbf3fd5ce2a9159764a0a04a4366a2edc88e1b36ed4873 │
-│                                                                  ┆ Owner:              c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f │
+│ 1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03 ┆ Public Key:         84eddaaafce7fb923c3b2494b3d25e54e910490a726ad9b3a2228d3fb18f9874 │
+│                                                                  ┆ Owner:              5d1b22ce0fe6a8bd45aa7d10e753a29bf569a2e39f22a63c462300f7dd41f7da │
 │                                                                  ┆ Block Hash:         -                                                                │
 │                                                                  ┆ Timestamp:          2023-06-28 09:53:51.167301                                       │
 │                                                                  ┆ Next Block Height:  0                                                                │
@@ -181,7 +181,7 @@ there yet. Request `crowd-funding` from the other chain. As an application ID, u
 ```gql,ignore
 mutation { requestApplication(
     chainId: "1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03"
-    applicationId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65070000000000000000000000"
+    applicationId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65040000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000"
 ) }
 ```
 
@@ -193,11 +193,12 @@ On both http://localhost:8080 and http://localhost:8081, you recognize the crowd
 application by its ID. The entry also has a field `link`. If you open that in a new tab, you
 see the GraphQL API for that application on that chain.
 
-Let's pledge 30 tokens by the campaign creator themself, i.e. `$OWNER_0` on 8080:
+Let's pledge 30 tokens by the campaign creator themself, i.e.
+[`$OWNER_0` on 8080](http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65040000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000):
 
 ```gql,ignore
 mutation { pledgeWithTransfer(
-    owner:"User:445991f46ae490fe207e60c95d0ed95bf4e7ed9c270d4fd4fa555587c2604fe1",
+    owner:"User:e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316",
     amount:"30."
 ) }
 ```
@@ -205,24 +206,24 @@ mutation { pledgeWithTransfer(
 This will make the owner show up if we list everyone who has made a pledge so far:
 
 ```gql,ignore
-query { pledgesKeys }
+query { pledges { keys } }
 ```
 
 To also have `$OWNER_1` make a pledge, they first need to claim their tokens. Those are still
-on the other chain, where the application was created. Find the link on http://localhost:8081
-for the fungible application, open it and run the following query. Remember to replace the user
-with `$OWNER_1`. The _source_ chain ID should be the `$CHAIN_0`, and the target `$CHAIN_1`.
+on the other chain, where the application was created. Find the [link on 8081
+for the fungible application](http://localhost:8081/chains/1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000),
+open it and run the following query.
 
 ```gql,ignore
 mutation { claim(
   sourceAccount: {
-    owner: "User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f",
+    owner: "User:5d1b22ce0fe6a8bd45aa7d10e753a29bf569a2e39f22a63c462300f7dd41f7da",
     chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
   },
   amount: "200.",
   targetAccount: {
-    owner:"User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f",
-    chainId:"1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03"
+    owner: "User:5d1b22ce0fe6a8bd45aa7d10e753a29bf569a2e39f22a63c462300f7dd41f7da",
+    chainId: "1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03"
   }
 ) }
 ```
@@ -231,15 +232,17 @@ You can check that the 200 tokens have arrived:
 
 ```gql,ignore
 query {
-    accounts { entry(key: "User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f") { value } }
+    accounts { entry(key: "User:5d1b22ce0fe6a8bd45aa7d10e753a29bf569a2e39f22a63c462300f7dd41f7da") { value } }
 }
 ```
 
-Now, also on 8081, you can open the link for the crowd-funding application and run:
+Now, also on 8081, you can open the [link for the crowd-funding
+application](http://localhost:8081/chains/1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65040000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000)
+and run:
 
 ```gql,ignore
 mutation { pledgeWithTransfer(
-  owner:"User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f",
+  owner:"User:5d1b22ce0fe6a8bd45aa7d10e753a29bf569a2e39f22a63c462300f7dd41f7da",
   amount:"80."
 ) }
 ```
@@ -251,14 +254,16 @@ goal. Now the campaign owner (on 8080) can collect the funds:
 mutation { collect }
 ```
 
-In the fungible application on 8080, check that we have received 110 tokens, in addition to the
+[In the fungible application on
+8080](http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000),
+check that we have received 110 tokens, in addition to the
 70 that we had left after pledging 30:
 
 ```gql,ignore
 query {
     accounts {
         entry(
-            key: "User:445991f46ae490fe207e60c95d0ed95bf4e7ed9c270d4fd4fa555587c2604fe1"
+            key: "User:e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316"
         ) {
             value
         }
