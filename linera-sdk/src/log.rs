@@ -3,10 +3,15 @@
 
 use crate::{contract, service};
 use log::{LevelFilter, Log, Metadata, Record};
-use std::panic::{self, PanicInfo};
+use std::{
+    panic::{self, PanicInfo},
+    sync::Once,
+};
 
 static CONTRACT_LOGGER: ContractLogger = ContractLogger;
 static SERVICE_LOGGER: ServiceLogger = ServiceLogger;
+
+static INSTALL_LOGGER: Once = Once::new();
 
 /// A logger that uses the system API for contracts.
 #[derive(Clone, Copy, Debug)]
@@ -15,9 +20,11 @@ pub struct ContractLogger;
 impl ContractLogger {
     /// Configures [`log`] to use the log system API for contracts.
     pub fn install() {
-        log::set_logger(&CONTRACT_LOGGER).expect("Failed to initialize contract logger");
-        log::set_max_level(LevelFilter::Trace);
-        panic::set_hook(Box::new(log_panic));
+        INSTALL_LOGGER.call_once(|| {
+            log::set_logger(&CONTRACT_LOGGER).expect("Failed to initialize contract logger");
+            log::set_max_level(LevelFilter::Trace);
+            panic::set_hook(Box::new(log_panic));
+        });
     }
 }
 
@@ -40,9 +47,11 @@ pub struct ServiceLogger;
 impl ServiceLogger {
     /// Configures [`log`] to use the log system API for services.
     pub fn install() {
-        log::set_logger(&SERVICE_LOGGER).expect("Failed to initialize service logger");
-        log::set_max_level(LevelFilter::Trace);
-        panic::set_hook(Box::new(log_panic));
+        INSTALL_LOGGER.call_once(|| {
+            log::set_logger(&SERVICE_LOGGER).expect("Failed to initialize service logger");
+            log::set_max_level(LevelFilter::Trace);
+            panic::set_hook(Box::new(log_panic));
+        });
     }
 }
 
