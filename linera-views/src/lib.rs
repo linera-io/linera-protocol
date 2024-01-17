@@ -63,6 +63,7 @@ pub mod common;
 pub mod journaling;
 
 /// The code for encapsulating one key_value store into another that does metric
+#[cfg(feature = "metrics")]
 pub mod metered_wrapper;
 
 /// The code for handling big values by splitting them into several small ones.

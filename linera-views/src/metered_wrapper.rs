@@ -71,8 +71,9 @@ impl MeteredCounter {
     }
 }
 
+/// A metered wrapper that keeps track of every operation
 #[derive(Clone)]
-struct MeteredStore<K> {
+pub struct MeteredStore<K> {
     /// the metrics being stored
     pub counter: MeteredCounter,
     /// The underlying store of the metered store
@@ -156,6 +157,7 @@ where
 }
 
 impl<K> MeteredStore<K> {
+    /// Creates a new Metered store
     pub fn new(name: String, store: K) -> Self {
         let counter = MeteredCounter::new(name);
         Self { counter, store }
