@@ -25,7 +25,7 @@ new block, they can subscribe to or unsubscribe from another chain.
 There is also a `Post` operation: It creates a new post and sends it to a channel, so that
 it reaches all subscribers.
 
-There are corresponding `RequestSubscribe`, `RequestUnsubscribe` and `Posts` cross-chain
+There are corresponding `Subscribe`, `Unsubscribe` and `Posts` cross-chain
 message variants that are created when these operations are handled. The first two are
 sent directly to the chain we want to subscribe to or unsubscribe from. The latter goes
 to the channel.
@@ -87,7 +87,7 @@ Point your browser to http://localhost:8081. This is the wallet that didn't crea
 application, so we have to request it from the creator chain. As the chain ID specify the
 one of the chain where it isn't registered yet:
 
-```json
+```gql
 mutation {
     requestApplication(
         chainId: "1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03",
@@ -99,7 +99,7 @@ mutation {
 Now in both http://localhost:8080 and http://localhost:8081, this should list the
 application and provide a link to its GraphQL API. Remember to use each wallet's chain ID:
 
-```json
+```gql
 query {
     applications(
         chainId: "1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03"
@@ -114,34 +114,34 @@ Open both URLs under the entry `link`. Now you can use the application on each c
 E.g. [in the 8081 tab](http://localhost:8081/chains/1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000)
 subscribe to the other chain:
 
-```json
+```gql
 mutation {
-    requestSubscribe(
-        field0: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+    subscribe(
+        chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
     )
 }
 ```
 
 Now make a post [in the 8080 tab](http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000):
 
-```json
+```gql
 mutation {
     post(
-        field0: "Linera Social is the new Mastodon!"
+        text: "Linera Social is the new Mastodon!"
     )
 }
 ```
 
 Since 8081 is a subscriber. Let's see if it received any posts:
 
-```json
+```gql
 query { receivedPosts { keys { timestamp author index } } }
 ```
 
 This should now list one entry, with timestamp, author and an index. If we view that
 entry, we can see the posted text:
 
-```json
+```gql
 query {
     receivedPosts {
         entry(
@@ -199,20 +199,20 @@ impl ServiceAbi for SocialAbi {
 #[derive(Debug, Serialize, Deserialize, GraphQLMutationRoot)]
 pub enum Operation {
     /// Request to be subscribed to another chain.
-    RequestSubscribe(ChainId),
+    Subscribe { chain_id: ChainId },
     /// Request to be unsubscribed from another chain.
-    RequestUnsubscribe(ChainId),
+    Unsubscribe { chain_id: ChainId },
     /// Send a new post to everyone who subscribed to us.
-    Post(String),
+    Post { text: String },
 }
 
 /// A message of the application on one chain, to be handled on another chain.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum Message {
     /// The origin chain wants to subscribe to the target chain.
-    RequestSubscribe,
+    Subscribe,
     /// The origin chain wants to unsubscribe from the target chain.
-    RequestUnsubscribe,
+    Unsubscribe,
     /// The origin chain made a post, and the target chain is subscribed.
     /// This includes the most recent posts in reverse order, and the total count of posts by the
     /// sender. I.e. the indices of the posts in the `Vec` are `count - 1, count - 2, ...`.

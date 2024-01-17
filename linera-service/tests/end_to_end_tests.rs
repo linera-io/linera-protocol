@@ -306,7 +306,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
         .await
         .unwrap();
     let hash = app2
-        .mutate(format!("requestSubscribe(field0: \"{chain1}\")"))
+        .mutate(format!("subscribe(chainId: \"{chain1}\")"))
         .await
         .unwrap();
 
@@ -319,7 +319,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
         .make_application(&chain1, &application_id)
         .await
         .unwrap();
-    app1.mutate("post(field0: \"Linera Social is the new Mastodon!\")")
+    app1.mutate("post(text: \"Linera Social is the new Mastodon!\")")
         .await
         .unwrap();
 

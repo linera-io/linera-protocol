@@ -50,13 +50,13 @@ impl Contract for Social {
         operation: Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         match operation {
-            Operation::RequestSubscribe(chain_id) => {
-                Ok(ExecutionOutcome::default().with_message(chain_id, Message::RequestSubscribe))
+            Operation::Subscribe { chain_id } => {
+                Ok(ExecutionOutcome::default().with_message(chain_id, Message::Subscribe))
             }
-            Operation::RequestUnsubscribe(chain_id) => {
-                Ok(ExecutionOutcome::default().with_message(chain_id, Message::RequestUnsubscribe))
+            Operation::Unsubscribe { chain_id } => {
+                Ok(ExecutionOutcome::default().with_message(chain_id, Message::Unsubscribe))
             }
-            Operation::Post(text) => self.execute_post_operation(text).await,
+            Operation::Post { text } => self.execute_post_operation(text).await,
         }
     }
 
@@ -67,11 +67,11 @@ impl Contract for Social {
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         let mut outcome = ExecutionOutcome::default();
         match message {
-            Message::RequestSubscribe => outcome.subscribe.push((
+            Message::Subscribe => outcome.subscribe.push((
                 ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
                 context.message_id.chain_id,
             )),
-            Message::RequestUnsubscribe => outcome.unsubscribe.push((
+            Message::Unsubscribe => outcome.unsubscribe.push((
                 ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
                 context.message_id.chain_id,
             )),
