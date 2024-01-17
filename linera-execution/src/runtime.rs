@@ -20,7 +20,7 @@ use linera_base::{
 use linera_views::batch::Batch;
 use oneshot::Receiver;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{hash_map, BTreeMap, HashMap, HashSet},
     sync::{Arc, Mutex, Weak},
 };
 
@@ -39,6 +39,8 @@ pub struct SyncRuntimeInternal<ContractOrService> {
     /// How to interact with the storage view of the execution state.
     execution_state_sender: ExecutionStateSender,
 
+    /// Application instances loaded in this transaction.
+    loaded_applications: HashMap<UserApplicationId, LoadedApplication<ContractOrService>>,
     /// The current stack of application descriptions.
     call_stack: Vec<ApplicationStatus>,
     /// The set of the IDs of the applications that are in the `call_stack`.
@@ -240,6 +242,7 @@ impl<ContractOrService> SyncRuntimeInternal<ContractOrService> {
         Self {
             chain_id,
             execution_state_sender,
+            loaded_applications: HashMap::new(),
             call_stack: Vec::new(),
             active_applications: HashSet::new(),
             execution_outcomes: Vec::default(),
@@ -314,18 +317,29 @@ impl SyncRuntimeInternal<UserContractInstance> {
             .recv_response()
     }
 
-    /// Initializes a contract instance with this runtime.
+    /// Loads a contract instance, initializing it with this runtime if needed.
     fn load_contract_instance(
         &mut self,
         id: UserApplicationId,
     ) -> Result<LoadedApplication<UserContractInstance>, ExecutionError> {
-        let (code, description) = self.load_contract(id)?;
-        let instance = code.instantiate(SyncRuntime(
-            self.reference
-                .upgrade()
-                .expect("`SyncRuntimeInner` should only be used by `SyncRuntime`"),
-        ))?;
-        Ok(LoadedApplication::new(instance, description))
+        match self.loaded_applications.entry(id) {
+            hash_map::Entry::Vacant(entry) => {
+                let (code, description) = self
+                    .execution_state_sender
+                    .send_request(|callback| Request::LoadContract { id, callback })?
+                    .recv_response()?;
+
+                let instance = code.instantiate(SyncRuntime(
+                    self.reference
+                        .upgrade()
+                        .expect("`SyncRuntimeInternal` should only be used by `SyncRuntime`"),
+                ))?;
+                Ok(entry
+                    .insert(LoadedApplication::new(instance, description))
+                    .clone())
+            }
+            hash_map::Entry::Occupied(entry) => Ok(entry.get().clone()),
+        }
     }
 
     /// Configures the runtime for executing a call to a different contract.
