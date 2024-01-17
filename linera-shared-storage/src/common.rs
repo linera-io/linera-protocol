@@ -7,17 +7,15 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum SharedContextError {
-    /// grpc error
-    #[error("grpc error")]
-    GrpcError(String),
-
     /// Not matching entry
     #[error("Not matching entry")]
     NotMatchingEntry,
-}
 
-impl From<Status> for SharedContextError {
-    fn from(error: Status) -> Self {
-        Self::GrpcError(error.to_string())
-    }
+    /// gRPC error
+    #[error(transparent)]
+    GrpcError(#[from] Status),
+
+    /// Transport error
+    #[error(transparent)]
+    TransportError(#[from] tonic::transport::Error),
 }

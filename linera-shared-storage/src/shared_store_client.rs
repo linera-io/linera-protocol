@@ -171,8 +171,8 @@ impl KeyValueStore for SharedStoreClient {
 
 impl SharedStoreClient {
     pub async fn new(endpoint: String) -> Result<Self, SharedContextError> {
-        let endpoint = Endpoint::from_shared(endpoint).unwrap();
-        let client = StoreProcessorClient::connect(endpoint).await.unwrap();
+        let endpoint = Endpoint::from_shared(endpoint)?;
+        let client = StoreProcessorClient::connect(endpoint).await?;
         let client = Arc::new(RwLock::new(client));
         let max_stream_queries = 10;
         Ok(SharedStoreClient {
