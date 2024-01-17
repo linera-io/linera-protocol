@@ -18,9 +18,9 @@
 * https://aws.amazon.com/cli/
 * https://docs.docker.com/desktop/mac/install/
 
-## Additional tooling
+## Additional tooling required by tests
 
-* `brew install gh`
+* `brew install jq`
 * `cargo install cargo-rdme`
 * `cargo install cargo-sort`
 * `cargo install cargo-all-features`
@@ -47,6 +47,7 @@ Alternatively, we have added experimental Nix support (see `flake.nix`).
 
 ## Additional tooling
 
+* `sudo apt-get install jq`
 * `cargo install cargo-rdme`
 * `cargo install cargo-sort`
 * `cargo install cargo-all-features`
