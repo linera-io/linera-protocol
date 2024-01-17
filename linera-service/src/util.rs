@@ -256,6 +256,21 @@ impl QuotedBashScript {
                     quote += "\n";
                 }
                 result.push(quote);
+            } else if let Some(uri) = line.strip_prefix("```gql,uri=") {
+                let mut quote = String::new();
+                while let Some(line) = lines.next() {
+                    let line = line?;
+                    if line.starts_with("```") {
+                        break;
+                    }
+                    quote += &line;
+                    quote += "\n";
+                }
+                let json = serde_json::to_string(&quote).unwrap();
+                let command = format!(
+                    "curl -g -X POST -H \"Content-Type: application/json\" -d '{{ \"query\": {json} }}' {uri} | jq -e .data \n"
+                );
+                result.push(command);
             }
         }
 
