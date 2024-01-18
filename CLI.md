@@ -262,11 +262,11 @@ View or update the resource control policy
 
 Create genesis configuration for a Linera deployment. Create initial user chains and print information to be used for initialization of validator setup. This will also create an initial wallet for the owner of the initial "root" chains
 
-**Usage:** `linera create-genesis-config [OPTIONS] --committee <COMMITTEE_CONFIG_PATH> --genesis <GENESIS_CONFIG_PATH> <NUM>`
+**Usage:** `linera create-genesis-config [OPTIONS] --committee <COMMITTEE_CONFIG_PATH> --genesis <GENESIS_CONFIG_PATH> <NUM_OTHER_INITIAL_CHAINS>`
 
 ###### **Arguments:**
 
-* `<NUM>` — Number of additional chains to create
+* `<NUM_OTHER_INITIAL_CHAINS>` — Number of initial (aka "root") chains to create in addition to the admin chain
 
 ###### **Options:**
 
@@ -614,6 +614,12 @@ Start a Local Linera Network
 ###### **Options:**
 
 * `--extra-wallets <EXTRA_WALLETS>` — The number of extra wallets and user chains to initialise. Default is 0
+* `--other-initial-chains <OTHER_INITIAL_CHAINS>` — The number of initial "root" chains created in the genesis config on top of the default "admin" chain. All initial chains belong to the first "admin" wallet
+
+  Default value: `10`
+* `--initial-amount <INITIAL_AMOUNT>` — The initial amount of native tokens credited in the initial "root" chains, including the default "admin" chain
+
+  Default value: `10`
 * `--validators <VALIDATORS>` — The number of validators in the local test network. Default is 1
 
   Default value: `1`

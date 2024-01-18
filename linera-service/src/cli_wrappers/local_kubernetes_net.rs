@@ -34,6 +34,8 @@ static SHARED_LOCAL_KUBERNETES_TESTING_NET: OnceCell<(
 pub struct LocalKubernetesNetConfig {
     pub network: Network,
     pub testing_prng_seed: Option<u64>,
+    pub num_other_initial_chains: u32,
+    pub initial_amount: Amount,
     pub num_initial_validators: usize,
     pub num_shards: usize,
     pub binaries: Option<Option<PathBuf>>,
@@ -121,7 +123,7 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
         let client = net.make_client().await;
         net.generate_initial_validator_config().await.unwrap();
         client
-            .create_genesis_config(Amount::from_tokens(10))
+            .create_genesis_config(self.num_other_initial_chains, self.initial_amount)
             .await
             .unwrap();
         net.run().await.unwrap();
@@ -164,7 +166,7 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
                 if num_validators > 0 {
                     net.generate_initial_validator_config().await.unwrap();
                     initial_client
-                        .create_genesis_config(Amount::from_tokens(2000))
+                        .create_genesis_config(10, Amount::from_tokens(2000))
                         .await
                         .unwrap();
                     net.run().await.unwrap();
