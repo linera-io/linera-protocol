@@ -42,8 +42,16 @@ use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument};
 
 pub static PROXY_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!("proxy_request_latency", "Proxy request latency", &[])
-        .expect("Counter creation should not fail")
+    register_histogram_vec!(
+        "proxy_request_latency",
+        "Proxy request latency",
+        &[],
+        vec![
+            0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0,
+            50.0, 100.0, 200.0, 300.0, 400.0
+        ]
+    )
+    .expect("Counter creation should not fail")
 });
 
 pub static PROXY_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
@@ -105,7 +113,7 @@ where
             let response = future.await?;
             PROXY_REQUEST_LATENCY
                 .with_label_values(&[])
-                .observe(start.elapsed().as_secs_f64());
+                .observe(start.elapsed().as_millis() as f64);
             PROXY_REQUEST_COUNT.with_label_values(&[]).inc();
             Ok(response)
         }

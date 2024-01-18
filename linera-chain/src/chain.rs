@@ -52,8 +52,8 @@ pub static BLOCK_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
         "Block execution latency",
         &[],
         vec![
-            0.000_01, 0.000_03, 0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025,
-            0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0,
+            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
+            1.0, 2.5, 5.0, 10.0, 25.0, 50.0
         ],
     )
     .expect("Counter creation should not fail")
@@ -764,7 +764,7 @@ where
         NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
         BLOCK_EXECUTION_LATENCY
             .with_label_values(&[])
-            .observe(start_time.elapsed().as_secs_f64());
+            .observe(start_time.elapsed().as_millis() as f64);
         WASM_FUEL_USED_PER_BLOCK
             .with_label_values(&[])
             .observe(tracker.used_fuel as f64);
