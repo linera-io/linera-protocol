@@ -125,10 +125,11 @@ impl UserChain {
         }
     }
 
-    /// Creates an entry for a chain that we don't own.
-    pub fn make_other(description: ChainDescription, timestamp: Timestamp) -> Self {
+    /// Creates an entry for a chain that we don't own. The timestamp must be the genesis
+    /// timestamp or earlier.
+    pub fn make_other(chain_id: ChainId, timestamp: Timestamp) -> Self {
         Self {
-            chain_id: description.into(),
+            chain_id,
             key_pair: None,
             block_hash: None,
             timestamp,
