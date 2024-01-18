@@ -6,11 +6,11 @@ racks:
   - name: rack-1
     members: 1
     storage:
-      capacity: 1Gi
+      capacity: 2Gi
     resources:
       limits:
         cpu: 1
-        memory: 0.2Gi
+        memory: 2Gi
       requests:
         cpu: 1
-        memory: 0.2Gi
+        memory: 2Gi
