@@ -16,6 +16,12 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(feature = "metrics")]
+use {
+    linera_base::sync::Lazy,
+    prometheus::{register_int_counter_vec, IntCounterVec},
+};
+
 #[cfg(any(test, feature = "test"))]
 use {
     crate::common::ContextFromStore,
@@ -23,6 +29,20 @@ use {
     crate::views::ViewError,
     async_lock::MutexGuardArc,
 };
+
+#[cfg(feature = "metrics")]
+/// The total number of cache faults
+pub static NUM_CACHE_FAULT: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!("num_cache_fault", "Number of cache faults", &[])
+        .expect("Counter creation should not fail")
+});
+
+#[cfg(feature = "metrics")]
+/// The total number of cache successes
+pub static NUM_CACHE_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!("num_cache_success", "Number of cache success", &[])
+        .expect("Counter creation should not fail")
+});
 
 /// The `LruPrefixCache` stores the data for simple `read_values` queries
 /// It is inspired by the crate `lru-cache`.
@@ -115,9 +135,13 @@ where
                 // First inquiring in the read_value_bytes LRU
                 let lru_read_values_container = lru_read_values.lock().await;
                 if let Some(value) = lru_read_values_container.query(key) {
+                    #[cfg(feature = "metrics")]
+                    NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
                     return Ok(value.clone());
                 }
                 drop(lru_read_values_container);
+                #[cfg(feature = "metrics")]
+                NUM_CACHE_FAULT.with_label_values(&[]).inc();
                 let value = self.store.read_value_bytes(key).await?;
                 let mut lru_read_values = lru_read_values.lock().await;
                 lru_read_values.insert(key.to_vec(), value.clone());
@@ -151,8 +175,12 @@ where
                 let lru_read_values_container = lru_read_values.lock().await;
                 for (i, key) in keys.into_iter().enumerate() {
                     if let Some(value) = lru_read_values_container.query(&key) {
+                        #[cfg(feature = "metrics")]
+                        NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
                         result.push(value.clone());
                     } else {
+                        #[cfg(feature = "metrics")]
+                        NUM_CACHE_FAULT.with_label_values(&[]).inc();
                         result.push(None);
                         cache_miss_indices.push(i);
                         miss_keys.push(key);
