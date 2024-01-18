@@ -77,7 +77,7 @@ RUN cargo build --release \
     --bin linera-proxy \
     --bin linera-server \
     --bin linera-db \
-    --features scylladb
+    --features scylladb,kubernetes
 
 RUN mv \
     target/"$target"/release/linera \

@@ -467,7 +467,7 @@ async fn run(options: ServerOptions) {
                 run_with_storage(full_storage_config, &genesis_config, wasm_runtime, job)
                     .await
                     .unwrap();
-                agent_running.shutdown();
+                // agent_running.shutdown();
             }
             #[cfg(not(feature = "kubernetes"))]
             {

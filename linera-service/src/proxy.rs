@@ -56,6 +56,7 @@ impl Proxy {
     /// Run the proxy.
     #[cfg(feature = "kubernetes")]
     async fn run(self) -> Result<()> {
+        println!("PYROSCOPE");
         use pyroscope::PyroscopeAgent;
         use pyroscope_pprofrs::{pprof_backend, PprofConfig};
         let agent = PyroscopeAgent::builder(
