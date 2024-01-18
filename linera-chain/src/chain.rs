@@ -47,8 +47,16 @@ pub static NUM_BLOCKS_EXECUTED: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 pub static BLOCK_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!("block_execution_latency", "Block execution latency", &[])
-        .expect("Counter creation should not fail")
+    register_histogram_vec!(
+        "block_execution_latency",
+        "Block execution latency",
+        &[],
+        vec![
+            0.000_01, 0.000_03, 0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025,
+            0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0,
+        ],
+    )
+    .expect("Counter creation should not fail")
 });
 
 pub static WASM_FUEL_USED_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
