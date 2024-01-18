@@ -45,6 +45,7 @@ serde-reflection = { workspace = true }
 serde_yaml = { workspace = true }
 similar-asserts = { workspace = true }
 test-strategy = { workspace = true }
+linera-shared-storage = { path = ".", features = ["test"] }
 
 [build-dependencies]
 tonic-build = { workspace = true }

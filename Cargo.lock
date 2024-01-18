@@ -3559,6 +3559,7 @@ dependencies = [
  "bytes",
  "clap 4.4.11",
  "linera-service",
+ "linera-shared-storage",
  "linera-views",
  "prometheus",
  "proptest",

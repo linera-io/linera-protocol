@@ -1,6 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(any(test, feature = "test"))]
+use linera_views::lru_caching::TEST_CACHE_SIZE;
+
 use crate::{
     common::{SharedContextError, SharedStoreConfig},
     key_value_store::{
@@ -16,6 +19,14 @@ use linera_views::{
 };
 use std::sync::Arc;
 use tonic::transport::{Channel, Endpoint};
+
+/// The number of concurrent queries of a test shared store
+#[cfg(any(test, feature = "test"))]
+const TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES: usize = 10;
+
+/// The number of concurrent stream queries
+#[cfg(any(test, feature = "test"))]
+const TEST_SHARED_STORE_MAX_STREAM_QUERIES: usize = 10;
 
 pub struct SharedStoreClient {
     client: Arc<RwLock<StoreProcessorClient<Channel>>>,
@@ -187,7 +198,7 @@ impl SharedStoreClient {
         }
     }
 
-    pub async fn new_internal(
+    async fn new_internal(
         endpoint: String,
         common_config: CommonStoreConfig,
     ) -> Result<Self, SharedContextError> {
@@ -208,4 +219,22 @@ impl SharedStoreClient {
     pub async fn new(config: SharedStoreConfig) -> Result<Self, SharedContextError> {
         Self::new_internal(config.endpoint, config.common_config).await
     }
+}
+
+
+#[cfg(any(test, feature = "test"))]
+pub fn create_shared_store_common_config() -> CommonStoreConfig {
+    CommonStoreConfig {
+        max_concurrent_queries: Some(TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES),
+        max_stream_queries: TEST_SHARED_STORE_MAX_STREAM_QUERIES,
+        cache_size: TEST_CACHE_SIZE,
+    }
+}
+
+#[cfg(any(test, feature = "test"))]
+pub async fn create_shared_test_store() -> SharedStoreClient {
+    let common_config = create_shared_store_common_config();
+    let endpoint = "127.0.0.1:8942".to_string();
+    let store_config = SharedStoreConfig { endpoint, common_config };
+    SharedStoreClient::new(store_config).await.unwrap()
 }
