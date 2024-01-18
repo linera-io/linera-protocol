@@ -30,6 +30,7 @@ thiserror = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono = { workspace = true }
 rand07 = { workspace = true }
+prometheus = { workspace = true }
 
 [dev-dependencies]
 custom_debug_derive = { workspace = true }

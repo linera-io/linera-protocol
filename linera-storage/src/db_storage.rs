@@ -4,7 +4,9 @@
 use crate::{chain_guards::ChainGuards, ChainRuntimeContext, Storage};
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::{crypto::CryptoHash, data_types::Timestamp, identifiers::ChainId, sync::Lazy};
+use linera_base::{
+    crypto::CryptoHash, data_types::Timestamp, identifiers::ChainId, prometheus_util, sync::Lazy,
+};
 use linera_chain::{
     data_types::{Certificate, CertificateValue, HashedValue, LiteCertificate},
     ChainStateView,
@@ -18,66 +20,66 @@ use linera_views::{
     value_splitting::DatabaseConsistencyError,
     views::{View, ViewError},
 };
-use prometheus::{register_int_counter_vec, IntCounterVec};
+use prometheus::IntCounterVec;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc};
 
 /// The metric counting how often a value is read from storage.
 pub static CONTAINS_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!(
+    prometheus_util::register_int_counter_vec(
         "contains_value",
         "The metric counting how often a value is tested for existence from storage",
-        &[]
+        &[],
     )
     .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often a value is read from storage.
 pub static CONTAINS_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!(
+    prometheus_util::register_int_counter_vec(
         "contains_certificate",
         "The metric counting how often a certificate is tested for existence from storage",
-        &[]
+        &[],
     )
     .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often a value is read from storage.
 pub static READ_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!(
+    prometheus_util::register_int_counter_vec(
         "read_value",
         "The metric counting how often a value is read from storage",
-        &[]
+        &[],
     )
     .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often a value is written to storage.
 pub static WRITE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!(
+    prometheus_util::register_int_counter_vec(
         "write_value",
         "The metric counting how often a value is written to storage",
-        &[]
+        &[],
     )
     .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often a certificate is read from storage.
 pub static READ_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!(
+    prometheus_util::register_int_counter_vec(
         "read_certificate",
         "The metric counting how often a certificate is read from storage",
-        &[]
+        &[],
     )
     .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often a certificate is written to storage.
 pub static WRITE_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!(
+    prometheus_util::register_int_counter_vec(
         "write_certificate",
         "The metric counting how often a certificate is written to storage",
-        &[]
+        &[],
     )
     .expect("Counter creation should not fail")
 });

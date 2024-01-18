@@ -35,7 +35,7 @@ use grpc::{
     BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
     LiteCertificate, SubscriptionRequest,
 };
-use linera_base::{identifiers::ChainId, sync::Lazy};
+use linera_base::{identifiers::ChainId, prometheus_util, sync::Lazy};
 use linera_chain::data_types;
 use linera_core::{
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
@@ -43,7 +43,7 @@ use linera_core::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
+use prometheus::{HistogramVec, IntCounterVec};
 use rand::Rng;
 use std::{
     fmt::Debug,
@@ -69,44 +69,44 @@ type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest
 type NotificationSender = mpsc::Sender<Notification>;
 
 pub static SERVER_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
+    prometheus_util::register_histogram_vec(
         "server_request_latency",
         "Server request latency",
         &[],
-        vec![0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0]
+        Some(vec![0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0]),
     )
     .expect("Counter creation should not fail")
 });
 
 pub static SERVER_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!("server_request_count", "Server request count", &[])
+    prometheus_util::register_int_counter_vec("server_request_count", "Server request count", &[])
         .expect("Counter creation should not fail")
 });
 
 pub static SERVER_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!(
+    prometheus_util::register_int_counter_vec(
         "server_request_success",
         "Server request success",
-        &["method_name"]
+        &["method_name"],
     )
     .expect("Counter creation should not fail")
 });
 
 pub static SERVER_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!(
+    prometheus_util::register_int_counter_vec(
         "server_request_error",
         "Server request error",
-        &["method_name"]
+        &["method_name"],
     )
     .expect("Counter creation should not fail")
 });
 
 pub static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
+    prometheus_util::register_histogram_vec(
         "server_request_latency_per_request_type",
         "Server request latency per request type",
         &["method_name"],
-        vec![0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0]
+        Some(vec![0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0]),
     )
     .expect("Counter creation should not fail")
 });

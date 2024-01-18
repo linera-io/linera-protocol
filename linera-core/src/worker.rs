@@ -10,6 +10,7 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, Round},
     doc_scalar, ensure,
     identifiers::{ChainId, Owner},
+    prometheus_util,
     sync::Lazy,
 };
 use linera_chain::{
@@ -30,7 +31,7 @@ use linera_views::{
     views::{RootView, View, ViewError},
 };
 use lru::LruCache;
-use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
+use prometheus::{HistogramVec, IntCounterVec};
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
@@ -55,27 +56,31 @@ use {
 mod worker_tests;
 
 pub static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
+    prometheus_util::register_histogram_vec(
         "num_rounds_in_certificate",
         "Number of rounds in certificate",
         &["certificate_value", "round_type"],
-        vec![0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 15.0, 25.0, 50.0],
+        Some(vec![
+            0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 15.0, 25.0, 50.0,
+        ]),
     )
     .expect("Counter creation should not fail")
 });
 
 pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
+    prometheus_util::register_histogram_vec(
         "num_rounds_in_block_proposal",
         "Number of rounds in block proposal",
         &["round_type"],
-        vec![0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 15.0, 25.0, 50.0],
+        Some(vec![
+            0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 15.0, 25.0, 50.0,
+        ]),
     )
     .expect("Counter creation should not fail")
 });
 
 pub static TRANSACTION_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!("transaction_count", "Transaction count", &[])
+    prometheus_util::register_int_counter_vec("transaction_count", "Transaction count", &[])
         .expect("Counter creation should not fail")
 });
 

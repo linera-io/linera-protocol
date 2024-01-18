@@ -53,6 +53,12 @@
 
 #![deny(missing_docs)]
 
+#[cfg(not(target_arch = "wasm32"))]
+use {
+    linera_base::{prometheus_util, sync::Lazy},
+    prometheus::IntCounterVec,
+};
+
 /// The definition of the batches for writing in the database.
 pub mod batch;
 
@@ -133,20 +139,17 @@ pub mod test_utils;
 /// Re-exports used by the derive macros of this library.
 #[doc(hidden)]
 pub use {
-    async_lock,
-    async_trait::async_trait,
-    futures, generic_array,
-    linera_base::{crypto, sync::Lazy},
-    prometheus::{register_int_counter_vec, IntCounterVec},
-    serde, sha3,
+    async_lock, async_trait::async_trait, futures, generic_array, linera_base::crypto, serde, sha3,
 };
 
 /// Does nothing. Use the metrics feature to enable.
 #[cfg(not(feature = "metrics"))]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn increment_counter(_counter: &Lazy<IntCounterVec>, _struct_name: &str, _base_key: &[u8]) {}
 
 /// Increments the metrics counter with the given name, with the struct and base key as labels.
 #[cfg(feature = "metrics")]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn increment_counter(counter: &Lazy<IntCounterVec>, struct_name: &str, base_key: &[u8]) {
     let base_key = hex::encode(base_key);
     let labels = [struct_name, &base_key];
@@ -154,20 +157,22 @@ pub fn increment_counter(counter: &Lazy<IntCounterVec>, struct_name: &str, base_
 }
 
 /// The metric counting how often a view is read from storage.
+#[cfg(not(target_arch = "wasm32"))]
 pub static LOAD_VIEW_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!(
+    prometheus_util::register_int_counter_vec(
         "load_view",
         "The metric counting how often a view is read from storage",
-        &["type", "base_key"]
+        &["type", "base_key"],
     )
     .expect("Counter creation should not fail")
 });
 /// The metric counting how often a view is written from storage.
+#[cfg(not(target_arch = "wasm32"))]
 pub static SAVE_VIEW_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!(
+    prometheus_util::register_int_counter_vec(
         "save_view",
         "The metric counting how often a view is written from storage",
-        &["type", "base_key"]
+        &["type", "base_key"],
     )
     .expect("Counter creation should not fail")
 });

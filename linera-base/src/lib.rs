@@ -12,6 +12,8 @@ pub mod crypto;
 pub mod data_types;
 mod graphql;
 pub mod identifiers;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod prometheus_util;
 pub mod sync;
 
 pub use graphql::BcsHexParseError;
