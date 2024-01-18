@@ -70,7 +70,24 @@ pub static WASM_BYTES_READ_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "wasm_bytes_read_per_block",
         "Wasm number of bytes read per block",
-        &[]
+        &[],
+        vec![
+            0.5,
+            1.0,
+            10.0,
+            100.0,
+            256.0,
+            512.0,
+            1024.0,
+            2048.0,
+            4096.0,
+            8192.0,
+            16384.0,
+            65_536.0,
+            524_288.0,
+            1_048_576.0,
+            8_388_608.0
+        ],
     )
     .expect("Counter can be created")
 });
@@ -79,7 +96,24 @@ pub static WASM_BYTES_WRITTEN_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "wasm_bytes_written_per_block",
         "Wasm number of bytes written per block",
-        &[]
+        &[],
+        vec![
+            0.5,
+            1.0,
+            10.0,
+            100.0,
+            256.0,
+            512.0,
+            1024.0,
+            2048.0,
+            4096.0,
+            8192.0,
+            16384.0,
+            65_536.0,
+            524_288.0,
+            1_048_576.0,
+            8_388_608.0
+        ],
     )
     .expect("Counter can be created")
 });
