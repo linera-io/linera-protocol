@@ -117,7 +117,7 @@ Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE
 
 To create a `Bid` order nature:
 
-```json
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE
 mutation ExecuteOrder {
   executeOrder(
     order:{
@@ -136,7 +136,7 @@ mutation ExecuteOrder {
 
 To query about the bid price:
 
-```json
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE
 query{
   bids {
     keys{
