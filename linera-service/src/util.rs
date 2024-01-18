@@ -208,13 +208,13 @@ use {
 };
 
 #[cfg(any(test, feature = "test"))]
-pub struct QuotedBashScript {
+pub struct QuotedBashAndGraphQlScript {
     tmp_dir: TempDir,
     path: PathBuf,
 }
 
 #[cfg(any(test, feature = "test"))]
-impl QuotedBashScript {
+impl QuotedBashAndGraphQlScript {
     pub fn from_markdown<P: AsRef<Path>>(
         source_path: P,
         pause_after_gql_mutations: Option<Duration>,
