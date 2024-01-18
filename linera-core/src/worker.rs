@@ -58,7 +58,8 @@ pub static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "num_rounds_in_certificate",
         "Number of rounds in certificate",
-        &["certificate_value", "round_type"]
+        &["certificate_value", "round_type"],
+        vec![0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 15.0, 25.0, 50.0],
     )
     .expect("Counter creation should not fail")
 });
@@ -67,7 +68,8 @@ pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "num_rounds_in_block_proposal",
         "Number of rounds in block proposal",
-        &["round_type"]
+        &["round_type"],
+        vec![0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 15.0, 25.0, 50.0],
     )
     .expect("Counter creation should not fail")
 });
