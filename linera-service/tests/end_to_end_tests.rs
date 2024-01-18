@@ -1754,6 +1754,8 @@ async fn test_project_publish(database: Database, network: Network) {
         network,
         testing_prng_seed: Some(37),
         table_name,
+        num_other_initial_chains: 10,
+        initial_amount: Amount::from_tokens(10),
         num_initial_validators: 1,
         num_shards: 1,
     };
@@ -1851,6 +1853,8 @@ async fn test_example_publish(database: Database, network: Network) {
         network,
         testing_prng_seed: Some(37),
         table_name,
+        num_other_initial_chains: 10,
+        initial_amount: Amount::from_tokens(10),
         num_initial_validators: 1,
         num_shards: 1,
     };

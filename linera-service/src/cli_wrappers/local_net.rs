@@ -28,6 +28,8 @@ pub struct LocalNetConfig {
     pub network: Network,
     pub testing_prng_seed: Option<u64>,
     pub table_name: String,
+    pub num_other_initial_chains: u32,
+    pub initial_amount: Amount,
     pub num_initial_validators: usize,
     pub num_shards: usize,
 }
@@ -148,7 +150,7 @@ impl LineraNetConfig for LocalNetConfig {
         );
         net.generate_initial_validator_config().await.unwrap();
         client
-            .create_genesis_config(Amount::from_tokens(10))
+            .create_genesis_config(self.num_other_initial_chains, self.initial_amount)
             .await
             .unwrap();
         net.run().await.unwrap();
@@ -182,7 +184,7 @@ impl LineraNetConfig for LocalNetTestingConfig {
         if num_validators > 0 {
             net.generate_initial_validator_config().await.unwrap();
             client
-                .create_genesis_config(Amount::from_tokens(10))
+                .create_genesis_config(10, Amount::from_tokens(10))
                 .await
                 .unwrap();
             net.run().await.unwrap();

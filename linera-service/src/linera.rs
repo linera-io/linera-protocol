@@ -1018,8 +1018,8 @@ enum ClientCommand {
         #[arg(long)]
         start_timestamp: Option<DateTime<Utc>>,
 
-        /// Number of additional chains to create
-        num: u32,
+        /// Number of initial (aka "root") chains to create in addition to the admin chain.
+        num_other_initial_chains: u32,
 
         /// Set the base price for each certificate.
         #[arg(long, default_value = "0")]
@@ -1242,6 +1242,17 @@ enum NetCommand {
         /// The number of extra wallets and user chains to initialise. Default is 0.
         #[arg(long)]
         extra_wallets: Option<usize>,
+
+        /// The number of initial "root" chains created in the genesis config on top of
+        /// the default "admin" chain. All initial chains belong to the first "admin"
+        /// wallet.
+        #[arg(long, default_value = "10")]
+        other_initial_chains: u32,
+
+        /// The initial amount of native tokens credited in the initial "root" chains,
+        /// including the default "admin" chain.
+        #[arg(long, default_value = "10")]
+        initial_amount: u128,
 
         /// The number of validators in the local test network. Default is 1.
         #[arg(long, default_value = "1")]
@@ -2429,7 +2440,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
             admin_root,
             initial_funding,
             start_timestamp,
-            num,
+            num_other_initial_chains,
             certificate_price,
             fuel_price,
             storage_num_reads_price,
@@ -2479,7 +2490,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 GenesisConfig::new(committee_config, admin_id, timestamp, policy, network_name);
             let mut rng = Box::<dyn CryptoRng>::from(*testing_prng_seed);
             let mut chains = vec![];
-            for i in 0..*num {
+            for i in 0..*num_other_initial_chains {
                 let description = ChainDescription::Root(i);
                 // Create keys.
                 let chain = UserChain::make_initial(&mut rng, description, timestamp);
@@ -2528,6 +2539,8 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
         ClientCommand::Net(net_command) => match net_command {
             NetCommand::Up {
                 extra_wallets,
+                other_initial_chains,
+                initial_amount,
                 validators,
                 shards,
                 testing_prng_seed,
@@ -2558,6 +2571,8 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                         let config = LocalKubernetesNetConfig {
                             network: Network::Grpc,
                             testing_prng_seed: *testing_prng_seed,
+                            num_other_initial_chains: *other_initial_chains,
+                            initial_amount: Amount::from_tokens(*initial_amount),
                             num_initial_validators: *validators,
                             num_shards: *shards,
                             binaries: binaries.clone(),
@@ -2575,6 +2590,8 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                         database: Database::RocksDb,
                         testing_prng_seed: *testing_prng_seed,
                         table_name: table_name.to_string(),
+                        num_other_initial_chains: *other_initial_chains,
+                        initial_amount: Amount::from_tokens(*initial_amount),
                         num_initial_validators: *validators,
                         num_shards: *shards,
                     };

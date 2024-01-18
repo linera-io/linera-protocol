@@ -145,10 +145,17 @@ impl ClientWrapper {
     }
 
     /// Runs `linera create-genesis-config`.
-    pub async fn create_genesis_config(&self, initial_funding: Amount) -> Result<()> {
+    pub async fn create_genesis_config(
+        &self,
+        num_other_initial_chains: u32,
+        initial_funding: Amount,
+    ) -> Result<()> {
         let mut command = self.command().await?;
         command
-            .args(["create-genesis-config", "10"])
+            .args([
+                "create-genesis-config",
+                &num_other_initial_chains.to_string(),
+            ])
             .args(["--initial-funding", &initial_funding.to_string()])
             .args(["--committee", "committee.json"])
             .args(["--genesis", "genesis.json"]);
