@@ -64,7 +64,9 @@ Now, compile the `meta-counter` application WebAssembly binaries, publish and cr
 (cd examples/meta-counter && cargo build --release)
 META_COUNTER_ID=$(linera --wait-for-outgoing-messages publish-and-create \
   examples/target/wasm32-unknown-unknown/release/meta_counter_{contract,service}.wasm \
-  --json-argument="null" --json-parameters '"'"$APPLICATION_ID"'"' --required-application-ids $APPLICATION_ID)
+  --json-argument="null" \
+  --json-parameters '"'"$APPLICATION_ID"'"' \
+  --required-application-ids $APPLICATION_ID)
 ```
 
 ## Using the Meta Counter Application

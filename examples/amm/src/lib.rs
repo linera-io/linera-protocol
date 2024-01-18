@@ -83,7 +83,10 @@ FUN2_APP_ID=$(linera --wait-for-outgoing-messages \
 )
 
 (cd examples/amm && cargo build --release)
-AMM_APPLICATION_ID=$(linera --wait-for-outgoing-messages publish-and-create examples/target/wasm32-unknown-unknown/release/amm_{contract,service}.wasm --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN2_APP_ID\""]}")
+AMM_APPLICATION_ID=$(linera --wait-for-outgoing-messages \
+  publish-and-create examples/target/wasm32-unknown-unknown/release/amm_{contract,service}.wasm \
+  --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN2_APP_ID\""]}" \
+  --required-application-ids $FUN1_APP_ID $FUN2_APP_ID)
 ```
 
 ## Using the AMM Application
@@ -102,8 +105,8 @@ navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION
 
 To perform `AddLiquidity` operation:
 
-```json
-mutation{
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
+mutation {
   operation(
     operation: {
       AddLiquidity: {
@@ -120,22 +123,22 @@ We can only perform `Swap` from a remote chain i.e. other than the chain on whic
 we can do it from GraphiQL by performing the `requestApplication` mutation so that we can perform the
 `Swap` operation from the chain.
 
-```json
+```gql,uri=http://localhost:8080
 mutation {
   requestApplication (
     chainId:"e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3",
-    applicationId: "AMM_APPLICATION_ID",
+    applicationId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65080000000000000000000000",
     targetChainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
   )
 }
 ```
 Note: The above mutation has to be performed from `http://localhost:8080`.
 
-Now to perform `Swap` operation, naviage to `http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID` and
+Now to perform `Swap` operation, navigate to `http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID` and
 perform the following mutation:
 
-```json
-mutation{
+```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID
+mutation {
   operation(
     operation: {
       Swap: {
@@ -151,12 +154,12 @@ mutation{
 We can also perform the `RemoveLiquidity` operation, navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID` and
 perform the following mutation:
 
-```json
-mutation{
+```gql
+mutation {
   operation(
     operation: {
       RemoveLiquidity: {
-        owner:"User:453690095cdfe6dbde7fc577e56bb838a7ee7920a72512d4a87748b4e151ed61",
+        owner:"User:e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316",
         token_to_remove_idx: 1,
         token_to_remove_amount: "1",
       }
