@@ -221,7 +221,7 @@ impl QuotedBashAndGraphQlScript {
     ) -> Result<Self, std::io::Error> {
         let file = std::io::BufReader::new(fs_err::File::open(source_path.as_ref())?);
         let tmp_dir = tempdir()?;
-        let quotes = Self::read_bash_quotes(file, pause_after_gql_mutations)?;
+        let quotes = Self::read_bash_and_gql_quotes(file, pause_after_gql_mutations)?;
 
         let path = tmp_dir.path().join("test.sh");
 
@@ -242,7 +242,7 @@ impl QuotedBashAndGraphQlScript {
     }
 
     #[allow(clippy::while_let_on_iterator)]
-    fn read_bash_quotes(
+    fn read_bash_and_gql_quotes(
         reader: impl std::io::BufRead,
         pause_after_gql_mutations: Option<Duration>,
     ) -> std::io::Result<Vec<String>> {
