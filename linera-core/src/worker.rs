@@ -1373,39 +1373,39 @@ impl<'a> CrossChainUpdateHelper<'a> {
         let mut latest_height = None;
         let mut skipped_len = 0;
         let mut trusted_len = 0;
-        for (i, certificate) in bundles.iter().enumerate() {
+        for (i, bundle) in bundles.iter().enumerate() {
             // Make sure that heights are increasing.
             ensure!(
-                latest_height < Some(certificate.height),
+                latest_height < Some(bundle.height),
                 WorkerError::InvalidCrossChainRequest
             );
-            latest_height = Some(certificate.height);
+            latest_height = Some(bundle.height);
             // Check if the block has been received already.
-            if certificate.height < next_height_to_receive {
+            if bundle.height < next_height_to_receive {
                 skipped_len = i + 1;
             }
             // Check if the height is trusted or the epoch is trusted.
             if self.allow_messages_from_deprecated_epochs
-                || Some(certificate.height) <= last_anticipated_block_height
-                || Some(certificate.epoch) >= self.current_epoch
-                || self.committees.contains_key(&certificate.epoch)
+                || Some(bundle.height) <= last_anticipated_block_height
+                || Some(bundle.epoch) >= self.current_epoch
+                || self.committees.contains_key(&bundle.epoch)
             {
                 trusted_len = i + 1;
             }
         }
         if skipped_len > 0 {
-            let sample = &bundles[skipped_len - 1];
+            let sample_bundle = &bundles[skipped_len - 1];
             debug!(
                 "[{}] Ignoring repeated messages to {recipient:?} from {origin:?} at height {}",
-                self.nickname, sample.height,
+                self.nickname, sample_bundle.height,
             );
         }
         if skipped_len < bundles.len() && trusted_len < bundles.len() {
-            let sample = &bundles[trusted_len];
+            let sample_bundle = &bundles[trusted_len];
             warn!(
                 "[{}] Refusing messages to {recipient:?} from {origin:?} at height {} \
                  because the epoch {:?} is not trusted any more",
-                self.nickname, sample.height, sample.epoch,
+                self.nickname, sample_bundle.height, sample_bundle.epoch,
             );
         }
         let certificates = if skipped_len < trusted_len {
