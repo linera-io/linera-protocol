@@ -60,7 +60,8 @@ pub static WASM_NUM_READS_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "wasm_num_reads_per_block",
         "Wasm number of reads per block",
-        &[]
+        &[],
+        vec![0.5, 1.0, 2.0, 4.0, 8.0, 15.0, 30.0, 50.0, 100.0],
     )
     .expect("Counter can be created")
 });
