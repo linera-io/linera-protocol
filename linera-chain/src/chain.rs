@@ -4,7 +4,7 @@
 use crate::{
     data_types::{
         Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, Event, IncomingMessage,
-        Medium, MessageAction, Origin, OutgoingMessage, Target,
+        MessageAction, MessageBundle, Origin, OutgoingMessage, Target,
     },
     inbox::{InboxError, InboxStateView},
     outbox::OutboxStateView,
@@ -369,71 +369,61 @@ where
     pub async fn receive_block(
         &mut self,
         origin: &Origin,
-        height: BlockHeight,
-        timestamp: Timestamp,
-        messages: Vec<OutgoingMessage>,
-        certificate_hash: CryptoHash,
+        bundle: MessageBundle,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         ensure!(
-            height >= self.next_block_height_to_receive(origin).await?,
+            bundle.height >= self.next_block_height_to_receive(origin).await?,
             ChainError::InternalError("Trying to receive blocks in the wrong order".to_string())
         );
         tracing::trace!(
             "Processing new messages to {:?} from {:?} at height {}",
             chain_id,
             origin,
-            height
+            bundle.height,
         );
         // Process immediate messages and create inbox events.
         let mut events = Vec::new();
-        for (index, outgoing_message) in messages.into_iter().enumerate() {
-            let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
+        for (index, outgoing_message) in bundle.messages {
+            ensure!(
+                outgoing_message.has_destination(&origin.medium, chain_id),
+                ChainError::InternalError(format!(
+                    "Cross-chain message to {:?} contains message to {:?}",
+                    chain_id, outgoing_message.destination
+                ))
+            );
             let OutgoingMessage {
-                destination,
+                destination: _,
                 authenticated_signer,
                 kind,
                 message,
             } = outgoing_message;
-            // Skip events that do not belong to this origin OR have no effect on this
-            // recipient.
-            match destination {
-                Destination::Recipient(id) => {
-                    if origin.medium != Medium::Direct || id != chain_id {
-                        continue;
-                    }
-                }
-                Destination::Subscribers(name) => {
-                    let expected_medium = Medium::Channel(ChannelFullName {
-                        application_id: message.application_id(),
-                        name,
-                    });
-                    if origin.medium != expected_medium {
-                        continue;
-                    }
-                }
-            }
             if let Message::System(_) = message {
                 if self.execution_state.system.description.get().is_none() {
                     // Handle special messages to be executed immediately.
                     let message_id = MessageId {
                         chain_id: origin.sender,
-                        height,
+                        height: bundle.height,
                         index,
                     };
-                    self.execute_immediate_message(message_id, &message, timestamp, local_time)
-                        .await?;
+                    self.execute_immediate_message(
+                        message_id,
+                        &message,
+                        bundle.timestamp,
+                        local_time,
+                    )
+                    .await?;
                 }
             }
             // Record the inbox event to process it below.
             events.push(Event {
-                certificate_hash,
-                height,
+                certificate_hash: bundle.hash,
+                height: bundle.height,
                 index,
                 authenticated_signer,
                 kind,
-                timestamp,
+                timestamp: bundle.timestamp,
                 message,
             });
         }
@@ -444,7 +434,7 @@ where
             ChainError::InternalError(format!(
                 "The block received by {:?} from {:?} at height {:?} was entirely ignored. \
                 This should not happen",
-                chain_id, origin, height
+                chain_id, origin, bundle.height
             ))
         );
         // Process the inbox events and update the inbox state.
@@ -460,7 +450,7 @@ where
         // Remember the certificate for future validator/client synchronizations.
         self.received_log.push(ChainAndHeight {
             chain_id: origin.sender,
-            height,
+            height: bundle.height,
         });
         Ok(())
     }

@@ -359,6 +359,19 @@ fn generate_key_pairs(count: usize) -> Vec<KeyPair> {
     key_pairs
 }
 
+/// Creates a `CrossChainRequest` with the messages sent by the certificate to the recipient.
+fn update_recipient_direct(recipient: ChainId, certificate: &Certificate) -> CrossChainRequest {
+    let sender = certificate.value().chain_id();
+    let bundle = certificate
+        .message_bundle_for(&Medium::Direct, recipient)
+        .unwrap();
+    CrossChainRequest::UpdateRecipient {
+        sender,
+        recipient,
+        bundle_vecs: vec![(Medium::Direct, vec![bundle])],
+    }
+}
+
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_bad_signature() {
     let storage = MemoryStorage::make_test_storage(None).await;
@@ -2003,12 +2016,7 @@ where
     )
     .await;
     worker
-        .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            height_map: vec![(Medium::Direct, vec![certificate.value().height()])],
-            sender: ChainId::root(1),
-            recipient: ChainId::root(2),
-            certificates: vec![certificate.clone()],
-        })
+        .handle_cross_chain_request(update_recipient_direct(ChainId::root(2), &certificate))
         .await
         .unwrap();
     let mut chain = worker
@@ -2100,12 +2108,7 @@ where
     )
     .await;
     assert!(worker
-        .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            height_map: vec![(Medium::Direct, vec![certificate.value().height()],)],
-            sender: ChainId::root(1),
-            recipient: ChainId::root(2),
-            certificates: vec![certificate],
-        })
+        .handle_cross_chain_request(update_recipient_direct(ChainId::root(2), &certificate))
         .await
         .unwrap()
         .cross_chain_requests
@@ -2164,12 +2167,7 @@ where
     .await;
     // An inactive target chain is created and it acknowledges the message.
     let actions = worker
-        .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            height_map: vec![(Medium::Direct, vec![certificate.value().height()])],
-            sender: ChainId::root(1),
-            recipient: ChainId::root(2),
-            certificates: vec![certificate],
-        })
+        .handle_cross_chain_request(update_recipient_direct(ChainId::root(2), &certificate))
         .await
         .unwrap();
     assert!(matches!(
@@ -3577,6 +3575,18 @@ async fn test_cross_chain_helper() {
         Some(&certificate2),
     )
     .await;
+    let bundle0 = certificate0
+        .message_bundle_for(&Medium::Direct, id1)
+        .unwrap();
+    let bundle1 = certificate1
+        .message_bundle_for(&Medium::Direct, id1)
+        .unwrap();
+    let bundle2 = certificate2
+        .message_bundle_for(&Medium::Direct, id1)
+        .unwrap();
+    let bundle3 = certificate3
+        .message_bundle_for(&Medium::Direct, id1)
+        .unwrap();
 
     let helper = CrossChainUpdateHelper {
         nickname: "test",
@@ -3587,60 +3597,49 @@ async fn test_cross_chain_helper() {
     // Epoch is not tested when `allow_messages_from_deprecated_epochs` is true.
     assert_eq!(
         helper
-            .select_certificates(
+            .select_message_bundles(
                 &Origin::chain(id0),
                 id1,
                 BlockHeight::ZERO,
                 None,
-                vec![certificate0.clone(), certificate1.clone()]
+                vec![bundle0.clone(), bundle1.clone()]
             )
             .unwrap(),
-        vec![certificate0.clone(), certificate1.clone()]
+        vec![bundle0.clone(), bundle1.clone()]
     );
     // Received heights is removing prefixes.
     assert_eq!(
         helper
-            .select_certificates(
+            .select_message_bundles(
                 &Origin::chain(id0),
                 id1,
                 BlockHeight::from(1),
                 None,
-                vec![certificate0.clone(), certificate1.clone()]
+                vec![bundle0.clone(), bundle1.clone()]
             )
             .unwrap(),
-        vec![certificate1.clone()]
+        vec![bundle1.clone()]
     );
     assert_eq!(
         helper
-            .select_certificates(
+            .select_message_bundles(
                 &Origin::chain(id0),
                 id1,
                 BlockHeight::from(2),
                 None,
-                vec![certificate0.clone(), certificate1.clone()]
+                vec![bundle0.clone(), bundle1.clone()]
             )
             .unwrap(),
         vec![]
     );
     // Order of certificates is checked.
     assert!(matches!(
-        helper.select_certificates(
+        helper.select_message_bundles(
             &Origin::chain(id0),
             id1,
             BlockHeight::ZERO,
             None,
-            vec![certificate1.clone(), certificate0.clone()]
-        ),
-        Err(WorkerError::InvalidCrossChainRequest)
-    ));
-    // Sender is checked.
-    assert!(matches!(
-        helper.select_certificates(
-            &Origin::chain(id1),
-            id0,
-            BlockHeight::ZERO,
-            None,
-            vec![certificate0.clone()]
+            vec![bundle1.clone(), bundle0.clone()]
         ),
         Err(WorkerError::InvalidCrossChainRequest)
     ));
@@ -3654,12 +3653,12 @@ async fn test_cross_chain_helper() {
     // Epoch is tested when `allow_messages_from_deprecated_epochs` is false.
     assert_eq!(
         helper
-            .select_certificates(
+            .select_message_bundles(
                 &Origin::chain(id0),
                 id1,
                 BlockHeight::ZERO,
                 None,
-                vec![certificate0.clone(), certificate1.clone()]
+                vec![bundle0.clone(), bundle1.clone()]
             )
             .unwrap(),
         vec![]
@@ -3667,66 +3666,53 @@ async fn test_cross_chain_helper() {
     // A certificate with a recent epoch certifies all the previous blocks.
     assert_eq!(
         helper
-            .select_certificates(
+            .select_message_bundles(
                 &Origin::chain(id0),
                 id1,
                 BlockHeight::ZERO,
                 None,
-                vec![
-                    certificate0.clone(),
-                    certificate1.clone(),
-                    certificate2.clone(),
-                    certificate3
-                ]
+                vec![bundle0.clone(), bundle1.clone(), bundle2.clone(), bundle3]
             )
             .unwrap(),
-        vec![
-            certificate0.clone(),
-            certificate1.clone(),
-            certificate2.clone()
-        ]
+        vec![bundle0.clone(), bundle1.clone(), bundle2.clone()]
     );
     // Received heights is still removing prefixes.
     assert_eq!(
         helper
-            .select_certificates(
+            .select_message_bundles(
                 &Origin::chain(id0),
                 id1,
                 BlockHeight::from(1),
                 None,
-                vec![
-                    certificate0.clone(),
-                    certificate1.clone(),
-                    certificate2.clone()
-                ]
+                vec![bundle0.clone(), bundle1.clone(), bundle2.clone()]
             )
             .unwrap(),
-        vec![certificate1.clone(), certificate2.clone()]
+        vec![bundle1.clone(), bundle2.clone()]
     );
     // Anticipated messages re-certify blocks up to the given height.
     assert_eq!(
         helper
-            .select_certificates(
+            .select_message_bundles(
                 &Origin::chain(id0),
                 id1,
                 BlockHeight::from(1),
                 Some(BlockHeight::from(1)),
-                vec![certificate0.clone(), certificate1.clone()]
+                vec![bundle0.clone(), bundle1.clone()]
             )
             .unwrap(),
-        vec![certificate1.clone()]
+        vec![bundle1.clone()]
     );
     assert_eq!(
         helper
-            .select_certificates(
+            .select_message_bundles(
                 &Origin::chain(id0),
                 id1,
                 BlockHeight::ZERO,
                 Some(BlockHeight::from(1)),
-                vec![certificate0.clone(), certificate1.clone()]
+                vec![bundle0.clone(), bundle1.clone()]
             )
             .unwrap(),
-        vec![certificate0.clone(), certificate1.clone()]
+        vec![bundle0.clone(), bundle1.clone()]
     );
 }
 

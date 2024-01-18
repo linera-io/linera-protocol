@@ -147,15 +147,13 @@ impl TryFrom<grpc::CrossChainRequest> for CrossChainRequest {
             .ok_or(ProtoConversionError::MissingField)?
         {
             Inner::UpdateRecipient(grpc::UpdateRecipient {
-                height_map,
                 sender,
                 recipient,
-                certificates,
+                bundle_vecs,
             }) => CrossChainRequest::UpdateRecipient {
-                height_map: bincode::deserialize(&height_map)?,
                 sender: try_proto_convert(sender)?,
                 recipient: try_proto_convert(recipient)?,
-                certificates: bincode::deserialize(&certificates)?,
+                bundle_vecs: bincode::deserialize(&bundle_vecs)?,
             },
             Inner::ConfirmUpdatedRecipient(grpc::ConfirmUpdatedRecipient {
                 sender,
@@ -179,15 +177,13 @@ impl TryFrom<CrossChainRequest> for grpc::CrossChainRequest {
 
         let inner = match cross_chain_request {
             CrossChainRequest::UpdateRecipient {
-                height_map,
                 sender,
                 recipient,
-                certificates,
+                bundle_vecs,
             } => Inner::UpdateRecipient(grpc::UpdateRecipient {
-                height_map: bincode::serialize(&height_map)?,
                 sender: Some(sender.into()),
                 recipient: Some(recipient.into()),
-                certificates: bincode::serialize(&certificates)?,
+                bundle_vecs: bincode::serialize(&bundle_vecs)?,
             }),
             CrossChainRequest::ConfirmUpdatedRecipient {
                 sender,
@@ -635,10 +631,9 @@ pub mod tests {
     #[test]
     pub fn test_cross_chain_request() {
         let cross_chain_request_update_recipient = CrossChainRequest::UpdateRecipient {
-            height_map: vec![(linera_chain::data_types::Medium::Direct, vec![])],
             sender: ChainId::root(0),
             recipient: ChainId::root(0),
-            certificates: vec![],
+            bundle_vecs: vec![(linera_chain::data_types::Medium::Direct, vec![])],
         };
         round_trip_check::<_, grpc::CrossChainRequest>(cross_chain_request_update_recipient);
 

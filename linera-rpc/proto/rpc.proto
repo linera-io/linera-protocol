@@ -78,13 +78,12 @@ message CrossChainRequest {
   }
 }
 
-// Communicate a number of confirmed blocks from the sender to the recipient.
-// Blocks must be given by increasing heights.
+// Communicate a number of messages from the sender to the recipient.
+// Messages must be given by increasing block height.
 message UpdateRecipient {
-  bytes height_map = 1;
-  ChainId sender = 2;
-  ChainId recipient = 3;
-  bytes certificates = 4;
+  ChainId sender = 1;
+  ChainId recipient = 2;
+  bytes bundle_vecs = 3;
 }
 
 // Acknowledge the height of the highest confirmed blocks communicated with `UpdateRecipient`.
