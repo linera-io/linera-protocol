@@ -12,6 +12,8 @@ spec:
     - port: {{ .Values.proxyPort }}
       name: linera-port
       targetPort: {{ .Values.proxyPort }}
+    - port: {{ .Values.metricsPort }}
+      name: metrics
   selector:
     app: proxy
   type: NodePort

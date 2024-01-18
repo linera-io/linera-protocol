@@ -5,6 +5,7 @@ lineraImage: linera-test:latest
 lineraImagePullPolicy: Never
 logLevel: "debug"
 proxyPort: 19100
+metricsPort: 21100
 numShards: 10
 
 # Loki
