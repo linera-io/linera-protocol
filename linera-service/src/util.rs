@@ -208,17 +208,20 @@ use {
 };
 
 #[cfg(any(test, feature = "test"))]
-pub struct QuotedBashScript {
+pub struct QuotedBashAndGraphQlScript {
     tmp_dir: TempDir,
     path: PathBuf,
 }
 
 #[cfg(any(test, feature = "test"))]
-impl QuotedBashScript {
-    pub fn from_markdown<P: AsRef<Path>>(source_path: P) -> Result<Self, std::io::Error> {
+impl QuotedBashAndGraphQlScript {
+    pub fn from_markdown<P: AsRef<Path>>(
+        source_path: P,
+        pause_after_gql_mutations: Option<Duration>,
+    ) -> Result<Self, std::io::Error> {
         let file = std::io::BufReader::new(fs_err::File::open(source_path.as_ref())?);
         let tmp_dir = tempdir()?;
-        let quotes = Self::read_bash_quotes(file)?;
+        let quotes = Self::read_bash_and_gql_quotes(file, pause_after_gql_mutations)?;
 
         let path = tmp_dir.path().join("test.sh");
 
@@ -239,7 +242,10 @@ impl QuotedBashScript {
     }
 
     #[allow(clippy::while_let_on_iterator)]
-    fn read_bash_quotes(reader: impl std::io::BufRead) -> std::io::Result<Vec<String>> {
+    fn read_bash_and_gql_quotes(
+        reader: impl std::io::BufRead,
+        pause_after_gql_mutations: Option<Duration>,
+    ) -> std::io::Result<Vec<String>> {
         let mut result = Vec::new();
         let mut lines = reader.lines();
 
@@ -256,6 +262,30 @@ impl QuotedBashScript {
                     quote += "\n";
                 }
                 result.push(quote);
+            } else if let Some(uri) = line.strip_prefix("```gql,uri=") {
+                let mut quote = String::new();
+                while let Some(line) = lines.next() {
+                    let line = line?;
+                    if line.starts_with("```") {
+                        break;
+                    }
+                    quote += &line;
+                    quote += "\n";
+                }
+                let json = serde_json::to_string(&quote).unwrap();
+                let command = format!(
+                    "curl -w '\\n' -g -X POST -H \"Content-Type: application/json\" -d '{{ \"query\": {json} }}' {uri} \
+                     | tee /dev/stderr \
+                     | jq -e .data \n"
+                );
+                result.push(command);
+
+                if let Some(pause) = pause_after_gql_mutations {
+                    // Hack: let's add a pause after mutations.
+                    if quote.starts_with("mutation") {
+                        result.push(format!("\nsleep {}\n", pause.as_secs()));
+                    }
+                }
             }
         }
 
