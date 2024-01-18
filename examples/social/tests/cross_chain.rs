@@ -27,7 +27,12 @@ async fn test_cross_chain_posting() {
     // Subscribe chain1 to chain2
     chain1
         .add_block(|block| {
-            block.with_operation(application_id, Operation::RequestSubscribe(chain2.id()));
+            block.with_operation(
+                application_id,
+                Operation::Subscribe {
+                    chain_id: chain2.id(),
+                },
+            );
         })
         .await;
 
@@ -39,7 +44,9 @@ async fn test_cross_chain_posting() {
         .add_block(|block| {
             block.with_operation(
                 application_id,
-                Operation::Post("Linera is the new Mastodon".to_string()),
+                Operation::Post {
+                    text: "Linera is the new Mastodon".to_string(),
+                },
             );
         })
         .await;

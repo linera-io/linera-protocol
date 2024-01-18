@@ -619,7 +619,9 @@ where
         .unwrap();
 
     // Request to subscribe to the sender.
-    let request_subscribe = social::Operation::RequestSubscribe(sender.chain_id());
+    let request_subscribe = social::Operation::Subscribe {
+        chain_id: sender.chain_id(),
+    };
     let cert = receiver
         .execute_operation(Operation::user(application_id, &request_subscribe)?)
         .await
@@ -633,7 +635,7 @@ where
 
     // Make a post.
     let text = "Please like and subscribe! No, wait, like isn't supported yet.".to_string();
-    let post = social::Operation::Post(text.clone());
+    let post = social::Operation::Post { text: text.clone() };
     let cert = sender
         .execute_operation(Operation::user(application_id, &post)?)
         .await
@@ -672,7 +674,9 @@ where
     assert_eq!(posts, expected);
 
     // Request to unsubscribe from the sender.
-    let request_unsubscribe = social::Operation::RequestUnsubscribe(sender.chain_id());
+    let request_unsubscribe = social::Operation::Unsubscribe {
+        chain_id: sender.chain_id(),
+    };
     let cert = receiver
         .execute_operation(Operation::user(application_id, &request_unsubscribe)?)
         .await
@@ -685,7 +689,9 @@ where
     let _certs = sender.process_inbox().await.unwrap();
 
     // Make a post.
-    let post = social::Operation::Post("Nobody will read this!".to_string());
+    let post = social::Operation::Post {
+        text: "Nobody will read this!".to_string(),
+    };
     let cert = sender
         .execute_operation(Operation::user(application_id, &post)?)
         .await
