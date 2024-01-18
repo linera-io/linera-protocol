@@ -23,8 +23,8 @@ mod wasmtime;
 
 use self::sanitizer::sanitize;
 use crate::{
-    Bytecode, ContractSyncRuntime, ExecutionError, ServiceSyncRuntime, UserContract,
-    UserContractModule, UserService, UserServiceModule, WasmRuntime,
+    Bytecode, ContractSyncRuntime, ExecutionError, ServiceSyncRuntime, UserContractInstance,
+    UserContractModule, UserServiceInstance, UserServiceModule, WasmRuntime,
 };
 use std::{path::Path, sync::Arc};
 use thiserror::Error;
@@ -91,7 +91,7 @@ impl UserContractModule for WasmContractModule {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntime,
-    ) -> Result<Box<dyn UserContract + Send + Sync + 'static>, ExecutionError> {
+    ) -> Result<UserContractInstance, ExecutionError> {
         match self {
             #[cfg(feature = "wasmtime")]
             WasmContractModule::Wasmtime { module } => Ok(Box::new(
@@ -152,7 +152,7 @@ impl UserServiceModule for WasmServiceModule {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntime,
-    ) -> Result<Box<dyn UserService + Send + Sync + 'static>, ExecutionError> {
+    ) -> Result<UserServiceInstance, ExecutionError> {
         match self {
             #[cfg(feature = "wasmtime")]
             WasmServiceModule::Wasmtime { module } => {

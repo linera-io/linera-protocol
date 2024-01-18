@@ -6,8 +6,9 @@ use crate::{
     execution_state_actor::{ExecutionStateSender, Request},
     resources::{RuntimeCounts, RuntimeLimits},
     util::{ReceiverExt, UnboundedSenderExt},
-    BaseRuntime, CallOutcome, ContractRuntime, ExecutionError, ExecutionOutcome, ServiceRuntime,
-    SessionId, UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
+    ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
+    ExecutionError, ExecutionOutcome, ServiceRuntime, SessionId, UserApplicationDescription,
+    UserApplicationId, UserContractCode, UserContractInstance, UserServiceInstance,
 };
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -18,25 +19,27 @@ use linera_base::{
 use linera_views::batch::Batch;
 use oneshot::Receiver;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{hash_map, BTreeMap, HashMap, HashSet},
     sync::{Arc, Mutex},
 };
 
-#[derive(Clone, Debug)]
-pub struct SyncRuntime<const W: bool>(Arc<Mutex<SyncRuntimeInternal<W>>>);
+#[derive(Debug)]
+pub struct SyncRuntime<UserInstance>(Arc<Mutex<SyncRuntimeInternal<UserInstance>>>);
 
-pub type ContractSyncRuntime = SyncRuntime<true>;
-pub type ServiceSyncRuntime = SyncRuntime<false>;
+pub type ContractSyncRuntime = SyncRuntime<UserContractInstance>;
+pub type ServiceSyncRuntime = SyncRuntime<UserServiceInstance>;
 
 /// Runtime data tracked during the execution of a transaction on the synchronous thread.
 #[derive(Debug)]
-pub struct SyncRuntimeInternal<const WRITABLE: bool> {
+pub struct SyncRuntimeInternal<UserInstance> {
     /// The current chain ID.
     chain_id: ChainId,
 
     /// How to interact with the storage view of the execution state.
     execution_state_sender: ExecutionStateSender,
 
+    /// Application instances loaded in this transaction.
+    loaded_applications: HashMap<UserApplicationId, LoadedApplication<UserInstance>>,
     /// The current stack of application descriptions.
     call_stack: Vec<ApplicationStatus>,
     /// The set of the IDs of the applications that are in the `call_stack`.
@@ -66,6 +69,34 @@ struct ApplicationStatus {
     parameters: Vec<u8>,
     /// The authenticated signer for the execution thread, if any.
     signer: Option<Owner>,
+}
+
+/// A loaded application instance.
+#[derive(Debug)]
+struct LoadedApplication<Instance> {
+    instance: Arc<Mutex<Instance>>,
+    parameters: Vec<u8>,
+}
+
+impl<Instance> LoadedApplication<Instance> {
+    /// Creates a new [`LoadedApplication`] entry from the `instance` and its `description`.
+    fn new(instance: Instance, description: UserApplicationDescription) -> Self {
+        LoadedApplication {
+            instance: Arc::new(Mutex::new(instance)),
+            parameters: description.parameters,
+        }
+    }
+}
+
+impl<Instance> Clone for LoadedApplication<Instance> {
+    // Manual implementation is needed to prevent the derive macro from adding an `Instance: Clone`
+    // bound
+    fn clone(&self) -> Self {
+        LoadedApplication {
+            instance: self.instance.clone(),
+            parameters: self.parameters.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -193,7 +224,7 @@ struct SessionState {
     data: Vec<u8>,
 }
 
-impl<const W: bool> SyncRuntimeInternal<W> {
+impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     fn new(
         chain_id: ChainId,
         execution_state_sender: ExecutionStateSender,
@@ -207,6 +238,7 @@ impl<const W: bool> SyncRuntimeInternal<W> {
         Self {
             chain_id,
             execution_state_sender,
+            loaded_applications: HashMap::new(),
             call_stack: Vec::new(),
             active_applications: HashSet::new(),
             execution_outcomes: Vec::default(),
@@ -216,24 +248,6 @@ impl<const W: bool> SyncRuntimeInternal<W> {
             runtime_counts,
             runtime_limits,
         }
-    }
-
-    fn load_contract(
-        &mut self,
-        id: UserApplicationId,
-    ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
-        self.execution_state_sender
-            .send_request(|callback| Request::LoadContract { id, callback })?
-            .recv_response()
-    }
-
-    fn load_service(
-        &mut self,
-        id: UserApplicationId,
-    ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
-        self.execution_state_sender
-            .send_request(|callback| Request::LoadService { id, callback })?
-            .recv_response()
     }
 
     /// Returns the [`ApplicationStatus`] of the current application.
@@ -264,12 +278,125 @@ impl<const W: bool> SyncRuntimeInternal<W> {
     /// # Panics
     ///
     /// If the call stack is empty.
-    fn pop_application(&mut self) {
+    fn pop_application(&mut self) -> ApplicationStatus {
         let status = self
             .call_stack
             .pop()
             .expect("Can't remove application from empty call stack");
         assert!(self.active_applications.remove(&status.id));
+        status
+    }
+
+    /// Ensures that a call to `application_id` is not-reentrant.
+    ///
+    /// Returns an error if there already is an entry for `application_id` in the call stack.
+    fn check_for_reentrancy(
+        &mut self,
+        application_id: UserApplicationId,
+    ) -> Result<(), ExecutionError> {
+        ensure!(
+            !self.active_applications.contains(&application_id),
+            ExecutionError::ReentrantCall(application_id)
+        );
+        Ok(())
+    }
+}
+
+impl SyncRuntimeInternal<UserContractInstance> {
+    fn load_contract(
+        &mut self,
+        id: UserApplicationId,
+    ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
+        self.execution_state_sender
+            .send_request(|callback| Request::LoadContract { id, callback })?
+            .recv_response()
+    }
+
+    /// Loads a contract instance, initializing it with this runtime if needed.
+    fn load_contract_instance(
+        &mut self,
+        this: Arc<Mutex<Self>>,
+        id: UserApplicationId,
+    ) -> Result<LoadedApplication<UserContractInstance>, ExecutionError> {
+        match self.loaded_applications.entry(id) {
+            hash_map::Entry::Vacant(entry) => {
+                let (code, description) = self
+                    .execution_state_sender
+                    .send_request(|callback| Request::LoadContract { id, callback })?
+                    .recv_response()?;
+
+                let instance = code.instantiate(SyncRuntime(this))?;
+                Ok(entry
+                    .insert(LoadedApplication::new(instance, description))
+                    .clone())
+            }
+            hash_map::Entry::Occupied(entry) => Ok(entry.get().clone()),
+        }
+    }
+
+    /// Configures the runtime for executing a call to a different contract.
+    fn prepare_for_call(
+        &mut self,
+        this: Arc<Mutex<Self>>,
+        authenticated: bool,
+        callee_id: UserApplicationId,
+        forwarded_sessions: &[SessionId],
+    ) -> Result<(Arc<Mutex<UserContractInstance>>, CalleeContext), ExecutionError> {
+        self.check_for_reentrancy(callee_id)?;
+
+        // Load the application.
+        let application = self.load_contract_instance(this, callee_id)?;
+
+        let caller = self.current_application();
+        let caller_id = caller.id;
+        let caller_signer = caller.signer;
+        // Change the owners of forwarded sessions.
+        self.forward_sessions(forwarded_sessions, caller_id, callee_id)?;
+        // Make the call to user code.
+        let authenticated_signer = match caller_signer {
+            Some(signer) if authenticated => Some(signer),
+            _ => None,
+        };
+        let authenticated_caller_id = authenticated.then_some(caller_id);
+        let callee_context = CalleeContext {
+            chain_id: self.chain_id,
+            authenticated_signer,
+            authenticated_caller_id,
+        };
+        self.push_application(ApplicationStatus {
+            id: callee_id,
+            parameters: application.parameters,
+            // Allow further nested calls to be authenticated if this one is.
+            signer: authenticated_signer,
+        });
+        Ok((application.instance, callee_context))
+    }
+
+    /// Cleans up the runtime after the execution of a call to a different contract.
+    fn finish_call(
+        &mut self,
+        raw_outcome: ApplicationCallOutcome,
+    ) -> Result<CallOutcome, ExecutionError> {
+        let ApplicationStatus {
+            id: callee_id,
+            signer,
+            ..
+        } = self.pop_application();
+
+        // Interpret the results of the call.
+        self.execution_outcomes.push(ExecutionOutcome::User(
+            callee_id,
+            raw_outcome
+                .execution_outcome
+                .with_authenticated_signer(signer),
+        ));
+        let caller_id = self.application_id()?;
+        let sessions = self.make_sessions(raw_outcome.create_sessions, callee_id, caller_id);
+        let outcome = CallOutcome {
+            value: raw_outcome.value,
+            sessions,
+        };
+        Ok(outcome)
     }
 
     fn forward_sessions(
@@ -399,138 +526,149 @@ impl<const W: bool> SyncRuntimeInternal<W> {
     }
 }
 
-impl<const W: bool> SyncRuntime<W> {
-    fn new(runtime: SyncRuntimeInternal<W>) -> Self {
+impl SyncRuntimeInternal<UserServiceInstance> {
+    /// Initializes a service instance with this runtime.
+    fn load_service_instance(
+        &mut self,
+        this: Arc<Mutex<Self>>,
+        id: UserApplicationId,
+    ) -> Result<LoadedApplication<UserServiceInstance>, ExecutionError> {
+        match self.loaded_applications.entry(id) {
+            hash_map::Entry::Vacant(entry) => {
+                let (code, description) = self
+                    .execution_state_sender
+                    .send_request(|callback| Request::LoadService { id, callback })?
+                    .recv_response()?;
+
+                let instance = code.instantiate(SyncRuntime(this))?;
+                Ok(entry
+                    .insert(LoadedApplication::new(instance, description))
+                    .clone())
+            }
+            hash_map::Entry::Occupied(entry) => Ok(entry.get().clone()),
+        }
+    }
+}
+
+impl<UserInstance> SyncRuntime<UserInstance> {
+    fn new(runtime: SyncRuntimeInternal<UserInstance>) -> Self {
         SyncRuntime(Arc::new(Mutex::new(runtime)))
     }
 
-    fn into_inner(self) -> Option<SyncRuntimeInternal<W>> {
+    fn into_inner(self) -> Option<SyncRuntimeInternal<UserInstance>> {
         let runtime = Arc::into_inner(self.0)?
             .into_inner()
             .expect("thread should not have panicked");
         Some(runtime)
     }
 
-    fn as_inner(&mut self) -> std::sync::MutexGuard<'_, SyncRuntimeInternal<W>> {
+    fn inner(&mut self) -> std::sync::MutexGuard<'_, SyncRuntimeInternal<UserInstance>> {
         self.0
             .try_lock()
             .expect("Synchronous runtimes run on a single execution thread")
     }
-
-    /// Ensures that a call to `application_id` is not-reentrant.
-    ///
-    /// Returns an error if there already is an entry for `application_id` in the call stack.
-    fn check_for_reentrancy(
-        &mut self,
-        application_id: UserApplicationId,
-    ) -> Result<(), ExecutionError> {
-        let this = self.as_inner();
-        ensure!(
-            !this.active_applications.contains(&application_id),
-            ExecutionError::ReentrantCall(application_id)
-        );
-        Ok(())
-    }
 }
 
-impl<const W: bool> BaseRuntime for SyncRuntime<W> {
-    type Read = <SyncRuntimeInternal<W> as BaseRuntime>::Read;
-    type ReadValueBytes = <SyncRuntimeInternal<W> as BaseRuntime>::ReadValueBytes;
-    type ContainsKey = <SyncRuntimeInternal<W> as BaseRuntime>::ContainsKey;
-    type ReadMultiValuesBytes = <SyncRuntimeInternal<W> as BaseRuntime>::ReadMultiValuesBytes;
-    type FindKeysByPrefix = <SyncRuntimeInternal<W> as BaseRuntime>::FindKeysByPrefix;
-    type FindKeyValuesByPrefix = <SyncRuntimeInternal<W> as BaseRuntime>::FindKeyValuesByPrefix;
+impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
+    type Read = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::Read;
+    type ReadValueBytes = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ReadValueBytes;
+    type ContainsKey = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ContainsKey;
+    type ReadMultiValuesBytes =
+        <SyncRuntimeInternal<UserInstance> as BaseRuntime>::ReadMultiValuesBytes;
+    type FindKeysByPrefix = <SyncRuntimeInternal<UserInstance> as BaseRuntime>::FindKeysByPrefix;
+    type FindKeyValuesByPrefix =
+        <SyncRuntimeInternal<UserInstance> as BaseRuntime>::FindKeyValuesByPrefix;
 
     fn chain_id(&mut self) -> Result<ChainId, ExecutionError> {
-        self.as_inner().chain_id()
+        self.inner().chain_id()
     }
 
     fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError> {
-        self.as_inner().application_id()
+        self.inner().application_id()
     }
 
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError> {
-        self.as_inner().application_parameters()
+        self.inner().application_parameters()
     }
 
     fn read_system_balance(&mut self) -> Result<Amount, ExecutionError> {
-        self.as_inner().read_system_balance()
+        self.inner().read_system_balance()
     }
 
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
-        self.as_inner().read_system_timestamp()
+        self.inner().read_system_timestamp()
     }
 
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError> {
-        self.as_inner().write_batch(batch)
+        self.inner().write_batch(batch)
     }
 
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
-        self.as_inner().contains_key_new(key)
+        self.inner().contains_key_new(key)
     }
 
     fn contains_key_wait(&mut self, promise: &Self::ContainsKey) -> Result<bool, ExecutionError> {
-        self.as_inner().contains_key_wait(promise)
+        self.inner().contains_key_wait(promise)
     }
 
     fn read_multi_values_bytes_new(
         &mut self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Self::ReadMultiValuesBytes, ExecutionError> {
-        self.as_inner().read_multi_values_bytes_new(keys)
+        self.inner().read_multi_values_bytes_new(keys)
     }
 
     fn read_multi_values_bytes_wait(
         &mut self,
         promise: &Self::ReadMultiValuesBytes,
     ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError> {
-        self.as_inner().read_multi_values_bytes_wait(promise)
+        self.inner().read_multi_values_bytes_wait(promise)
     }
 
     fn read_value_bytes_new(
         &mut self,
         key: Vec<u8>,
     ) -> Result<Self::ReadValueBytes, ExecutionError> {
-        self.as_inner().read_value_bytes_new(key)
+        self.inner().read_value_bytes_new(key)
     }
 
     fn read_value_bytes_wait(
         &mut self,
         promise: &Self::ReadValueBytes,
     ) -> Result<Option<Vec<u8>>, ExecutionError> {
-        self.as_inner().read_value_bytes_wait(promise)
+        self.inner().read_value_bytes_wait(promise)
     }
 
     fn find_keys_by_prefix_new(
         &mut self,
         key_prefix: Vec<u8>,
     ) -> Result<Self::FindKeysByPrefix, ExecutionError> {
-        self.as_inner().find_keys_by_prefix_new(key_prefix)
+        self.inner().find_keys_by_prefix_new(key_prefix)
     }
 
     fn find_keys_by_prefix_wait(
         &mut self,
         promise: &Self::FindKeysByPrefix,
     ) -> Result<Vec<Vec<u8>>, ExecutionError> {
-        self.as_inner().find_keys_by_prefix_wait(promise)
+        self.inner().find_keys_by_prefix_wait(promise)
     }
 
     fn find_key_values_by_prefix_new(
         &mut self,
         key_prefix: Vec<u8>,
     ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError> {
-        self.as_inner().find_key_values_by_prefix_new(key_prefix)
+        self.inner().find_key_values_by_prefix_new(key_prefix)
     }
 
     fn find_key_values_by_prefix_wait(
         &mut self,
         promise: &Self::FindKeyValuesByPrefix,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError> {
-        self.as_inner().find_key_values_by_prefix_wait(promise)
+        self.inner().find_key_values_by_prefix_wait(promise)
     }
 }
 
-impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
+impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     type Read = ();
     type ReadValueBytes = u32;
     type ContainsKey = u32;
@@ -721,6 +859,12 @@ impl<const W: bool> BaseRuntime for SyncRuntimeInternal<W> {
     }
 }
 
+impl<UserInstance> Clone for SyncRuntime<UserInstance> {
+    fn clone(&self) -> Self {
+        SyncRuntime(self.0.clone())
+    }
+}
+
 impl ContractSyncRuntime {
     /// Main entry point to start executing a user action.
     pub(crate) fn run_action(
@@ -744,20 +888,24 @@ impl ContractSyncRuntime {
             parameters: description.parameters,
             signer,
         });
-        let runtime = ContractSyncRuntime::new(runtime);
-        let execution_outcome = {
+        let mut runtime = ContractSyncRuntime::new(runtime);
+        let execution_result = {
             let mut code = code.instantiate(runtime.clone())?;
             match action {
-                UserAction::Initialize(context, argument) => code.initialize(context, argument)?,
+                UserAction::Initialize(context, argument) => code.initialize(context, argument),
                 UserAction::Operation(context, operation) => {
-                    code.execute_operation(context, operation)?
+                    code.execute_operation(context, operation)
                 }
-                UserAction::Message(context, message) => code.execute_message(context, message)?,
+                UserAction::Message(context, message) => code.execute_message(context, message),
             }
         };
+        // Ensure the `loaded_applications` are cleared to prevent circular references in the
+        // `runtime`
+        runtime.inner().loaded_applications.clear();
         let mut runtime = runtime
             .into_inner()
             .expect("Runtime clones should have been freed by now");
+        let execution_outcome = execution_result?;
         assert_eq!(runtime.call_stack.len(), 1);
         assert_eq!(runtime.call_stack[0].id, application_id);
         assert_eq!(runtime.active_applications.len(), 1);
@@ -777,13 +925,11 @@ impl ContractSyncRuntime {
 
 impl ContractRuntime for ContractSyncRuntime {
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError> {
-        let this = self.as_inner();
-        Ok(this.runtime_counts.remaining_fuel)
+        Ok(self.inner().runtime_counts.remaining_fuel)
     }
 
     fn set_remaining_fuel(&mut self, remaining_fuel: u64) -> Result<(), ExecutionError> {
-        let mut this = self.as_inner();
-        this.runtime_counts.remaining_fuel = remaining_fuel;
+        self.inner().runtime_counts.remaining_fuel = remaining_fuel;
         Ok(())
     }
 
@@ -794,57 +940,20 @@ impl ContractRuntime for ContractSyncRuntime {
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallOutcome, ExecutionError> {
-        self.check_for_reentrancy(callee_id)?;
-        let (callee_context, authenticated_signer, code) = {
-            let mut this = self.as_inner();
-            let caller = this.current_application();
-            let caller_id = caller.id;
-            let caller_signer = caller.signer;
-            // Load the application.
-            let (code, description) = this.load_contract(callee_id)?;
-            // Change the owners of forwarded sessions.
-            this.forward_sessions(&forwarded_sessions, caller_id, callee_id)?;
-            // Make the call to user code.
-            let authenticated_signer = match caller_signer {
-                Some(signer) if authenticated => Some(signer),
-                _ => None,
-            };
-            let authenticated_caller_id = authenticated.then_some(caller_id);
-            let callee_context = crate::CalleeContext {
-                chain_id: this.chain_id,
-                authenticated_signer,
-                authenticated_caller_id,
-            };
-            this.push_application(ApplicationStatus {
-                id: callee_id,
-                parameters: description.parameters,
-                // Allow further nested calls to be authenticated if this one is.
-                signer: authenticated_signer,
-            });
-            (callee_context, authenticated_signer, code)
-        };
-        let mut code = code.instantiate(self.clone())?;
-        let raw_outcome =
-            code.handle_application_call(callee_context, argument, forwarded_sessions)?;
-        {
-            let mut this = self.as_inner();
-            this.pop_application();
+        let cloned_self = self.clone().0;
+        let (contract, callee_context) = self.inner().prepare_for_call(
+            cloned_self,
+            authenticated,
+            callee_id,
+            &forwarded_sessions,
+        )?;
 
-            // Interpret the results of the call.
-            this.execution_outcomes.push(ExecutionOutcome::User(
-                callee_id,
-                raw_outcome
-                    .execution_outcome
-                    .with_authenticated_signer(authenticated_signer),
-            ));
-            let caller_id = this.application_id()?;
-            let sessions = this.make_sessions(raw_outcome.create_sessions, callee_id, caller_id);
-            let outcome = CallOutcome {
-                value: raw_outcome.value,
-                sessions,
-            };
-            Ok(outcome)
-        }
+        let raw_outcome = contract
+            .try_lock()
+            .expect("Applications should not have reentrant calls")
+            .handle_application_call(callee_context, argument, forwarded_sessions)?;
+
+        self.inner().finish_call(raw_outcome)
     }
 
     fn try_call_session(
@@ -854,46 +963,33 @@ impl ContractRuntime for ContractSyncRuntime {
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallOutcome, ExecutionError> {
-        self.check_for_reentrancy(session_id.application_id)?;
-        let (callee_context, authenticated_signer, session_state, code) = {
-            let mut this = self.as_inner();
-            let callee_id = session_id.application_id;
-            let caller = this.current_application();
-            let caller_id = caller.id;
-            let caller_signer = caller.signer;
-            // Load the application.
-            let (code, description) = this.load_contract(callee_id)?;
-            // Change the owners of forwarded sessions.
-            this.forward_sessions(&forwarded_sessions, caller_id, callee_id)?;
-            // Load the session.
-            let session_state = this.try_load_session(session_id, caller_id)?;
-            // Make the call to user code.
-            let authenticated_signer = match caller_signer {
-                Some(signer) if authenticated => Some(signer),
-                _ => None,
-            };
-            let authenticated_caller_id = authenticated.then_some(caller_id);
-            let callee_context = crate::CalleeContext {
-                chain_id: this.chain_id,
-                authenticated_signer,
-                authenticated_caller_id,
-            };
-            this.push_application(ApplicationStatus {
-                id: callee_id,
-                parameters: description.parameters,
-                // Allow further nested calls to be authenticated if this one is.
-                signer: authenticated_signer,
-            });
-            (callee_context, authenticated_signer, session_state, code)
-        };
-        let mut code = code.instantiate(self.clone())?;
-        let (raw_outcome, session_state) =
-            code.handle_session_call(callee_context, session_state, argument, forwarded_sessions)?;
-        {
-            let mut this = self.as_inner();
-            this.pop_application();
+        let callee_id = session_id.application_id;
 
-            // Interpret the results of the call.
+        let (contract, callee_context, session_state) = {
+            let cloned_self = self.clone().0;
+            let mut this = self.inner();
+
+            // Load the session.
+            let caller_id = this.application_id()?;
+            let session_state = this.try_load_session(session_id, caller_id)?;
+
+            let (contract, callee_context) =
+                this.prepare_for_call(cloned_self, authenticated, callee_id, &forwarded_sessions)?;
+
+            Ok::<_, ExecutionError>((contract, callee_context, session_state))
+        }?;
+
+        let (raw_outcome, session_state) = contract
+            .try_lock()
+            .expect("Applications should not have reentrant calls")
+            .handle_session_call(callee_context, session_state, argument, forwarded_sessions)?;
+
+        {
+            let mut this = self.inner();
+
+            let outcome = this.finish_call(raw_outcome.inner)?;
+
+            // Update the session.
             let caller_id = this.application_id()?;
             if raw_outcome.close_session {
                 // Terminate the session.
@@ -902,19 +998,7 @@ impl ContractRuntime for ContractSyncRuntime {
                 // Save the session.
                 this.try_save_session(session_id, caller_id, session_state)?;
             }
-            let inner_outcome = raw_outcome.inner;
-            let callee_id = session_id.application_id;
-            this.execution_outcomes.push(ExecutionOutcome::User(
-                callee_id,
-                inner_outcome
-                    .execution_outcome
-                    .with_authenticated_signer(authenticated_signer),
-            ));
-            let sessions = this.make_sessions(inner_outcome.create_sessions, callee_id, caller_id);
-            let outcome = CallOutcome {
-                value: inner_outcome.value,
-                sessions,
-            };
+
             Ok(outcome)
         }
     }
@@ -927,13 +1011,20 @@ impl ServiceSyncRuntime {
         context: crate::QueryContext,
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let runtime = SyncRuntimeInternal::new(
+        let runtime_internal = SyncRuntimeInternal::new(
             context.chain_id,
             execution_state_sender,
             RuntimeLimits::default(),
             0,
         );
-        ServiceSyncRuntime::new(runtime).try_query_application(application_id, query)
+        let mut runtime = ServiceSyncRuntime::new(runtime_internal);
+
+        let result = runtime.try_query_application(application_id, query);
+
+        // Ensure the `loaded_applications` are cleared to remove circular references in
+        // `runtime_internal`
+        runtime.inner().loaded_applications.clear();
+        result
     }
 }
 
@@ -944,28 +1035,28 @@ impl ServiceRuntime for ServiceSyncRuntime {
         queried_id: UserApplicationId,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let (query_context, code) = {
-            let mut this = self.as_inner();
+        let (query_context, service) = {
+            let cloned_self = self.clone().0;
+            let mut this = self.inner();
 
             // Load the application.
-            let (code, description) = this.load_service(queried_id)?;
+            let application = this.load_service_instance(cloned_self, queried_id)?;
             // Make the call to user code.
             let query_context = crate::QueryContext {
                 chain_id: this.chain_id,
             };
             this.push_application(ApplicationStatus {
                 id: queried_id,
-                parameters: description.parameters,
+                parameters: application.parameters,
                 signer: None,
             });
-            (query_context, code)
+            (query_context, application.instance)
         };
-        let mut code = code.instantiate(self.clone())?;
-        let response = code.handle_query(query_context, argument)?;
-        {
-            let mut this = self.as_inner();
-            this.pop_application();
-        }
+        let response = service
+            .try_lock()
+            .expect("Applications should not have reentrant calls")
+            .handle_query(query_context, argument)?;
+        self.inner().pop_application();
         Ok(response)
     }
 }
