@@ -21,7 +21,10 @@ use std::{
 use thiserror::Error;
 
 #[cfg(feature = "metrics")]
-use crate::metered_wrapper::MeteredStore;
+use crate::metered_wrapper::{
+    MeteredStore, METERED_COUNTER_LRU_CACHING, METERED_COUNTER_ROCKS_DB,
+    METERED_COUNTER_VALUE_SPLITTING,
+};
 
 #[cfg(any(test, feature = "test"))]
 use {crate::lru_caching::TEST_CACHE_SIZE, tempfile::TempDir};
@@ -263,7 +266,7 @@ impl RocksDbStore {
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
         store_config: RocksDbStoreConfig,
-    ) -> Result<(RocksDbStore, TableStatus), RocksDbContextError> {
+    ) -> Result<(Self, TableStatus), RocksDbContextError> {
         let path = store_config.path_buf.as_path();
         fs::remove_dir_all(path)?;
         let create_if_missing = true;
@@ -289,7 +292,7 @@ impl RocksDbStore {
     /// Creates a RocksDB database from a specified path.
     pub async fn new(
         store_config: RocksDbStoreConfig,
-    ) -> Result<(RocksDbStore, TableStatus), RocksDbContextError> {
+    ) -> Result<(Self, TableStatus), RocksDbContextError> {
         let create_if_missing = false;
         Self::new_internal(store_config, create_if_missing).await
     }
@@ -313,11 +316,11 @@ impl RocksDbStore {
 
     #[cfg(feature = "metrics")]
     fn get_complete_store(store: RocksDbStoreInternal, cache_size: usize) -> Self {
-        let store = MeteredStore::new("rocks db internal".to_string(), store);
+        let store = MeteredStore::new(&METERED_COUNTER_ROCKS_DB, store);
         let store = ValueSplittingStore::new(store);
-        let store = MeteredStore::new("value splitting".to_string(), store);
+        let store = MeteredStore::new(&METERED_COUNTER_VALUE_SPLITTING, store);
         let store = LruCachingStore::new(store, cache_size);
-        let store = MeteredStore::new("lru caching".to_string(), store);
+        let store = MeteredStore::new(&METERED_COUNTER_LRU_CACHING, store);
         Self { store }
     }
 
@@ -325,7 +328,7 @@ impl RocksDbStore {
     async fn new_internal(
         store_config: RocksDbStoreConfig,
         create_if_missing: bool,
-    ) -> Result<(RocksDbStore, TableStatus), RocksDbContextError> {
+    ) -> Result<(Self, TableStatus), RocksDbContextError> {
         let kv_name = format!(
             "store_config={:?} create_if_missing={:?}",
             store_config, create_if_missing

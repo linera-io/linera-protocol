@@ -41,7 +41,10 @@ use std::{collections::HashMap, env, str::FromStr, sync::Arc};
 use thiserror::Error;
 
 #[cfg(feature = "metrics")]
-use crate::metered_wrapper::MeteredStore;
+use crate::metered_wrapper::{
+    MeteredStore, METERED_COUNTER_DYNAMO_DB, METERED_COUNTER_LRU_CACHING,
+    METERED_COUNTER_VALUE_SPLITTING,
+};
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -1035,11 +1038,11 @@ impl DynamoDbStore {
         store: JournalingKeyValueStore<DynamoDbStoreInternal>,
         cache_size: usize,
     ) -> Self {
-        let store = MeteredStore::new("dynamo db internal".to_string(), store);
+        let store = MeteredStore::new(&METERED_COUNTER_DYNAMO_DB, store);
         let store = ValueSplittingStore::new(store);
-        let store = MeteredStore::new("value splitting".to_string(), store);
+        let store = MeteredStore::new(&METERED_COUNTER_VALUE_SPLITTING, store);
         let store = LruCachingStore::new(store, cache_size);
-        let store = MeteredStore::new("lru caching".to_string(), store);
+        let store = MeteredStore::new(&METERED_COUNTER_LRU_CACHING, store);
         Self { store }
     }
 

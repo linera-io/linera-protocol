@@ -9,12 +9,14 @@ use crate::{
 };
 use async_trait::async_trait;
 use convert_case::{Case, Casing};
+use linera_base::sync::Lazy;
 use prometheus::{register_histogram_vec, HistogramVec};
 use std::{future::Future, time::Instant};
 //use crate::journaling::DirectWritableKeyValueStore;
 
 #[derive(Clone)]
-struct MeteredCounter {
+/// The implementation of the `MeteredCounter` for the `KeyValueStore`.
+pub struct MeteredCounter {
     read_value_bytes: HistogramVec,
     contains_key: HistogramVec,
     read_multi_values_bytes: HistogramVec,
@@ -24,7 +26,33 @@ struct MeteredCounter {
     clear_journal: HistogramVec,
 }
 
+/// The metered counter for the "rocks db"
+#[cfg(feature = "rocksdb")]
+pub static METERED_COUNTER_ROCKS_DB: Lazy<MeteredCounter> =
+    Lazy::new(|| MeteredCounter::new("rocks db internal".to_string()));
+
+/// The metered counter for the "dynamo db"
+#[cfg(feature = "aws")]
+pub static METERED_COUNTER_DYNAMO_DB: Lazy<MeteredCounter> =
+    Lazy::new(|| MeteredCounter::new("dynamo db internal".to_string()));
+
+/// The metered counter for the "scylla db"
+#[cfg(feature = "scylladb")]
+pub static METERED_COUNTER_SCYLLA_DB: Lazy<MeteredCounter> =
+    Lazy::new(|| MeteredCounter::new("scylla db internal".to_string()));
+
+/// The metered counter for the "scylla db"
+#[cfg(any(feature = "rocksdb", feature = "aws"))]
+pub static METERED_COUNTER_VALUE_SPLITTING: Lazy<MeteredCounter> =
+    Lazy::new(|| MeteredCounter::new("value splitting".to_string()));
+
+/// The metered counter for the "lru caching"
+#[cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
+pub static METERED_COUNTER_LRU_CACHING: Lazy<MeteredCounter> =
+    Lazy::new(|| MeteredCounter::new("lru caching".to_string()));
+
 impl MeteredCounter {
+    /// Creation of a named Metered counter.
     pub fn new(name: String) -> Self {
         // name can be "rocks db". Then var_name = "rocks_db" and title_name = "RocksDb"
         let var_name = name.replace(' ', "_");
@@ -83,7 +111,7 @@ impl MeteredCounter {
 #[derive(Clone)]
 pub struct MeteredStore<K> {
     /// the metrics being stored
-    counter: MeteredCounter,
+    counter: &'static Lazy<MeteredCounter>,
     /// The underlying store of the metered store
     pub store: K,
 }
@@ -183,8 +211,7 @@ where
 
 impl<K> MeteredStore<K> {
     /// Creates a new Metered store
-    pub fn new(name: String, store: K) -> Self {
-        let counter = MeteredCounter::new(name);
+    pub fn new(counter: &'static Lazy<MeteredCounter>, store: K) -> Self {
         Self { counter, store }
     }
 }
