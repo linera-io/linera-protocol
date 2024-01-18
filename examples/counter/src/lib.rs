@@ -70,13 +70,13 @@ linera service --port $PORT &
 
 - Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$APPLICATION_ID`.
 - To get the current value of `counter`, run the query:
-```json
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APPLICATION_ID
     query{
         value
     }
 ```
 - To increase the value of the counter by 3, perform the `increment` operation.
-```json
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APPLICATION_ID
     mutation Increment{
         increment(value: 3)
     }

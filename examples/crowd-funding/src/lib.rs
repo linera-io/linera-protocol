@@ -176,7 +176,7 @@ The response will have two entries, one for each application.
 
 If you do the same with the other chain ID in http://localhost:8081, the node service for the
 other wallet, it will have no entries at all, because the applications haven't been registered
-there yet. Request `crowd-funding` from the other chain. As an application ID, use `$APP_ID2`:
+there yet. Request `crowd-funding` from the other chain. As an application ID, use `$APP_ID_1`:
 
 ```gql,uri=http://localhost:8081
 mutation { requestApplication(
@@ -198,7 +198,7 @@ Let's pledge 30 tokens by the campaign creator themself, i.e.
 
 Let's give it a variable for testing (for instance with `curl -g -X POST -H "Content-Type: application/json" -d '{ "query": "'$QUERY'" }' $URI | jq -e .data`):
 ```bash
-CAMPAIGN=http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65040000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000
+CAMPAIGN=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1
 ```
 
 ```gql,uri=$CAMPAIGN
@@ -220,7 +220,7 @@ for the fungible application](http://localhost:8081/chains/1db1936dad0717597a774
 open it and run the following query.
 
 ```bash
-TOKEN1=http://localhost:8081/chains/1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
+TOKEN1=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0
 ```
 
 ```gql,uri=$TOKEN1
@@ -250,7 +250,7 @@ application](http://localhost:8081/chains/1db1936dad0717597a7743a8353c9c0191c14c
 and run:
 
 ```bash
-PLEDGE1=http://localhost:8081/chains/1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65040000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000
+PLEDGE1=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1
 ```
 
 ```gql,uri=$PLEDGE1
@@ -272,7 +272,7 @@ mutation { collect }
 check that we have received 110 tokens, in addition to the
 70 that we had left after pledging 30:
 
-```gql,uri=http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
+```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0
 query {
     accounts {
         entry(

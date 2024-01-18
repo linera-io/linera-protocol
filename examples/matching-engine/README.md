@@ -97,7 +97,10 @@ Now we have to publish and deploy the Matching Engine application:
 
 ```bash
 (cd examples/matching-engine && cargo build --release)
-MATCHING_ENGINE=$(linera --wait-for-outgoing-messages publish-and-create examples/target/wasm32-unknown-unknown/release/matching_engine_{contract,service}.wasm --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN1_APP_ID\""]}")
+MATCHING_ENGINE=$(linera --wait-for-outgoing-messages \
+    publish-and-create examples/target/wasm32-unknown-unknown/release/matching_engine_{contract,service}.wasm \
+    --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN2_APP_ID\""]}" \
+    --required-application-ids $FUN1_APP_ID $FUN2_APP_ID)
 ```
 
 ## Using the Matching Engine Application
@@ -115,7 +118,7 @@ Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE
 
 To create a `Bid` order nature:
 
-```json
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE
 mutation ExecuteOrder {
   executeOrder(
     order:{
@@ -134,7 +137,7 @@ mutation ExecuteOrder {
 
 To query about the bid price:
 
-```json
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE
 query{
   bids {
     keys{
