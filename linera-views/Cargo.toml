@@ -22,12 +22,12 @@ db_timings = []
 metrics = ["dep:hex"]
 
 [dependencies]
-convert_case = { workspace = true }
 anyhow = { workspace = true }
 async-graphql = { workspace = true }
 async-lock = { workspace = true }
 async-trait = { workspace = true }
 bcs = { workspace = true }
+convert_case = { workspace = true }
 futures = { workspace = true }
 generic-array = { workspace = true }
 hex = { workspace = true, optional = true }
