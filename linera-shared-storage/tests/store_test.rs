@@ -1,15 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_views::{
-    test_utils::{
-        run_writes_from_blank, run_writes_from_state,
-        run_reads, get_random_test_scenarios,
-    },
+use linera_views::test_utils::{
+    get_random_test_scenarios, run_reads, run_writes_from_blank, run_writes_from_state,
 };
 
 use linera_shared_storage::shared_store_client::create_shared_test_store;
-
 
 #[tokio::test]
 async fn test_reads_shared_store() {

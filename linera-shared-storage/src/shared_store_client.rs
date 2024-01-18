@@ -221,7 +221,6 @@ impl SharedStoreClient {
     }
 }
 
-
 #[cfg(any(test, feature = "test"))]
 pub fn create_shared_store_common_config() -> CommonStoreConfig {
     CommonStoreConfig {
@@ -235,6 +234,9 @@ pub fn create_shared_store_common_config() -> CommonStoreConfig {
 pub async fn create_shared_test_store() -> SharedStoreClient {
     let common_config = create_shared_store_common_config();
     let endpoint = "http://127.0.0.1:8942".to_string();
-    let store_config = SharedStoreConfig { endpoint, common_config };
+    let store_config = SharedStoreConfig {
+        endpoint,
+        common_config,
+    };
     SharedStoreClient::new(store_config).await.unwrap()
 }
