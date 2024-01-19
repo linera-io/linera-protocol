@@ -16,7 +16,7 @@
 //! [trait2]: common::Context
 
 #[cfg(feature = "metrics")]
-use crate::metering::{MeteredStore, METERED_COUNTER_LRU_CACHING, METERED_COUNTER_SCYLLA_DB};
+use crate::metering::{MeteredStore, LRU_CACHING_METRICS, SCYLLA_DB_METRICS};
 
 #[cfg(any(test, feature = "test"))]
 use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::get_table_name};
@@ -781,9 +781,9 @@ impl ScyllaDbStore {
         store: JournalingKeyValueStore<ScyllaDbStoreInternal>,
         cache_size: usize,
     ) -> Self {
-        let store = MeteredStore::new(&METERED_COUNTER_SCYLLA_DB, store);
+        let store = MeteredStore::new(&SCYLLA_DB_METRICS, store);
         let store = LruCachingStore::new(store, cache_size);
-        let store = MeteredStore::new(&METERED_COUNTER_LRU_CACHING, store);
+        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
         Self { store }
     }
 

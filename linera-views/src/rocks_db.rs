@@ -22,8 +22,7 @@ use thiserror::Error;
 
 #[cfg(feature = "metrics")]
 use crate::metering::{
-    MeteredStore, METERED_COUNTER_LRU_CACHING, METERED_COUNTER_ROCKS_DB,
-    METERED_COUNTER_VALUE_SPLITTING,
+    MeteredStore, LRU_CACHING_METRICS, ROCKS_DB_METRICS, VALUE_SPLITTING_METRICS,
 };
 
 #[cfg(any(test, feature = "test"))]
@@ -316,11 +315,11 @@ impl RocksDbStore {
 
     #[cfg(feature = "metrics")]
     fn get_complete_store(store: RocksDbStoreInternal, cache_size: usize) -> Self {
-        let store = MeteredStore::new(&METERED_COUNTER_ROCKS_DB, store);
+        let store = MeteredStore::new(&ROCKS_DB_METRICS, store);
         let store = ValueSplittingStore::new(store);
-        let store = MeteredStore::new(&METERED_COUNTER_VALUE_SPLITTING, store);
+        let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
         let store = LruCachingStore::new(store, cache_size);
-        let store = MeteredStore::new(&METERED_COUNTER_LRU_CACHING, store);
+        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
         Self { store }
     }
 
