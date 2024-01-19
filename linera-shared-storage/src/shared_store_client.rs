@@ -28,6 +28,12 @@ const TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES: usize = 10;
 #[cfg(any(test, feature = "test"))]
 const TEST_SHARED_STORE_MAX_STREAM_QUERIES: usize = 10;
 
+/// The shared store client.
+/// * Interior mutability is required for client because
+/// accessing requires mutability while the KeyValueStore
+/// does not allow it.
+/// * The semaphore and max_stream_queries work as other
+/// stores.
 pub struct SharedStoreClient {
     client: Arc<RwLock<StoreProcessorClient<Channel>>>,
     semaphore: Option<Arc<Semaphore>>,
