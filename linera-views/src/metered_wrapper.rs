@@ -116,7 +116,7 @@ pub struct MeteredStore<K> {
     pub store: K,
 }
 
-async fn prometheus_async<F, O>(f: F, hist: &HistogramVec) -> O
+async fn run_with_execution_time_metric<F, O>(f: F, hist: &HistogramVec) -> O
 where
     F: Future<Output = O>,
 {
@@ -142,7 +142,7 @@ where
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, E> {
-        prometheus_async(
+        run_with_execution_time_metric(
             self.store.read_value_bytes(key),
             &self.counter.read_value_bytes,
         )
@@ -150,11 +150,11 @@ where
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, E> {
-        prometheus_async(self.store.contains_key(key), &self.counter.contains_key).await
+        run_with_execution_time_metric(self.store.contains_key(key), &self.counter.contains_key).await
     }
 
     async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, E> {
-        prometheus_async(
+        run_with_execution_time_metric(
             self.store.read_multi_values_bytes(keys),
             &self.counter.read_multi_values_bytes,
         )
@@ -162,7 +162,7 @@ where
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, E> {
-        prometheus_async(
+        run_with_execution_time_metric(
             self.store.find_keys_by_prefix(key_prefix),
             &self.counter.find_keys_by_prefix,
         )
@@ -170,7 +170,7 @@ where
     }
 
     async fn find_key_values_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::KeyValues, E> {
-        prometheus_async(
+        run_with_execution_time_metric(
             self.store.find_key_values_by_prefix(key_prefix),
             &self.counter.find_key_values_by_prefix,
         )
@@ -186,7 +186,7 @@ where
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), E> {
-        prometheus_async(
+        run_with_execution_time_metric(
             self.store.write_batch(batch, base_key),
             &self.counter.write_batch,
         )
@@ -194,7 +194,7 @@ where
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), E> {
-        prometheus_async(
+        run_with_execution_time_metric(
             self.store.clear_journal(base_key),
             &self.counter.clear_journal,
         )
