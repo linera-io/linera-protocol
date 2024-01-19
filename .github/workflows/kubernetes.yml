@@ -57,6 +57,17 @@ jobs:
           max_attempts: 10
           timeout_minutes: 45
           command: kind get clusters | xargs -I {} kind delete cluster --name {} && cargo test --locked -p linera-service --features scylladb,kubernetes --test end_to_end_tests -- kubernetes
+      - name: Port forward Prometheus
+        run: |
+          kubectl port-forward prometheus-linera-core-kube-prometheu-prometheus-0 9090 &
+      - name: Check Proxy metric
+        # Check one random proxy metric that we expect to be logged after running the e2e tests
+        run: |
+          curl -s 'http://127.0.0.1:9090/api/v1/query?query=proxy_request_latency_bucket' | jq -r '.data.result[]' | grep -q .
+      - name: Check Server metric
+        # Check one random server metric that we expect to be logged after running the e2e tests
+        run: |
+          curl -s 'http://127.0.0.1:9090/api/v1/query?query=server_request_latency_bucket' | jq -r '.data.result[]' | grep -q .
       - name: Destroy the kind clusters
         if: always()
         shell: bash
