@@ -80,7 +80,17 @@ record outgoing-message {
     destination: destination,
     authenticated: bool,
     is-tracked: bool,
+    resources: resources,
     message: list<u8>,
+}
+
+record resources {
+    fuel: u64,
+    read-operations: u32,
+    write-operations: u32,
+    bytes-to-read: u32,
+    bytes-to-write: u32,
+    storage-size-delta: u32,
 }
 
 record execution-outcome {

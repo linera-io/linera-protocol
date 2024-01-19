@@ -8,6 +8,7 @@ use super::{contract_system_api as wit_system_api, wit_types};
 use crate::{ApplicationCallOutcome, ExecutionOutcome, OutgoingMessage, SessionCallOutcome};
 use linera_base::{
     crypto::CryptoHash,
+    data_types::Resources,
     identifiers::{ApplicationId, ChannelName, Destination, MessageId, SessionId},
 };
 use serde::{de::DeserializeOwned, Serialize};
@@ -137,7 +138,21 @@ where
             destination: message.destination.into(),
             authenticated: message.authenticated,
             is_tracked: message.is_tracked,
+            resources: message.resources.into(),
             message: bcs::to_bytes(&message.message).expect("message serialization failed"),
+        }
+    }
+}
+
+impl From<Resources> for wit_types::Resources {
+    fn from(resources: Resources) -> Self {
+        wit_types::Resources {
+            fuel: resources.fuel,
+            read_operations: resources.read_operations,
+            write_operations: resources.write_operations,
+            bytes_to_read: resources.bytes_to_read,
+            bytes_to_write: resources.bytes_to_write,
+            storage_size_delta: resources.storage_size_delta,
         }
     }
 }
