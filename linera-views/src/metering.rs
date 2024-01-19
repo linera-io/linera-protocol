@@ -15,8 +15,8 @@ use std::{future::Future, time::Instant};
 //use crate::journaling::DirectWritableKeyValueStore;
 
 #[derive(Clone)]
-/// The implementation of the `MeteredCounter` for the `KeyValueStore`.
-pub struct MeteredCounter {
+/// The implementation of the `KeyValueStoreMetrics` for the `KeyValueStore`.
+pub struct KeyValueStoreMetrics {
     read_value_bytes: HistogramVec,
     contains_key: HistogramVec,
     read_multi_values_bytes: HistogramVec,
@@ -28,30 +28,30 @@ pub struct MeteredCounter {
 
 /// The metered counter for the "rocks db"
 #[cfg(feature = "rocksdb")]
-pub static METERED_COUNTER_ROCKS_DB: Lazy<MeteredCounter> =
-    Lazy::new(|| MeteredCounter::new("rocks db internal".to_string()));
+pub static METERED_COUNTER_ROCKS_DB: Lazy<KeyValueStoreMetrics> =
+    Lazy::new(|| KeyValueStoreMetrics::new("rocks db internal".to_string()));
 
 /// The metered counter for the "dynamo db"
 #[cfg(feature = "aws")]
-pub static METERED_COUNTER_DYNAMO_DB: Lazy<MeteredCounter> =
-    Lazy::new(|| MeteredCounter::new("dynamo db internal".to_string()));
+pub static METERED_COUNTER_DYNAMO_DB: Lazy<KeyValueStoreMetrics> =
+    Lazy::new(|| KeyValueStoreMetrics::new("dynamo db internal".to_string()));
 
 /// The metered counter for the "scylla db"
 #[cfg(feature = "scylladb")]
-pub static METERED_COUNTER_SCYLLA_DB: Lazy<MeteredCounter> =
-    Lazy::new(|| MeteredCounter::new("scylla db internal".to_string()));
+pub static METERED_COUNTER_SCYLLA_DB: Lazy<KeyValueStoreMetrics> =
+    Lazy::new(|| KeyValueStoreMetrics::new("scylla db internal".to_string()));
 
 /// The metered counter for the "scylla db"
 #[cfg(any(feature = "rocksdb", feature = "aws"))]
-pub static METERED_COUNTER_VALUE_SPLITTING: Lazy<MeteredCounter> =
-    Lazy::new(|| MeteredCounter::new("value splitting".to_string()));
+pub static METERED_COUNTER_VALUE_SPLITTING: Lazy<KeyValueStoreMetrics> =
+    Lazy::new(|| KeyValueStoreMetrics::new("value splitting".to_string()));
 
 /// The metered counter for the "lru caching"
 #[cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
-pub static METERED_COUNTER_LRU_CACHING: Lazy<MeteredCounter> =
-    Lazy::new(|| MeteredCounter::new("lru caching".to_string()));
+pub static METERED_COUNTER_LRU_CACHING: Lazy<KeyValueStoreMetrics> =
+    Lazy::new(|| KeyValueStoreMetrics::new("lru caching".to_string()));
 
-impl MeteredCounter {
+impl KeyValueStoreMetrics {
     /// Creation of a named Metered counter.
     pub fn new(name: String) -> Self {
         // name can be "rocks db". Then var_name = "rocks_db" and title_name = "RocksDb"
@@ -95,7 +95,7 @@ impl MeteredCounter {
         let clear_journal = register_histogram_vec!(clear_journal1, clear_journal2, &[])
             .expect("Counter creation should not fail");
 
-        MeteredCounter {
+        KeyValueStoreMetrics {
             read_value_bytes,
             contains_key,
             read_multi_values_bytes,
@@ -111,7 +111,7 @@ impl MeteredCounter {
 #[derive(Clone)]
 pub struct MeteredStore<K> {
     /// the metrics being stored
-    counter: &'static Lazy<MeteredCounter>,
+    counter: &'static Lazy<KeyValueStoreMetrics>,
     /// The underlying store of the metered store
     pub store: K,
 }
@@ -211,7 +211,7 @@ where
 
 impl<K> MeteredStore<K> {
     /// Creates a new Metered store
-    pub fn new(counter: &'static Lazy<MeteredCounter>, store: K) -> Self {
+    pub fn new(counter: &'static Lazy<KeyValueStoreMetrics>, store: K) -> Self {
         Self { counter, store }
     }
 }
