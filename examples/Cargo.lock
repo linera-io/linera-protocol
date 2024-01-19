@@ -1725,6 +1725,7 @@ dependencies = [
  "lru",
  "once_cell",
  "oneshot",
+ "prometheus",
  "serde",
  "serde_bytes",
  "serde_json",

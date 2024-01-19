@@ -38,6 +38,7 @@ linera-views-derive = { workspace = true }
 lru = { workspace = true }
 once_cell = { workspace = true }
 oneshot = { workspace = true }
+prometheus = { workspace = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
 serde_json = { workspace = true }
