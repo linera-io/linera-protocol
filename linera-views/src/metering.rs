@@ -26,27 +26,27 @@ pub struct KeyValueStoreMetrics {
     clear_journal: HistogramVec,
 }
 
-/// The metered counter for the "rocks db"
+/// The metrics for the "rocks db"
 #[cfg(feature = "rocksdb")]
 pub static METERED_COUNTER_ROCKS_DB: Lazy<KeyValueStoreMetrics> =
     Lazy::new(|| KeyValueStoreMetrics::new("rocks db internal".to_string()));
 
-/// The metered counter for the "dynamo db"
+/// The metrics for the "dynamo db"
 #[cfg(feature = "aws")]
 pub static METERED_COUNTER_DYNAMO_DB: Lazy<KeyValueStoreMetrics> =
     Lazy::new(|| KeyValueStoreMetrics::new("dynamo db internal".to_string()));
 
-/// The metered counter for the "scylla db"
+/// The metrics for the "scylla db"
 #[cfg(feature = "scylladb")]
 pub static METERED_COUNTER_SCYLLA_DB: Lazy<KeyValueStoreMetrics> =
     Lazy::new(|| KeyValueStoreMetrics::new("scylla db internal".to_string()));
 
-/// The metered counter for the "scylla db"
+/// The metrics for the "scylla db"
 #[cfg(any(feature = "rocksdb", feature = "aws"))]
 pub static METERED_COUNTER_VALUE_SPLITTING: Lazy<KeyValueStoreMetrics> =
     Lazy::new(|| KeyValueStoreMetrics::new("value splitting".to_string()));
 
-/// The metered counter for the "lru caching"
+/// The metrics for the "lru caching"
 #[cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 pub static METERED_COUNTER_LRU_CACHING: Lazy<KeyValueStoreMetrics> =
     Lazy::new(|| KeyValueStoreMetrics::new("lru caching".to_string()));
