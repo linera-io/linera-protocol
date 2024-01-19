@@ -69,8 +69,13 @@ type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest
 type NotificationSender = mpsc::Sender<Notification>;
 
 pub static SERVER_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!("server_request_latency", "Server request latency", &[])
-        .expect("Counter creation should not fail")
+    register_histogram_vec!(
+        "server_request_latency",
+        "Server request latency",
+        &[],
+        vec![0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0]
+    )
+    .expect("Counter creation should not fail")
 });
 
 pub static SERVER_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
@@ -100,7 +105,8 @@ pub static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: Lazy<HistogramVec> = Lazy::n
     register_histogram_vec!(
         "server_request_latency_per_request_type",
         "Server request latency per request type",
-        &["method_name"]
+        &["method_name"],
+        vec![0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0]
     )
     .expect("Counter creation should not fail")
 });
@@ -182,7 +188,7 @@ where
             let response = future.await?;
             SERVER_REQUEST_LATENCY
                 .with_label_values(&[])
-                .observe(start.elapsed().as_secs_f64());
+                .observe(start.elapsed().as_millis() as f64);
             SERVER_REQUEST_COUNT.with_label_values(&[]).inc();
             Ok(response)
         }
@@ -423,7 +429,7 @@ where
     fn log_request_success_and_latency(start: Instant, method_name: &str) {
         SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE
             .with_label_values(&[method_name])
-            .observe(start.elapsed().as_secs_f64());
+            .observe(start.elapsed().as_millis() as f64);
         SERVER_REQUEST_SUCCESS
             .with_label_values(&[method_name])
             .inc();
