@@ -16,9 +16,7 @@
 //! [trait2]: common::Context
 
 #[cfg(feature = "metrics")]
-use crate::metering::{
-    MeteredStore, METERED_COUNTER_LRU_CACHING, METERED_COUNTER_SCYLLA_DB,
-};
+use crate::metering::{MeteredStore, METERED_COUNTER_LRU_CACHING, METERED_COUNTER_SCYLLA_DB};
 
 #[cfg(any(test, feature = "test"))]
 use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::get_table_name};

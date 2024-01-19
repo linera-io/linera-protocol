@@ -150,7 +150,8 @@ where
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, E> {
-        run_with_execution_time_metric(self.store.contains_key(key), &self.counter.contains_key).await
+        run_with_execution_time_metric(self.store.contains_key(key), &self.counter.contains_key)
+            .await
     }
 
     async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, E> {
