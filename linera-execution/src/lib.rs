@@ -45,7 +45,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     doc_scalar, hex_debug,
-    identifiers::{BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId},
+    identifiers::{Account, BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId},
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -536,6 +536,8 @@ pub struct RawOutgoingMessage<Message> {
     pub destination: Destination,
     /// Whether the message is authenticated.
     pub authenticated: bool,
+    /// A grant to pay for the message execution.
+    pub grant: Amount,
     /// The kind of outgoing message being sent.
     pub kind: MessageKind,
     /// The message itself.
@@ -564,8 +566,10 @@ pub enum MessageKind {
 pub struct RawExecutionOutcome<Message> {
     /// The signer who created the messages.
     pub authenticated_signer: Option<Owner>,
+    /// Where to send a refund for the unused part of each grant after execution, if any.
+    pub refund_grant_to: Option<Account>,
     /// Sends messages to the given destinations, possibly forwarding the authenticated
-    /// signer.
+    /// signer and including grant with the refund policy described above.
     pub messages: Vec<RawOutgoingMessage<Message>>,
     /// Subscribe chains to channels.
     pub subscribe: Vec<(ChannelName, ChainId)>,
@@ -608,6 +612,11 @@ impl<Message> RawExecutionOutcome<Message> {
         self
     }
 
+    pub fn with_refund_grant_to(mut self, refund_grant_to: Option<Account>) -> Self {
+        self.refund_grant_to = refund_grant_to;
+        self
+    }
+
     /// Adds a `message` to this [`RawExecutionOutcome`].
     pub fn with_message(mut self, message: RawOutgoingMessage<Message>) -> Self {
         self.messages.push(message);
@@ -619,6 +628,7 @@ impl<Message> Default for RawExecutionOutcome<Message> {
     fn default() -> Self {
         Self {
             authenticated_signer: None,
+            refund_grant_to: None,
             messages: Vec::new(),
             subscribe: Vec::new(),
             unsubscribe: Vec::new(),

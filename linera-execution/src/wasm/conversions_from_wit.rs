@@ -47,6 +47,7 @@ impl From<contract::OutgoingMessage> for RawOutgoingMessage<Vec<u8>> {
         Self {
             destination: message.destination.into(),
             authenticated: message.authenticated,
+            grant: crate::Amount::ZERO, // TODO
             kind: if message.is_tracked {
                 MessageKind::Tracked
             } else {
@@ -79,6 +80,7 @@ impl From<contract::ExecutionOutcome> for RawExecutionOutcome<Vec<u8>> {
 
         RawExecutionOutcome {
             authenticated_signer: None,
+            refund_grant_to: None,
             messages,
             subscribe,
             unsubscribe,

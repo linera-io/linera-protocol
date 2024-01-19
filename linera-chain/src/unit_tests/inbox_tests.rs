@@ -6,7 +6,7 @@ use super::*;
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
-    data_types::Timestamp,
+    data_types::{Amount, Timestamp},
 };
 use linera_execution::{Message, MessageKind, UserApplicationId};
 use serde::{Deserialize, Serialize};
@@ -30,6 +30,8 @@ fn make_event(
         height: BlockHeight::from(height),
         index,
         authenticated_signer: None,
+        grant: Amount::ZERO,
+        refund_grant_to: None,
         kind: MessageKind::Simple,
         timestamp: Timestamp::default(),
         message: Message::User {

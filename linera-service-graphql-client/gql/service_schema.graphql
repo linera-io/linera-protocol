@@ -1,4 +1,9 @@
 """
+An account
+"""
+scalar Account
+
+"""
 A non-negative amount of tokens.
 """
 scalar Amount
@@ -584,6 +589,14 @@ type OutgoingMessage {
 	The user authentication carried by the message, if any.
 	"""
 	authenticatedSigner: Owner
+	"""
+	A grant to pay for the message execution.
+	"""
+	grant: Amount!
+	"""
+	Where to send a refund for the unused part of the grant after execution, if any.
+	"""
+	refundGrantTo: Account
 	"""
 	The kind of event being sent.
 	"""

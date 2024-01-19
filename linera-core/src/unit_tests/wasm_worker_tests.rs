@@ -141,6 +141,8 @@ where
         messages: vec![OutgoingMessage {
             destination: Destination::Recipient(publisher_chain.into()),
             authenticated_signer: None,
+            grant: Amount::ZERO,
+            refund_grant_to: None,
             kind: MessageKind::Protected,
             message: Message::System(publish_message.clone()),
         }],
@@ -169,6 +171,8 @@ where
             height: publish_block_height,
             index: 0,
             authenticated_signer: None,
+            grant: Amount::ZERO,
+            refund_grant_to: None,
             kind: MessageKind::Protected,
             timestamp: Timestamp::from(1),
             message: Message::System(publish_message),
@@ -202,6 +206,8 @@ where
         messages: vec![OutgoingMessage {
             destination: broadcast_channel,
             authenticated_signer: None,
+            grant: Amount::ZERO,
+            refund_grant_to: None,
             kind: MessageKind::Simple,
             message: Message::System(broadcast_message.clone()),
         }],
@@ -256,6 +262,8 @@ where
         messages: vec![OutgoingMessage {
             destination: Destination::Recipient(publisher_chain.into()),
             authenticated_signer: None,
+            grant: Amount::ZERO,
+            refund_grant_to: None,
             kind: MessageKind::Protected,
             message: Message::System(subscribe_message.clone()),
         }],
@@ -284,6 +292,8 @@ where
             height: subscribe_block_height,
             index: 0,
             authenticated_signer: None,
+            grant: Amount::ZERO,
+            refund_grant_to: None,
             kind: MessageKind::Protected,
             timestamp: Timestamp::from(2),
             message: subscribe_message.into(),
@@ -300,6 +310,8 @@ where
         messages: vec![OutgoingMessage {
             destination: Destination::Recipient(creator_chain.into()),
             authenticated_signer: None,
+            grant: Amount::ZERO,
+            refund_grant_to: None,
             kind: MessageKind::Protected,
             message: Message::System(SystemMessage::Notify {
                 id: creator_chain.into(),
@@ -361,6 +373,8 @@ where
                 height: broadcast_block_height,
                 index: 0,
                 authenticated_signer: None,
+                grant: Amount::ZERO,
+                refund_grant_to: None,
                 kind: MessageKind::Simple,
                 timestamp: Timestamp::from(1),
                 message: Message::System(broadcast_message),
@@ -393,6 +407,8 @@ where
         messages: vec![OutgoingMessage {
             destination: Destination::Recipient(creator_chain.into()),
             authenticated_signer: None,
+            grant: Amount::ZERO,
+            refund_grant_to: None,
             kind: MessageKind::Protected,
             message: Message::System(SystemMessage::ApplicationCreated),
         }],

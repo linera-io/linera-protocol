@@ -6,9 +6,9 @@ use crate::ChainError;
 use async_graphql::{Object, SimpleObject};
 use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
-    data_types::{BlockHeight, Round, Timestamp},
+    data_types::{Amount, BlockHeight, Round, Timestamp},
     doc_scalar, ensure,
-    identifiers::{ChainId, ChannelName, Destination, MessageId, Owner},
+    identifiers::{Account, ChainId, ChannelName, Destination, MessageId, Owner},
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
@@ -131,6 +131,10 @@ pub struct Event {
     pub index: u32,
     /// The authenticated signer for the operation that created the event, if any.
     pub authenticated_signer: Option<Owner>,
+    /// A grant to pay for the message execution.
+    pub grant: Amount,
+    /// Where to send a refund for the unused part of the grant after execution, if any.
+    pub refund_grant_to: Option<Account>,
     /// The kind of event being delivered.
     pub kind: MessageKind,
     /// The timestamp of the block that caused the message.
@@ -211,6 +215,10 @@ pub struct OutgoingMessage {
     pub destination: Destination,
     /// The user authentication carried by the message, if any.
     pub authenticated_signer: Option<Owner>,
+    /// A grant to pay for the message execution.
+    pub grant: Amount,
+    /// Where to send a refund for the unused part of the grant after execution, if any.
+    pub refund_grant_to: Option<Account>,
     /// The kind of event being sent.
     pub kind: MessageKind,
     /// The message itself.

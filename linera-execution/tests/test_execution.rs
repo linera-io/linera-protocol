@@ -11,7 +11,7 @@ use self::utils::{
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::PublicKey,
-    data_types::BlockHeight,
+    data_types::{Amount, BlockHeight},
     identifiers::{ChainDescription, ChainId, Destination, Owner},
 };
 use linera_execution::{
@@ -436,6 +436,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
     let dummy_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
+        grant: Amount::ZERO,
         kind: MessageKind::Simple,
         message: b"msg".to_vec(),
     };
@@ -474,6 +475,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
     let registration_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
+        grant: Amount::ZERO,
         kind: MessageKind::Simple,
         message: SystemMessage::RegisterApplications {
             applications: vec![application_description],
@@ -533,6 +535,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     let dummy_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
+        grant: Amount::ZERO,
         kind: MessageKind::Simple,
         message: b"msg".to_vec(),
     };
@@ -571,6 +574,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     let registration_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
+        grant: Amount::ZERO,
         kind: MessageKind::Simple,
         message: SystemMessage::RegisterApplications {
             applications: vec![target_description],
@@ -654,6 +658,7 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
     let dummy_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
+        grant: Amount::ZERO,
         kind: MessageKind::Simple,
         message: b"msg".to_vec(),
     };
@@ -701,6 +706,7 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
     let registration_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
+        grant: Amount::ZERO,
         kind: MessageKind::Simple,
         message: SystemMessage::RegisterApplications {
             applications: vec![target_description],
@@ -765,6 +771,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     let first_message = RawOutgoingMessage {
         destination: Destination::from(first_destination_chain),
         authenticated: false,
+        grant: Amount::ZERO,
         kind: MessageKind::Simple,
         message: b"first".to_vec(),
     };
@@ -799,6 +806,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     let second_message = RawOutgoingMessage {
         destination: Destination::from(second_destination_chain),
         authenticated: false,
+        grant: Amount::ZERO,
         kind: MessageKind::Simple,
         message: b"second".to_vec(),
     };
@@ -851,6 +859,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     let first_registration_message = RawOutgoingMessage {
         destination: Destination::from(first_destination_chain),
         authenticated: false,
+        grant: Amount::ZERO,
         kind: MessageKind::Simple,
         message: SystemMessage::RegisterApplications {
             applications: vec![sending_target_description.clone(), caller_description],
@@ -860,6 +869,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     let second_registration_message = RawOutgoingMessage {
         destination: Destination::from(second_destination_chain),
         authenticated: false,
+        grant: Amount::ZERO,
         kind: MessageKind::Simple,
         message: SystemMessage::RegisterApplications {
             applications: vec![sending_target_description],

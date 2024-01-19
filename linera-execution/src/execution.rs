@@ -9,7 +9,10 @@ use crate::{
     UserApplicationDescription, UserApplicationId,
 };
 use futures::{stream::FuturesUnordered, StreamExt, TryStreamExt};
-use linera_base::identifiers::{ChainId, Destination, Owner};
+use linera_base::{
+    data_types::Amount,
+    identifiers::{Account, ChainId, Destination, Owner},
+};
 use linera_views::{
     common::Context,
     key_value_store_view::KeyValueStoreView,
@@ -266,6 +269,7 @@ where
                 Ok::<_, ExecutionError>(RawOutgoingMessage {
                     destination: destination.clone(),
                     authenticated: false,
+                    grant: Amount::ZERO,
                     kind: MessageKind::Simple,
                     message: SystemMessage::RegisterApplications { applications },
                 })
@@ -356,6 +360,8 @@ where
     pub async fn bounce_message(
         &self,
         context: MessageContext,
+        grant: Amount,
+        refund_grant_to: Option<Account>,
         message: Message,
     ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
@@ -363,11 +369,13 @@ where
             Message::System(message) => {
                 let mut outcome = RawExecutionOutcome {
                     authenticated_signer: context.authenticated_signer,
+                    refund_grant_to,
                     ..Default::default()
                 };
                 outcome.messages.push(RawOutgoingMessage {
                     destination: Destination::Recipient(context.message_id.chain_id),
                     authenticated: true,
+                    grant,
                     kind: MessageKind::Bouncing,
                     message,
                 });
@@ -379,11 +387,13 @@ where
             } => {
                 let mut outcome = RawExecutionOutcome {
                     authenticated_signer: context.authenticated_signer,
+                    refund_grant_to,
                     ..Default::default()
                 };
                 outcome.messages.push(RawOutgoingMessage {
                     destination: Destination::Recipient(context.message_id.chain_id),
                     authenticated: true,
+                    grant,
                     kind: MessageKind::Bouncing,
                     message: bytes,
                 });

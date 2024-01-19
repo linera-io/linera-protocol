@@ -474,6 +474,8 @@ where
             let OutgoingMessage {
                 destination: _,
                 authenticated_signer,
+                grant,
+                refund_grant_to,
                 kind,
                 message,
             } = outgoing_message;
@@ -494,6 +496,8 @@ where
                 height: bundle.height,
                 index,
                 authenticated_signer,
+                grant,
+                refund_grant_to,
                 kind,
                 timestamp: bundle.timestamp,
                 message,
@@ -692,7 +696,12 @@ where
                     if message.event.is_tracked() {
                         // Bounce the message.
                         self.execution_state
-                            .bounce_message(context, message.event.message.clone())
+                            .bounce_message(
+                                context,
+                                message.event.grant,
+                                message.event.refund_grant_to,
+                                message.event.message.clone(),
+                            )
                             .await
                             .map_err(|err| {
                                 ChainError::ExecutionError(err, chain_execution_context)
@@ -859,6 +868,7 @@ where
         for RawOutgoingMessage {
             destination,
             authenticated,
+            grant,
             kind,
             message,
         } in raw_outcome.messages
@@ -879,6 +889,8 @@ where
             messages.push(OutgoingMessage {
                 destination,
                 authenticated_signer,
+                grant,
+                refund_grant_to: raw_outcome.refund_grant_to,
                 kind,
                 message: lift(message),
             });
