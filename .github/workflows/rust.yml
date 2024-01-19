@@ -34,8 +34,8 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 45
+    runs-on: gcp-large
+    timeout-minutes: 50
 
     steps:
     - uses: actions/checkout@v3
@@ -46,10 +46,6 @@ jobs:
         sudo rm -rf /opt/ghc
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-    - name: Install Protoc
-      uses: arduino/setup-protoc@v1
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build example applications
       run: |
         cd examples
