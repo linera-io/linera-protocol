@@ -1,17 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod test_views;
-
-use crate::batch::{
-    WriteOperation,
-    WriteOperation::{Delete, Put},
-};
 use crate::{
-    batch::Batch,
-    common::{
-        KeyIterable, KeyValueIterable, KeyValueStore,
+    batch::{
+        Batch, WriteOperation,
+        WriteOperation::{Delete, Put},
     },
+    common::{KeyIterable, KeyValueIterable, KeyValueStore},
 };
 use rand::{Rng, RngCore, SeedableRng};
 use std::collections::{BTreeMap, HashSet};

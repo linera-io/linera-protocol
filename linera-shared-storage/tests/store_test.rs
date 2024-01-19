@@ -10,7 +10,7 @@
 /// * Only one test being run at a time with a semaphore.
 /// * After the test, the storage is cleaned
 
-pub static ROCKS_DB_SEMAPHORE: Semaphore = Semaphore::const_new(1);
+pub static SHARED_STORE_SEMAPHORE: Semaphore = Semaphore::const_new(1);
 
 use linera_views::{batch::Batch, common::WritableKeyValueStore};
 use tokio::sync::Semaphore;
@@ -31,7 +31,7 @@ async fn clean_storage() {
 
 #[tokio::test]
 async fn test_reads_shared_store() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let _lock = SHARED_STORE_SEMAPHORE.acquire().await;
     for scenario in get_random_test_scenarios() {
         let key_value_store = create_shared_test_store().await;
         run_reads(key_value_store, scenario).await;
@@ -41,7 +41,7 @@ async fn test_reads_shared_store() {
 
 #[tokio::test]
 async fn test_shared_store_writes_from_blank() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let _lock = SHARED_STORE_SEMAPHORE.acquire().await;
     let key_value_store = create_shared_test_store().await;
     run_writes_from_blank(&key_value_store).await;
     clean_storage().await;
@@ -49,7 +49,7 @@ async fn test_shared_store_writes_from_blank() {
 
 #[tokio::test]
 async fn test_shared_store_writes_from_state() {
-    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let _lock = SHARED_STORE_SEMAPHORE.acquire().await;
     let key_value_store = create_shared_test_store().await;
     run_writes_from_state(&key_value_store).await;
     clean_storage().await;

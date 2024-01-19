@@ -259,13 +259,16 @@ impl StoreProcessor for SharedStoreServer {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() {
     let options = <SharedStoreServerOptions as clap::Parser>::parse();
 
     let storage_config = options.storage_config;
     let common_config = CommonStoreConfig::default();
-    let storage_config: StorageConfig = storage_config.parse()?;
-    let full_storage_config = storage_config.add_common_config(common_config).await?;
+    let storage_config: StorageConfig = storage_config.parse().expect("storage_config");
+    let full_storage_config = storage_config
+        .add_common_config(common_config)
+        .await
+        .expect("full_storage_config");
 
     let endpoint = options.endpoint;
     let endpoint = endpoint.parse().unwrap();
@@ -276,7 +279,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Server::builder()
         .add_service(StoreProcessorServer::new(shared_store))
         .serve(endpoint)
-        .await?;
-
-    Ok(())
+        .await
+        .expect("a successful running of the server");
 }
