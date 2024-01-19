@@ -138,6 +138,18 @@ pub static WASM_BYTES_WRITTEN_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
+static STATE_HASH_COMPUTATION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+    prometheus_util::register_histogram_vec(
+        "state_hash_computation_latency",
+        "Time to recompute the state hash",
+        &[],
+        Some(vec![
+            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
+        ]),
+    )
+    .expect("Histogram can be created")
+});
+
 /// A view accessing the state of a chain.
 #[derive(Debug, RootView, SimpleObject)]
 pub struct ChainStateView<C>
@@ -730,7 +742,10 @@ where
             .map_err(|err| ChainError::ExecutionError(err, ChainExecutionContext::Block))?;
 
         // Recompute the state hash.
-        let state_hash = self.execution_state.crypto_hash().await?;
+        let state_hash = {
+            let _hash_latency = STATE_HASH_COMPUTATION_LATENCY.measure_latency();
+            self.execution_state.crypto_hash().await?
+        };
         self.execution_state_hash.set(Some(state_hash));
         // Last, reset the consensus state based on the current ownership.
         self.manager.get_mut().reset(
