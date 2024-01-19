@@ -41,7 +41,7 @@ use std::{collections::HashMap, env, str::FromStr, sync::Arc};
 use thiserror::Error;
 
 #[cfg(feature = "metrics")]
-use crate::metered_wrapper::{
+use crate::metering::{
     MeteredStore, METERED_COUNTER_DYNAMO_DB, METERED_COUNTER_LRU_CACHING,
     METERED_COUNTER_VALUE_SPLITTING,
 };

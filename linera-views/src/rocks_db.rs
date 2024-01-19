@@ -21,7 +21,7 @@ use std::{
 use thiserror::Error;
 
 #[cfg(feature = "metrics")]
-use crate::metered_wrapper::{
+use crate::metering::{
     MeteredStore, METERED_COUNTER_LRU_CACHING, METERED_COUNTER_ROCKS_DB,
     METERED_COUNTER_VALUE_SPLITTING,
 };

@@ -16,7 +16,7 @@
 //! [trait2]: common::Context
 
 #[cfg(feature = "metrics")]
-use crate::metered_wrapper::{
+use crate::metering::{
     MeteredStore, METERED_COUNTER_LRU_CACHING, METERED_COUNTER_SCYLLA_DB,
 };
 
