@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//use std::time::{Duration, Instant};
-//use linera_base::sync::Lazy;
 use crate::{
     batch::Batch,
     common::{KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
@@ -12,7 +10,6 @@ use convert_case::{Case, Casing};
 use linera_base::sync::Lazy;
 use prometheus::{register_histogram_vec, HistogramVec};
 use std::{future::Future, time::Instant};
-//use crate::journaling::DirectWritableKeyValueStore;
 
 #[derive(Clone)]
 /// The implementation of the `KeyValueStoreMetrics` for the `KeyValueStore`.
