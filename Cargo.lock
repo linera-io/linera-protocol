@@ -3542,6 +3542,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bcs",
+ "convert_case 0.6.0",
  "futures",
  "generic-array",
  "hex",

@@ -19,6 +19,12 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
+
+#[cfg(feature = "metrics")]
+use crate::metering::{
+    MeteredStore, LRU_CACHING_METRICS, ROCKS_DB_METRICS, VALUE_SPLITTING_METRICS,
+};
+
 #[cfg(any(test, feature = "test"))]
 use {crate::lru_caching::TEST_CACHE_SIZE, tempfile::TempDir};
 
@@ -231,6 +237,11 @@ impl KeyValueStore for RocksDbStoreInternal {
 /// A shared DB client for RocksDB implementing LruCaching
 #[derive(Clone)]
 pub struct RocksDbStore {
+    #[cfg(feature = "metrics")]
+    store: MeteredStore<
+        LruCachingStore<MeteredStore<ValueSplittingStore<MeteredStore<RocksDbStoreInternal>>>>,
+    >,
+    #[cfg(not(feature = "metrics"))]
     store: LruCachingStore<ValueSplittingStore<RocksDbStoreInternal>>,
 }
 
@@ -254,7 +265,7 @@ impl RocksDbStore {
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
         store_config: RocksDbStoreConfig,
-    ) -> Result<(RocksDbStore, TableStatus), RocksDbContextError> {
+    ) -> Result<(Self, TableStatus), RocksDbContextError> {
         let path = store_config.path_buf.as_path();
         fs::remove_dir_all(path)?;
         let create_if_missing = true;
@@ -280,7 +291,7 @@ impl RocksDbStore {
     /// Creates a RocksDB database from a specified path.
     pub async fn new(
         store_config: RocksDbStoreConfig,
-    ) -> Result<(RocksDbStore, TableStatus), RocksDbContextError> {
+    ) -> Result<(Self, TableStatus), RocksDbContextError> {
         let create_if_missing = false;
         Self::new_internal(store_config, create_if_missing).await
     }
@@ -295,11 +306,28 @@ impl RocksDbStore {
         Ok(client)
     }
 
+    #[cfg(not(feature = "metrics"))]
+    fn get_complete_store(store: RocksDbStoreInternal, cache_size: usize) -> Self {
+        let store = ValueSplittingStore::new(store);
+        let store = LruCachingStore::new(store, cache_size);
+        Self { store }
+    }
+
+    #[cfg(feature = "metrics")]
+    fn get_complete_store(store: RocksDbStoreInternal, cache_size: usize) -> Self {
+        let store = MeteredStore::new(&ROCKS_DB_METRICS, store);
+        let store = ValueSplittingStore::new(store);
+        let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
+        let store = LruCachingStore::new(store, cache_size);
+        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
+        Self { store }
+    }
+
     /// Creates a RocksDB database from a specified path.
     async fn new_internal(
         store_config: RocksDbStoreConfig,
         create_if_missing: bool,
-    ) -> Result<(RocksDbStore, TableStatus), RocksDbContextError> {
+    ) -> Result<(Self, TableStatus), RocksDbContextError> {
         let kv_name = format!(
             "store_config={:?} create_if_missing={:?}",
             store_config, create_if_missing
@@ -328,9 +356,7 @@ impl RocksDbStore {
             db: Arc::new(db),
             max_stream_queries,
         };
-        let store = ValueSplittingStore::new(store);
-        let store = LruCachingStore::new(store, cache_size);
-        let store = Self { store };
+        let store = Self::get_complete_store(store, cache_size);
         Ok((store, table_status))
     }
 }

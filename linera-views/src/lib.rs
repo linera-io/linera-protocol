@@ -62,6 +62,10 @@ pub mod common;
 /// The code to turn a `DirectKeyValueStore` into a `KeyValueStore` by adding journaling.
 pub mod journaling;
 
+/// The code for encapsulating one key_value store into another that does metric
+#[cfg(feature = "metrics")]
+pub mod metering;
+
 /// The code for handling big values by splitting them into several small ones.
 pub mod value_splitting;
 

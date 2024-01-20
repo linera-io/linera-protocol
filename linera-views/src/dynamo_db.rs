@@ -40,6 +40,11 @@ use linera_base::ensure;
 use std::{collections::HashMap, env, str::FromStr, sync::Arc};
 use thiserror::Error;
 
+#[cfg(feature = "metrics")]
+use crate::metering::{
+    MeteredStore, DYNAMO_DB_METRICS, LRU_CACHING_METRICS, VALUE_SPLITTING_METRICS,
+};
+
 #[cfg(any(test, feature = "test"))]
 use {
     crate::lru_caching::TEST_CACHE_SIZE,
@@ -944,7 +949,17 @@ impl DirectKeyValueStore for DynamoDbStoreInternal {
 
 /// A shared DB client for DynamoDb implementing LruCaching
 #[derive(Clone)]
+#[allow(clippy::type_complexity)]
 pub struct DynamoDbStore {
+    #[cfg(feature = "metrics")]
+    store: MeteredStore<
+        LruCachingStore<
+            MeteredStore<
+                ValueSplittingStore<MeteredStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
+            >,
+        >,
+    >,
+    #[cfg(not(feature = "metrics"))]
     store: LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
 }
 
@@ -1007,6 +1022,29 @@ impl KeyValueStore for DynamoDbStore {
 }
 
 impl DynamoDbStore {
+    #[cfg(not(feature = "metrics"))]
+    fn get_complete_store(
+        store: JournalingKeyValueStore<DynamoDbStoreInternal>,
+        cache_size: usize,
+    ) -> Self {
+        let store = ValueSplittingStore::new(store);
+        let store = LruCachingStore::new(store, cache_size);
+        Self { store }
+    }
+
+    #[cfg(feature = "metrics")]
+    fn get_complete_store(
+        store: JournalingKeyValueStore<DynamoDbStoreInternal>,
+        cache_size: usize,
+    ) -> Self {
+        let store = MeteredStore::new(&DYNAMO_DB_METRICS, store);
+        let store = ValueSplittingStore::new(store);
+        let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
+        let store = LruCachingStore::new(store, cache_size);
+        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
+        Self { store }
+    }
+
     /// Creates a `DynamoDbStore` from scratch with an LRU cache
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
@@ -1016,9 +1054,7 @@ impl DynamoDbStore {
         let (simple_store, table_status) =
             DynamoDbStoreInternal::new_for_testing(store_config).await?;
         let store = JournalingKeyValueStore::new(simple_store);
-        let store = ValueSplittingStore::new(store);
-        let store = LruCachingStore::new(store, cache_size);
-        let store = Self { store };
+        let store = Self::get_complete_store(store, cache_size);
         Ok((store, table_status))
     }
 
@@ -1029,9 +1065,7 @@ impl DynamoDbStore {
         let cache_size = store_config.common_config.cache_size;
         let simple_store = DynamoDbStoreInternal::initialize(store_config).await?;
         let store = JournalingKeyValueStore::new(simple_store);
-        let store = ValueSplittingStore::new(store);
-        let store = LruCachingStore::new(store, cache_size);
-        let store = Self { store };
+        let store = Self::get_complete_store(store, cache_size);
         Ok(store)
     }
 
@@ -1068,9 +1102,7 @@ impl DynamoDbStore {
         let cache_size = store_config.common_config.cache_size;
         let (simple_store, table_name) = DynamoDbStoreInternal::new(store_config).await?;
         let store = JournalingKeyValueStore::new(simple_store);
-        let store = ValueSplittingStore::new(store);
-        let store = LruCachingStore::new(store, cache_size);
-        let store = Self { store };
+        let store = Self::get_complete_store(store, cache_size);
         Ok((store, table_name))
     }
 }
