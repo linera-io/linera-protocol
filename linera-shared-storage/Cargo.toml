@@ -23,20 +23,13 @@ path = "src/shared_store_server.rs"
 
 [dependencies]
 async-lock = { workspace = true }
-anyhow = { workspace = true }
 async-trait = { workspace = true }
-bincode = { workspace = true }
-bytes = { workspace = true }
 clap = { workspace = true }
 prost = { workspace = true }
 linera-views = { workspace = true }
 linera-service = { workspace = true }
-prometheus = { workspace = true }
-serde = { workspace = true }
 tokio = { workspace = true }
-tokio-util = { workspace = true, features = ["codec", "net"] }
 tonic = { workspace = true }
-tonic-health = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
