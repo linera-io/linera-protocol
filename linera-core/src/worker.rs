@@ -593,14 +593,17 @@ where
         if tip.is_first_block() && !chain.is_active() {
             let local_time = self.storage.current_time();
             for message in &block.incoming_messages {
-                chain
-                    .execute_immediate_message(
+                if chain
+                    .execute_init_message(
                         message.id(),
                         &message.event.message,
                         message.event.timestamp,
                         local_time,
                     )
-                    .await?;
+                    .await?
+                {
+                    break;
+                }
             }
         }
         chain.ensure_is_active()?;

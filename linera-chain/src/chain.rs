@@ -476,22 +476,16 @@ where
                 kind,
                 message,
             } = outgoing_message;
-            if let Message::System(_) = message {
-                if self.execution_state.system.description.get().is_none() {
-                    // Handle special messages to be executed immediately.
-                    let message_id = MessageId {
-                        chain_id: origin.sender,
-                        height: bundle.height,
-                        index,
-                    };
-                    self.execute_immediate_message(
-                        message_id,
-                        &message,
-                        bundle.timestamp,
-                        local_time,
-                    )
+            // See if the chain needs initialization.
+            if self.execution_state.system.description.get().is_none() {
+                // Handle any special initialization message to be executed immediately.
+                let message_id = MessageId {
+                    chain_id: origin.sender,
+                    height: bundle.height,
+                    index,
+                };
+                self.execute_init_message(message_id, &message, bundle.timestamp, local_time)
                     .await?;
-                }
             }
             // Record the inbox event to process it below.
             events.push(Event {
@@ -532,13 +526,13 @@ where
         Ok(())
     }
 
-    pub async fn execute_immediate_message(
+    pub async fn execute_init_message(
         &mut self,
         message_id: MessageId,
         message: &Message,
         timestamp: Timestamp,
         local_time: Timestamp,
-    ) -> Result<(), ChainError> {
+    ) -> Result<bool, ChainError> {
         if let Message::System(SystemMessage::OpenChain {
             ownership,
             epoch,
@@ -566,8 +560,10 @@ where
                 BlockHeight(0),
                 local_time,
             )?;
+            Ok(true)
+        } else {
+            Ok(false)
         }
-        Ok(())
     }
 
     /// Removes the incoming messages in the block from the inboxes.
