@@ -3552,29 +3552,22 @@ dependencies = [
 name = "linera-shared-storage"
 version = "0.6.0"
 dependencies = [
- "anyhow",
  "async-lock",
  "async-trait",
- "bincode",
- "bytes",
  "clap 4.4.11",
  "linera-service",
  "linera-shared-storage",
  "linera-views",
- "prometheus",
  "proptest",
  "prost",
- "serde",
  "serde-reflection",
  "serde_yaml 0.8.26",
  "similar-asserts",
  "test-strategy",
  "thiserror",
  "tokio",
- "tokio-util 0.6.10",
  "tonic",
  "tonic-build",
- "tonic-health",
 ]
 
 [[package]]
