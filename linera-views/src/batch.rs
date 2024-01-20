@@ -175,21 +175,14 @@ impl Batch {
 
     /// The total size of the batch
     pub fn size(&self) -> usize {
-        let mut size = 0;
-        for operation in &self.operations {
-            match operation {
-                WriteOperation::Delete { key } => {
-                    size += key.len();
-                }
-                WriteOperation::Put { key, value } => {
-                    size += key.len() + value.len();
-                }
-                WriteOperation::DeletePrefix { key_prefix } => {
-                    size += key_prefix.len();
-                }
-            }
-        }
-        size
+        self.operations
+            .iter()
+            .map(|operation| match operation {
+                WriteOperation::Delete { key } => key.len(),
+                WriteOperation::Put { key, value } => key.len() + value.len(),
+                WriteOperation::DeletePrefix { key_prefix } => key_prefix.len(),
+            })
+            .sum()
     }
 
     /// Builds a batch from a builder function.
