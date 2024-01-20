@@ -11,6 +11,20 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{borrow::Borrow, collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
 
+#[cfg(feature = "metrics")]
+use {
+    crate::metering::run_with_execution_time_metric,
+    linera_base::sync::Lazy,
+    prometheus::{register_histogram_vec, HistogramVec},
+};
+
+#[cfg(feature = "metrics")]
+/// The runtime of hash computation
+static SET_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!("set_view_hash_runtime", "SetView hash runtime", &[])
+        .expect("Counter creation should not fail")
+});
+
 /// Key tags to create the sub-keys of a SetView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
@@ -299,7 +313,7 @@ where
         .await
     }
 
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+    async fn compute_hash_internal(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0;
         self.for_each_key(|key| {
@@ -310,6 +324,17 @@ where
         .await?;
         hasher.update_with_bcs_bytes(&count)?;
         Ok(hasher.finalize())
+    }
+
+    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+        #[cfg(feature = "metrics")]
+        return run_with_execution_time_metric(
+            self.compute_hash_internal(),
+            &SET_VIEW_HASH_RUNTIME,
+        )
+        .await;
+        #[cfg(not(feature = "metrics"))]
+        return self.compute_hash_internal().await;
     }
 }
 

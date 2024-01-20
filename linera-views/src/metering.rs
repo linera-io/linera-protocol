@@ -27,27 +27,27 @@ pub struct KeyValueStoreMetrics {
 
 /// The metrics for the "rocks db"
 #[cfg(feature = "rocksdb")]
-pub static ROCKS_DB_METRICS: Lazy<KeyValueStoreMetrics> =
+pub(crate) static ROCKS_DB_METRICS: Lazy<KeyValueStoreMetrics> =
     Lazy::new(|| KeyValueStoreMetrics::new("rocks db internal".to_string()));
 
 /// The metrics for the "dynamo db"
 #[cfg(feature = "aws")]
-pub static DYNAMO_DB_METRICS: Lazy<KeyValueStoreMetrics> =
+pub(crate) static DYNAMO_DB_METRICS: Lazy<KeyValueStoreMetrics> =
     Lazy::new(|| KeyValueStoreMetrics::new("dynamo db internal".to_string()));
 
 /// The metrics for the "scylla db"
 #[cfg(feature = "scylladb")]
-pub static SCYLLA_DB_METRICS: Lazy<KeyValueStoreMetrics> =
+pub(crate) static SCYLLA_DB_METRICS: Lazy<KeyValueStoreMetrics> =
     Lazy::new(|| KeyValueStoreMetrics::new("scylla db internal".to_string()));
 
 /// The metrics for the "scylla db"
 #[cfg(any(feature = "rocksdb", feature = "aws"))]
-pub static VALUE_SPLITTING_METRICS: Lazy<KeyValueStoreMetrics> =
+pub(crate) static VALUE_SPLITTING_METRICS: Lazy<KeyValueStoreMetrics> =
     Lazy::new(|| KeyValueStoreMetrics::new("value splitting".to_string()));
 
 /// The metrics for the "lru caching"
 #[cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
-pub static LRU_CACHING_METRICS: Lazy<KeyValueStoreMetrics> =
+pub(crate) static LRU_CACHING_METRICS: Lazy<KeyValueStoreMetrics> =
     Lazy::new(|| KeyValueStoreMetrics::new("lru caching".to_string()));
 
 impl KeyValueStoreMetrics {
@@ -113,6 +113,18 @@ pub struct MeteredStore<K> {
     counter: &'static Lazy<KeyValueStoreMetrics>,
     /// The underlying store of the metered store
     pub store: K,
+}
+
+pub(crate) async fn run_with_execution_time_metric<F, O>(f: F, hist: &HistogramVec) -> O
+where
+    F: Future<Output = O>,
+{
+    let start = Instant::now();
+    let out = f.await;
+    let duration = start.elapsed();
+    hist.with_label_values(&[])
+        .observe(duration.as_micros() as f64);
+    out
 }
 
 #[async_trait]

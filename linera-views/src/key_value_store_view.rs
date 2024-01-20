@@ -21,6 +21,24 @@ use std::{
     ops::Bound::Included,
 };
 
+#[cfg(feature = "metrics")]
+use {
+    crate::metering::run_with_execution_time_metric,
+    linera_base::sync::Lazy,
+    prometheus::{register_histogram_vec, HistogramVec},
+};
+
+#[cfg(feature = "metrics")]
+/// The runtime of hash computation
+static KEY_VALUE_STORE_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "key_value_store_view_hash_runtime",
+        "KeyValueStoreView hash runtime",
+        &[]
+    )
+    .expect("Counter creation should not fail")
+});
+
 #[cfg(any(test, feature = "test"))]
 use {
     crate::common::{
@@ -913,7 +931,7 @@ where
         Ok(key_values)
     }
 
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+    async fn compute_hash_internal(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0;
         self.for_each_index_value(|index, value| -> Result<(), ViewError> {
@@ -925,6 +943,17 @@ where
         .await?;
         hasher.update_with_bcs_bytes(&count)?;
         Ok(hasher.finalize())
+    }
+
+    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+        #[cfg(feature = "metrics")]
+        return run_with_execution_time_metric(
+            self.compute_hash_internal(),
+            &KEY_VALUE_STORE_VIEW_HASH_RUNTIME,
+        )
+        .await;
+        #[cfg(not(feature = "metrics"))]
+        return self.compute_hash_internal().await;
     }
 }
 

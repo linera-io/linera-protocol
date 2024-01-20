@@ -15,6 +15,20 @@ use std::{
     ops::Range,
 };
 
+#[cfg(feature = "metrics")]
+use {
+    crate::metering::run_with_execution_time_metric,
+    linera_base::sync::Lazy,
+    prometheus::{register_histogram_vec, HistogramVec},
+};
+
+#[cfg(feature = "metrics")]
+/// The runtime of hash computation
+static QUEUE_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!("queue_view_hash_runtime", "QueueView hash runtime", &[])
+        .expect("Counter creation should not fail")
+});
+
 /// Key tags to create the sub-keys of a QueueView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
@@ -365,12 +379,23 @@ where
         self.read_front(count).await
     }
 
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+    async fn compute_hash_internal(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         let count = self.count();
         let elements = self.read_front(count).await?;
         let mut hasher = sha3::Sha3_256::default();
         hasher.update_with_bcs_bytes(&elements)?;
         Ok(hasher.finalize())
+    }
+
+    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+        #[cfg(feature = "metrics")]
+        return run_with_execution_time_metric(
+            self.compute_hash_internal(),
+            &QUEUE_VIEW_HASH_RUNTIME,
+        )
+        .await;
+        #[cfg(not(feature = "metrics"))]
+        return self.compute_hash_internal().await;
     }
 
     async fn load_all(&mut self) -> Result<(), ViewError> {
