@@ -643,7 +643,7 @@ impl Event {
         use MessageKind::*;
         match self.kind {
             Protected | Tracked => false,
-            Simple | Bouncing => true,
+            Simple | Bouncing => self.grant == Amount::ZERO,
         }
     }
 
