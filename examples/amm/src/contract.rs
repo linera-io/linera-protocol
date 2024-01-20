@@ -13,7 +13,7 @@ use linera_sdk::{
     base::{Amount, ApplicationId, Owner, SessionId, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
-    OperationContext, OutgoingMessage, SessionCallOutcome, ViewStateStorage,
+    OperationContext, OutgoingMessage, Resources, SessionCallOutcome, ViewStateStorage,
 };
 use num_bigint::BigUint;
 use num_traits::{cast::FromPrimitive, ToPrimitive};
@@ -321,6 +321,7 @@ impl Amm {
                     destination: chain_id.into(),
                     authenticated: true,
                     is_tracked: false,
+                    resources: Resources::default(),
                     message,
                 });
             }
@@ -364,6 +365,7 @@ impl Amm {
                     destination: chain_id.into(),
                     authenticated: true,
                     is_tracked: false,
+                    resources: Resources::default(),
                     message,
                 });
             }

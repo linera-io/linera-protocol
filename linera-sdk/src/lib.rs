@@ -65,7 +65,7 @@ pub use self::{
     log::{ContractLogger, ServiceLogger},
     service::ServiceStateStorage,
 };
-pub use linera_base::{abi, ensure};
+pub use linera_base::{abi, data_types::Resources, ensure};
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
 
@@ -376,6 +376,8 @@ pub struct OutgoingMessage<Message> {
     pub authenticated: bool,
     /// Whether the message is tracked.
     pub is_tracked: bool,
+    /// Resources to be forwarded with the message.
+    pub resources: Resources,
     /// The message itself.
     pub message: Message,
 }
@@ -412,6 +414,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
             destination,
             authenticated: false,
             is_tracked: false,
+            resources: Resources::default(),
             message,
         });
         self
@@ -429,6 +432,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
             destination,
             authenticated: true,
             is_tracked: false,
+            resources: Resources::default(),
             message,
         });
         self
@@ -447,6 +451,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
             destination,
             authenticated: false,
             is_tracked: true,
+            resources: Resources::default(),
             message,
         });
         self
@@ -466,6 +471,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
             destination,
             authenticated: true,
             is_tracked: true,
+            resources: Resources::default(),
             message,
         });
         self

@@ -144,6 +144,23 @@ impl fmt::Display for Timestamp {
     }
 }
 
+/// Resources that are spent during an execution.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct Resources {
+    /// An amount of execution fuel.
+    pub fuel: u64,
+    /// A number of read operations to be executed.
+    pub read_operations: u32,
+    /// A number of write operations to be executed.
+    pub write_operations: u32,
+    /// A number of bytes to read.
+    pub bytes_to_read: u32,
+    /// A number of bytes to write.
+    pub bytes_to_write: u32,
+    /// An amount of storage space to use.
+    pub storage_size_delta: u32,
+}
+
 /// An error type for arithmetic errors.
 #[derive(Debug, Error)]
 #[allow(missing_docs)]
