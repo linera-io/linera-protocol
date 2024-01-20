@@ -10,7 +10,7 @@ use self::utils::create_dummy_user_application_description;
 use counter::CounterAbi;
 use linera_base::{
     data_types::{Amount, BlockHeight},
-    identifiers::{ChainDescription, ChainId},
+    identifiers::{Account, ChainDescription, ChainId},
 };
 use linera_execution::{
     policy::ResourceControlPolicy, ExecutionOutcome, ExecutionRuntimeConfig,
@@ -90,6 +90,10 @@ async fn test_fuel_for_counter_wasm_application(
         account: None,
     };
     for increment in &increments {
+        let account = Account {
+            chain_id: ChainId::root(0),
+            owner: None,
+        };
         let outcomes = view
             .execute_operation(
                 context,
@@ -101,7 +105,7 @@ async fn test_fuel_for_counter_wasm_application(
             outcomes,
             vec![ExecutionOutcome::User(
                 app_id.forget_abi(),
-                RawExecutionOutcome::default()
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
             )]
         );
     }

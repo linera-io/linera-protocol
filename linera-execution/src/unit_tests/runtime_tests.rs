@@ -92,7 +92,7 @@ fn create_contract_runtime() -> (
     let resource_controller = ResourceController::default();
 
     let mut runtime =
-        SyncRuntimeInternal::new(chain_id, execution_state_sender, resource_controller);
+        SyncRuntimeInternal::new(chain_id, execution_state_sender, None, resource_controller);
 
     runtime.push_application(create_dummy_application());
 

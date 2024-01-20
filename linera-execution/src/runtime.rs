@@ -6,7 +6,7 @@ use crate::{
     execution_state_actor::{ExecutionStateSender, Request},
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
-    ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
+    Account, ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
     ExecutionError, ExecutionOutcome, ServiceRuntime, SessionId, UserApplicationDescription,
     UserApplicationId, UserContractCode, UserContractInstance, UserServiceInstance,
 };
@@ -58,6 +58,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     /// Track application states (view case).
     view_user_states: BTreeMap<UserApplicationId, ViewUserState>,
 
+    /// Where to send a refund for the unused part of the grant after execution, if any.
+    refund_grant_to: Option<Account>,
     /// Controller to track fuel and storage consumption.
     resource_controller: ResourceController,
 }
@@ -230,6 +232,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     fn new(
         chain_id: ChainId,
         execution_state_sender: ExecutionStateSender,
+        refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
     ) -> Self {
         Self {
@@ -242,6 +245,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             session_manager: SessionManager::default(),
             simple_user_states: BTreeMap::default(),
             view_user_states: BTreeMap::default(),
+            refund_grant_to,
             resource_controller,
         }
     }
@@ -384,6 +388,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
             callee_id,
             raw_outcome
                 .execution_outcome
+                .with_refund_grant_to(self.refund_grant_to)
                 .with_authenticated_signer(signer),
         ));
         let caller_id = self.application_id()?;
@@ -870,11 +875,16 @@ impl ContractSyncRuntime {
         execution_state_sender: ExecutionStateSender,
         application_id: UserApplicationId,
         chain_id: ChainId,
+        refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         action: UserAction,
     ) -> Result<(Vec<ExecutionOutcome>, ResourceController), ExecutionError> {
-        let mut runtime =
-            SyncRuntimeInternal::new(chain_id, execution_state_sender, resource_controller);
+        let mut runtime = SyncRuntimeInternal::new(
+            chain_id,
+            execution_state_sender,
+            refund_grant_to,
+            resource_controller,
+        );
         let (code, description) = runtime.load_contract(application_id)?;
         let signer = action.signer();
         runtime.push_application(ApplicationStatus {
@@ -911,7 +921,9 @@ impl ContractSyncRuntime {
         // Adds the results of the last call to the execution results.
         runtime.execution_outcomes.push(ExecutionOutcome::User(
             application_id,
-            execution_outcome.with_authenticated_signer(signer),
+            execution_outcome
+                .with_authenticated_signer(signer)
+                .with_refund_grant_to(refund_grant_to),
         ));
         Ok((runtime.execution_outcomes, runtime.resource_controller))
     }
@@ -1008,6 +1020,7 @@ impl ServiceSyncRuntime {
         let runtime_internal = SyncRuntimeInternal::new(
             context.chain_id,
             execution_state_sender,
+            None,
             ResourceController::default(),
         );
         let mut runtime = ServiceSyncRuntime::new(runtime_internal);

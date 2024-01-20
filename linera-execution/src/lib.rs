@@ -45,7 +45,9 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     doc_scalar, hex_debug,
-    identifiers::{Account, BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId},
+    identifiers::{
+        Account, BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId,
+    },
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -283,6 +285,8 @@ pub struct MessageContext {
     pub is_bouncing: bool,
     /// The authenticated signer of the operation that created the message, if any.
     pub authenticated_signer: Option<Owner>,
+    /// Where to send a refund for the unused part of each grant after execution, if any.
+    pub refund_grant_to: Option<Account>,
     /// The current block height.
     pub height: BlockHeight,
     /// The hash of the remote certificate that created the message.
@@ -637,6 +641,13 @@ impl<Message> Default for RawExecutionOutcome<Message> {
 }
 
 impl OperationContext {
+    fn refund_grant_to(&self) -> Option<Account> {
+        Some(Account {
+            chain_id: self.chain_id,
+            owner: self.authenticated_signer,
+        })
+    }
+
     fn next_message_id(&self) -> MessageId {
         MessageId {
             chain_id: self.chain_id,

@@ -4,8 +4,8 @@
 use crate::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
     system::{Recipient, UserData},
-    Bytecode, ChainOwnership, ChannelSubscription, ExecutionStateView,
-    GenericApplicationId, SystemExecutionStateView, UserApplicationDescription,
+    Bytecode, ChainOwnership, ChannelSubscription, ExecutionStateView, GenericApplicationId,
+    SystemExecutionStateView, UserApplicationDescription,
 };
 use async_graphql::{Error, Object};
 use linera_base::{

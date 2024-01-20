@@ -11,7 +11,7 @@ use self::utils::{register_mock_applications, ExpectedCall};
 use linera_base::{
     crypto::PublicKey,
     data_types::{Amount, BlockHeight},
-    identifiers::{ChainDescription, ChainId, Owner},
+    identifiers::{Account, ChainDescription, ChainId, Owner},
 };
 use linera_execution::{
     policy::ResourceControlPolicy, ContractRuntime, ExecutionError, ExecutionOutcome,
@@ -160,7 +160,14 @@ async fn test_fee_consumption(
         outcomes,
         vec![ExecutionOutcome::User(
             application_id,
-            RawExecutionOutcome::default().with_authenticated_signer(authenticated_signer),
+            RawExecutionOutcome {
+                refund_grant_to: Some(Account {
+                    chain_id: ChainId::root(0),
+                    owner: authenticated_signer
+                }),
+                authenticated_signer,
+                ..Default::default()
+            }
         )]
     );
 }

@@ -6,7 +6,7 @@
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
     data_types::{Amount, BlockHeight},
-    identifiers::{ChainDescription, ChainId, MessageId},
+    identifiers::{Account, ChainDescription, ChainId, MessageId},
 };
 use linera_execution::{
     system::{Recipient, UserData},
@@ -47,9 +47,15 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::ZERO);
+    let account = Account {
+        chain_id: ChainId::root(0),
+        owner: None,
+    };
     assert_eq!(
         outcomes,
-        vec![ExecutionOutcome::System(RawExecutionOutcome::default())]
+        vec![ExecutionOutcome::System(
+            RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+        )]
     );
     Ok(())
 }
@@ -85,6 +91,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
             index: 0,
         },
         authenticated_signer: None,
+        refund_grant_to: None,
     };
     let mut controller = ResourceController::default();
     let outcomes = view

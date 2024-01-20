@@ -47,8 +47,10 @@ pub struct Block {
     /// The timestamp when this block was created. This must be later than all messages received
     /// in this block, but no later than the current time.
     pub timestamp: Timestamp,
-    /// The user signing for the operations in the block. (Currently, this must be the `owner`
-    /// in the block proposal, or no one.)
+    /// The user signing for the operations in the block and paying for their execution
+    /// fees. If set, this must be the `owner` in the block proposal. `None` means that
+    /// the default account of the chain is used. This value is also used as recipient of
+    /// potential refunds for the message grants created by the operations.
     pub authenticated_signer: Option<Owner>,
     /// Certified hash (see `Certificate` below) of the previous block in the
     /// chain, if any.

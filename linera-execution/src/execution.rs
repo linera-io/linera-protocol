@@ -138,8 +138,14 @@ where
             tracker,
             account: None,
         };
-        self.run_user_action(application_id, chain_id, action, &mut resource_controller)
-            .await?;
+        self.run_user_action(
+            application_id,
+            chain_id,
+            action,
+            context.refund_grant_to(),
+            &mut resource_controller,
+        )
+        .await?;
 
         Ok(())
     }
@@ -173,6 +179,7 @@ where
         application_id: UserApplicationId,
         chain_id: ChainId,
         action: UserAction,
+        refund_grant_to: Option<Account>,
         resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
         let execution_outcomes = match self.context().extra().execution_runtime_config() {
@@ -181,6 +188,7 @@ where
                     application_id,
                     chain_id,
                     action,
+                    refund_grant_to,
                     resource_controller,
                 )
                 .await?
@@ -195,6 +203,7 @@ where
         application_id: UserApplicationId,
         chain_id: ChainId,
         action: UserAction,
+        refund_grant_to: Option<Account>,
         resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
         let initial_balance = resource_controller.with(self).await?.balance();
@@ -210,6 +219,7 @@ where
                 execution_state_sender,
                 application_id,
                 chain_id,
+                refund_grant_to,
                 controller,
                 action,
             )
@@ -300,6 +310,7 @@ where
                 let (mut result, new_application) =
                     self.system.execute_operation(context, op).await?;
                 result.authenticated_signer = context.authenticated_signer;
+                result.refund_grant_to = context.refund_grant_to();
                 let mut outcomes = vec![ExecutionOutcome::System(result)];
                 if let Some((application_id, argument)) = new_application {
                     let user_action = UserAction::Initialize(context, argument);
@@ -308,6 +319,7 @@ where
                             application_id,
                             context.chain_id,
                             user_action,
+                            context.refund_grant_to(),
                             resource_controller,
                         )
                         .await?,
@@ -323,6 +335,7 @@ where
                     application_id,
                     context.chain_id,
                     UserAction::Operation(context, bytes),
+                    context.refund_grant_to(),
                     resource_controller,
                 )
                 .await
@@ -350,6 +363,7 @@ where
                     application_id,
                     context.chain_id,
                     UserAction::Message(context, bytes),
+                    context.refund_grant_to,
                     resource_controller,
                 )
                 .await

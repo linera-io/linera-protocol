@@ -14,7 +14,7 @@ use async_graphql::SimpleObject;
 use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{ArithmeticError, BlockHeight, Timestamp},
+    data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     ensure,
     identifiers::{ChainId, Destination, MessageId},
     prometheus_util::{self, MeasureLatency},
@@ -673,6 +673,7 @@ where
                     index: message.event.index,
                 },
                 authenticated_signer: message.event.authenticated_signer,
+                refund_grant_to: message.event.refund_grant_to,
             };
             let outcomes = match message.action {
                 MessageAction::Accept => self
@@ -886,11 +887,16 @@ where
             } else {
                 None
             };
+            let refund_grant_to = if grant > Amount::ZERO {
+                raw_outcome.refund_grant_to
+            } else {
+                None
+            };
             messages.push(OutgoingMessage {
                 destination,
                 authenticated_signer,
                 grant,
-                refund_grant_to: raw_outcome.refund_grant_to,
+                refund_grant_to,
                 kind,
                 message: lift(message),
             });

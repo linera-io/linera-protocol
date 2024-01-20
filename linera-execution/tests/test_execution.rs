@@ -12,7 +12,7 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::PublicKey,
     data_types::{Amount, BlockHeight},
-    identifiers::{ChainDescription, ChainId, Destination, Owner},
+    identifiers::{Account, ChainDescription, ChainId, Destination, Owner},
 };
 use linera_execution::{
     system::SystemMessage, ApplicationCallOutcome, BaseRuntime, ContractRuntime, ExecutionError,
@@ -171,17 +171,28 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         )
         .await
         .unwrap();
+    let account = Account {
+        chain_id: ChainId::root(0),
+        owner: Some(owner),
+    };
     assert_eq!(
         outcomes,
         vec![
             ExecutionOutcome::User(
                 target_id,
-                RawExecutionOutcome::default().with_authenticated_signer(Some(owner))
+                RawExecutionOutcome::default()
+                    .with_authenticated_signer(Some(owner))
+                    .with_refund_grant_to(Some(account)),
             ),
-            ExecutionOutcome::User(target_id, RawExecutionOutcome::default()),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
             ExecutionOutcome::User(
                 caller_id,
-                RawExecutionOutcome::default().with_authenticated_signer(Some(owner))
+                RawExecutionOutcome::default()
+                    .with_authenticated_signer(Some(owner))
+                    .with_refund_grant_to(Some(account))
             )
         ]
     );
@@ -335,13 +346,25 @@ async fn test_simple_session() -> anyhow::Result<()> {
             &mut controller,
         )
         .await?;
-
+    let account = Account {
+        chain_id: ChainId::root(0),
+        owner: None,
+    };
     assert_eq!(
         outcomes,
         vec![
-            ExecutionOutcome::User(target_id, RawExecutionOutcome::default()),
-            ExecutionOutcome::User(target_id, RawExecutionOutcome::default()),
-            ExecutionOutcome::User(caller_id, RawExecutionOutcome::default()),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                caller_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
         ]
     );
     Ok(())
@@ -481,6 +504,10 @@ async fn test_simple_message() -> anyhow::Result<()> {
             applications: vec![application_description],
         },
     };
+    let account = Account {
+        chain_id: ChainId::root(0),
+        owner: None,
+    };
 
     assert_eq!(
         outcomes,
@@ -490,7 +517,9 @@ async fn test_simple_message() -> anyhow::Result<()> {
             ),
             ExecutionOutcome::User(
                 application_id,
-                RawExecutionOutcome::default().with_message(dummy_message)
+                RawExecutionOutcome::default()
+                    .with_message(dummy_message)
+                    .with_refund_grant_to(Some(account))
             )
         ]
     );
@@ -580,6 +609,10 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
             applications: vec![target_description],
         },
     };
+    let account = Account {
+        chain_id: ChainId::root(0),
+        owner: None,
+    };
 
     assert_eq!(
         outcomes,
@@ -589,9 +622,14 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
             ),
             ExecutionOutcome::User(
                 target_id,
-                RawExecutionOutcome::default().with_message(dummy_message)
+                RawExecutionOutcome::default()
+                    .with_message(dummy_message)
+                    .with_refund_grant_to(Some(account))
             ),
-            ExecutionOutcome::User(caller_id, RawExecutionOutcome::default()),
+            ExecutionOutcome::User(
+                caller_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
         ]
     );
 
@@ -712,20 +750,34 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
             applications: vec![target_description],
         },
     };
-
+    let account = Account {
+        chain_id: ChainId::root(0),
+        owner: None,
+    };
     assert_eq!(
         outcomes,
         &[
             ExecutionOutcome::System(
                 RawExecutionOutcome::default().with_message(registration_message)
             ),
-            ExecutionOutcome::User(target_id, RawExecutionOutcome::default()),
             ExecutionOutcome::User(
                 target_id,
-                RawExecutionOutcome::default().with_message(dummy_message)
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
             ),
-            ExecutionOutcome::User(middle_id, RawExecutionOutcome::default()),
-            ExecutionOutcome::User(caller_id, RawExecutionOutcome::default()),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default()
+                    .with_message(dummy_message)
+                    .with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                middle_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                caller_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
         ]
     );
 
@@ -895,21 +947,31 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     assert!(system_outcome
         .messages
         .contains(&second_registration_message));
+    let account = Account {
+        chain_id: ChainId::root(0),
+        owner: None,
+    };
 
     // Return to checking the user application outcomes
     assert_eq!(
         outcomes,
         &[
-            ExecutionOutcome::User(silent_target_id, RawExecutionOutcome::default(),),
+            ExecutionOutcome::User(
+                silent_target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account)),
+            ),
             ExecutionOutcome::User(
                 sending_target_id,
                 RawExecutionOutcome::default()
                     .with_message(first_message.clone())
                     .with_message(second_message)
+                    .with_refund_grant_to(Some(account))
             ),
             ExecutionOutcome::User(
                 caller_id,
-                RawExecutionOutcome::default().with_message(first_message)
+                RawExecutionOutcome::default()
+                    .with_message(first_message)
+                    .with_refund_grant_to(Some(account))
             ),
         ]
     );
