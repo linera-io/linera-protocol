@@ -704,6 +704,8 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
         state.force_all_pending_queries()?;
+        self.runtime_counts
+            .increment_bytes_written(&self.runtime_limits, batch.size() as u64)?;
         self.execution_state_sender
             .send_request(|callback| Request::WriteBatch {
                 id,
