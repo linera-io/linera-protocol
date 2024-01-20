@@ -185,6 +185,11 @@ impl Batch {
             .sum()
     }
 
+    /// Returns the number of operations in this [`Batch`].
+    pub fn num_operations(&self) -> usize {
+        self.operations.len()
+    }
+
     /// Builds a batch from a builder function.
     pub async fn build<F>(builder: F) -> Result<Self, ViewError>
     where
