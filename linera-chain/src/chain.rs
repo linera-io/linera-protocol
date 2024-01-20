@@ -440,10 +440,11 @@ where
         }
     }
 
-    /// Schedules operations to be executed as a recipient, unless this block was already
-    /// processed. Returns true if the call changed the chain state. Operations must be
-    /// received by order of heights and indices.
-    pub async fn receive_block(
+    /// Attempts to process a new `bundle` of messages from the given `origin`. Returns an
+    /// internal error if the bundle doesn't appear to be new, based on the sender's
+    /// height. The value `local_time` is specific to each validator and only used for
+    /// round timeouts.
+    pub async fn receive_message_bundle(
         &mut self,
         origin: &Origin,
         bundle: MessageBundle,
@@ -452,7 +453,7 @@ where
         let chain_id = self.chain_id();
         ensure!(
             bundle.height >= self.next_block_height_to_receive(origin).await?,
-            ChainError::InternalError("Trying to receive blocks in the wrong order".to_string())
+            ChainError::InternalError("Trying to receive messages in the wrong order".to_string())
         );
         tracing::trace!(
             "Processing new messages to {:?} from {:?} at height {}",
