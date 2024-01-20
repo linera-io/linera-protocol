@@ -601,15 +601,11 @@ where
         let policy = committee.policy().clone();
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
-        let maximum_bytes_left_to_read = policy.maximum_bytes_read_per_block;
-        let maximum_bytes_left_to_write = policy.maximum_bytes_written_per_block;
         let mut tracker = ResourceTracker {
             used_fuel: 0,
             num_reads: 0,
             bytes_read: 0,
             bytes_written: 0,
-            maximum_bytes_left_to_read,
-            maximum_bytes_left_to_write,
             stored_size_delta: 0,
         };
         // The first incoming message of any child chain must be `OpenChain`. A root chain must

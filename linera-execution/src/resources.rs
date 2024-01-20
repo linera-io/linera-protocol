@@ -8,7 +8,7 @@ use crate::{policy::ResourceControlPolicy, system::SystemExecutionError, Executi
 use custom_debug_derive::Debug;
 use linera_base::data_types::Amount;
 
-/// The entries of the runtime related to storage
+/// The resource constraints applicable to an execution process.
 #[derive(Copy, Debug, Clone)]
 pub struct RuntimeLimits {
     /// The maximum read requests per block
@@ -23,8 +23,8 @@ pub struct RuntimeLimits {
     pub maximum_bytes_left_to_write: u64,
 }
 
-/// The entries of the runtime related to storage
-#[derive(Copy, Debug, Clone)]
+/// The resources used so far by an execution process.
+#[derive(Copy, Debug, Clone, Default)]
 pub struct ResourceTracker {
     /// The used fuel in the computation
     pub used_fuel: u64,
@@ -36,25 +36,6 @@ pub struct ResourceTracker {
     pub bytes_written: u64,
     /// The change in the total data being stored
     pub stored_size_delta: i32,
-    /// The maximum size of read that remains available for use
-    pub maximum_bytes_left_to_read: u64,
-    /// The maximum size of write that remains available for use
-    pub maximum_bytes_left_to_write: u64,
-}
-
-#[cfg(any(test, feature = "test"))]
-impl Default for ResourceTracker {
-    fn default() -> Self {
-        ResourceTracker {
-            used_fuel: 0,
-            num_reads: 0,
-            bytes_read: 0,
-            bytes_written: 0,
-            stored_size_delta: 0,
-            maximum_bytes_left_to_read: u64::MAX / 2,
-            maximum_bytes_left_to_write: u64::MAX / 2,
-        }
-    }
 }
 
 impl Default for RuntimeLimits {
@@ -101,13 +82,11 @@ impl ResourceTracker {
 
         // The number of bytes read
         let bytes_read = runtime_counts.bytes_read;
-        self.maximum_bytes_left_to_read -= bytes_read;
         self.bytes_read += runtime_counts.bytes_read;
         Self::sub_assign_fees(balance, policy.storage_bytes_read_price(bytes_read)?)?;
 
         // The number of bytes written
         let bytes_written = runtime_counts.bytes_written;
-        self.maximum_bytes_left_to_write -= bytes_written;
         self.bytes_written += bytes_written;
         Self::sub_assign_fees(balance, policy.storage_bytes_written_price(bytes_written)?)?;
 
@@ -121,13 +100,15 @@ impl ResourceTracker {
         let max_budget_bytes_read =
             u64::try_from(balance.saturating_div(policy.storage_bytes_read)).unwrap_or(u64::MAX);
         let max_budget_bytes_written =
-            u64::try_from(balance.saturating_div(policy.storage_bytes_read)).unwrap_or(u64::MAX);
+            u64::try_from(balance.saturating_div(policy.storage_bytes_written)).unwrap_or(u64::MAX);
+        let maximum_bytes_left_to_read = policy.maximum_bytes_read_per_block.saturating_sub(self.bytes_read);
+        let maximum_bytes_left_to_write = policy.maximum_bytes_written_per_block.saturating_sub(self.bytes_written);
         RuntimeLimits {
             max_budget_num_reads,
             max_budget_bytes_read,
             max_budget_bytes_written,
-            maximum_bytes_left_to_read: self.maximum_bytes_left_to_read,
-            maximum_bytes_left_to_write: self.maximum_bytes_left_to_write,
+            maximum_bytes_left_to_read,
+            maximum_bytes_left_to_write,
         }
     }
 }
