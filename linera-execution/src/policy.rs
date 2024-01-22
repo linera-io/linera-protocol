@@ -118,7 +118,7 @@ impl ResourceControlPolicy {
     }
 
     #[cfg(any(test, feature = "test"))]
-    /// Creates a pricing with no cost for anything except fuel.
+    /// Creates a policy with no cost for anything except fuel.
     ///
     /// This can be used in tests that need whole numbers in their chain balance and don't expect
     /// to execute any Wasm code.
@@ -130,7 +130,7 @@ impl ResourceControlPolicy {
     }
 
     #[cfg(any(test, feature = "test"))]
-    /// Creates a pricing with no cost for anything except fuel, and 0.001 per block.
+    /// Creates a policy with no cost for anything except fuel, and 0.001 per block.
     ///
     /// This can be used in tests that don't expect to execute any Wasm code, and that keep track of
     /// how many blocks were created.
@@ -143,7 +143,7 @@ impl ResourceControlPolicy {
     }
 
     #[cfg(any(test, feature = "test"))]
-    /// Creates a pricing where all categories have a small non-zero cost.
+    /// Creates a policy where all categories have a small non-zero cost.
     pub fn all_categories() -> Self {
         Self {
             block: Amount::from_milli(1),
