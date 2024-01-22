@@ -40,10 +40,11 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: Twey/setup-rust-toolchain@v1
-    - uses: mozilla-actions/sccache-action@v0.0.3
+      with:
+        # We use `sccache`, so don't use `Swatinem/rust-cache` as well
+        cache: false
     - name: Enable `sccache` for Rust builds
       run: |
-        echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
         echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
     - name: Build example applications
       run: |
