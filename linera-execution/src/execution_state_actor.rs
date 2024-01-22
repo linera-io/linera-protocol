@@ -15,6 +15,7 @@ use linera_views::{
     views::{View, ViewError},
 };
 use oneshot::Sender;
+use std::fmt::{self, Debug, Formatter};
 
 pub(crate) type ExecutionStateSender = mpsc::UnboundedSender<Request>;
 
@@ -166,4 +167,64 @@ pub enum Request {
         batch: Batch,
         callback: Sender<()>,
     },
+}
+
+impl Debug for Request {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        match self {
+            Request::LoadContract { id, .. } => formatter
+                .debug_struct("Request::LoadContract")
+                .field("id", id)
+                .finish_non_exhaustive(),
+
+            Request::LoadService { id, .. } => formatter
+                .debug_struct("Request::LoadService")
+                .field("id", id)
+                .finish_non_exhaustive(),
+
+            Request::SystemBalance { .. } => formatter
+                .debug_struct("Request::SystemBalance")
+                .finish_non_exhaustive(),
+
+            Request::SystemTimestamp { .. } => formatter
+                .debug_struct("Request::SystemTimestamp")
+                .finish_non_exhaustive(),
+
+            Request::ReadValueBytes { id, key, .. } => formatter
+                .debug_struct("Request::ReadValueBytes")
+                .field("id", id)
+                .field("key", key)
+                .finish_non_exhaustive(),
+
+            Request::ContainsKey { id, key, .. } => formatter
+                .debug_struct("Request::ContainsKey")
+                .field("id", id)
+                .field("key", key)
+                .finish_non_exhaustive(),
+
+            Request::ReadMultiValuesBytes { id, keys, .. } => formatter
+                .debug_struct("Request::ReadMultiValuesBytes")
+                .field("id", id)
+                .field("keys", keys)
+                .finish_non_exhaustive(),
+
+            Request::FindKeysByPrefix { id, key_prefix, .. } => formatter
+                .debug_struct("Request::FindKeysByPrefix")
+                .field("id", id)
+                .field("key_prefix", key_prefix)
+                .finish_non_exhaustive(),
+
+            Request::FindKeyValuesByPrefix { id, key_prefix, .. } => formatter
+                .debug_struct("Request::FindKeyValuesByPrefix")
+                .field("id", id)
+                .field("key_prefix", key_prefix)
+                .finish_non_exhaustive(),
+
+            Request::WriteBatch { id, batch, .. } => formatter
+                .debug_struct("Request::WriteBatch")
+                .field("id", id)
+                .field("batch", batch)
+                .finish_non_exhaustive(),
+        }
+    }
 }
