@@ -90,6 +90,8 @@ record resources {
     write-operations: u32,
     bytes-to-read: u32,
     bytes-to-write: u32,
+    messages: u32,
+    message-size: u32,
     storage-size-delta: u32,
 }
 

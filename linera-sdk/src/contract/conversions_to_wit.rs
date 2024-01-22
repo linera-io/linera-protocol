@@ -152,6 +152,8 @@ impl From<Resources> for wit_types::Resources {
             write_operations: resources.write_operations,
             bytes_to_read: resources.bytes_to_read,
             bytes_to_write: resources.bytes_to_write,
+            messages: resources.messages,
+            message_size: resources.message_size,
             storage_size_delta: resources.storage_size_delta,
         }
     }

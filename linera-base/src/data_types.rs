@@ -144,7 +144,8 @@ impl fmt::Display for Timestamp {
     }
 }
 
-/// Resources that are spent during an execution.
+/// Resources that an application may spend during the execution of transaction or an
+/// application call.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Resources {
     /// An amount of execution fuel.
@@ -152,13 +153,21 @@ pub struct Resources {
     /// A number of read operations to be executed.
     pub read_operations: u32,
     /// A number of write operations to be executed.
+    // TODO(#1530): This is not used at the moment.
     pub write_operations: u32,
     /// A number of bytes to read.
     pub bytes_to_read: u32,
     /// A number of bytes to write.
     pub bytes_to_write: u32,
-    /// An amount of storage space to use.
+    /// A number of messages to be sent.
+    pub messages: u32,
+    /// The size of the messages to be sent.
+    // TODO(#1531): Account for the type of message to be sent.
+    pub message_size: u32,
+    /// An increase in the amount of storage space.
     pub storage_size_delta: u32,
+    // TODO(#1532): Account for the system calls that we plan on calling.
+    // TODO(#1533): Allow declaring calls to other applications instead of having to count them here.
 }
 
 /// An error type for arithmetic errors.
