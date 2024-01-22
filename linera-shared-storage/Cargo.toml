@@ -25,12 +25,12 @@ path = "src/shared_store_server.rs"
 async-lock = { workspace = true }
 async-trait = { workspace = true }
 clap = { workspace = true }
-prost = { workspace = true }
 linera-views = { workspace = true }
 linera-service = { workspace = true }
+prost = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
-thiserror = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
