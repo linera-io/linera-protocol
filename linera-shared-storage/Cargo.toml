@@ -25,20 +25,20 @@ path = "src/shared_store_server.rs"
 async-lock = { workspace = true }
 async-trait = { workspace = true }
 clap = { workspace = true }
-linera-views = { workspace = true }
 linera-service = { workspace = true }
+linera-views = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
 
 [dev-dependencies]
+linera-shared-storage = { path = ".", features = ["test"] }
 proptest = { workspace = true }
 serde-reflection = { workspace = true }
 serde_yaml = { workspace = true }
 similar-asserts = { workspace = true }
 test-strategy = { workspace = true }
-linera-shared-storage = { path = ".", features = ["test"] }
 
 [build-dependencies]
 tonic-build = { workspace = true }
