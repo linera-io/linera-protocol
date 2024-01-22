@@ -7,6 +7,7 @@ members = [
         "fungible",
         "matching-engine",
         "meta-counter",
+        "native-fungible",
         "social",
 ]
 
@@ -31,6 +32,7 @@ num-traits = "0.2.16"
 counter = { path = "./counter" }
 crowd-funding = { path = "./crowd-funding" }
 fungible = { path = "./fungible" }
+native-fungible = { path = "./native-fungible" }
 amm = { path = "./amm" }
 matching-engine = { path = "./matching-engine" }
 

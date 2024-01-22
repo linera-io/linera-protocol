@@ -8,7 +8,10 @@ use crate::{
     UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
 };
 use futures::channel::mpsc;
-use linera_base::data_types::{Amount, Timestamp};
+use linera_base::{
+    data_types::{Amount, Timestamp},
+    identifiers::Owner,
+};
 use linera_views::{
     batch::Batch,
     common::Context,
@@ -51,6 +54,11 @@ where
 
             SystemBalance { callback } => {
                 let balance = *self.system.balance.get();
+                callback.respond(balance);
+            }
+
+            SystemBalances { owner, callback } => {
+                let balance = *self.system.balances.get_mut_or_default(&owner).await?;
                 callback.respond(balance);
             }
 
@@ -128,6 +136,11 @@ pub enum Request {
         callback: Sender<Amount>,
     },
 
+    SystemBalances {
+        owner: Owner,
+        callback: Sender<Amount>,
+    },
+
     SystemTimestamp {
         callback: Sender<Timestamp>,
     },
@@ -184,6 +197,11 @@ impl Debug for Request {
 
             Request::SystemBalance { .. } => formatter
                 .debug_struct("Request::SystemBalance")
+                .finish_non_exhaustive(),
+
+            Request::SystemBalances { owner, .. } => formatter
+                .debug_struct("Request::SystemBalances")
+                .field("owner", owner)
                 .finish_non_exhaustive(),
 
             Request::SystemTimestamp { .. } => formatter

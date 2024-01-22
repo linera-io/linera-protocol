@@ -33,6 +33,7 @@ static mut MOCK_CHAIN_ID: Option<ChainId> = None;
 static mut MOCK_APPLICATION_ID: Option<ApplicationId> = None;
 static mut MOCK_APPLICATION_PARAMETERS: Option<Vec<u8>> = None;
 static mut MOCK_SYSTEM_BALANCE: Option<Amount> = None;
+static mut MOCK_SYSTEM_BALANCES: Option<Amount> = None;
 static mut MOCK_SYSTEM_TIMESTAMP: Option<Timestamp> = None;
 static mut MOCK_LOG_COLLECTOR: Vec<(log::Level, String)> = Vec::new();
 static mut MOCK_KEY_VALUE_STORE: Option<MemoryContext<()>> = None;
@@ -60,6 +61,11 @@ pub fn mock_application_parameters(application_parameters: &impl Serialize) {
 /// Sets the mocked system balance.
 pub fn mock_system_balance(system_balance: impl Into<Option<Amount>>) {
     unsafe { MOCK_SYSTEM_BALANCE = system_balance.into() };
+}
+
+/// Sets the mocked system balances.
+pub fn mock_system_balances(system_balances: impl Into<Option<Amount>>) {
+    unsafe { MOCK_SYSTEM_BALANCES = system_balances.into() };
 }
 
 /// Sets the mocked system timestamp.
@@ -121,6 +127,15 @@ impl wit::MockSystemApi for MockSystemApi {
             .expect(
                 "Unexpected call to the `read_system_balance` system API. \
                 Please call `mock_system_balance` first",
+            )
+            .into()
+    }
+
+    fn mocked_read_system_balances() -> wit::Amount {
+        unsafe { MOCK_SYSTEM_BALANCES }
+            .expect(
+                "Unexpected call to the `read_system_balances` system API. \
+                Please call `mock_system_balances` first",
             )
             .into()
     }

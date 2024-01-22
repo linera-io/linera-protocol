@@ -337,6 +337,9 @@ pub trait BaseRuntime {
     /// Reads the system balance.
     fn read_system_balance(&mut self) -> Result<Amount, ExecutionError>;
 
+    /// Reads the system balance.
+    fn read_system_balances(&mut self, owner: Owner) -> Result<Amount, ExecutionError>;
+
     /// Reads the system timestamp.
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError>;
 

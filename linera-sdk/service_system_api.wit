@@ -2,6 +2,7 @@ chain-id: func() -> chain-id
 application-id: func() -> application-id
 application-parameters: func() -> list<u8>
 read-system-balance: func() -> amount
+read-system-balances: func(owner: owner) -> amount
 read-system-timestamp: func() -> timestamp
 
 log: func(message: string, level: log-level)
@@ -29,6 +30,7 @@ record message-id {
     index: u32,
 }
 
+type owner = crypto-hash
 type chain-id = crypto-hash
 type block-height = u64
 type timestamp = u64

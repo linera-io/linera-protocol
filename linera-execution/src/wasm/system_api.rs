@@ -33,6 +33,13 @@ macro_rules! impl_contract_system_api {
                 BaseRuntime::read_system_balance(self).map(|balance| balance.into())
             }
 
+            fn read_system_balances(
+                &mut self,
+                owner: contract_system_api::Owner,
+            ) -> Result<contract_system_api::Amount, Self::Error> {
+                BaseRuntime::read_system_balances(self, owner.into()).map(|balance| balance.into())
+            }
+
             fn read_system_timestamp(
                 &mut self,
             ) -> Result<contract_system_api::Timestamp, Self::Error> {
@@ -131,6 +138,13 @@ macro_rules! impl_service_system_api {
 
             fn read_system_balance(&mut self) -> Result<service_system_api::Amount, Self::Error> {
                 BaseRuntime::read_system_balance(self).map(|balance| balance.into())
+            }
+
+            fn read_system_balances(
+                &mut self,
+                owner: service_system_api::Owner,
+            ) -> Result<service_system_api::Amount, Self::Error> {
+                BaseRuntime::read_system_balances(self, owner.into()).map(|balance| balance.into())
             }
 
             fn read_system_timestamp(

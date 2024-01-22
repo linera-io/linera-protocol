@@ -9,7 +9,7 @@ use crate::{ApplicationCallOutcome, ExecutionOutcome, OutgoingMessage, SessionCa
 use linera_base::{
     crypto::CryptoHash,
     data_types::Resources,
-    identifiers::{ApplicationId, ChannelName, Destination, MessageId, SessionId},
+    identifiers::{ApplicationId, ChannelName, Destination, MessageId, Owner, SessionId},
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
@@ -27,9 +27,35 @@ impl From<CryptoHash> for wit_system_api::CryptoHash {
     }
 }
 
+impl From<Owner> for wit_system_api::CryptoHash {
+    fn from(owner: Owner) -> Self {
+        let parts = <[u64; 4]>::from(owner.0);
+
+        wit_system_api::CryptoHash {
+            part1: parts[0],
+            part2: parts[1],
+            part3: parts[2],
+            part4: parts[3],
+        }
+    }
+}
+
 impl From<CryptoHash> for wit_types::CryptoHash {
     fn from(crypto_hash: CryptoHash) -> Self {
         let parts = <[u64; 4]>::from(crypto_hash);
+
+        wit_types::CryptoHash {
+            part1: parts[0],
+            part2: parts[1],
+            part3: parts[2],
+            part4: parts[3],
+        }
+    }
+}
+
+impl From<Owner> for wit_types::CryptoHash {
+    fn from(owner: Owner) -> Self {
+        let parts = <[u64; 4]>::from(owner.0);
 
         wit_types::CryptoHash {
             part1: parts[0],

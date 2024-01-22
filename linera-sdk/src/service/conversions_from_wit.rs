@@ -11,7 +11,7 @@ use crate::QueryContext;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight},
-    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
+    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
 
 impl From<wit_types::QueryContext> for QueryContext {
@@ -33,6 +33,12 @@ impl From<wit_types::CryptoHash> for CryptoHash {
     }
 }
 
+impl From<wit_types::CryptoHash> for Owner {
+    fn from(crypto_hash: wit_types::CryptoHash) -> Self {
+        Owner(crypto_hash.into())
+    }
+}
+
 impl From<wit_system_api::CryptoHash> for CryptoHash {
     fn from(hash_value: wit_system_api::CryptoHash) -> Self {
         CryptoHash::from([
@@ -41,6 +47,12 @@ impl From<wit_system_api::CryptoHash> for CryptoHash {
             hash_value.part3,
             hash_value.part4,
         ])
+    }
+}
+
+impl From<wit_system_api::CryptoHash> for Owner {
+    fn from(crypto_hash: wit_system_api::CryptoHash) -> Self {
+        Owner(crypto_hash.into())
     }
 }
 

@@ -599,6 +599,10 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().read_system_balance()
     }
 
+    fn read_system_balances(&mut self, owner: Owner) -> Result<Amount, ExecutionError> {
+        self.inner().read_system_balances(owner)
+    }
+
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
         self.inner().read_system_timestamp()
     }
@@ -695,6 +699,12 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     fn read_system_balance(&mut self) -> Result<Amount, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| Request::SystemBalance { callback })?
+            .recv_response()
+    }
+
+    fn read_system_balances(&mut self, owner: Owner) -> Result<Amount, ExecutionError> {
+        self.execution_state_sender
+            .send_request(|callback| Request::SystemBalances { owner, callback })?
             .recv_response()
     }
 
