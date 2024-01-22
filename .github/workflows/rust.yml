@@ -39,10 +39,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - uses: Twey/setup-rust-toolchain@v1
-      with:
-        # We use `sccache`, so don't use `Swatinem/rust-cache` as well
-        cache: false
+    # - uses: Twey/setup-rust-toolchain@v1
+    #   with:
+    #     # We use `sccache`, so don't use `Swatinem/rust-cache` as well
+    #     cache: false
     - name: Enable `sccache` for Rust builds
       run: |
         echo $PATH
@@ -51,7 +51,7 @@ jobs:
         ls -lah ~/.cache ||:
         ls -lah ~/.cache/cargo ||:
 
-        cargo install sccache
+        # cargo install sccache
         echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
     - name: Build example applications
       run: |
