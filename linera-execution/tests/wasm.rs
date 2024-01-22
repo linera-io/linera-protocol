@@ -101,7 +101,7 @@ async fn test_fuel_for_counter_wasm_application(
             )]
         );
     }
-    assert_eq!(tracker.used_fuel, expected_fuel);
+    assert_eq!(tracker.fuel, expected_fuel);
 
     let context = QueryContext {
         chain_id: ChainId::root(0),

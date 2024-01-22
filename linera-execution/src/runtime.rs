@@ -4,7 +4,7 @@
 use crate::{
     execution::UserAction,
     execution_state_actor::{ExecutionStateSender, Request},
-    resources::{RuntimeCounts, RuntimeLimits},
+    resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
     ExecutionError, ExecutionOutcome, ServiceRuntime, SessionId, UserApplicationDescription,
@@ -58,10 +58,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     /// Track application states (view case).
     view_user_states: BTreeMap<UserApplicationId, ViewUserState>,
 
-    /// Counters to track fuel and storage consumption.
-    runtime_counts: RuntimeCounts,
-    /// The runtime limits.
-    runtime_limits: RuntimeLimits,
+    /// Controller to track fuel and storage consumption.
+    resource_controller: ResourceController,
 }
 
 /// The runtime status of an application.
@@ -232,13 +230,8 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     fn new(
         chain_id: ChainId,
         execution_state_sender: ExecutionStateSender,
-        runtime_limits: RuntimeLimits,
-        remaining_fuel: u64,
+        resource_controller: ResourceController,
     ) -> Self {
-        let runtime_counts = RuntimeCounts {
-            remaining_fuel,
-            ..Default::default()
-        };
         Self {
             chain_id,
             execution_state_sender,
@@ -249,8 +242,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             session_manager: SessionManager::default(),
             simple_user_states: BTreeMap::default(),
             view_user_states: BTreeMap::default(),
-            runtime_counts,
-            runtime_limits,
+            resource_controller,
         }
     }
 
@@ -708,10 +700,10 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
         state.force_all_pending_queries()?;
-        self.runtime_counts
-            .increment_num_writes(&self.runtime_limits, batch.num_operations() as u64)?;
-        self.runtime_counts
-            .increment_bytes_written(&self.runtime_limits, batch.size() as u64)?;
+        self.resource_controller
+            .track_write_operations(batch.num_operations() as u32)?;
+        self.resource_controller
+            .track_bytes_written(batch.size() as u64)?;
         self.execution_state_sender
             .send_request(|callback| Request::WriteBatch {
                 id,
@@ -725,8 +717,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     fn contains_key_new(&mut self, key: Vec<u8>) -> Result<Self::ContainsKey, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        self.runtime_counts
-            .increment_num_reads(&self.runtime_limits)?;
+        self.resource_controller.track_read_operations(1)?;
         let receiver = self
             .execution_state_sender
             .send_request(move |callback| Request::ContainsKey { id, key, callback })?;
@@ -746,8 +737,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     ) -> Result<Self::ReadMultiValuesBytes, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        self.runtime_counts
-            .increment_num_reads(&self.runtime_limits)?;
+        self.resource_controller.track_read_operations(1)?;
         let receiver = self
             .execution_state_sender
             .send_request(move |callback| Request::ReadMultiValuesBytes { id, keys, callback })?;
@@ -763,8 +753,8 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let values = state.read_multi_values_queries.wait(*promise)?;
         for value in &values {
             if let Some(value) = &value {
-                self.runtime_counts
-                    .increment_bytes_read(&self.runtime_limits, value.len() as u64)?;
+                self.resource_controller
+                    .track_bytes_read(value.len() as u64)?;
             }
         }
         Ok(values)
@@ -776,8 +766,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     ) -> Result<Self::ReadValueBytes, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        self.runtime_counts
-            .increment_num_reads(&self.runtime_limits)?;
+        self.resource_controller.track_read_operations(1)?;
         let receiver = self
             .execution_state_sender
             .send_request(move |callback| Request::ReadValueBytes { id, key, callback })?;
@@ -792,8 +781,8 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let state = self.view_user_states.entry(id).or_default();
         let value = state.read_value_queries.wait(*promise)?;
         if let Some(value) = &value {
-            self.runtime_counts
-                .increment_bytes_read(&self.runtime_limits, value.len() as u64)?;
+            self.resource_controller
+                .track_bytes_read(value.len() as u64)?;
         }
         Ok(value)
     }
@@ -804,8 +793,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     ) -> Result<Self::FindKeysByPrefix, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        self.runtime_counts
-            .increment_num_reads(&self.runtime_limits)?;
+        self.resource_controller.track_read_operations(1)?;
         let receiver = self.execution_state_sender.send_request(move |callback| {
             Request::FindKeysByPrefix {
                 id,
@@ -827,8 +815,8 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         for key in &keys {
             read_size += key.len();
         }
-        self.runtime_counts
-            .increment_bytes_read(&self.runtime_limits, read_size as u64)?;
+        self.resource_controller
+            .track_bytes_read(read_size as u64)?;
         Ok(keys)
     }
 
@@ -838,8 +826,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
-        self.runtime_counts
-            .increment_num_reads(&self.runtime_limits)?;
+        self.resource_controller.track_read_operations(1)?;
         let receiver = self.execution_state_sender.send_request(move |callback| {
             Request::FindKeyValuesByPrefix {
                 id,
@@ -861,8 +848,8 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         for (key, value) in &key_values {
             read_size += key.len() + value.len();
         }
-        self.runtime_counts
-            .increment_bytes_read(&self.runtime_limits, read_size as u64)?;
+        self.resource_controller
+            .track_bytes_read(read_size as u64)?;
         Ok(key_values)
     }
 }
@@ -879,16 +866,11 @@ impl ContractSyncRuntime {
         execution_state_sender: ExecutionStateSender,
         application_id: UserApplicationId,
         chain_id: ChainId,
-        runtime_limits: RuntimeLimits,
-        initial_remaining_fuel: u64,
+        resource_controller: ResourceController,
         action: UserAction,
-    ) -> Result<(Vec<ExecutionOutcome>, RuntimeCounts), ExecutionError> {
-        let mut runtime = SyncRuntimeInternal::new(
-            chain_id,
-            execution_state_sender,
-            runtime_limits,
-            initial_remaining_fuel,
-        );
+    ) -> Result<(Vec<ExecutionOutcome>, ResourceController), ExecutionError> {
+        let mut runtime =
+            SyncRuntimeInternal::new(chain_id, execution_state_sender, resource_controller);
         let (code, description) = runtime.load_contract(application_id)?;
         let signer = action.signer();
         runtime.push_application(ApplicationStatus {
@@ -927,18 +909,21 @@ impl ContractSyncRuntime {
             application_id,
             execution_outcome.with_authenticated_signer(signer),
         ));
-        Ok((runtime.execution_outcomes, runtime.runtime_counts))
+        Ok((runtime.execution_outcomes, runtime.resource_controller))
     }
 }
 
 impl ContractRuntime for ContractSyncRuntime {
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError> {
-        Ok(self.inner().runtime_counts.remaining_fuel)
+        Ok(self.inner().resource_controller.remaining_fuel())
     }
 
     fn set_remaining_fuel(&mut self, remaining_fuel: u64) -> Result<(), ExecutionError> {
-        self.inner().runtime_counts.remaining_fuel = remaining_fuel;
-        Ok(())
+        let mut this = self.inner();
+        let previous_fuel = this.resource_controller.remaining_fuel();
+        assert!(previous_fuel >= remaining_fuel);
+        this.resource_controller
+            .track_fuel(previous_fuel - remaining_fuel)
     }
 
     fn try_call_application(
@@ -1022,8 +1007,7 @@ impl ServiceSyncRuntime {
         let runtime_internal = SyncRuntimeInternal::new(
             context.chain_id,
             execution_state_sender,
-            RuntimeLimits::default(),
-            0,
+            ResourceController::default(),
         );
         let mut runtime = ServiceSyncRuntime::new(runtime_internal);
 

@@ -249,6 +249,7 @@ View or update the resource control policy
 * `--block <BLOCK>` — Set the base price for creating a block
 * `--fuel-unit <FUEL_UNIT>` — Set the price per unit of fuel
 * `--read-operation <READ_OPERATION>` — Set the price per read operation
+* `--write-operation <WRITE_OPERATION>` — Set the price per write operation
 * `--byte-read <BYTE_READ>` — Set the price per byte read
 * `--byte-written <BYTE_WRITTEN>` — Set the price per byte written
 * `--byte-stored <BYTE_STORED>` — Set the price per byte stored
@@ -289,6 +290,9 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 
   Default value: `0`
 * `--read-operation-price <READ_OPERATION_PRICE>` — Set the price per read operation
+
+  Default value: `0`
+* `--write-operation-price <WRITE_OPERATION_PRICE>` — Set the price per write operation
 
   Default value: `0`
 * `--byte-read-price <BYTE_READ_PRICE>` — Set the price per byte read

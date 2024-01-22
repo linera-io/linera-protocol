@@ -752,10 +752,10 @@ where
             .observe(start_time.elapsed().as_secs_f64() * 1000.0);
         WASM_FUEL_USED_PER_BLOCK
             .with_label_values(&[])
-            .observe(tracker.used_fuel as f64);
+            .observe(tracker.fuel as f64);
         WASM_NUM_READS_PER_BLOCK
             .with_label_values(&[])
-            .observe(tracker.num_reads as f64);
+            .observe(tracker.read_operations as f64);
         WASM_BYTES_READ_PER_BLOCK
             .with_label_values(&[])
             .observe(tracker.bytes_read as f64);

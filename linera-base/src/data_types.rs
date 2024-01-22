@@ -153,7 +153,6 @@ pub struct Resources {
     /// A number of read operations to be executed.
     pub read_operations: u32,
     /// A number of write operations to be executed.
-    // TODO(#1530): This is not used at the moment.
     pub write_operations: u32,
     /// A number of bytes to read.
     pub bytes_to_read: u32,

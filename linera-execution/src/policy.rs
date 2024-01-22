@@ -18,12 +18,14 @@ pub struct ResourceControlPolicy {
     pub fuel_unit: Amount,
     /// The price of one read operation.
     pub read_operation: Amount,
-    // TODO(#1530): Write operation.
+    /// The price of one write operation.
+    pub write_operation: Amount,
     /// The price of reading a byte.
     pub byte_read: Amount,
-    /// The price to writting a byte
+    /// The price to writing a byte
     pub byte_written: Amount,
     /// The price of increasing storage by a byte.
+    // TODO(#1536): This is not fully supported.
     pub byte_stored: Amount,
     /// The base price of adding an operation to a block.
     pub operation: Amount,
@@ -34,6 +36,8 @@ pub struct ResourceControlPolicy {
     /// The additional price for each byte in the argument of a user message.
     pub message_byte: Amount,
 
+    // TODO(#1538): Cap the number of transactions per block and the total size of their
+    // arguments.
     /// The maximum data to read per block
     pub maximum_bytes_read_per_block: u64,
     /// The maximum data to write per block
@@ -46,6 +50,7 @@ impl Default for ResourceControlPolicy {
             block: Amount::default(),
             fuel_unit: Amount::default(),
             read_operation: Amount::default(),
+            write_operation: Amount::default(),
             byte_read: Amount::default(),
             byte_written: Amount::default(),
             byte_stored: Amount::default(),
@@ -92,19 +97,23 @@ impl ResourceControlPolicy {
         }
     }
 
-    pub fn storage_num_reads_price(&self, count: u64) -> Result<Amount, PricingError> {
+    pub fn read_operations_price(&self, count: u32) -> Result<Amount, PricingError> {
         Ok(self.read_operation.try_mul(count as u128)?)
     }
 
-    pub fn storage_bytes_read_price(&self, count: u64) -> Result<Amount, PricingError> {
+    pub fn write_operations_price(&self, count: u32) -> Result<Amount, PricingError> {
+        Ok(self.write_operation.try_mul(count as u128)?)
+    }
+
+    pub fn bytes_read_price(&self, count: u64) -> Result<Amount, PricingError> {
         Ok(self.byte_read.try_mul(count as u128)?)
     }
 
-    pub fn storage_bytes_written_price(&self, count: u64) -> Result<Amount, PricingError> {
+    pub fn bytes_written_price(&self, count: u64) -> Result<Amount, PricingError> {
         Ok(self.byte_written.try_mul(count as u128)?)
     }
 
-    pub fn storage_bytes_stored_price(&self, count: u64) -> Result<Amount, PricingError> {
+    pub fn bytes_stored_price(&self, count: u64) -> Result<Amount, PricingError> {
         Ok(self.byte_stored.try_mul(count as u128)?)
     }
 

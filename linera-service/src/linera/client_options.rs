@@ -300,6 +300,10 @@ pub enum ClientCommand {
         #[arg(long)]
         read_operation: Option<Amount>,
 
+        /// Set the price per write operation.
+        #[arg(long)]
+        write_operation: Option<Amount>,
+
         /// Set the price per byte read.
         #[arg(long)]
         byte_read: Option<Amount>,
@@ -387,6 +391,10 @@ pub enum ClientCommand {
         /// Set the price per read operation.
         #[arg(long, default_value = "0")]
         read_operation_price: Amount,
+
+        /// Set the price per write operation.
+        #[arg(long, default_value = "0")]
+        write_operation_price: Amount,
 
         /// Set the price per byte read.
         #[arg(long, default_value = "0")]

@@ -603,6 +603,8 @@ ResourceControlPolicy:
         TYPENAME: Amount
     - read_operation:
         TYPENAME: Amount
+    - write_operation:
+        TYPENAME: Amount
     - byte_read:
         TYPENAME: Amount
     - byte_written:

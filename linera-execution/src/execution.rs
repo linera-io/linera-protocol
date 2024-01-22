@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    policy::ResourceControlPolicy, resources::ResourceTracker, system::SystemExecutionStateView,
-    ContractSyncRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
-    Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage, Response, ServiceSyncRuntime,
-    SystemMessage, UserApplicationDescription, UserApplicationId,
+    resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
+    ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
+    MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext,
+    RawExecutionOutcome, RawOutgoingMessage, Response, ServiceSyncRuntime, SystemMessage,
+    UserApplicationDescription, UserApplicationId,
 };
 use futures::{stream::FuturesUnordered, StreamExt, TryStreamExt};
 use linera_base::identifiers::{ChainId, Destination, Owner};
@@ -21,7 +21,10 @@ use std::collections::{BTreeSet, HashMap};
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::{system::SystemExecutionState, TestExecutionRuntimeContext, UserContractCode},
+    crate::{
+        policy::ResourceControlPolicy, system::SystemExecutionState, ResourceTracker,
+        TestExecutionRuntimeContext, UserContractCode,
+    },
     async_lock::Mutex,
     linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
     std::collections::BTreeMap,
@@ -192,9 +195,11 @@ where
         policy: &ResourceControlPolicy,
         tracker: &mut ResourceTracker,
     ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
-        let balance = self.system.balance.get();
-        let runtime_limits = tracker.limits(policy, balance);
-        let initial_remaining_fuel = policy.remaining_fuel(*balance);
+        let resource_controller = ResourceController {
+            policy: Arc::new(policy.clone()),
+            tracker: *tracker,
+            balance: *self.system.balance.get(),
+        };
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
         let execution_outcomes_future = tokio::task::spawn_blocking(move || {
@@ -202,17 +207,16 @@ where
                 execution_state_sender,
                 application_id,
                 chain_id,
-                runtime_limits,
-                initial_remaining_fuel,
+                resource_controller,
                 action,
             )
         });
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;
         }
-        let (execution_outcomes, runtime_counts) = execution_outcomes_future.await??;
-        let balance = self.system.balance.get_mut();
-        tracker.update_limits(balance, policy, runtime_counts)?;
+        let (execution_outcomes, resource_controller) = execution_outcomes_future.await??;
+        *self.system.balance.get_mut() = resource_controller.balance;
+        *tracker = resource_controller.tracker;
         Ok(execution_outcomes)
     }
 
