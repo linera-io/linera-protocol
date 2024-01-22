@@ -718,7 +718,7 @@ where
             let balance = self.execution_state.system.balance.get_mut();
             Self::sub_assign_fees(
                 balance,
-                policy.operation_price(&operation)?,
+                policy.operation_price(operation)?,
                 chain_execution_context,
             )?;
             for message_out in &messages_out {
