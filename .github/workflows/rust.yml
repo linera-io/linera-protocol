@@ -35,17 +35,16 @@ permissions:
 jobs:
   test:
     runs-on: gcp-large
-    timeout-minutes: 50
+    timeout-minutes: 60
 
     steps:
     - uses: actions/checkout@v3
     - uses: Twey/setup-rust-toolchain@v1
-    - name: Clear up some space
+    - uses: mozilla-actions/sccache-action@v0.0.3
+    - name: Enable `sccache` for Rust builds
       run: |
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /opt/ghc
-        sudo rm -rf "/usr/local/share/boost"
-        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+        echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
     - name: Build example applications
       run: |
         cd examples
