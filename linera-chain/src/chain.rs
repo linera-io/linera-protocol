@@ -688,16 +688,13 @@ where
                 .await?;
             if let MessageAction::Accept = message.action {
                 let balance = self.execution_state.system.balance.get_mut();
-                Self::sub_assign_fees(
-                    balance,
-                    policy.storage_bytes_written_price_raw(&message)?,
-                    chain_execution_context,
-                )?;
-                Self::sub_assign_fees(
-                    balance,
-                    policy.messages_price(&messages_out)?,
-                    chain_execution_context,
-                )?;
+                for message_out in &messages_out {
+                    Self::sub_assign_fees(
+                        balance,
+                        policy.message_price(&message_out.message)?,
+                        chain_execution_context,
+                    )?;
+                }
             }
             messages.append(&mut messages_out);
             message_counts
@@ -727,24 +724,22 @@ where
             let balance = self.execution_state.system.balance.get_mut();
             Self::sub_assign_fees(
                 balance,
-                policy.storage_bytes_written_price_raw(&operation)?,
+                policy.operation_price(&operation)?,
                 chain_execution_context,
             )?;
-            Self::sub_assign_fees(
-                balance,
-                policy.messages_price(&messages_out)?,
-                chain_execution_context,
-            )?;
+            for message_out in &messages_out {
+                Self::sub_assign_fees(
+                    balance,
+                    policy.message_price(&message_out.message)?,
+                    chain_execution_context,
+                )?;
+            }
             messages.append(&mut messages_out);
             message_counts
                 .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
         }
         let balance = self.execution_state.system.balance.get_mut();
-        Self::sub_assign_fees(
-            balance,
-            policy.certificate_price(),
-            ChainExecutionContext::Block,
-        )?;
+        Self::sub_assign_fees(balance, policy.block_price(), ChainExecutionContext::Block)?;
 
         // Recompute the state hash.
         let state_hash = self.execution_state.crypto_hash().await?;

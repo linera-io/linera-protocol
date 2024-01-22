@@ -96,13 +96,17 @@ impl ResourceTracker {
     /// Obtain the limits for the running of the system
     pub fn limits(&self, policy: &ResourceControlPolicy, balance: &Amount) -> RuntimeLimits {
         let max_budget_num_reads =
-            u64::try_from(balance.saturating_div(policy.storage_num_reads)).unwrap_or(u64::MAX);
+            u64::try_from(balance.saturating_div(policy.read_operation)).unwrap_or(u64::MAX);
         let max_budget_bytes_read =
-            u64::try_from(balance.saturating_div(policy.storage_bytes_read)).unwrap_or(u64::MAX);
+            u64::try_from(balance.saturating_div(policy.byte_read)).unwrap_or(u64::MAX);
         let max_budget_bytes_written =
-            u64::try_from(balance.saturating_div(policy.storage_bytes_written)).unwrap_or(u64::MAX);
-        let maximum_bytes_left_to_read = policy.maximum_bytes_read_per_block.saturating_sub(self.bytes_read);
-        let maximum_bytes_left_to_write = policy.maximum_bytes_written_per_block.saturating_sub(self.bytes_written);
+            u64::try_from(balance.saturating_div(policy.byte_written)).unwrap_or(u64::MAX);
+        let maximum_bytes_left_to_read = policy
+            .maximum_bytes_read_per_block
+            .saturating_sub(self.bytes_read);
+        let maximum_bytes_left_to_write = policy
+            .maximum_bytes_written_per_block
+            .saturating_sub(self.bytes_written);
         RuntimeLimits {
             max_budget_num_reads,
             max_budget_bytes_read,

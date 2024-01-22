@@ -945,41 +945,53 @@ enum ClientCommand {
 
     /// View or update the resource control policy
     ResourceControlPolicy {
-        /// Set the base price for each certificate.
+        /// Set the base price for creating a block.
         #[arg(long)]
-        certificate: Option<Amount>,
+        block: Option<Amount>,
 
-        /// Set the price per unit of fuel when executing user messages and operations.
+        /// Set the price per unit of fuel.
         #[arg(long)]
-        fuel: Option<Amount>,
+        fuel_unit: Option<Amount>,
 
-        /// Set the price per byte to read data per operation
+        /// Set the price per read operation.
         #[arg(long)]
-        storage_num_reads: Option<Amount>,
+        read_operation: Option<Amount>,
 
-        /// Set the price per byte to read data per byte
+        /// Set the price per byte read.
         #[arg(long)]
-        storage_bytes_read: Option<Amount>,
+        byte_read: Option<Amount>,
 
-        /// Set the price per byte to write data per byte
+        /// Set the price per byte written.
         #[arg(long)]
-        storage_bytes_written: Option<Amount>,
+        byte_written: Option<Amount>,
 
-        /// Set the price per byte stored
+        /// Set the price per byte stored.
         #[arg(long)]
-        storage_bytes_stored: Option<Amount>,
+        byte_stored: Option<Amount>,
 
-        /// Set the maximum quantity of data to read per block
+        /// Set the base price of sending a operation from a block..
+        #[arg(long)]
+        operation: Option<Amount>,
+
+        /// Set the additional price for each byte in the argument of a user operation.
+        #[arg(long)]
+        operation_byte: Option<Amount>,
+
+        /// Set the base price of sending a message from a block..
+        #[arg(long)]
+        message: Option<Amount>,
+
+        /// Set the additional price for each byte in the argument of a user message.
+        #[arg(long)]
+        message_byte: Option<Amount>,
+
+        /// Set the maximum read data per block.
         #[arg(long)]
         maximum_bytes_read_per_block: Option<u64>,
 
-        /// Set the maximum quantity of data to write per block
+        /// Set the maximum write data per block.
         #[arg(long)]
         maximum_bytes_written_per_block: Option<u64>,
-
-        /// Set the price per byte to store and send outgoing cross-chain messages.
-        #[arg(long)]
-        messages: Option<Amount>,
     },
 
     /// Send one transfer per chain in bulk mode
@@ -1021,41 +1033,53 @@ enum ClientCommand {
         /// Number of initial (aka "root") chains to create in addition to the admin chain.
         num_other_initial_chains: u32,
 
-        /// Set the base price for each certificate.
+        /// Set the base price for creating a block.
         #[arg(long, default_value = "0")]
-        certificate_price: Amount,
+        block_price: Amount,
 
-        /// Set the price per unit of fuel when executing user messages and operations.
+        /// Set the price per unit of fuel.
         #[arg(long, default_value = "0")]
-        fuel_price: Amount,
+        fuel_unit_price: Amount,
 
-        /// Set the price per operation to read data
+        /// Set the price per read operation.
         #[arg(long, default_value = "0")]
-        storage_num_reads_price: Amount,
+        read_operation_price: Amount,
 
-        /// Set the price per byte to read data
+        /// Set the price per byte read.
         #[arg(long, default_value = "0")]
-        storage_bytes_read_price: Amount,
+        byte_read_price: Amount,
 
-        /// Set the price per byte to write data
+        /// Set the price per byte written.
         #[arg(long, default_value = "0")]
-        storage_bytes_written_price: Amount,
+        byte_written_price: Amount,
 
-        /// Set the price per byte stored
+        /// Set the price per byte stored.
         #[arg(long, default_value = "0")]
-        storage_bytes_stored_price: Amount,
+        byte_stored_price: Amount,
 
-        /// Set the maximum read data per block
+        /// Set the base price of sending a operation from a block..
+        #[arg(long, default_value = "0")]
+        operation_price: Amount,
+
+        /// Set the additional price for each byte in the argument of a user operation.
+        #[arg(long, default_value = "0")]
+        operation_byte_price: Amount,
+
+        /// Set the base price of sending a message from a block..
+        #[arg(long, default_value = "0")]
+        message_price: Amount,
+
+        /// Set the additional price for each byte in the argument of a user message.
+        #[arg(long, default_value = "0")]
+        message_byte_price: Amount,
+
+        /// Set the maximum read data per block.
         #[arg(long)]
         maximum_bytes_read_per_block: Option<u64>,
 
-        /// Set the maximum write data per block
+        /// Set the maximum write data per block.
         #[arg(long)]
         maximum_bytes_written_per_block: Option<u64>,
-
-        /// Set the price per byte to store and send outgoing cross-chain messages.
-        #[arg(long, default_value = "0")]
-        messages_price: Amount,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.
@@ -1649,33 +1673,48 @@ impl Runnable for Job {
                                     }
                                 }
                                 ResourceControlPolicy {
-                                    certificate,
-                                    fuel,
-                                    storage_num_reads,
-                                    storage_bytes_read,
-                                    storage_bytes_written,
-                                    storage_bytes_stored,
+                                    block,
+                                    fuel_unit,
+                                    read_operation,
+                                    byte_read,
+                                    byte_written,
+                                    byte_stored,
+                                    operation,
+                                    operation_byte,
+                                    message,
+                                    message_byte,
                                     maximum_bytes_read_per_block,
                                     maximum_bytes_written_per_block,
-                                    messages,
                                 } => {
-                                    if let Some(certificate) = certificate {
-                                        policy.certificate = certificate;
+                                    if let Some(block) = block {
+                                        policy.block = block;
                                     }
-                                    if let Some(fuel) = fuel {
-                                        policy.fuel = fuel;
+                                    if let Some(fuel_unit) = fuel_unit {
+                                        policy.fuel_unit = fuel_unit;
                                     }
-                                    if let Some(storage_num_reads) = storage_num_reads {
-                                        policy.storage_num_reads = storage_num_reads;
+                                    if let Some(read_operation) = read_operation {
+                                        policy.read_operation = read_operation;
                                     }
-                                    if let Some(storage_bytes_read) = storage_bytes_read {
-                                        policy.storage_bytes_read = storage_bytes_read;
+                                    if let Some(byte_read) = byte_read {
+                                        policy.byte_read = byte_read;
                                     }
-                                    if let Some(storage_bytes_written) = storage_bytes_written {
-                                        policy.storage_bytes_written = storage_bytes_written;
+                                    if let Some(byte_written) = byte_written {
+                                        policy.byte_written = byte_written;
                                     }
-                                    if let Some(storage_bytes_stored) = storage_bytes_stored {
-                                        policy.storage_bytes_stored = storage_bytes_stored;
+                                    if let Some(byte_stored) = byte_stored {
+                                        policy.byte_stored = byte_stored;
+                                    }
+                                    if let Some(operation) = operation {
+                                        policy.operation = operation;
+                                    }
+                                    if let Some(operation_byte) = operation_byte {
+                                        policy.operation_byte = operation_byte;
+                                    }
+                                    if let Some(message) = message {
+                                        policy.message = message;
+                                    }
+                                    if let Some(message_byte) = message_byte {
+                                        policy.message_byte = message_byte;
                                     }
                                     if let Some(maximum_bytes_read_per_block) =
                                         maximum_bytes_read_per_block
@@ -1689,39 +1728,45 @@ impl Runnable for Job {
                                         policy.maximum_bytes_written_per_block =
                                             maximum_bytes_written_per_block;
                                     }
-                                    if let Some(messages) = messages {
-                                        policy.messages = messages;
-                                    }
                                     info!(
                                         "ResourceControlPolicy:\n\
                             {:.2} base cost per block\n\
-                            {:.2} cost per byte of operations and incoming messages\n\
-                            {:.2} cost per byte operation\n\
-                            {:.2} cost per bytes read\n\
-                            {:.2} cost per bytes written\n\
-                            {:.2} cost per bytes stored\n\
-                            {:.2} per byte of outgoing messages\n\
+                            {:.2} cost per fuel unit\n\
+                            {:.2} cost per read operation\n\
+                            {:.2} cost per byte read\n\
+                            {:.2} cost per byte written\n\
+                            {:.2} cost per byte stored\n\
+                            {:.2} per operation\n\
+                            {:.2} per byte in the argument of an operation\n\
+                            {:.2} per outgoing messages\n\
+                            {:.2} per byte in the argument of an outgoing messages\n\
                             {:.2} maximum number bytes read per block\n\
                             {:.2} maximum number bytes written per block",
-                                        policy.certificate,
-                                        policy.fuel,
-                                        policy.storage_num_reads,
-                                        policy.storage_bytes_read,
-                                        policy.storage_bytes_written,
-                                        policy.storage_bytes_stored,
-                                        policy.messages,
+                                        policy.block,
+                                        policy.fuel_unit,
+                                        policy.read_operation,
+                                        policy.byte_read,
+                                        policy.byte_written,
+                                        policy.byte_stored,
+                                        policy.operation,
+                                        policy.operation_byte,
+                                        policy.message,
+                                        policy.message_byte,
                                         policy.maximum_bytes_read_per_block,
                                         policy.maximum_bytes_written_per_block
                                     );
-                                    if certificate.is_none()
-                                        && fuel.is_none()
-                                        && storage_num_reads.is_none()
-                                        && storage_bytes_read.is_none()
-                                        && storage_bytes_written.is_none()
-                                        && storage_bytes_stored.is_none()
+                                    if block.is_none()
+                                        && fuel_unit.is_none()
+                                        && read_operation.is_none()
+                                        && byte_read.is_none()
+                                        && byte_written.is_none()
+                                        && byte_stored.is_none()
+                                        && operation.is_none()
+                                        && operation_byte.is_none()
+                                        && message.is_none()
+                                        && message_byte.is_none()
                                         && maximum_bytes_read_per_block.is_none()
                                         && maximum_bytes_written_per_block.is_none()
-                                        && messages.is_none()
                                     {
                                         return (Ok(ClientOutcome::Committed(None)), chain_client);
                                     }
@@ -2441,15 +2486,18 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
             initial_funding,
             start_timestamp,
             num_other_initial_chains,
-            certificate_price,
-            fuel_price,
-            storage_num_reads_price,
-            storage_bytes_read_price,
-            storage_bytes_written_price,
-            storage_bytes_stored_price,
+            block_price,
+            fuel_unit_price,
+            read_operation_price,
+            byte_read_price,
+            byte_written_price,
+            byte_stored_price,
+            operation_price,
+            operation_byte_price,
+            message_price,
+            message_byte_price,
             maximum_bytes_read_per_block,
             maximum_bytes_written_per_block,
-            messages_price,
             testing_prng_seed,
             network_name,
         } => {
@@ -2464,15 +2512,18 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 None => u64::MAX,
             };
             let policy = ResourceControlPolicy {
-                certificate: *certificate_price,
-                fuel: *fuel_price,
-                storage_num_reads: *storage_num_reads_price,
-                storage_bytes_read: *storage_bytes_read_price,
-                storage_bytes_written: *storage_bytes_written_price,
-                storage_bytes_stored: *storage_bytes_stored_price,
+                block: *block_price,
+                fuel_unit: *fuel_unit_price,
+                read_operation: *read_operation_price,
+                byte_read: *byte_read_price,
+                byte_written: *byte_written_price,
+                byte_stored: *byte_stored_price,
+                operation_byte: *operation_byte_price,
+                operation: *operation_price,
+                message_byte: *message_byte_price,
+                message: *message_price,
                 maximum_bytes_read_per_block,
                 maximum_bytes_written_per_block,
-                messages: *messages_price,
             };
             let timestamp = start_timestamp
                 .map(|st| {
