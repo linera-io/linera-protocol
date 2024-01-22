@@ -36,7 +36,7 @@ use std::{
 /// * Deletion of a specific key.
 /// * Deletion of all keys matching a specific prefix.
 /// * Insertion or replacement of a key with a value.
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum WriteOperation {
     /// Delete the given key.
     Delete {
@@ -58,7 +58,7 @@ pub enum WriteOperation {
 }
 
 /// A batch of write operations.
-#[derive(Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Batch {
     /// The write operations.
     pub operations: Vec<WriteOperation>,
@@ -175,21 +175,19 @@ impl Batch {
 
     /// The total size of the batch
     pub fn size(&self) -> usize {
-        let mut size = 0;
-        for operation in &self.operations {
-            match operation {
-                WriteOperation::Delete { key } => {
-                    size += key.len();
-                }
-                WriteOperation::Put { key, value } => {
-                    size += key.len() + value.len();
-                }
-                WriteOperation::DeletePrefix { key_prefix } => {
-                    size += key_prefix.len();
-                }
-            }
-        }
-        size
+        self.operations
+            .iter()
+            .map(|operation| match operation {
+                WriteOperation::Delete { key } => key.len(),
+                WriteOperation::Put { key, value } => key.len() + value.len(),
+                WriteOperation::DeletePrefix { key_prefix } => key_prefix.len(),
+            })
+            .sum()
+    }
+
+    /// Returns the number of operations in this [`Batch`].
+    pub fn num_operations(&self) -> usize {
+        self.operations.len()
     }
 
     /// Builds a batch from a builder function.
