@@ -58,7 +58,7 @@ pub enum WriteOperation {
 }
 
 /// A batch of write operations.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Batch {
     /// The write operations.
     pub operations: Vec<WriteOperation>,
