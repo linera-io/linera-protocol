@@ -23,6 +23,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+#[cfg(test)]
+#[path = "unit_tests/runtime_tests.rs"]
+mod tests;
+
 #[derive(Debug)]
 pub struct SyncRuntime<UserInstance>(Arc<Mutex<SyncRuntimeInternal<UserInstance>>>);
 
