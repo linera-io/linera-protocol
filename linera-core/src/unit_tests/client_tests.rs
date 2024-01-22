@@ -85,7 +85,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_certificate());
+        .with_policy(ResourceControlPolicy::fuel_and_block());
     let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
@@ -265,7 +265,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_certificate());
+        .with_policy(ResourceControlPolicy::fuel_and_block());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
@@ -335,7 +335,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_certificate());
+        .with_policy(ResourceControlPolicy::fuel_and_block());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
@@ -1233,7 +1233,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_certificate());
+        .with_policy(ResourceControlPolicy::fuel_and_block());
     let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
         .await?;
@@ -1558,7 +1558,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
-        .with_policy(ResourceControlPolicy::fuel_and_certificate());
+        .with_policy(ResourceControlPolicy::fuel_and_block());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
         .await?;

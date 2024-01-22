@@ -601,17 +601,7 @@ where
         let policy = committee.policy().clone();
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
-        let maximum_bytes_left_to_read = policy.maximum_bytes_read_per_block;
-        let maximum_bytes_left_to_write = policy.maximum_bytes_written_per_block;
-        let mut tracker = ResourceTracker {
-            used_fuel: 0,
-            num_reads: 0,
-            bytes_read: 0,
-            bytes_written: 0,
-            maximum_bytes_left_to_read,
-            maximum_bytes_left_to_write,
-            stored_size_delta: 0,
-        };
+        let mut tracker = ResourceTracker::default();
         // The first incoming message of any child chain must be `OpenChain`. A root chain must
         // already be initialized
         if block.height == BlockHeight::ZERO
@@ -692,16 +682,13 @@ where
                 .await?;
             if let MessageAction::Accept = message.action {
                 let balance = self.execution_state.system.balance.get_mut();
-                Self::sub_assign_fees(
-                    balance,
-                    policy.storage_bytes_written_price_raw(&message)?,
-                    chain_execution_context,
-                )?;
-                Self::sub_assign_fees(
-                    balance,
-                    policy.messages_price(&messages_out)?,
-                    chain_execution_context,
-                )?;
+                for message_out in &messages_out {
+                    Self::sub_assign_fees(
+                        balance,
+                        policy.message_price(&message_out.message)?,
+                        chain_execution_context,
+                    )?;
+                }
             }
             messages.append(&mut messages_out);
             message_counts
@@ -731,24 +718,22 @@ where
             let balance = self.execution_state.system.balance.get_mut();
             Self::sub_assign_fees(
                 balance,
-                policy.storage_bytes_written_price_raw(&operation)?,
+                policy.operation_price(operation)?,
                 chain_execution_context,
             )?;
-            Self::sub_assign_fees(
-                balance,
-                policy.messages_price(&messages_out)?,
-                chain_execution_context,
-            )?;
+            for message_out in &messages_out {
+                Self::sub_assign_fees(
+                    balance,
+                    policy.message_price(&message_out.message)?,
+                    chain_execution_context,
+                )?;
+            }
             messages.append(&mut messages_out);
             message_counts
                 .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
         }
         let balance = self.execution_state.system.balance.get_mut();
-        Self::sub_assign_fees(
-            balance,
-            policy.certificate_price(),
-            ChainExecutionContext::Block,
-        )?;
+        Self::sub_assign_fees(balance, policy.block_price(), ChainExecutionContext::Block)?;
 
         // Recompute the state hash.
         let state_hash = self.execution_state.crypto_hash().await?;

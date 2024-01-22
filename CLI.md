@@ -246,15 +246,18 @@ View or update the resource control policy
 
 ###### **Options:**
 
-* `--certificate <CERTIFICATE>` — Set the base price for each certificate
-* `--fuel <FUEL>` — Set the price per unit of fuel when executing user messages and operations
-* `--storage-num-reads <STORAGE_NUM_READS>` — Set the price per byte to read data per operation
-* `--storage-bytes-read <STORAGE_BYTES_READ>` — Set the price per byte to read data per byte
-* `--storage-bytes-written <STORAGE_BYTES_WRITTEN>` — Set the price per byte to write data per byte
-* `--storage-bytes-stored <STORAGE_BYTES_STORED>` — Set the price per byte stored
-* `--maximum-bytes-read-per-block <MAXIMUM_BYTES_READ_PER_BLOCK>` — Set the maximum quantity of data to read per block
-* `--maximum-bytes-written-per-block <MAXIMUM_BYTES_WRITTEN_PER_BLOCK>` — Set the maximum quantity of data to write per block
-* `--messages <MESSAGES>` — Set the price per byte to store and send outgoing cross-chain messages
+* `--block <BLOCK>` — Set the base price for creating a block
+* `--fuel-unit <FUEL_UNIT>` — Set the price per unit of fuel
+* `--read-operation <READ_OPERATION>` — Set the price per read operation
+* `--byte-read <BYTE_READ>` — Set the price per byte read
+* `--byte-written <BYTE_WRITTEN>` — Set the price per byte written
+* `--byte-stored <BYTE_STORED>` — Set the price per byte stored
+* `--operation <OPERATION>` — Set the base price of sending a operation from a block..
+* `--operation-byte <OPERATION_BYTE>` — Set the additional price for each byte in the argument of a user operation
+* `--message <MESSAGE>` — Set the base price of sending a message from a block..
+* `--message-byte <MESSAGE_BYTE>` — Set the additional price for each byte in the argument of a user message
+* `--maximum-bytes-read-per-block <MAXIMUM_BYTES_READ_PER_BLOCK>` — Set the maximum read data per block
+* `--maximum-bytes-written-per-block <MAXIMUM_BYTES_WRITTEN_PER_BLOCK>` — Set the maximum write data per block
 
 
 
@@ -279,29 +282,38 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 
   Default value: `0`
 * `--start-timestamp <START_TIMESTAMP>` — The start timestamp: no blocks can be created before this time
-* `--certificate-price <CERTIFICATE_PRICE>` — Set the base price for each certificate
+* `--block-price <BLOCK_PRICE>` — Set the base price for creating a block
 
   Default value: `0`
-* `--fuel-price <FUEL_PRICE>` — Set the price per unit of fuel when executing user messages and operations
+* `--fuel-unit-price <FUEL_UNIT_PRICE>` — Set the price per unit of fuel
 
   Default value: `0`
-* `--storage-num-reads-price <STORAGE_NUM_READS_PRICE>` — Set the price per operation to read data
+* `--read-operation-price <READ_OPERATION_PRICE>` — Set the price per read operation
 
   Default value: `0`
-* `--storage-bytes-read-price <STORAGE_BYTES_READ_PRICE>` — Set the price per byte to read data
+* `--byte-read-price <BYTE_READ_PRICE>` — Set the price per byte read
 
   Default value: `0`
-* `--storage-bytes-written-price <STORAGE_BYTES_WRITTEN_PRICE>` — Set the price per byte to write data
+* `--byte-written-price <BYTE_WRITTEN_PRICE>` — Set the price per byte written
 
   Default value: `0`
-* `--storage-bytes-stored-price <STORAGE_BYTES_STORED_PRICE>` — Set the price per byte stored
+* `--byte-stored-price <BYTE_STORED_PRICE>` — Set the price per byte stored
+
+  Default value: `0`
+* `--operation-price <OPERATION_PRICE>` — Set the base price of sending a operation from a block..
+
+  Default value: `0`
+* `--operation-byte-price <OPERATION_BYTE_PRICE>` — Set the additional price for each byte in the argument of a user operation
+
+  Default value: `0`
+* `--message-price <MESSAGE_PRICE>` — Set the base price of sending a message from a block..
+
+  Default value: `0`
+* `--message-byte-price <MESSAGE_BYTE_PRICE>` — Set the additional price for each byte in the argument of a user message
 
   Default value: `0`
 * `--maximum-bytes-read-per-block <MAXIMUM_BYTES_READ_PER_BLOCK>` — Set the maximum read data per block
 * `--maximum-bytes-written-per-block <MAXIMUM_BYTES_WRITTEN_PER_BLOCK>` — Set the maximum write data per block
-* `--messages-price <MESSAGES_PRICE>` — Set the price per byte to store and send outgoing cross-chain messages
-
-  Default value: `0`
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 * `--network-name <NETWORK_NAME>` — A unique name to identify this network
 

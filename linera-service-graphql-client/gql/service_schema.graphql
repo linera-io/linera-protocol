@@ -617,34 +617,49 @@ type ReentrantCollectionView_Target_OutboxStateView {
 }
 
 """
-A collection of costs associated with blocks in validators.
+A collection of prices and limits associated with block execution.
 """
 input ResourceControlPolicy {
 	"""
-	The base price for each certificate, to compensate for the communication and signing
-	overhead.
+	The base price for creating a new block.
 	"""
-	certificate: Amount!
+	block: Amount!
 	"""
-	The price per unit of fuel used when executing messages and operations for user applications.
+	The price per unit of fuel (aka gas) for VM execution.
 	"""
-	fuel: Amount!
+	fuelUnit: Amount!
 	"""
-	The cost to read data per operation
+	The price of one read operation.
 	"""
-	storageNumReads: Amount!
+	readOperation: Amount!
 	"""
-	The cost to read data per byte
+	The price of reading a byte.
 	"""
-	storageBytesRead: Amount!
+	byteRead: Amount!
 	"""
-	The cost to store data per byte
+	The price to writting a byte
 	"""
-	storageBytesWritten: Amount!
+	byteWritten: Amount!
 	"""
-	The cost of the total storage used
+	The price of increasing storage by a byte.
 	"""
-	storageBytesStored: Amount!
+	byteStored: Amount!
+	"""
+	The base price of adding an operation to a block.
+	"""
+	operation: Amount!
+	"""
+	The additional price for each byte in the argument of a user operation.
+	"""
+	operationByte: Amount!
+	"""
+	The base price of sending a message from a block.
+	"""
+	message: Amount!
+	"""
+	The additional price for each byte in the argument of a user message.
+	"""
+	messageByte: Amount!
 	"""
 	The maximum data to read per block
 	"""
@@ -653,10 +668,6 @@ input ResourceControlPolicy {
 	The maximum data to write per block
 	"""
 	maximumBytesWrittenPerBlock: Int!
-	"""
-	The cost to store and send cross-chain messages, per byte.
-	"""
-	messages: Amount!
 }
 
 

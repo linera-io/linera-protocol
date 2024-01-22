@@ -78,7 +78,7 @@ async fn test_fuel_for_counter_wasm_application(
     };
     let increments = [2_u64, 9, 7, 1000];
     let policy = ResourceControlPolicy {
-        fuel: Amount::from_atto(1),
+        fuel_unit: Amount::from_atto(1),
         ..ResourceControlPolicy::default()
     };
     let mut tracker = ResourceTracker::default();
