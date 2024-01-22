@@ -45,7 +45,13 @@ jobs:
         cache: false
     - name: Enable `sccache` for Rust builds
       run: |
+        cargo install sccache
         echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+        echo $PATH
+        type -P sccache ||:
+        ls -lah ~/.cargo ||:
+        ls -lah ~/.cache ||:
+        ls -lah ~/.cache/cargo ||:
     - name: Build example applications
       run: |
         cd examples
