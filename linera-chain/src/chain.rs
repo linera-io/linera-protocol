@@ -601,13 +601,7 @@ where
         let policy = committee.policy().clone();
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
-        let mut tracker = ResourceTracker {
-            used_fuel: 0,
-            num_reads: 0,
-            bytes_read: 0,
-            bytes_written: 0,
-            stored_size_delta: 0,
-        };
+        let mut tracker = ResourceTracker::default();
         // The first incoming message of any child chain must be `OpenChain`. A root chain must
         // already be initialized
         if block.height == BlockHeight::ZERO
