@@ -1,0 +1,648 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use anyhow::Context;
+use async_trait::async_trait;
+use colored::Colorize;
+use futures::{future, lock::Mutex, Future};
+use linera_base::{
+    crypto::{CryptoRng, KeyPair},
+    data_types::{BlockHeight, Timestamp},
+    identifiers::{BytecodeId, ChainId},
+};
+use linera_chain::data_types::Certificate;
+use linera_core::{
+    client::{ChainClient, ChainClientBuilder},
+    data_types::ClientOutcome,
+    node::{CrossChainMessageDelivery, ValidatorNodeProvider},
+};
+use linera_execution::Bytecode;
+use linera_rpc::node_provider::{NodeOptions, NodeProvider};
+use linera_service::{
+    chain_listener,
+    config::{GenesisConfig, UserChain, WalletState},
+    node_service::wait_for_next_round,
+    storage::StorageConfig,
+};
+use linera_storage::Storage;
+use linera_views::views::ViewError;
+use std::{path::PathBuf, sync::Arc, time::Duration};
+use tracing::{debug, info, warn};
+
+use crate::ClientOptions;
+
+#[cfg(feature = "benchmark")]
+use {
+    linera_base::data_types::Amount,
+    linera_chain::data_types::{Block, BlockAndRound, BlockProposal, SignatureAggregator, Vote},
+    linera_core::{
+        data_types::ChainInfoQuery, local_node::LocalNodeClient, notifier::Notifier,
+        worker::WorkerState,
+    },
+    linera_execution::{
+        committee::Epoch,
+        system::UserData,
+        system::{Recipient, SystemOperation},
+        Operation,
+    },
+    linera_rpc::{
+        config::NetworkProtocol, grpc_network::GrpcClient, mass::MassClient, simple_network,
+        RpcMessage,
+    },
+    std::{
+        collections::{HashMap, HashSet},
+        time::Instant,
+    },
+    tracing::{error, trace},
+};
+
+pub struct ClientContext {
+    wallet_state: WalletState,
+    chain_client_builder: ChainClientBuilder<NodeProvider>,
+    send_timeout: Duration,
+    recv_timeout: Duration,
+    notification_retry_delay: Duration,
+    notification_retries: u32,
+    prng: Box<dyn CryptoRng>,
+}
+
+#[async_trait]
+impl chain_listener::ClientContext<NodeProvider> for ClientContext {
+    fn wallet_state(&self) -> &WalletState {
+        &self.wallet_state
+    }
+
+    fn make_chain_client<S>(
+        &self,
+        storage: S,
+        chain_id: impl Into<Option<ChainId>>,
+    ) -> ChainClient<NodeProvider, S> {
+        self.make_chain_client(storage, chain_id)
+    }
+
+    fn update_wallet_for_new_chain(
+        &mut self,
+        chain_id: ChainId,
+        key_pair: Option<KeyPair>,
+        timestamp: Timestamp,
+    ) {
+        self.update_wallet_for_new_chain(chain_id, key_pair, timestamp);
+    }
+
+    async fn update_wallet<'a, S>(&'a mut self, client: &'a mut ChainClient<NodeProvider, S>)
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        self.update_and_save_wallet(client).await;
+    }
+}
+
+impl ClientContext {
+    pub fn create(
+        options: &ClientOptions,
+        genesis_config: GenesisConfig,
+        testing_prng_seed: Option<u64>,
+        chains: Vec<UserChain>,
+    ) -> Result<Self, anyhow::Error> {
+        let wallet_state_path = match &options.wallet_state_path {
+            Some(path) => path.clone(),
+            None => Self::create_default_wallet_path()?,
+        };
+        anyhow::ensure!(
+            !wallet_state_path.exists(),
+            "Wallet already exists at {}. Aborting",
+            wallet_state_path.display()
+        );
+        let mut wallet_state =
+            WalletState::create(&wallet_state_path, genesis_config, testing_prng_seed)
+                .with_context(|| format!("Unable to create wallet at {:?}", &wallet_state_path))?;
+        chains
+            .into_iter()
+            .for_each(|chain| wallet_state.insert(chain));
+        Ok(Self::configure(options, wallet_state))
+    }
+
+    pub fn from_options(options: &ClientOptions) -> Result<Self, anyhow::Error> {
+        let wallet_state_path = match &options.wallet_state_path {
+            Some(path) => path.clone(),
+            None => Self::create_default_wallet_path()?,
+        };
+        let wallet_state = WalletState::from_file(&wallet_state_path)?;
+        Ok(Self::configure(options, wallet_state))
+    }
+
+    pub fn wallet_state_mut(&mut self) -> &mut WalletState {
+        &mut self.wallet_state
+    }
+
+    fn configure(options: &ClientOptions, wallet_state: WalletState) -> Self {
+        let prng = wallet_state.make_prng();
+
+        let node_options = NodeOptions {
+            send_timeout: options.send_timeout,
+            recv_timeout: options.recv_timeout,
+            notification_retry_delay: options.notification_retry_delay,
+            notification_retries: options.notification_retries,
+        };
+        let node_provider = NodeProvider::new(node_options);
+        let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
+        let chain_client_builder =
+            ChainClientBuilder::new(node_provider, options.max_pending_messages, delivery);
+        ClientContext {
+            chain_client_builder,
+            wallet_state,
+            send_timeout: options.send_timeout,
+            recv_timeout: options.recv_timeout,
+            notification_retry_delay: options.notification_retry_delay,
+            notification_retries: options.notification_retries,
+            prng,
+        }
+    }
+
+    fn create_default_config_path() -> Result<PathBuf, anyhow::Error> {
+        let mut config_dir = dirs::config_dir()
+            .context("Default configuration directory not supported. Please specify a path.")?;
+        config_dir.push("linera");
+        if !config_dir.exists() {
+            debug!("{} does not exist, creating", config_dir.display());
+            fs_err::create_dir(&config_dir)?;
+            debug!("{} created.", config_dir.display());
+        }
+        Ok(config_dir)
+    }
+
+    fn create_default_wallet_path() -> Result<PathBuf, anyhow::Error> {
+        Ok(Self::create_default_config_path()?.join("wallet.json"))
+    }
+
+    pub fn storage_config(options: &ClientOptions) -> Result<StorageConfig, anyhow::Error> {
+        match &options.storage_config {
+            Some(config) => config.parse(),
+            #[cfg(feature = "rocksdb")]
+            None => Ok(StorageConfig::RocksDb {
+                path: Self::create_default_config_path()?.join("wallet.db"),
+            }),
+            #[cfg(not(feature = "rocksdb"))]
+            None => bail!("A storage option must be provided"),
+        }
+    }
+
+    #[cfg(feature = "benchmark")]
+    fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<Box<dyn MassClient>> {
+        let mut validator_clients = Vec::new();
+        for config in &self.wallet_state.genesis_config().committee.validators {
+            let client: Box<dyn MassClient> = match config.network.protocol {
+                NetworkProtocol::Simple(protocol) => {
+                    let network = config.network.clone_with_protocol(protocol);
+                    Box::new(simple_network::SimpleMassClient::new(
+                        network,
+                        self.send_timeout,
+                        self.recv_timeout,
+                        max_in_flight,
+                    ))
+                }
+                NetworkProtocol::Grpc { .. } => Box::new(
+                    GrpcClient::new(config.network.clone(), self.make_node_options()).unwrap(),
+                ),
+            };
+
+            validator_clients.push(client);
+        }
+        validator_clients
+    }
+
+    fn make_chain_client<S>(
+        &self,
+        storage: S,
+        chain_id: impl Into<Option<ChainId>>,
+    ) -> ChainClient<NodeProvider, S> {
+        let chain_id = chain_id.into().unwrap_or_else(|| {
+            self.wallet_state
+                .default_chain()
+                .expect("No chain specified in wallet with no default chain")
+        });
+        let chain = self
+            .wallet_state
+            .get(chain_id)
+            .unwrap_or_else(|| panic!("Unknown chain: {}", chain_id));
+        let known_key_pairs = chain
+            .key_pair
+            .as_ref()
+            .map(|kp| kp.copy())
+            .into_iter()
+            .collect();
+        self.chain_client_builder.build(
+            chain_id,
+            known_key_pairs,
+            storage,
+            self.wallet_state.genesis_admin_chain(),
+            chain.block_hash,
+            chain.timestamp,
+            chain.next_block_height,
+            chain.pending_block.clone(),
+        )
+    }
+
+    pub fn make_node_provider(&self) -> NodeProvider {
+        NodeProvider::new(self.make_node_options())
+    }
+
+    fn make_node_options(&self) -> NodeOptions {
+        NodeOptions {
+            send_timeout: self.send_timeout,
+            recv_timeout: self.recv_timeout,
+            notification_retry_delay: self.notification_retry_delay,
+            notification_retries: self.notification_retries,
+        }
+    }
+
+    #[cfg(feature = "benchmark")]
+    pub async fn process_inboxes_and_force_validator_updates<S>(&mut self, storage: &S)
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        for chain_id in self.wallet_state.own_chain_ids() {
+            let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
+            self.process_inbox(&mut chain_client).await.unwrap();
+            chain_client.update_validators().await.unwrap();
+        }
+    }
+
+    /// Makes one block proposal per chain, up to `max_proposals` blocks.
+    #[cfg(feature = "benchmark")]
+    pub fn make_benchmark_block_proposals(&mut self, max_proposals: usize) -> Vec<RpcMessage> {
+        let mut proposals = Vec::new();
+        let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id;
+        for chain in self.wallet_state.chains_mut() {
+            let key_pair = match &chain.key_pair {
+                Some(kp) => kp,
+                None => continue,
+            };
+            let block = Block {
+                epoch: Epoch::ZERO,
+                chain_id: chain.chain_id,
+                incoming_messages: Vec::new(),
+                operations: vec![Operation::System(SystemOperation::Transfer {
+                    owner: None,
+                    recipient: Recipient::chain(next_recipient),
+                    amount: Amount::ONE,
+                    user_data: UserData::default(),
+                })],
+                previous_block_hash: chain.block_hash,
+                height: chain.next_block_height,
+                authenticated_signer: None,
+                timestamp: chain.timestamp.max(Timestamp::now()),
+            };
+            trace!("Preparing block proposal: {:?}", block);
+            let proposal = BlockProposal::new(
+                BlockAndRound {
+                    block: block.clone(),
+                    round: linera_base::data_types::Round::Fast,
+                },
+                key_pair,
+                vec![],
+                None,
+            );
+            proposals.push(proposal.into());
+            if proposals.len() >= max_proposals {
+                break;
+            }
+            next_recipient = chain.chain_id;
+        }
+        proposals
+    }
+
+    /// Tries to aggregate votes into certificates.
+    #[cfg(feature = "benchmark")]
+    pub fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<Certificate> {
+        let committee = self.wallet_state.genesis_config().create_committee();
+        let mut aggregators = HashMap::new();
+        let mut certificates = Vec::new();
+        let mut done_senders = HashSet::new();
+        for vote in votes {
+            // We aggregate votes indexed by sender.
+            let chain_id = vote.value().chain_id();
+            if done_senders.contains(&chain_id) {
+                continue;
+            }
+            trace!(
+                "Processing vote on {:?}'s block by {:?}",
+                chain_id,
+                vote.validator,
+            );
+            let aggregator = aggregators.entry(chain_id).or_insert_with(|| {
+                SignatureAggregator::new(
+                    vote.value,
+                    linera_base::data_types::Round::Fast,
+                    &committee,
+                )
+            });
+            match aggregator.append(vote.validator, vote.signature) {
+                Ok(Some(certificate)) => {
+                    trace!("Found certificate: {:?}", certificate);
+                    certificates.push(certificate);
+                    done_senders.insert(chain_id);
+                }
+                Ok(None) => {
+                    trace!("Added one vote");
+                }
+                Err(error) => {
+                    error!("Failed to aggregate vote: {}", error);
+                }
+            }
+        }
+        certificates
+    }
+
+    /// Broadcasts a bulk of blocks to each validator.
+    #[cfg(feature = "benchmark")]
+    pub async fn mass_broadcast(
+        &self,
+        phase: &'static str,
+        max_in_flight: u64,
+        proposals: Vec<RpcMessage>,
+    ) -> Vec<RpcMessage> {
+        let time_start = Instant::now();
+        info!("Broadcasting {} {}", proposals.len(), phase);
+        let mut handles = Vec::new();
+        for mut client in self.make_validator_mass_clients(max_in_flight) {
+            let proposals = proposals.clone();
+            handles.push(tokio::spawn(async move {
+                debug!("Sending {} requests", proposals.len());
+                let responses = client.send(proposals).await.unwrap_or_default();
+                debug!("Done sending requests");
+                responses
+            }));
+        }
+        let responses = futures::future::join_all(handles)
+            .await
+            .into_iter()
+            .flatten()
+            .flatten()
+            .collect::<Vec<RpcMessage>>();
+        let time_elapsed = time_start.elapsed();
+        info!(
+            "Received {} responses in {} ms.",
+            responses.len(),
+            time_elapsed.as_millis()
+        );
+        info!(
+            "Estimated server throughput: {} {} per sec",
+            (proposals.len() as u128) * 1_000_000 / time_elapsed.as_micros(),
+            phase
+        );
+        responses
+    }
+
+    pub fn save_wallet(&mut self) {
+        self.wallet_state.refresh_prng_seed(&mut self.prng);
+        self.wallet_state
+            .write()
+            .expect("Unable to write user chains");
+        info!("Saved user chain states");
+    }
+
+    async fn update_wallet_from_client<P, S>(&mut self, state: &mut ChainClient<P, S>)
+    where
+        P: ValidatorNodeProvider + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        self.wallet_state.update_from_state(state).await
+    }
+
+    pub async fn update_and_save_wallet<P, S>(&mut self, state: &mut ChainClient<P, S>)
+    where
+        P: ValidatorNodeProvider + Sync + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        self.update_wallet_from_client(state).await;
+        self.save_wallet()
+    }
+
+    /// Remembers the new private key (if any) in the wallet.
+    pub fn update_wallet_for_new_chain(
+        &mut self,
+        chain_id: ChainId,
+        key_pair: Option<KeyPair>,
+        timestamp: Timestamp,
+    ) {
+        if self.wallet_state.get(chain_id).is_none() {
+            self.wallet_state.insert(UserChain {
+                chain_id,
+                key_pair: key_pair.as_ref().map(|kp| kp.copy()),
+                block_hash: None,
+                timestamp,
+                next_block_height: BlockHeight::ZERO,
+                pending_block: None,
+            });
+        }
+    }
+
+    #[cfg(feature = "benchmark")]
+    pub async fn update_wallet_from_certificates<S>(
+        &mut self,
+        storage: S,
+        certificates: Vec<Certificate>,
+    ) where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        // First instantiate a local node on top of storage.
+        let worker = WorkerState::new("Temporary client node".to_string(), None, storage)
+            .with_allow_inactive_chains(true)
+            .with_allow_messages_from_deprecated_epochs(true);
+        let mut node = LocalNodeClient::new(worker, Arc::new(Notifier::default()));
+        // Second replay the certificates locally.
+        for certificate in certificates {
+            // No required certificates from other chains: This is only used with benchmark.
+            node.handle_certificate(certificate, vec![]).await.unwrap();
+        }
+        // Last update the wallet.
+        for chain in self.wallet_state.chains_mut() {
+            let query = ChainInfoQuery::new(chain.chain_id);
+            let info = node.handle_chain_info_query(query).await.unwrap().info;
+            // We don't have private keys but that's ok.
+            chain.block_hash = info.block_hash;
+            chain.next_block_height = info.next_block_height;
+        }
+    }
+
+    pub async fn ensure_admin_subscription<S>(
+        this: Arc<Mutex<Self>>,
+        storage: &S,
+    ) -> Vec<Certificate>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        let chain_ids = {
+            let guard = this.lock().await;
+            guard.wallet_state.chain_ids()
+        };
+        let futures = chain_ids.into_iter().map(|chain_id| {
+            let this = this.clone();
+            async move {
+                loop {
+                    let mut chain_client = this
+                        .lock()
+                        .await
+                        .make_chain_client(storage.clone(), chain_id);
+                    let stream = match chain_client.subscribe().await {
+                        Ok(stream) => stream,
+                        Err(error) => {
+                            warn!(%chain_id, %error, "Failed to subscribe to notifications.");
+                            return None;
+                        }
+                    };
+                    match chain_client.subscribe_to_new_committees().await {
+                        Ok(ClientOutcome::Committed(cert)) => {
+                            let mut guard = this.lock().await;
+                            debug!(
+                                "Subscribed {:?} to the admin chain {:?}",
+                                chain_id,
+                                guard.wallet_state.genesis_admin_chain(),
+                            );
+                            guard.update_wallet_from_client(&mut chain_client).await;
+                            return Some(cert);
+                        }
+                        Ok(ClientOutcome::WaitForTimeout(timeout)) => {
+                            wait_for_next_round(stream, timeout).await;
+                        }
+                        Err(error) => {
+                            warn!(%chain_id, %error, "Failed to subscribe to new committees.");
+                            return None;
+                        }
+                    }
+                }
+            }
+        });
+        future::join_all(futures)
+            .await
+            .into_iter()
+            .flatten()
+            .collect()
+    }
+
+    pub async fn push_to_all_chains<S>(&mut self, storage: &S, certificate: &Certificate)
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        for chain_id in self.wallet_state.own_chain_ids() {
+            let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
+            chain_client
+                .receive_certificate(certificate.clone())
+                .await
+                .unwrap();
+            self.process_inbox(&mut chain_client).await.unwrap();
+            let epochs = chain_client.epochs().await.unwrap();
+            debug!("{:?} accepts epochs {:?}", chain_id, epochs);
+        }
+    }
+
+    pub async fn process_inbox<S>(
+        &mut self,
+        chain_client: &mut ChainClient<impl ValidatorNodeProvider + Sync + 'static, S>,
+    ) -> anyhow::Result<Vec<Certificate>>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        let mut certificates = Vec::new();
+        loop {
+            chain_client.synchronize_from_validators().await?;
+            let stream = chain_client.subscribe().await?;
+            let result = chain_client.process_inbox().await;
+            self.update_wallet_from_client(chain_client).await;
+            let (new_certificates, maybe_timeout) = result.unwrap();
+            certificates.extend(new_certificates);
+            match maybe_timeout {
+                None => return Ok(certificates),
+                Some(timestamp) => wait_for_next_round(stream, timestamp).await,
+            }
+        }
+    }
+
+    pub async fn publish_bytecode<S>(
+        &mut self,
+        chain_client: &mut ChainClient<impl ValidatorNodeProvider + Sync + 'static, S>,
+        contract: PathBuf,
+        service: PathBuf,
+    ) -> anyhow::Result<BytecodeId>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        info!("Loading bytecode files");
+        let contract_bytecode = Bytecode::load_from_file(&contract).await.context(format!(
+            "failed to load contract bytecode from {:?}",
+            &contract
+        ))?;
+        let service_bytecode = Bytecode::load_from_file(&service).await.context(format!(
+            "failed to load service bytecode from {:?}",
+            &service
+        ))?;
+
+        info!("Publishing bytecode");
+        let bytecode_id = loop {
+            let stream = chain_client.subscribe().await?;
+            match chain_client
+                .publish_bytecode(contract_bytecode.clone(), service_bytecode.clone())
+                .await
+                .context("failed to publish bytecode")?
+            {
+                ClientOutcome::Committed((bytecode_id, _)) => break bytecode_id,
+                ClientOutcome::WaitForTimeout(timeout) => {
+                    wait_for_next_round(stream, timeout).await;
+                }
+            }
+        };
+
+        info!("{}", "Bytecode published successfully!".green().bold());
+
+        info!("Synchronizing client and processing inbox");
+        chain_client.synchronize_from_validators().await?;
+        self.process_inbox(chain_client).await?;
+        Ok(bytecode_id)
+    }
+
+    pub fn generate_key_pair(&mut self) -> KeyPair {
+        KeyPair::generate_from(&mut self.prng)
+    }
+
+    /// Applies the given function to the chain client.
+    /// Updates the wallet regardless of the outcome. As long as the function returns a round
+    /// timeout, it will wait and retry.
+    pub async fn apply_client_command<S, F, Fut, T>(
+        &mut self,
+        mut client: ChainClient<NodeProvider, S>,
+        mut f: F,
+    ) -> anyhow::Result<(T, ChainClient<NodeProvider, S>)>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+        F: FnMut(ChainClient<NodeProvider, S>) -> Fut,
+        Fut: Future<
+            Output = (
+                anyhow::Result<ClientOutcome<T>>,
+                ChainClient<NodeProvider, S>,
+            ),
+        >,
+    {
+        loop {
+            let stream = client.subscribe().await?;
+            let (result, moved_client) = f(client).await;
+            client = moved_client;
+            self.update_and_save_wallet(&mut client).await;
+            let timeout = match result? {
+                ClientOutcome::Committed(t) => return Ok((t, client)),
+                ClientOutcome::WaitForTimeout(timeout) => timeout,
+            };
+            linera_service::node_service::wait_for_next_round(stream, timeout).await;
+        }
+    }
+}

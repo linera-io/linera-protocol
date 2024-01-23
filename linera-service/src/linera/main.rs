@@ -2,55 +2,53 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, bail, ensure, Context, Error};
+use anyhow::{anyhow, bail, ensure, Context};
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
+use client_context::ClientContext;
+use client_options::ClientOptions;
 use colored::Colorize;
-use futures::{future, lock::Mutex, Future, StreamExt};
+use futures::{lock::Mutex, StreamExt};
 use linera_base::{
-    crypto::{CryptoHash, CryptoRng, KeyPair, PublicKey},
-    data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{BytecodeId, ChainDescription, ChainId, MessageId, Owner},
+    crypto::{CryptoHash, CryptoRng, PublicKey},
+    data_types::{Amount, Timestamp},
+    identifiers::{ChainDescription, ChainId, MessageId, Owner},
 };
-use linera_chain::data_types::{Certificate, CertificateValue, ExecutedBlock};
+use linera_chain::data_types::{CertificateValue, ExecutedBlock};
 use linera_core::{
-    client::{ChainClient, ChainClientBuilder},
+    client::ChainClient,
     data_types::{ChainInfoQuery, ClientOutcome},
     local_node::LocalNodeClient,
-    node::{CrossChainMessageDelivery, ValidatorNodeProvider},
+    node::ValidatorNodeProvider,
     notifier::Notifier,
     worker::WorkerState,
 };
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
     policy::ResourceControlPolicy,
-    system::{Account, UserData},
-    Bytecode, ChainOwnership, Message, SystemMessage, TimeoutConfig, UserApplicationId,
-    WasmRuntime, WithWasmDefault,
+    system::UserData,
+    ChainOwnership, Message, SystemMessage, TimeoutConfig,
 };
-use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
-    chain_listener::{self, ChainListenerConfig},
+    chain_listener::ClientContext as _,
     cli_wrappers::{
         self,
         local_net::{Database, LocalNetConfig},
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
-    config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
+    config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain},
     faucet::FaucetService,
-    node_service::{wait_for_next_round, NodeService},
+    node_service::NodeService,
     project::{self, Project},
-    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfig},
-    util,
+    storage::Runnable,
 };
 use linera_storage::Storage;
-use linera_views::{common::CommonStoreConfig, views::ViewError};
+use linera_views::views::ViewError;
 use rand07::Rng;
 use serde_json::Value;
 use std::{
     collections::HashMap,
     env, iter,
-    num::NonZeroU16,
     path::PathBuf,
     sync::Arc,
     time::{Duration, Instant},
@@ -58,611 +56,22 @@ use std::{
 use tokio::{signal::unix, sync::mpsc};
 use tracing::{debug, info, warn};
 
+mod client_context;
+mod client_options;
+
 #[cfg(feature = "kubernetes")]
 use linera_service::cli_wrappers::local_kubernetes_net::LocalKubernetesNetConfig;
 
+use crate::client_options::{ClientCommand, NetCommand, ProjectCommand, WalletCommand};
+
 #[cfg(feature = "benchmark")]
 use {
-    linera_chain::data_types::{
-        Block, BlockAndRound, BlockProposal, HashedValue, SignatureAggregator, Vote,
-    },
+    linera_chain::data_types::HashedValue,
     linera_core::data_types::ChainInfoResponse,
-    linera_execution::{
-        committee::Epoch,
-        system::{Recipient, SystemOperation},
-        Operation,
-    },
-    linera_rpc::{
-        config::NetworkProtocol, grpc_network::GrpcClient, mass::MassClient, simple_network,
-        HandleCertificateRequest, RpcMessage,
-    },
+    linera_rpc::{HandleCertificateRequest, RpcMessage},
     std::collections::HashSet,
-    tracing::{error, trace},
+    tracing::error,
 };
-
-struct ClientContext {
-    wallet_state: WalletState,
-    chain_client_builder: ChainClientBuilder<NodeProvider>,
-    send_timeout: Duration,
-    recv_timeout: Duration,
-    notification_retry_delay: Duration,
-    notification_retries: u32,
-    prng: Box<dyn CryptoRng>,
-}
-
-#[async_trait]
-impl chain_listener::ClientContext<NodeProvider> for ClientContext {
-    fn wallet_state(&self) -> &WalletState {
-        &self.wallet_state
-    }
-
-    fn make_chain_client<S>(
-        &self,
-        storage: S,
-        chain_id: impl Into<Option<ChainId>>,
-    ) -> ChainClient<NodeProvider, S> {
-        self.make_chain_client(storage, chain_id)
-    }
-
-    fn update_wallet_for_new_chain(
-        &mut self,
-        chain_id: ChainId,
-        key_pair: Option<KeyPair>,
-        timestamp: Timestamp,
-    ) {
-        self.update_wallet_for_new_chain(chain_id, key_pair, timestamp);
-    }
-
-    async fn update_wallet<'a, S>(&'a mut self, client: &'a mut ChainClient<NodeProvider, S>)
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
-        self.update_and_save_wallet(client).await;
-    }
-}
-
-impl ClientContext {
-    fn create(
-        options: &ClientOptions,
-        genesis_config: GenesisConfig,
-        testing_prng_seed: Option<u64>,
-        chains: Vec<UserChain>,
-    ) -> Result<Self, anyhow::Error> {
-        let wallet_state_path = match &options.wallet_state_path {
-            Some(path) => path.clone(),
-            None => Self::create_default_wallet_path()?,
-        };
-        anyhow::ensure!(
-            !wallet_state_path.exists(),
-            "Wallet already exists at {}. Aborting",
-            wallet_state_path.display()
-        );
-        let mut wallet_state =
-            WalletState::create(&wallet_state_path, genesis_config, testing_prng_seed)
-                .with_context(|| format!("Unable to create wallet at {:?}", &wallet_state_path))?;
-        chains
-            .into_iter()
-            .for_each(|chain| wallet_state.insert(chain));
-        Ok(Self::configure(options, wallet_state))
-    }
-
-    fn from_options(options: &ClientOptions) -> Result<Self, anyhow::Error> {
-        let wallet_state_path = match &options.wallet_state_path {
-            Some(path) => path.clone(),
-            None => Self::create_default_wallet_path()?,
-        };
-        let wallet_state = WalletState::from_file(&wallet_state_path)?;
-        Ok(Self::configure(options, wallet_state))
-    }
-
-    fn configure(options: &ClientOptions, wallet_state: WalletState) -> Self {
-        let prng = wallet_state.make_prng();
-
-        let node_options = NodeOptions {
-            send_timeout: options.send_timeout,
-            recv_timeout: options.recv_timeout,
-            notification_retry_delay: options.notification_retry_delay,
-            notification_retries: options.notification_retries,
-        };
-        let node_provider = NodeProvider::new(node_options);
-        let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
-        let chain_client_builder =
-            ChainClientBuilder::new(node_provider, options.max_pending_messages, delivery);
-        ClientContext {
-            chain_client_builder,
-            wallet_state,
-            send_timeout: options.send_timeout,
-            recv_timeout: options.recv_timeout,
-            notification_retry_delay: options.notification_retry_delay,
-            notification_retries: options.notification_retries,
-            prng,
-        }
-    }
-
-    fn create_default_config_path() -> Result<PathBuf, anyhow::Error> {
-        let mut config_dir = dirs::config_dir()
-            .context("Default configuration directory not supported. Please specify a path.")?;
-        config_dir.push("linera");
-        if !config_dir.exists() {
-            debug!("{} does not exist, creating", config_dir.display());
-            fs_err::create_dir(&config_dir)?;
-            debug!("{} created.", config_dir.display());
-        }
-        Ok(config_dir)
-    }
-
-    fn create_default_wallet_path() -> Result<PathBuf, anyhow::Error> {
-        Ok(Self::create_default_config_path()?.join("wallet.json"))
-    }
-
-    fn storage_config(options: &ClientOptions) -> Result<StorageConfig, anyhow::Error> {
-        match &options.storage_config {
-            Some(config) => config.parse(),
-            #[cfg(feature = "rocksdb")]
-            None => Ok(StorageConfig::RocksDb {
-                path: Self::create_default_config_path()?.join("wallet.db"),
-            }),
-            #[cfg(not(feature = "rocksdb"))]
-            None => bail!("A storage option must be provided"),
-        }
-    }
-
-    #[cfg(feature = "benchmark")]
-    fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<Box<dyn MassClient>> {
-        let mut validator_clients = Vec::new();
-        for config in &self.wallet_state.genesis_config().committee.validators {
-            let client: Box<dyn MassClient> = match config.network.protocol {
-                NetworkProtocol::Simple(protocol) => {
-                    let network = config.network.clone_with_protocol(protocol);
-                    Box::new(simple_network::SimpleMassClient::new(
-                        network,
-                        self.send_timeout,
-                        self.recv_timeout,
-                        max_in_flight,
-                    ))
-                }
-                NetworkProtocol::Grpc { .. } => Box::new(
-                    GrpcClient::new(config.network.clone(), self.make_node_options()).unwrap(),
-                ),
-            };
-
-            validator_clients.push(client);
-        }
-        validator_clients
-    }
-
-    fn make_chain_client<S>(
-        &self,
-        storage: S,
-        chain_id: impl Into<Option<ChainId>>,
-    ) -> ChainClient<NodeProvider, S> {
-        let chain_id = chain_id.into().unwrap_or_else(|| {
-            self.wallet_state
-                .default_chain()
-                .expect("No chain specified in wallet with no default chain")
-        });
-        let chain = self
-            .wallet_state
-            .get(chain_id)
-            .unwrap_or_else(|| panic!("Unknown chain: {}", chain_id));
-        let known_key_pairs = chain
-            .key_pair
-            .as_ref()
-            .map(|kp| kp.copy())
-            .into_iter()
-            .collect();
-        self.chain_client_builder.build(
-            chain_id,
-            known_key_pairs,
-            storage,
-            self.wallet_state.genesis_admin_chain(),
-            chain.block_hash,
-            chain.timestamp,
-            chain.next_block_height,
-            chain.pending_block.clone(),
-        )
-    }
-
-    fn make_node_provider(&self) -> NodeProvider {
-        NodeProvider::new(self.make_node_options())
-    }
-
-    fn make_node_options(&self) -> NodeOptions {
-        NodeOptions {
-            send_timeout: self.send_timeout,
-            recv_timeout: self.recv_timeout,
-            notification_retry_delay: self.notification_retry_delay,
-            notification_retries: self.notification_retries,
-        }
-    }
-
-    #[cfg(feature = "benchmark")]
-    async fn process_inboxes_and_force_validator_updates<S>(&mut self, storage: &S)
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
-        for chain_id in self.wallet_state.own_chain_ids() {
-            let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
-            self.process_inbox(&mut chain_client).await.unwrap();
-            chain_client.update_validators().await.unwrap();
-        }
-    }
-
-    /// Makes one block proposal per chain, up to `max_proposals` blocks.
-    #[cfg(feature = "benchmark")]
-    fn make_benchmark_block_proposals(&mut self, max_proposals: usize) -> Vec<RpcMessage> {
-        let mut proposals = Vec::new();
-        let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id;
-        for chain in self.wallet_state.chains_mut() {
-            let key_pair = match &chain.key_pair {
-                Some(kp) => kp,
-                None => continue,
-            };
-            let block = Block {
-                epoch: Epoch::ZERO,
-                chain_id: chain.chain_id,
-                incoming_messages: Vec::new(),
-                operations: vec![Operation::System(SystemOperation::Transfer {
-                    owner: None,
-                    recipient: Recipient::chain(next_recipient),
-                    amount: Amount::ONE,
-                    user_data: UserData::default(),
-                })],
-                previous_block_hash: chain.block_hash,
-                height: chain.next_block_height,
-                authenticated_signer: None,
-                timestamp: chain.timestamp.max(Timestamp::now()),
-            };
-            trace!("Preparing block proposal: {:?}", block);
-            let proposal = BlockProposal::new(
-                BlockAndRound {
-                    block: block.clone(),
-                    round: linera_base::data_types::Round::Fast,
-                },
-                key_pair,
-                vec![],
-                None,
-            );
-            proposals.push(proposal.into());
-            if proposals.len() >= max_proposals {
-                break;
-            }
-            next_recipient = chain.chain_id;
-        }
-        proposals
-    }
-
-    /// Tries to aggregate votes into certificates.
-    #[cfg(feature = "benchmark")]
-    fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<Certificate> {
-        let committee = self.wallet_state.genesis_config().create_committee();
-        let mut aggregators = HashMap::new();
-        let mut certificates = Vec::new();
-        let mut done_senders = HashSet::new();
-        for vote in votes {
-            // We aggregate votes indexed by sender.
-            let chain_id = vote.value().chain_id();
-            if done_senders.contains(&chain_id) {
-                continue;
-            }
-            trace!(
-                "Processing vote on {:?}'s block by {:?}",
-                chain_id,
-                vote.validator,
-            );
-            let aggregator = aggregators.entry(chain_id).or_insert_with(|| {
-                SignatureAggregator::new(
-                    vote.value,
-                    linera_base::data_types::Round::Fast,
-                    &committee,
-                )
-            });
-            match aggregator.append(vote.validator, vote.signature) {
-                Ok(Some(certificate)) => {
-                    trace!("Found certificate: {:?}", certificate);
-                    certificates.push(certificate);
-                    done_senders.insert(chain_id);
-                }
-                Ok(None) => {
-                    trace!("Added one vote");
-                }
-                Err(error) => {
-                    error!("Failed to aggregate vote: {}", error);
-                }
-            }
-        }
-        certificates
-    }
-
-    /// Broadcasts a bulk of blocks to each validator.
-    #[cfg(feature = "benchmark")]
-    async fn mass_broadcast(
-        &self,
-        phase: &'static str,
-        max_in_flight: u64,
-        proposals: Vec<RpcMessage>,
-    ) -> Vec<RpcMessage> {
-        let time_start = Instant::now();
-        info!("Broadcasting {} {}", proposals.len(), phase);
-        let mut handles = Vec::new();
-        for mut client in self.make_validator_mass_clients(max_in_flight) {
-            let proposals = proposals.clone();
-            handles.push(tokio::spawn(async move {
-                debug!("Sending {} requests", proposals.len());
-                let responses = client.send(proposals).await.unwrap_or_default();
-                debug!("Done sending requests");
-                responses
-            }));
-        }
-        let responses = futures::future::join_all(handles)
-            .await
-            .into_iter()
-            .flatten()
-            .flatten()
-            .collect::<Vec<RpcMessage>>();
-        let time_elapsed = time_start.elapsed();
-        info!(
-            "Received {} responses in {} ms.",
-            responses.len(),
-            time_elapsed.as_millis()
-        );
-        info!(
-            "Estimated server throughput: {} {} per sec",
-            (proposals.len() as u128) * 1_000_000 / time_elapsed.as_micros(),
-            phase
-        );
-        responses
-    }
-
-    fn save_wallet(&mut self) {
-        self.wallet_state.refresh_prng_seed(&mut self.prng);
-        self.wallet_state
-            .write()
-            .expect("Unable to write user chains");
-        info!("Saved user chain states");
-    }
-
-    async fn update_wallet_from_client<P, S>(&mut self, state: &mut ChainClient<P, S>)
-    where
-        P: ValidatorNodeProvider + Sync + 'static,
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
-        self.wallet_state.update_from_state(state).await
-    }
-
-    async fn update_and_save_wallet<P, S>(&mut self, state: &mut ChainClient<P, S>)
-    where
-        P: ValidatorNodeProvider + Sync + 'static,
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
-        self.update_wallet_from_client(state).await;
-        self.save_wallet()
-    }
-
-    /// Remembers the new private key (if any) in the wallet.
-    fn update_wallet_for_new_chain(
-        &mut self,
-        chain_id: ChainId,
-        key_pair: Option<KeyPair>,
-        timestamp: Timestamp,
-    ) {
-        if self.wallet_state.get(chain_id).is_none() {
-            self.wallet_state.insert(UserChain {
-                chain_id,
-                key_pair: key_pair.as_ref().map(|kp| kp.copy()),
-                block_hash: None,
-                timestamp,
-                next_block_height: BlockHeight::ZERO,
-                pending_block: None,
-            });
-        }
-    }
-
-    #[cfg(feature = "benchmark")]
-    async fn update_wallet_from_certificates<S>(
-        &mut self,
-        storage: S,
-        certificates: Vec<Certificate>,
-    ) where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
-        // First instantiate a local node on top of storage.
-        let worker = WorkerState::new("Temporary client node".to_string(), None, storage)
-            .with_allow_inactive_chains(true)
-            .with_allow_messages_from_deprecated_epochs(true);
-        let mut node = LocalNodeClient::new(worker, Arc::new(Notifier::default()));
-        // Second replay the certificates locally.
-        for certificate in certificates {
-            // No required certificates from other chains: This is only used with benchmark.
-            node.handle_certificate(certificate, vec![]).await.unwrap();
-        }
-        // Last update the wallet.
-        for chain in self.wallet_state.chains_mut() {
-            let query = ChainInfoQuery::new(chain.chain_id);
-            let info = node.handle_chain_info_query(query).await.unwrap().info;
-            // We don't have private keys but that's ok.
-            chain.block_hash = info.block_hash;
-            chain.next_block_height = info.next_block_height;
-        }
-    }
-
-    async fn ensure_admin_subscription<S>(this: Arc<Mutex<Self>>, storage: &S) -> Vec<Certificate>
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
-        let chain_ids = {
-            let guard = this.lock().await;
-            guard.wallet_state.chain_ids()
-        };
-        let futures = chain_ids.into_iter().map(|chain_id| {
-            let this = this.clone();
-            async move {
-                loop {
-                    let mut chain_client = this
-                        .lock()
-                        .await
-                        .make_chain_client(storage.clone(), chain_id);
-                    let stream = match chain_client.subscribe().await {
-                        Ok(stream) => stream,
-                        Err(error) => {
-                            warn!(%chain_id, %error, "Failed to subscribe to notifications.");
-                            return None;
-                        }
-                    };
-                    match chain_client.subscribe_to_new_committees().await {
-                        Ok(ClientOutcome::Committed(cert)) => {
-                            let mut guard = this.lock().await;
-                            debug!(
-                                "Subscribed {:?} to the admin chain {:?}",
-                                chain_id,
-                                guard.wallet_state.genesis_admin_chain(),
-                            );
-                            guard.update_wallet_from_client(&mut chain_client).await;
-                            return Some(cert);
-                        }
-                        Ok(ClientOutcome::WaitForTimeout(timeout)) => {
-                            wait_for_next_round(stream, timeout).await;
-                        }
-                        Err(error) => {
-                            warn!(%chain_id, %error, "Failed to subscribe to new committees.");
-                            return None;
-                        }
-                    }
-                }
-            }
-        });
-        future::join_all(futures)
-            .await
-            .into_iter()
-            .flatten()
-            .collect()
-    }
-
-    async fn push_to_all_chains<S>(&mut self, storage: &S, certificate: &Certificate)
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
-        for chain_id in self.wallet_state.own_chain_ids() {
-            let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
-            chain_client
-                .receive_certificate(certificate.clone())
-                .await
-                .unwrap();
-            self.process_inbox(&mut chain_client).await.unwrap();
-            let epochs = chain_client.epochs().await.unwrap();
-            debug!("{:?} accepts epochs {:?}", chain_id, epochs);
-        }
-    }
-
-    async fn process_inbox<S>(
-        &mut self,
-        chain_client: &mut ChainClient<impl ValidatorNodeProvider + Sync + 'static, S>,
-    ) -> anyhow::Result<Vec<Certificate>>
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
-        let mut certificates = Vec::new();
-        loop {
-            chain_client.synchronize_from_validators().await?;
-            let stream = chain_client.subscribe().await?;
-            let result = chain_client.process_inbox().await;
-            self.update_wallet_from_client(chain_client).await;
-            let (new_certificates, maybe_timeout) = result.unwrap();
-            certificates.extend(new_certificates);
-            match maybe_timeout {
-                None => return Ok(certificates),
-                Some(timestamp) => wait_for_next_round(stream, timestamp).await,
-            }
-        }
-    }
-
-    async fn publish_bytecode<S>(
-        &mut self,
-        chain_client: &mut ChainClient<impl ValidatorNodeProvider + Sync + 'static, S>,
-        contract: PathBuf,
-        service: PathBuf,
-    ) -> anyhow::Result<BytecodeId>
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
-        info!("Loading bytecode files");
-        let contract_bytecode = Bytecode::load_from_file(&contract).await.context(format!(
-            "failed to load contract bytecode from {:?}",
-            &contract
-        ))?;
-        let service_bytecode = Bytecode::load_from_file(&service).await.context(format!(
-            "failed to load service bytecode from {:?}",
-            &service
-        ))?;
-
-        info!("Publishing bytecode");
-        let bytecode_id = loop {
-            let stream = chain_client.subscribe().await?;
-            match chain_client
-                .publish_bytecode(contract_bytecode.clone(), service_bytecode.clone())
-                .await
-                .context("failed to publish bytecode")?
-            {
-                ClientOutcome::Committed((bytecode_id, _)) => break bytecode_id,
-                ClientOutcome::WaitForTimeout(timeout) => {
-                    wait_for_next_round(stream, timeout).await;
-                }
-            }
-        };
-
-        info!("{}", "Bytecode published successfully!".green().bold());
-
-        info!("Synchronizing client and processing inbox");
-        chain_client.synchronize_from_validators().await?;
-        self.process_inbox(chain_client).await?;
-        Ok(bytecode_id)
-    }
-
-    fn generate_key_pair(&mut self) -> KeyPair {
-        KeyPair::generate_from(&mut self.prng)
-    }
-
-    /// Applies the given function to the chain client.
-    /// Updates the wallet regardless of the outcome. As long as the function returns a round
-    /// timeout, it will wait and retry.
-    async fn apply_client_command<S, F, Fut, T>(
-        &mut self,
-        mut client: ChainClient<NodeProvider, S>,
-        mut f: F,
-    ) -> anyhow::Result<(T, ChainClient<NodeProvider, S>)>
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-        F: FnMut(ChainClient<NodeProvider, S>) -> Fut,
-        Fut: Future<
-            Output = (
-                anyhow::Result<ClientOutcome<T>>,
-                ChainClient<NodeProvider, S>,
-            ),
-        >,
-    {
-        loop {
-            let stream = client.subscribe().await?;
-            let (result, moved_client) = f(client).await;
-            client = moved_client;
-            self.update_and_save_wallet(&mut client).await;
-            let timeout = match result? {
-                ClientOutcome::Committed(t) => return Ok((t, client)),
-                ClientOutcome::WaitForTimeout(timeout) => timeout,
-            };
-            linera_service::node_service::wait_for_next_round(stream, timeout).await;
-        }
-    }
-}
 
 #[cfg(feature = "benchmark")]
 fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
@@ -677,731 +86,6 @@ fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
             None
         }
     }
-}
-
-#[derive(clap::Parser)]
-#[command(
-    name = "linera",
-    version = clap::crate_version!(),
-    about = "A Byzantine-fault tolerant sidechain with low-latency finality and high throughput",
-)]
-struct ClientOptions {
-    /// Sets the file storing the private state of user chains (an empty one will be created if missing)
-    #[arg(long = "wallet")]
-    wallet_state_path: Option<PathBuf>,
-
-    /// Storage configuration for the blockchain history.
-    #[arg(long = "storage")]
-    storage_config: Option<String>,
-
-    /// Given an integer value N, read the wallet state and the wallet storage config from the
-    /// environment variables LINERA_WALLET_{N} and LINERA_STORAGE_{N} instead of
-    /// LINERA_WALLET and LINERA_STORAGE.
-    #[arg(long, short = 'w')]
-    with_wallet: Option<u32>,
-
-    /// Timeout for sending queries (milliseconds)
-    #[arg(long = "send-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
-    send_timeout: Duration,
-
-    /// Timeout for receiving responses (milliseconds)
-    #[arg(long = "recv-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
-    recv_timeout: Duration,
-
-    #[arg(long, default_value = "10")]
-    max_pending_messages: usize,
-
-    /// The WebAssembly runtime to use.
-    #[arg(long)]
-    wasm_runtime: Option<WasmRuntime>,
-
-    /// The maximal number of simultaneous queries to the database
-    #[arg(long)]
-    max_concurrent_queries: Option<usize>,
-
-    /// The maximal number of simultaneous stream queries to the database
-    #[arg(long, default_value = "10")]
-    max_stream_queries: usize,
-
-    /// The maximal number of entries in the storage cache.
-    #[arg(long, default_value = "1000")]
-    cache_size: usize,
-
-    /// Subcommand.
-    #[command(subcommand)]
-    command: ClientCommand,
-
-    /// Delay increment for retrying to connect to a validator for notifications.
-    #[arg(
-        long = "notification-retry-delay-ms",
-        default_value = "1000",
-        value_parser = util::parse_millis
-    )]
-    notification_retry_delay: Duration,
-
-    /// Number of times to retry connecting to a validator for notifications.
-    #[arg(long, default_value = "10")]
-    notification_retries: u32,
-
-    /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
-    /// messages have been delivered.
-    #[arg(long)]
-    wait_for_outgoing_messages: bool,
-
-    /// The number of Tokio worker threads to use.
-    #[arg(long, env = "LINERA_CLIENT_TOKIO_THREADS")]
-    tokio_threads: Option<usize>,
-}
-
-impl ClientOptions {
-    fn init() -> Result<Self, anyhow::Error> {
-        let mut options = <ClientOptions as clap::Parser>::parse();
-        let suffix = match options.with_wallet {
-            None => String::new(),
-            Some(n) => format!("_{}", n),
-        };
-        let wallet_env_var = env::var(format!("LINERA_WALLET{suffix}")).ok();
-        let storage_env_var = env::var(format!("LINERA_STORAGE{suffix}")).ok();
-        if let (None, Some(wallet_path)) = (&options.wallet_state_path, wallet_env_var) {
-            options.wallet_state_path = Some(wallet_path.parse()?);
-        }
-        if let (None, Some(storage_path)) = (&options.storage_config, storage_env_var) {
-            options.storage_config = Some(storage_path.parse()?);
-        }
-        Ok(options)
-    }
-
-    async fn run_command_with_storage(self) -> Result<(), Error> {
-        let context = ClientContext::from_options(&self)?;
-        let genesis_config = context.wallet_state.genesis_config().clone();
-        let wasm_runtime = self.wasm_runtime.with_wasm_default();
-        let max_concurrent_queries = self.max_concurrent_queries;
-        let max_stream_queries = self.max_stream_queries;
-        let cache_size = self.cache_size;
-        let storage_config = ClientContext::storage_config(&self)?;
-        let common_config = CommonStoreConfig {
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-        };
-        let full_storage_config = storage_config.add_common_config(common_config).await?;
-        run_with_storage(
-            full_storage_config,
-            &genesis_config,
-            wasm_runtime,
-            Job(context, self.command),
-        )
-        .await?;
-        Ok(())
-    }
-
-    async fn initialize_storage(&self) -> Result<(), Error> {
-        let context = ClientContext::from_options(self)?;
-        let genesis_config = context.wallet_state.genesis_config().clone();
-        let max_concurrent_queries = self.max_concurrent_queries;
-        let max_stream_queries = self.max_stream_queries;
-        let cache_size = self.cache_size;
-        let storage_config = ClientContext::storage_config(self)?;
-        let common_config = CommonStoreConfig {
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-        };
-        let full_storage_config = storage_config.add_common_config(common_config).await?;
-        full_initialize_storage(full_storage_config, &genesis_config).await?;
-        Ok(())
-    }
-}
-
-#[derive(Clone, clap::Subcommand)]
-enum ClientCommand {
-    /// Print CLI help in Markdown format, and exit.
-    #[command(hide = true)]
-    HelpMarkdown,
-
-    /// Transfer funds
-    Transfer {
-        /// Sending chain id (must be one of our chains)
-        #[arg(long = "from")]
-        sender: Account,
-
-        /// Recipient account
-        #[arg(long = "to")]
-        recipient: Account,
-
-        /// Amount to transfer
-        amount: Amount,
-    },
-
-    /// Open (i.e. activate) a new chain deriving the UID from an existing one.
-    OpenChain {
-        /// Chain id (must be one of our chains).
-        #[arg(long = "from")]
-        chain_id: Option<ChainId>,
-
-        /// Public key of the new owner (otherwise create a key pair and remember it)
-        #[arg(long = "to-public-key")]
-        public_key: Option<PublicKey>,
-
-        /// The initial balance of the new chain. This is subtracted from the parent chain's
-        /// balance.
-        #[arg(long = "initial-balance", default_value = "0")]
-        balance: Amount,
-    },
-
-    /// Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one.
-    OpenMultiOwnerChain {
-        /// Chain id (must be one of our chains).
-        #[arg(long = "from")]
-        chain_id: Option<ChainId>,
-
-        /// Public keys of the new owners
-        #[arg(long = "to-public-keys", num_args(0..))]
-        public_keys: Vec<PublicKey>,
-
-        /// Weights for the new owners
-        #[arg(long = "weights", num_args(0..))]
-        weights: Vec<u64>,
-
-        /// The number of rounds in which every owner can propose blocks, i.e. the first round
-        /// number in which only a single designated leader is allowed to propose blocks.
-        #[arg(long = "multi-leader-rounds")]
-        multi_leader_rounds: Option<u32>,
-
-        /// The initial balance of the new chain. This is subtracted from the parent chain's
-        /// balance.
-        #[arg(long = "initial-balance", default_value = "0")]
-        balance: Amount,
-
-        /// The duration of the fast round, in milliseconds.
-        #[arg(long = "fast-round-ms", value_parser = util::parse_millis)]
-        fast_round_duration: Option<Duration>,
-
-        /// The duration of the first single-leader and all multi-leader rounds.
-        #[arg(
-            long = "base-timeout-ms",
-            default_value = "10000",
-            value_parser = util::parse_millis
-        )]
-        base_timeout: Duration,
-
-        /// The number of milliseconds by which the timeout increases after each
-        /// single-leader round.
-        #[arg(
-            long = "timeout-increment-ms",
-            default_value = "1000",
-            value_parser = util::parse_millis
-        )]
-        timeout_increment: Duration,
-    },
-
-    /// Close (i.e. deactivate) an existing chain.
-    CloseChain {
-        /// Chain id (must be one of our chains)
-        #[arg(long = "from")]
-        chain_id: ChainId,
-    },
-
-    /// Read the balance of the chain from the local state of the client.
-    QueryBalance {
-        /// Chain id
-        chain_id: Option<ChainId>,
-    },
-
-    /// Synchronize the local state of the chain (including a conservative estimation of the
-    /// available balance) with a quorum validators.
-    SyncBalance {
-        /// Chain id
-        chain_id: Option<ChainId>,
-    },
-
-    /// Show the current set of validators for a chain.
-    QueryValidators {
-        /// Chain id
-        chain_id: Option<ChainId>,
-    },
-
-    /// Add or modify a validator (admin only)
-    SetValidator {
-        /// The public key of the validator.
-        #[arg(long)]
-        name: ValidatorName,
-
-        /// Network address
-        #[arg(long)]
-        address: String,
-
-        /// Voting power
-        #[arg(long, default_value = "1")]
-        votes: u64,
-    },
-
-    /// Remove a validator (admin only)
-    RemoveValidator {
-        /// The public key of the validator.
-        #[arg(long)]
-        name: ValidatorName,
-    },
-
-    /// View or update the resource control policy
-    ResourceControlPolicy {
-        /// Set the base price for creating a block.
-        #[arg(long)]
-        block: Option<Amount>,
-
-        /// Set the price per unit of fuel.
-        #[arg(long)]
-        fuel_unit: Option<Amount>,
-
-        /// Set the price per read operation.
-        #[arg(long)]
-        read_operation: Option<Amount>,
-
-        /// Set the price per byte read.
-        #[arg(long)]
-        byte_read: Option<Amount>,
-
-        /// Set the price per byte written.
-        #[arg(long)]
-        byte_written: Option<Amount>,
-
-        /// Set the price per byte stored.
-        #[arg(long)]
-        byte_stored: Option<Amount>,
-
-        /// Set the base price of sending a operation from a block..
-        #[arg(long)]
-        operation: Option<Amount>,
-
-        /// Set the additional price for each byte in the argument of a user operation.
-        #[arg(long)]
-        operation_byte: Option<Amount>,
-
-        /// Set the base price of sending a message from a block..
-        #[arg(long)]
-        message: Option<Amount>,
-
-        /// Set the additional price for each byte in the argument of a user message.
-        #[arg(long)]
-        message_byte: Option<Amount>,
-
-        /// Set the maximum read data per block.
-        #[arg(long)]
-        maximum_bytes_read_per_block: Option<u64>,
-
-        /// Set the maximum write data per block.
-        #[arg(long)]
-        maximum_bytes_written_per_block: Option<u64>,
-    },
-
-    /// Send one transfer per chain in bulk mode
-    #[cfg(feature = "benchmark")]
-    Benchmark {
-        /// Maximum number of blocks in flight
-        #[arg(long, default_value = "200")]
-        max_in_flight: u64,
-
-        /// Use a subset of the chains to generate N transfers
-        #[arg(long)]
-        max_proposals: Option<usize>,
-    },
-
-    /// Create genesis configuration for a Linera deployment.
-    /// Create initial user chains and print information to be used for initialization of validator setup.
-    /// This will also create an initial wallet for the owner of the initial "root" chains.
-    CreateGenesisConfig {
-        /// Sets the file describing the public configurations of all validators
-        #[arg(long = "committee")]
-        committee_config_path: PathBuf,
-
-        /// The output config path to be consumed by the server
-        #[arg(long = "genesis")]
-        genesis_config_path: PathBuf,
-
-        /// Index of the admin chain in the genesis config
-        #[arg(long, default_value = "0")]
-        admin_root: u32,
-
-        /// Known initial balance of the chain
-        #[arg(long, default_value = "0")]
-        initial_funding: Amount,
-
-        /// The start timestamp: no blocks can be created before this time.
-        #[arg(long)]
-        start_timestamp: Option<DateTime<Utc>>,
-
-        /// Number of initial (aka "root") chains to create in addition to the admin chain.
-        num_other_initial_chains: u32,
-
-        /// Set the base price for creating a block.
-        #[arg(long, default_value = "0")]
-        block_price: Amount,
-
-        /// Set the price per unit of fuel.
-        #[arg(long, default_value = "0")]
-        fuel_unit_price: Amount,
-
-        /// Set the price per read operation.
-        #[arg(long, default_value = "0")]
-        read_operation_price: Amount,
-
-        /// Set the price per byte read.
-        #[arg(long, default_value = "0")]
-        byte_read_price: Amount,
-
-        /// Set the price per byte written.
-        #[arg(long, default_value = "0")]
-        byte_written_price: Amount,
-
-        /// Set the price per byte stored.
-        #[arg(long, default_value = "0")]
-        byte_stored_price: Amount,
-
-        /// Set the base price of sending a operation from a block..
-        #[arg(long, default_value = "0")]
-        operation_price: Amount,
-
-        /// Set the additional price for each byte in the argument of a user operation.
-        #[arg(long, default_value = "0")]
-        operation_byte_price: Amount,
-
-        /// Set the base price of sending a message from a block..
-        #[arg(long, default_value = "0")]
-        message_price: Amount,
-
-        /// Set the additional price for each byte in the argument of a user message.
-        #[arg(long, default_value = "0")]
-        message_byte_price: Amount,
-
-        /// Set the maximum read data per block.
-        #[arg(long)]
-        maximum_bytes_read_per_block: Option<u64>,
-
-        /// Set the maximum write data per block.
-        #[arg(long)]
-        maximum_bytes_written_per_block: Option<u64>,
-
-        /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
-        /// TESTING ONLY.
-        #[arg(long)]
-        testing_prng_seed: Option<u64>,
-
-        /// A unique name to identify this network.
-        #[arg(long)]
-        network_name: Option<String>,
-    },
-
-    /// Watch the network for notifications.
-    Watch {
-        /// The chain id to watch.
-        chain_id: Option<ChainId>,
-
-        /// Show all notifications from all validators.
-        #[arg(long)]
-        raw: bool,
-    },
-
-    /// Run a GraphQL service to explore and extend the chains of the wallet.
-    Service {
-        #[command(flatten)]
-        config: ChainListenerConfig,
-
-        /// The port on which to run the server
-        #[arg(long = "port", default_value = "8080")]
-        port: NonZeroU16,
-    },
-
-    /// Run a GraphQL service that exposes a faucet where users can claim tokens.
-    /// This gives away the chain's tokens, and is mainly intended for testing.
-    Faucet {
-        /// The chain that gives away its tokens.
-        chain_id: Option<ChainId>,
-
-        /// The port on which to run the server
-        #[arg(long = "port", default_value = "8080")]
-        port: NonZeroU16,
-
-        /// The number of tokens to send to each new chain.
-        #[arg(long = "amount")]
-        amount: Amount,
-
-        /// The end timestamp: The faucet will rate-limit the token supply so it runs out of money
-        /// no earlier than this.
-        #[arg(long)]
-        limit_rate_until: Option<DateTime<Utc>>,
-    },
-
-    /// Publish bytecode.
-    PublishBytecode {
-        /// Path to the Wasm file for the application "contract" bytecode.
-        contract: PathBuf,
-
-        /// Path to the Wasm file for the application "service" bytecode.
-        service: PathBuf,
-
-        /// An optional chain ID to publish the bytecode. The default chain of the wallet
-        /// is used otherwise.
-        publisher: Option<ChainId>,
-    },
-
-    /// Create an application.
-    CreateApplication {
-        /// The bytecode ID of the application to create.
-        bytecode_id: BytecodeId,
-
-        /// An optional chain ID to host the application. The default chain of the wallet
-        /// is used otherwise.
-        creator: Option<ChainId>,
-
-        /// The shared parameters as JSON string.
-        #[arg(long)]
-        json_parameters: Option<String>,
-
-        /// Path to a JSON file containing the shared parameters.
-        #[arg(long)]
-        json_parameters_path: Option<PathBuf>,
-
-        /// The initialization argument as a JSON string.
-        #[arg(long)]
-        json_argument: Option<String>,
-
-        /// Path to a JSON file containing the initialization argument.
-        #[arg(long)]
-        json_argument_path: Option<PathBuf>,
-
-        /// The list of required dependencies of application, if any.
-        #[arg(long, num_args(0..))]
-        required_application_ids: Option<Vec<UserApplicationId>>,
-    },
-
-    /// Create an application, and publish the required bytecode.
-    PublishAndCreate {
-        /// Path to the Wasm file for the application "contract" bytecode.
-        contract: PathBuf,
-
-        /// Path to the Wasm file for the application "service" bytecode.
-        service: PathBuf,
-
-        /// An optional chain ID to publish the bytecode. The default chain of the wallet
-        /// is used otherwise.
-        publisher: Option<ChainId>,
-
-        /// The shared parameters as JSON string.
-        #[arg(long)]
-        json_parameters: Option<String>,
-
-        /// Path to a JSON file containing the shared parameters.
-        #[arg(long)]
-        json_parameters_path: Option<PathBuf>,
-
-        /// The initialization argument as a JSON string.
-        #[arg(long)]
-        json_argument: Option<String>,
-
-        /// Path to a JSON file containing the initialization argument.
-        #[arg(long)]
-        json_argument_path: Option<PathBuf>,
-
-        /// The list of required dependencies of application, if any.
-        #[arg(long, num_args(0..))]
-        required_application_ids: Option<Vec<UserApplicationId>>,
-    },
-
-    /// Request an application from another chain, so it can be used on this one.
-    RequestApplication {
-        /// The ID of the application to request.
-        application_id: UserApplicationId,
-
-        /// The target chain on which the application is already registered.
-        /// If not specified, the chain on which the application was created is used.
-        #[arg(long)]
-        target_chain_id: Option<ChainId>,
-
-        /// The owned chain on which the application is missing.
-        #[arg(long)]
-        requester_chain_id: Option<ChainId>,
-    },
-
-    /// Create an unassigned key-pair.
-    Keygen,
-
-    /// Link a key owned by the wallet to a chain that was just created for that key.
-    Assign {
-        /// The public key to assign.
-        #[arg(long)]
-        key: PublicKey,
-
-        /// The ID of the message that created the chain. (This uniquely describes the
-        /// chain and where it was created.)
-        #[arg(long)]
-        message_id: MessageId,
-    },
-
-    /// Retry a block we unsuccessfully tried to propose earlier.
-    ///
-    /// As long as a block is pending most other commands will fail, since it is unsafe to propose
-    /// multiple blocks at the same height.
-    RetryPendingBlock {
-        /// The chain with the pending block. If not specified, the wallet's default chain is used.
-        chain_id: Option<ChainId>,
-    },
-
-    /// Show the contents of the wallet.
-    #[command(subcommand)]
-    Wallet(WalletCommand),
-
-    /// Manage Linera projects.
-    #[command(subcommand)]
-    Project(ProjectCommand),
-
-    /// Manage a local Linera Network.
-    #[command(subcommand)]
-    Net(NetCommand),
-}
-
-#[derive(Clone, clap::Parser)]
-enum NetCommand {
-    /// Start a Local Linera Network
-    Up {
-        /// The number of extra wallets and user chains to initialise. Default is 0.
-        #[arg(long)]
-        extra_wallets: Option<usize>,
-
-        /// The number of initial "root" chains created in the genesis config on top of
-        /// the default "admin" chain. All initial chains belong to the first "admin"
-        /// wallet.
-        #[arg(long, default_value = "10")]
-        other_initial_chains: u32,
-
-        /// The initial amount of native tokens credited in the initial "root" chains,
-        /// including the default "admin" chain.
-        #[arg(long, default_value = "10")]
-        initial_amount: u128,
-
-        /// The number of validators in the local test network. Default is 1.
-        #[arg(long, default_value = "1")]
-        validators: usize,
-
-        /// The number of shards per validator in the local test network. Default is 1.
-        #[arg(long, default_value = "1")]
-        shards: usize,
-
-        /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
-        /// TESTING ONLY.
-        #[arg(long)]
-        testing_prng_seed: Option<u64>,
-
-        /// The name for the database table to store the chain data in.
-        #[arg(long, default_value = "table_default")]
-        table_name: String,
-
-        /// Start the local network on a local Kubernetes deployment.
-        #[cfg(feature = "kubernetes")]
-        #[arg(long)]
-        kubernetes: bool,
-
-        /// If this is not set, we'll build the binaries from within the Docker container
-        /// If it's set, but with no directory path arg, we'll look for the binaries based on `current_binary_parent`
-        /// If it's set, but with a directory path arg, we'll get the binaries from that path directory
-        #[cfg(feature = "kubernetes")]
-        #[arg(long, num_args=0..=1)]
-        binaries: Option<Option<PathBuf>>,
-    },
-
-    /// Print a bash helper script to make `linera net up` easier to use. The script is
-    /// meant to be installed in `~/.bash_profile` or sourced when needed.
-    Helper,
-}
-
-#[derive(Clone, clap::Subcommand)]
-enum WalletCommand {
-    /// Show the contents of the wallet.
-    Show { chain_id: Option<ChainId> },
-
-    /// Change the wallet default chain.
-    SetDefault { chain_id: ChainId },
-
-    /// Initialize a wallet from the genesis configuration.
-    Init {
-        /// The path to the genesis configuration for a Linera deployment. Either this or `--faucet`
-        /// must be specified.
-        #[arg(long = "genesis")]
-        genesis_config_path: Option<PathBuf>,
-
-        /// The address of a faucet.
-        #[arg(long = "faucet")]
-        faucet: Option<String>,
-
-        /// Request a new chain from the faucet, credited with tokens. This requires `--faucet`.
-        #[arg(long)]
-        with_new_chain: bool,
-
-        /// Other chains to follow.
-        #[arg(long, num_args(0..))]
-        with_other_chains: Vec<ChainId>,
-
-        /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
-        /// TESTING ONLY.
-        #[arg(long)]
-        testing_prng_seed: Option<u64>,
-    },
-}
-
-#[derive(Clone, clap::Parser)]
-enum ProjectCommand {
-    /// Create a new Linera project.
-    New {
-        /// The project name. A directory of the same name will be created in the current directory.
-        name: String,
-
-        /// Use the given clone of the Linera repository instead of remote crates.
-        #[arg(long)]
-        linera_root: Option<PathBuf>,
-    },
-
-    /// Test a Linera project.
-    ///
-    /// Equivalent to running `cargo test` with the appropriate test runner.
-    Test { path: Option<PathBuf> },
-
-    /// Build and publish a Linera project.
-    PublishAndCreate {
-        /// The path of the root of the Linera project.
-        /// Defaults to current working directory if unspecified.
-        path: Option<PathBuf>,
-
-        /// Specify the name of the Linera project.
-        /// This is used to locate the generated bytecode. The generated bytecode should
-        /// be of the form `<name>_{contract,service}.wasm`.
-        ///
-        /// Defaults to the package name in Cargo.toml, with dashes replaced by
-        /// underscores.
-        name: Option<String>,
-
-        /// An optional chain ID to publish the bytecode. The default chain of the wallet
-        /// is used otherwise.
-        publisher: Option<ChainId>,
-
-        /// The shared parameters as JSON string.
-        #[arg(long)]
-        json_parameters: Option<String>,
-
-        /// Path to a JSON file containing the shared parameters.
-        #[arg(long)]
-        json_parameters_path: Option<PathBuf>,
-
-        /// The initialization argument as a JSON string.
-        #[arg(long)]
-        json_argument: Option<String>,
-
-        /// Path to a JSON file containing the initialization argument.
-        #[arg(long)]
-        json_argument_path: Option<PathBuf>,
-
-        /// The list of required dependencies of application, if any.
-        #[arg(long, num_args(0..))]
-        required_application_ids: Option<Vec<UserApplicationId>>,
-    },
 }
 
 struct Job(ClientContext, ClientCommand);
@@ -1631,8 +315,10 @@ impl Runnable for Job {
                 let certificates =
                     ClientContext::ensure_admin_subscription(context.clone(), &storage).await;
                 let mut context = context.lock().await;
-                let mut chain_client = context
-                    .make_chain_client(storage.clone(), context.wallet_state.genesis_admin_chain());
+                let mut chain_client = context.make_chain_client(
+                    storage.clone(),
+                    context.wallet_state().genesis_admin_chain(),
+                );
                 for cert in certificates {
                     chain_client.receive_certificate(cert).await.unwrap();
                 }
@@ -1822,7 +508,7 @@ impl Runnable for Job {
                 // For this command, we create proposals and gather certificates without using
                 // the client library. We update the wallet storage at the end using a local node.
                 let max_proposals =
-                    max_proposals.unwrap_or_else(|| context.wallet_state.num_chains());
+                    max_proposals.unwrap_or_else(|| context.wallet_state().num_chains());
                 info!("Starting benchmark phase 1 (block proposals)");
                 let proposals = context.make_benchmark_block_proposals(max_proposals);
                 let num_proposal = proposals.len();
@@ -1916,7 +602,7 @@ impl Runnable for Job {
             }
 
             Service { config, port } => {
-                let default_chain = context.wallet_state.default_chain();
+                let default_chain = context.wallet_state().default_chain();
                 let service = NodeService::new(config, port, default_chain, storage, context);
                 service.run().await?;
             }
@@ -1936,7 +622,7 @@ impl Runnable for Job {
                         Timestamp::from(micros)
                     })
                     .unwrap_or_else(Timestamp::now);
-                let genesis_config = Arc::new(context.wallet_state.genesis_config().clone());
+                let genesis_config = Arc::new(context.wallet_state().genesis_config().clone());
                 let faucet =
                     FaucetService::new(port, chain_client, amount, end_timestamp, genesis_config)
                         .await?;
@@ -2159,7 +845,7 @@ impl Runnable for Job {
                 info!("Requesting a new chain from the faucet.");
                 let key_pair = context.generate_key_pair();
                 let public_key = key_pair.public();
-                context.wallet_state.add_unassigned_key_pair(key_pair);
+                context.wallet_state_mut().add_unassigned_key_pair(key_pair);
                 let outcome = cli_wrappers::Faucet::claim_url(&public_key, &faucet_url).await?;
                 let validators = cli_wrappers::Faucet::current_validators(&faucet_url).await?;
                 println!("{}", outcome.chain_id);
@@ -2174,12 +860,14 @@ impl Runnable for Job {
                     &mut context,
                 )
                 .await?;
-                let admin_id = context.wallet_state.genesis_admin_chain();
+                let admin_id = context.wallet_state().genesis_admin_chain();
                 let chains = with_other_chains
                     .into_iter()
                     .chain([admin_id, outcome.chain_id]);
                 Self::print_peg_certificate_hash(storage, chains, &context).await?;
-                context.wallet_state.set_default_chain(outcome.chain_id)?;
+                context
+                    .wallet_state_mut()
+                    .set_default_chain(outcome.chain_id)?;
                 context.save_wallet();
             }
 
@@ -2210,7 +898,7 @@ impl Job {
         let mut node_client = LocalNodeClient::new(state, Arc::new(Notifier::default()));
 
         // Take the latest committee we know of.
-        let admin_chain_id = context.wallet_state.genesis_admin_chain();
+        let admin_chain_id = context.wallet_state().genesis_admin_chain();
         let query = ChainInfoQuery::new(admin_chain_id).with_committees();
         let nodes = if let Some(validators) = validators {
             context
@@ -2257,7 +945,7 @@ impl Job {
             Please make sure you are connecting to a genuine faucet."
         );
         context
-            .wallet_state
+            .wallet_state_mut()
             .assign_new_chain_to_key(public_key, chain_id, executed_block.block.timestamp)
             .context("could not assign the new chain")?;
         Ok(())
@@ -2307,7 +995,7 @@ impl Job {
         }
         // This proves that once we have verified that the peg chain's tip is a block in the real
         // network, we can be confident that all downloaded chains are.
-        let config_hash = CryptoHash::new(context.wallet_state.genesis_config());
+        let config_hash = CryptoHash::new(context.wallet_state().genesis_config());
         let maybe_epoch = peg_chain.execution_state.system.epoch.get();
         let epoch = maybe_epoch.context("missing epoch in peg chain")?.0;
         info!(
@@ -2581,7 +1269,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
             let mut context = ClientContext::from_options(&options)?;
             let key_pair = context.generate_key_pair();
             let public = key_pair.public();
-            context.wallet_state.add_unassigned_key_pair(key_pair);
+            context.wallet_state_mut().add_unassigned_key_pair(key_pair);
             context.save_wallet();
             println!("{}", public);
             Ok(())
@@ -2667,12 +1355,12 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
         ClientCommand::Wallet(wallet_command) => match wallet_command {
             WalletCommand::Show { chain_id } => {
                 let context = ClientContext::from_options(&options)?;
-                context.wallet_state.pretty_print(*chain_id);
+                context.wallet_state().pretty_print(*chain_id);
                 Ok(())
             }
             WalletCommand::SetDefault { chain_id } => {
                 let mut context = ClientContext::from_options(&options)?;
-                context.wallet_state.set_default_chain(*chain_id)?;
+                context.wallet_state_mut().set_default_chain(*chain_id)?;
                 context.save_wallet();
                 Ok(())
             }
