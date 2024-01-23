@@ -110,7 +110,7 @@ path = "src/database_tool.rs"
 
 [[bin]]
 name = "linera"
-path = "src/linera.rs"
+path = "src/linera/main.rs"
 
 [[bin]]
 name = "linera-server"
