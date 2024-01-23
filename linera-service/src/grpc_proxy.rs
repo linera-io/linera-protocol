@@ -113,7 +113,7 @@ where
             let response = future.await?;
             PROXY_REQUEST_LATENCY
                 .with_label_values(&[])
-                .observe(start.elapsed().as_millis() as f64);
+                .observe(start.elapsed().as_secs_f64() * 1000.0);
             PROXY_REQUEST_COUNT.with_label_values(&[]).inc();
             Ok(response)
         }

@@ -749,7 +749,7 @@ where
         NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
         BLOCK_EXECUTION_LATENCY
             .with_label_values(&[])
-            .observe(start_time.elapsed().as_millis() as f64);
+            .observe(start_time.elapsed().as_secs_f64() * 1000.0);
         WASM_FUEL_USED_PER_BLOCK
             .with_label_values(&[])
             .observe(tracker.used_fuel as f64);

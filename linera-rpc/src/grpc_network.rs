@@ -188,7 +188,7 @@ where
             let response = future.await?;
             SERVER_REQUEST_LATENCY
                 .with_label_values(&[])
-                .observe(start.elapsed().as_millis() as f64);
+                .observe(start.elapsed().as_secs_f64() * 1000.0);
             SERVER_REQUEST_COUNT.with_label_values(&[]).inc();
             Ok(response)
         }
@@ -429,7 +429,7 @@ where
     fn log_request_success_and_latency(start: Instant, method_name: &str) {
         SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE
             .with_label_values(&[method_name])
-            .observe(start.elapsed().as_millis() as f64);
+            .observe(start.elapsed().as_secs_f64() * 1000.0);
         SERVER_REQUEST_SUCCESS
             .with_label_values(&[method_name])
             .inc();
