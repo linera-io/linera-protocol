@@ -616,17 +616,20 @@ impl ClientContext {
     pub async fn mass_broadcast(
         &self,
         phase: &'static str,
-        max_in_flight: u64,
+        max_in_flight: usize,
         proposals: Vec<RpcMessage>,
     ) -> Vec<RpcMessage> {
         let time_start = Instant::now();
         info!("Broadcasting {} {}", proposals.len(), phase);
         let mut handles = Vec::new();
-        for mut client in self.make_validator_mass_clients(max_in_flight) {
+        for mut client in self.make_validator_mass_clients() {
             let proposals = proposals.clone();
             handles.push(tokio::spawn(async move {
                 debug!("Sending {} requests", proposals.len());
-                let responses = client.send(proposals).await.unwrap_or_default();
+                let responses = client
+                    .send(proposals, max_in_flight)
+                    .await
+                    .unwrap_or_default();
                 debug!("Done sending requests");
                 responses
             }));
@@ -651,7 +654,7 @@ impl ClientContext {
         responses
     }
 
-    fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<Box<dyn MassClient>> {
+    fn make_validator_mass_clients(&self) -> Vec<Box<dyn MassClient>> {
         let mut validator_clients = Vec::new();
         for config in &self.wallet_state.genesis_config().committee.validators {
             let client: Box<dyn MassClient> = match config.network.protocol {
@@ -661,7 +664,6 @@ impl ClientContext {
                         network,
                         self.send_timeout,
                         self.recv_timeout,
-                        max_in_flight,
                     ))
                 }
                 NetworkProtocol::Grpc { .. } => Box::new(

@@ -342,7 +342,7 @@ pub enum ClientCommand {
     Benchmark {
         /// Maximum number of blocks in flight
         #[arg(long, default_value = "200")]
-        max_in_flight: u64,
+        max_in_flight: usize,
 
         /// How many chains to use for the benchmark
         #[arg(long, default_value = "10")]

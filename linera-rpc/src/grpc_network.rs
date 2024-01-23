@@ -692,28 +692,6 @@ macro_rules! client_delegate {
     }};
 }
 
-macro_rules! mass_client_delegate {
-    ($client:ident, $handler:ident, $msg:ident, $responses:ident) => {{
-        let response = $client.$handler(Request::new((*$msg).try_into()?)).await?;
-        match response
-            .into_inner()
-            .inner
-            .ok_or(ProtoConversionError::MissingField)?
-        {
-            Inner::ChainInfoResponse(chain_info_response) => {
-                $responses.push(RpcMessage::ChainInfoResponse(Box::new(
-                    chain_info_response.try_into()?,
-                )));
-            }
-            Inner::Error(error) => {
-                let error = bincode::deserialize::<NodeError>(&error)
-                    .map_err(ProtoConversionError::BincodeError)?;
-                error!(?error, "received error response")
-            }
-        }
-    }};
-}
-
 #[async_trait]
 impl ValidatorNode for GrpcClient {
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
@@ -839,21 +817,51 @@ impl MassClient for GrpcClient {
     async fn send(
         &mut self,
         requests: Vec<RpcMessage>,
+        max_in_flight: usize,
     ) -> Result<Vec<RpcMessage>, MassClientError> {
         let client = &mut self.client;
-        let mut responses = Vec::new();
-
-        for request in requests {
-            match request {
-                RpcMessage::BlockProposal(proposal) => {
-                    mass_client_delegate!(client, handle_block_proposal, proposal, responses)
+        let responses = stream::iter(requests)
+            .map(|request| {
+                let mut client = client.clone();
+                async move {
+                    let response = match request {
+                        RpcMessage::BlockProposal(proposal) => {
+                            let request = Request::new((*proposal).try_into()?);
+                            client.handle_block_proposal(request).await?
+                        }
+                        RpcMessage::Certificate(request) => {
+                            let request = Request::new((*request).try_into()?);
+                            client.handle_certificate(request).await?
+                        }
+                        msg => panic!("attempted to send msg: {:?}", msg),
+                    };
+                    match response
+                        .into_inner()
+                        .inner
+                        .ok_or(ProtoConversionError::MissingField)?
+                    {
+                        Inner::ChainInfoResponse(chain_info_response) => {
+                            Ok(Some(RpcMessage::ChainInfoResponse(Box::new(
+                                chain_info_response.try_into()?,
+                            ))))
+                        }
+                        Inner::Error(error) => {
+                            let error = bincode::deserialize::<NodeError>(&error)
+                                .map_err(ProtoConversionError::BincodeError)?;
+                            error!(?error, "received error response");
+                            Ok(None)
+                        }
+                    }
                 }
-                RpcMessage::Certificate(request) => {
-                    mass_client_delegate!(client, handle_certificate, request, responses)
-                }
-                msg => panic!("attempted to send msg: {:?}", msg),
-            }
-        }
+            })
+            .buffer_unordered(max_in_flight)
+            .filter_map(
+                |result: Result<Option<_>, MassClientError>| async move { result.transpose() },
+            )
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(responses)
     }
 }
