@@ -63,6 +63,19 @@ pub static BLOCK_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
+static MESSAGE_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+    prometheus_util::register_histogram_vec(
+        "message_execution_latency",
+        "Message execution latency",
+        &[],
+        Some(vec![
+            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
+            1.0, 2.5,
+        ]),
+    )
+    .expect("Histogram creation should not fail")
+});
+
 pub static WASM_FUEL_USED_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "wasm_fuel_used_per_block",
@@ -632,6 +645,7 @@ where
             );
         }
         for (index, message) in block.incoming_messages.iter().enumerate() {
+            let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let chain_execution_context = ChainExecutionContext::IncomingMessage(index);
             // Execute the received message.
