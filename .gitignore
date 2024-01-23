@@ -21,3 +21,5 @@
 
 # Helm
 kubernetes/linera-validator/working/*
+
+*.code-workspace
