@@ -529,12 +529,10 @@ impl Runnable for Job {
                 let votes = responses
                     .into_iter()
                     .filter_map(|message| {
-                        deserialize_response(message).and_then(|response| {
-                            response.info.manager.pending.and_then(|vote| {
-                                let value = values.get(&vote.value.value_hash)?.clone();
-                                vote.clone().with_value(value)
-                            })
-                        })
+                        let response = deserialize_response(message)?;
+                        let vote = response.info.manager.pending?;
+                        let value = values.get(&vote.value.value_hash)?.clone();
+                        vote.clone().with_value(value)
                     })
                     .collect::<Vec<_>>();
                 info!("Received {} valid votes.", votes.len());
