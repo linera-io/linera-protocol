@@ -51,7 +51,6 @@ jobs:
 
         echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
         env
-        sccache --show-stats
     - name: Build example applications
       run: |
         cd examples
@@ -62,6 +61,8 @@ jobs:
     - name: Compile the workspace with the default features (build)
       run: |
         cargo build --locked
+    - name: Check sccache efficiency
+      run: sccache --show-stats
     - name: Run all tests using the default features
       run: |
         cargo test --locked
