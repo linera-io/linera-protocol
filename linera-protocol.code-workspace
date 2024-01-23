@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "examples"
+		}
+	],
+	"settings": {
+		"rust-analyzer.showUnlinkedFileNotification": false
+	}
+}
