@@ -2659,7 +2659,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                     "This will install a function `linera_spawn_and_read_wallet_variables` to facilitate \
                        testing with a local Linera network"
                 );
-                println!("{}", include_str!("../template/linera_net_helper.sh"));
+                println!("{}", include_str!("../../template/linera_net_helper.sh"));
                 Ok(())
             }
         },
