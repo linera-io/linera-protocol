@@ -41,9 +41,8 @@ use {
     },
     linera_execution::{
         committee::Epoch,
-        system::UserData,
-        system::{Recipient, SystemOperation},
-        Operation,
+        system::{Recipient, SystemOperation, UserData},
+        ChainOwnership, Operation,
     },
     linera_rpc::{
         config::NetworkProtocol, grpc_network::GrpcClient, mass::MassClient, simple_network,
@@ -469,23 +468,86 @@ impl ClientContext {
         }
     }
 
-    /// Makes one block proposal per chain, up to `max_proposals` blocks.
-    pub fn make_benchmark_block_proposals(&mut self, max_proposals: usize) -> Vec<RpcMessage> {
+    /// Creates chains if necessary, and returns a map of exactly `num_chains` chain IDs
+    /// with key pairs.
+    pub async fn make_benchmark_chains<S>(
+        &mut self,
+        num_chains: usize,
+        storage: S,
+    ) -> anyhow::Result<HashMap<ChainId, KeyPair>>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        let mut key_pairs: HashMap<_, _> = HashMap::new();
+        for chain_id in self.wallet_state.own_chain_ids() {
+            if key_pairs.len() == num_chains {
+                break;
+            }
+            let Some(key_pair) = self
+                .wallet_state
+                .get(chain_id)
+                .and_then(|chain| chain.key_pair.as_ref().map(|kp| kp.copy()))
+            else {
+                continue;
+            };
+            let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
+            let ownership = chain_client.chain_info().await?.manager.ownership;
+            if !ownership.owners.is_empty() || ownership.super_owners.len() != 1 {
+                continue;
+            }
+            key_pairs.insert(chain_id, key_pair);
+        }
+
+        let default_chain_id = self
+            .wallet_state
+            .default_chain()
+            .context("should have default chain")?;
+        let mut chain_client = self.make_chain_client(storage.clone(), default_chain_id);
+        while key_pairs.len() < num_chains {
+            let key_pair = self.generate_key_pair();
+            let public_key = key_pair.public();
+            let (message_id, certificate) = chain_client
+                .open_chain(ChainOwnership::single(public_key), Amount::ONE)
+                .await?
+                .expect("should create chain");
+            let timestamp = certificate
+                .value()
+                .block()
+                .context("certificate should be confirmed block")?
+                .timestamp;
+            let chain_id = ChainId::child(message_id);
+            key_pairs.insert(chain_id, key_pair.copy());
+            self.update_wallet_for_new_chain(chain_id, Some(key_pair), timestamp);
+        }
+
+        for chain_id in key_pairs.keys() {
+            let mut child_client = self.make_chain_client(storage.clone(), *chain_id);
+            child_client.process_inbox().await?;
+            self.wallet_state_mut()
+                .update_from_state(&mut child_client)
+                .await;
+        }
+        Ok(key_pairs)
+    }
+
+    /// Makes one block proposal per chain, up to `num_chains` blocks.
+    pub fn make_benchmark_block_proposals(
+        &mut self,
+        key_pairs: &HashMap<ChainId, KeyPair>,
+    ) -> Vec<RpcMessage> {
         let mut proposals = Vec::new();
         let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id;
-        for chain in self.wallet_state.chains_mut() {
-            let key_pair = match &chain.key_pair {
-                Some(kp) => kp,
-                None => continue,
-            };
+        for (chain_id, key_pair) in key_pairs {
+            let chain = self.wallet_state.get(*chain_id).expect("should have chain");
             let block = Block {
                 epoch: Epoch::ZERO,
-                chain_id: chain.chain_id,
+                chain_id: *chain_id,
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::System(SystemOperation::Transfer {
                     owner: None,
                     recipient: Recipient::chain(next_recipient),
-                    amount: Amount::ONE,
+                    amount: Amount::from(1),
                     user_data: UserData::default(),
                 })],
                 previous_block_hash: chain.block_hash,
@@ -504,9 +566,6 @@ impl ClientContext {
                 None,
             );
             proposals.push(proposal.into());
-            if proposals.len() >= max_proposals {
-                break;
-            }
             next_recipient = chain.chain_id;
         }
         proposals
