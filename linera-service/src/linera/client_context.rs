@@ -479,7 +479,7 @@ impl ClientContext {
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
-        let mut key_pairs: HashMap<_, _> = HashMap::new();
+        let mut key_pairs = HashMap::new();
         for chain_id in self.wallet_state.own_chain_ids() {
             if key_pairs.len() == num_chains {
                 break;
