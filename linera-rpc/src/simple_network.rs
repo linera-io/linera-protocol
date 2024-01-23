@@ -460,7 +460,6 @@ pub struct SimpleMassClient {
     pub network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
-    max_in_flight: u64,
 }
 
 impl SimpleMassClient {
@@ -468,13 +467,11 @@ impl SimpleMassClient {
         network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
         send_timeout: std::time::Duration,
         recv_timeout: std::time::Duration,
-        max_in_flight: u64,
     ) -> Self {
         Self {
             network,
             send_timeout,
             recv_timeout,
-            max_in_flight,
         }
     }
 }
@@ -484,15 +481,16 @@ impl MassClient for SimpleMassClient {
     async fn send(
         &mut self,
         requests: Vec<RpcMessage>,
+        max_in_flight: usize,
     ) -> Result<Vec<RpcMessage>, MassClientError> {
         let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = self.network.protocol.connect(address).await?;
         let mut requests = requests.into_iter();
-        let mut in_flight = 0u64;
+        let mut in_flight = 0;
         let mut responses = Vec::new();
 
         loop {
-            while in_flight < self.max_in_flight {
+            while in_flight < max_in_flight {
                 let request = match requests.next() {
                     None => {
                         if in_flight == 0 {

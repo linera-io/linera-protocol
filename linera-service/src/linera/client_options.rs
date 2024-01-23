@@ -342,11 +342,11 @@ pub enum ClientCommand {
     Benchmark {
         /// Maximum number of blocks in flight
         #[arg(long, default_value = "200")]
-        max_in_flight: u64,
+        max_in_flight: usize,
 
-        /// Use a subset of the chains to generate N transfers
-        #[arg(long)]
-        max_proposals: Option<usize>,
+        /// How many chains to use for the benchmark
+        #[arg(long, default_value = "10")]
+        num_chains: usize,
     },
 
     /// Create genesis configuration for a Linera deployment.

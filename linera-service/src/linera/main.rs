@@ -493,7 +493,7 @@ impl Runnable for Job {
             #[cfg(feature = "benchmark")]
             Benchmark {
                 max_in_flight,
-                max_proposals,
+                num_chains,
             } => {
                 // Below all block proposals are supposed to succeed without retries, we
                 // must make sure that all incoming payments have been accepted on-chain
@@ -502,12 +502,14 @@ impl Runnable for Job {
                     .process_inboxes_and_force_validator_updates(&storage)
                     .await;
 
+                let key_pairs = context
+                    .make_benchmark_chains(num_chains, storage.clone())
+                    .await?;
+
                 // For this command, we create proposals and gather certificates without using
                 // the client library. We update the wallet storage at the end using a local node.
-                let max_proposals =
-                    max_proposals.unwrap_or_else(|| context.wallet_state().num_chains());
                 info!("Starting benchmark phase 1 (block proposals)");
-                let proposals = context.make_benchmark_block_proposals(max_proposals);
+                let proposals = context.make_benchmark_block_proposals(&key_pairs);
                 let num_proposal = proposals.len();
                 let mut values = HashMap::new();
 
@@ -529,12 +531,10 @@ impl Runnable for Job {
                 let votes = responses
                     .into_iter()
                     .filter_map(|message| {
-                        deserialize_response(message).and_then(|response| {
-                            response.info.manager.pending.and_then(|vote| {
-                                let value = values.get(&vote.value.value_hash)?.clone();
-                                vote.clone().with_value(value)
-                            })
-                        })
+                        let response = deserialize_response(message)?;
+                        let vote = response.info.manager.pending?;
+                        let value = values.get(&vote.value.value_hash)?.clone();
+                        vote.clone().with_value(value)
                     })
                     .collect::<Vec<_>>();
                 info!("Received {} valid votes.", votes.len());
