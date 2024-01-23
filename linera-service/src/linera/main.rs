@@ -59,9 +59,6 @@ use tracing::{debug, info, warn};
 mod client_context;
 mod client_options;
 
-#[cfg(feature = "kubernetes")]
-use linera_service::cli_wrappers::local_kubernetes_net::LocalKubernetesNetConfig;
-
 use crate::client_options::{ClientCommand, NetCommand, ProjectCommand, WalletCommand};
 
 #[cfg(feature = "benchmark")]
@@ -1299,15 +1296,13 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 let (shutdown_sender, mut shutdown_receiver) = mpsc::channel(1);
                 tokio::spawn(handle_signals(shutdown_sender));
 
-                #[cfg(feature = "kubernetes")]
-                let (kubernetes, binaries) = (*kubernetes, binaries.clone());
                 #[cfg(not(feature = "kubernetes"))]
-                let (kubernetes, _binaries_dir) = (false, PathBuf::default());
+                let kubernetes = &false;
 
-                if kubernetes {
+                if *kubernetes {
                     #[cfg(feature = "kubernetes")]
                     {
-                        let config = LocalKubernetesNetConfig {
+                        let config = cli_wrappers::local_kubernetes_net::LocalKubernetesNetConfig {
                             network: Network::Grpc,
                             testing_prng_seed: *testing_prng_seed,
                             num_other_initial_chains: *other_initial_chains,

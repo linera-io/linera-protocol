@@ -184,32 +184,8 @@ impl ClientContext {
                 path: Self::create_default_config_path()?.join("wallet.db"),
             }),
             #[cfg(not(feature = "rocksdb"))]
-            None => bail!("A storage option must be provided"),
+            None => anyhow::bail!("A storage option must be provided"),
         }
-    }
-
-    #[cfg(feature = "benchmark")]
-    fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<Box<dyn MassClient>> {
-        let mut validator_clients = Vec::new();
-        for config in &self.wallet_state.genesis_config().committee.validators {
-            let client: Box<dyn MassClient> = match config.network.protocol {
-                NetworkProtocol::Simple(protocol) => {
-                    let network = config.network.clone_with_protocol(protocol);
-                    Box::new(simple_network::SimpleMassClient::new(
-                        network,
-                        self.send_timeout,
-                        self.recv_timeout,
-                        max_in_flight,
-                    ))
-                }
-                NetworkProtocol::Grpc { .. } => Box::new(
-                    GrpcClient::new(config.network.clone(), self.make_node_options()).unwrap(),
-                ),
-            };
-
-            validator_clients.push(client);
-        }
-        validator_clients
     }
 
     fn make_chain_client<S>(
@@ -257,145 +233,6 @@ impl ClientContext {
         }
     }
 
-    #[cfg(feature = "benchmark")]
-    pub async fn process_inboxes_and_force_validator_updates<S>(&mut self, storage: &S)
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
-        for chain_id in self.wallet_state.own_chain_ids() {
-            let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
-            self.process_inbox(&mut chain_client).await.unwrap();
-            chain_client.update_validators().await.unwrap();
-        }
-    }
-
-    /// Makes one block proposal per chain, up to `max_proposals` blocks.
-    #[cfg(feature = "benchmark")]
-    pub fn make_benchmark_block_proposals(&mut self, max_proposals: usize) -> Vec<RpcMessage> {
-        let mut proposals = Vec::new();
-        let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id;
-        for chain in self.wallet_state.chains_mut() {
-            let key_pair = match &chain.key_pair {
-                Some(kp) => kp,
-                None => continue,
-            };
-            let block = Block {
-                epoch: Epoch::ZERO,
-                chain_id: chain.chain_id,
-                incoming_messages: Vec::new(),
-                operations: vec![Operation::System(SystemOperation::Transfer {
-                    owner: None,
-                    recipient: Recipient::chain(next_recipient),
-                    amount: Amount::ONE,
-                    user_data: UserData::default(),
-                })],
-                previous_block_hash: chain.block_hash,
-                height: chain.next_block_height,
-                authenticated_signer: None,
-                timestamp: chain.timestamp.max(Timestamp::now()),
-            };
-            trace!("Preparing block proposal: {:?}", block);
-            let proposal = BlockProposal::new(
-                BlockAndRound {
-                    block: block.clone(),
-                    round: linera_base::data_types::Round::Fast,
-                },
-                key_pair,
-                vec![],
-                None,
-            );
-            proposals.push(proposal.into());
-            if proposals.len() >= max_proposals {
-                break;
-            }
-            next_recipient = chain.chain_id;
-        }
-        proposals
-    }
-
-    /// Tries to aggregate votes into certificates.
-    #[cfg(feature = "benchmark")]
-    pub fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<Certificate> {
-        let committee = self.wallet_state.genesis_config().create_committee();
-        let mut aggregators = HashMap::new();
-        let mut certificates = Vec::new();
-        let mut done_senders = HashSet::new();
-        for vote in votes {
-            // We aggregate votes indexed by sender.
-            let chain_id = vote.value().chain_id();
-            if done_senders.contains(&chain_id) {
-                continue;
-            }
-            trace!(
-                "Processing vote on {:?}'s block by {:?}",
-                chain_id,
-                vote.validator,
-            );
-            let aggregator = aggregators.entry(chain_id).or_insert_with(|| {
-                SignatureAggregator::new(
-                    vote.value,
-                    linera_base::data_types::Round::Fast,
-                    &committee,
-                )
-            });
-            match aggregator.append(vote.validator, vote.signature) {
-                Ok(Some(certificate)) => {
-                    trace!("Found certificate: {:?}", certificate);
-                    certificates.push(certificate);
-                    done_senders.insert(chain_id);
-                }
-                Ok(None) => {
-                    trace!("Added one vote");
-                }
-                Err(error) => {
-                    error!("Failed to aggregate vote: {}", error);
-                }
-            }
-        }
-        certificates
-    }
-
-    /// Broadcasts a bulk of blocks to each validator.
-    #[cfg(feature = "benchmark")]
-    pub async fn mass_broadcast(
-        &self,
-        phase: &'static str,
-        max_in_flight: u64,
-        proposals: Vec<RpcMessage>,
-    ) -> Vec<RpcMessage> {
-        let time_start = Instant::now();
-        info!("Broadcasting {} {}", proposals.len(), phase);
-        let mut handles = Vec::new();
-        for mut client in self.make_validator_mass_clients(max_in_flight) {
-            let proposals = proposals.clone();
-            handles.push(tokio::spawn(async move {
-                debug!("Sending {} requests", proposals.len());
-                let responses = client.send(proposals).await.unwrap_or_default();
-                debug!("Done sending requests");
-                responses
-            }));
-        }
-        let responses = futures::future::join_all(handles)
-            .await
-            .into_iter()
-            .flatten()
-            .flatten()
-            .collect::<Vec<RpcMessage>>();
-        let time_elapsed = time_start.elapsed();
-        info!(
-            "Received {} responses in {} ms.",
-            responses.len(),
-            time_elapsed.as_millis()
-        );
-        info!(
-            "Estimated server throughput: {} {} per sec",
-            (proposals.len() as u128) * 1_000_000 / time_elapsed.as_micros(),
-            phase
-        );
-        responses
-    }
-
     pub fn save_wallet(&mut self) {
         self.wallet_state.refresh_prng_seed(&mut self.prng);
         self.wallet_state
@@ -439,35 +276,6 @@ impl ClientContext {
                 next_block_height: BlockHeight::ZERO,
                 pending_block: None,
             });
-        }
-    }
-
-    #[cfg(feature = "benchmark")]
-    pub async fn update_wallet_from_certificates<S>(
-        &mut self,
-        storage: S,
-        certificates: Vec<Certificate>,
-    ) where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
-        // First instantiate a local node on top of storage.
-        let worker = WorkerState::new("Temporary client node".to_string(), None, storage)
-            .with_allow_inactive_chains(true)
-            .with_allow_messages_from_deprecated_epochs(true);
-        let mut node = LocalNodeClient::new(worker, Arc::new(Notifier::default()));
-        // Second replay the certificates locally.
-        for certificate in certificates {
-            // No required certificates from other chains: This is only used with benchmark.
-            node.handle_certificate(certificate, vec![]).await.unwrap();
-        }
-        // Last update the wallet.
-        for chain in self.wallet_state.chains_mut() {
-            let query = ChainInfoQuery::new(chain.chain_id);
-            let info = node.handle_chain_info_query(query).await.unwrap().info;
-            // We don't have private keys but that's ok.
-            chain.block_hash = info.block_hash;
-            chain.next_block_height = info.next_block_height;
         }
     }
 
@@ -643,6 +451,195 @@ impl ClientContext {
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
             linera_service::node_service::wait_for_next_round(stream, timeout).await;
+        }
+    }
+}
+
+#[cfg(feature = "benchmark")]
+impl ClientContext {
+    pub async fn process_inboxes_and_force_validator_updates<S>(&mut self, storage: &S)
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        for chain_id in self.wallet_state.own_chain_ids() {
+            let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
+            self.process_inbox(&mut chain_client).await.unwrap();
+            chain_client.update_validators().await.unwrap();
+        }
+    }
+
+    /// Makes one block proposal per chain, up to `max_proposals` blocks.
+    pub fn make_benchmark_block_proposals(&mut self, max_proposals: usize) -> Vec<RpcMessage> {
+        let mut proposals = Vec::new();
+        let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id;
+        for chain in self.wallet_state.chains_mut() {
+            let key_pair = match &chain.key_pair {
+                Some(kp) => kp,
+                None => continue,
+            };
+            let block = Block {
+                epoch: Epoch::ZERO,
+                chain_id: chain.chain_id,
+                incoming_messages: Vec::new(),
+                operations: vec![Operation::System(SystemOperation::Transfer {
+                    owner: None,
+                    recipient: Recipient::chain(next_recipient),
+                    amount: Amount::ONE,
+                    user_data: UserData::default(),
+                })],
+                previous_block_hash: chain.block_hash,
+                height: chain.next_block_height,
+                authenticated_signer: None,
+                timestamp: chain.timestamp.max(Timestamp::now()),
+            };
+            trace!("Preparing block proposal: {:?}", block);
+            let proposal = BlockProposal::new(
+                BlockAndRound {
+                    block: block.clone(),
+                    round: linera_base::data_types::Round::Fast,
+                },
+                key_pair,
+                vec![],
+                None,
+            );
+            proposals.push(proposal.into());
+            if proposals.len() >= max_proposals {
+                break;
+            }
+            next_recipient = chain.chain_id;
+        }
+        proposals
+    }
+
+    /// Tries to aggregate votes into certificates.
+    pub fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<Certificate> {
+        let committee = self.wallet_state.genesis_config().create_committee();
+        let mut aggregators = HashMap::new();
+        let mut certificates = Vec::new();
+        let mut done_senders = HashSet::new();
+        for vote in votes {
+            // We aggregate votes indexed by sender.
+            let chain_id = vote.value().chain_id();
+            if done_senders.contains(&chain_id) {
+                continue;
+            }
+            trace!(
+                "Processing vote on {:?}'s block by {:?}",
+                chain_id,
+                vote.validator,
+            );
+            let aggregator = aggregators.entry(chain_id).or_insert_with(|| {
+                SignatureAggregator::new(
+                    vote.value,
+                    linera_base::data_types::Round::Fast,
+                    &committee,
+                )
+            });
+            match aggregator.append(vote.validator, vote.signature) {
+                Ok(Some(certificate)) => {
+                    trace!("Found certificate: {:?}", certificate);
+                    certificates.push(certificate);
+                    done_senders.insert(chain_id);
+                }
+                Ok(None) => {
+                    trace!("Added one vote");
+                }
+                Err(error) => {
+                    error!("Failed to aggregate vote: {}", error);
+                }
+            }
+        }
+        certificates
+    }
+
+    /// Broadcasts a bulk of blocks to each validator.
+    pub async fn mass_broadcast(
+        &self,
+        phase: &'static str,
+        max_in_flight: u64,
+        proposals: Vec<RpcMessage>,
+    ) -> Vec<RpcMessage> {
+        let time_start = Instant::now();
+        info!("Broadcasting {} {}", proposals.len(), phase);
+        let mut handles = Vec::new();
+        for mut client in self.make_validator_mass_clients(max_in_flight) {
+            let proposals = proposals.clone();
+            handles.push(tokio::spawn(async move {
+                debug!("Sending {} requests", proposals.len());
+                let responses = client.send(proposals).await.unwrap_or_default();
+                debug!("Done sending requests");
+                responses
+            }));
+        }
+        let responses = futures::future::join_all(handles)
+            .await
+            .into_iter()
+            .flatten()
+            .flatten()
+            .collect::<Vec<RpcMessage>>();
+        let time_elapsed = time_start.elapsed();
+        info!(
+            "Received {} responses in {} ms.",
+            responses.len(),
+            time_elapsed.as_millis()
+        );
+        info!(
+            "Estimated server throughput: {} {} per sec",
+            (proposals.len() as u128) * 1_000_000 / time_elapsed.as_micros(),
+            phase
+        );
+        responses
+    }
+
+    fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<Box<dyn MassClient>> {
+        let mut validator_clients = Vec::new();
+        for config in &self.wallet_state.genesis_config().committee.validators {
+            let client: Box<dyn MassClient> = match config.network.protocol {
+                NetworkProtocol::Simple(protocol) => {
+                    let network = config.network.clone_with_protocol(protocol);
+                    Box::new(simple_network::SimpleMassClient::new(
+                        network,
+                        self.send_timeout,
+                        self.recv_timeout,
+                        max_in_flight,
+                    ))
+                }
+                NetworkProtocol::Grpc { .. } => Box::new(
+                    GrpcClient::new(config.network.clone(), self.make_node_options()).unwrap(),
+                ),
+            };
+
+            validator_clients.push(client);
+        }
+        validator_clients
+    }
+
+    pub async fn update_wallet_from_certificates<S>(
+        &mut self,
+        storage: S,
+        certificates: Vec<Certificate>,
+    ) where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        // First instantiate a local node on top of storage.
+        let worker = WorkerState::new("Temporary client node".to_string(), None, storage)
+            .with_allow_inactive_chains(true)
+            .with_allow_messages_from_deprecated_epochs(true);
+        let mut node = LocalNodeClient::new(worker, Arc::new(Notifier::default()));
+        // Second replay the certificates locally.
+        for certificate in certificates {
+            // No required certificates from other chains: This is only used with benchmark.
+            node.handle_certificate(certificate, vec![]).await.unwrap();
+        }
+        // Last update the wallet.
+        for chain in self.wallet_state.chains_mut() {
+            let query = ChainInfoQuery::new(chain.chain_id);
+            let info = node.handle_chain_info_query(query).await.unwrap().info;
+            // We don't have private keys but that's ok.
+            chain.block_hash = info.block_hash;
+            chain.next_block_height = info.next_block_height;
         }
     }
 }
