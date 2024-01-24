@@ -3,21 +3,21 @@
 
 //! Derivation of the `WitStore` trait.
 
-use crate::util::hlist_type_for;
+use crate::util::FieldsInformation;
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
-use quote::{format_ident, quote};
-use syn::{Fields, Ident, LitInt, Variant};
+use quote::quote;
+use syn::{Ident, LitInt, Variant};
 
 #[path = "unit_tests/wit_store.rs"]
 mod tests;
 
 /// Returns the body of the `WitStore` implementation for the Rust `struct` with the specified
 /// `fields`.
-pub fn derive_for_struct(fields: &Fields) -> TokenStream {
-    let field_names = field_names(fields);
-    let pattern = fields_pattern(fields, field_names.clone());
-    let fields_hlist_value = quote! { linera_witty::hlist![#( #field_names ),*] };
+pub fn derive_for_struct<'input>(fields: impl Into<FieldsInformation<'input>>) -> TokenStream {
+    let fields = fields.into();
+    let pattern = fields.construction();
+    let fields_hlist_value = fields.hlist_value();
 
     quote! {
         fn store<Instance>(
@@ -58,6 +58,10 @@ pub fn derive_for_enum<'variants>(
     variants: impl DoubleEndedIterator<Item = &'variants Variant> + Clone,
 ) -> TokenStream {
     let variant_count = variants.clone().count();
+    let variant_fields = variants
+        .clone()
+        .map(|variant| FieldsInformation::from(&variant.fields))
+        .collect::<Vec<_>>();
 
     let discriminant_type = if variant_count <= u8::MAX.into() {
         quote! { u8 }
@@ -69,23 +73,28 @@ pub fn derive_for_enum<'variants>(
         abort!(name, "Too many variants in `enum`");
     };
 
-    let align_to_cases = variants
-        .clone()
-        .map(|variant| hlist_type_for(&variant.fields))
-        .fold(quote! {}, |location, variant_type| {
-            quote! {
-                #location.after_padding_for::<#variant_type>()
-            }
+    let variants = variants
+        .zip(&variant_fields)
+        .enumerate()
+        .map(|(index, (variant, fields))| {
+            let discriminant = LitInt::new(
+                &format!("{index}_{discriminant_type}"),
+                variant.ident.span(),
+            );
+            (discriminant, (variant, fields))
         });
 
-    let store_variants = variants.clone().enumerate().map(|(index, variant)| {
-        let variant_name = &variant.ident;
-        let discriminant =
-            LitInt::new(&format!("{index}_{discriminant_type}"), variant_name.span());
+    let align_to_cases = variant_fields.iter().fold(quote! {}, |location, variant| {
+        let variant_type = variant.hlist_type();
+        quote! {
+            #location.after_padding_for::<#variant_type>()
+        }
+    });
 
-        let field_names = field_names(&variant.fields);
-        let pattern = fields_pattern(&variant.fields, field_names.clone());
-        let fields_hlist_value = quote! { linera_witty::hlist![#( #field_names ),*] };
+    let store_variants = variants.clone().map(|(discriminant, (variant, fields))| {
+        let variant_name = &variant.ident;
+        let pattern = fields.construction();
+        let fields_hlist_value = fields.hlist_value();
 
         quote! {
             #name::#variant_name #pattern => {
@@ -97,14 +106,10 @@ pub fn derive_for_enum<'variants>(
         }
     });
 
-    let lower_variants = variants.enumerate().map(|(index, variant)| {
+    let lower_variants = variants.map(|(discriminant, (variant, fields))| {
         let variant_name = &variant.ident;
-        let discriminant =
-            LitInt::new(&format!("{index}_{discriminant_type}"), variant_name.span());
-
-        let field_names = field_names(&variant.fields);
-        let pattern = fields_pattern(&variant.fields, field_names.clone());
-        let fields_hlist_value = quote! { linera_witty::hlist![#( #field_names ),*] };
+        let pattern = fields.construction();
+        let fields_hlist_value = fields.hlist_value();
 
         quote! {
             #name::#variant_name #pattern => {
@@ -150,24 +155,4 @@ pub fn derive_for_enum<'variants>(
             }
         }
     }
-}
-
-/// Returns the code with a pattern to match the `fields` using the provided `bindings`.
-fn fields_pattern(fields: &Fields, bindings: impl Iterator<Item = Ident>) -> TokenStream {
-    match fields {
-        Fields::Unit => quote! {},
-        Fields::Named(_) => quote! { { #( #bindings ),* } },
-        Fields::Unnamed(_) => quote! { ( #( #bindings ),* ) },
-    }
-}
-
-/// Returns an iterator over names for bindings used to deconstruct the provided `fields`.
-fn field_names(fields: &Fields) -> impl Iterator<Item = Ident> + Clone + '_ {
-    fields.iter().enumerate().map(|(index, field)| {
-        field
-            .ident
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| format_ident!("field{index}"))
-    })
 }
