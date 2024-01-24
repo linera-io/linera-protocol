@@ -57,9 +57,9 @@ pub struct SystemExecutionStateView<C> {
     /// Track the channels that we have subscribed to.
     pub subscriptions: SetView<C, ChannelSubscription>,
     /// The committees that we trust, indexed by epoch number.
-    /// Not using a `MapView` because the set active of committees is supposed to be
-    /// small. Plus, currently, we would create the `BTreeMap` anyway in various places
-    /// (e.g. the `OpenChain` operation).
+    // Not using a `MapView` because the set active of committees is supposed to be
+    // small. Plus, currently, we would create the `BTreeMap` anyway in various places
+    // (e.g. the `OpenChain` operation).
     pub committees: RegisterView<C, BTreeMap<Epoch, Committee>>,
     /// Ownership of the chain.
     pub ownership: RegisterView<C, ChainOwnership>,
