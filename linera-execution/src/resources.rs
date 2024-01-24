@@ -47,9 +47,9 @@ pub struct ResourceTracker {
     pub operations: u32,
     /// The total size of the arguments of user operations.
     pub operation_bytes: u64,
-    /// The number of messages executed.
+    /// The number of outgoing messages created (system and user).
     pub messages: u32,
-    /// The total size of the arguments of user messages.
+    /// The total size of the arguments of outgoing user messages.
     pub message_bytes: u64,
 }
 
@@ -106,7 +106,7 @@ where
         self.update_balance(self.policy.block)
     }
 
-    /// Tracks a block operation.
+    /// Tracks the execution of an operation in block.
     pub fn track_operation(&mut self, operation: &Operation) -> Result<(), ExecutionError> {
         self.tracker.as_mut().operations = self
             .tracker
@@ -131,7 +131,7 @@ where
         }
     }
 
-    /// Tracks a block message.
+    /// Tracks the creation of an outgoing message.
     pub fn track_message(&mut self, message: &Message) -> Result<(), ExecutionError> {
         self.tracker.as_mut().messages = self
             .tracker
