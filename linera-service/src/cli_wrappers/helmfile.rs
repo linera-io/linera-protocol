@@ -30,6 +30,7 @@ impl HelmFile {
             .env("LINERA_HELMFILE_SET_NUM_SHARDS", num_shards.to_string())
             .arg("sync")
             .arg("--wait")
+            .arg("--debug")
             .args(["--kube-context", &format!("kind-{}", cluster_id)])
             .spawn_and_wait()
             .await
