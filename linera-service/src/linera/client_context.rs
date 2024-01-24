@@ -50,6 +50,7 @@ use {
     },
     std::{
         collections::{HashMap, HashSet},
+        iter,
         time::Instant,
     },
     tracing::{error, trace},
@@ -536,21 +537,25 @@ impl ClientContext {
     pub fn make_benchmark_block_proposals(
         &mut self,
         key_pairs: &HashMap<ChainId, KeyPair>,
+        transactions_per_block: usize,
     ) -> Vec<RpcMessage> {
         let mut proposals = Vec::new();
         let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id;
         for (chain_id, key_pair) in key_pairs {
             let chain = self.wallet_state.get(*chain_id).expect("should have chain");
+            let operations = iter::repeat(Operation::System(SystemOperation::Transfer {
+                owner: None,
+                recipient: Recipient::chain(next_recipient),
+                amount: Amount::from(1),
+                user_data: UserData::default(),
+            }))
+            .take(transactions_per_block)
+            .collect();
             let block = Block {
                 epoch: Epoch::ZERO,
                 chain_id: *chain_id,
                 incoming_messages: Vec::new(),
-                operations: vec![Operation::System(SystemOperation::Transfer {
-                    owner: None,
-                    recipient: Recipient::chain(next_recipient),
-                    amount: Amount::from(1),
-                    user_data: UserData::default(),
-                })],
+                operations,
                 previous_block_hash: chain.block_hash,
                 height: chain.next_block_height,
                 authenticated_signer: None,

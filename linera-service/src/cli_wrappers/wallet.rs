@@ -411,12 +411,21 @@ impl ClientWrapper {
 
     /// Runs `linera benchmark`.
     #[cfg(feature = "benchmark")]
-    pub async fn benchmark(&self, max_in_flight: usize, num_chains: usize) -> Result<()> {
+    pub async fn benchmark(
+        &self,
+        max_in_flight: usize,
+        num_chains: usize,
+        transactions_per_block: usize,
+    ) -> Result<()> {
         self.command()
             .await?
             .arg("benchmark")
             .args(["--max-in-flight", &max_in_flight.to_string()])
             .args(["--num-chains", &num_chains.to_string()])
+            .args([
+                "--transactions-per-block",
+                &transactions_per_block.to_string(),
+            ])
             .spawn_and_wait_for_stdout()
             .await?;
         Ok(())
