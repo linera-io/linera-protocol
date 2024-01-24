@@ -17,7 +17,7 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, Timestamp},
     ensure,
     identifiers::{ChainId, Destination, MessageId},
-    prometheus_util,
+    prometheus_util::{self, MeasureLatency},
     sync::Lazy,
 };
 use linera_execution::{
@@ -39,7 +39,6 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashSet},
     sync::Arc,
-    time::Instant,
 };
 
 pub static NUM_BLOCKS_EXECUTED: Lazy<IntCounterVec> = Lazy::new(|| {
@@ -62,6 +61,32 @@ pub static BLOCK_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
         ]),
     )
     .expect("Counter creation should not fail")
+});
+
+static MESSAGE_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+    prometheus_util::register_histogram_vec(
+        "message_execution_latency",
+        "Message execution latency",
+        &[],
+        Some(vec![
+            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
+            1.0, 2.5,
+        ]),
+    )
+    .expect("Histogram creation should not fail")
+});
+
+static OPERATION_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+    prometheus_util::register_histogram_vec(
+        "operation_execution_latency",
+        "Operation execution latency",
+        &[],
+        Some(vec![
+            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
+            1.0, 2.5,
+        ]),
+    )
+    .expect("Histogram creation should not fail")
 });
 
 pub static WASM_FUEL_USED_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
@@ -137,6 +162,18 @@ pub static WASM_BYTES_WRITTEN_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
         ]),
     )
     .expect("Counter creation should not fail")
+});
+
+static STATE_HASH_COMPUTATION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+    prometheus_util::register_histogram_vec(
+        "state_hash_computation_latency",
+        "Time to recompute the state hash",
+        &[],
+        Some(vec![
+            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
+        ]),
+    )
+    .expect("Histogram can be created")
 });
 
 /// A view accessing the state of a chain.
@@ -574,7 +611,7 @@ where
         block: &Block,
         local_time: Timestamp,
     ) -> Result<BlockExecutionOutcome, ChainError> {
-        let start_time = Instant::now();
+        let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
 
         assert_eq!(block.chain_id, self.chain_id());
         let chain_id = self.chain_id();
@@ -621,6 +658,7 @@ where
             );
         }
         for (index, message) in block.incoming_messages.iter().enumerate() {
+            let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let chain_execution_context = ChainExecutionContext::IncomingMessage(index);
             // Execute the received message.
@@ -687,6 +725,7 @@ where
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
+            let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let chain_execution_context = ChainExecutionContext::Operation(index);
             let next_message_index =
@@ -731,7 +770,10 @@ where
             .map_err(|err| ChainError::ExecutionError(err, ChainExecutionContext::Block))?;
 
         // Recompute the state hash.
-        let state_hash = self.execution_state.crypto_hash().await?;
+        let state_hash = {
+            let _hash_latency = STATE_HASH_COMPUTATION_LATENCY.measure_latency();
+            self.execution_state.crypto_hash().await?
+        };
         self.execution_state_hash.set(Some(state_hash));
         // Last, reset the consensus state based on the current ownership.
         self.manager.get_mut().reset(
@@ -742,9 +784,6 @@ where
 
         // Log Prometheus metrics
         NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
-        BLOCK_EXECUTION_LATENCY
-            .with_label_values(&[])
-            .observe(start_time.elapsed().as_secs_f64() * 1000.0);
         WASM_FUEL_USED_PER_BLOCK
             .with_label_values(&[])
             .observe(resource_controller.tracker.fuel as f64);

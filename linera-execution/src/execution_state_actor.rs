@@ -8,14 +8,47 @@ use crate::{
     UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
 };
 use futures::channel::mpsc;
-use linera_base::data_types::{Amount, Timestamp};
+use linera_base::{
+    data_types::{Amount, Timestamp},
+    prometheus_util::{self, MeasureLatency},
+    sync::Lazy,
+};
 use linera_views::{
     batch::Batch,
     common::Context,
     views::{View, ViewError},
 };
 use oneshot::Sender;
+use prometheus::HistogramVec;
 use std::fmt::{self, Debug, Formatter};
+
+/// Histogram of the latency to load a contract bytecode.
+static LOAD_CONTRACT_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+    prometheus_util::register_histogram_vec(
+        "load_contract_latency",
+        "Load contract latency",
+        &[],
+        Some(vec![
+            0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0,
+            100.0, 250.0,
+        ]),
+    )
+    .expect("Histogram creation should not fail")
+});
+
+/// Histogram of the latency to load a service bytecode.
+static LOAD_SERVICE_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+    prometheus_util::register_histogram_vec(
+        "load_service_latency",
+        "Load service latency",
+        &[],
+        Some(vec![
+            0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0,
+            100.0, 250.0,
+        ]),
+    )
+    .expect("Histogram creation should not fail")
+});
 
 pub(crate) type ExecutionStateSender = mpsc::UnboundedSender<Request>;
 
@@ -30,6 +63,7 @@ where
         use Request::*;
         match request {
             LoadContract { id, callback } => {
+                let _latency = LOAD_CONTRACT_LATENCY.measure_latency();
                 let description = self.system.registry.describe_application(id).await?;
                 let code = self
                     .context()
@@ -40,6 +74,7 @@ where
             }
 
             LoadService { id, callback } => {
+                let _latency = LOAD_SERVICE_LATENCY.measure_latency();
                 let description = self.system.registry.describe_application(id).await?;
                 let code = self
                     .context()
