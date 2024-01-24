@@ -49,7 +49,7 @@ jobs:
           strip target/release/linera-db
       - name: Setup helmfile
         uses: mamezou-tech/setup-helmfile@v1.3.0
-      - name: Run Wasm e2e test
+      - name: Run e2e tests
         uses: nick-fields/retry@v2
         with:
           # Port forwarding sometimes dies, which makes all requests timeout
