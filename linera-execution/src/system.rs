@@ -414,9 +414,7 @@ pub enum SystemExecutionError {
     IncorrectTransferAmount,
     #[error("Transfer from owned account must be authenticated by the right signer")]
     UnauthenticatedTransferOwner,
-    #[error(
-        "The transferred amount must be not exceed the current chain balance: {current_balance}"
-    )]
+    #[error("The transferred amount must not exceed the current chain balance: {current_balance}")]
     InsufficientFunding { current_balance: Amount },
     #[error("Claim must have positive amount")]
     IncorrectClaimAmount,
