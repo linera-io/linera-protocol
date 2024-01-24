@@ -641,7 +641,7 @@ input ResourceControlPolicy {
 	"""
 	byteRead: Amount!
 	"""
-	The price to writing a byte
+	The price of writing a byte
 	"""
 	byteWritten: Amount!
 	"""

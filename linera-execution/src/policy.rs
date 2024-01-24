@@ -20,7 +20,7 @@ pub struct ResourceControlPolicy {
     pub write_operation: Amount,
     /// The price of reading a byte.
     pub byte_read: Amount,
-    /// The price to writing a byte
+    /// The price of writing a byte
     pub byte_written: Amount,
     /// The price of increasing storage by a byte.
     // TODO(#1536): This is not fully supported.
