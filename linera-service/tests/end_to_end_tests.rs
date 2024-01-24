@@ -1398,12 +1398,6 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
         Amount::from_tokens(3)
     );
 
-    #[cfg(benchmark)]
-    {
-        // Launch local benchmark using all user chains
-        client.benchmark(500).await;
-    }
-
     // Create derived chain
     let (_, chain_3) = client
         .open_chain(chain_1, None, Amount::ZERO)
@@ -2210,6 +2204,30 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetTestingConfig) {
     );
     let result = client.retry_pending_block(Some(chain_id)).await;
     assert!(result.unwrap().is_none());
+
+    net.ensure_is_running().await.unwrap();
+    net.terminate().await.unwrap();
+}
+
+#[cfg(feature = "benchmark")]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Tcp) ; "rocksdb_tcp"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Udp) ; "rocksdb_udp"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_benchmark(config: LocalNetTestingConfig) {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let (mut net, client) = config.instantiate().await.unwrap();
+
+    assert_eq!(client.get_wallet().unwrap().num_chains(), 10);
+    // Launch local benchmark using all user chains and creating additional ones.
+    client.benchmark(12, 15).await.unwrap();
+    assert_eq!(client.get_wallet().unwrap().num_chains(), 15);
 
     net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();

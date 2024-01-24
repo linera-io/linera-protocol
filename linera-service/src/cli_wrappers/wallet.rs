@@ -410,12 +410,13 @@ impl ClientWrapper {
     }
 
     /// Runs `linera benchmark`.
-    #[cfg(benchmark)]
-    async fn benchmark(&self, max_in_flight: usize) -> Result<()> {
+    #[cfg(feature = "benchmark")]
+    pub async fn benchmark(&self, max_in_flight: usize, num_chains: usize) -> Result<()> {
         self.command()
-            .await
+            .await?
             .arg("benchmark")
             .args(["--max-in-flight", &max_in_flight.to_string()])
+            .args(["--num-chains", &num_chains.to_string()])
             .spawn_and_wait_for_stdout()
             .await?;
         Ok(())
