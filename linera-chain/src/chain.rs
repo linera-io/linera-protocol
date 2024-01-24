@@ -14,17 +14,16 @@ use async_graphql::SimpleObject;
 use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
+    data_types::{ArithmeticError, BlockHeight, Timestamp},
     ensure,
     identifiers::{ChainId, Destination, MessageId},
     sync::Lazy,
 };
 use linera_execution::{
-    system::{SystemExecutionError, SystemMessage},
-    ExecutionError, ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView,
+    system::SystemMessage, ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView,
     GenericApplicationId, Message, MessageContext, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, ResourceTracker, Response, UserApplicationDescription,
-    UserApplicationId,
+    RawExecutionOutcome, RawOutgoingMessage, ResourceController, ResourceTracker, Response,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     common::Context,
@@ -38,6 +37,7 @@ use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec,
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashSet},
+    sync::Arc,
     time::Instant,
 };
 
@@ -266,22 +266,6 @@ where
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
-    /// Substracts an amount from a balance and reports an error if that is impossible
-    fn sub_assign_fees(
-        balance: &mut Amount,
-        fees: Amount,
-        chain_execution_context: ChainExecutionContext,
-    ) -> Result<(), ChainError> {
-        balance.try_sub_assign(fees).map_err(|_| {
-            ChainError::ExecutionError(
-                ExecutionError::SystemError(SystemExecutionError::InsufficientFunding {
-                    current_balance: *balance,
-                }),
-                chain_execution_context,
-            )
-        })
-    }
-
     pub fn chain_id(&self) -> ChainId {
         self.context().extra().chain_id()
     }
@@ -597,11 +581,15 @@ where
         let Some((_, committee)) = self.execution_state.system.current_committee() else {
             return Err(ChainError::InactiveChain(chain_id));
         };
-
-        let policy = committee.policy().clone();
+        let mut resource_controller = ResourceController {
+            policy: Arc::new(committee.policy().clone()),
+            tracker: ResourceTracker::default(),
+            // TODO(#1537): Allow using the personal account of the block producer.
+            account: None,
+        };
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
-        let mut tracker = ResourceTracker::default();
+
         // The first incoming message of any child chain must be `OpenChain`. A root chain must
         // already be initialized
         if block.height == BlockHeight::ZERO
@@ -649,8 +637,7 @@ where
                     .execute_message(
                         context,
                         message.event.message.clone(),
-                        &policy,
-                        &mut tracker,
+                        &mut resource_controller,
                     )
                     .await
                     .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?,
@@ -681,13 +668,12 @@ where
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;
             if let MessageAction::Accept = message.action {
-                let balance = self.execution_state.system.balance.get_mut();
                 for message_out in &messages_out {
-                    Self::sub_assign_fees(
-                        balance,
-                        policy.message_price(&message_out.message)?,
-                        chain_execution_context,
-                    )?;
+                    resource_controller
+                        .with(&mut self.execution_state)
+                        .await?
+                        .track_message(&message_out.message)
+                        .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
                 }
             }
             messages.append(&mut messages_out);
@@ -709,31 +695,35 @@ where
             };
             let outcomes = self
                 .execution_state
-                .execute_operation(context, operation.clone(), &policy, &mut tracker)
+                .execute_operation(context, operation.clone(), &mut resource_controller)
                 .await
                 .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
             let mut messages_out = self
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;
-            let balance = self.execution_state.system.balance.get_mut();
-            Self::sub_assign_fees(
-                balance,
-                policy.operation_price(operation)?,
-                chain_execution_context,
-            )?;
+            resource_controller
+                .with(&mut self.execution_state)
+                .await?
+                .track_operation(operation)
+                .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
             for message_out in &messages_out {
-                Self::sub_assign_fees(
-                    balance,
-                    policy.message_price(&message_out.message)?,
-                    chain_execution_context,
-                )?;
+                resource_controller
+                    .with(&mut self.execution_state)
+                    .await?
+                    .track_message(&message_out.message)
+                    .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
             }
             messages.append(&mut messages_out);
             message_counts
                 .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
         }
-        let balance = self.execution_state.system.balance.get_mut();
-        Self::sub_assign_fees(balance, policy.block_price(), ChainExecutionContext::Block)?;
+
+        // Finally, charge for the block fee.
+        resource_controller
+            .with(&mut self.execution_state)
+            .await?
+            .track_block()
+            .map_err(|err| ChainError::ExecutionError(err, ChainExecutionContext::Block))?;
 
         // Recompute the state hash.
         let state_hash = self.execution_state.crypto_hash().await?;
@@ -752,16 +742,16 @@ where
             .observe(start_time.elapsed().as_secs_f64() * 1000.0);
         WASM_FUEL_USED_PER_BLOCK
             .with_label_values(&[])
-            .observe(tracker.fuel as f64);
+            .observe(resource_controller.tracker.fuel as f64);
         WASM_NUM_READS_PER_BLOCK
             .with_label_values(&[])
-            .observe(tracker.read_operations as f64);
+            .observe(resource_controller.tracker.read_operations as f64);
         WASM_BYTES_READ_PER_BLOCK
             .with_label_values(&[])
-            .observe(tracker.bytes_read as f64);
+            .observe(resource_controller.tracker.bytes_read as f64);
         WASM_BYTES_WRITTEN_PER_BLOCK
             .with_label_values(&[])
-            .observe(tracker.bytes_written as f64);
+            .observe(resource_controller.tracker.bytes_written as f64);
 
         assert_eq!(
             message_counts.len(),

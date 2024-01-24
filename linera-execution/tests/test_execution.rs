@@ -12,12 +12,12 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, Destination, Owner},
 };
 use linera_execution::{
-    policy::ResourceControlPolicy, system::SystemMessage, ApplicationCallOutcome,
-    ApplicationRegistryView, BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome,
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, ExecutionStateView, MessageKind, Operation,
-    OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
-    ResourceTracker, Response, SessionCallOutcome, SystemExecutionState,
-    TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
+    system::SystemMessage, ApplicationCallOutcome, ApplicationRegistryView, BaseRuntime,
+    ContractRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig,
+    ExecutionRuntimeContext, ExecutionStateView, MessageKind, Operation, OperationContext, Query,
+    QueryContext, RawExecutionOutcome, RawOutgoingMessage, ResourceController, Response,
+    SessionCallOutcome, SystemExecutionState, TestExecutionRuntimeContext,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     batch::Batch,
@@ -48,8 +48,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         authenticated_signer: None,
         next_message_index: 0,
     };
-    let mut tracker = ResourceTracker::default();
-    let policy = ResourceControlPolicy::default();
+    let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
             context,
@@ -57,8 +56,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
                 application_id: *app_id,
                 bytes: vec![],
             },
-            &policy,
-            &mut tracker,
+            &mut controller,
         )
         .await;
 
@@ -164,8 +162,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         authenticated_signer: Some(owner),
         next_message_index: 0,
     };
-    let mut tracker = ResourceTracker::default();
-    let policy = ResourceControlPolicy::default();
+    let mut controller = ResourceController::default();
     let outcomes = view
         .execute_operation(
             context,
@@ -173,8 +170,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: dummy_operation.clone(),
             },
-            &policy,
-            &mut tracker,
+            &mut controller,
         )
         .await
         .unwrap();
@@ -259,8 +255,7 @@ async fn test_leaking_session() -> anyhow::Result<()> {
         authenticated_signer: None,
         next_message_index: 0,
     };
-    let mut tracker = ResourceTracker::default();
-    let policy = ResourceControlPolicy::default();
+    let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
             context,
@@ -268,8 +263,7 @@ async fn test_leaking_session() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            &policy,
-            &mut tracker,
+            &mut controller,
         )
         .await;
 
@@ -336,8 +330,7 @@ async fn test_simple_session() -> anyhow::Result<()> {
         authenticated_signer: None,
         next_message_index: 0,
     };
-    let mut tracker = ResourceTracker::default();
-    let policy = ResourceControlPolicy::default();
+    let mut controller = ResourceController::default();
     let outcomes = view
         .execute_operation(
             context,
@@ -345,8 +338,7 @@ async fn test_simple_session() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            &policy,
-            &mut tracker,
+            &mut controller,
         )
         .await?;
 
@@ -411,8 +403,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
         authenticated_signer: None,
         next_message_index: 0,
     };
-    let mut tracker = ResourceTracker::default();
-    let policy = ResourceControlPolicy::default();
+    let mut controller = ResourceController::default();
     assert!(matches!(
         view.execute_operation(
             context,
@@ -420,8 +411,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            &policy,
-            &mut tracker,
+            &mut controller,
         )
         .await,
         Err(ExecutionError::UserError(message)) if message == error_message
@@ -470,8 +460,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
         authenticated_signer: None,
         next_message_index: 0,
     };
-    let mut tracker = ResourceTracker::default();
-    let policy = ResourceControlPolicy::default();
+    let mut controller = ResourceController::default();
     let outcomes = view
         .execute_operation(
             context,
@@ -479,8 +468,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
                 application_id,
                 bytes: vec![],
             },
-            &policy,
-            &mut tracker,
+            &mut controller,
         )
         .await?;
 
@@ -573,8 +561,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         authenticated_signer: None,
         next_message_index: 0,
     };
-    let mut tracker = ResourceTracker::default();
-    let policy = ResourceControlPolicy::default();
+    let mut controller = ResourceController::default();
     let outcomes = view
         .execute_operation(
             context,
@@ -582,8 +569,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            &policy,
-            &mut tracker,
+            &mut controller,
         )
         .await?;
 
@@ -705,8 +691,7 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
         authenticated_signer: None,
         next_message_index: 0,
     };
-    let mut tracker = ResourceTracker::default();
-    let policy = ResourceControlPolicy::default();
+    let mut controller = ResourceController::default();
     let outcomes = view
         .execute_operation(
             context,
@@ -714,8 +699,7 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            &policy,
-            &mut tracker,
+            &mut controller,
         )
         .await?;
 
@@ -848,8 +832,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         authenticated_signer: None,
         next_message_index: 0,
     };
-    let mut tracker = ResourceTracker::default();
-    let policy = ResourceControlPolicy::default();
+    let mut controller = ResourceController::default();
     let mut outcomes = view
         .execute_operation(
             context,
@@ -857,8 +840,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
                 application_id: caller_id,
                 bytes: vec![],
             },
-            &policy,
-            &mut tracker,
+            &mut controller,
         )
         .await?;
 

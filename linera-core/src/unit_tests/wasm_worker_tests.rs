@@ -26,11 +26,10 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::Epoch,
-    policy::ResourceControlPolicy,
     system::{SystemChannel, SystemMessage, SystemOperation},
     Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription, ExecutionRuntimeConfig,
     ExecutionStateView, GenericApplicationId, Message, MessageKind, Operation, OperationContext,
-    ResourceTracker, SystemExecutionState, UserApplicationDescription, UserApplicationId,
+    ResourceController, SystemExecutionState, UserApplicationDescription, UserApplicationId,
     WasmContractModule, WasmRuntime,
 };
 use linera_storage::{MemoryStorage, Storage};
@@ -430,8 +429,7 @@ where
         index: 0,
         next_message_index: 0,
     };
-    let mut tracker = ResourceTracker::default();
-    let policy = ResourceControlPolicy::default();
+    let mut controller = ResourceController::default();
     creator_state
         .execute_operation(
             operation_context,
@@ -439,8 +437,7 @@ where
                 application_id,
                 bytes: user_operation,
             },
-            &policy,
-            &mut tracker,
+            &mut controller,
         )
         .await?;
     creator_state.system.timestamp.set(Timestamp::from(5));
