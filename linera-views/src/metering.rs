@@ -7,8 +7,11 @@ use crate::{
 };
 use async_trait::async_trait;
 use convert_case::{Case, Casing};
-use linera_base::{prometheus_util::MeasureLatency, sync::Lazy};
-use prometheus::{register_histogram_vec, HistogramVec};
+use linera_base::{
+    prometheus_util::{register_histogram_vec, MeasureLatency},
+    sync::Lazy,
+};
+use prometheus::HistogramVec;
 
 #[derive(Clone)]
 /// The implementation of the `KeyValueStoreMetrics` for the `KeyValueStore`.
@@ -56,39 +59,39 @@ impl KeyValueStoreMetrics {
 
         let read_value1 = format!("{}_read_value_bytes", var_name);
         let read_value2 = format!("{} read value bytes", title_name);
-        let read_value_bytes = register_histogram_vec!(read_value1, read_value2, &[])
+        let read_value_bytes = register_histogram_vec(&read_value1, &read_value2, &[], None)
             .expect("Counter creation should not fail");
 
         let contains_key1 = format!("{}_contains_key", var_name);
         let contains_key2 = format!("{} contains key", title_name);
-        let contains_key = register_histogram_vec!(contains_key1, contains_key2, &[])
+        let contains_key = register_histogram_vec(&contains_key1, &contains_key2, &[], None)
             .expect("Counter creation should not fail");
 
         let read_multi_values1 = format!("{}_read_multi_value_bytes", var_name);
         let read_multi_values2 = format!("{} read multi value bytes", title_name);
         let read_multi_values_bytes =
-            register_histogram_vec!(read_multi_values1, read_multi_values2, &[])
+            register_histogram_vec(&read_multi_values1, &read_multi_values2, &[], None)
                 .expect("Counter creation should not fail");
 
         let find_keys1 = format!("{}_find_keys_by_prefix", var_name);
         let find_keys2 = format!("{} find keys by prefix", title_name);
-        let find_keys_by_prefix = register_histogram_vec!(find_keys1, find_keys2, &[])
+        let find_keys_by_prefix = register_histogram_vec(&find_keys1, &find_keys2, &[], None)
             .expect("Counter creation should not fail");
 
         let find_key_values1 = format!("{}_find_key_values_by_prefix", var_name);
         let find_key_values2 = format!("{} find key values by prefix", title_name);
         let find_key_values_by_prefix =
-            register_histogram_vec!(find_key_values1, find_key_values2, &[])
+            register_histogram_vec(&find_key_values1, &find_key_values2, &[], None)
                 .expect("Counter creation should not fail");
 
         let write_batch1 = format!("{}_write_batch", var_name);
         let write_batch2 = format!("{} write batch", title_name);
-        let write_batch = register_histogram_vec!(write_batch1, write_batch2, &[])
+        let write_batch = register_histogram_vec(&write_batch1, &write_batch2, &[], None)
             .expect("Counter creation should not fail");
 
         let clear_journal1 = format!("{}_clear_journal", var_name);
         let clear_journal2 = format!("{} clear journal", title_name);
-        let clear_journal = register_histogram_vec!(clear_journal1, clear_journal2, &[])
+        let clear_journal = register_histogram_vec(&clear_journal1, &clear_journal2, &[], None)
             .expect("Counter creation should not fail");
 
         KeyValueStoreMetrics {
