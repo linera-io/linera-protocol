@@ -3,19 +3,19 @@
 
 //! Derivation of the `WitType` trait.
 
-use crate::util::hlist_type_for;
+use crate::util::FieldsInformation;
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
 use quote::quote;
-use syn::{Fields, Ident, Variant};
+use syn::{Ident, Variant};
 
 #[path = "unit_tests/wit_type.rs"]
 mod tests;
 
 /// Returns the body of the `WitType` implementation for the Rust `struct` with the specified
 /// `fields`.
-pub fn derive_for_struct(fields: &Fields) -> TokenStream {
-    let fields_hlist = hlist_type_for(fields);
+pub fn derive_for_struct<'input>(fields: impl Into<FieldsInformation<'input>>) -> TokenStream {
+    let fields_hlist = fields.into().hlist_type();
 
     quote! {
         const SIZE: u32 = <#fields_hlist as linera_witty::WitType>::SIZE;
@@ -31,7 +31,8 @@ pub fn derive_for_enum<'variants>(
     variants: impl DoubleEndedIterator<Item = &'variants Variant> + Clone,
 ) -> TokenStream {
     let variant_count = variants.clone().count();
-    let variant_hlists = variants.map(|variant| hlist_type_for(&variant.fields));
+    let variant_hlists =
+        variants.map(|variant| FieldsInformation::from(&variant.fields).hlist_type());
 
     let discriminant_type = if variant_count <= u8::MAX.into() {
         quote! { u8 }
