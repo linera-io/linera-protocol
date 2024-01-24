@@ -10,6 +10,7 @@ where
 {
     async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
         use linera_views::{common::Context, batch::Batch, views::View};
+        #[cfg(not(target_arch = "wasm32"))]
         linera_views::increment_counter(
             &linera_views::SAVE_VIEW_COUNTER,
             stringify!(TestView),

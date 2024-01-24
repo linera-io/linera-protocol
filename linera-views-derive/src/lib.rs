@@ -122,6 +122,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
 
     let increment_counter = if root {
         quote! {
+            #[cfg(not(target_arch = "wasm32"))]
             linera_views::increment_counter(
                 &linera_views::LOAD_VIEW_COUNTER,
                 stringify!(#struct_name),
@@ -191,6 +192,7 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
         {
             async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
                 use linera_views::{common::Context, batch::Batch, views::View};
+                #[cfg(not(target_arch = "wasm32"))]
                 linera_views::increment_counter(
                     &linera_views::SAVE_VIEW_COUNTER,
                     stringify!(#struct_name),

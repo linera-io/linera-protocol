@@ -63,11 +63,11 @@ jobs:
       - name: Check Proxy metric
         # Check one random proxy metric that we expect to be logged after running the e2e tests
         run: |
-          curl -s 'http://127.0.0.1:9090/api/v1/query?query=proxy_request_latency_bucket' | jq -r '.data.result[]' | grep -q .
+          curl -s 'http://127.0.0.1:9090/api/v1/query?query=linera_proxy_request_latency_bucket' | jq -r '.data.result[]' | grep -q .
       - name: Check Server metric
         # Check one random server metric that we expect to be logged after running the e2e tests
         run: |
-          curl -s 'http://127.0.0.1:9090/api/v1/query?query=server_request_latency_bucket' | jq -r '.data.result[]' | grep -q .
+          curl -s 'http://127.0.0.1:9090/api/v1/query?query=linera_server_request_latency_bucket' | jq -r '.data.result[]' | grep -q .
       - name: Destroy the kind clusters
         if: always()
         shell: bash

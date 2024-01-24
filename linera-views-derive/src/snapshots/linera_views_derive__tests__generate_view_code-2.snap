@@ -12,6 +12,7 @@ impl linera_views::views::View<CustomContext> for TestView {
         context: CustomContext,
     ) -> Result<Self, linera_views::views::ViewError> {
         use linera_views::{futures::join, common::Context};
+        #[cfg(not(target_arch = "wasm32"))]
         linera_views::increment_counter(
             &linera_views::LOAD_VIEW_COUNTER,
             stringify!(TestView),

@@ -17,6 +17,7 @@ use linera_base::{
     data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     ensure,
     identifiers::{ChainId, Destination, MessageId},
+    prometheus_util,
     sync::Lazy,
 };
 use linera_execution::{
@@ -34,7 +35,7 @@ use linera_views::{
     set_view::SetView,
     views::{CryptoHashView, RootView, View, ViewError},
 };
-use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
+use prometheus::{HistogramVec, IntCounterVec};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashSet},
@@ -42,52 +43,56 @@ use std::{
 };
 
 pub static NUM_BLOCKS_EXECUTED: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!("num_blocks_executed", "Number of blocks executed", &[])
-        .expect("Counter creation should not fail")
+    prometheus_util::register_int_counter_vec(
+        "num_blocks_executed",
+        "Number of blocks executed",
+        &[],
+    )
+    .expect("Counter creation should not fail")
 });
 
 pub static BLOCK_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
+    prometheus_util::register_histogram_vec(
         "block_execution_latency",
         "Block execution latency",
         &[],
-        vec![
+        Some(vec![
             0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
-            1.0, 2.5, 5.0, 10.0, 25.0, 50.0
-        ],
+            1.0, 2.5, 5.0, 10.0, 25.0, 50.0,
+        ]),
     )
     .expect("Counter creation should not fail")
 });
 
 pub static WASM_FUEL_USED_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
+    prometheus_util::register_histogram_vec(
         "wasm_fuel_used_per_block",
         "Wasm fuel used per block",
         &[],
-        vec![
+        Some(vec![
             50.0, 100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 10_000.0, 25_000.0, 50_000.0,
-            100_000.0, 250_000.0, 500_000.0
-        ],
+            100_000.0, 250_000.0, 500_000.0,
+        ]),
     )
     .expect("Counter creation should not fail")
 });
 
 pub static WASM_NUM_READS_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
+    prometheus_util::register_histogram_vec(
         "wasm_num_reads_per_block",
         "Wasm number of reads per block",
         &[],
-        vec![0.5, 1.0, 2.0, 4.0, 8.0, 15.0, 30.0, 50.0, 100.0],
+        Some(vec![0.5, 1.0, 2.0, 4.0, 8.0, 15.0, 30.0, 50.0, 100.0]),
     )
-    .expect("Counter can be created")
+    .expect("Counter creation should not fail")
 });
 
 pub static WASM_BYTES_READ_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
+    prometheus_util::register_histogram_vec(
         "wasm_bytes_read_per_block",
         "Wasm number of bytes read per block",
         &[],
-        vec![
+        Some(vec![
             0.5,
             1.0,
             10.0,
@@ -102,18 +107,18 @@ pub static WASM_BYTES_READ_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
             65_536.0,
             524_288.0,
             1_048_576.0,
-            8_388_608.0
-        ],
+            8_388_608.0,
+        ]),
     )
-    .expect("Counter can be created")
+    .expect("Counter creation should not fail")
 });
 
 pub static WASM_BYTES_WRITTEN_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
+    prometheus_util::register_histogram_vec(
         "wasm_bytes_written_per_block",
         "Wasm number of bytes written per block",
         &[],
-        vec![
+        Some(vec![
             0.5,
             1.0,
             10.0,
@@ -128,10 +133,10 @@ pub static WASM_BYTES_WRITTEN_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
             65_536.0,
             524_288.0,
             1_048_576.0,
-            8_388_608.0
-        ],
+            8_388_608.0,
+        ]),
     )
-    .expect("Counter can be created")
+    .expect("Counter creation should not fail")
 });
 
 /// A view accessing the state of a chain.

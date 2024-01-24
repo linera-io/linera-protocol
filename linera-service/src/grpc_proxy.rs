@@ -5,7 +5,7 @@ use crate::prometheus_server;
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt};
-use linera_base::{identifiers::ChainId, sync::Lazy};
+use linera_base::{identifiers::ChainId, prometheus_util, sync::Lazy};
 use linera_core::notifier::Notifier;
 use linera_rpc::{
     config::{
@@ -23,7 +23,7 @@ use linera_rpc::{
     },
     grpc_pool::ConnectionPool,
 };
-use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
+use prometheus::{HistogramVec, IntCounterVec};
 use rcgen::generate_simple_self_signed;
 use std::{
     fmt::Debug,
@@ -42,37 +42,37 @@ use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument};
 
 pub static PROXY_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
+    prometheus_util::register_histogram_vec(
         "proxy_request_latency",
         "Proxy request latency",
         &[],
-        vec![
+        Some(vec![
             0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0,
-            50.0, 100.0, 200.0, 300.0, 400.0
-        ]
+            50.0, 100.0, 200.0, 300.0, 400.0,
+        ]),
     )
     .expect("Counter creation should not fail")
 });
 
 pub static PROXY_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!("proxy_request_count", "Proxy request count", &[])
+    prometheus_util::register_int_counter_vec("proxy_request_count", "Proxy request count", &[])
         .expect("Counter creation should not fail")
 });
 
 pub static PROXY_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!(
+    prometheus_util::register_int_counter_vec(
         "proxy_request_success",
         "Proxy request success",
-        &["method_name"]
+        &["method_name"],
     )
     .expect("Counter creation should not fail")
 });
 
 pub static PROXY_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!(
+    prometheus_util::register_int_counter_vec(
         "proxy_request_error",
         "Proxy request error",
-        &["method_name"]
+        &["method_name"],
     )
     .expect("Counter creation should not fail")
 });
