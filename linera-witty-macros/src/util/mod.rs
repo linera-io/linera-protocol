@@ -3,9 +3,10 @@
 
 //! Helper types and functions shared between different macro implementations.
 
+mod fields;
 mod specialization;
 
-pub use self::specialization::Specializations;
+pub use self::{fields::FieldsInformation, specialization::Specializations};
 use heck::ToKebabCase;
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::abort;
