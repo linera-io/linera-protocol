@@ -34,7 +34,7 @@ jobs:
 
   test:
     runs-on: gcp-large
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     steps:
     - uses: actions/checkout@v3
