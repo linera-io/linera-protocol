@@ -494,6 +494,7 @@ impl Runnable for Job {
             Benchmark {
                 max_in_flight,
                 num_chains,
+                tokens_per_chain,
             } => {
                 // Below all block proposals are supposed to succeed without retries, we
                 // must make sure that all incoming payments have been accepted on-chain
@@ -503,7 +504,7 @@ impl Runnable for Job {
                     .await;
 
                 let key_pairs = context
-                    .make_benchmark_chains(num_chains, storage.clone())
+                    .make_benchmark_chains(num_chains, tokens_per_chain, storage.clone())
                     .await?;
 
                 // For this command, we create proposals and gather certificates without using

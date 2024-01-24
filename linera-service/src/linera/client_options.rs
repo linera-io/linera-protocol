@@ -347,6 +347,11 @@ pub enum ClientCommand {
         /// How many chains to use for the benchmark
         #[arg(long, default_value = "10")]
         num_chains: usize,
+
+        /// How many tokens to assign to each newly created chain.
+        /// These need to cover the transaction fees per chain for the benchmark.
+        #[arg(long, default_value = "0.001")]
+        tokens_per_chain: Amount,
     },
 
     /// Create genesis configuration for a Linera deployment.

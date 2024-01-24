@@ -473,6 +473,7 @@ impl ClientContext {
     pub async fn make_benchmark_chains<S>(
         &mut self,
         num_chains: usize,
+        balance: Amount,
         storage: S,
     ) -> anyhow::Result<HashMap<ChainId, KeyPair>>
     where
@@ -508,7 +509,7 @@ impl ClientContext {
             let key_pair = self.generate_key_pair();
             let public_key = key_pair.public();
             let (message_id, certificate) = chain_client
-                .open_chain(ChainOwnership::single(public_key), Amount::ONE)
+                .open_chain(ChainOwnership::single(public_key), balance)
                 .await?
                 .expect("should create chain");
             let timestamp = certificate
