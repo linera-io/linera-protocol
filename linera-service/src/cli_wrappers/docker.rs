@@ -8,21 +8,15 @@ use tokio::process::Command;
 
 use crate::util::{current_binary_parent, CommandExt};
 
-pub struct DockerImage {
-    name: String,
-}
+pub struct DockerImage;
 
 impl DockerImage {
-    pub fn name(&self) -> &String {
-        &self.name
-    }
-
     pub async fn build(
-        name: String,
+        name: &String,
         binaries: &Option<Option<PathBuf>>,
         github_root: &PathBuf,
     ) -> Result<Self> {
-        let docker_image = Self { name: name.clone() };
+        let docker_image = Self {};
         let mut command = Command::new("docker");
         command
             .current_dir(github_root)

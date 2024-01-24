@@ -39,6 +39,7 @@ pub struct LocalKubernetesNetConfig {
     pub num_initial_validators: usize,
     pub num_shards: usize,
     pub binaries: Option<Option<PathBuf>>,
+    pub no_build: bool,
 }
 
 /// A simplified version of [`LocalKubernetesNetConfig`]
@@ -46,6 +47,11 @@ pub struct LocalKubernetesNetConfig {
 pub struct SharedLocalKubernetesNetTestingConfig {
     pub network: Network,
     pub binaries: Option<Option<PathBuf>>,
+}
+
+struct BuildConfig {
+    binaries: Option<Option<PathBuf>>,
+    no_build: bool,
 }
 
 /// A set of Linera validators running locally as native processes.
@@ -60,6 +66,7 @@ pub struct LocalKubernetesNet {
     kind_clusters: Vec<KindCluster>,
     num_initial_validators: usize,
     num_shards: usize,
+    no_build: bool,
 }
 
 #[cfg(any(test, feature = "test"))]
@@ -113,11 +120,14 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
         let mut net = LocalKubernetesNet::new(
             self.network,
             self.testing_prng_seed,
-            self.binaries,
             KubectlInstance::new(Vec::new()),
             clusters,
             self.num_initial_validators,
             self.num_shards,
+            BuildConfig {
+                binaries: self.binaries,
+                no_build: self.no_build,
+            },
         )?;
 
         let client = net.make_client().await;
@@ -154,11 +164,14 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
                 let mut net = LocalKubernetesNet::new(
                     self.network,
                     Some(seed),
-                    self.binaries,
                     KubectlInstance::new(Vec::new()),
                     clusters,
                     num_validators,
                     num_shards,
+                    BuildConfig {
+                        binaries: self.binaries,
+                        no_build: false,
+                    },
                 )
                 .expect("Creating LocalKubernetesNet should not fail");
 
@@ -308,22 +321,23 @@ impl LocalKubernetesNet {
     fn new(
         network: Network,
         testing_prng_seed: Option<u64>,
-        binaries: Option<Option<PathBuf>>,
         kubectl_instance: KubectlInstance,
         kind_clusters: Vec<KindCluster>,
         num_initial_validators: usize,
         num_shards: usize,
+        build_config: BuildConfig,
     ) -> Result<Self> {
         Ok(Self {
             network,
             testing_prng_seed,
             next_client_id: 0,
             tmp_dir: Arc::new(tempdir()?),
-            binaries,
+            binaries: build_config.binaries,
             kubectl_instance: Arc::new(Mutex::new(kubectl_instance)),
             kind_clusters,
             num_initial_validators,
             num_shards,
+            no_build: build_config.no_build,
         })
     }
 
@@ -398,13 +412,12 @@ impl LocalKubernetesNet {
 
     async fn run(&mut self) -> Result<()> {
         let github_root = get_github_root().await?;
-        // Build Docker image
-        let docker_image = DockerImage::build(
-            String::from("linera-test:latest"),
-            &self.binaries,
-            &github_root,
-        )
-        .await?;
+        let docker_image_name = String::from("linera-test:latest");
+
+        if !self.no_build {
+            // Build Docker image
+            DockerImage::build(&docker_image_name, &self.binaries, &github_root).await?;
+        }
 
         let base_dir = github_root
             .join("kubernetes")
@@ -421,7 +434,7 @@ impl LocalKubernetesNet {
 
         let mut validators_initialization_futures = Vec::new();
         for (i, kind_cluster) in self.kind_clusters.iter().cloned().enumerate() {
-            let docker_image_name = docker_image.name().to_string();
+            let docker_image_name = docker_image_name.clone();
             let base_dir = base_dir.clone();
             let github_root = github_root.clone();
 

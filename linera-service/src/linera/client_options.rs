@@ -666,6 +666,11 @@ pub enum NetCommand {
         #[cfg(feature = "kubernetes")]
         #[arg(long, num_args=0..=1)]
         binaries: Option<Option<PathBuf>>,
+
+        /// Don't build the Docker image, just use whatever was last built
+        #[cfg(feature = "kubernetes")]
+        #[arg(long)]
+        no_build: bool,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is

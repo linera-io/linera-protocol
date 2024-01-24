@@ -1297,6 +1297,8 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 kubernetes,
                 #[cfg(feature = "kubernetes")]
                 binaries,
+                #[cfg(feature = "kubernetes")]
+                no_build,
             } => {
                 if *validators < 1 {
                     panic!("The local test network must have at least one validator.");
@@ -1314,6 +1316,13 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 if *kubernetes {
                     #[cfg(feature = "kubernetes")]
                     {
+                        if *no_build {
+                            ensure!(
+                                binaries.is_none(),
+                                "Can't specify --no-build and --binaries together!"
+                            );
+                        }
+
                         let config = cli_wrappers::local_kubernetes_net::LocalKubernetesNetConfig {
                             network: Network::Grpc,
                             testing_prng_seed: *testing_prng_seed,
@@ -1322,6 +1331,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                             num_initial_validators: *validators,
                             num_shards: *shards,
                             binaries: binaries.clone(),
+                            no_build: *no_build,
                         };
                         let (mut net, client1) = config.instantiate().await?;
                         let result = Ok(net_up(extra_wallets, &mut net, client1).await?);
