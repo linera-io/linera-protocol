@@ -184,7 +184,7 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
 
 #[async_trait]
 impl DirectWritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
-    const MAX_BATCH_SIZE: usize = usize::MAX;
+    const MAX_BATCH_SIZE: usize = 14000;
     /// The total size is 16M
     const MAX_BATCH_TOTAL_SIZE: usize = 16000000;
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;

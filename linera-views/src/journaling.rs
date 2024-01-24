@@ -87,7 +87,7 @@ pub trait DirectKeyValueStore:
 }
 
 /// The header that contains the current state of the journal.
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 struct JournalHeader {
     block_count: u32,
 }
@@ -226,7 +226,6 @@ where
         base_key: &[u8],
     ) -> Result<(), K::Error> {
         let header_key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
-
         while header.block_count > 0 {
             let block_key =
                 get_journaling_key(base_key, KeyTag::Entry as u8, header.block_count - 1)?;
@@ -265,15 +264,21 @@ where
     /// As a result, the constraints of the underlying database are respected if the
     /// following conditions are met while a "transaction" batch is being built:
     ///
-    /// (1) the number of blocks per transaction doesn't exceed `K::MAX_BATCH_SIZE`;
+    /// (1) The number of blocks per transaction doesn't exceed `K::MAX_BATCH_SIZE`.
+    /// But it is perfectly possible to have K::MAX_BATCH_SIZE = usize::MAX.
     ///
-    /// (2) the total size of BCS-serialized blocks in a transaction doesn't exceed
-    /// `K::MAX_BATCH_TOTAL_SIZE - K::MAX_BATCH_SIZE * sizeof(block_key)`
+    /// (2) The total size of BCS-serialized blocks together with their corresponding keys
+    /// does not exceed `K::MAX_BATCH_TOTAL_SIZE`.
     ///
-    /// (3) the size of each BCS-serialized block doesn't exceed `K::MAX_VALUE_SIZE`.
+    /// (3) The size of each BCS-serialized block doesn't exceed `K::MAX_VALUE_SIZE`.
     ///
-    /// (4) `block_key` and `header_key` don't exceed `K::MAX_KEY_SIZE` and `bcs_header`
-    /// doesn't exceed `K::MAX_VALUE_SIZE`.
+    /// (4) When processing a journal block, we have to do two other operations.
+    ///   (a) removing the existing block. The cost is `key_len`.
+    ///   (b) updating or removing the journal. The cost is `key_len + header_value_len`
+    ///       or `key_len`. An upper bound is thus
+    ///       `journal_len_upper_bound = key_len + header_value_len`.
+    ///   Thus the following has to be taken as upper bound on block_size:
+    ///   `K::MAX_BATCH_TOTAL_SIZE - key_len - journal_len_upper_bound`.
     ///
     /// NOTE:
     /// * Since a block must contain at least one operation and M bytes of the
@@ -290,18 +295,14 @@ where
         base_key: &[u8],
     ) -> Result<JournalHeader, K::Error> {
         let header_key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
-        let header_key_len = header_key.len();
-        let header_len = bcs::serialized_size(&JournalHeader::default())?;
-        // Currently the same length.
-        let block_key_len = header_key.len();
+        let key_len = header_key.len();
+        let header_value_len = bcs::serialized_size(&JournalHeader::default())?;
+        let journal_len_upper_bound = key_len + header_value_len;
         // Each block in a transaction comes with a key.
-        let max_transaction_size = K::MAX_BATCH_TOTAL_SIZE - K::MAX_BATCH_SIZE * block_key_len;
+        let max_transaction_size = K::MAX_BATCH_TOTAL_SIZE;
         let max_block_size = std::cmp::min(
-            // Each block is written as value.
             K::MAX_VALUE_SIZE,
-            // When a block is executed, we also atomically remove the block and write the
-            // header.
-            K::MAX_BATCH_TOTAL_SIZE - block_key_len - header_key_len - header_len,
+            K::MAX_BATCH_TOTAL_SIZE - key_len - journal_len_upper_bound,
         );
 
         let mut iter = batch.into_iter();
@@ -316,7 +317,7 @@ where
                     (true, true)
                 } else {
                     let next_block_size = iter.next_batch_size(&block_batch, block_size)?;
-                    let next_transaction_size = transaction_size + next_block_size;
+                    let next_transaction_size = transaction_size + next_block_size + key_len;
                     let transaction_flush = next_transaction_size > max_transaction_size;
                     let block_flush = transaction_flush
                         || block_batch.len() == K::MAX_BATCH_SIZE - 2
@@ -332,7 +333,7 @@ where
                 let key = get_journaling_key(base_key, KeyTag::Entry as u8, block_count)?;
                 transaction_batch.add_insert(key, value);
                 block_count += 1;
-                transaction_size += block_size;
+                transaction_size += block_size + key_len;
                 block_size = 0;
             }
             if transaction_flush {
