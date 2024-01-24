@@ -400,7 +400,7 @@ where
     }
 
     /// Obtains the current epoch of the given chain as well as its set of trusted committees.
-    async fn epoch_and_committees(
+    pub async fn epoch_and_committees(
         &mut self,
         chain_id: ChainId,
     ) -> Result<(Option<Epoch>, BTreeMap<Epoch, Committee>), LocalNodeError> {

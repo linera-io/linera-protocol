@@ -41,7 +41,7 @@ use {
     },
     linera_execution::{
         committee::Epoch,
-        system::{Recipient, SystemOperation, UserData},
+        system::{Recipient, SystemOperation, UserData, OPEN_CHAIN_MESSAGE_INDEX},
         ChainOwnership, Operation,
     },
     linera_rpc::{
@@ -509,18 +509,36 @@ impl ClientContext {
         while key_pairs.len() < num_chains {
             let key_pair = self.generate_key_pair();
             let public_key = key_pair.public();
-            let (message_id, certificate) = chain_client
-                .open_chain(ChainOwnership::single(public_key), balance)
+            let (epoch, committees) = chain_client.epoch_and_committees(default_chain_id).await?;
+            let epoch = epoch.context("missing epoch on the default chain")?;
+            // Put at most 1000 OpenChain operations in each block.
+            let num_new_chains = (num_chains - key_pairs.len()).min(1000);
+            let operations = iter::repeat(Operation::System(SystemOperation::OpenChain {
+                ownership: ChainOwnership::single(public_key),
+                committees,
+                admin_id: self.wallet_state.genesis_admin_chain(),
+                epoch,
+                balance,
+            }))
+            .take(num_new_chains)
+            .collect();
+            let certificate = chain_client
+                .execute_with_messages(operations)
                 .await?
-                .expect("should create chain");
-            let timestamp = certificate
+                .expect("should execute block with OpenChain operations");
+            let executed_block = certificate
                 .value()
-                .block()
-                .context("certificate should be confirmed block")?
-                .timestamp;
-            let chain_id = ChainId::child(message_id);
-            key_pairs.insert(chain_id, key_pair.copy());
-            self.update_wallet_for_new_chain(chain_id, Some(key_pair), timestamp);
+                .executed_block()
+                .context("certificate should be confirmed block")?;
+            let timestamp = executed_block.block.timestamp;
+            for i in 0..num_new_chains {
+                let message_id = executed_block
+                    .message_id_for_operation(i, OPEN_CHAIN_MESSAGE_INDEX)
+                    .context("failed to create new chain")?;
+                let chain_id = ChainId::child(message_id);
+                key_pairs.insert(chain_id, key_pair.copy());
+                self.update_wallet_for_new_chain(chain_id, Some(key_pair.copy()), timestamp);
+            }
         }
 
         for chain_id in key_pairs.keys() {
