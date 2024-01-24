@@ -633,11 +633,15 @@ input ResourceControlPolicy {
 	"""
 	readOperation: Amount!
 	"""
+	The price of one write operation.
+	"""
+	writeOperation: Amount!
+	"""
 	The price of reading a byte.
 	"""
 	byteRead: Amount!
 	"""
-	The price to writting a byte
+	The price of writing a byte
 	"""
 	byteWritten: Amount!
 	"""

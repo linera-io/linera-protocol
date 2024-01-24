@@ -3,11 +3,9 @@
 
 //! This module contains types related to fees and pricing.
 
-use crate::{Message, Operation};
 use async_graphql::InputObject;
 use linera_base::data_types::{Amount, ArithmeticError};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
 /// A collection of prices and limits associated with block execution.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, InputObject)]
@@ -18,12 +16,14 @@ pub struct ResourceControlPolicy {
     pub fuel_unit: Amount,
     /// The price of one read operation.
     pub read_operation: Amount,
-    // TODO(#1530): Write operation.
+    /// The price of one write operation.
+    pub write_operation: Amount,
     /// The price of reading a byte.
     pub byte_read: Amount,
-    /// The price to writting a byte
+    /// The price of writing a byte
     pub byte_written: Amount,
     /// The price of increasing storage by a byte.
+    // TODO(#1536): This is not fully supported.
     pub byte_stored: Amount,
     /// The base price of adding an operation to a block.
     pub operation: Amount,
@@ -34,6 +34,8 @@ pub struct ResourceControlPolicy {
     /// The additional price for each byte in the argument of a user message.
     pub message_byte: Amount,
 
+    // TODO(#1538): Cap the number of transactions per block and the total size of their
+    // arguments.
     /// The maximum data to read per block
     pub maximum_bytes_read_per_block: u64,
     /// The maximum data to write per block
@@ -46,6 +48,7 @@ impl Default for ResourceControlPolicy {
             block: Amount::default(),
             fuel_unit: Amount::default(),
             read_operation: Amount::default(),
+            write_operation: Amount::default(),
             byte_read: Amount::default(),
             byte_written: Amount::default(),
             byte_stored: Amount::default(),
@@ -64,56 +67,42 @@ impl ResourceControlPolicy {
         self.block
     }
 
-    pub fn operation_price(&self, operation: &Operation) -> Result<Amount, PricingError> {
-        match operation {
-            Operation::System(_) => Ok(self.operation),
-            Operation::User { bytes, .. } => {
-                let size = bytes.len();
-                let price = self
-                    .operation_byte
-                    .try_mul(size as u128)?
-                    .try_add(self.operation)?;
-                Ok(price)
-            }
-        }
+    pub(crate) fn operation_byte_price(&self, size: u64) -> Result<Amount, ArithmeticError> {
+        self.operation_byte.try_mul(size as u128)
     }
 
-    pub fn message_price(&self, message: &Message) -> Result<Amount, PricingError> {
-        match message {
-            Message::System(_) => Ok(self.message),
-            Message::User { bytes, .. } => {
-                let size = bytes.len();
-                let price = self
-                    .message_byte
-                    .try_mul(size as u128)?
-                    .try_add(self.message)?;
-                Ok(price)
-            }
-        }
+    pub(crate) fn message_byte_price(&self, size: u64) -> Result<Amount, ArithmeticError> {
+        self.message_byte.try_mul(size as u128)
     }
 
-    pub fn storage_num_reads_price(&self, count: u64) -> Result<Amount, PricingError> {
-        Ok(self.read_operation.try_mul(count as u128)?)
+    pub(crate) fn read_operations_price(&self, count: u32) -> Result<Amount, ArithmeticError> {
+        self.read_operation.try_mul(count as u128)
     }
 
-    pub fn storage_bytes_read_price(&self, count: u64) -> Result<Amount, PricingError> {
-        Ok(self.byte_read.try_mul(count as u128)?)
+    pub(crate) fn write_operations_price(&self, count: u32) -> Result<Amount, ArithmeticError> {
+        self.write_operation.try_mul(count as u128)
     }
 
-    pub fn storage_bytes_written_price(&self, count: u64) -> Result<Amount, PricingError> {
-        Ok(self.byte_written.try_mul(count as u128)?)
+    pub(crate) fn bytes_read_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
+        self.byte_read.try_mul(count as u128)
     }
 
-    pub fn storage_bytes_stored_price(&self, count: u64) -> Result<Amount, PricingError> {
-        Ok(self.byte_stored.try_mul(count as u128)?)
+    pub(crate) fn bytes_written_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
+        self.byte_written.try_mul(count as u128)
     }
 
-    pub fn fuel_price(&self, fuel: u64) -> Result<Amount, PricingError> {
-        Ok(self.fuel_unit.try_mul(u128::from(fuel))?)
+    // TODO(#1536): This is not fully implemented.
+    #[allow(dead_code)]
+    pub(crate) fn bytes_stored_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
+        self.byte_stored.try_mul(count as u128)
+    }
+
+    pub(crate) fn fuel_price(&self, fuel: u64) -> Result<Amount, ArithmeticError> {
+        self.fuel_unit.try_mul(u128::from(fuel))
     }
 
     /// Returns how much fuel can be paid with the given balance.
-    pub fn remaining_fuel(&self, balance: Amount) -> u64 {
+    pub(crate) fn remaining_fuel(&self, balance: Amount) -> u64 {
         u64::try_from(balance.saturating_div(self.fuel_unit)).unwrap_or(u64::MAX)
     }
 
@@ -157,10 +146,4 @@ impl ResourceControlPolicy {
             ..Self::default()
         }
     }
-}
-
-#[derive(Error, Debug)]
-pub enum PricingError {
-    #[error(transparent)]
-    ArithmeticError(#[from] ArithmeticError),
 }

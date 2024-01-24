@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    policy::ResourceControlPolicy, resources::ResourceTracker, system::SystemExecutionStateView,
-    ContractSyncRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, Message, MessageContext, MessageKind, Operation, OperationContext,
-    Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage, Response, ServiceSyncRuntime,
-    SystemMessage, UserApplicationDescription, UserApplicationId,
+    resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
+    ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
+    MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext,
+    RawExecutionOutcome, RawOutgoingMessage, Response, ServiceSyncRuntime, SystemMessage,
+    UserApplicationDescription, UserApplicationId,
 };
 use futures::{stream::FuturesUnordered, StreamExt, TryStreamExt};
 use linera_base::identifiers::{ChainId, Destination, Owner};
@@ -21,7 +21,10 @@ use std::collections::{BTreeSet, HashMap};
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::{system::SystemExecutionState, TestExecutionRuntimeContext, UserContractCode},
+    crate::{
+        policy::ResourceControlPolicy, system::SystemExecutionState, ResourceTracker,
+        TestExecutionRuntimeContext, UserContractCode,
+    },
     async_lock::Mutex,
     linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
     std::collections::BTreeMap,
@@ -128,9 +131,14 @@ where
             .user_contracts()
             .insert(application_id, contract);
 
-        let mut tracker = ResourceTracker::default();
+        let tracker = ResourceTracker::default();
         let policy = ResourceControlPolicy::default();
-        self.run_user_action(application_id, chain_id, action, &policy, &mut tracker)
+        let mut resource_controller = ResourceController {
+            policy: Arc::new(policy),
+            tracker,
+            account: None,
+        };
+        self.run_user_action(application_id, chain_id, action, &mut resource_controller)
             .await?;
 
         Ok(())
@@ -165,8 +173,7 @@ where
         application_id: UserApplicationId,
         chain_id: ChainId,
         action: UserAction,
-        policy: &ResourceControlPolicy,
-        tracker: &mut ResourceTracker,
+        resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
         let execution_outcomes = match self.context().extra().execution_runtime_config() {
             ExecutionRuntimeConfig::Synchronous => {
@@ -174,8 +181,7 @@ where
                     application_id,
                     chain_id,
                     action,
-                    policy,
-                    tracker,
+                    resource_controller,
                 )
                 .await?
             }
@@ -189,12 +195,13 @@ where
         application_id: UserApplicationId,
         chain_id: ChainId,
         action: UserAction,
-        policy: &ResourceControlPolicy,
-        tracker: &mut ResourceTracker,
+        resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
-        let balance = self.system.balance.get();
-        let runtime_limits = tracker.limits(policy, balance);
-        let initial_remaining_fuel = policy.remaining_fuel(*balance);
+        let controller = ResourceController {
+            policy: resource_controller.policy.clone(),
+            tracker: resource_controller.tracker,
+            account: resource_controller.with(self).await?.balance(),
+        };
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
         let execution_outcomes_future = tokio::task::spawn_blocking(move || {
@@ -202,17 +209,16 @@ where
                 execution_state_sender,
                 application_id,
                 chain_id,
-                runtime_limits,
-                initial_remaining_fuel,
+                controller,
                 action,
             )
         });
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;
         }
-        let (execution_outcomes, runtime_counts) = execution_outcomes_future.await??;
-        let balance = self.system.balance.get_mut();
-        tracker.update_limits(balance, policy, runtime_counts)?;
+        let (execution_outcomes, controller) = execution_outcomes_future.await??;
+        *resource_controller.with(self).await?.balance_mut() = controller.account;
+        resource_controller.tracker = controller.tracker;
         Ok(execution_outcomes)
     }
 
@@ -281,8 +287,7 @@ where
         &mut self,
         context: OperationContext,
         operation: Operation,
-        policy: &ResourceControlPolicy,
-        tracker: &mut ResourceTracker,
+        resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
@@ -298,8 +303,7 @@ where
                             application_id,
                             context.chain_id,
                             user_action,
-                            policy,
-                            tracker,
+                            resource_controller,
                         )
                         .await?,
                     );
@@ -314,8 +318,7 @@ where
                     application_id,
                     context.chain_id,
                     UserAction::Operation(context, bytes),
-                    policy,
-                    tracker,
+                    resource_controller,
                 )
                 .await
             }
@@ -326,8 +329,7 @@ where
         &mut self,
         context: MessageContext,
         message: Message,
-        policy: &ResourceControlPolicy,
-        tracker: &mut ResourceTracker,
+        resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
@@ -343,8 +345,7 @@ where
                     application_id,
                     context.chain_id,
                     UserAction::Message(context, bytes),
-                    policy,
-                    tracker,
+                    resource_controller,
                 )
                 .await
             }

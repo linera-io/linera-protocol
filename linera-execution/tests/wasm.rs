@@ -14,7 +14,7 @@ use linera_base::{
 use linera_execution::{
     policy::ResourceControlPolicy, ExecutionOutcome, ExecutionRuntimeConfig,
     ExecutionRuntimeContext, ExecutionStateView, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, ResourceTracker, Response, SystemExecutionState,
+    RawExecutionOutcome, ResourceController, ResourceTracker, Response, SystemExecutionState,
     TestExecutionRuntimeContext, WasmContractModule, WasmRuntime, WasmServiceModule,
 };
 use linera_views::{memory::MemoryContext, views::View};
@@ -81,16 +81,19 @@ async fn test_fuel_for_counter_wasm_application(
         fuel_unit: Amount::from_atto(1),
         ..ResourceControlPolicy::default()
     };
-    let mut tracker = ResourceTracker::default();
     let amount = Amount::from_tokens(1);
     *view.system.balance.get_mut() = amount;
+    let mut controller = ResourceController {
+        policy: Arc::new(policy),
+        tracker: ResourceTracker::default(),
+        account: None,
+    };
     for increment in &increments {
         let outcomes = view
             .execute_operation(
                 context,
                 Operation::user(app_id, increment).unwrap(),
-                &policy,
-                &mut tracker,
+                &mut controller,
             )
             .await?;
         assert_eq!(
@@ -101,7 +104,13 @@ async fn test_fuel_for_counter_wasm_application(
             )]
         );
     }
-    assert_eq!(tracker.used_fuel, expected_fuel);
+    assert_eq!(controller.tracker.fuel, expected_fuel);
+    assert_eq!(
+        controller.with(&mut view).await?.balance(),
+        Amount::ONE
+            .try_sub(Amount::from_atto(expected_fuel as u128))
+            .unwrap()
+    );
 
     let context = QueryContext {
         chain_id: ChainId::root(0),

@@ -23,7 +23,7 @@ pub use applications::{
 };
 pub use execution::ExecutionStateView;
 pub use ownership::{ChainOwnership, TimeoutConfig};
-pub use resources::ResourceTracker;
+pub use resources::{ResourceController, ResourceTracker};
 pub use system::{
     SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation, SystemQuery,
     SystemResponse,
@@ -38,7 +38,6 @@ pub use wasm::{WasmContractModule, WasmExecutionError, WasmServiceModule};
 #[cfg(any(test, feature = "test"))]
 pub use {applications::ApplicationRegistry, system::SystemExecutionState};
 
-use crate::policy::PricingError;
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
@@ -123,10 +122,6 @@ pub enum ExecutionError {
     #[error("Failed to load bytecode from storage {0:?}")]
     ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
 
-    #[error("Pricing error: {0}")]
-    PricingError(#[from] PricingError),
-    #[error("Excessive number of read queries from storage")]
-    ExcessiveNumReads,
     #[error("Excessive number of bytes read from storage")]
     ExcessiveRead,
     #[error("Excessive number of bytes written to storage")]

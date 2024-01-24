@@ -359,6 +359,7 @@ impl Runnable for Job {
                                     block,
                                     fuel_unit,
                                     read_operation,
+                                    write_operation,
                                     byte_read,
                                     byte_written,
                                     byte_stored,
@@ -377,6 +378,9 @@ impl Runnable for Job {
                                     }
                                     if let Some(read_operation) = read_operation {
                                         policy.read_operation = read_operation;
+                                    }
+                                    if let Some(write_operation) = write_operation {
+                                        policy.write_operation = write_operation;
                                     }
                                     if let Some(byte_read) = byte_read {
                                         policy.byte_read = byte_read;
@@ -416,6 +420,7 @@ impl Runnable for Job {
                             {:.2} base cost per block\n\
                             {:.2} cost per fuel unit\n\
                             {:.2} cost per read operation\n\
+                            {:.2} cost per write operation\n\
                             {:.2} cost per byte read\n\
                             {:.2} cost per byte written\n\
                             {:.2} cost per byte stored\n\
@@ -428,6 +433,7 @@ impl Runnable for Job {
                                         policy.block,
                                         policy.fuel_unit,
                                         policy.read_operation,
+                                        policy.write_operation,
                                         policy.byte_read,
                                         policy.byte_written,
                                         policy.byte_stored,
@@ -441,6 +447,7 @@ impl Runnable for Job {
                                     if block.is_none()
                                         && fuel_unit.is_none()
                                         && read_operation.is_none()
+                                        && write_operation.is_none()
                                         && byte_read.is_none()
                                         && byte_written.is_none()
                                         && byte_stored.is_none()
@@ -1177,6 +1184,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
             block_price,
             fuel_unit_price,
             read_operation_price,
+            write_operation_price,
             byte_read_price,
             byte_written_price,
             byte_stored_price,
@@ -1203,6 +1211,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 block: *block_price,
                 fuel_unit: *fuel_unit_price,
                 read_operation: *read_operation_price,
+                write_operation: *write_operation_price,
                 byte_read: *byte_read_price,
                 byte_written: *byte_written_price,
                 byte_stored: *byte_stored_price,

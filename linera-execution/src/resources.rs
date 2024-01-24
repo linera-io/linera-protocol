@@ -3,194 +3,331 @@
 
 //! This module tracks the resources used during the execution of a transaction.
 
-use crate::{policy::ResourceControlPolicy, system::SystemExecutionError, ExecutionError};
-
+use crate::{
+    policy::ResourceControlPolicy, system::SystemExecutionError, ExecutionError,
+    ExecutionStateView, Message, Operation,
+};
 use custom_debug_derive::Debug;
-use linera_base::data_types::Amount;
+use futures::FutureExt;
+use linera_base::{
+    data_types::{Amount, ArithmeticError},
+    identifiers::Owner,
+};
+use linera_views::{common::Context, views::ViewError};
+use std::sync::Arc;
 
-/// The resource constraints applicable to an execution process.
-#[derive(Copy, Debug, Clone)]
-pub struct RuntimeLimits {
-    /// The maximum read requests per block
-    pub max_budget_num_reads: u64,
-    /// The maximum number of bytes that can be read per block
-    pub max_budget_bytes_read: u64,
-    /// The maximum number of bytes that can be written per block
-    pub max_budget_bytes_written: u64,
-    /// The maximum size of read allowed per block
-    pub maximum_bytes_left_to_read: u64,
-    /// The maximum size of write allowed per block
-    pub maximum_bytes_left_to_write: u64,
+#[derive(Clone, Debug, Default)]
+pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {
+    /// The (fixed) policy used to charge fees and control resource usage.
+    pub policy: Arc<ResourceControlPolicy>,
+    /// How the resources were used so far.
+    pub tracker: Tracker,
+    /// The account paying for the resource usage.
+    pub account: Account,
 }
 
 /// The resources used so far by an execution process.
 #[derive(Copy, Debug, Clone, Default)]
 pub struct ResourceTracker {
-    /// The used fuel in the computation
-    pub used_fuel: u64,
-    /// The number of reads in the computation
-    pub num_reads: u64,
-    /// The number of writes in the computation
-    pub num_writes: u64,
-    /// The total number of bytes read
+    /// The number of blocks created.
+    pub blocks: u32,
+    /// The fuel used so far.
+    pub fuel: u64,
+    /// The number of read operations.
+    pub read_operations: u32,
+    /// The number of write operations.
+    pub write_operations: u32,
+    /// The number of bytes read.
     pub bytes_read: u64,
-    /// The total number of bytes written
+    /// The number of bytes written.
     pub bytes_written: u64,
-    /// The change in the total data being stored
-    pub stored_size_delta: i32,
+    /// The change in the number of bytes being stored by user applications.
+    pub bytes_stored: i32,
+    /// The number of operations executed.
+    pub operations: u32,
+    /// The total size of the arguments of user operations.
+    pub operation_bytes: u64,
+    /// The number of outgoing messages created (system and user).
+    pub messages: u32,
+    /// The total size of the arguments of outgoing user messages.
+    pub message_bytes: u64,
 }
 
-impl Default for RuntimeLimits {
-    fn default() -> Self {
-        RuntimeLimits {
-            max_budget_num_reads: u64::MAX / 2,
-            max_budget_bytes_read: u64::MAX / 2,
-            max_budget_bytes_written: u64::MAX / 2,
-            maximum_bytes_left_to_read: u64::MAX / 2,
-            maximum_bytes_left_to_write: u64::MAX / 2,
-        }
+/// How to access the balance of an account.
+pub trait BalanceHolder {
+    fn as_amount(&self) -> Amount;
+
+    fn as_amount_mut(&mut self) -> &mut Amount;
+
+    fn try_sub_assign(&mut self, other: Amount) -> Result<(), ArithmeticError> {
+        self.as_amount_mut().try_sub_assign(other)
     }
 }
 
-impl ResourceTracker {
-    /// Subtracts an amount from a balance and reports an error if that is impossible
-    fn sub_assign_fees(balance: &mut Amount, fees: Amount) -> Result<(), SystemExecutionError> {
-        balance
-            .try_sub_assign(fees)
-            .map_err(|_| SystemExecutionError::InsufficientFunding {
-                current_balance: *balance,
-            })
+// The main accounting functions for a ResourceController.
+impl<Account, Tracker> ResourceController<Account, Tracker>
+where
+    Account: BalanceHolder,
+    Tracker: AsMut<ResourceTracker>,
+{
+    /// Obtains the balance of the account.
+    pub fn balance(&mut self) -> Amount {
+        self.account.as_amount()
     }
 
-    /// Updates the limits for the maximum and updates the balance.
-    pub fn update_limits(
-        &mut self,
-        balance: &mut Amount,
-        policy: &ResourceControlPolicy,
-        runtime_counts: RuntimeCounts,
-    ) -> Result<(), ExecutionError> {
-        // The fuel being used
-        let initial_fuel = policy.remaining_fuel(*balance);
-        let used_fuel = initial_fuel.saturating_sub(runtime_counts.remaining_fuel);
-        self.used_fuel += used_fuel;
-        Self::sub_assign_fees(balance, policy.fuel_price(used_fuel)?)?;
+    /// Obtains a mutable reference on the balance of the account.
+    pub fn balance_mut(&mut self) -> &mut Amount {
+        self.account.as_amount_mut()
+    }
 
-        // The number of reads
-        Self::sub_assign_fees(
-            balance,
-            policy.storage_num_reads_price(runtime_counts.num_reads)?,
-        )?;
-        self.num_reads += runtime_counts.num_reads;
-
-        // The number of bytes read
-        let bytes_read = runtime_counts.bytes_read;
-        self.bytes_read += runtime_counts.bytes_read;
-        Self::sub_assign_fees(balance, policy.storage_bytes_read_price(bytes_read)?)?;
-
-        // The number of bytes written
-        let bytes_written = runtime_counts.bytes_written;
-        self.bytes_written += bytes_written;
-        Self::sub_assign_fees(balance, policy.storage_bytes_written_price(bytes_written)?)?;
-
+    /// Subtracts an amount from a balance and reports an error if that is impossible.
+    fn update_balance(&mut self, fees: Amount) -> Result<(), ExecutionError> {
+        self.account.try_sub_assign(fees).map_err(|_| {
+            SystemExecutionError::InsufficientFunding {
+                current_balance: self.account.as_amount(),
+            }
+        })?;
         Ok(())
     }
 
-    /// Obtain the limits for the running of the system
-    pub fn limits(&self, policy: &ResourceControlPolicy, balance: &Amount) -> RuntimeLimits {
-        let max_budget_num_reads =
-            u64::try_from(balance.saturating_div(policy.read_operation)).unwrap_or(u64::MAX);
-        let max_budget_bytes_read =
-            u64::try_from(balance.saturating_div(policy.byte_read)).unwrap_or(u64::MAX);
-        let max_budget_bytes_written =
-            u64::try_from(balance.saturating_div(policy.byte_written)).unwrap_or(u64::MAX);
-        let maximum_bytes_left_to_read = policy
-            .maximum_bytes_read_per_block
-            .saturating_sub(self.bytes_read);
-        let maximum_bytes_left_to_write = policy
-            .maximum_bytes_written_per_block
-            .saturating_sub(self.bytes_written);
-        RuntimeLimits {
-            max_budget_num_reads,
-            max_budget_bytes_read,
-            max_budget_bytes_written,
-            maximum_bytes_left_to_read,
-            maximum_bytes_left_to_write,
+    /// Obtains the amount of fuel that could be spent by consuming the entire balance.
+    pub(crate) fn remaining_fuel(&self) -> u64 {
+        self.policy.remaining_fuel(self.account.as_amount())
+    }
+
+    /// Tracks the creation of a block.
+    pub fn track_block(&mut self) -> Result<(), ExecutionError> {
+        self.tracker.as_mut().blocks = self
+            .tracker
+            .as_mut()
+            .blocks
+            .checked_add(1)
+            .ok_or(ArithmeticError::Overflow)?;
+        self.update_balance(self.policy.block)
+    }
+
+    /// Tracks the execution of an operation in block.
+    pub fn track_operation(&mut self, operation: &Operation) -> Result<(), ExecutionError> {
+        self.tracker.as_mut().operations = self
+            .tracker
+            .as_mut()
+            .operations
+            .checked_add(1)
+            .ok_or(ArithmeticError::Overflow)?;
+        self.update_balance(self.policy.operation)?;
+        match operation {
+            Operation::System(_) => Ok(()),
+            Operation::User { bytes, .. } => {
+                let size = bytes.len();
+                self.tracker.as_mut().operation_bytes = self
+                    .tracker
+                    .as_mut()
+                    .operation_bytes
+                    .checked_add(size as u64)
+                    .ok_or(ArithmeticError::Overflow)?;
+                self.update_balance(self.policy.operation_byte_price(size as u64)?)?;
+                Ok(())
+            }
         }
     }
-}
 
-/// The entries of the runtime related to fuel and storage
-#[derive(Copy, Debug, Clone, Default)]
-pub struct RuntimeCounts {
-    /// The remaining fuel available
-    pub remaining_fuel: u64,
-    /// The number of read operations
-    pub num_reads: u64,
-    /// The number of write operations
-    pub num_writes: u64,
-    /// The bytes that have been read
-    pub bytes_read: u64,
-    /// The bytes that have been written
-    pub bytes_written: u64,
-    /// The change in the total data stored
-    pub stored_size_delta: i32,
-}
-
-impl RuntimeCounts {
-    pub fn increment_num_reads(&mut self, limits: &RuntimeLimits) -> Result<(), ExecutionError> {
-        self.num_reads += 1;
-        if self.num_reads >= limits.max_budget_num_reads {
-            return Err(ExecutionError::ExcessiveNumReads);
+    /// Tracks the creation of an outgoing message.
+    pub fn track_message(&mut self, message: &Message) -> Result<(), ExecutionError> {
+        self.tracker.as_mut().messages = self
+            .tracker
+            .as_mut()
+            .messages
+            .checked_add(1)
+            .ok_or(ArithmeticError::Overflow)?;
+        self.update_balance(self.policy.message)?;
+        match message {
+            Message::System(_) => Ok(()),
+            Message::User { bytes, .. } => {
+                let size = bytes.len();
+                self.tracker.as_mut().message_bytes = self
+                    .tracker
+                    .as_mut()
+                    .message_bytes
+                    .checked_add(size as u64)
+                    .ok_or(ArithmeticError::Overflow)?;
+                self.update_balance(self.policy.message_byte_price(size as u64)?)?;
+                Ok(())
+            }
         }
-        Ok(())
     }
 
-    /// Increments the number of executed write operations.
-    pub fn increment_num_writes(
-        &mut self,
-        _limits: &RuntimeLimits,
-        amount: u64,
-    ) -> Result<(), ExecutionError> {
-        self.num_writes += amount;
-        Ok(())
+    /// Tracks a number of fuel units used.
+    pub(crate) fn track_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError> {
+        self.tracker.as_mut().fuel = self
+            .tracker
+            .as_mut()
+            .fuel
+            .checked_add(fuel)
+            .ok_or(ArithmeticError::Overflow)?;
+        self.update_balance(self.policy.fuel_price(fuel)?)
     }
 
-    pub fn increment_bytes_read(
-        &mut self,
-        limits: &RuntimeLimits,
-        increment: u64,
-    ) -> Result<(), ExecutionError> {
-        self.bytes_read = self
+    /// Tracks a read operation.
+    pub(crate) fn track_read_operations(&mut self, count: u32) -> Result<(), ExecutionError> {
+        self.tracker.as_mut().read_operations = self
+            .tracker
+            .as_mut()
+            .read_operations
+            .checked_add(count)
+            .ok_or(ArithmeticError::Overflow)?;
+        self.update_balance(self.policy.read_operations_price(count)?)
+    }
+
+    /// Tracks a write operation.
+    pub(crate) fn track_write_operations(&mut self, count: u32) -> Result<(), ExecutionError> {
+        self.tracker.as_mut().write_operations = self
+            .tracker
+            .as_mut()
+            .write_operations
+            .checked_add(count)
+            .ok_or(ArithmeticError::Overflow)?;
+        self.update_balance(self.policy.write_operations_price(count)?)
+    }
+
+    /// Tracks a number of bytes read.
+    pub(crate) fn track_bytes_read(&mut self, count: u64) -> Result<(), ExecutionError> {
+        self.tracker.as_mut().bytes_read = self
+            .tracker
+            .as_mut()
             .bytes_read
-            .checked_add(increment)
-            .ok_or(ExecutionError::ExcessiveRead)?;
-        if self.bytes_read >= limits.max_budget_bytes_read
-            || self.bytes_read >= limits.maximum_bytes_left_to_read
-        {
+            .checked_add(count)
+            .ok_or(ArithmeticError::Overflow)?;
+        if self.tracker.as_mut().bytes_read >= self.policy.maximum_bytes_read_per_block {
             return Err(ExecutionError::ExcessiveRead);
         }
+        self.update_balance(self.policy.bytes_read_price(count)?)?;
         Ok(())
     }
 
-    pub fn increment_bytes_written(
-        &mut self,
-        limits: &RuntimeLimits,
-        increment: u64,
-    ) -> Result<(), ExecutionError> {
-        self.bytes_written = self
+    /// Tracks a number of bytes written.
+    pub(crate) fn track_bytes_written(&mut self, count: u64) -> Result<(), ExecutionError> {
+        self.tracker.as_mut().bytes_written = self
+            .tracker
+            .as_mut()
             .bytes_written
-            .checked_add(increment)
-            .ok_or(ExecutionError::ExcessiveWrite)?;
-        if self.bytes_written >= limits.max_budget_bytes_written
-            || self.bytes_written >= limits.maximum_bytes_left_to_write
-        {
+            .checked_add(count)
+            .ok_or(ArithmeticError::Overflow)?;
+        if self.tracker.as_mut().bytes_written >= self.policy.maximum_bytes_written_per_block {
             return Err(ExecutionError::ExcessiveWrite);
         }
+        self.update_balance(self.policy.bytes_written_price(count)?)?;
         Ok(())
     }
 
-    pub fn update_stored_size(&mut self, delta: i32) -> Result<(), ExecutionError> {
-        self.stored_size_delta += delta;
+    /// Tracks a change in the number of bytes stored.
+    // TODO(#1536): This is not fully implemented.
+    #[allow(dead_code)]
+    pub(crate) fn track_stored_bytes(&mut self, delta: i32) -> Result<(), ExecutionError> {
+        self.tracker.as_mut().bytes_stored = self
+            .tracker
+            .as_mut()
+            .bytes_stored
+            .checked_add(delta)
+            .ok_or(ArithmeticError::Overflow)?;
         Ok(())
+    }
+}
+
+// The simplest `BalanceHolder` is an `Amount`.
+impl BalanceHolder for Amount {
+    fn as_amount(&self) -> Amount {
+        *self
+    }
+
+    fn as_amount_mut(&mut self) -> &mut Amount {
+        self
+    }
+}
+
+// This is also needed for the default instantiation `ResourceController<Amount, ResourceTracker>`.
+// See https://doc.rust-lang.org/std/convert/trait.AsMut.html#reflexivity for general context.
+impl AsMut<ResourceTracker> for ResourceTracker {
+    fn as_mut(&mut self) -> &mut Self {
+        self
+    }
+}
+
+/// A temporary object made of an optional [`Owner`] together with a mutable reference
+/// on an execution state view [`ExecutionStateView`].
+///
+/// This type is meant to implement [`BalanceHolder`] and make the accounting functions of
+/// [`ResourceController`] available to temporary objects of type
+/// `ResourceController<OwnedView<'a, C>, &'a mut ResourceTracker>`.
+///
+/// Such temporary objects can be obtained from values of type
+/// `ResourceController<Option<Owner>>` using the method `with` to provide the missing
+/// reference on [`ExecutionStateView`].
+pub struct OwnedView<'a, C> {
+    owner: Option<Owner>,
+    view: &'a mut ExecutionStateView<C>,
+}
+
+impl<C> BalanceHolder for OwnedView<'_, C>
+where
+    C: Context + Clone + Send + Sync + 'static,
+    ViewError: From<C::Error>,
+{
+    fn as_amount(&self) -> Amount {
+        match &self.owner {
+            None => *self.view.system.balance.get(),
+            Some(owner) => self
+                .view
+                .system
+                .balances
+                .get(owner)
+                .now_or_never()
+                .expect("The map entry was previously loaded by OwnedView::with")
+                .expect("Account was created there as well")
+                .expect("No I/O can fail here"),
+        }
+    }
+
+    fn as_amount_mut(&mut self) -> &mut Amount {
+        match &self.owner {
+            None => self.view.system.balance.get_mut(),
+            Some(owner) => self
+                .view
+                .system
+                .balances
+                .get_mut(owner)
+                .now_or_never()
+                .expect("The map entry was previously loaded by OwnedView::with")
+                .expect("Account was created there as well")
+                .expect("No I/O can fail here"),
+        }
+    }
+}
+
+impl ResourceController<Option<Owner>, ResourceTracker> {
+    /// Provides a reference to the current execution state and obtains a temporary object
+    /// where the accounting functions of [`ResourceController`] are available.
+    pub async fn with<'a, C>(
+        &mut self,
+        view: &'a mut ExecutionStateView<C>,
+    ) -> Result<ResourceController<OwnedView<'a, C>, &mut ResourceTracker>, ViewError>
+    where
+        C: Context + Clone + Send + Sync + 'static,
+        ViewError: From<C::Error>,
+    {
+        if let Some(owner) = &self.account {
+            // Make sure `owner` has an account and that the account is loaded in memory.
+            let balance = view.system.balances.get_mut(owner).await?;
+            if balance.is_none() {
+                view.system.balances.insert(owner, Amount::ZERO)?;
+            }
+        }
+        Ok(ResourceController {
+            policy: self.policy.clone(),
+            tracker: &mut self.tracker,
+            account: OwnedView {
+                owner: self.account,
+                view,
+            },
+        })
     }
 }

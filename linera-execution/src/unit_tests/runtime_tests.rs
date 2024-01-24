@@ -5,7 +5,7 @@
 
 use super::{ApplicationStatus, SyncRuntimeInternal};
 use crate::{
-    execution_state_actor::Request, resources::RuntimeLimits, BaseRuntime, UserContractInstance,
+    execution_state_actor::Request, runtime::ResourceController, BaseRuntime, UserContractInstance,
 };
 use futures::{channel::mpsc, StreamExt};
 use linera_base::{
@@ -72,11 +72,11 @@ fn test_write_batch() {
         .expect("Failed to write test batch");
 
     assert_eq!(
-        runtime.runtime_counts.num_writes,
-        expected_write_count as u64
+        runtime.resource_controller.tracker.write_operations,
+        expected_write_count as u32
     );
     assert_eq!(
-        runtime.runtime_counts.bytes_written,
+        runtime.resource_controller.tracker.bytes_written,
         expected_bytes_count as u64
     );
 }
@@ -89,9 +89,10 @@ fn create_contract_runtime() -> (
 ) {
     let chain_id = ChainDescription::Root(0).into();
     let (execution_state_sender, execution_state_receiver) = mpsc::unbounded();
-    let limits = RuntimeLimits::default();
+    let resource_controller = ResourceController::default();
 
-    let mut runtime = SyncRuntimeInternal::new(chain_id, execution_state_sender, limits, 0);
+    let mut runtime =
+        SyncRuntimeInternal::new(chain_id, execution_state_sender, resource_controller);
 
     runtime.push_application(create_dummy_application());
 
