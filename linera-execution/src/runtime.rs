@@ -700,8 +700,12 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let id = self.application_id()?;
         let state = self.view_user_states.entry(id).or_default();
         state.force_all_pending_queries()?;
-        self.resource_controller
-            .track_write_operations(batch.num_operations() as u32)?;
+        self.resource_controller.track_write_operations(
+            batch
+                .num_operations()
+                .try_into()
+                .map_err(|_| ExecutionError::from(ArithmeticError::Overflow))?,
+        )?;
         self.resource_controller
             .track_bytes_written(batch.size() as u64)?;
         self.execution_state_sender
