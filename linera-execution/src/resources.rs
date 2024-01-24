@@ -291,7 +291,7 @@ where
             .balances
             .get(owner)
             .now_or_never()
-            .expect("The map entry was previously loaded by OwnedView::with")
+            .expect("The map entry was previously loaded by ResourceController::with")
             .expect("Account was created there as well")
             .expect("No I/O can fail here")
     }
@@ -302,7 +302,7 @@ where
             .balances
             .get_mut(owner)
             .now_or_never()
-            .expect("The map entry was previously loaded by OwnedView::with")
+            .expect("The map entry was previously loaded by ResourceController::with")
             .expect("Account was created there as well")
             .expect("No I/O can fail here")
     }
