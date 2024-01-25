@@ -32,14 +32,14 @@ use {
 
 #[cfg(feature = "metrics")]
 /// The total number of cache faults
-pub static NUM_CACHE_FAULT: Lazy<IntCounterVec> = Lazy::new(|| {
+static NUM_CACHE_FAULT: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!("num_cache_fault", "Number of cache faults", &[])
         .expect("Counter creation should not fail")
 });
 
 #[cfg(feature = "metrics")]
 /// The total number of cache successes
-pub static NUM_CACHE_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
+static NUM_CACHE_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!("num_cache_success", "Number of cache success", &[])
         .expect("Counter creation should not fail")
 });

@@ -41,7 +41,7 @@ use std::{
     sync::Arc,
 };
 
-pub static NUM_BLOCKS_EXECUTED: Lazy<IntCounterVec> = Lazy::new(|| {
+static NUM_BLOCKS_EXECUTED: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "num_blocks_executed",
         "Number of blocks executed",
@@ -50,7 +50,7 @@ pub static NUM_BLOCKS_EXECUTED: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
-pub static BLOCK_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+static BLOCK_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "block_execution_latency",
         "Block execution latency",
@@ -89,7 +89,7 @@ static OPERATION_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Histogram creation should not fail")
 });
 
-pub static WASM_FUEL_USED_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
+static WASM_FUEL_USED_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "wasm_fuel_used_per_block",
         "Wasm fuel used per block",
@@ -102,7 +102,7 @@ pub static WASM_FUEL_USED_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
-pub static WASM_NUM_READS_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
+static WASM_NUM_READS_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "wasm_num_reads_per_block",
         "Wasm number of reads per block",
@@ -112,7 +112,7 @@ pub static WASM_NUM_READS_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
-pub static WASM_BYTES_READ_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
+static WASM_BYTES_READ_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "wasm_bytes_read_per_block",
         "Wasm number of bytes read per block",
@@ -138,7 +138,7 @@ pub static WASM_BYTES_READ_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
-pub static WASM_BYTES_WRITTEN_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
+static WASM_BYTES_WRITTEN_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "wasm_bytes_written_per_block",
         "Wasm number of bytes written per block",

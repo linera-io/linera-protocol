@@ -158,6 +158,7 @@ pub fn increment_counter(counter: &Lazy<IntCounterVec>, struct_name: &str, base_
 
 /// The metric counting how often a view is read from storage.
 #[cfg(not(target_arch = "wasm32"))]
+#[doc(hidden)]
 pub static LOAD_VIEW_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "load_view",
@@ -168,6 +169,7 @@ pub static LOAD_VIEW_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 /// The metric counting how often a view is written from storage.
 #[cfg(not(target_arch = "wasm32"))]
+#[doc(hidden)]
 pub static SAVE_VIEW_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "save_view",

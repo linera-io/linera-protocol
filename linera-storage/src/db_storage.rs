@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc};
 
 /// The metric counting how often a value is read from storage.
-pub static CONTAINS_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+static CONTAINS_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "contains_value",
         "The metric counting how often a value is tested for existence from storage",
@@ -35,7 +35,7 @@ pub static CONTAINS_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 /// The metric counting how often a value is read from storage.
-pub static CONTAINS_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+static CONTAINS_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "contains_certificate",
         "The metric counting how often a certificate is tested for existence from storage",
@@ -45,6 +45,7 @@ pub static CONTAINS_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 /// The metric counting how often a value is read from storage.
+#[doc(hidden)]
 pub static READ_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "read_value",
@@ -55,6 +56,7 @@ pub static READ_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 /// The metric counting how often a value is written to storage.
+#[doc(hidden)]
 pub static WRITE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "write_value",
@@ -65,6 +67,7 @@ pub static WRITE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 /// The metric counting how often a certificate is read from storage.
+#[doc(hidden)]
 pub static READ_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "read_certificate",
@@ -75,6 +78,7 @@ pub static READ_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 /// The metric counting how often a certificate is written to storage.
+#[doc(hidden)]
 pub static WRITE_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "write_certificate",
