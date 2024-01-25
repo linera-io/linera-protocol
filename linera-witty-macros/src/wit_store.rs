@@ -16,7 +16,7 @@ mod tests;
 /// `fields`.
 pub fn derive_for_struct<'input>(fields: impl Into<FieldsInformation<'input>>) -> TokenStream {
     let fields = fields.into();
-    let pattern = fields.construction();
+    let pattern = fields.destructuring();
     let fields_hlist_value = fields.hlist_value();
 
     quote! {
@@ -93,7 +93,7 @@ pub fn derive_for_enum<'variants>(
 
     let store_variants = variants.clone().map(|(discriminant, (variant, fields))| {
         let variant_name = &variant.ident;
-        let pattern = fields.construction();
+        let pattern = fields.destructuring();
         let fields_hlist_value = fields.hlist_value();
 
         quote! {
@@ -108,7 +108,7 @@ pub fn derive_for_enum<'variants>(
 
     let lower_variants = variants.map(|(discriminant, (variant, fields))| {
         let variant_name = &variant.ident;
-        let pattern = fields.construction();
+        let pattern = fields.destructuring();
         let fields_hlist_value = fields.hlist_value();
 
         quote! {

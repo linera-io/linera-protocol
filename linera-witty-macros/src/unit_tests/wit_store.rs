@@ -69,7 +69,7 @@ fn named_struct() {
             <Instance::Runtime as linera_witty::Runtime>::Memory:
                 linera_witty::RuntimeMemory<Instance>,
         {
-            let Self { first, second } = self;
+            let Self { first, second, } = self;
             linera_witty::hlist![first, second].store(memory, location)
         }
 
@@ -82,7 +82,7 @@ fn named_struct() {
             <Instance::Runtime as linera_witty::Runtime>::Memory:
                 linera_witty::RuntimeMemory<Instance>,
         {
-            let Self { first, second } = self;
+            let Self { first, second, } = self;
             linera_witty::hlist![first, second].lower(memory)
         }
     };
@@ -177,7 +177,7 @@ fn enum_type() {
 
                     linera_witty::hlist![field0, field1].store(memory, location)
                 }
-                Enum::Struct { first, second } => {
+                Enum::Struct { first, second, } => {
                     2_u8.store(memory, location)?;
                     location = location
                         .after::<u8>()
@@ -218,7 +218,7 @@ fn enum_type() {
 
                     Ok(flat_layout)
                 }
-                Enum::Struct { first, second } => {
+                Enum::Struct { first, second, } => {
                     let variant_flat_layout = linera_witty::hlist![first, second].lower(memory)?;
                     let flat_layout: <Self::Layout as linera_witty::Layout>::Flat =
                         linera_witty::JoinFlatLayouts::into_joined(

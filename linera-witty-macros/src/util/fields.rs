@@ -59,6 +59,19 @@ impl FieldsInformation<'_> {
             FieldsKind::Unnamed => quote! { ( #( #names ),* ) },
         }
     }
+
+    /// Returns the code with the body pattern to destructure the container of the fields.
+    ///
+    /// Does not include bindings for skipped fields.
+    pub fn destructuring(&self) -> TokenStream {
+        let names = self.fields.iter().map(FieldInformation::name);
+
+        match self.kind {
+            FieldsKind::Unit => quote! {},
+            FieldsKind::Named => quote! { { #( #names, )* } },
+            FieldsKind::Unnamed => quote! { ( #( #names ),* ) },
+        }
+    }
 }
 
 impl<'input> From<&'input Fields> for FieldsInformation<'input> {
