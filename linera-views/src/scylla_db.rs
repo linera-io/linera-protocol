@@ -187,7 +187,9 @@ impl DirectWritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal
     // The constant 14000 is an empirical constant that was found to be necessary
     // to make the ScyllaDb system work. We have not been able to find this or
     // a similar constant in the source code or the documentation.
-    const MAX_BATCH_SIZE: usize = 14000;
+    // An experimental approach gets us that 14796 is the latest value that is
+    // correct.
+    const MAX_BATCH_SIZE: usize = 12000;
     /// The total size is 16M
     const MAX_BATCH_TOTAL_SIZE: usize = 16000000;
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;

@@ -316,7 +316,9 @@ where
                 if iter.is_empty() || transaction_batch.len() == K::MAX_BATCH_SIZE - 1 {
                     (true, true)
                 } else {
-                    let next_block_size = iter.next_batch_size(&block_batch, block_size)?;
+                    // We can unwrap the result since if it were None, it would mean that
+                    // there is no next size but we have make sure this is not the case.
+                    let next_block_size = iter.next_batch_size(&block_batch, block_size)?.unwrap();
                     let next_transaction_size = transaction_size + next_block_size + key_len;
                     let transaction_flush = next_transaction_size > max_transaction_size;
                     let block_flush = transaction_flush
