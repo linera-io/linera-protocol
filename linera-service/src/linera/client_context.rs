@@ -35,6 +35,7 @@ use crate::ClientOptions;
 use {
     futures::{stream, StreamExt as _},
     linera_base::{
+        crypto::PublicKey,
         data_types::Amount,
         identifiers::{ApplicationId, Owner},
     },
@@ -581,24 +582,16 @@ impl ClientContext {
             .unwrap()
             .public();
         let amount = Amount::from(1_000_000);
-        let owner = fungible::AccountOwner::User(Owner::from(default_key));
         let operations: Vec<_> = key_pairs
             .iter()
-            .map(|(&chain_id, key_pair)| {
-                let target_account = fungible::Account {
-                    chain_id,
-                    owner: fungible::AccountOwner::User(Owner::from(key_pair.public())),
-                };
-                let bytes = bcs::to_bytes(&fungible::Operation::Transfer {
-                    owner,
-                    amount,
-                    target_account,
-                })
-                .expect("should serialize fungible token operation");
-                Operation::User {
+            .map(|(chain_id, key_pair)| {
+                Self::fungible_transfer(
                     application_id,
-                    bytes,
-                }
+                    *chain_id,
+                    default_key,
+                    key_pair.public(),
+                    amount,
+                )
             })
             .collect();
         let mut chain_client = self.make_chain_client(storage.clone(), default_chain_id);
@@ -659,27 +652,15 @@ impl ClientContext {
         let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id;
         let amount = Amount::from(1);
         for (&chain_id, key_pair) in key_pairs {
-            let chain = self.wallet_state.get(chain_id).expect("should have chain");
             let public_key = key_pair.public();
-            let owner = Owner::from(public_key);
             let operation = match fungible_application_id {
-                Some(application_id) => {
-                    let owner = fungible::AccountOwner::User(owner);
-                    let target_account = fungible::Account {
-                        chain_id: next_recipient,
-                        owner,
-                    };
-                    let bytes = bcs::to_bytes(&fungible::Operation::Transfer {
-                        owner,
-                        amount,
-                        target_account,
-                    })
-                    .expect("should serialize fungible token operation");
-                    Operation::User {
-                        application_id,
-                        bytes,
-                    }
-                }
+                Some(application_id) => Self::fungible_transfer(
+                    application_id,
+                    next_recipient,
+                    public_key,
+                    public_key,
+                    amount,
+                ),
                 None => Operation::System(SystemOperation::Transfer {
                     owner: None,
                     recipient: Recipient::chain(next_recipient),
@@ -690,6 +671,7 @@ impl ClientContext {
             let operations = iter::repeat(operation)
                 .take(transactions_per_block)
                 .collect();
+            let chain = self.wallet_state.get(chain_id).expect("should have chain");
             let block = Block {
                 epoch: Epoch::ZERO,
                 chain_id,
@@ -697,7 +679,7 @@ impl ClientContext {
                 operations,
                 previous_block_hash: chain.block_hash,
                 height: chain.next_block_height,
-                authenticated_signer: Some(owner),
+                authenticated_signer: Some(Owner::from(public_key)),
                 timestamp: chain.timestamp.max(Timestamp::now()),
             };
             trace!("Preparing block proposal: {:?}", block);
@@ -846,6 +828,30 @@ impl ClientContext {
             // We don't have private keys but that's ok.
             chain.block_hash = info.block_hash;
             chain.next_block_height = info.next_block_height;
+        }
+    }
+
+    /// Creates a fungible token transfer operation.
+    fn fungible_transfer(
+        application_id: ApplicationId,
+        chain_id: ChainId,
+        sender: PublicKey,
+        receiver: PublicKey,
+        amount: Amount,
+    ) -> Operation {
+        let target_account = fungible::Account {
+            chain_id,
+            owner: fungible::AccountOwner::User(Owner::from(receiver)),
+        };
+        let bytes = bcs::to_bytes(&fungible::Operation::Transfer {
+            owner: fungible::AccountOwner::User(Owner::from(sender)),
+            amount,
+            target_account,
+        })
+        .expect("should serialize fungible token operation");
+        Operation::User {
+            application_id,
+            bytes,
         }
     }
 }
