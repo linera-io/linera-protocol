@@ -185,6 +185,17 @@ where
     receiver.process_inbox().await?;
     // The received amount is not in the unprotected balance.
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
+    assert_eq!(
+        receiver.local_owner_balance(owner).await.unwrap(),
+        Amount::from_tokens(3)
+    );
+    assert_eq!(
+        receiver
+            .local_balances_with_owner(Some(owner))
+            .await
+            .unwrap(),
+        (Amount::ZERO, Some(Amount::from_tokens(3)))
+    );
 
     // First attempt that should be rejected.
     sender

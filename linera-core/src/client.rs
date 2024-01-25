@@ -1574,7 +1574,35 @@ where
         }
     }
 
+    /// Obtains the local balance of the default account after staging the execution of
+    /// any incoming transfers.
+    ///
+    /// Does not attempt to synchronize with validators.
     pub async fn local_balance(&mut self) -> Result<Amount, ChainClientError> {
+        let (balance, _) = self.local_balances_with_owner(None).await?;
+        Ok(balance)
+    }
+
+    /// Obtains the local balance of a user account after staging the execution of any
+    /// incoming transfers.
+    ///
+    /// Does not attempt to synchronize with validators.
+    pub async fn local_owner_balance(&mut self, owner: Owner) -> Result<Amount, ChainClientError> {
+        Ok(self
+            .local_balances_with_owner(Some(owner))
+            .await?
+            .1
+            .unwrap_or(Amount::ZERO))
+    }
+
+    /// Obtains the local balance of the default account and optionally another user after
+    /// staging the execution of any incoming transfers.
+    ///
+    /// Does not attempt to synchronize with validators.
+    async fn local_balances_with_owner(
+        &mut self,
+        owner: Option<Owner>,
+    ) -> Result<(Amount, Option<Amount>), ChainClientError> {
         ensure!(
             self.chain_info().await?.next_block_height == self.next_block_height,
             ChainClientError::WalletSynchronizationError
@@ -1588,11 +1616,14 @@ where
             operations: Vec::new(),
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
-            authenticated_signer: None,
+            authenticated_signer: owner,
             timestamp,
         };
         let (_, response) = self.node_client.stage_block_execution(block).await?;
-        Ok(response.info.system_balance)
+        Ok((
+            response.info.system_balance,
+            response.info.requested_system_balance,
+        ))
     }
 
     /// Attempts to update all validators about the local chain.
