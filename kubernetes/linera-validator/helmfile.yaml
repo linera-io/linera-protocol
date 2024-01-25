@@ -26,6 +26,8 @@ releases:
         value: {{ env "LINERA_HELMFILE_SET_GENESIS_CONFIG" | default "working/genesis.json" }}
       - name: numShards
         value: {{ env "LINERA_HELMFILE_SET_NUM_SHARDS" | default 10 }}
+      - name: lineraImage
+        value: {{ env "LINERA_HELMFILE_SET_LINERA_IMAGE" | default "linera-local:latest-x86_64" }}
   - name: scylla
     namespace: scylla
     chart: scylla/scylla

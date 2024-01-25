@@ -398,13 +398,11 @@ impl LocalKubernetesNet {
 
     async fn run(&mut self) -> Result<()> {
         let github_root = get_github_root().await?;
+        let docker_image_name =
+            String::from(format!("linera-local:latest-{}", std::env::consts::ARCH));
+
         // Build Docker image
-        let docker_image = DockerImage::build(
-            String::from("linera-test:latest"),
-            &self.binaries,
-            &github_root,
-        )
-        .await?;
+        DockerImage::build(&docker_image_name, &self.binaries, &github_root).await?;
 
         let base_dir = github_root
             .join("kubernetes")
@@ -421,7 +419,7 @@ impl LocalKubernetesNet {
 
         let mut validators_initialization_futures = Vec::new();
         for (i, kind_cluster) in self.kind_clusters.iter().cloned().enumerate() {
-            let docker_image_name = docker_image.name().to_string();
+            let docker_image_name = docker_image_name.clone();
             let base_dir = base_dir.clone();
             let github_root = github_root.clone();
 
@@ -438,7 +436,7 @@ impl LocalKubernetesNet {
                     base_dir.join(&server_config_filename),
                 )?;
 
-                HelmFile::sync(i, &github_root, num_shards, cluster_id).await?;
+                HelmFile::sync(i, &github_root, num_shards, cluster_id, &docker_image_name).await?;
 
                 let mut kubectl_instance = kubectl_instance.lock().await;
                 let output = kubectl_instance.get_pods(cluster_id).await?;
