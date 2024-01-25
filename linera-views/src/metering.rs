@@ -7,9 +7,11 @@ use crate::{
 };
 use async_trait::async_trait;
 use convert_case::{Case, Casing};
-use linera_base::sync::Lazy;
-use prometheus::{register_histogram_vec, HistogramVec};
-use std::{future::Future, time::Instant};
+use linera_base::{
+    prometheus_util::{register_histogram_vec, MeasureLatency},
+    sync::Lazy,
+};
+use prometheus::HistogramVec;
 
 #[derive(Clone)]
 /// The implementation of the `KeyValueStoreMetrics` for the `KeyValueStore`.
@@ -57,39 +59,39 @@ impl KeyValueStoreMetrics {
 
         let read_value1 = format!("{}_read_value_bytes", var_name);
         let read_value2 = format!("{} read value bytes", title_name);
-        let read_value_bytes = register_histogram_vec!(read_value1, read_value2, &[])
+        let read_value_bytes = register_histogram_vec(&read_value1, &read_value2, &[], None)
             .expect("Counter creation should not fail");
 
         let contains_key1 = format!("{}_contains_key", var_name);
         let contains_key2 = format!("{} contains key", title_name);
-        let contains_key = register_histogram_vec!(contains_key1, contains_key2, &[])
+        let contains_key = register_histogram_vec(&contains_key1, &contains_key2, &[], None)
             .expect("Counter creation should not fail");
 
         let read_multi_values1 = format!("{}_read_multi_value_bytes", var_name);
         let read_multi_values2 = format!("{} read multi value bytes", title_name);
         let read_multi_values_bytes =
-            register_histogram_vec!(read_multi_values1, read_multi_values2, &[])
+            register_histogram_vec(&read_multi_values1, &read_multi_values2, &[], None)
                 .expect("Counter creation should not fail");
 
         let find_keys1 = format!("{}_find_keys_by_prefix", var_name);
         let find_keys2 = format!("{} find keys by prefix", title_name);
-        let find_keys_by_prefix = register_histogram_vec!(find_keys1, find_keys2, &[])
+        let find_keys_by_prefix = register_histogram_vec(&find_keys1, &find_keys2, &[], None)
             .expect("Counter creation should not fail");
 
         let find_key_values1 = format!("{}_find_key_values_by_prefix", var_name);
         let find_key_values2 = format!("{} find key values by prefix", title_name);
         let find_key_values_by_prefix =
-            register_histogram_vec!(find_key_values1, find_key_values2, &[])
+            register_histogram_vec(&find_key_values1, &find_key_values2, &[], None)
                 .expect("Counter creation should not fail");
 
         let write_batch1 = format!("{}_write_batch", var_name);
         let write_batch2 = format!("{} write batch", title_name);
-        let write_batch = register_histogram_vec!(write_batch1, write_batch2, &[])
+        let write_batch = register_histogram_vec(&write_batch1, &write_batch2, &[], None)
             .expect("Counter creation should not fail");
 
         let clear_journal1 = format!("{}_clear_journal", var_name);
         let clear_journal2 = format!("{} clear journal", title_name);
-        let clear_journal = register_histogram_vec!(clear_journal1, clear_journal2, &[])
+        let clear_journal = register_histogram_vec(&clear_journal1, &clear_journal2, &[], None)
             .expect("Counter creation should not fail");
 
         KeyValueStoreMetrics {
@@ -113,18 +115,6 @@ pub struct MeteredStore<K> {
     pub store: K,
 }
 
-async fn run_with_execution_time_metric<F, O>(f: F, hist: &HistogramVec) -> O
-where
-    F: Future<Output = O>,
-{
-    let start = Instant::now();
-    let out = f.await;
-    let duration = start.elapsed();
-    hist.with_label_values(&[])
-        .observe(duration.as_micros() as f64);
-    out
-}
-
 #[async_trait]
 impl<K, E> ReadableKeyValueStore<E> for MeteredStore<K>
 where
@@ -139,40 +129,28 @@ where
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, E> {
-        run_with_execution_time_metric(
-            self.store.read_value_bytes(key),
-            &self.counter.read_value_bytes,
-        )
-        .await
+        let _metric = self.counter.read_value_bytes.measure_latency();
+        self.store.read_value_bytes(key).await
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, E> {
-        run_with_execution_time_metric(self.store.contains_key(key), &self.counter.contains_key)
-            .await
+        let _metric = self.counter.contains_key.measure_latency();
+        self.store.contains_key(key).await
     }
 
     async fn read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, E> {
-        run_with_execution_time_metric(
-            self.store.read_multi_values_bytes(keys),
-            &self.counter.read_multi_values_bytes,
-        )
-        .await
+        let _metric = self.counter.read_multi_values_bytes.measure_latency();
+        self.store.read_multi_values_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, E> {
-        run_with_execution_time_metric(
-            self.store.find_keys_by_prefix(key_prefix),
-            &self.counter.find_keys_by_prefix,
-        )
-        .await
+        let _metric = self.counter.find_keys_by_prefix.measure_latency();
+        self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::KeyValues, E> {
-        run_with_execution_time_metric(
-            self.store.find_key_values_by_prefix(key_prefix),
-            &self.counter.find_key_values_by_prefix,
-        )
-        .await
+        let _metric = self.counter.find_key_values_by_prefix.measure_latency();
+        self.store.find_key_values_by_prefix(key_prefix).await
     }
 }
 
@@ -184,19 +162,13 @@ where
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), E> {
-        run_with_execution_time_metric(
-            self.store.write_batch(batch, base_key),
-            &self.counter.write_batch,
-        )
-        .await
+        let _metric = self.counter.write_batch.measure_latency();
+        self.store.write_batch(batch, base_key).await
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), E> {
-        run_with_execution_time_metric(
-            self.store.clear_journal(base_key),
-            &self.counter.clear_journal,
-        )
-        .await
+        let _metric = self.counter.clear_journal.measure_latency();
+        self.store.clear_journal(base_key).await
     }
 }
 
