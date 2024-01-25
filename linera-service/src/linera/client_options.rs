@@ -197,30 +197,30 @@ pub enum ClientCommand {
     /// Subscribes to a system channel.
     Subscribe {
         /// Chain id (must be one of our chains).
-        #[arg(long = "subscriber")]
+        #[arg(long)]
         subscriber: Option<ChainId>,
 
         /// Chain id.
-        #[arg(long = "publisher")]
+        #[arg(long)]
         publisher: Option<ChainId>,
 
         /// System channel available in the system application.
-        #[arg(long = "channel")]
+        #[arg(long)]
         channel: SystemChannel,
     },
 
     /// Unsubscribes from a system channel.
     Unsubscribe {
         /// Chain id (must be one of our chains).
-        #[arg(long = "subscriber")]
+        #[arg(long)]
         subscriber: Option<ChainId>,
 
         /// Chain id.
-        #[arg(long = "publisher")]
+        #[arg(long)]
         publisher: Option<ChainId>,
 
         /// System channel available in the system application.
-        #[arg(long = "channel")]
+        #[arg(long)]
         channel: SystemChannel,
     },
 
