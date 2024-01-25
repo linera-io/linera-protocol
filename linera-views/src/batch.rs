@@ -504,9 +504,7 @@ impl BatchValueWriter<SimpleUnorderedBatch> for SimpleUnorderedBatchIter {
                 + get_uleb128_size(batch.deletions.len())
                 + get_uleb128_size(batch.insertions.len() + 1))
         } else {
-            Ok(batch_size
-                + get_uleb128_size(batch.deletions.len())
-                + get_uleb128_size(batch.insertions.len()))
+            unreachable!();
         }
     }
 }
