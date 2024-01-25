@@ -304,6 +304,10 @@ impl TryFrom<grpc::ChainInfoQuery> for ChainInfoQuery {
 
         Ok(Self {
             request_committees: chain_info_query.request_committees,
+            request_system_balance: chain_info_query
+                .request_system_balance
+                .map(TryInto::try_into)
+                .transpose()?,
             request_pending_messages: chain_info_query.request_pending_messages,
             chain_id: try_proto_convert(chain_info_query.chain_id)?,
             request_sent_certificates_in_range,
@@ -333,6 +337,7 @@ impl TryFrom<ChainInfoQuery> for grpc::ChainInfoQuery {
         Ok(Self {
             chain_id: Some(chain_info_query.chain_id.into()),
             request_committees: chain_info_query.request_committees,
+            request_system_balance: chain_info_query.request_system_balance.map(Into::into),
             request_pending_messages: chain_info_query.request_pending_messages,
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
             request_sent_certificates_in_range,
@@ -555,6 +560,7 @@ pub mod tests {
             next_block_height: BlockHeight::ZERO,
             state_hash: None,
             requested_committees: None,
+            requested_system_balance: None,
             requested_pending_messages: vec![],
             requested_sent_certificates: vec![],
             count_received_log: 0,
@@ -586,6 +592,7 @@ pub mod tests {
             chain_id: ChainId::root(0),
             test_next_block_height: Some(BlockHeight::from(10)),
             request_committees: false,
+            request_system_balance: None,
             request_pending_messages: false,
             request_sent_certificates_in_range: Some(linera_core::data_types::BlockHeightRange {
                 start: BlockHeight::from(3),

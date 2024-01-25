@@ -6,7 +6,7 @@ use crate::client::ChainClientError;
 use linera_base::{
     crypto::{BcsSignable, CryptoError, CryptoHash, KeyPair, Signature},
     data_types::{Amount, BlockHeight, Round, Timestamp},
-    identifiers::{ChainDescription, ChainId},
+    identifiers::{ChainDescription, ChainId, Owner},
 };
 use linera_chain::{
     data_types::{
@@ -55,6 +55,8 @@ pub struct ChainInfoQuery {
     pub chain_id: ChainId,
     /// Optionally test that the block height is the one expected.
     pub test_next_block_height: Option<BlockHeight>,
+    /// Request the system balance of a given `Owner`.
+    pub request_system_balance: Option<Owner>,
     /// Query the current committees.
     pub request_committees: bool,
     /// Query the received messages that are waiting be picked in the next block.
@@ -77,6 +79,7 @@ impl ChainInfoQuery {
             chain_id,
             test_next_block_height: None,
             request_committees: false,
+            request_system_balance: None,
             request_pending_messages: false,
             request_sent_certificates_in_range: None,
             request_received_log_excluding_first_nth: None,
@@ -93,6 +96,11 @@ impl ChainInfoQuery {
 
     pub fn with_committees(mut self) -> Self {
         self.request_committees = true;
+        self
+    }
+
+    pub fn with_system_balance(mut self, owner: Owner) -> Self {
+        self.request_system_balance = Some(owner);
         self
     }
 
@@ -148,6 +156,8 @@ pub struct ChainInfo {
     pub next_block_height: BlockHeight,
     /// The hash of the current execution state.
     pub state_hash: Option<CryptoHash>,
+    /// The request system balance, if any.
+    pub requested_system_balance: Option<Amount>,
     /// The current committees.
     pub requested_committees: Option<BTreeMap<Epoch, Committee>>,
     /// The received messages that are waiting be picked in the next block (if requested).
@@ -233,6 +243,7 @@ where
             timestamp: *view.execution_state.system.timestamp.get(),
             state_hash: *view.execution_state_hash.get(),
             requested_committees: None,
+            requested_system_balance: None,
             requested_pending_messages: Vec::new(),
             requested_sent_certificates: Vec::new(),
             count_received_log: view.received_log.count(),

@@ -1204,6 +1204,10 @@ where
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
         }
+        if let Some(owner) = query.request_system_balance {
+            info.requested_system_balance =
+                chain.execution_state.system.balances.get(&owner).await?;
+        }
         if let Some(next_block_height) = query.test_next_block_height {
             ensure!(
                 chain.tip_state.get().next_block_height == next_block_height,

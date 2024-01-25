@@ -133,6 +133,9 @@ message ChainInfoQuery {
 
   // Query a value that contains a binary blob (e.g. bytecode) required by this chain.
   optional bytes request_blob = 9;
+
+  // Query the system balance of a given owner.
+  Owner request_system_balance = 10;
 }
 
 // An authenticated proposal for a new block.
