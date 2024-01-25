@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
+    data_types::{
+        BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout,
+    },
     local_node::{LocalNodeClient, LocalNodeError},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
@@ -40,8 +42,9 @@ use linera_execution::{
         Account, AdminOperation, Recipient, SystemChannel, SystemOperation, UserData,
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX, PUBLISH_BYTECODE_MESSAGE_INDEX,
     },
-    Bytecode, ChainOwnership, Message, Operation, Query, Response, SystemMessage, SystemQuery,
-    SystemResponse, TimeoutConfig, UserApplicationId,
+    Bytecode, ChainOwnership, ExecutionError, Message, Operation, Query, Response,
+    SystemExecutionError, SystemMessage, SystemQuery, SystemResponse, TimeoutConfig,
+    UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -318,20 +321,6 @@ where
     /// Messages known to be redundant are filtered out: A `RegisterApplications` message whose
     /// entries are already known never needs to be included in a block.
     async fn pending_messages(&mut self) -> Result<Vec<IncomingMessage>, LocalNodeError> {
-        self.pending_messages_internal(|_| true).await
-    }
-
-    async fn pending_system_messages(&mut self) -> Result<Vec<IncomingMessage>, LocalNodeError> {
-        self.pending_messages_internal(|message| {
-            matches!(message.event.message, Message::System(_))
-        })
-        .await
-    }
-
-    async fn pending_messages_internal<F: Fn(&IncomingMessage) -> bool>(
-        &mut self,
-        filter: F,
-    ) -> Result<Vec<IncomingMessage>, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
         let info = self.node_client.handle_chain_info_query(query).await?.info;
         assert_eq!(
@@ -366,9 +355,6 @@ where
                     self.max_pending_messages
                 );
                 break;
-            }
-            if !filter(&message) {
-                continue;
             }
             if let Message::System(SystemMessage::RegisterApplications { applications }) =
                 &message.event.message
@@ -1262,7 +1248,7 @@ where
     async fn stage_block_execution_and_discard_failing_messages(
         &mut self,
         mut block: Block,
-    ) -> Result<ExecutedBlock, ChainClientError> {
+    ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self.node_client.stage_block_execution(block.clone()).await;
             if let Err(LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))) = &result
@@ -1291,7 +1277,7 @@ where
                     }
                 }
             }
-            return Ok(result?.0);
+            return Ok(result?);
         }
     }
 
@@ -1344,7 +1330,7 @@ where
         }
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
-        let executed_block = self
+        let (executed_block, _) = self
             .stage_block_execution_and_discard_failing_messages(block)
             .await?;
         let block = executed_block.block.clone();
@@ -1508,7 +1494,7 @@ where
         };
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
-        let executed_block = self
+        let (executed_block, _) = self
             .stage_block_execution_and_discard_failing_messages(block)
             .await?;
         self.pending_block = Some(executed_block.block.clone());
@@ -1607,7 +1593,7 @@ where
             self.chain_info().await?.next_block_height == self.next_block_height,
             ChainClientError::WalletSynchronizationError
         );
-        let incoming_messages = self.pending_system_messages().await?;
+        let incoming_messages = self.pending_messages().await?;
         let timestamp = self.next_timestamp(&incoming_messages).await;
         let block = Block {
             epoch: self.epoch().await?,
@@ -1619,11 +1605,29 @@ where
             authenticated_signer: owner,
             timestamp,
         };
-        let (_, response) = self.node_client.stage_block_execution(block).await?;
-        Ok((
-            response.info.system_balance,
-            response.info.requested_system_balance,
-        ))
+        match self
+            .stage_block_execution_and_discard_failing_messages(block)
+            .await
+        {
+            Ok((_, response)) => Ok((
+                response.info.system_balance,
+                response.info.requested_system_balance,
+            )),
+            Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
+                WorkerError::ChainError(error),
+            ))) if matches!(
+                *error,
+                ChainError::ExecutionError(
+                    ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }),
+                    ChainExecutionContext::Block
+                )
+            ) =>
+            {
+                // We can't even pay for the execution of one empty block. Let's return zero.
+                Ok((Amount::ZERO, Some(Amount::ZERO)))
+            }
+            Err(error) => Err(error),
+        }
     }
 
     /// Attempts to update all validators about the local chain.

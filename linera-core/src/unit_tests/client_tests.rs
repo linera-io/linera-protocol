@@ -162,7 +162,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
-        .with_policy(ResourceControlPolicy::only_fuel());
+        .with_policy(ResourceControlPolicy::fuel_and_block());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
@@ -170,7 +170,8 @@ where
     let mut receiver = builder
         .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
         .await?;
-    let cert = sender
+    let friend = receiver.identity().await?;
+    sender
         .transfer_to_account(
             None,
             Amount::from_tokens(3),
@@ -180,21 +181,34 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
+    let cert = sender
+        .transfer_to_account(
+            None,
+            Amount::from_milli(100),
+            Account::owner(ChainId::root(2), friend),
+            UserData(None),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        sender.local_balance().await.unwrap(),
+        Amount::from_milli(897)
+    );
     receiver.receive_certificate(cert).await?;
     receiver.process_inbox().await?;
     // The received amount is not in the unprotected balance.
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         receiver.local_owner_balance(owner).await.unwrap(),
-        Amount::from_tokens(3)
+        Amount::from_milli(2999)
     );
     assert_eq!(
         receiver
             .local_balances_with_owner(Some(owner))
             .await
             .unwrap(),
-        (Amount::ZERO, Some(Amount::from_tokens(3)))
+        (Amount::ZERO, Some(Amount::from_milli(2999)))
     );
 
     // First attempt that should be rejected.
@@ -228,10 +242,10 @@ where
         // Both `Claim` messages were included in the block.
         assert_eq!(messages.len(), 2);
         // The first one was rejected.
-        assert_eq!(messages[0].event.height, BlockHeight::from(1));
+        assert_eq!(messages[0].event.height, BlockHeight::from(2));
         assert_eq!(messages[0].action, MessageAction::Reject);
         // The second was accepted.
-        assert_eq!(messages[1].event.height, BlockHeight::from(2));
+        assert_eq!(messages[1].event.height, BlockHeight::from(3));
         assert_eq!(messages[1].action, MessageAction::Accept);
     }
 
@@ -239,7 +253,7 @@ where
     sender.process_inbox().await?;
     assert_eq!(
         sender.local_balance().await.unwrap(),
-        Amount::from_tokens(3)
+        Amount::from_milli(2894)
     );
 
     Ok(())
