@@ -729,6 +729,10 @@ where
             Ok(vec![])
         }
     }
+
+    async fn version(&self) -> linera_base::VersionInfo {
+        linera_base::VersionInfo::default()
+    }
 }
 
 // What follows is a hack to add a chain_id field to `ChainStateView` based on

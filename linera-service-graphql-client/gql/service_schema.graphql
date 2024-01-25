@@ -583,6 +583,7 @@ type QueryRoot {
 	chains: Chains!
 	block(hash: CryptoHash, chainId: ChainId!): HashedValue
 	blocks(from: CryptoHash, chainId: ChainId!, limit: Int): [HashedValue!]!
+	version: VersionInfo!
 }
 
 type QueueView_BlockHeight {
@@ -726,6 +727,32 @@ scalar UserApplicationDescription
 Optional user message attached to a transfer
 """
 scalar UserData
+
+"""
+The version info of a build of Linera.
+"""
+type VersionInfo {
+	"""
+	The crate version
+	"""
+	crateVersion: String!
+	"""
+	The git commit hash
+	"""
+	gitCommit: String!
+	"""
+	A hash of the RPC API
+	"""
+	rpcHash: String!
+	"""
+	A hash of the GraphQL API
+	"""
+	graphqlHash: String!
+	"""
+	A hash of the WIT API
+	"""
+	witHash: String!
+}
 
 schema {
 	query: QueryRoot
