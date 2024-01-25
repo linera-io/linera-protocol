@@ -360,6 +360,11 @@ pub enum ClientCommand {
         /// How many transactions to put in each block.
         #[arg(long, default_value = "1")]
         transactions_per_block: usize,
+
+        /// The application ID of a fungible token on the wallet's default chain.
+        /// If none is specified, the benchmark uses the native token.
+        #[arg(long)]
+        fungible_application_id: Option<linera_base::identifiers::ApplicationId>,
     },
 
     /// Create genesis configuration for a Linera deployment.

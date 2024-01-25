@@ -503,6 +503,7 @@ impl Runnable for Job {
                 num_chains,
                 tokens_per_chain,
                 transactions_per_block,
+                fungible_application_id,
             } => {
                 // Below all block proposals are supposed to succeed without retries, we
                 // must make sure that all incoming payments have been accepted on-chain
@@ -512,14 +513,23 @@ impl Runnable for Job {
                     .await;
 
                 let key_pairs = context
-                    .make_benchmark_chains(num_chains, tokens_per_chain, storage.clone())
+                    .make_benchmark_chains(num_chains, tokens_per_chain, &storage)
                     .await?;
+
+                if let Some(id) = fungible_application_id {
+                    context
+                        .supply_fungible_tokens(&key_pairs, id, max_in_flight, &storage)
+                        .await?;
+                }
 
                 // For this command, we create proposals and gather certificates without using
                 // the client library. We update the wallet storage at the end using a local node.
                 info!("Starting benchmark phase 1 (block proposals)");
-                let proposals =
-                    context.make_benchmark_block_proposals(&key_pairs, transactions_per_block);
+                let proposals = context.make_benchmark_block_proposals(
+                    &key_pairs,
+                    transactions_per_block,
+                    fungible_application_id,
+                );
                 let num_proposal = proposals.len();
                 let mut values = HashMap::new();
 
