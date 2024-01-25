@@ -6,7 +6,7 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::{borrow::Cow, ops::Deref};
-use syn::{Field, Fields, Ident};
+use syn::{Field, Fields, Ident, Meta, MetaList};
 
 /// A helper type with information about a list of [`Fields`].
 pub struct FieldsInformation<'input> {
@@ -14,7 +14,14 @@ pub struct FieldsInformation<'input> {
     fields: Vec<FieldInformation<'input>>,
 }
 
-impl FieldsInformation<'_> {
+impl<'input> FieldsInformation<'input> {
+    /// Returns an iterator over the [`FieldInformation`] of the non-skipped fields.
+    pub fn non_skipped_fields(
+        &self,
+    ) -> impl Iterator<Item = &FieldInformation<'input>> + Clone + '_ {
+        self.fields.iter().filter(|field| !field.is_skipped())
+    }
+
     /// Returns an iterator over the names of the fields.
     pub fn names(&self) -> impl Iterator<Item = &Ident> + '_ {
         self.fields.iter().map(FieldInformation::name)
@@ -23,7 +30,7 @@ impl FieldsInformation<'_> {
     /// Returns the code with a pattern to match a heterogenous list using the `field_names` as
     /// bindings.
     pub fn hlist_type(&self) -> TokenStream {
-        let field_types = self.fields.iter().map(|field| &field.ty);
+        let field_types = self.non_skipped_fields().map(|field| &field.ty);
         quote! { linera_witty::HList![#( #field_types ),*] }
     }
 
@@ -33,7 +40,7 @@ impl FieldsInformation<'_> {
     /// This function receives `field_names` instead of a `Fields` instance because some fields might
     /// not have names, so binding names must be created for them.
     pub fn hlist_bindings(&self) -> TokenStream {
-        let field_names = self.fields.iter().map(FieldInformation::name);
+        let field_names = self.non_skipped_fields().map(FieldInformation::name);
         quote! { linera_witty::hlist_pat![#( #field_names ),*] }
     }
 
@@ -42,8 +49,18 @@ impl FieldsInformation<'_> {
     /// Assumes that the bindings were obtained using [`Self::hlist_bindings`] or
     /// [`Self::construction`].
     pub fn hlist_value(&self) -> TokenStream {
-        let field_names = self.fields.iter().map(FieldInformation::name);
+        let field_names = self.non_skipped_fields().map(FieldInformation::name);
         quote! { linera_witty::hlist![#( #field_names ),*] }
+    }
+
+    /// Returns the code that creates bindings with default values for the skipped fields.
+    pub fn bindings_for_skipped_fields(&self) -> TokenStream {
+        self.fields
+            .iter()
+            .filter(|field| field.is_skipped())
+            .map(FieldInformation::name)
+            .map(|field_name| quote! { let #field_name = Default::default(); })
+            .collect()
     }
 
     /// Returns the code with the body to construct the container of the fields.
@@ -64,12 +81,36 @@ impl FieldsInformation<'_> {
     ///
     /// Does not include bindings for skipped fields.
     pub fn destructuring(&self) -> TokenStream {
-        let names = self.fields.iter().map(FieldInformation::name);
-
         match self.kind {
             FieldsKind::Unit => quote! {},
-            FieldsKind::Named => quote! { { #( #names, )* } },
-            FieldsKind::Unnamed => quote! { ( #( #names ),* ) },
+            FieldsKind::Named => {
+                let bindings = self.non_skipped_fields().map(FieldInformation::name);
+
+                let skipped_field_count = self
+                    .fields
+                    .iter()
+                    .filter(|field| field.is_skipped())
+                    .count();
+
+                let ignored_fields = match skipped_field_count {
+                    0 => quote! {},
+                    1 => quote! { _ },
+                    _ => quote! { .. },
+                };
+
+                quote! { { #( #bindings, )* #ignored_fields } }
+            }
+            FieldsKind::Unnamed => {
+                let bindings = self.fields.iter().map(|field| {
+                    if field.is_skipped() {
+                        Cow::Owned(Ident::new("_", field.name.span()))
+                    } else {
+                        Cow::Borrowed(field.name())
+                    }
+                });
+
+                quote! { ( #( #bindings ),* ) }
+            }
         }
     }
 }
@@ -91,12 +132,18 @@ impl<'input> From<&'input Fields> for FieldsInformation<'input> {
 pub struct FieldInformation<'input> {
     field: &'input Field,
     name: Cow<'input, Ident>,
+    is_skipped: bool,
 }
 
 impl FieldInformation<'_> {
     /// Returns the name to use for this field.
     pub fn name(&self) -> &Ident {
         &self.name
+    }
+
+    /// Returns `true` if this field was marked to be skipped.
+    pub fn is_skipped(&self) -> bool {
+        self.is_skipped
     }
 }
 
@@ -116,7 +163,19 @@ impl<'input> From<(usize, &'input Field)> for FieldInformation<'input> {
             .map(Cow::Borrowed)
             .unwrap_or_else(|| Cow::Owned(format_ident!("field{index}")));
 
-        FieldInformation { field, name }
+        let is_skipped = field.attrs.iter().any(|attribute| {
+            matches!(
+                &attribute.meta,
+                Meta::List(MetaList { path, tokens, ..})
+                    if path.is_ident("witty") && tokens.to_string() == "skip"
+            )
+        });
+
+        FieldInformation {
+            field,
+            name,
+            is_skipped,
+        }
     }
 }
 

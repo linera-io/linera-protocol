@@ -19,6 +19,7 @@ pub fn derive_for_struct<'input>(fields: impl Into<FieldsInformation<'input>>) -
     let fields_hlist_binding = fields.hlist_bindings();
     let fields_hlist_type = fields.hlist_type();
     let construction = fields.construction();
+    let fallback_bindings = fields.bindings_for_skipped_fields();
 
     quote! {
         fn load<Instance>(
@@ -32,6 +33,8 @@ pub fn derive_for_struct<'input>(fields: impl Into<FieldsInformation<'input>>) -
         {
             let #fields_hlist_binding =
                 <#fields_hlist_type as linera_witty::WitLoad>::load(memory, location)?;
+
+            #fallback_bindings
 
             Ok(Self #construction)
         }
@@ -47,6 +50,8 @@ pub fn derive_for_struct<'input>(fields: impl Into<FieldsInformation<'input>>) -
         {
             let #fields_hlist_binding =
                 <#fields_hlist_type as linera_witty::WitLoad>::lift_from(flat_layout, memory)?;
+
+            #fallback_bindings
 
             Ok(Self #construction)
         }
@@ -89,11 +94,14 @@ pub fn derive_for_enum<'variants>(
         let field_bindings = fields.hlist_bindings();
         let fields_type = fields.hlist_type();
         let construction = fields.construction();
+        let fallback_bindings = fields.bindings_for_skipped_fields();
 
         quote! {
             #index => {
                 let #field_bindings =
                     <#fields_type as linera_witty::WitLoad>::load(memory, location)?;
+
+                #fallback_bindings
 
                 Ok(#name::#variant_name #construction)
             }
@@ -106,6 +114,7 @@ pub fn derive_for_enum<'variants>(
         let field_bindings = fields.hlist_bindings();
         let fields_type = fields.hlist_type();
         let construction = fields.construction();
+        let fallback_bindings = fields.bindings_for_skipped_fields();
 
         quote! {
             #index => {
@@ -113,6 +122,8 @@ pub fn derive_for_enum<'variants>(
                     linera_witty::JoinFlatLayouts::from_joined(flat_layout),
                     memory,
                 )?;
+
+                #fallback_bindings
 
                 Ok(#name::#variant_name #construction)
             }
