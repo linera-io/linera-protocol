@@ -200,7 +200,7 @@ pub enum ClientCommand {
         #[arg(long = "subscriber")]
         subscriber: Option<ChainId>,
 
-        /// Chain id (must be one of our chains).
+        /// Chain id.
         #[arg(long = "publisher")]
         publisher: Option<ChainId>,
 
@@ -215,7 +215,7 @@ pub enum ClientCommand {
         #[arg(long = "subscriber")]
         subscriber: Option<ChainId>,
 
-        /// Chain id (must be one of our chains).
+        /// Chain id.
         #[arg(long = "publisher")]
         publisher: Option<ChainId>,
 

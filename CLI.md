@@ -150,7 +150,7 @@ Subscribes to a system channel
 ###### **Options:**
 
 * `--subscriber <SUBSCRIBER>` — Chain id (must be one of our chains)
-* `--publisher <PUBLISHER>` — Chain id (must be one of our chains)
+* `--publisher <PUBLISHER>` — Chain id
 * `--channel <CHANNEL>` — System channel available in the system application
 
   Possible values:
@@ -171,7 +171,7 @@ Unsubscribes from a system channel
 ###### **Options:**
 
 * `--subscriber <SUBSCRIBER>` — Chain id (must be one of our chains)
-* `--publisher <PUBLISHER>` — Chain id (must be one of our chains)
+* `--publisher <PUBLISHER>` — Chain id
 * `--channel <CHANNEL>` — System channel available in the system application
 
   Possible values:
