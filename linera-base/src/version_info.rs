@@ -39,7 +39,7 @@ pub const VERSION_INFO: VersionInfo = VersionInfo {
 
 impl VersionInfo {
     /// Print a human-readable listing of the version information.
-    pub fn print(&self) {
+    pub fn log(&self) {
         let VersionInfo {
             crate_version,
             git_commit,
@@ -48,15 +48,11 @@ impl VersionInfo {
             wit_hash,
         } = self;
 
-        println!(
-            "\
-            Linera v{crate_version}\n\
-            Built from git commit: {git_commit}\n\
-            RPC API hash: {rpc_hash}\n\
-            GraphQL API hash: {graphql_hash}\n\
-            WIT API hash: {wit_hash}\n\
-        "
-        );
+        tracing::info!("Linera v{crate_version}");
+        tracing::info!("Built from git commit: {git_commit}");
+        tracing::info!("RPC API hash: {rpc_hash}");
+        tracing::info!("GraphQL API hash: {graphql_hash}");
+        tracing::info!("WIT API hash: {wit_hash}");
     }
 }
 
