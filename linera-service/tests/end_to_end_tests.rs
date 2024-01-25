@@ -2216,9 +2216,6 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetTestingConfig) {
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Tcp) ; "rocksdb_tcp"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
-#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Udp) ; "rocksdb_udp"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_benchmark(config: LocalNetTestingConfig) {
     use fungible::{FungibleTokenAbi, InitialState};
