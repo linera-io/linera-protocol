@@ -333,19 +333,18 @@ where
         filter: F,
     ) -> Result<Vec<IncomingMessage>, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
-        let response = self.node_client.handle_chain_info_query(query).await?;
-        let mut requested_pending_messages = response.info.requested_pending_messages;
+        let info = self.node_client.handle_chain_info_query(query).await?.info;
+        assert_eq!(
+            self.next_block_height, info.next_block_height,
+            "prepare_chain should have been called before"
+        );
+        let mut requested_pending_messages = info.requested_pending_messages;
         let mut pending_messages = vec![];
         // The first incoming message of any child chain must be `OpenChain`. We must have it in
         // our inbox, and include it before all other messages.
-        if self.next_block_height == BlockHeight::ZERO
-            && self
-                .chain_state_view()
-                .await?
-                .execution_state
-                .system
+        if info.next_block_height == BlockHeight::ZERO
+            && info
                 .description
-                .get()
                 .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id))?
                 .is_child()
         {
