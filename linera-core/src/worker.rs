@@ -55,7 +55,7 @@ use {
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
 
-pub static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
+static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "num_rounds_in_certificate",
         "Number of rounds in certificate",
@@ -67,7 +67,7 @@ pub static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
-pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: Lazy<HistogramVec> = Lazy::new(|| {
+static NUM_ROUNDS_IN_BLOCK_PROPOSAL: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "num_rounds_in_block_proposal",
         "Number of rounds in block proposal",
@@ -79,7 +79,7 @@ pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
-pub static TRANSACTION_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+static TRANSACTION_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec("transaction_count", "Transaction count", &[])
         .expect("Counter creation should not fail")
 });

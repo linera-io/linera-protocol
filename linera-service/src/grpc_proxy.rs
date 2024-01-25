@@ -41,7 +41,7 @@ use tonic::{
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument};
 
-pub static PROXY_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+static PROXY_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "proxy_request_latency",
         "Proxy request latency",
@@ -54,12 +54,12 @@ pub static PROXY_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
-pub static PROXY_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+static PROXY_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec("proxy_request_count", "Proxy request count", &[])
         .expect("Counter creation should not fail")
 });
 
-pub static PROXY_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
+static PROXY_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "proxy_request_success",
         "Proxy request success",
@@ -68,7 +68,7 @@ pub static PROXY_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
-pub static PROXY_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
+static PROXY_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "proxy_request_error",
         "Proxy request error",

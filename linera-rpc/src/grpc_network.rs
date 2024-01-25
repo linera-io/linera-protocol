@@ -68,7 +68,7 @@ use tracing::{debug, error, info, instrument, warn};
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
 type NotificationSender = mpsc::Sender<Notification>;
 
-pub static SERVER_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+static SERVER_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "server_request_latency",
         "Server request latency",
@@ -78,12 +78,12 @@ pub static SERVER_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
-pub static SERVER_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+static SERVER_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec("server_request_count", "Server request count", &[])
         .expect("Counter creation should not fail")
 });
 
-pub static SERVER_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
+static SERVER_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "server_request_success",
         "Server request success",
@@ -92,7 +92,7 @@ pub static SERVER_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
-pub static SERVER_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
+static SERVER_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "server_request_error",
         "Server request error",
@@ -101,7 +101,7 @@ pub static SERVER_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
-pub static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: Lazy<HistogramVec> = Lazy::new(|| {
+static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "server_request_latency_per_request_type",
         "Server request latency per request type",
