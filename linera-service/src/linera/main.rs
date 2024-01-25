@@ -286,8 +286,8 @@ impl Runnable for Job {
                 };
                 context.update_and_save_wallet(&mut chain_client).await;
                 let subscribe = result.context("Failed to subscribe")?;
-                let time_total = time_start.elapsed().as_micros();
-                info!("Subscription confirmed after {} us", time_total);
+                let time_total = time_start.elapsed();
+                info!("Subscription confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", subscribe);
             }
 
@@ -315,8 +315,8 @@ impl Runnable for Job {
                 };
                 context.update_and_save_wallet(&mut chain_client).await;
                 let unsubscribe = result.context("Failed to unsubscribe")?;
-                let time_total = time_start.elapsed().as_micros();
-                info!("Unsubscribed in {} us", time_total);
+                let time_total = time_start.elapsed();
+                info!("Unsubscribed in {} ms", time_total.as_millis());
                 debug!("{:?}", unsubscribe);
             }
 
