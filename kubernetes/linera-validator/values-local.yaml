@@ -36,6 +36,8 @@ kube-prometheus-stack:
     persistence:
       enabled: true
       size: 1Gi
+    plugins:
+      - grafana-piechart-panel
   prometheus:
     prometheusSpec:
       retention: 2d
