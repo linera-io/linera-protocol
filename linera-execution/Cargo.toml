@@ -28,6 +28,7 @@ async-lock = { workspace = true }
 async-trait = { workspace = true }
 bcs = { workspace = true }
 bytes = { workspace = true, optional = true }
+clap = { workspace = true }
 custom_debug_derive = { workspace = true }
 dashmap = { workspace = true }
 derive_more = { workspace = true }

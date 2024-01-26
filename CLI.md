@@ -7,6 +7,8 @@ This document contains the help content for the `linera` command-line program.
 * [`linera`↴](#linera)
 * [`linera transfer`↴](#linera-transfer)
 * [`linera open-chain`↴](#linera-open-chain)
+* [`linera subscribe`↴](#linera-subscribe)
+* [`linera unsubscribe`↴](#linera-unsubscribe)
 * [`linera open-multi-owner-chain`↴](#linera-open-multi-owner-chain)
 * [`linera close-chain`↴](#linera-close-chain)
 * [`linera query-balance`↴](#linera-query-balance)
@@ -48,6 +50,8 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 
 * `transfer` — Transfer funds
 * `open-chain` — Open (i.e. activate) a new chain deriving the UID from an existing one
+* `subscribe` — Subscribes to a system channel
+* `unsubscribe` — Unsubscribes from a system channel
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
 * `close-chain` — Close (i.e. deactivate) an existing chain
 * `query-balance` — Read the balance of the chain from the local state of the client
@@ -134,6 +138,48 @@ Open (i.e. activate) a new chain deriving the UID from an existing one
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
+
+
+
+## `linera subscribe`
+
+Subscribes to a system channel
+
+**Usage:** `linera subscribe [OPTIONS] --channel <CHANNEL>`
+
+###### **Options:**
+
+* `--subscriber <SUBSCRIBER>` — Chain id (must be one of our chains)
+* `--publisher <PUBLISHER>` — Chain id
+* `--channel <CHANNEL>` — System channel available in the system application
+
+  Possible values:
+  - `admin`:
+    Channel used to broadcast reconfigurations
+  - `published-bytecodes`:
+    Channel used to broadcast new published bytecodes
+
+
+
+
+## `linera unsubscribe`
+
+Unsubscribes from a system channel
+
+**Usage:** `linera unsubscribe [OPTIONS] --channel <CHANNEL>`
+
+###### **Options:**
+
+* `--subscriber <SUBSCRIBER>` — Chain id (must be one of our chains)
+* `--publisher <PUBLISHER>` — Chain id
+* `--channel <CHANNEL>` — System channel available in the system application
+
+  Possible values:
+  - `admin`:
+    Channel used to broadcast reconfigurations
+  - `published-bytecodes`:
+    Channel used to broadcast new published bytecodes
+
 
 
 

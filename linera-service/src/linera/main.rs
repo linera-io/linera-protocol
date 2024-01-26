@@ -16,7 +16,7 @@ use linera_base::{
 };
 use linera_chain::data_types::{CertificateValue, ExecutedBlock};
 use linera_core::{
-    client::ChainClient,
+    client::{ChainClient, ChainClientError},
     data_types::{ChainInfoQuery, ClientOutcome},
     local_node::LocalNodeClient,
     node::ValidatorNodeProvider,
@@ -26,7 +26,7 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
     policy::ResourceControlPolicy,
-    system::UserData,
+    system::{SystemChannel, UserData},
     ChainOwnership, Message, SystemMessage, TimeoutConfig,
 };
 use linera_service::{
@@ -263,6 +263,61 @@ impl Runnable for Job {
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
+            }
+
+            Subscribe {
+                subscriber,
+                publisher,
+                channel,
+            } => {
+                let mut chain_client = context.make_chain_client(storage, subscriber);
+                let time_start = Instant::now();
+                info!("Subscribing");
+                let result = match channel {
+                    SystemChannel::Admin => chain_client.subscribe_to_new_committees().await,
+                    SystemChannel::PublishedBytecodes => match publisher {
+                        Some(publisher_chainid) => {
+                            chain_client
+                                .subscribe_to_published_bytecodes(publisher_chainid)
+                                .await
+                        }
+                        None => Err(ChainClientError::InternalError("Incorrect chain ID")),
+                    },
+                };
+                context.update_and_save_wallet(&mut chain_client).await;
+                let subscribe = result.context("Failed to subscribe")?;
+                let time_total = time_start.elapsed();
+                info!("Subscription confirmed after {} ms", time_total.as_millis());
+                debug!("{:?}", subscribe);
+            }
+
+            Unsubscribe {
+                subscriber,
+                publisher,
+                channel,
+            } => {
+                let mut chain_client = context.make_chain_client(storage, subscriber);
+                let time_start = Instant::now();
+                let result = match channel {
+                    SystemChannel::Admin => {
+                        info!("Unsubscribing from admin channel");
+                        chain_client.unsubscribe_from_new_committees().await
+                    }
+                    SystemChannel::PublishedBytecodes => match publisher {
+                        Some(publisher_chainid) => {
+                            info!("Unsubscribing from publisher {}", publisher_chainid);
+                            chain_client
+                                .unsubscribe_from_published_bytecodes(publisher_chainid)
+                                .await
+                        }
+                        None => Err(ChainClientError::InternalError("Incorrect chain ID")),
+                    },
+                };
+                context.update_and_save_wallet(&mut chain_client).await;
+                let unsubscribe = result.context("Failed to unsubscribe")?;
+                let time_total = time_start.elapsed();
+                info!("Unsubscribed in {} ms", time_total.as_millis());
+                debug!("{:?}", unsubscribe);
             }
 
             QueryBalance { chain_id } => {
