@@ -5,7 +5,4 @@ metadata:
   labels:
     grafana_dashboard: "1"
 data:
-  # If adding another dashboard here doesn't work, we should rename this ConfigMap to
-  # linera-general-dashboard-config, and create one ConfigMap per dashboard (that seems
-  # to be what's actually recommended by the docs)
   linera-general.json: {{ .Files.Get "grafana-dashboards/linera-general.json" | quote | indent 4 }}
