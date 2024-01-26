@@ -417,20 +417,15 @@ impl ClientWrapper {
         Ok(amount)
     }
 
-    /// Runs `linera sync-balance`.
-    pub async fn synchronize_balance(&self, account: Account) -> Result<Amount> {
-        let stdout = self
-            .command()
+    /// Runs `linera sync`.
+    pub async fn synchronize(&self, chain_id: ChainId) -> Result<()> {
+        self.command()
             .await?
-            .arg("sync-balance")
-            .arg(account.to_string())
+            .arg("sync")
+            .arg(&chain_id.to_string())
             .spawn_and_wait_for_stdout()
             .await?;
-        let amount = stdout
-            .trim()
-            .parse()
-            .context("error while parsing the result of `linera sync-balance`")?;
-        Ok(amount)
+        Ok(())
     }
 
     /// Runs `linera process-inbox`.

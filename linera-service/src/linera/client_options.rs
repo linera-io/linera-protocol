@@ -302,13 +302,22 @@ pub enum ClientCommand {
         account: Option<Account>,
     },
 
-    /// Synchronize the local state of the chain with a quorum validators, then query the
+    /// (DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the
     /// local balance.
+    ///
+    /// This command is deprecated. Use `linera sync && linera query-balance` instead.
     SyncBalance {
         /// The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
         /// chain balance. By defaults, we read the chain balance of the default chain in
         /// the wallet.
         account: Option<Account>,
+    },
+
+    /// Synchronize the local state of the chain with a quorum validators.
+    Sync {
+        /// The chain to synchronize with validators. If omitted, synchronizes the
+        /// default chain of the wallet.
+        chain_id: Option<ChainId>,
     },
 
     /// Process all pending incoming messages from the inbox of the given chain by creating as many

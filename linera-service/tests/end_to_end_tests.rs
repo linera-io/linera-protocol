@@ -1464,10 +1464,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetTestingConfig) {
         .transfer(Amount::from_tokens(5), chain_1, chain_2)
         .await
         .unwrap();
-    client
-        .synchronize_balance(system::Account::chain(chain_2))
-        .await
-        .unwrap();
+    client.synchronize(chain_2).await.unwrap();
     assert_eq!(
         client
             .query_balance(system::Account::chain(chain_2))
@@ -1700,10 +1697,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
         .transfer(Amount::from_tokens(5), chain1, chain2)
         .await
         .unwrap();
-    client2
-        .synchronize_balance(system::Account::chain(chain2))
-        .await
-        .unwrap();
+    client2.synchronize(chain2).await.unwrap();
 
     assert_eq!(
         client1
@@ -1730,10 +1724,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
         )
         .await
         .unwrap();
-    client1
-        .synchronize_balance(system::Account::chain(chain1))
-        .await
-        .unwrap();
+    client1.synchronize(chain1).await.unwrap();
 
     assert_eq!(
         client1
@@ -1977,10 +1968,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
         .transfer(Amount::from_tokens(6), chain1, chain2)
         .await
         .unwrap();
-    client2
-        .synchronize_balance(system::Account::chain(chain2))
-        .await
-        .unwrap();
+    client2.synchronize(chain2).await.unwrap();
 
     assert_eq!(
         client1
@@ -2013,14 +2001,8 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
         .transfer(Amount::from_tokens(1), chain2, chain1)
         .await
         .unwrap();
-    client1
-        .synchronize_balance(system::Account::chain(chain1))
-        .await
-        .unwrap();
-    client2
-        .synchronize_balance(system::Account::chain(chain2))
-        .await
-        .unwrap();
+    client1.synchronize(chain1).await.unwrap();
+    client2.synchronize(chain2).await.unwrap();
 
     assert_eq!(
         client1
@@ -2088,10 +2070,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
         .transfer(Amount::from_tokens(6), chain1, chain2)
         .await
         .unwrap();
-    client2
-        .synchronize_balance(system::Account::chain(chain2))
-        .await
-        .unwrap();
+    client2.synchronize(chain2).await.unwrap();
     assert_eq!(
         client2
             .query_balance(system::Account::chain(chain2))
@@ -2105,14 +2084,8 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
         .transfer(Amount::from_tokens(2), chain2, chain1)
         .await
         .unwrap();
-    client1
-        .synchronize_balance(system::Account::chain(chain1))
-        .await
-        .unwrap();
-    client2
-        .synchronize_balance(system::Account::chain(chain2))
-        .await
-        .unwrap();
+    client1.synchronize(chain1).await.unwrap();
+    client2.synchronize(chain2).await.unwrap();
     assert_eq!(
         client1
             .query_balance(system::Account::chain(chain1))
@@ -2181,10 +2154,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     faucet_service.terminate().await.unwrap();
 
     // Chain 1 should have transferred four tokens, two to each child. So it should have six left.
-    client1
-        .synchronize_balance(system::Account::chain(chain1))
-        .await
-        .unwrap();
+    client1.synchronize(chain1).await.unwrap();
     assert_eq!(
         client1
             .query_balance(system::Account::chain(chain1))
@@ -2200,10 +2170,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     );
 
     // Clients 2 and 3 should have the tokens, and own the chain.
-    client2
-        .synchronize_balance(system::Account::chain(chain2))
-        .await
-        .unwrap();
+    client2.synchronize(chain2).await.unwrap();
     assert_eq!(
         client2
             .query_balance(system::Account::chain(chain2))
@@ -2223,10 +2190,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
         Amount::from_tokens(1)
     );
 
-    client3
-        .synchronize_balance(system::Account::chain(chain3))
-        .await
-        .unwrap();
+    client3.synchronize(chain3).await.unwrap();
     assert_eq!(
         client3
             .query_balance(system::Account::chain(chain3))
@@ -2334,9 +2298,10 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetTestingConfig) {
     }
     let result = client.retry_pending_block(Some(chain_id)).await;
     assert!(result.unwrap().is_some());
+    client.synchronize(chain_id).await.unwrap();
     assert_eq!(
         client
-            .synchronize_balance(system::Account::chain(chain_id))
+            .query_balance(system::Account::chain(chain_id))
             .await
             .unwrap(),
         Amount::from_tokens(8)

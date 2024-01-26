@@ -358,6 +358,7 @@ impl Runnable for Job {
                 let account = account.unwrap_or_else(|| context.default_account());
                 let mut chain_client = context.make_chain_client(storage, account.chain_id);
                 info!("Synchronizing chain information and querying the local balance");
+                warn!("This command is deprecated. Use `linera sync && linera query-balance` instead.");
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
                 let result = match account.owner {
@@ -369,6 +370,20 @@ impl Runnable for Job {
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
                 println!("{}", balance);
+            }
+
+            Sync { chain_id } => {
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                let mut chain_client = context.make_chain_client(storage, chain_id);
+                info!("Synchronizing chain information");
+                let time_start = Instant::now();
+                chain_client.synchronize_from_validators().await?;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let time_total = time_start.elapsed();
+                info!(
+                    "Synchronized chain information in {} ms",
+                    time_total.as_millis()
+                );
             }
 
             ProcessInbox { chain_id } => {
