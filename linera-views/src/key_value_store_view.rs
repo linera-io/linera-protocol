@@ -31,7 +31,7 @@ use {
 #[cfg(feature = "metrics")]
 /// The runtime of hash computation
 static KEY_VALUE_STORE_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
-    prometheus_util::register_histogram_vec( 
+    prometheus_util::register_histogram_vec(
         "key_value_store_view_hash_runtime",
         "KeyValueStoreView hash runtime",
         &[],
