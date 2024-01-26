@@ -18,16 +18,23 @@
 
 #[cfg(feature = "metrics")]
 use {
-    crate::metering::run_with_execution_time_metric,
+    linera_base::prometheus_util::{self, MeasureLatency},
     linera_base::sync::Lazy,
-    prometheus::{register_histogram_vec, HistogramVec},
+    prometheus::HistogramVec,
 };
 
 #[cfg(feature = "metrics")]
 /// The runtime of hash computation
 static MAP_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!("map_view_hash_runtime", "MapView hash runtime", &[])
-        .expect("Counter creation should not fail")
+    prometheus_util::register_histogram_vec(
+        "map_view_hash_runtime",
+        "MapView hash runtime",
+        &[],
+        Some(vec![
+            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
+        ]),
+    )
+    .expect("Histogram can be created")
 });
 
 use crate::{
@@ -642,7 +649,9 @@ where
         .await
     }
 
-    async fn compute_hash_internal(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+        #[cfg(feature = "metrics")]
+        let _hash_latency = MAP_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0;
         let prefix = Vec::new();
@@ -658,17 +667,6 @@ where
         .await?;
         hasher.update_with_bcs_bytes(&count)?;
         Ok(hasher.finalize())
-    }
-
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
-        #[cfg(feature = "metrics")]
-        return run_with_execution_time_metric(
-            self.compute_hash_internal(),
-            &MAP_VIEW_HASH_RUNTIME,
-        )
-        .await;
-        #[cfg(not(feature = "metrics"))]
-        return self.compute_hash_internal().await;
     }
 }
 

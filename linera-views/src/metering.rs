@@ -115,18 +115,6 @@ pub struct MeteredStore<K> {
     pub store: K,
 }
 
-pub(crate) async fn run_with_execution_time_metric<F, O>(f: F, hist: &HistogramVec) -> O
-where
-    F: Future<Output = O>,
-{
-    let start = Instant::now();
-    let out = f.await;
-    let duration = start.elapsed();
-    hist.with_label_values(&[])
-        .observe(duration.as_micros() as f64);
-    out
-}
-
 #[async_trait]
 impl<K, E> ReadableKeyValueStore<E> for MeteredStore<K>
 where
