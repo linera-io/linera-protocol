@@ -416,18 +416,22 @@ impl ClientWrapper {
         max_in_flight: usize,
         num_chains: usize,
         transactions_per_block: usize,
+        fungible_application_id: Option<ApplicationId<fungible::FungibleTokenAbi>>,
     ) -> Result<()> {
-        self.command()
-            .await?
+        let mut command = self.command().await?;
+        command
             .arg("benchmark")
             .args(["--max-in-flight", &max_in_flight.to_string()])
             .args(["--num-chains", &num_chains.to_string()])
             .args([
                 "--transactions-per-block",
                 &transactions_per_block.to_string(),
-            ])
-            .spawn_and_wait_for_stdout()
-            .await?;
+            ]);
+        if let Some(application_id) = fungible_application_id {
+            let application_id = application_id.forget_abi().to_string();
+            command.args(["--fungible-application-id", &application_id]);
+        }
+        command.spawn_and_wait_for_stdout().await?;
         Ok(())
     }
 

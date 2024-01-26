@@ -33,7 +33,12 @@ use crate::ClientOptions;
 
 #[cfg(feature = "benchmark")]
 use {
-    linera_base::data_types::Amount,
+    futures::{stream, StreamExt as _},
+    linera_base::{
+        crypto::PublicKey,
+        data_types::Amount,
+        identifiers::{ApplicationId, Owner},
+    },
     linera_chain::data_types::{Block, BlockAndRound, BlockProposal, SignatureAggregator, Vote},
     linera_core::{
         data_types::ChainInfoQuery, local_node::LocalNodeClient, notifier::Notifier,
@@ -475,7 +480,7 @@ impl ClientContext {
         &mut self,
         num_chains: usize,
         balance: Amount,
-        storage: S,
+        storage: &S,
     ) -> anyhow::Result<HashMap<ChainId, KeyPair>>
     where
         S: Storage + Clone + Send + Sync + 'static,
@@ -551,32 +556,130 @@ impl ClientContext {
         Ok(key_pairs)
     }
 
+    /// Creates chains if necessary, and returns a map of exactly `num_chains` chain IDs
+    /// with key pairs.
+    pub async fn supply_fungible_tokens<S>(
+        &mut self,
+        key_pairs: &HashMap<ChainId, KeyPair>,
+        application_id: ApplicationId,
+        max_in_flight: usize,
+        storage: &S,
+    ) -> anyhow::Result<()>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        let default_chain_id = self
+            .wallet_state
+            .default_chain()
+            .context("should have default chain")?;
+        let default_key = self
+            .wallet_state
+            .get(default_chain_id)
+            .unwrap()
+            .key_pair
+            .as_ref()
+            .unwrap()
+            .public();
+        let amount = Amount::from(1_000_000);
+        let operations: Vec<_> = key_pairs
+            .iter()
+            .map(|(chain_id, key_pair)| {
+                Self::fungible_transfer(
+                    application_id,
+                    *chain_id,
+                    default_key,
+                    key_pair.public(),
+                    amount,
+                )
+            })
+            .collect();
+        let mut chain_client = self.make_chain_client(storage.clone(), default_chain_id);
+        // Put at most 1000 fungible token operations in each block.
+        for operations in operations.chunks(1000) {
+            chain_client
+                .execute_with_messages(operations.to_vec())
+                .await?
+                .expect("should execute block with OpenChain operations");
+        }
+        self.update_wallet_from_client(&mut chain_client).await;
+        // Make sure all chains have registered the application now.
+        let futures = stream::iter(key_pairs.keys())
+            .map(|&chain_id| {
+                let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
+                async move {
+                    for i in 0..5 {
+                        tokio::time::sleep(Duration::from_secs(i)).await;
+                        chain_client.process_inbox().await?;
+                        let chain_state = chain_client.chain_state_view().await?;
+                        if chain_state
+                            .execution_state
+                            .system
+                            .registry
+                            .known_applications
+                            .contains_key(&application_id)
+                            .await?
+                        {
+                            return Ok(chain_client);
+                        }
+                    }
+                    anyhow::bail!("Could not instantiate application on chain {:?}", chain_id);
+                }
+            })
+            .collect::<Vec<_>>()
+            .await;
+        // We have to collect the futures to avoid a higher-ranked lifetime error:
+        // https://github.com/rust-lang/rust/issues/102211#issuecomment-1673201352
+        let results = stream::iter(futures)
+            .buffer_unordered(max_in_flight)
+            .collect::<Vec<_>>()
+            .await;
+        for result in results {
+            let mut client = result?;
+            self.update_wallet_from_client(&mut client).await;
+        }
+        Ok(())
+    }
+
     /// Makes one block proposal per chain, up to `num_chains` blocks.
     pub fn make_benchmark_block_proposals(
         &mut self,
         key_pairs: &HashMap<ChainId, KeyPair>,
         transactions_per_block: usize,
+        fungible_application_id: Option<ApplicationId>,
     ) -> Vec<RpcMessage> {
         let mut proposals = Vec::new();
         let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id;
-        for (chain_id, key_pair) in key_pairs {
-            let chain = self.wallet_state.get(*chain_id).expect("should have chain");
-            let operations = iter::repeat(Operation::System(SystemOperation::Transfer {
-                owner: None,
-                recipient: Recipient::chain(next_recipient),
-                amount: Amount::from(1),
-                user_data: UserData::default(),
-            }))
-            .take(transactions_per_block)
-            .collect();
+        let amount = Amount::from(1);
+        for (&chain_id, key_pair) in key_pairs {
+            let public_key = key_pair.public();
+            let operation = match fungible_application_id {
+                Some(application_id) => Self::fungible_transfer(
+                    application_id,
+                    next_recipient,
+                    public_key,
+                    public_key,
+                    amount,
+                ),
+                None => Operation::System(SystemOperation::Transfer {
+                    owner: None,
+                    recipient: Recipient::chain(next_recipient),
+                    amount,
+                    user_data: UserData::default(),
+                }),
+            };
+            let operations = iter::repeat(operation)
+                .take(transactions_per_block)
+                .collect();
+            let chain = self.wallet_state.get(chain_id).expect("should have chain");
             let block = Block {
                 epoch: Epoch::ZERO,
-                chain_id: *chain_id,
+                chain_id,
                 incoming_messages: Vec::new(),
                 operations,
                 previous_block_hash: chain.block_hash,
                 height: chain.next_block_height,
-                authenticated_signer: None,
+                authenticated_signer: Some(Owner::from(public_key)),
                 timestamp: chain.timestamp.max(Timestamp::now()),
             };
             trace!("Preparing block proposal: {:?}", block);
@@ -725,6 +828,30 @@ impl ClientContext {
             // We don't have private keys but that's ok.
             chain.block_hash = info.block_hash;
             chain.next_block_height = info.next_block_height;
+        }
+    }
+
+    /// Creates a fungible token transfer operation.
+    fn fungible_transfer(
+        application_id: ApplicationId,
+        chain_id: ChainId,
+        sender: PublicKey,
+        receiver: PublicKey,
+        amount: Amount,
+    ) -> Operation {
+        let target_account = fungible::Account {
+            chain_id,
+            owner: fungible::AccountOwner::User(Owner::from(receiver)),
+        };
+        let bytes = bcs::to_bytes(&fungible::Operation::Transfer {
+            owner: fungible::AccountOwner::User(Owner::from(sender)),
+            amount,
+            target_account,
+        })
+        .expect("should serialize fungible token operation");
+        Operation::User {
+            application_id,
+            bytes,
         }
     }
 }

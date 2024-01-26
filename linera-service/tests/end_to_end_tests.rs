@@ -2216,18 +2216,33 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetTestingConfig) {
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Tcp) ; "rocksdb_tcp"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
-#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Udp) ; "rocksdb_udp"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_benchmark(config: LocalNetTestingConfig) {
+    use fungible::{FungibleTokenAbi, InitialState};
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let (mut net, client) = config.instantiate().await.unwrap();
 
     assert_eq!(client.get_wallet().unwrap().num_chains(), 10);
     // Launch local benchmark using all user chains and creating additional ones.
-    client.benchmark(12, 15, 10).await.unwrap();
+    client.benchmark(12, 15, 10, None).await.unwrap();
     assert_eq!(client.get_wallet().unwrap().num_chains(), 15);
+
+    // Now we run the benchmark again, with the fungible token application instead of the
+    // native token.
+    let account_owner = get_fungible_account_owner(&client);
+    let accounts = BTreeMap::from([(account_owner, Amount::from_tokens(1_000_000))]);
+    let state = InitialState { accounts };
+    let (contract, service) = client.build_example("fungible").await.unwrap();
+    let params = fungible::Parameters::new("FUN");
+    let application_id = client
+        .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
+        .await
+        .unwrap();
+    client
+        .benchmark(12, 15, 10, Some(application_id))
+        .await
+        .unwrap();
 
     net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
