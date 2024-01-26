@@ -11,7 +11,12 @@
 //! instance is dropped.
 
 use dashmap::DashMap;
-use linera_base::identifiers::ChainId;
+use linera_base::{
+    identifiers::ChainId,
+    prometheus_util::{register_histogram_vec, MeasureLatency},
+    sync::Lazy,
+};
+use prometheus::HistogramVec;
 use std::{
     fmt::{self, Debug, Formatter},
     sync::{Arc, Weak},
@@ -50,6 +55,8 @@ impl ChainGuards {
     /// the same chain.
     pub async fn guard(&self, chain_id: ChainId) -> ChainGuard {
         let guard = self.get_or_create_lock(chain_id);
+        let _measurement = CHAIN_GUARD_LOCK_LATENCY.measure_latency();
+
         ChainGuard {
             chain_id,
             guards: self.guards.clone(),
@@ -151,3 +158,16 @@ impl Debug for ChainGuard {
             .finish_non_exhaustive()
     }
 }
+
+/// The time spent waiting to acquire a [`ChainGuard`].
+static CHAIN_GUARD_LOCK_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec(
+        "chain_guard_lock_atency",
+        "The time spent waiting to acquire a chain guard",
+        &[],
+        Some(vec![
+            0.000_5, 0.001, 0.005, 0.01, 0.1, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0, 100.0, 500.0,
+        ]),
+    )
+    .expect("Creation of Gauge should not fail")
+});
