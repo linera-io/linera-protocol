@@ -604,7 +604,8 @@ impl ClientContext {
         }
         self.update_wallet_from_client(&mut chain_client).await;
         // Make sure all chains have registered the application now.
-        let futures = stream::iter(key_pairs.keys())
+        let futures = key_pairs
+            .keys()
             .map(|&chain_id| {
                 let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
                 async move {
@@ -626,8 +627,7 @@ impl ClientContext {
                     anyhow::bail!("Could not instantiate application on chain {:?}", chain_id);
                 }
             })
-            .collect::<Vec<_>>()
-            .await;
+            .collect::<Vec<_>>();
         // We have to collect the futures to avoid a higher-ranked lifetime error:
         // https://github.com/rust-lang/rust/issues/102211#issuecomment-1673201352
         let results = stream::iter(futures)
