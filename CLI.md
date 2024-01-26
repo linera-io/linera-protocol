@@ -54,8 +54,8 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `unsubscribe` — Unsubscribes from a system channel
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
 * `close-chain` — Close (i.e. deactivate) an existing chain
-* `query-balance` — Read the balance of the chain from the local state of the client
-* `sync-balance` — Synchronize the local state of the chain (including a conservative estimation of the available balance) with a quorum validators
+* `query-balance` — Simulate the execution of pending messages in the local inbox, then read the balance of the chain from the local state of the client
+* `sync-balance` — Synchronize the local state of the chain with a quorum validators, then query the local balance
 * `query-validators` — Show the current set of validators for a chain
 * `set-validator` — Add or modify a validator (admin only)
 * `remove-validator` — Remove a validator (admin only)
@@ -222,7 +222,7 @@ Close (i.e. deactivate) an existing chain
 
 ## `linera query-balance`
 
-Read the balance of the chain from the local state of the client
+Simulate the execution of pending messages in the local inbox, then read the balance of the chain from the local state of the client
 
 **Usage:** `linera query-balance [CHAIN_ID]`
 
@@ -234,7 +234,7 @@ Read the balance of the chain from the local state of the client
 
 ## `linera sync-balance`
 
-Synchronize the local state of the chain (including a conservative estimation of the available balance) with a quorum validators
+Synchronize the local state of the chain with a quorum validators, then query the local balance
 
 **Usage:** `linera sync-balance [CHAIN_ID]`
 

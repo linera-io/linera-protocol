@@ -63,7 +63,7 @@ pub struct SystemExecutionStateView<C> {
     pub committees: RegisterView<C, BTreeMap<Epoch, Committee>>,
     /// Ownership of the chain.
     pub ownership: RegisterView<C, ChainOwnership>,
-    /// Balance of the chain (unattributed).
+    /// Balance of the chain. (Available to any user able to create blocks in the chain.)
     pub balance: RegisterView<C, Amount>,
     /// Balances attributed to a given owner.
     pub balances: MapView<C, Owner, Amount>,

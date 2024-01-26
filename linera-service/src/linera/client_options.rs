@@ -277,14 +277,15 @@ pub enum ClientCommand {
         chain_id: ChainId,
     },
 
-    /// Read the balance of the chain from the local state of the client.
+    /// Simulate the execution of pending messages in the local inbox, then read the
+    /// balance of the chain from the local state of the client.
     QueryBalance {
         /// Chain id
         chain_id: Option<ChainId>,
     },
 
-    /// Synchronize the local state of the chain (including a conservative estimation of the
-    /// available balance) with a quorum validators.
+    /// Synchronize the local state of the chain with a quorum validators, then query the
+    /// local balance.
     SyncBalance {
         /// Chain id
         chain_id: Option<ChainId>,

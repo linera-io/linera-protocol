@@ -324,9 +324,7 @@ impl Runnable for Job {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting query for the local balance");
                 let time_start = Instant::now();
-                let result = chain_client.local_balance().await;
-                context.update_and_save_wallet(&mut chain_client).await;
-                let balance = result.context("Use sync_balance instead")?;
+                let balance = chain_client.query_balance().await?;
                 let time_total = time_start.elapsed();
                 info!("Local balance obtained after {} ms", time_total.as_millis());
                 println!("{}", balance);
@@ -334,9 +332,10 @@ impl Runnable for Job {
 
             SyncBalance { chain_id } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
-                info!("Synchronizing chain information");
+                info!("Synchronizing chain information and querying the local balance");
                 let time_start = Instant::now();
-                let result = chain_client.synchronize_from_validators().await;
+                chain_client.synchronize_from_validators().await?;
+                let result = chain_client.query_balance().await;
                 context.update_and_save_wallet(&mut chain_client).await;
                 let balance = result.context("Failed to synchronize from validators")?;
                 let time_total = time_start.elapsed();
