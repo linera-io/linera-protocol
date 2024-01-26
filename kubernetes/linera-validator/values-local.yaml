@@ -48,6 +48,51 @@ kube-prometheus-stack:
             resources:
               requests:
                 storage: 1Gi
+      # Instruct prometheus operator to search for any ServiceMonitor
+      serviceMonitorSelector: {}
+      serviceMonitorNamespaceSelector: {}
+      # This prevents from adding any Helm label to serviceMonitorSelector if
+      # above is empty.
+      serviceMonitorSelectorNilUsesHelmValues: false
+      # Relabelings needed for Scylla dashboards
+      additionalScrapeConfigs:
+        - job_name: scylla
+          relabel_configs:
+          - source_labels: [ __address__ ]
+            regex: '([^:]+)'
+            target_label: __address__
+            replacement: '${1}:9180'
+          - source_labels: [ __address__ ]
+            regex: '(.*):.+'
+            target_label: instance
+            replacement: '${1}'
+          metric_relabel_configs:
+            - source_labels: [ version ]
+              regex: '(.+)'
+              target_label: CPU
+              replacement: 'cpu'
+            - source_labels: [ version ]
+              regex: '(.+)'
+              target_label: CQL
+              replacement: 'cql'
+            - source_labels: [ version ]
+              regex: '(.+)'
+              target_label: OS
+              replacement: 'os'
+            - source_labels: [ version ]
+              regex: '(.+)'
+              target_label: IO
+              replacement: 'io'
+            - source_labels: [ version ]
+              regex: '(.+)'
+              target_label: Errors
+              replacement: 'errors'
+            - regex: 'help|exported_instance|type'
+              action: labeldrop
+            - source_labels: [ version ]
+              regex: '([0-9]+\.[0-9]+)(\.?[0-9]*).*'
+              replacement: '$1$2'
+              target_label: svr
 
 # Environment
 environment: "kind"

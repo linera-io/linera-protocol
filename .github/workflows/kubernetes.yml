@@ -68,6 +68,14 @@ jobs:
         # Check one random server metric that we expect to be logged after running the e2e tests
         run: |
           curl -s 'http://127.0.0.1:9090/api/v1/query?query=linera_server_request_latency_bucket' | jq -r '.data.result[]' | grep -q .
+      - name: Check Scylla metric
+        # Check one random server metric that we expect to be logged after running the e2e tests
+        run: |
+          curl -s 'http://127.0.0.1:9090/api/v1/query?query=scylla_database_total_reads' | jq -r '.data.result[]' | grep -q .
+      - name: Check Scylla Manager metric
+        # Check one random server metric that we expect to be logged after running the e2e tests
+        run: |
+          curl -s 'http://127.0.0.1:9090/api/v1/query?query=scylla_manager_agent_rclone_bytes_transferred_total' | jq -r '.data.result[]' | grep -q .
       - name: Destroy the kind clusters
         if: always()
         shell: bash
