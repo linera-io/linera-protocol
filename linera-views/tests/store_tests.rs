@@ -442,8 +442,8 @@ async fn run_big_write_read<C: KeyValueStore + Sync>(
 #[tokio::test]
 async fn test_scylla_db_big_write_read() {
     let key_value_store = create_scylla_db_test_store().await;
-    let value_sizes = vec![1000, 200000, 5000000];
-    let target_size = 14000000;
+    let value_sizes = vec![100, 1000, 200000, 5000000];
+    let target_size = 20000000;
     run_big_write_read(key_value_store, target_size, value_sizes).await;
 }
 

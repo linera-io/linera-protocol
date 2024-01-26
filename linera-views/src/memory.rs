@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    batch::{Batch, WriteOperation},
+    batch::{Batch, DeletePrefixExpander, WriteOperation},
     common::{
-        get_interval, CommonStoreConfig, ContextFromStore, KeyValueStore, ReadableKeyValueStore,
-        WritableKeyValueStore,
+        get_interval, CommonStoreConfig, Context, ContextFromStore, KeyIterable, KeyValueStore,
+        ReadableKeyValueStore, WritableKeyValueStore,
     },
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
@@ -207,5 +207,20 @@ impl From<MemoryContextError> for ViewError {
             backend: "memory".to_string(),
             error: error.to_string(),
         }
+    }
+}
+
+#[async_trait]
+impl DeletePrefixExpander for MemoryContext<()> {
+    type Error = MemoryContextError;
+
+    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
+        let mut vector_list = Vec::new();
+        for key in <Vec<Vec<u8>> as KeyIterable<Self::Error>>::iterator(
+            &self.find_keys_by_prefix(key_prefix).await?,
+        ) {
+            vector_list.push(key?.to_vec());
+        }
+        Ok(vector_list)
     }
 }

@@ -168,7 +168,8 @@ const MAX_KEY_SIZE: usize = 1024;
 
 /// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 4M.
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html
-const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = 4194304;
+/// We're taking a conservative value because the mode of computation is unclear.
+const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = 4000000;
 
 /// The DynamoDb database is potentially handling an infinite number of connections.
 /// However, for testing or some other purpose we really need to decrease the number of

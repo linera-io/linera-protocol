@@ -15,11 +15,7 @@
 //! is public because some other libraries require it. But the users using views should
 //! not have to deal with batches.
 
-use crate::{
-    common::{get_uleb128_size, Context, KeyIterable},
-    memory::{MemoryContext, MemoryContextError},
-    views::ViewError,
-};
+use crate::{common::get_uleb128_size, views::ViewError};
 use async_trait::async_trait;
 use bcs::serialized_size;
 use serde::{Deserialize, Serialize};
@@ -356,21 +352,6 @@ pub trait DeletePrefixExpander {
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 }
 
-#[async_trait]
-impl DeletePrefixExpander for MemoryContext<()> {
-    type Error = MemoryContextError;
-
-    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let mut vector_list = Vec::new();
-        for key in <Vec<Vec<u8>> as KeyIterable<Self::Error>>::iterator(
-            &self.find_keys_by_prefix(key_prefix).await?,
-        ) {
-            vector_list.push(key?.to_vec());
-        }
-        Ok(vector_list)
-    }
-}
-
 /// A notion of batch useful for certain computations (notably journaling).
 #[async_trait]
 pub trait SimplifiedBatch: Sized + Send + Sync {
@@ -424,7 +405,11 @@ pub trait BatchValueWriter<Batch>: Send + Sync {
 
     /// Computes the batch size that we would obtain if we wrote the next value (if any)
     /// without consuming the value.
-    fn next_batch_size(&mut self, batch: &Batch, batch_size: usize) -> Result<usize, bcs::Error>;
+    fn next_batch_size(
+        &mut self,
+        batch: &Batch,
+        batch_size: usize,
+    ) -> Result<Option<usize>, bcs::Error>;
 }
 
 /// The iterator that corresponds to a SimpleUnorderedBatch
@@ -509,23 +494,25 @@ impl BatchValueWriter<SimpleUnorderedBatch> for SimpleUnorderedBatchIter {
         &mut self,
         batch: &SimpleUnorderedBatch,
         batch_size: usize,
-    ) -> Result<usize, bcs::Error> {
+    ) -> Result<Option<usize>, bcs::Error> {
         if let Some(delete) = self.delete_iter.peek() {
             let next_size = serialized_size(&delete)?;
-            Ok(batch_size
-                + next_size
-                + get_uleb128_size(batch.deletions.len() + 1)
-                + get_uleb128_size(batch.insertions.len()))
+            Ok(Some(
+                batch_size
+                    + next_size
+                    + get_uleb128_size(batch.deletions.len() + 1)
+                    + get_uleb128_size(batch.insertions.len()),
+            ))
         } else if let Some((key, value)) = self.insert_iter.peek() {
             let next_size = serialized_size(&key)? + serialized_size(&value)?;
-            Ok(batch_size
-                + next_size
-                + get_uleb128_size(batch.deletions.len())
-                + get_uleb128_size(batch.insertions.len() + 1))
+            Ok(Some(
+                batch_size
+                    + next_size
+                    + get_uleb128_size(batch.deletions.len())
+                    + get_uleb128_size(batch.insertions.len() + 1),
+            ))
         } else {
-            Ok(batch_size
-                + get_uleb128_size(batch.deletions.len())
-                + get_uleb128_size(batch.insertions.len()))
+            Ok(None)
         }
     }
 }
@@ -610,13 +597,15 @@ impl BatchValueWriter<UnorderedBatch> for UnorderedBatchIter {
         &mut self,
         batch: &UnorderedBatch,
         batch_size: usize,
-    ) -> Result<usize, bcs::Error> {
+    ) -> Result<Option<usize>, bcs::Error> {
         if let Some(delete_prefix) = self.delete_prefix_iter.peek() {
             let next_size = serialized_size(&delete_prefix)?;
-            Ok(batch_size
-                + next_size
-                + get_uleb128_size(batch.key_prefix_deletions.len() + 1)
-                + batch.simple_unordered_batch.overhead_size())
+            Ok(Some(
+                batch_size
+                    + next_size
+                    + get_uleb128_size(batch.key_prefix_deletions.len() + 1)
+                    + batch.simple_unordered_batch.overhead_size(),
+            ))
         } else {
             let batch_size = batch_size + get_uleb128_size(batch.key_prefix_deletions.len());
             self.insert_deletion_iter
