@@ -290,6 +290,8 @@ impl Runnable for Job {
             }
 
             QueryValidators { chain_id } => {
+                use linera_core::node::ValidatorNode as _;
+
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting operation to query validators");
                 let time_start = Instant::now();
@@ -299,6 +301,22 @@ impl Runnable for Job {
                 let time_total = time_start.elapsed();
                 info!("Validators obtained after {} ms", time_total.as_millis());
                 info!("{:?}", committee.validators());
+                let node_provider = context.make_node_provider();
+                for (name, state) in committee.validators() {
+                    match node_provider
+                        .make_node(&state.network_address)?
+                        .get_version_info()
+                        .await
+                    {
+                        Ok(version_info) => {
+                            info!("Version information for validator {name:?}:");
+                            version_info.log();
+                        }
+                        Err(e) => {
+                            warn!("Failed to get version information for validator {name:?}:\n{e}")
+                        }
+                    }
+                }
             }
 
             command @ (SetValidator { .. }
