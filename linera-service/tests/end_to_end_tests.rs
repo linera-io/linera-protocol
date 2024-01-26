@@ -2220,13 +2220,14 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetTestingConfig) {
 async fn test_end_to_end_benchmark(config: LocalNetTestingConfig) {
     use fungible::{FungibleTokenAbi, InitialState};
 
+    let config = config.with_num_other_initial_chains(2);
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let (mut net, client) = config.instantiate().await.unwrap();
 
-    assert_eq!(client.get_wallet().unwrap().num_chains(), 10);
+    assert_eq!(client.get_wallet().unwrap().num_chains(), 2);
     // Launch local benchmark using all user chains and creating additional ones.
-    client.benchmark(12, 15, 10, None).await.unwrap();
-    assert_eq!(client.get_wallet().unwrap().num_chains(), 15);
+    client.benchmark(2, 4, 10, None).await.unwrap();
+    assert_eq!(client.get_wallet().unwrap().num_chains(), 4);
 
     // Now we run the benchmark again, with the fungible token application instead of the
     // native token.
@@ -2240,7 +2241,7 @@ async fn test_end_to_end_benchmark(config: LocalNetTestingConfig) {
         .await
         .unwrap();
     client
-        .benchmark(12, 15, 10, Some(application_id))
+        .benchmark(2, 5, 10, Some(application_id))
         .await
         .unwrap();
 

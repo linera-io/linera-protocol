@@ -39,6 +39,8 @@ pub struct LocalNetConfig {
 pub struct LocalNetTestingConfig {
     pub database: Database,
     pub network: Network,
+    pub num_other_initial_chains: u32,
+    pub initial_amount: Amount,
 }
 
 /// A set of Linera validators running locally as native processes.
@@ -122,7 +124,22 @@ impl Validator {
 #[cfg(any(test, feature = "test"))]
 impl LocalNetTestingConfig {
     pub fn new(database: Database, network: Network) -> Self {
-        Self { database, network }
+        Self {
+            database,
+            network,
+            num_other_initial_chains: 10,
+            initial_amount: Amount::from_tokens(10),
+        }
+    }
+
+    pub fn with_num_other_initial_chains(mut self, num: u32) -> Self {
+        self.num_other_initial_chains = num;
+        self
+    }
+
+    pub fn with_initial_amount(mut self, amount: Amount) -> Self {
+        self.initial_amount = amount;
+        self
     }
 }
 
@@ -184,7 +201,7 @@ impl LineraNetConfig for LocalNetTestingConfig {
         if num_validators > 0 {
             net.generate_initial_validator_config().await.unwrap();
             client
-                .create_genesis_config(10, Amount::from_tokens(10))
+                .create_genesis_config(self.num_other_initial_chains, self.initial_amount)
                 .await
                 .unwrap();
             net.run().await.unwrap();
