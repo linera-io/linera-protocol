@@ -409,6 +409,8 @@ fn main() {
 }
 
 async fn run(options: ServerOptions) {
+    linera_base::VERSION_INFO.log();
+
     match options.command {
         ServerCommand::Run {
             server_config_path,

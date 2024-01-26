@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use linera_base::{crypto::KeyPair, data_types::Timestamp, identifiers::ChainId};
+use linera_base::{crypto::KeyPair, data_types::Timestamp, identifiers::ChainId, VersionInfo};
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
     client::ChainClient,
@@ -58,6 +58,10 @@ impl ValidatorNode for DummyValidatorNode {
     }
 
     async fn subscribe(&mut self, _: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
+    async fn get_version_info(&mut self) -> Result<VersionInfo, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 }

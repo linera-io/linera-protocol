@@ -12,6 +12,7 @@ use linera_base::{
     crypto::CryptoError,
     data_types::{ArithmeticError, BlockHeight},
     identifiers::ChainId,
+    VersionInfo,
 };
 use linera_chain::{
     data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate, Origin},
@@ -66,6 +67,9 @@ pub trait ValidatorNode {
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError>;
+
+    /// Gets the version info for this validator node.
+    async fn get_version_info(&mut self) -> Result<VersionInfo, NodeError>;
 
     /// Subscribes to receiving notifications for a collection of chains.
     async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError>;
@@ -174,6 +178,14 @@ pub enum NodeError {
 
     #[error("Failed to make a chain info query on the local node: {error}")]
     LocalNodeQuery { error: String },
+}
+
+impl From<tonic::Status> for NodeError {
+    fn from(status: tonic::Status) -> Self {
+        Self::GrpcError {
+            error: status.to_string(),
+        }
+    }
 }
 
 impl CrossChainMessageDelivery {

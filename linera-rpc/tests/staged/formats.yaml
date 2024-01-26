@@ -650,18 +650,24 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: ChainInfoQuery
     4:
+      VersionInfoQuery: UNIT
+    5:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    5:
+    6:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    6:
+    7:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    7:
+    8:
+      VersionInfoResponse:
+        NEWTYPE:
+          TYPENAME: VersionInfo
+    9:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest
@@ -909,4 +915,11 @@ ValidatorState:
   STRUCT:
     - network_address: STR
     - votes: U64
+VersionInfo:
+  STRUCT:
+    - crate_version: STR
+    - git_commit: STR
+    - rpc_hash: STR
+    - graphql_hash: STR
+    - wit_hash: STR
 

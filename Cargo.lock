@@ -3114,6 +3114,7 @@ dependencies = [
  "sha3",
  "test-strategy",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -3171,6 +3172,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tonic",
  "tracing",
  "tracing-subscriber",
 ]

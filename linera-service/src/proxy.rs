@@ -116,10 +116,16 @@ pub struct SimpleProxy {
 impl MessageHandler for SimpleProxy {
     #[instrument(skip_all, fields(chain_id = ?message.target_chain_id()))]
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage> {
+        if let RpcMessage::VersionInfoQuery = message {
+            // We assume each shard is running the same version as the proxy
+            return Some(linera_base::VERSION_INFO.into());
+        }
+
         let Some(chain_id) = message.target_chain_id() else {
-            error!("Can't proxy unexpected message");
+            error!("Can't proxy message without chain ID");
             return None;
         };
+
         let shard = self.internal_config.get_shard_for(chain_id).clone();
         let protocol = self.internal_config.protocol;
 
