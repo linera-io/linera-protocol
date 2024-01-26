@@ -48,6 +48,18 @@ service ValidatorNode {
 
   // Subscribe to notifications for a set of Chain Ids.
   rpc Subscribe(SubscriptionRequest) returns (stream Notification);
+
+  // Request the node's version info.
+  rpc GetVersionInfo(google.protobuf.Empty) returns (VersionInfo);
+}
+
+// Information about the version of Linera the validator is running
+message VersionInfo {
+    string crate_version = 1;
+    string git_commit = 2;
+    string rpc_hash = 3;
+    string graphql_hash = 4;
+    string wit_hash = 5;
 }
 
 // A request for client to subscribe to notifications for a given `ChainId`

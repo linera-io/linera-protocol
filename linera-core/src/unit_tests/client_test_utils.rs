@@ -14,6 +14,7 @@ use linera_base::{
     crypto::*,
     data_types::*,
     identifiers::{ChainDescription, ChainId},
+    VersionInfo,
 };
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_execution::{
@@ -134,6 +135,10 @@ where
     async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
         self.spawn_and_receive(move |validator, sender| validator.do_subscribe(chains, sender))
             .await
+    }
+
+    async fn get_version_info(&mut self) -> Result<VersionInfo, NodeError> {
+        Ok(Default::default())
     }
 }
 

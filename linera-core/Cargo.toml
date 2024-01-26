@@ -46,6 +46,7 @@ test-strategy = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
+tonic = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

@@ -17,7 +17,7 @@ use linera_rpc::{
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
             BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, LiteCertificate,
-            Notification, SubscriptionRequest,
+            Notification, SubscriptionRequest, VersionInfo,
         },
         Proxyable,
     },
@@ -340,6 +340,15 @@ impl ValidatorNode for GrpcProxy {
             .collect::<Result<Vec<ChainId>, _>>()?;
         let rx = self.0.notifier.subscribe(chain_ids);
         Ok(Response::new(UnboundedReceiverStream::new(rx)))
+    }
+
+    #[instrument(skip_all, err(Display))]
+    async fn get_version_info(
+        &self,
+        _request: Request<()>,
+    ) -> Result<Response<VersionInfo>, Status> {
+        // We assume each shard is running the same version as the proxy
+        Ok(Response::new(linera_base::VERSION_INFO.into()))
     }
 }
 

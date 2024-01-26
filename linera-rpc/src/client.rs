@@ -96,4 +96,11 @@ impl ValidatorNode for Client {
             Client::Simple(simple_client) => Box::pin(simple_client.subscribe(chains).await?),
         })
     }
+
+    async fn get_version_info(&mut self) -> Result<linera_base::VersionInfo, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => grpc_client.get_version_info().await?,
+            Client::Simple(simple_client) => simple_client.get_version_info().await?,
+        })
+    }
 }

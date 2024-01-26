@@ -13,7 +13,6 @@ use std::borrow::Cow;
     serde::Deserialize,
     serde::Serialize,
 )]
-#[non_exhaustive]
 /// The version info of a build of Linera.
 pub struct VersionInfo {
     /// The crate version

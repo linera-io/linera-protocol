@@ -6,6 +6,8 @@ use std::{io, mem, ops::DerefMut};
 use thiserror::Error;
 use tokio_util::codec::{Decoder, Encoder};
 
+use linera_core::node::NodeError;
+
 use crate::RpcMessage;
 
 /// The size of the frame prefix that contains the payload size.
@@ -97,6 +99,20 @@ pub enum Error {
         message is {size} bytes but can't be larger than {max} bytes.",
         max = u32::MAX)]
     MessageTooBig { size: usize },
+}
+
+impl From<Error> for NodeError {
+    fn from(error: Error) -> NodeError {
+        match error {
+            Error::Io(io_error) => NodeError::ClientIoError {
+                error: format!("{}", io_error),
+            },
+            err => {
+                tracing::error!("Unexpected decoding error: {err}");
+                NodeError::InvalidDecoding
+            }
+        }
+    }
 }
 
 #[cfg(test)]

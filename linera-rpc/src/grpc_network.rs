@@ -35,7 +35,7 @@ use grpc::{
     BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
     LiteCertificate, SubscriptionRequest,
 };
-use linera_base::{identifiers::ChainId, prometheus_util, sync::Lazy};
+use linera_base::{identifiers::ChainId, prometheus_util, sync::Lazy, VersionInfo};
 use linera_chain::data_types;
 use linera_core::{
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
@@ -808,6 +808,11 @@ impl ValidatorNode for GrpcClient {
             .filter_map(|result| future::ready(result.ok()));
 
         Ok(Box::pin(notification_stream))
+    }
+
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    async fn get_version_info(&mut self) -> Result<VersionInfo, NodeError> {
+        Ok(self.client.get_version_info(()).await?.into_inner().into())
     }
 }
 

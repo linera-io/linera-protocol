@@ -14,7 +14,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
-use linera_base::identifiers::ChainId;
+use linera_base::{identifiers::ChainId, VersionInfo};
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
@@ -287,9 +287,13 @@ where
                 // No user to respond to.
                 Ok(None)
             }
-            RpcMessage::Vote(_) | RpcMessage::Error(_) | RpcMessage::ChainInfoResponse(_) => {
-                Err(NodeError::UnexpectedMessage)
-            }
+
+            RpcMessage::VersionInfoQuery => Ok(Some(linera_base::VERSION_INFO.into())),
+
+            RpcMessage::Vote(_)
+            | RpcMessage::Error(_)
+            | RpcMessage::ChainInfoResponse(_)
+            | RpcMessage::VersionInfoResponse(_) => Err(NodeError::UnexpectedMessage),
         };
 
         self.server.packets_processed += 1;
@@ -379,24 +383,12 @@ impl SimpleClient {
             .ok_or_else(|| codec::Error::Io(std::io::ErrorKind::UnexpectedEof.into()))
     }
 
-    async fn send_recv_info(
-        &mut self,
-        message: RpcMessage,
-    ) -> Result<ChainInfoResponse, NodeError> {
-        match self.send_recv_internal(message).await {
-            Ok(RpcMessage::ChainInfoResponse(response)) => Ok(*response),
-            Ok(RpcMessage::Error(error)) => Err(*error),
-            Ok(_) => Err(NodeError::UnexpectedMessage),
-            Err(error) => match error {
-                codec::Error::Io(io_error) => Err(NodeError::ClientIoError {
-                    error: format!("{}", io_error),
-                }),
-                err => {
-                    error!("Unexpected decoding error: {err}");
-                    Err(NodeError::InvalidDecoding)
-                }
-            },
-        }
+    async fn query<Response>(&mut self, query: RpcMessage) -> Result<Response, Response::Error>
+    where
+        Response: TryFrom<RpcMessage>,
+        Response::Error: From<codec::Error>,
+    {
+        self.send_recv_internal(query).await?.try_into()
     }
 }
 
@@ -407,7 +399,7 @@ impl ValidatorNode for SimpleClient {
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.send_recv_info(proposal.into()).await
+        self.query(proposal.into()).await
     }
 
     /// Processes a hash certificate.
@@ -421,7 +413,7 @@ impl ValidatorNode for SimpleClient {
             certificate: certificate.cloned(),
             wait_for_outgoing_messages,
         };
-        self.send_recv_info(request.into()).await
+        self.query(request.into()).await
     }
 
     /// Processes a certificate.
@@ -437,7 +429,7 @@ impl ValidatorNode for SimpleClient {
             blobs,
             wait_for_outgoing_messages,
         };
-        self.send_recv_info(request.into()).await
+        self.query(request.into()).await
     }
 
     /// Handles information queries for this chain.
@@ -445,13 +437,17 @@ impl ValidatorNode for SimpleClient {
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.send_recv_info(query.into()).await
+        self.query(query.into()).await
     }
 
     async fn subscribe(&mut self, _chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
         Err(NodeError::SubscriptionError {
             transport: self.network.protocol.to_string(),
         })
+    }
+
+    async fn get_version_info(&mut self) -> Result<VersionInfo, NodeError> {
+        self.query(RpcMessage::VersionInfoQuery).await
     }
 }
 

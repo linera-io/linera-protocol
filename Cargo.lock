@@ -3172,6 +3172,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tonic",
  "tracing",
  "tracing-subscriber",
 ]
