@@ -189,7 +189,7 @@ impl DirectWritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal
     // a similar constant in the source code or the documentation.
     // An experimental approach gets us that 14796 is the latest value that is
     // correct.
-    const MAX_BATCH_SIZE: usize = 12000;
+    const MAX_BATCH_SIZE: usize = 5000;
     /// The total size is 16M
     const MAX_BATCH_TOTAL_SIZE: usize = 16000000;
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
