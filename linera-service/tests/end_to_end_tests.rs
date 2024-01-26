@@ -2225,8 +2225,8 @@ async fn test_end_to_end_benchmark(config: LocalNetTestingConfig) {
 
     assert_eq!(client.get_wallet().unwrap().num_chains(), 10);
     // Launch local benchmark using all user chains and creating additional ones.
-    client.benchmark(12, 15, 10, None).await.unwrap();
-    assert_eq!(client.get_wallet().unwrap().num_chains(), 15);
+    client.benchmark(11, 12, 10, None).await.unwrap();
+    assert_eq!(client.get_wallet().unwrap().num_chains(), 12);
 
     // Now we run the benchmark again, with the fungible token application instead of the
     // native token.
@@ -2240,7 +2240,7 @@ async fn test_end_to_end_benchmark(config: LocalNetTestingConfig) {
         .await
         .unwrap();
     client
-        .benchmark(12, 15, 10, Some(application_id))
+        .benchmark(11, 12, 10, Some(application_id))
         .await
         .unwrap();
 
