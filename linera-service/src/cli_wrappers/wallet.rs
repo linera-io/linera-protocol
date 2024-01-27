@@ -429,6 +429,25 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera transfer` with no logging.
+    pub async fn transfer_with_silent_logs(
+        &self,
+        amount: Amount,
+        from: ChainId,
+        to: ChainId,
+    ) -> Result<()> {
+        self.command()
+            .await?
+            .env("RUST_LOG", "off")
+            .arg("transfer")
+            .arg(amount.to_string())
+            .args(["--from", &from.to_string()])
+            .args(["--to", &to.to_string()])
+            .spawn_and_wait_for_stdout()
+            .await?;
+        Ok(())
+    }
+
     /// Runs `linera transfer` with owner accounts.
     pub async fn transfer_with_accounts(
         &self,

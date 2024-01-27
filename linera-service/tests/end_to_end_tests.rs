@@ -2312,7 +2312,7 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetTestingConfig) {
         net.remove_validator(i).unwrap();
     }
     let result = client
-        .transfer(Amount::from_tokens(2), chain_id, ChainId::root(5))
+        .transfer_with_silent_logs(Amount::from_tokens(2), chain_id, ChainId::root(5))
         .await;
     assert!(result.is_err());
     assert_eq!(
