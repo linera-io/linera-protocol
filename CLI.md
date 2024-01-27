@@ -14,6 +14,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera local-balance`↴](#linera-local-balance)
 * [`linera query-balance`↴](#linera-query-balance)
 * [`linera sync-balance`↴](#linera-sync-balance)
+* [`linera process-inbox`↴](#linera-process-inbox)
 * [`linera query-validators`↴](#linera-query-validators)
 * [`linera set-validator`↴](#linera-set-validator)
 * [`linera remove-validator`↴](#linera-remove-validator)
@@ -58,6 +59,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `local-balance` — Read the current native-token balance of the given account from the local state
 * `query-balance` — Simulate the execution of one block made of pending messages from the local inbox, then read the native-token balance of the account from the local state
 * `sync-balance` — Synchronize the local state of the chain with a quorum validators, then query the local balance
+* `process-inbox` — Process all pending incoming messages from the inbox of the given chain by creating as many blocks as needed to execute all (non-failing) messages. Failing messages will be marked as rejected and may bounce to their sender depending on their configuration
 * `query-validators` — Show the current set of validators for a chain
 * `set-validator` — Add or modify a validator (admin only)
 * `remove-validator` — Remove a validator (admin only)
@@ -259,6 +261,18 @@ Synchronize the local state of the chain with a quorum validators, then query th
 ###### **Arguments:**
 
 * `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By defaults, we read the chain balance of the default chain in the wallet
+
+
+
+## `linera process-inbox`
+
+Process all pending incoming messages from the inbox of the given chain by creating as many blocks as needed to execute all (non-failing) messages. Failing messages will be marked as rejected and may bounce to their sender depending on their configuration
+
+**Usage:** `linera process-inbox [CHAIN_ID]`
+
+###### **Arguments:**
+
+* `<CHAIN_ID>` — The chain to process. If omitted, uses the default chain of the wallet
 
 
 

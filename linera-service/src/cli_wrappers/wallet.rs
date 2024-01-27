@@ -433,6 +433,17 @@ impl ClientWrapper {
         Ok(amount)
     }
 
+    /// Runs `linera process-inbox`.
+    pub async fn process_inbox(&self, chain_id: ChainId) -> Result<()> {
+        self.command()
+            .await?
+            .arg("process-inbox")
+            .arg(&chain_id.to_string())
+            .spawn_and_wait_for_stdout()
+            .await?;
+        Ok(())
+    }
+
     /// Runs `linera transfer`.
     pub async fn transfer(&self, amount: Amount, from: ChainId, to: ChainId) -> Result<()> {
         self.command()

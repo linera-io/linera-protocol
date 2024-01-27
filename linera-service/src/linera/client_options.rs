@@ -311,6 +311,14 @@ pub enum ClientCommand {
         account: Option<Account>,
     },
 
+    /// Process all pending incoming messages from the inbox of the given chain by creating as many
+    /// blocks as needed to execute all (non-failing) messages. Failing messages will be
+    /// marked as rejected and may bounce to their sender depending on their configuration.
+    ProcessInbox {
+        /// The chain to process. If omitted, uses the default chain of the wallet.
+        chain_id: Option<ChainId>,
+    },
+
     /// Show the current set of validators for a chain.
     QueryValidators {
         /// The chain to query. If omitted, query the default chain of the wallet.

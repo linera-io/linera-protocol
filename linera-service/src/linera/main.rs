@@ -371,6 +371,21 @@ impl Runnable for Job {
                 println!("{}", balance);
             }
 
+            ProcessInbox { chain_id } => {
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                let mut chain_client = context.make_chain_client(storage, chain_id);
+                info!("Processing the inbox of chain {}", chain_id);
+                let time_start = Instant::now();
+                let certificates = context.process_inbox(&mut chain_client).await?;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let time_total = time_start.elapsed();
+                info!(
+                    "Processed incoming messages with {} blocks in {} ms",
+                    certificates.len(),
+                    time_total.as_millis()
+                );
+            }
+
             QueryValidators { chain_id } => {
                 use linera_core::node::ValidatorNode as _;
 
