@@ -213,7 +213,7 @@ impl Runnable for ServerContext {
 #[command(
     name = "linera-server",
     about = "A byzantine fault tolerant payments sidechain with low-latency finality and high throughput",
-    version = clap::crate_version!(),
+    version = linera_base::VersionInfo::default_str(),
 )]
 struct ServerOptions {
     /// Subcommands. Acceptable values are run and generate.

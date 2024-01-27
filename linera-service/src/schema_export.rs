@@ -84,7 +84,7 @@ impl ValidatorNodeProvider for DummyValidatorNodeProvider {
 #[command(
     name = "linera-schema-export",
     about = "Export the GraphQL schema for the core data in a Linera chain",
-    version = clap::crate_version!(),
+    version = linera_base::VersionInfo::default_str(),
 )]
 struct Options {}
 

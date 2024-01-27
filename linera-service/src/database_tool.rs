@@ -9,7 +9,7 @@ use std::process;
 #[command(
     name = "Clear database",
     about = "A tool for cleaning up a database",
-    version = clap::crate_version!(),
+    version = linera_base::VersionInfo::default_str(),
 )]
 struct DatabaseToolOptions {
     /// Subcommands. Acceptable values are run and generate.

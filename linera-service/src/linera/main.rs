@@ -378,8 +378,10 @@ impl Runnable for Job {
                         .await
                     {
                         Ok(version_info) => {
-                            info!("Version information for validator {name:?}:");
-                            version_info.log();
+                            info!(
+                                "Version information for validator {name:?}:\n{}",
+                                version_info
+                            );
                         }
                         Err(e) => {
                             warn!("Failed to get version information for validator {name:?}:\n{e}")

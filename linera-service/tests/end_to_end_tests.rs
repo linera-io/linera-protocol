@@ -1315,7 +1315,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     net.terminate().await.unwrap();
 }
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn test_resolve_binary() {
     util::resolve_binary("linera", env!("CARGO_PKG_NAME"))
         .await

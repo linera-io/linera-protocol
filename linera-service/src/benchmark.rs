@@ -23,7 +23,7 @@ use tracing::info;
 #[derive(clap::Parser)]
 #[command(
     name = "linera-benchmark",
-    version = clap::crate_version!(),
+    version = linera_base::VersionInfo::default_str(),
     about = "Run benchmarks against a Linera network",
 )]
 enum Args {

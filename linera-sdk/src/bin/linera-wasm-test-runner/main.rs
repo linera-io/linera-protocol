@@ -42,7 +42,7 @@ use wasmtime::*;
 #[command(
     name = "linera-wasm-test-runner",
     about = "A binary for running unit tests for Linera applications implemented in WebAssembly.",
-    version = clap::crate_version!(),
+    version = linera_base::VersionInfo::default_str(),
 )]
 struct Options {
     module_path: PathBuf,
