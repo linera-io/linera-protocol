@@ -399,8 +399,13 @@ where
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         let local_time = self.storage.current_time();
+        let signer = block.authenticated_signer;
         let executed_block = chain.execute_block(&block, local_time).await?.with(block);
-        let response = ChainInfoResponse::new(&chain, None);
+        let mut response = ChainInfoResponse::new(&chain, None);
+        if let Some(signer) = signer {
+            response.info.requested_system_balance =
+                chain.execution_state.system.balances.get(&signer).await?;
+        }
         // Do not save the new state.
         Ok((executed_block, response))
     }
@@ -1203,6 +1208,10 @@ where
         let mut info = ChainInfo::from(&chain);
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
+        }
+        if let Some(owner) = query.request_system_balance {
+            info.requested_system_balance =
+                chain.execution_state.system.balances.get(&owner).await?;
         }
         if let Some(next_block_height) = query.test_next_block_height {
             ensure!(

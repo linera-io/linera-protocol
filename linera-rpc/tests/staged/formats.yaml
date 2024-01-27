@@ -164,6 +164,9 @@ ChainInfo:
     - state_hash:
         OPTION:
           TYPENAME: CryptoHash
+    - requested_system_balance:
+        OPTION:
+          TYPENAME: Amount
     - requested_committees:
         OPTION:
           MAP:
@@ -191,6 +194,9 @@ ChainInfoQuery:
     - test_next_block_height:
         OPTION:
           TYPENAME: BlockHeight
+    - request_system_balance:
+        OPTION:
+          TYPENAME: Owner
     - request_committees: BOOL
     - request_pending_messages: BOOL
     - request_sent_certificates_in_range:

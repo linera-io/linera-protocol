@@ -277,22 +277,30 @@ pub enum ClientCommand {
         chain_id: ChainId,
     },
 
-    /// Read the balance of the chain from the local state of the client.
+    /// Simulate the execution of one block made of pending messages from the local inbox,
+    /// then read the native-token balance of the account from the local state.
+    ///
+    /// The balance does not reflect messages that have not been synchronized from
+    /// validators yet. Call `linera sync` first to do so.
     QueryBalance {
-        /// Chain id
-        chain_id: Option<ChainId>,
+        /// The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
+        /// chain balance. By defaults, we read the chain balance of the default chain in
+        /// the wallet.
+        account: Option<Account>,
     },
 
-    /// Synchronize the local state of the chain (including a conservative estimation of the
-    /// available balance) with a quorum validators.
+    /// Synchronize the local state of the chain with a quorum validators, then query the
+    /// local balance.
     SyncBalance {
-        /// Chain id
-        chain_id: Option<ChainId>,
+        /// The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
+        /// chain balance. By defaults, we read the chain balance of the default chain in
+        /// the wallet.
+        account: Option<Account>,
     },
 
     /// Show the current set of validators for a chain.
     QueryValidators {
-        /// Chain id
+        /// The chain to query. If omitted, query the default chain of the wallet.
         chain_id: Option<ChainId>,
     },
 

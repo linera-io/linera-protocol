@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
+    data_types::{
+        BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout,
+    },
     local_node::{LocalNodeClient, LocalNodeError},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
@@ -40,8 +42,9 @@ use linera_execution::{
         Account, AdminOperation, Recipient, SystemChannel, SystemOperation, UserData,
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX, PUBLISH_BYTECODE_MESSAGE_INDEX,
     },
-    Bytecode, ChainOwnership, Message, Operation, Query, Response, SystemMessage, SystemQuery,
-    SystemResponse, TimeoutConfig, UserApplicationId,
+    Bytecode, ChainOwnership, ExecutionError, Message, Operation, Query, Response,
+    SystemExecutionError, SystemMessage, SystemQuery, SystemResponse, TimeoutConfig,
+    UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -317,35 +320,20 @@ where
     ///
     /// Messages known to be redundant are filtered out: A `RegisterApplications` message whose
     /// entries are already known never needs to be included in a block.
-    async fn pending_messages(&mut self) -> Result<Vec<IncomingMessage>, LocalNodeError> {
-        self.pending_messages_internal(|_| true).await
-    }
-
-    async fn pending_system_messages(&mut self) -> Result<Vec<IncomingMessage>, LocalNodeError> {
-        self.pending_messages_internal(|message| {
-            matches!(message.event.message, Message::System(_))
-        })
-        .await
-    }
-
-    async fn pending_messages_internal<F: Fn(&IncomingMessage) -> bool>(
-        &mut self,
-        filter: F,
-    ) -> Result<Vec<IncomingMessage>, LocalNodeError> {
+    async fn pending_messages(&mut self) -> Result<Vec<IncomingMessage>, ChainClientError> {
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
-        let response = self.node_client.handle_chain_info_query(query).await?;
-        let mut requested_pending_messages = response.info.requested_pending_messages;
+        let info = self.node_client.handle_chain_info_query(query).await?.info;
+        ensure!(
+            info.next_block_height == self.next_block_height,
+            ChainClientError::WalletSynchronizationError
+        );
+        let mut requested_pending_messages = info.requested_pending_messages;
         let mut pending_messages = vec![];
         // The first incoming message of any child chain must be `OpenChain`. We must have it in
         // our inbox, and include it before all other messages.
-        if self.next_block_height == BlockHeight::ZERO
-            && self
-                .chain_state_view()
-                .await?
-                .execution_state
-                .system
+        if info.next_block_height == BlockHeight::ZERO
+            && info
                 .description
-                .get()
                 .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id))?
                 .is_child()
         {
@@ -355,7 +343,7 @@ where
                     Message::System(SystemMessage::OpenChain { .. })
                 )
             }) else {
-                return Err(LocalNodeError::InactiveChain(self.chain_id));
+                return Err(LocalNodeError::InactiveChain(self.chain_id).into());
             };
             let open_chain_message = requested_pending_messages.remove(index);
             pending_messages.push(open_chain_message);
@@ -367,9 +355,6 @@ where
                     self.max_pending_messages
                 );
                 break;
-            }
-            if !filter(&message) {
-                continue;
             }
             if let Message::System(SystemMessage::RegisterApplications { applications }) =
                 &message.event.message
@@ -1263,7 +1248,7 @@ where
     async fn stage_block_execution_and_discard_failing_messages(
         &mut self,
         mut block: Block,
-    ) -> Result<ExecutedBlock, ChainClientError> {
+    ) -> Result<(ExecutedBlock, ChainInfoResponse), ChainClientError> {
         loop {
             let result = self.node_client.stage_block_execution(block.clone()).await;
             if let Err(LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))) = &result
@@ -1292,7 +1277,7 @@ where
                     }
                 }
             }
-            return Ok(result?.0);
+            return Ok(result?);
         }
     }
 
@@ -1345,7 +1330,7 @@ where
         }
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
-        let executed_block = self
+        let (executed_block, _) = self
             .stage_block_execution_and_discard_failing_messages(block)
             .await?;
         let block = executed_block.block.clone();
@@ -1509,7 +1494,7 @@ where
         };
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
-        let executed_block = self
+        let (executed_block, _) = self
             .stage_block_execution_and_discard_failing_messages(block)
             .await?;
         self.pending_block = Some(executed_block.block.clone());
@@ -1575,12 +1560,42 @@ where
         }
     }
 
-    pub async fn local_balance(&mut self) -> Result<Amount, ChainClientError> {
-        ensure!(
-            self.chain_info().await?.next_block_height == self.next_block_height,
-            ChainClientError::WalletSynchronizationError
-        );
-        let incoming_messages = self.pending_system_messages().await?;
+    /// Obtains the local balance of the chain account after staging the execution of
+    /// incoming messages in a new block.
+    ///
+    /// Does not attempt to synchronize with validators. The result will reflect up to
+    /// `max_pending_messages` incoming messages and the execution fees for a single
+    /// block.
+    pub async fn query_balance(&mut self) -> Result<Amount, ChainClientError> {
+        let (balance, _) = self.query_balances_with_owner(None).await?;
+        Ok(balance)
+    }
+
+    /// Obtains the local balance of a user account after staging the execution of
+    /// incoming messages in a new block.
+    ///
+    /// Does not attempt to synchronize with validators. The result will reflect up to
+    /// `max_pending_messages` incoming messages and the execution fees for a single
+    /// block.
+    pub async fn query_owner_balance(&mut self, owner: Owner) -> Result<Amount, ChainClientError> {
+        Ok(self
+            .query_balances_with_owner(Some(owner))
+            .await?
+            .1
+            .unwrap_or(Amount::ZERO))
+    }
+
+    /// Obtains the local balance of the chain account and optionally another user after
+    /// staging the execution of incoming messages in a new block.
+    ///
+    /// Does not attempt to synchronize with validators. The result will reflect up to
+    /// `max_pending_messages` incoming messages and the execution fees for a single
+    /// block.
+    async fn query_balances_with_owner(
+        &mut self,
+        owner: Option<Owner>,
+    ) -> Result<(Amount, Option<Amount>), ChainClientError> {
+        let incoming_messages = self.pending_messages().await?;
         let timestamp = self.next_timestamp(&incoming_messages).await;
         let block = Block {
             epoch: self.epoch().await?,
@@ -1589,11 +1604,71 @@ where
             operations: Vec::new(),
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
-            authenticated_signer: None,
+            authenticated_signer: owner,
             timestamp,
         };
-        let (_, response) = self.node_client.stage_block_execution(block).await?;
-        Ok(response.info.system_balance)
+        match self
+            .stage_block_execution_and_discard_failing_messages(block)
+            .await
+        {
+            Ok((_, response)) => Ok((
+                response.info.system_balance,
+                response.info.requested_system_balance,
+            )),
+            Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
+                WorkerError::ChainError(error),
+            ))) if matches!(
+                *error,
+                ChainError::ExecutionError(
+                    ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }),
+                    ChainExecutionContext::Block
+                )
+            ) =>
+            {
+                // We can't even pay for the execution of one empty block. Let's return zero.
+                Ok((Amount::ZERO, Some(Amount::ZERO)))
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Reads the local balance of the chain account.
+    ///
+    /// Does not process the inbox or attempt to synchronize with validators.
+    pub async fn local_balance(&mut self) -> Result<Amount, ChainClientError> {
+        let (balance, _) = self.local_balances_with_owner(None).await?;
+        Ok(balance)
+    }
+
+    /// Reads the local balance of a user account.
+    ///
+    /// Does not process the inbox or attempt to synchronize with validators.
+    pub async fn local_owner_balance(&mut self, owner: Owner) -> Result<Amount, ChainClientError> {
+        Ok(self
+            .local_balances_with_owner(Some(owner))
+            .await?
+            .1
+            .unwrap_or(Amount::ZERO))
+    }
+
+    /// Reads the local balance of the chain account and optionally another user.
+    ///
+    /// Does not process the inbox or attempt to synchronize with validators.
+    async fn local_balances_with_owner(
+        &mut self,
+        owner: Option<Owner>,
+    ) -> Result<(Amount, Option<Amount>), ChainClientError> {
+        ensure!(
+            self.chain_info().await?.next_block_height == self.next_block_height,
+            ChainClientError::WalletSynchronizationError
+        );
+        let mut query = ChainInfoQuery::new(self.chain_id);
+        query.request_system_balance = owner;
+        let response = self.node_client.handle_chain_info_query(query).await?;
+        Ok((
+            response.info.system_balance,
+            response.info.requested_system_balance,
+        ))
     }
 
     /// Attempts to update all validators about the local chain.
@@ -1649,11 +1724,16 @@ where
             .await
     }
 
-    /// Attempts to synchronize with validators and re-compute our balance.
-    pub async fn synchronize_from_validators(&mut self) -> Result<Amount, ChainClientError> {
+    /// Attempts to synchronize chains that have sent us messages and populate our local
+    /// inbox.
+    ///
+    /// To create a block that actually executes the messages in the inbox,
+    /// `process_inbox` must be called separately.
+    pub async fn synchronize_from_validators(
+        &mut self,
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
         self.find_received_certificates().await?;
-        self.prepare_chain().await?;
-        self.local_balance().await
+        self.prepare_chain().await
     }
 
     /// Processes the last pending block

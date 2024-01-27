@@ -107,10 +107,9 @@ where
             .unwrap();
         assert_eq!(sender.next_block_height, BlockHeight::from(1));
         assert!(sender.pending_block.is_none());
-        // `local_balance` stages another block execution, which costs another 0.001.
         assert_eq!(
             sender.local_balance().await.unwrap(),
-            Amount::from_milli(998)
+            Amount::from_milli(999)
         );
         assert_eq!(
             builder
@@ -162,7 +161,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
-        .with_policy(ResourceControlPolicy::only_fuel());
+        .with_policy(ResourceControlPolicy::fuel_and_block());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
@@ -170,7 +169,8 @@ where
     let mut receiver = builder
         .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
         .await?;
-    let cert = sender
+    let friend = receiver.identity().await?;
+    sender
         .transfer_to_account(
             None,
             Amount::from_tokens(3),
@@ -180,11 +180,52 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
+    let cert = sender
+        .transfer_to_account(
+            None,
+            Amount::from_milli(100),
+            Account::owner(ChainId::root(2), friend),
+            UserData(None),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        sender.local_balance().await.unwrap(),
+        Amount::from_milli(898)
+    );
     receiver.receive_certificate(cert).await?;
-    receiver.process_inbox().await?;
+    assert_eq!(receiver.process_inbox().await?.0.len(), 1);
+    // The friend paid to receive the message.
+    assert_eq!(
+        receiver.local_owner_balance(friend).await.unwrap(),
+        Amount::from_milli(99)
+    );
     // The received amount is not in the unprotected balance.
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
+    assert_eq!(
+        receiver.local_owner_balance(owner).await.unwrap(),
+        Amount::from_tokens(3)
+    );
+    assert_eq!(
+        receiver
+            .local_balances_with_owner(Some(owner))
+            .await
+            .unwrap(),
+        (Amount::ZERO, Some(Amount::from_tokens(3)))
+    );
+    assert_eq!(receiver.query_balance().await.unwrap(), Amount::ZERO);
+    assert_eq!(
+        receiver.query_owner_balance(owner).await.unwrap(),
+        Amount::from_milli(2999)
+    );
+    assert_eq!(
+        receiver
+            .query_balances_with_owner(Some(owner))
+            .await
+            .unwrap(),
+        (Amount::ZERO, Some(Amount::from_milli(2999)))
+    );
 
     // First attempt that should be rejected.
     sender
@@ -217,10 +258,10 @@ where
         // Both `Claim` messages were included in the block.
         assert_eq!(messages.len(), 2);
         // The first one was rejected.
-        assert_eq!(messages[0].event.height, BlockHeight::from(1));
+        assert_eq!(messages[0].event.height, BlockHeight::from(2));
         assert_eq!(messages[0].action, MessageAction::Reject);
         // The second was accepted.
-        assert_eq!(messages[1].event.height, BlockHeight::from(2));
+        assert_eq!(messages[1].event.height, BlockHeight::from(3));
         assert_eq!(messages[1].action, MessageAction::Accept);
     }
 
@@ -228,7 +269,7 @@ where
     sender.process_inbox().await?;
     assert_eq!(
         sender.local_balance().await.unwrap(),
-        Amount::from_tokens(3)
+        Amount::from_milli(2895)
     );
 
     Ok(())
@@ -285,12 +326,9 @@ where
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
-        Amount::from_milli(3998)
+        Amount::from_milli(3999)
     );
-    assert_eq!(
-        sender.synchronize_from_validators().await.unwrap(),
-        Amount::from_milli(3998)
-    );
+    sender.synchronize_from_validators().await.unwrap();
     // Can still use the chain.
     sender
         .transfer_to_account(
@@ -362,12 +400,9 @@ where
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
-        Amount::from_milli(3998)
+        Amount::from_milli(3999)
     );
-    assert_eq!(
-        sender.synchronize_from_validators().await.unwrap(),
-        Amount::from_milli(3998)
-    );
+    sender.synchronize_from_validators().await.unwrap();
     // Cannot use the chain any more.
     assert!(matches!(
         sender
@@ -437,10 +472,7 @@ where
         sender.local_balance().await.unwrap(),
         Amount::from_tokens(4)
     );
-    assert_eq!(
-        sender.synchronize_from_validators().await.unwrap(),
-        Amount::from_tokens(4)
-    );
+    sender.synchronize_from_validators().await.unwrap();
     // Can still use the chain with the old client.
     sender
         .transfer_to_account(
@@ -467,10 +499,7 @@ where
         client.local_balance().await,
         Err(ChainClientError::WalletSynchronizationError)
     ));
-    assert_eq!(
-        client.synchronize_from_validators().await.unwrap(),
-        Amount::from_tokens(2)
-    );
+    client.synchronize_from_validators().await.unwrap();
     assert_eq!(
         client.local_balance().await.unwrap(),
         Amount::from_tokens(2)
@@ -515,8 +544,10 @@ where
     // Half the validators voted for one block, half for the other. We need to make a proposal in
     // the next round to succeed.
     builder.set_fault_type(.., FaultType::Honest).await;
+    client.synchronize_from_validators().await.unwrap();
+    client.process_inbox().await.unwrap();
     assert_eq!(
-        client.synchronize_from_validators().await.unwrap(),
+        client.local_balance().await.unwrap(),
         Amount::from_tokens(2)
     );
     client.clear_pending_block();
@@ -532,10 +563,9 @@ where
         .unwrap();
 
     // The other client doesn't know the new round number yet:
-    assert_eq!(
-        sender.synchronize_from_validators().await.unwrap(),
-        Amount::ONE
-    );
+    sender.synchronize_from_validators().await.unwrap();
+    sender.process_inbox().await.unwrap();
+    assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
     sender.clear_pending_block();
     sender
         .transfer_to_account(
@@ -549,10 +579,9 @@ where
 
     // That's it, we spent all our money on this test!
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ZERO);
-    assert_eq!(
-        client.synchronize_from_validators().await.unwrap(),
-        Amount::ZERO
-    );
+    client.synchronize_from_validators().await.unwrap();
+    client.process_inbox().await.unwrap();
+    assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
     Ok(())
 }
 
@@ -609,11 +638,7 @@ where
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
     client.receive_certificate(certificate).await.unwrap();
-    assert_eq!(
-        client.synchronize_from_validators().await.unwrap(),
-        Amount::ZERO
-    );
-    assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
+    assert_eq!(client.query_balance().await.unwrap(), Amount::ZERO);
     client.close_chain().await.unwrap();
     Ok(())
 }
@@ -720,7 +745,7 @@ where
         .unwrap();
     client.receive_certificate(certificate2).await.unwrap();
     assert_eq!(
-        client.local_balance().await.unwrap(),
+        client.query_balance().await.unwrap(),
         Amount::from_tokens(3)
     );
     client
@@ -819,10 +844,6 @@ where
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
     client.receive_certificate(certificate).await.unwrap();
-    assert_eq!(
-        client.local_balance().await.unwrap(),
-        Amount::from_tokens(3)
-    );
     let result = client
         .transfer_to_account(
             None,
@@ -918,7 +939,7 @@ where
         .await
         .unwrap();
     assert_eq!(
-        client.local_balance().await.unwrap(),
+        client.query_balance().await.unwrap(),
         Amount::from_tokens(3)
     );
     client
@@ -1118,7 +1139,6 @@ where
             balance: Amount::from_tokens(3),
         }
     );
-
     let certificate = client1
         .transfer_to_account(
             None,
@@ -1151,26 +1171,18 @@ where
     );
     // Local balance is lagging.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
-    // Force synchronization of local balance.
-    assert_eq!(
-        client2.synchronize_from_validators().await.unwrap(),
-        Amount::from_tokens(3)
-    );
-    assert_eq!(
-        client2.local_balance().await.unwrap(),
-        Amount::from_tokens(3)
-    );
-    // The local balance from the client is reflecting incoming messages but the
-    // SystemResponse only reads the ChainState.
+    // Obtain the certificate but do not process the inbox yet.
+    client2.synchronize_from_validators().await.unwrap();
+    assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         client2.query_system_application(SystemQuery).await.unwrap(),
         SystemResponse {
             chain_id: ChainId::root(2),
-            balance: Amount::ZERO,
+            balance: Amount::from_tokens(0),
         }
     );
 
-    // Send back some money.
+    // Process the inbox and send back some money.
     assert_eq!(client2.next_block_height, BlockHeight::ZERO);
     client2
         .transfer_to_account(
@@ -1187,10 +1199,9 @@ where
         client2.local_balance().await.unwrap(),
         Amount::from_tokens(2)
     );
-    assert_eq!(
-        client1.synchronize_from_validators().await.unwrap(),
-        Amount::ONE
-    );
+    client1.synchronize_from_validators().await.unwrap();
+    client1.process_inbox().await.unwrap();
+    assert_eq!(client1.local_balance().await.unwrap(), Amount::ONE);
     // Local balance from client2 is now consolidated.
     assert_eq!(
         client2.query_system_application(SystemQuery).await.unwrap(),
@@ -1253,14 +1264,17 @@ where
     // Transfer was executed locally.
     assert_eq!(
         client1.local_balance().await.unwrap(),
-        Amount::from_milli(998)
+        Amount::from_milli(999)
     );
     assert_eq!(client1.next_block_height, BlockHeight::from(1));
     assert!(client1.pending_block.is_none());
+    // The receiver doesn't know about the transfer.
+    client2.process_inbox().await.unwrap();
+    assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Let the receiver confirm in last resort.
     client2.receive_certificate(certificate).await.unwrap();
     assert_eq!(
-        client2.local_balance().await.unwrap(),
+        client2.query_balance().await.unwrap(),
         Amount::from_milli(1999)
     );
     Ok(())
@@ -1376,10 +1390,7 @@ where
         .unwrap()
         .is_none());
     // Retrying the whole command works after synchronization.
-    assert_eq!(
-        client2.synchronize_from_validators().await.unwrap(),
-        Amount::from_tokens(2)
-    );
+    client2.synchronize_from_validators().await.unwrap();
     let certificate = client2
         .transfer_to_account(
             None,
@@ -1402,7 +1413,7 @@ where
     // Let the receiver confirm in last resort.
     client3.receive_certificate(certificate).await.unwrap();
     assert_eq!(
-        client3.local_balance().await.unwrap(),
+        client3.query_balance().await.unwrap(),
         Amount::from_tokens(2)
     );
     Ok(())
@@ -1483,10 +1494,7 @@ where
         Err(ChainClientError::CommitteeSynchronizationError)
     ));
     assert_eq!(user.epoch().await.unwrap(), Epoch::ZERO);
-    assert_eq!(
-        user.synchronize_from_validators().await.unwrap(),
-        Amount::from_tokens(3)
-    );
+    user.synchronize_from_validators().await.unwrap();
 
     // User is a genesis chain so the migration message is not even in the inbox yet.
     user.process_inbox().await.unwrap();
@@ -1516,10 +1524,9 @@ where
         Err(ChainClientError::CommitteeDeprecationError)
     ));
     // Transfer is blocked because the epoch #0 has been retired by admin.
-    assert_eq!(
-        admin.synchronize_from_validators().await.unwrap(),
-        Amount::ZERO
-    );
+    admin.synchronize_from_validators().await.unwrap();
+    admin.process_inbox().await.unwrap();
+    assert_eq!(admin.local_balance().await.unwrap(), Amount::ZERO);
 
     // Have the user receive the notification to migrate to epoch #1.
     user.synchronize_from_validators().await.unwrap();
@@ -1538,11 +1545,9 @@ where
         .unwrap()
         .unwrap();
     admin.receive_certificate(cert).await.unwrap();
+    admin.process_inbox().await.unwrap();
     // Transfer goes through and the previous one as well thanks to block chaining.
-    assert_eq!(
-        admin.synchronize_from_validators().await.unwrap(),
-        Amount::from_tokens(3)
-    );
+    assert_eq!(admin.local_balance().await.unwrap(), Amount::from_tokens(3));
     Ok(())
 }
 
@@ -1815,8 +1820,10 @@ where
         .burn(None, Amount::from_tokens(1), UserData::default())
         .await
         .unwrap();
+    client0.synchronize_from_validators().await.unwrap();
+    client0.process_inbox().await.unwrap();
     assert_eq!(
-        client0.synchronize_from_validators().await.unwrap(),
+        client0.local_balance().await.unwrap(),
         Amount::from_tokens(7)
     );
     Ok(())
@@ -1876,8 +1883,10 @@ where
         .burn(None, Amount::ONE, UserData::default())
         .await
         .unwrap();
+    client.synchronize_from_validators().await.unwrap();
+    client.process_inbox().await.unwrap();
     assert_eq!(
-        client.synchronize_from_validators().await.unwrap(),
+        client.local_balance().await.unwrap(),
         Amount::from_tokens(6)
     );
     Ok(())

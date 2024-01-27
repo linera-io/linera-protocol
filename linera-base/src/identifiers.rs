@@ -19,7 +19,7 @@ use std::{
 /// The owner of a chain. This is currently the hash of the owner's public key used to
 /// verify signatures.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Default))]
+#[cfg_attr(any(test, feature = "test"), derive(Default, test_strategy::Arbitrary))]
 pub struct Owner(pub CryptoHash);
 
 /// How to create a chain.

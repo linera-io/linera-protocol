@@ -197,10 +197,11 @@ where
         action: UserAction,
         resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
+        let initial_balance = resource_controller.with(self).await?.balance();
         let controller = ResourceController {
             policy: resource_controller.policy.clone(),
             tracker: resource_controller.tracker,
-            account: resource_controller.with(self).await?.balance(),
+            account: initial_balance,
         };
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
@@ -217,7 +218,10 @@ where
             self.handle_request(request).await?;
         }
         let (execution_outcomes, controller) = execution_outcomes_future.await??;
-        *resource_controller.with(self).await?.balance_mut() = controller.account;
+        resource_controller
+            .with(self)
+            .await?
+            .merge_balance(initial_balance, controller.balance())?;
         resource_controller.tracker = controller.tracker;
         Ok(execution_outcomes)
     }

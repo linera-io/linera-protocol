@@ -36,11 +36,7 @@ pub struct ChainListenerConfig {
 pub trait ClientContext<P: ValidatorNodeProvider> {
     fn wallet_state(&self) -> &WalletState;
 
-    fn make_chain_client<S>(
-        &self,
-        storage: S,
-        chain_id: impl Into<Option<ChainId>>,
-    ) -> ChainClient<P, S>;
+    fn make_chain_client<S>(&self, storage: S, chain_id: ChainId) -> ChainClient<P, S>;
 
     fn update_wallet_for_new_chain(
         &mut self,

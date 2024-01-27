@@ -16,7 +16,7 @@ use linera_core::{
     data_types::ClientOutcome,
     node::{CrossChainMessageDelivery, ValidatorNodeProvider},
 };
-use linera_execution::Bytecode;
+use linera_execution::{system::Account, Bytecode};
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
     chain_listener,
@@ -77,11 +77,7 @@ impl chain_listener::ClientContext<NodeProvider> for ClientContext {
         &self.wallet_state
     }
 
-    fn make_chain_client<S>(
-        &self,
-        storage: S,
-        chain_id: impl Into<Option<ChainId>>,
-    ) -> ChainClient<NodeProvider, S> {
+    fn make_chain_client<S>(&self, storage: S, chain_id: ChainId) -> ChainClient<NodeProvider, S> {
         self.make_chain_client(storage, chain_id)
     }
 
@@ -193,16 +189,20 @@ impl ClientContext {
         }
     }
 
-    fn make_chain_client<S>(
-        &self,
-        storage: S,
-        chain_id: impl Into<Option<ChainId>>,
-    ) -> ChainClient<NodeProvider, S> {
-        let chain_id = chain_id.into().unwrap_or_else(|| {
-            self.wallet_state
-                .default_chain()
-                .expect("No chain specified in wallet with no default chain")
-        });
+    /// Retrieve the default account. Current this is the common account of the default
+    /// chain.
+    pub fn default_account(&self) -> Account {
+        Account::chain(self.default_chain())
+    }
+
+    /// Retrieve the default chain.
+    pub fn default_chain(&self) -> ChainId {
+        self.wallet_state
+            .default_chain()
+            .expect("No chain specified in wallet with no default chain")
+    }
+
+    fn make_chain_client<S>(&self, storage: S, chain_id: ChainId) -> ChainClient<NodeProvider, S> {
         let chain = self
             .wallet_state
             .get(chain_id)

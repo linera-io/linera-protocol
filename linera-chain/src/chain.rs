@@ -626,8 +626,7 @@ where
         let mut resource_controller = ResourceController {
             policy: Arc::new(committee.policy().clone()),
             tracker: ResourceTracker::default(),
-            // TODO(#1537): Allow using the personal account of the block producer.
-            account: None,
+            account: block.authenticated_signer,
         };
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
