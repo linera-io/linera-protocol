@@ -547,7 +547,7 @@ where
         let mut hasher = sha3::Sha3_256::default();
         let keys = self.keys().await?;
         hasher.update_with_bcs_bytes(&keys.len())?;
-        let updates = self.updates.write().await;
+        let updates = self.updates.read().await;
         for key in keys {
             hasher.update_with_bytes(&key)?;
             let hash = match updates.get(&key) {
