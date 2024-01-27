@@ -11,6 +11,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera unsubscribe`↴](#linera-unsubscribe)
 * [`linera open-multi-owner-chain`↴](#linera-open-multi-owner-chain)
 * [`linera close-chain`↴](#linera-close-chain)
+* [`linera local-balance`↴](#linera-local-balance)
 * [`linera query-balance`↴](#linera-query-balance)
 * [`linera sync-balance`↴](#linera-sync-balance)
 * [`linera query-validators`↴](#linera-query-validators)
@@ -54,6 +55,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `unsubscribe` — Unsubscribes from a system channel
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
 * `close-chain` — Close (i.e. deactivate) an existing chain
+* `local-balance` — Read the current native-token balance of the given account from the local state
 * `query-balance` — Simulate the execution of one block made of pending messages from the local inbox, then read the native-token balance of the account from the local state
 * `sync-balance` — Synchronize the local state of the chain with a quorum validators, then query the local balance
 * `query-validators` — Show the current set of validators for a chain
@@ -217,6 +219,20 @@ Close (i.e. deactivate) an existing chain
 ###### **Options:**
 
 * `--from <CHAIN_ID>` — Chain id (must be one of our chains)
+
+
+
+## `linera local-balance`
+
+Read the current native-token balance of the given account from the local state.
+
+The balance does not reflect messages that are waiting to be picked in the local inbox, or that have not been synchronized from validators yet. Use `linera sync` then either `linera query-balance` or `linera process-inbox && linera local-balance` for a consolidated balance.
+
+**Usage:** `linera local-balance [ACCOUNT]`
+
+###### **Arguments:**
+
+* `<ACCOUNT>` — The account to read, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By defaults, we read the chain balance of the default chain in the wallet
 
 
 

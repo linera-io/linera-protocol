@@ -324,6 +324,20 @@ impl Runnable for Job {
                 debug!("{:?}", certificate);
             }
 
+            LocalBalance { account } => {
+                let account = account.unwrap_or_else(|| context.default_account());
+                let mut chain_client = context.make_chain_client(storage, account.chain_id);
+                info!("Reading the balance for the local node");
+                let time_start = Instant::now();
+                let balance = match account.owner {
+                    Some(owner) => chain_client.local_owner_balance(owner).await?,
+                    None => chain_client.local_balance().await?,
+                };
+                let time_total = time_start.elapsed();
+                info!("Local balance obtained after {} ms", time_total.as_millis());
+                println!("{}", balance);
+            }
+
             QueryBalance { account } => {
                 let account = account.unwrap_or_else(|| context.default_account());
                 let mut chain_client = context.make_chain_client(storage, account.chain_id);

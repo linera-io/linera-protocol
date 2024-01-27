@@ -385,6 +385,22 @@ impl ClientWrapper {
         bail!("Failed to start faucet");
     }
 
+    /// Runs `linera local-balance`.
+    pub async fn local_balance(&self, account: Account) -> Result<Amount> {
+        let stdout = self
+            .command()
+            .await?
+            .arg("local-balance")
+            .arg(account.to_string())
+            .spawn_and_wait_for_stdout()
+            .await?;
+        let amount = stdout
+            .trim()
+            .parse()
+            .context("error while parsing the result of `linera local-balance`")?;
+        Ok(amount)
+    }
+
     /// Runs `linera query-balance`.
     pub async fn query_balance(&self, account: Account) -> Result<Amount> {
         let stdout = self

@@ -2308,7 +2308,7 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetTestingConfig) {
     let chain_id = client.get_wallet().unwrap().default_chain().unwrap();
     assert_eq!(
         client
-            .query_balance(system::Account::chain(chain_id))
+            .local_balance(system::Account::chain(chain_id))
             .await
             .unwrap(),
         Amount::from_tokens(10)
