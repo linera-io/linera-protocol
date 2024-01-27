@@ -21,6 +21,27 @@ use std::{
     ops::Bound::Included,
 };
 
+#[cfg(feature = "metrics")]
+use {
+    linera_base::prometheus_util::{self, MeasureLatency},
+    linera_base::sync::Lazy,
+    prometheus::HistogramVec,
+};
+
+#[cfg(feature = "metrics")]
+/// The runtime of hash computation
+static KEY_VALUE_STORE_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
+    prometheus_util::register_histogram_vec(
+        "key_value_store_view_hash_runtime",
+        "KeyValueStoreView hash runtime",
+        &[],
+        Some(vec![
+            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
+        ]),
+    )
+    .expect("Histogram can be created")
+});
+
 #[cfg(any(test, feature = "test"))]
 use {
     crate::common::{
@@ -914,6 +935,8 @@ where
     }
 
     async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+        #[cfg(feature = "metrics")]
+        let _hash_latency = KEY_VALUE_STORE_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0;
         self.for_each_index_value(|index, value| -> Result<(), ViewError> {

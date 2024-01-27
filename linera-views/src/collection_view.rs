@@ -18,6 +18,27 @@ use std::{
     mem,
 };
 
+#[cfg(feature = "metrics")]
+use {
+    linera_base::prometheus_util::{self, MeasureLatency},
+    linera_base::sync::Lazy,
+    prometheus::HistogramVec,
+};
+
+#[cfg(feature = "metrics")]
+/// The runtime of hash computation
+static COLLECTION_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
+    prometheus_util::register_histogram_vec(
+        "collection_view_hash_runtime",
+        "CollectionView hash runtime",
+        &[],
+        Some(vec![
+            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
+        ]),
+    )
+    .expect("Histogram can be created")
+});
+
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// `Vec<u8>`, one subview at a time.
 #[derive(Debug)]
@@ -513,6 +534,42 @@ where
     }
 }
 
+impl<C, W> ByteCollectionView<C, W>
+where
+    C: Context + Send,
+    ViewError: From<C::Error>,
+    W: HashableView<C> + Sync,
+{
+    /// Computes the hash of the view
+    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+        #[cfg(feature = "metrics")]
+        let _hash_latency = COLLECTION_VIEW_HASH_RUNTIME.measure_latency();
+        let mut hasher = sha3::Sha3_256::default();
+        let keys = self.keys().await?;
+        hasher.update_with_bcs_bytes(&keys.len())?;
+        let updates = self.updates.read().await;
+        for key in keys {
+            hasher.update_with_bytes(&key)?;
+            let hash = match updates.get(&key) {
+                Some(entry) => {
+                    let Update::Set(view) = entry else {
+                        unreachable!();
+                    };
+                    view.hash().await?
+                }
+                None => {
+                    let key = self.context.base_tag_index(KeyTag::Subview as u8, &key);
+                    let context = self.context.clone_with_base_key(key);
+                    let view = W::load(context).await?;
+                    view.hash().await?
+                }
+            };
+            hasher.write_all(hash.as_ref())?;
+        }
+        Ok(hasher.finalize())
+    }
+}
+
 #[async_trait]
 impl<C, W> HashableView<C> for ByteCollectionView<C, W>
 where
@@ -527,16 +584,7 @@ where
         match hash {
             Some(hash) => Ok(hash),
             None => {
-                let mut hasher = Self::Hasher::default();
-                let keys = self.keys().await?;
-                hasher.update_with_bcs_bytes(&keys.len())?;
-                for key in keys {
-                    hasher.update_with_bytes(&key)?;
-                    let view = self.load_entry_mut(key).await?;
-                    let hash = view.hash().await?;
-                    hasher.write_all(hash.as_ref())?;
-                }
-                let new_hash = hasher.finalize();
+                let new_hash = self.compute_hash().await?;
                 let hash = self.hash.get_mut();
                 *hash = Some(new_hash);
                 Ok(new_hash)
@@ -549,17 +597,7 @@ where
         match *hash {
             Some(hash) => Ok(hash),
             None => {
-                let mut hasher = Self::Hasher::default();
-                let keys = self.keys().await?;
-                hasher.update_with_bcs_bytes(&keys.len())?;
-                for key in keys {
-                    hasher.update_with_bytes(&key)?;
-                    // We can unwrap since `key` is in `keys`, so we know it is present and cannot be modifed with `&self` methods.
-                    let view = self.try_load_entry(key).await?.unwrap();
-                    let hash = view.hash().await?;
-                    hasher.write_all(hash.as_ref())?;
-                }
-                let new_hash = hasher.finalize();
+                let new_hash = self.compute_hash().await?;
                 *hash = Some(new_hash);
                 Ok(new_hash)
             }

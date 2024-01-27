@@ -19,6 +19,27 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(feature = "metrics")]
+use {
+    linera_base::prometheus_util::{self, MeasureLatency},
+    linera_base::sync::Lazy,
+    prometheus::HistogramVec,
+};
+
+#[cfg(feature = "metrics")]
+/// The runtime of hash computation
+static REENTRANT_COLLECTION_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
+    prometheus_util::register_histogram_vec(
+        "reentrant_collection_view_hash_runtime",
+        "ReentrantCollectionView hash runtime",
+        &[],
+        Some(vec![
+            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
+        ]),
+    )
+    .expect("Histogram can be created")
+});
+
 /// A read-only accessor for a particular subview in a [`ReentrantCollectionView`].
 #[derive(Debug)]
 pub struct ReadGuardedView<T>(RwLockReadGuardArc<T>);
@@ -713,6 +734,44 @@ where
     }
 }
 
+impl<C, W> ReentrantByteCollectionView<C, W>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    W: HashableView<C> + Send + Sync + 'static,
+{
+    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+        #[cfg(feature = "metrics")]
+        let _hash_latency = REENTRANT_COLLECTION_VIEW_HASH_RUNTIME.measure_latency();
+        let mut hasher = sha3::Sha3_256::default();
+        let keys = self.keys().await?;
+        hasher.update_with_bcs_bytes(&keys.len())?;
+        let updates = self.updates.lock().await;
+        for key in keys {
+            hasher.update_with_bytes(&key)?;
+            let hash = match updates.get(&key) {
+                Some(entry) => {
+                    let Update::Set(view) = entry else {
+                        unreachable!();
+                    };
+                    let view = view
+                        .try_read_arc()
+                        .ok_or_else(|| ViewError::TryLockError(key))?;
+                    view.hash().await?
+                }
+                None => {
+                    let key = self.context.base_tag_index(KeyTag::Subview as u8, &key);
+                    let context = self.context.clone_with_base_key(key);
+                    let view = W::load(context).await?;
+                    view.hash().await?
+                }
+            };
+            hasher.write_all(hash.as_ref())?;
+        }
+        Ok(hasher.finalize())
+    }
+}
+
 #[async_trait]
 impl<C, W> HashableView<C> for ReentrantByteCollectionView<C, W>
 where
@@ -727,16 +786,7 @@ where
         match hash {
             Some(hash) => Ok(hash),
             None => {
-                let mut hasher = Self::Hasher::default();
-                let keys = self.keys().await?;
-                hasher.update_with_bcs_bytes(&keys.len())?;
-                for key in keys {
-                    hasher.update_with_bytes(&key)?;
-                    let view = self.try_load_entry_mut(key).await?;
-                    let hash = view.hash().await?;
-                    hasher.write_all(hash.as_ref())?;
-                }
-                let new_hash = hasher.finalize();
+                let new_hash = self.compute_hash().await?;
                 let hash = self.hash.get_mut();
                 *hash = Some(new_hash);
                 Ok(new_hash)
@@ -749,17 +799,7 @@ where
         match *hash {
             Some(hash) => Ok(hash),
             None => {
-                let mut hasher = Self::Hasher::default();
-                let keys = self.keys().await?;
-                hasher.update_with_bcs_bytes(&keys.len())?;
-                for key in keys {
-                    hasher.update_with_bytes(&key)?;
-                    // We can unwrap since `key` is in `keys`, so we know it is present and cannot be modifed with `&self` methods.
-                    let view = self.try_load_entry(key).await?.unwrap();
-                    let hash = view.hash().await?;
-                    hasher.write_all(hash.as_ref())?;
-                }
-                let new_hash = hasher.finalize();
+                let new_hash = self.compute_hash().await?;
                 *hash = Some(new_hash);
                 Ok(new_hash)
             }
