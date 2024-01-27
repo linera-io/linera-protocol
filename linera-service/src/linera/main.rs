@@ -118,7 +118,10 @@ impl Runnable for Job {
                 amount,
             } => {
                 let chain_client = context.make_chain_client(storage, sender.chain_id);
-                info!("Starting transfer");
+                info!(
+                    "Starting transfer of {} native tokens from {} to {}",
+                    amount, sender, recipient
+                );
                 let time_start = Instant::now();
                 let (certificate, _) = context
                     .apply_client_command(chain_client, |mut chain_client| async move {
@@ -153,7 +156,7 @@ impl Runnable for Job {
                         (key_pair.public(), Some(key_pair))
                     }
                 };
-                info!("Starting operation to open a new chain");
+                info!("Opening a new chain from existing chain {}", chain_id);
                 let time_start = Instant::now();
                 let ((message_id, certificate), _) = context
                     .apply_client_command(chain_client, |mut chain_client| {
@@ -197,7 +200,10 @@ impl Runnable for Job {
             } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(storage, chain_id);
-                info!("Starting operation to open a new chain");
+                info!(
+                    "Opening a new multi-owner chain from existing chain {}",
+                    chain_id
+                );
                 let time_start = Instant::now();
                 let owners = if weights.is_empty() {
                     public_keys
@@ -257,7 +263,7 @@ impl Runnable for Job {
 
             CloseChain { chain_id } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
-                info!("Starting operation to close the chain");
+                info!("Closing chain {}", chain_id);
                 let time_start = Instant::now();
                 let result = chain_client.close_chain().await;
                 context.update_and_save_wallet(&mut chain_client).await;
@@ -327,7 +333,7 @@ impl Runnable for Job {
             LocalBalance { account } => {
                 let account = account.unwrap_or_else(|| context.default_account());
                 let mut chain_client = context.make_chain_client(storage, account.chain_id);
-                info!("Reading the balance for the local node");
+                info!("Reading the balance of {} from the local state", account);
                 let time_start = Instant::now();
                 let balance = match account.owner {
                     Some(owner) => chain_client.local_owner_balance(owner).await?,
@@ -342,7 +348,7 @@ impl Runnable for Job {
                 let account = account.unwrap_or_else(|| context.default_account());
                 let mut chain_client = context.make_chain_client(storage, account.chain_id);
                 info!(
-                    "Evaluating the local balance by staging execution of known incoming messages"
+                    "Evaluating the local balance of {} by staging execution of known incoming messages", account
                 );
                 let time_start = Instant::now();
                 let balance = match account.owner {
@@ -406,7 +412,10 @@ impl Runnable for Job {
 
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let mut chain_client = context.make_chain_client(storage, chain_id);
-                info!("Starting operation to query validators");
+                info!(
+                    "Querying the validators of the current epoch of chain {}",
+                    chain_id
+                );
                 let time_start = Instant::now();
                 let result = chain_client.local_committee().await;
                 context.update_and_save_wallet(&mut chain_client).await;
@@ -764,8 +773,8 @@ impl Runnable for Job {
                 amount,
                 limit_rate_until,
             } => {
-                info!("Starting faucet service");
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                info!("Starting faucet service using chain {}", chain_id);
                 let chain_client = context.make_chain_client(storage, chain_id);
                 let end_timestamp = limit_rate_until
                     .map(|et| {
@@ -786,9 +795,9 @@ impl Runnable for Job {
                 service,
                 publisher,
             } => {
-                info!("Publishing bytecode");
                 let start_time = Instant::now();
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
+                info!("Publishing bytecode on chain {}", publisher);
                 let mut chain_client = context.make_chain_client(storage, publisher);
                 let result = context
                     .publish_bytecode(&mut chain_client, contract, service)
@@ -809,9 +818,9 @@ impl Runnable for Job {
                 json_argument_path,
                 required_application_ids,
             } => {
-                info!("Creating application");
                 let start_time = Instant::now();
                 let creator = creator.unwrap_or_else(|| context.default_chain());
+                info!("Creating application on chain {}", creator);
                 let mut chain_client = context.make_chain_client(storage, creator);
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
@@ -855,9 +864,9 @@ impl Runnable for Job {
                 json_argument_path,
                 required_application_ids,
             } => {
-                info!("Creating application");
                 let start_time = Instant::now();
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
+                info!("Publishing and creating application on chain {}", publisher);
                 let mut chain_client = context.make_chain_client(storage, publisher);
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
@@ -899,8 +908,8 @@ impl Runnable for Job {
             } => {
                 let requester_chain_id =
                     requester_chain_id.unwrap_or_else(|| context.default_chain());
+                info!("Requesting application for chain {}", requester_chain_id);
                 let mut chain_client = context.make_chain_client(storage, requester_chain_id);
-                info!("Starting request");
                 let result = chain_client
                     .request_application(application_id, target_chain_id)
                     .await;
@@ -911,6 +920,11 @@ impl Runnable for Job {
 
             Assign { key, message_id } => {
                 let chain_id = ChainId::child(message_id);
+                info!(
+                    "Linking chain {} to its corresponding key in the wallet, owned by {}",
+                    chain_id,
+                    Owner::from(&key)
+                );
                 Self::assign_new_chain_to_key(
                     chain_id,
                     message_id,
@@ -935,9 +949,9 @@ impl Runnable for Job {
                     json_argument_path,
                     required_application_ids,
                 } => {
-                    info!("Creating application");
                     let start_time = Instant::now();
                     let publisher = publisher.unwrap_or_else(|| context.default_chain());
+                    info!("Creating application on chain {}", publisher);
                     let mut chain_client = context.make_chain_client(storage, publisher);
 
                     let parameters = read_json(json_parameters, json_parameters_path)?;

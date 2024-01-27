@@ -277,11 +277,12 @@ pub enum ClientCommand {
         chain_id: ChainId,
     },
 
-    /// Read the current native-token balance of the given account from the local state.
+    /// Read the current native-token balance of the given account directly from the local
+    /// state.
     ///
-    /// The balance does not reflect messages that are waiting to be picked in the local
-    /// inbox, or that have not been synchronized from validators yet.
-    /// Use `linera sync` then either `linera query-balance` or `linera process-inbox &&
+    /// NOTE: The local balance does not reflect messages that are waiting to be picked in
+    /// the local inbox, or that have not been synchronized from validators yet. Use
+    /// `linera sync` then either `linera query-balance` or `linera process-inbox &&
     /// linera local-balance` for a consolidated balance.
     LocalBalance {
         /// The account to read, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
@@ -293,7 +294,7 @@ pub enum ClientCommand {
     /// Simulate the execution of one block made of pending messages from the local inbox,
     /// then read the native-token balance of the account from the local state.
     ///
-    /// The balance does not reflect messages that have not been synchronized from
+    /// NOTE: The balance does not reflect messages that have not been synchronized from
     /// validators yet. Call `linera sync` first to do so.
     QueryBalance {
         /// The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the

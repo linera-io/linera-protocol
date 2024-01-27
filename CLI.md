@@ -57,7 +57,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `unsubscribe` — Unsubscribes from a system channel
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
 * `close-chain` — Close (i.e. deactivate) an existing chain
-* `local-balance` — Read the current native-token balance of the given account from the local state
+* `local-balance` — Read the current native-token balance of the given account directly from the local state
 * `query-balance` — Simulate the execution of one block made of pending messages from the local inbox, then read the native-token balance of the account from the local state
 * `sync-balance` — (DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the local balance
 * `sync` — Synchronize the local state of the chain with a quorum validators
@@ -228,9 +228,9 @@ Close (i.e. deactivate) an existing chain
 
 ## `linera local-balance`
 
-Read the current native-token balance of the given account from the local state.
+Read the current native-token balance of the given account directly from the local state.
 
-The balance does not reflect messages that are waiting to be picked in the local inbox, or that have not been synchronized from validators yet. Use `linera sync` then either `linera query-balance` or `linera process-inbox && linera local-balance` for a consolidated balance.
+NOTE: The local balance does not reflect messages that are waiting to be picked in the local inbox, or that have not been synchronized from validators yet. Use `linera sync` then either `linera query-balance` or `linera process-inbox && linera local-balance` for a consolidated balance.
 
 **Usage:** `linera local-balance [ACCOUNT]`
 
@@ -244,7 +244,7 @@ The balance does not reflect messages that are waiting to be picked in the local
 
 Simulate the execution of one block made of pending messages from the local inbox, then read the native-token balance of the account from the local state.
 
-The balance does not reflect messages that have not been synchronized from validators yet. Call `linera sync` first to do so.
+NOTE: The balance does not reflect messages that have not been synchronized from validators yet. Call `linera sync` first to do so.
 
 **Usage:** `linera query-balance [ACCOUNT]`
 
