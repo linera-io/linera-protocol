@@ -965,8 +965,9 @@ impl Runnable for Job {
                     Owner::from(&public_key)
                 );
                 context.wallet_state_mut().add_unassigned_key_pair(key_pair);
-                let outcome = cli_wrappers::Faucet::claim_url(&public_key, &faucet_url).await?;
-                let validators = cli_wrappers::Faucet::current_validators(&faucet_url).await?;
+                let faucet = cli_wrappers::Faucet::new(faucet_url);
+                let outcome = faucet.claim(&public_key).await?;
+                let validators = faucet.current_validators().await?;
                 println!("{}", outcome.chain_id);
                 println!("{}", outcome.message_id);
                 println!("{}", outcome.certificate_hash);
@@ -1493,7 +1494,11 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
             } => {
                 let genesis_config = match (genesis_config_path, faucet) {
                     (Some(genesis_config_path), None) => GenesisConfig::read(genesis_config_path)?,
-                    (None, Some(url)) => cli_wrappers::Faucet::request_genesis_config(url).await?,
+                    (None, Some(url)) => {
+                        cli_wrappers::Faucet::new(url.clone())
+                            .genesis_config()
+                            .await?
+                    }
                     (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
                 };
                 let timestamp = genesis_config.timestamp;

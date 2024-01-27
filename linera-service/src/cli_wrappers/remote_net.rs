@@ -13,14 +13,16 @@ use tempfile::{tempdir, TempDir};
 
 #[cfg(any(test, feature = "test"))]
 pub struct RemoteNetTestingConfig {
-    faucet_url: String,
+    faucet: Faucet,
 }
 
 #[cfg(any(test, feature = "test"))]
 impl RemoteNetTestingConfig {
     pub fn new(faucet_url: Option<&str>) -> Self {
         Self {
-            faucet_url: String::from(faucet_url.unwrap_or("https://faucet.devnet.linera.net")),
+            faucet: Faucet::new(String::from(
+                faucet_url.unwrap_or("https://faucet.devnet.linera.net"),
+            )),
         }
     }
 }
@@ -32,7 +34,7 @@ impl LineraNetConfig for RemoteNetTestingConfig {
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
         let seed = 37;
-        let mut net = RemoteNet::new(Some(seed), &self.faucet_url)
+        let mut net = RemoteNet::new(Some(seed), &self.faucet)
             .await
             .expect("Creating RemoteNet should not fail");
 
@@ -40,7 +42,7 @@ impl LineraNetConfig for RemoteNetTestingConfig {
         // The tests assume we've created a genesis config with 10
         // chains with 10 tokens each. We create the first chain here
         client
-            .wallet_init(&[], FaucetOption::NewChain(&self.faucet_url))
+            .wallet_init(&[], FaucetOption::NewChain(&self.faucet))
             .await
             .unwrap();
 
@@ -98,9 +100,9 @@ impl LineraNet for RemoteNet {
 
 #[cfg(any(test, feature = "test"))]
 impl RemoteNet {
-    async fn new(testing_prng_seed: Option<u64>, faucet_url: &str) -> Result<Self> {
+    async fn new(testing_prng_seed: Option<u64>, faucet: &Faucet) -> Result<Self> {
         let tmp_dir = Arc::new(tempdir()?);
-        let genesis_config = Faucet::request_genesis_config(faucet_url).await?;
+        let genesis_config = faucet.genesis_config().await?;
         // Write json config to disk
         genesis_config.write(tmp_dir.path().join("genesis.json").as_path())?;
         Ok(Self {

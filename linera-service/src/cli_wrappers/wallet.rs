@@ -182,11 +182,11 @@ impl ClientWrapper {
             FaucetOption::None => {
                 command.args(["--genesis", "genesis.json"]);
             }
-            FaucetOption::GenesisOnly(url) => {
-                command.args(["--faucet", url]);
+            FaucetOption::GenesisOnly(faucet) => {
+                command.args(["--faucet", faucet.url()]);
             }
-            FaucetOption::NewChain(url) => {
-                command.args(["--with-new-chain", "--faucet", url]);
+            FaucetOption::NewChain(faucet) => {
+                command.args(["--with-new-chain", "--faucet", faucet.url()]);
             }
         }
         if let Some(seed) = self.testing_prng_seed {
@@ -358,7 +358,7 @@ impl ClientWrapper {
         port: impl Into<Option<u16>>,
         chain_id: ChainId,
         amount: Amount,
-    ) -> Result<Faucet> {
+    ) -> Result<FaucetService> {
         let port = port.into().unwrap_or(8080);
         let mut command = self.command().await?;
         let child = command
@@ -376,7 +376,7 @@ impl ClientWrapper {
                 .await;
             if request.is_ok() {
                 info!("Faucet has started");
-                return Ok(Faucet::new(port, child));
+                return Ok(FaucetService::new(port, child));
             } else {
                 warn!("Waiting for faucet to start");
             }
@@ -675,8 +675,8 @@ impl ClientWrapper {
 #[derive(Clone, Copy, Debug)]
 pub enum FaucetOption<'a> {
     None,
-    GenesisOnly(&'a str),
-    NewChain(&'a str),
+    GenesisOnly(&'a Faucet),
+    NewChain(&'a Faucet),
 }
 
 #[cfg(any(test, feature = "test"))]
@@ -900,12 +900,12 @@ impl NodeService {
 }
 
 /// A running faucet service.
-pub struct Faucet {
+pub struct FaucetService {
     port: u16,
     child: Child,
 }
 
-impl Faucet {
+impl FaucetService {
     fn new(port: u16, child: Child) -> Self {
         Self { port, child }
     }
@@ -921,19 +921,31 @@ impl Faucet {
         self.child.ensure_is_running()
     }
 
-    pub fn url(&self) -> String {
-        format!("http://localhost:{}/", self.port)
+    pub fn instance(&self) -> Faucet {
+        Faucet::new(format!("http://localhost:{}/", self.port))
+    }
+}
+
+/// A faucet instance that can be queried.
+#[derive(Debug, Clone)]
+pub struct Faucet {
+    url: String,
+}
+
+impl Faucet {
+    pub fn new(url: String) -> Self {
+        Self { url }
     }
 
-    pub async fn claim(&self, public_key: &PublicKey) -> Result<ClaimOutcome> {
-        Self::claim_url(public_key, &self.url()).await
+    pub fn url(&self) -> &str {
+        &self.url
     }
 
-    pub async fn request_genesis_config(url: &str) -> Result<GenesisConfig> {
+    pub async fn genesis_config(&self) -> Result<GenesisConfig> {
         let query = "query { genesisConfig }";
         let client = reqwest_client();
         let response = client
-            .post(url)
+            .post(&self.url)
             .json(&json!({ "query": query }))
             .send()
             .await
@@ -955,7 +967,7 @@ impl Faucet {
             .context("could not parse genesis config")
     }
 
-    pub async fn claim_url(public_key: &PublicKey, url: &str) -> Result<ClaimOutcome> {
+    pub async fn claim(&self, public_key: &PublicKey) -> Result<ClaimOutcome> {
         let query = format!(
             "mutation {{ claim(publicKey: \"{public_key}\") {{ \
                 messageId chainId certificateHash \
@@ -963,7 +975,7 @@ impl Faucet {
         );
         let client = reqwest_client();
         let response = client
-            .post(url)
+            .post(&self.url)
             .json(&json!({ "query": &query }))
             .send()
             .await
@@ -1005,11 +1017,11 @@ impl Faucet {
         Ok(outcome)
     }
 
-    pub async fn current_validators(url: &str) -> Result<Vec<(ValidatorName, String)>> {
+    pub async fn current_validators(&self) -> Result<Vec<(ValidatorName, String)>> {
         let query = "query { currentValidators { name networkAddress } }";
         let client = reqwest_client();
         let response = client
-            .post(url)
+            .post(&self.url)
             .json(&json!({ "query": query }))
             .send()
             .await

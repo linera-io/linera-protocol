@@ -2152,10 +2152,11 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     // Generate keys for client 2.
     let client2_key = client2.keygen().await.unwrap();
 
-    let mut faucet = client1
+    let mut faucet_service = client1
         .run_faucet(None, chain1, Amount::from_tokens(2))
         .await
         .unwrap();
+    let faucet = faucet_service.instance();
     let outcome = faucet.claim(&client2_key).await.unwrap();
     let chain2 = outcome.chain_id;
     let message_id = outcome.message_id;
@@ -2163,7 +2164,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     // Use the faucet directly to initialize client 3.
     let client3 = net.make_client().await;
     let outcome = client3
-        .wallet_init(&[], FaucetOption::NewChain(&faucet.url()))
+        .wallet_init(&[], FaucetOption::NewChain(&faucet))
         .await
         .unwrap();
     let chain3 = outcome.unwrap().chain_id;
@@ -2172,8 +2173,8 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
         client3.get_wallet().unwrap().default_chain().unwrap()
     );
 
-    faucet.ensure_is_running().unwrap();
-    faucet.terminate().await.unwrap();
+    faucet_service.ensure_is_running().unwrap();
+    faucet_service.terminate().await.unwrap();
 
     // Chain 1 should have transferred four tokens, two to each child. So it should have six left.
     client1
@@ -2262,10 +2263,11 @@ async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) {
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
 
-    let mut faucet = client1
+    let mut faucet_service = client1
         .run_faucet(None, chain1, Amount::from_tokens(1))
         .await
         .unwrap();
+    let faucet = faucet_service.instance();
 
     let path = util::resolve_binary("linera-benchmark", env!("CARGO_PKG_NAME"))
         .await
@@ -2280,13 +2282,13 @@ async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) {
         .args(["--wallets", "3"])
         .args(["--transactions", "1"])
         .arg("--uniform")
-        .args(["--faucet".to_string(), faucet.url()]);
+        .args(["--faucet", faucet.url()]);
     let stdout = command.spawn_and_wait_for_stdout().await.unwrap();
     let json = serde_json::from_str::<serde_json::Value>(&stdout).unwrap();
     assert_eq!(json["successes"], 3);
 
-    faucet.ensure_is_running().unwrap();
-    faucet.terminate().await.unwrap();
+    faucet_service.ensure_is_running().unwrap();
+    faucet_service.terminate().await.unwrap();
     net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }

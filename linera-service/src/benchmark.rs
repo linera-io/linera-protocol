@@ -11,7 +11,9 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId, Owner},
 };
 use linera_execution::system::{self, SystemChannel};
-use linera_service::cli_wrappers::{ApplicationWrapper, ClientWrapper, FaucetOption, Network};
+use linera_service::cli_wrappers::{
+    ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, Network,
+};
 use port_selector::random_free_tcp_port;
 use rand::{Rng as _, SeedableRng};
 use serde_json::Value;
@@ -68,14 +70,16 @@ async fn main() -> Result<()> {
             faucet,
             seed,
             uniform,
-        } => benchmark_with_fungible(wallets, transactions, faucet, seed, uniform).await,
+        } => {
+            benchmark_with_fungible(wallets, transactions, Faucet::new(faucet), seed, uniform).await
+        }
     }
 }
 
 async fn benchmark_with_fungible(
     num_wallets: usize,
     num_transactions: usize,
-    faucet: String,
+    faucet: Faucet,
     seed: u64,
     uniform: bool,
 ) -> Result<()> {
