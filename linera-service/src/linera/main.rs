@@ -379,7 +379,7 @@ impl Runnable for Job {
                     {
                         Ok(version_info) => {
                             info!(
-                                "Version information for validator {name:?}:\n{}",
+                                "Version information for validator {name:?}:{}",
                                 version_info
                             );
                         }
@@ -961,8 +961,9 @@ impl Runnable for Job {
                 let key_pair = context.generate_key_pair();
                 let public_key = key_pair.public();
                 info!(
-                    "Requesting a new chain from the faucet, attributed to owner {}",
-                    Owner::from(&public_key)
+                    "Requesting a new chain for owner {} using the faucet at address {}",
+                    Owner::from(&public_key),
+                    faucet_url,
                 );
                 context.wallet_state_mut().add_unassigned_key_pair(key_pair);
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
@@ -1495,9 +1496,29 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                 let genesis_config = match (genesis_config_path, faucet) {
                     (Some(genesis_config_path), None) => GenesisConfig::read(genesis_config_path)?,
                     (None, Some(url)) => {
-                        cli_wrappers::Faucet::new(url.clone())
+                        let faucet = cli_wrappers::Faucet::new(url.clone());
+                        let version_info = faucet
+                            .version_info()
+                            .await
+                            .context("Failed to obtain version information from the faucet")?;
+                        if version_info != linera_base::VERSION_INFO {
+                            warn!(
+                                "\
+Make sure to use a Linera client compatible with the Linera network in use.
+--- Faucet info ---\
+{}\
+-------------------
+--- This binary ---\
+{}\
+-------------------",
+                                version_info,
+                                linera_base::VERSION_INFO,
+                            );
+                        }
+                        faucet
                             .genesis_config()
-                            .await?
+                            .await
+                            .context("Failed to obtain the genesis configuration from the faucet")?
                     }
                     (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
                 };
