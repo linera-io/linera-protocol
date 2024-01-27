@@ -144,6 +144,7 @@ impl Runnable for Job {
                 public_key,
                 balance,
             } => {
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(storage, chain_id);
                 let (new_public_key, key_pair) = match public_key {
                     Some(key) => (key, None),
@@ -194,6 +195,7 @@ impl Runnable for Job {
                 base_timeout,
                 timeout_increment,
             } => {
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting operation to open a new chain");
                 let time_start = Instant::now();
@@ -270,6 +272,7 @@ impl Runnable for Job {
                 publisher,
                 channel,
             } => {
+                let subscriber = subscriber.unwrap_or_else(|| context.default_chain());
                 let mut chain_client = context.make_chain_client(storage, subscriber);
                 let time_start = Instant::now();
                 info!("Subscribing");
@@ -285,10 +288,10 @@ impl Runnable for Job {
                     },
                 };
                 context.update_and_save_wallet(&mut chain_client).await;
-                let subscribe = result.context("Failed to subscribe")?;
+                let certificate = result.context("Failed to subscribe")?;
                 let time_total = time_start.elapsed();
                 info!("Subscription confirmed after {} ms", time_total.as_millis());
-                debug!("{:?}", subscribe);
+                debug!("{:?}", certificate);
             }
 
             Unsubscribe {
@@ -296,6 +299,7 @@ impl Runnable for Job {
                 publisher,
                 channel,
             } => {
+                let subscriber = subscriber.unwrap_or_else(|| context.default_chain());
                 let mut chain_client = context.make_chain_client(storage, subscriber);
                 let time_start = Instant::now();
                 let result = match channel {
@@ -314,28 +318,38 @@ impl Runnable for Job {
                     },
                 };
                 context.update_and_save_wallet(&mut chain_client).await;
-                let unsubscribe = result.context("Failed to unsubscribe")?;
+                let certificate = result.context("Failed to unsubscribe")?;
                 let time_total = time_start.elapsed();
                 info!("Unsubscribed in {} ms", time_total.as_millis());
-                debug!("{:?}", unsubscribe);
+                debug!("{:?}", certificate);
             }
 
-            QueryBalance { chain_id } => {
-                let mut chain_client = context.make_chain_client(storage, chain_id);
-                info!("Starting query for the local balance");
+            QueryBalance { account } => {
+                let account = account.unwrap_or_else(|| context.default_account());
+                let mut chain_client = context.make_chain_client(storage, account.chain_id);
+                info!(
+                    "Evaluating the local balance by staging execution of known incoming messages"
+                );
                 let time_start = Instant::now();
-                let balance = chain_client.query_balance().await?;
+                let balance = match account.owner {
+                    Some(owner) => chain_client.query_owner_balance(owner).await?,
+                    None => chain_client.query_balance().await?,
+                };
                 let time_total = time_start.elapsed();
-                info!("Local balance obtained after {} ms", time_total.as_millis());
+                info!("Balance obtained after {} ms", time_total.as_millis());
                 println!("{}", balance);
             }
 
-            SyncBalance { chain_id } => {
-                let mut chain_client = context.make_chain_client(storage, chain_id);
+            SyncBalance { account } => {
+                let account = account.unwrap_or_else(|| context.default_account());
+                let mut chain_client = context.make_chain_client(storage, account.chain_id);
                 info!("Synchronizing chain information and querying the local balance");
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
-                let result = chain_client.query_balance().await;
+                let result = match account.owner {
+                    Some(owner) => chain_client.query_owner_balance(owner).await,
+                    None => chain_client.query_balance().await,
+                };
                 context.update_and_save_wallet(&mut chain_client).await;
                 let balance = result.context("Failed to synchronize from validators")?;
                 let time_total = time_start.elapsed();
@@ -346,6 +360,7 @@ impl Runnable for Job {
             QueryValidators { chain_id } => {
                 use linera_core::node::ValidatorNode as _;
 
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting operation to query validators");
                 let time_start = Instant::now();
@@ -676,6 +691,7 @@ impl Runnable for Job {
             }
 
             Watch { chain_id, raw } => {
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 let chain_id = chain_client.chain_id();
                 info!("Watching for notifications for chain {:?}", chain_id);
@@ -703,6 +719,7 @@ impl Runnable for Job {
                 limit_rate_until,
             } => {
                 info!("Starting faucet service");
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(storage, chain_id);
                 let end_timestamp = limit_rate_until
                     .map(|et| {
@@ -725,6 +742,7 @@ impl Runnable for Job {
             } => {
                 info!("Publishing bytecode");
                 let start_time = Instant::now();
+                let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 let mut chain_client = context.make_chain_client(storage, publisher);
                 let result = context
                     .publish_bytecode(&mut chain_client, contract, service)
@@ -747,6 +765,7 @@ impl Runnable for Job {
             } => {
                 info!("Creating application");
                 let start_time = Instant::now();
+                let creator = creator.unwrap_or_else(|| context.default_chain());
                 let mut chain_client = context.make_chain_client(storage, creator);
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
@@ -792,6 +811,7 @@ impl Runnable for Job {
             } => {
                 info!("Creating application");
                 let start_time = Instant::now();
+                let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 let mut chain_client = context.make_chain_client(storage, publisher);
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
@@ -831,6 +851,8 @@ impl Runnable for Job {
                 target_chain_id,
                 requester_chain_id,
             } => {
+                let requester_chain_id =
+                    requester_chain_id.unwrap_or_else(|| context.default_chain());
                 let mut chain_client = context.make_chain_client(storage, requester_chain_id);
                 info!("Starting request");
                 let result = chain_client
@@ -869,6 +891,7 @@ impl Runnable for Job {
                 } => {
                     info!("Creating application");
                     let start_time = Instant::now();
+                    let publisher = publisher.unwrap_or_else(|| context.default_chain());
                     let mut chain_client = context.make_chain_client(storage, publisher);
 
                     let parameters = read_json(json_parameters, json_parameters_path)?;
@@ -911,6 +934,8 @@ impl Runnable for Job {
             },
 
             RetryPendingBlock { chain_id } => {
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                info!("Committing pending block for chain {}", chain_id);
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 match chain_client.process_pending_block().await? {
                     ClientOutcome::Committed(Some(certificate)) => {
@@ -931,9 +956,12 @@ impl Runnable for Job {
                 with_other_chains,
                 ..
             }) => {
-                info!("Requesting a new chain from the faucet.");
                 let key_pair = context.generate_key_pair();
                 let public_key = key_pair.public();
+                info!(
+                    "Requesting a new chain from the faucet, attributed to owner {}",
+                    Owner::from(&public_key)
+                );
                 context.wallet_state_mut().add_unassigned_key_pair(key_pair);
                 let outcome = cli_wrappers::Faucet::claim_url(&public_key, &faucet_url).await?;
                 let validators = cli_wrappers::Faucet::current_validators(&faucet_url).await?;

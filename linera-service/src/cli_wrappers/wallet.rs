@@ -16,7 +16,11 @@ use linera_base::{
     data_types::Amount,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
-use linera_execution::{committee::ValidatorName, system::SystemChannel, Bytecode};
+use linera_execution::{
+    committee::ValidatorName,
+    system::{Account, SystemChannel},
+    Bytecode,
+};
 use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_json::{json, Value};
 use std::{
@@ -381,12 +385,12 @@ impl ClientWrapper {
     }
 
     /// Runs `linera query-balance`.
-    pub async fn query_balance(&self, chain_id: ChainId) -> Result<Amount> {
+    pub async fn query_balance(&self, account: Account) -> Result<Amount> {
         let stdout = self
             .command()
             .await?
             .arg("query-balance")
-            .arg(&chain_id.to_string())
+            .arg(account.to_string())
             .spawn_and_wait_for_stdout()
             .await?;
         let amount = stdout
@@ -396,8 +400,42 @@ impl ClientWrapper {
         Ok(amount)
     }
 
+    /// Runs `linera sync-balance`.
+    pub async fn synchronize_balance(&self, account: Account) -> Result<Amount> {
+        let stdout = self
+            .command()
+            .await?
+            .arg("sync-balance")
+            .arg(account.to_string())
+            .spawn_and_wait_for_stdout()
+            .await?;
+        let amount = stdout
+            .trim()
+            .parse()
+            .context("error while parsing the result of `linera sync-balance`")?;
+        Ok(amount)
+    }
+
     /// Runs `linera transfer`.
     pub async fn transfer(&self, amount: Amount, from: ChainId, to: ChainId) -> Result<()> {
+        self.command()
+            .await?
+            .arg("transfer")
+            .arg(amount.to_string())
+            .args(["--from", &from.to_string()])
+            .args(["--to", &to.to_string()])
+            .spawn_and_wait_for_stdout()
+            .await?;
+        Ok(())
+    }
+
+    /// Runs `linera transfer` with owner accounts.
+    pub async fn transfer_with_accounts(
+        &self,
+        amount: Amount,
+        from: Account,
+        to: Account,
+    ) -> Result<()> {
         self.command()
             .await?
             .arg("transfer")
@@ -599,22 +637,6 @@ impl ClientWrapper {
         let chain_id = ChainId::from_str(stdout.trim())?;
 
         Ok(chain_id)
-    }
-
-    /// Runs `linera sync-balance`.
-    pub async fn synchronize_balance(&self, chain_id: ChainId) -> Result<Amount> {
-        let stdout = self
-            .command()
-            .await?
-            .arg("sync-balance")
-            .arg(&chain_id.to_string())
-            .spawn_and_wait_for_stdout()
-            .await?;
-        let amount = stdout
-            .trim()
-            .parse()
-            .context("error while parsing the result of `linera sync-balance`")?;
-        Ok(amount)
     }
 
     pub async fn build_application(

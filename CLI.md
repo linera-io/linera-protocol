@@ -54,7 +54,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `unsubscribe` — Unsubscribes from a system channel
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
 * `close-chain` — Close (i.e. deactivate) an existing chain
-* `query-balance` — Simulate the execution of pending messages in the local inbox, then read the balance of the chain from the local state of the client
+* `query-balance` — Simulate the execution of one block made of pending messages from the local inbox, then read the native-token balance of the account from the local state
 * `sync-balance` — Synchronize the local state of the chain with a quorum validators, then query the local balance
 * `query-validators` — Show the current set of validators for a chain
 * `set-validator` — Add or modify a validator (admin only)
@@ -222,13 +222,15 @@ Close (i.e. deactivate) an existing chain
 
 ## `linera query-balance`
 
-Simulate the execution of pending messages in the local inbox, then read the balance of the chain from the local state of the client
+Simulate the execution of one block made of pending messages from the local inbox, then read the native-token balance of the account from the local state.
 
-**Usage:** `linera query-balance [CHAIN_ID]`
+The balance does not reflect messages that have not been synchronized from validators yet. Call `linera sync` first to do so.
+
+**Usage:** `linera query-balance [ACCOUNT]`
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>` — Chain id
+* `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By defaults, we read the chain balance of the default chain in the wallet
 
 
 
@@ -236,11 +238,11 @@ Simulate the execution of pending messages in the local inbox, then read the bal
 
 Synchronize the local state of the chain with a quorum validators, then query the local balance
 
-**Usage:** `linera sync-balance [CHAIN_ID]`
+**Usage:** `linera sync-balance [ACCOUNT]`
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>` — Chain id
+* `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By defaults, we read the chain balance of the default chain in the wallet
 
 
 
@@ -252,7 +254,7 @@ Show the current set of validators for a chain
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>` — Chain id
+* `<CHAIN_ID>` — The chain to query. If omitted, query the default chain of the wallet
 
 
 

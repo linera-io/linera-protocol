@@ -3,14 +3,14 @@
 
 use anyhow::{bail, Context as _, Result};
 use clap::Parser as _;
-use fungible::{Account, AccountOwner, FungibleTokenAbi, InitialState, Parameters};
+use fungible::{self, AccountOwner, FungibleTokenAbi, InitialState, Parameters};
 use futures::future::{join_all, try_join_all};
 use linera_base::{
     async_graphql::InputType,
     data_types::Amount,
     identifiers::{ApplicationId, ChainId, Owner},
 };
-use linera_execution::system::SystemChannel;
+use linera_execution::system::{self, SystemChannel};
 use linera_service::cli_wrappers::{ApplicationWrapper, ClientWrapper, FaucetOption, Network};
 use port_selector::random_free_tcp_port;
 use rand::{Rng as _, SeedableRng};
@@ -101,7 +101,9 @@ async fn benchmark_with_fungible(
     info!("Synchronizing balances (sanity check)");
     try_join_all(clients.iter().map(|user| async move {
         let chain = user.default_chain().context("missing default chain")?;
-        let balance = user.synchronize_balance(chain).await?;
+        let balance = user
+            .synchronize_balance(system::Account::chain(chain))
+            .await?;
         info!("User {:?} has {}", user.get_owner(), balance);
         Ok::<_, anyhow::Error>(())
     }))
@@ -192,7 +194,7 @@ async fn benchmark_with_fungible(
                 sender_app.transfer(
                     AccountOwner::User(sender_context.owner),
                     Amount::ONE,
-                    Account {
+                    fungible::Account {
                         chain_id: receiver_context.default_chain,
                         owner: AccountOwner::User(receiver_context.owner),
                     },
