@@ -2161,6 +2161,10 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     let chain2 = outcome.chain_id;
     let message_id = outcome.message_id;
 
+    // Test version info.
+    let info = faucet.version_info().await.unwrap();
+    assert_eq!(linera_base::VERSION_INFO, info);
+
     // Use the faucet directly to initialize client 3.
     let client3 = net.make_client().await;
     let outcome = client3

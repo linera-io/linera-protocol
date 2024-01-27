@@ -15,6 +15,7 @@ use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::Amount,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    VersionInfo,
 };
 use linera_execution::{
     committee::ValidatorName,
@@ -965,6 +966,47 @@ impl Faucet {
         }
         serde_json::from_value(value["data"]["genesisConfig"].take())
             .context("could not parse genesis config")
+    }
+
+    pub async fn version_info(&self) -> Result<VersionInfo> {
+        let query = "query { version { crateVersion gitCommit rpcHash graphqlHash witHash } }";
+        let client = reqwest_client();
+        let response = client
+            .post(&self.url)
+            .json(&json!({ "query": query }))
+            .send()
+            .await
+            .context("failed to post query")?;
+        anyhow::ensure!(
+            response.status().is_success(),
+            "Query \"{}\" failed: {}",
+            query,
+            response
+                .text()
+                .await
+                .unwrap_or_else(|error| format!("Could not get response text: {error}"))
+        );
+        let mut value: Value = response.json().await.context("invalid JSON")?;
+        if let Some(errors) = value.get("errors") {
+            bail!("Query \"{}\" failed: {}", query, errors);
+        }
+        let crate_version = serde_json::from_value(value["data"]["version"]["crateVersion"].take())
+            .context("could not parse crate version")?;
+        let git_commit = serde_json::from_value(value["data"]["version"]["gitCommit"].take())
+            .context("could not parse git commit")?;
+        let rpc_hash = serde_json::from_value(value["data"]["version"]["rpcHash"].take())
+            .context("could not parse rpc hash")?;
+        let graphql_hash = serde_json::from_value(value["data"]["version"]["graphqlHash"].take())
+            .context("could not parse graphql hash")?;
+        let wit_hash = serde_json::from_value(value["data"]["version"]["witHash"].take())
+            .context("could not parse wit hash")?;
+        Ok(VersionInfo {
+            crate_version,
+            git_commit,
+            rpc_hash,
+            graphql_hash,
+            wit_hash,
+        })
     }
 
     pub async fn claim(&self, public_key: &PublicKey) -> Result<ClaimOutcome> {
