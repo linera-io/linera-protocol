@@ -320,12 +320,12 @@ where
     ///
     /// Messages known to be redundant are filtered out: A `RegisterApplications` message whose
     /// entries are already known never needs to be included in a block.
-    async fn pending_messages(&mut self) -> Result<Vec<IncomingMessage>, LocalNodeError> {
+    async fn pending_messages(&mut self) -> Result<Vec<IncomingMessage>, ChainClientError> {
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
         let info = self.node_client.handle_chain_info_query(query).await?.info;
-        assert_eq!(
-            self.next_block_height, info.next_block_height,
-            "prepare_chain should have been called before"
+        ensure!(
+            info.next_block_height == self.next_block_height,
+            ChainClientError::WalletSynchronizationError
         );
         let mut requested_pending_messages = info.requested_pending_messages;
         let mut pending_messages = vec![];
@@ -343,7 +343,7 @@ where
                     Message::System(SystemMessage::OpenChain { .. })
                 )
             }) else {
-                return Err(LocalNodeError::InactiveChain(self.chain_id));
+                return Err(LocalNodeError::InactiveChain(self.chain_id).into());
             };
             let open_chain_message = requested_pending_messages.remove(index);
             pending_messages.push(open_chain_message);
@@ -1595,10 +1595,6 @@ where
         &mut self,
         owner: Option<Owner>,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
-        ensure!(
-            self.chain_info().await?.next_block_height == self.next_block_height,
-            ChainClientError::WalletSynchronizationError
-        );
         let incoming_messages = self.pending_messages().await?;
         let timestamp = self.next_timestamp(&incoming_messages).await;
         let block = Block {
