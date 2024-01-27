@@ -1640,8 +1640,7 @@ where
         Ok(balance)
     }
 
-    /// Reads the local balance of a user account after staging the execution of any
-    /// incoming transfers.
+    /// Reads the local balance of a user account.
     ///
     /// Does not process the inbox or attempt to synchronize with validators.
     pub async fn local_owner_balance(&mut self, owner: Owner) -> Result<Amount, ChainClientError> {

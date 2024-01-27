@@ -1173,10 +1173,7 @@ where
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Obtain the certificate but do not process the inbox yet.
     client2.synchronize_from_validators().await.unwrap();
-    assert_eq!(
-        client2.local_balance().await.unwrap(),
-        Amount::from_tokens(0)
-    );
+    assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         client2.query_system_application(SystemQuery).await.unwrap(),
         SystemResponse {

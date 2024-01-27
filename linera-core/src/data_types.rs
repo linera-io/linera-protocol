@@ -156,7 +156,7 @@ pub struct ChainInfo {
     pub next_block_height: BlockHeight,
     /// The hash of the current execution state.
     pub state_hash: Option<CryptoHash>,
-    /// The request system balance, if any.
+    /// The requested system balance, if any.
     pub requested_system_balance: Option<Amount>,
     /// The current committees.
     pub requested_committees: Option<BTreeMap<Epoch, Committee>>,
