@@ -55,7 +55,7 @@ pub struct ChainInfoQuery {
     pub chain_id: ChainId,
     /// Optionally test that the block height is the one expected.
     pub test_next_block_height: Option<BlockHeight>,
-    /// Request the system balance of a given `Owner`.
+    /// Request the balance of a given `Owner`.
     pub request_owner_balance: Option<Owner>,
     /// Query the current committees.
     pub request_committees: bool,
@@ -156,7 +156,7 @@ pub struct ChainInfo {
     pub next_block_height: BlockHeight,
     /// The hash of the current execution state.
     pub state_hash: Option<CryptoHash>,
-    /// The requested system balance, if any.
+    /// The requested owner balance, if any.
     pub requested_owner_balance: Option<Amount>,
     /// The current committees.
     pub requested_committees: Option<BTreeMap<Epoch, Committee>>,

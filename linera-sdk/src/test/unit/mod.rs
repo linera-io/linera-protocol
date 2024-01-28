@@ -57,7 +57,7 @@ pub fn mock_application_parameters(application_parameters: &impl Serialize) {
     unsafe { MOCK_APPLICATION_PARAMETERS = Some(serialized_parameters) };
 }
 
-/// Sets the mocked system balance.
+/// Sets the mocked chain balance.
 pub fn mock_chain_balance(chain_balance: impl Into<Option<Amount>>) {
     unsafe { MOCK_SYSTEM_BALANCE = chain_balance.into() };
 }

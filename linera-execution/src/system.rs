@@ -322,8 +322,7 @@ impl Display for SystemChannel {
 pub enum Recipient {
     /// This is mainly a placeholder for future extensions.
     Burn,
-    /// Transfers to the system balance of the given owner (or any owner) at the given
-    /// chain.
+    /// Transfers to the balance of the given account.
     Account(Account),
 }
 
@@ -345,7 +344,7 @@ impl Recipient {
 pub struct Account {
     /// The chain of the account.
     pub chain_id: ChainId,
-    /// The owner of the account.
+    /// The owner of the account, or `None` for the chain balance.
     pub owner: Option<Owner>,
 }
 

@@ -28,7 +28,7 @@ pub fn current_application_id() -> ApplicationId {
     wit::application_id().into()
 }
 
-/// Retrieves the current system balance.
+/// Retrieves the current chain balance.
 pub fn current_chain_balance() -> Amount {
     wit::read_chain_balance().into()
 }

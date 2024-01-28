@@ -80,7 +80,7 @@ fn mock_application_parameters() {
     );
 }
 
-/// Test if the system balance getter API is mocked successfully.
+/// Test if the chain balance getter API is mocked successfully.
 #[webassembly_test]
 fn mock_chain_balance() {
     let balance = Amount::from_atto(0x00010203_04050607_08090a0b_0c0d0e0f);
