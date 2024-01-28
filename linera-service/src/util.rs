@@ -92,12 +92,7 @@ pub async fn resolve_binary_in_same_directory_as<P: AsRef<Path>>(
         })?
         .stdout;
     let version_message = String::from_utf8_lossy(&version_message);
-    let found_version = parse_version_message(&version_message).with_context(|| {
-        format!(
-            "Passing --version to the binary {name} in directory {} returned an empty result",
-            current_binary_parent.display()
-        )
-    })?;
+    let found_version = parse_version_message(&version_message);
     if version != found_version {
         error!("The binary {name} in directory {} should have version {version} (found {found_version}). \
                 Consider using `cargo install {package} --version '{version}'` or `cargo build -p {package}`",
@@ -110,11 +105,17 @@ pub async fn resolve_binary_in_same_directory_as<P: AsRef<Path>>(
     Ok(binary)
 }
 
-fn parse_version_message(message: &str) -> Option<String> {
+fn parse_version_message(message: &str) -> String {
     let mut lines = message.lines();
     lines.next();
-    let version = lines.next().unwrap_or_default().trim().split(' ').last()?;
-    Some(version.to_string())
+    lines
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .split(' ')
+        .last()
+        .expect("splitting strings gives non-empty lists")
+        .to_string()
 }
 
 /// Extension trait for [`tokio::process::Command`].
@@ -312,5 +313,14 @@ pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
 #[test]
 fn test_parse_version_message() {
     let s = "something\n . . . version12\nother things";
-    assert_eq!(parse_version_message(s).unwrap(), "version12");
+    assert_eq!(parse_version_message(s), "version12");
+
+    let s = "something\n . . . version12other things";
+    assert_eq!(parse_version_message(s), "things");
+
+    let s = "something . . . version12 other things";
+    assert_eq!(parse_version_message(s), "");
+
+    let s = "";
+    assert_eq!(parse_version_message(s), "");
 }

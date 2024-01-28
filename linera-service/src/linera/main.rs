@@ -1504,7 +1504,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                         if version_info != linera_base::VERSION_INFO {
                             warn!(
                                 "\
-Make sure to use a Linera client compatible with the Linera network in use.
+Make sure to use a Linera client compatible with this network.
 --- Faucet info ---\
 {}\
 -------------------
