@@ -42,10 +42,28 @@ impl VersionInfo {
         } = self;
 
         tracing::info!("Linera protocol: v{crate_version}");
-        tracing::info!("Built from git commit: {git_commit}");
         tracing::info!("RPC API hash: {rpc_hash}");
         tracing::info!("GraphQL API hash: {graphql_hash}");
         tracing::info!("WIT API hash: {wit_hash}");
+        tracing::info!(
+            "Source code: https://github.com/linera-io/linera-protocol/commit/{git_commit}"
+        );
+    }
+
+    /// Returns true if `other` is probably incompatible with `self`. Currently, the
+    /// commit hash of the source code is the only field that can differ.
+    pub fn is_probably_incompatible_with(&self, other: &Self) -> bool {
+        (
+            &self.crate_version,
+            &self.rpc_hash,
+            &self.graphql_hash,
+            &self.wit_hash,
+        ) != (
+            &other.crate_version,
+            &other.rpc_hash,
+            &other.graphql_hash,
+            &other.wit_hash,
+        )
     }
 
     /// A static string corresponding to `VersionInfo::default().to_string()`.
@@ -71,10 +89,10 @@ impl std::fmt::Display for VersionInfo {
             f,
             "
 Linera protocol: v{crate_version}
-Built from git commit: {git_commit}
 RPC API hash: {rpc_hash}
 GraphQL API hash: {graphql_hash}
 WIT API hash: {wit_hash}
+Source code: https://github.com/linera-io/linera-protocol/commit/{git_commit}
 "
         )
     }
