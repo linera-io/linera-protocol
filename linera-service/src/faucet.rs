@@ -82,6 +82,11 @@ where
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    /// Returns the version information on this faucet service.
+    async fn version(&self) -> linera_base::VersionInfo {
+        linera_base::VersionInfo::default()
+    }
+
     /// Returns the genesis config.
     async fn genesis_config(&self) -> Result<serde_json::Value, Error> {
         Ok(serde_json::to_value(&*self.genesis_config)?)

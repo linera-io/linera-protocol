@@ -68,7 +68,7 @@ pub async fn resolve_binary_in_same_directory_as<P: AsRef<Path>>(
         binary_parent(current_binary).expect("Fetching binary directory should not fail");
 
     let binary = current_binary_parent.join(name);
-    let version = env!("CARGO_PKG_VERSION");
+    let version = format!("v{}", env!("CARGO_PKG_VERSION"));
     if !binary.exists() {
         error!(
             "Cannot find a binary {name} in the directory {}. \
@@ -91,17 +91,8 @@ pub async fn resolve_binary_in_same_directory_as<P: AsRef<Path>>(
             )
         })?
         .stdout;
-    let found_version = String::from_utf8_lossy(&version_message)
-        .trim()
-        .split(' ')
-        .last()
-        .with_context(|| {
-            format!(
-                "Passing --version to the binary {name} in directory {} returned an empty result",
-                current_binary_parent.display()
-            )
-        })?
-        .to_string();
+    let version_message = String::from_utf8_lossy(&version_message);
+    let found_version = parse_version_message(&version_message);
     if version != found_version {
         error!("The binary {name} in directory {} should have version {version} (found {found_version}). \
                 Consider using `cargo install {package} --version '{version}'` or `cargo build -p {package}`",
@@ -112,6 +103,19 @@ pub async fn resolve_binary_in_same_directory_as<P: AsRef<Path>>(
     debug!("{} has version {version}", binary.display());
 
     Ok(binary)
+}
+
+fn parse_version_message(message: &str) -> String {
+    let mut lines = message.lines();
+    lines.next();
+    lines
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .split(' ')
+        .last()
+        .expect("splitting strings gives non-empty lists")
+        .to_string()
 }
 
 /// Extension trait for [`tokio::process::Command`].
@@ -304,4 +308,19 @@ pub(crate) async fn graphiql(uri: Uri) -> impl IntoResponse {
 
 pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(s.parse()?))
+}
+
+#[test]
+fn test_parse_version_message() {
+    let s = "something\n . . . version12\nother things";
+    assert_eq!(parse_version_message(s), "version12");
+
+    let s = "something\n . . . version12other things";
+    assert_eq!(parse_version_message(s), "things");
+
+    let s = "something . . . version12 other things";
+    assert_eq!(parse_version_message(s), "");
+
+    let s = "";
+    assert_eq!(parse_version_message(s), "");
 }

@@ -583,6 +583,9 @@ type QueryRoot {
 	chains: Chains!
 	block(hash: CryptoHash, chainId: ChainId!): HashedValue
 	blocks(from: CryptoHash, chainId: ChainId!, limit: Int): [HashedValue!]!
+	"""
+	Returns the version information on this node service.
+	"""
 	version: VersionInfo!
 }
 
