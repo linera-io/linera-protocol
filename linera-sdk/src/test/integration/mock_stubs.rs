@@ -40,7 +40,7 @@ pub fn mock_application_parameters(_application_parameters: &impl Serialize) {
 }
 
 /// Sets the mocked system balance.
-pub fn mock_system_balance(_system_balance: impl Into<Option<Amount>>) {
+pub fn mock_chain_balance(_chain_balance: impl Into<Option<Amount>>) {
     unreachable!("{ERROR_MESSAGE}");
 }
 

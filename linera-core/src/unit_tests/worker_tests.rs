@@ -2279,7 +2279,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
-    assert_eq!(Amount::ZERO, info.system_balance);
+    assert_eq!(Amount::ZERO, info.chain_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.hash()), info.block_hash);
     assert!(info.manager.pending.is_none());
@@ -2434,7 +2434,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
-    assert_eq!(Amount::ZERO, info.system_balance);
+    assert_eq!(Amount::ZERO, info.chain_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.hash()), info.block_hash);
     assert!(info.manager.pending.is_none());

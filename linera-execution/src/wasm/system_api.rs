@@ -29,8 +29,8 @@ macro_rules! impl_contract_system_api {
                 BaseRuntime::application_parameters(self)
             }
 
-            fn read_system_balance(&mut self) -> Result<contract_system_api::Amount, Self::Error> {
-                BaseRuntime::read_system_balance(self).map(|balance| balance.into())
+            fn read_chain_balance(&mut self) -> Result<contract_system_api::Amount, Self::Error> {
+                BaseRuntime::read_chain_balance(self).map(|balance| balance.into())
             }
 
             fn read_system_timestamp(
@@ -129,8 +129,8 @@ macro_rules! impl_service_system_api {
                 BaseRuntime::application_parameters(self)
             }
 
-            fn read_system_balance(&mut self) -> Result<service_system_api::Amount, Self::Error> {
-                BaseRuntime::read_system_balance(self).map(|balance| balance.into())
+            fn read_chain_balance(&mut self) -> Result<service_system_api::Amount, Self::Error> {
+                BaseRuntime::read_chain_balance(self).map(|balance| balance.into())
             }
 
             fn read_system_timestamp(

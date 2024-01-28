@@ -84,7 +84,7 @@ where
                 callback.respond((code, description));
             }
 
-            SystemBalance { callback } => {
+            ChainBalance { callback } => {
                 let balance = *self.system.balance.get();
                 callback.respond(balance);
             }
@@ -159,7 +159,7 @@ pub enum Request {
         callback: Sender<(UserServiceCode, UserApplicationDescription)>,
     },
 
-    SystemBalance {
+    ChainBalance {
         callback: Sender<Amount>,
     },
 
@@ -217,8 +217,8 @@ impl Debug for Request {
                 .field("id", id)
                 .finish_non_exhaustive(),
 
-            Request::SystemBalance { .. } => formatter
-                .debug_struct("Request::SystemBalance")
+            Request::ChainBalance { .. } => formatter
+                .debug_struct("Request::ChainBalance")
                 .finish_non_exhaustive(),
 
             Request::SystemTimestamp { .. } => formatter

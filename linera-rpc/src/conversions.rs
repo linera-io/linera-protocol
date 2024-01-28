@@ -554,7 +554,7 @@ pub mod tests {
             epoch: None,
             description: None,
             manager: Box::default(),
-            system_balance: Amount::ZERO,
+            chain_balance: Amount::ZERO,
             block_hash: None,
             timestamp: Timestamp::default(),
             next_block_height: BlockHeight::ZERO,

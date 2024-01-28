@@ -155,7 +155,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::from(publisher_chain), info.chain_id);
-    assert_eq!(Amount::ZERO, info.system_balance);
+    assert_eq!(Amount::ZERO, info.chain_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Timestamp::from(1), info.timestamp);
     assert_eq!(Some(publish_certificate.hash()), info.block_hash);
@@ -216,7 +216,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::from(publisher_chain), info.chain_id);
-    assert_eq!(Amount::ZERO, info.system_balance);
+    assert_eq!(Amount::ZERO, info.chain_balance);
     assert_eq!(BlockHeight::from(2), info.next_block_height);
     assert_eq!(Timestamp::from(1), info.timestamp);
     assert_eq!(Some(broadcast_certificate.hash()), info.block_hash);
@@ -270,7 +270,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::from(creator_chain), info.chain_id);
-    assert_eq!(Amount::ZERO, info.system_balance);
+    assert_eq!(Amount::ZERO, info.chain_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Timestamp::from(2), info.timestamp);
     assert_eq!(Some(subscribe_certificate.hash()), info.block_hash);
@@ -316,7 +316,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::from(publisher_chain), info.chain_id);
-    assert_eq!(Amount::ZERO, info.system_balance);
+    assert_eq!(Amount::ZERO, info.chain_balance);
     assert_eq!(BlockHeight::from(3), info.next_block_height);
     assert_eq!(Timestamp::from(3), info.timestamp);
     assert_eq!(Some(accept_certificate.hash()), info.block_hash);
@@ -407,7 +407,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::root(2), info.chain_id);
-    assert_eq!(Amount::ZERO, info.system_balance);
+    assert_eq!(Amount::ZERO, info.chain_balance);
     assert_eq!(BlockHeight::from(2), info.next_block_height);
     assert_eq!(Timestamp::from(4), info.timestamp);
     assert_eq!(Some(create_certificate.hash()), info.block_hash);
@@ -455,7 +455,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::root(2), info.chain_id);
-    assert_eq!(Amount::ZERO, info.system_balance);
+    assert_eq!(Amount::ZERO, info.chain_balance);
     assert_eq!(BlockHeight::from(3), info.next_block_height);
     assert_eq!(Some(run_certificate.hash()), info.block_hash);
     assert_eq!(Timestamp::from(5), info.timestamp);

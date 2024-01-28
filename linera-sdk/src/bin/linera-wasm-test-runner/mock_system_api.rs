@@ -268,27 +268,27 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     )?;
     linker.func_wrap1_async(
         "contract_system_api",
-        "read-system-balance: func() -> record { lower-half: u64, upper-half: u64 }",
+        "read-chain-balance: func() -> record { lower-half: u64, upper-half: u64 }",
         move |mut caller: Caller<'_, Resources>, return_offset: i32| {
             Box::new(async move {
                 let function = get_function(
                     &mut caller,
-                    "mocked-read-system-balance: \
+                    "mocked-read-chain-balance: \
                         func() -> record { lower-half: u64, upper-half: u64 }",
                 )
                 .expect(
-                    "Missing `mocked-read-system-balance` function in the module. \
-                    Please ensure `linera_sdk::test::mock_system_balance` was called",
+                    "Missing `mocked-read-chain-balance` function in the module. \
+                    Please ensure `linera_sdk::test::mock_chain_balance` was called",
                 );
 
                 let (result_offset,) = function
                     .typed::<(), (i32,), _>(&mut caller)
-                    .expect("Incorrect `mocked-read-system-balance` function signature")
+                    .expect("Incorrect `mocked-read-chain-balance` function signature")
                     .call_async(&mut caller, ())
                     .await
                     .expect(
-                        "Failed to call `mocked-read-system-balance` function. \
-                        Please ensure `linera_sdk::test::mock_system_balance` was called",
+                        "Failed to call `mocked-read-chain-balance` function. \
+                        Please ensure `linera_sdk::test::mock_chain_balance` was called",
                     );
 
                 copy_memory_slices(&mut caller, result_offset, return_offset, 16);
@@ -479,27 +479,27 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     )?;
     linker.func_wrap1_async(
         "service_system_api",
-        "read-system-balance: func() -> record { lower-half: u64, upper-half: u64 }",
+        "read-chain-balance: func() -> record { lower-half: u64, upper-half: u64 }",
         move |mut caller: Caller<'_, Resources>, return_offset: i32| {
             Box::new(async move {
                 let function = get_function(
                     &mut caller,
-                    "mocked-read-system-balance: \
+                    "mocked-read-chain-balance: \
                         func() -> record { lower-half: u64, upper-half: u64 }",
                 )
                 .expect(
-                    "Missing `mocked-read-system-balance` function in the module. \
-                    Please ensure `linera_sdk::test::mock_system_balance` was called",
+                    "Missing `mocked-read-chain-balance` function in the module. \
+                    Please ensure `linera_sdk::test::mock_chain_balance` was called",
                 );
 
                 let (result_offset,) = function
                     .typed::<(), (i32,), _>(&mut caller)
-                    .expect("Incorrect `mocked-read-system-balance` function signature")
+                    .expect("Incorrect `mocked-read-chain-balance` function signature")
                     .call_async(&mut caller, ())
                     .await
                     .expect(
-                        "Failed to call `mocked-read-system-balance` function. \
-                        Please ensure `linera_sdk::test::mock_system_balance` was called",
+                        "Failed to call `mocked-read-chain-balance` function. \
+                        Please ensure `linera_sdk::test::mock_chain_balance` was called",
                     );
 
                 copy_memory_slices(&mut caller, result_offset, return_offset, 16);

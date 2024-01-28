@@ -152,7 +152,7 @@ ChainInfo:
           TYPENAME: ChainDescription
     - manager:
         TYPENAME: ChainManagerInfo
-    - system_balance:
+    - chain_balance:
         TYPENAME: Amount
     - block_hash:
         OPTION:
