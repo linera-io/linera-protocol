@@ -429,13 +429,13 @@ pub enum SystemExecutionError {
     #[error("Failed to remove committee")]
     InvalidCommitteeRemoval,
     #[error(
-        "Attempted to subscribe to the admin channel ({1}) of this chain's ({0}) admin chain {1}"
+        "Chain {0} tried to subscribe to the admin channel ({1}) of a chain that is not the admin chain"
     )]
     InvalidAdminSubscription(ChainId, SystemChannel),
-    #[error("Attempted to subscribe to self on channel {1} on chain {0}")]
+    #[error("Cannot subscribe to a channel ({1}) on the same chain ({0})")]
     SelfSubscription(ChainId, SystemChannel),
-    #[error("Attempted to subscribe to a channel which does not exist ({1}) on chain {0}")]
-    NoSuchChannel(ChainId, SystemChannel),
+    #[error("Chain {0} tried to subscribe to channel {1} but it is already subscribed")]
+    AlreadySubscribedToChannel(ChainId, SystemChannel),
     #[error("Invalid unsubscription request to channel {1} on chain {0}")]
     InvalidUnsubscription(ChainId, SystemChannel),
     #[error("Amount overflow")]
@@ -716,7 +716,7 @@ where
                 };
                 ensure!(
                     !self.subscriptions.contains(&subscription).await?,
-                    SystemExecutionError::NoSuchChannel(context.chain_id, channel)
+                    SystemExecutionError::AlreadySubscribedToChannel(context.chain_id, channel)
                 );
                 self.subscriptions.insert(&subscription)?;
                 let message = RawOutgoingMessage {
