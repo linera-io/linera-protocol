@@ -5,7 +5,11 @@ use crate::{chain_guards::ChainGuards, ChainRuntimeContext, Storage};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
-    crypto::CryptoHash, data_types::Timestamp, identifiers::ChainId, prometheus_util, sync::Lazy,
+    crypto::CryptoHash,
+    data_types::Timestamp,
+    identifiers::ChainId,
+    prometheus_util::{self, MeasureLatency},
+    sync::Lazy,
 };
 use linera_chain::{
     data_types::{Certificate, CertificateValue, HashedValue, LiteCertificate},
@@ -20,7 +24,7 @@ use linera_views::{
     value_splitting::DatabaseConsistencyError,
     views::{View, ViewError},
 };
-use prometheus::IntCounterVec;
+use prometheus::{HistogramVec, IntCounterVec};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc};
 
@@ -86,6 +90,20 @@ pub static WRITE_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
         &[],
     )
     .expect("Counter creation should not fail")
+});
+
+/// The latency to load a chain state.
+#[doc(hidden)]
+pub static LOAD_CHAIN_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+    prometheus_util::register_histogram_vec(
+        "load_chain_latency",
+        "The latency to load a chain state",
+        &[],
+        Some(vec![
+            0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0,
+        ]),
+    )
+    .expect("Histogram creation should not fail")
 });
 
 /// A storage implemented from a [`KeyValueStore`]
@@ -192,6 +210,7 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<ChainStateView<Self::Context>, ViewError> {
+        let _metric = LOAD_CHAIN_LATENCY.measure_latency();
         tracing::trace!("Acquiring lock on {:?}", chain_id);
         let guard = self.client.guards.guard(chain_id).await;
         let runtime_context = ChainRuntimeContext {
