@@ -18,4 +18,20 @@ fn main() {
             line.expect("failed to read line")
         );
     }
+
+    // TODO(#1573): Rewrite this.
+    println!("cargo:rerun-if-changed=../linera-sdk/contract.wit");
+    println!("cargo:rerun-if-changed=../linera-sdk/contract_system_api.wit");
+    println!("cargo:rerun-if-changed=../linera-sdk/service.wit");
+    println!("cargo:rerun-if-changed=../linera-sdk/service_system_api.wit");
+    println!("cargo:rerun-if-changed=../linera-sdk/view_system_api.wit");
+    println!("cargo:rerun-if-changed=../linera-sdk/mock_system_api.wit");
+
+    // println!("cargo:rerun-if-changed=../linera-rpc/proto/rpc.proto");
+    println!("cargo:rerun-if-changed=../linera-rpc/tests/staged/formats.yaml");
+
+    println!(
+        "cargo:rerun-if-changed=../linera-service-graphql-client/gql/service_requests.graphql"
+    );
+    println!("cargo:rerun-if-changed=../linera-service-graphql-client/gql/service_schema.graphql");
 }
