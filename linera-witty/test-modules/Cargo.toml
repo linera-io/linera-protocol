@@ -5,7 +5,7 @@ authors = ["Linera <contact@linera.io>"]
 repository = "https://github.com/linera-io/linera-protocol"
 homepage = "https://linera.dev"
 license = "Apache-2.0"
-version = "0.6.0"
+version = "0.8.0"
 edition = "2021"
 
 [[bin]]
