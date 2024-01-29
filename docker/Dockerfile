@@ -1,27 +1,31 @@
 # Build arguments:
 #
+# - `git_commit` is the hash of the current git commit — used for
+#   versioning information inside the binaries.
 # - `binaries` is the path to the directory containing the Linera
 #   binaries.  Leave unset to build the binaries from scratch.
-# - `environment` is the name of a runtime environment, and used to
-#   select the configuration.  The name of a directory in
-#   `/configuration`.
 # - `target` is a Rust target quadruple.  Currently known to be
 #   supported are `x86_64-unknown-linux-gnu` and
 #   `aarch64-unknown-linux-gnu`.
 
 # Stage 1 - Generate recipe file for dependencies
 
-ARG environment=k8s-local
 # Modern Docker provides TARGETPLATFORM and friends, but these do not
 # provide enough information to reconstruct the whole Rust target and
 # switching on them to map to a subset of targets seems unwise
+ARG git_commit
 ARG target=x86_64-unknown-linux-gnu
 ARG binaries=
 ARG copy=${binaries:+_copy}
 
-FROM lukemathwalker/cargo-chef:latest-rust-slim AS chef
+FROM rust:1.74-slim-bookworm AS builder
+ARG git_commit
+ARG target
 
-FROM chef as planner
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    protobuf-compiler \
+    clang
 
 COPY examples examples
 COPY linera-base linera-base
@@ -43,33 +47,7 @@ COPY linera-witty-macros linera-witty-macros
 COPY scripts scripts
 COPY rust-toolchain* Cargo.* ./
 
-RUN cargo chef prepare --recipe-path recipe.json
-
-# Stage 2 - Build dependencies
-FROM chef AS cacher
-ARG target
-
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    protobuf-compiler \
-    clang
-
-COPY --from=planner . .
-
-RUN cargo chef cook --release --recipe-path recipe.json --target "$target"
-
-# Stage 3 - Do actual build
-FROM chef as builder
-ARG target
-
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    protobuf-compiler \
-    clang
-
-COPY --from=planner . .
-COPY --from=cacher target target
-COPY --from=cacher /usr/local/cargo /usr/local/cargo
+ENV GIT_COMMIT=${git_commit}
 
 RUN cargo build --release \
     --target "$target" \
@@ -88,9 +66,8 @@ RUN mv \
 
 RUN strip linera linera-proxy linera-server linera-db
 
-# Stage 3.5 - Optionally copy binaries instead of using the build
-# images above
-FROM scratch as builder_copy
+# Optionally copy binaries instead of using the build images above
+FROM scratch AS builder_copy
 ARG binaries
 COPY \
     "$binaries"/linera \
@@ -99,9 +76,9 @@ COPY \
     "$binaries"/linera-db \
     ./
 
-FROM builder$copy as binaries
+FROM builder$copy AS binaries
 
-# Stage 4 - Setup running environment for container
+# Setup running environment for container
 FROM debian:latest
 
 RUN apt-get update && apt-get install -y \
@@ -109,7 +86,6 @@ RUN apt-get update && apt-get install -y \
     openssl
 RUN update-ca-certificates
 
-ARG environment
 ARG target
 
 COPY --from=binaries \
