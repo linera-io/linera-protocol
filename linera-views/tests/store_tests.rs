@@ -411,7 +411,6 @@ async fn test_big_value_read_write() {
     }
 }
 
-
 // That test is especially challenging for ScyllaDB.
 // In its default settings, Scylla has a limitation to 10000 tombstones.
 // A tombstone is an indication that the data has been deleted. That
@@ -424,9 +423,7 @@ async fn test_big_value_read_write() {
 // which triggers the crash with the default settings.
 #[cfg(feature = "scylladb")]
 #[cfg(test)]
-async fn tombstone_triggering_test<C: KeyValueStore + Sync>(
-    key_value_store: C,
-) {
+async fn tombstone_triggering_test<C: KeyValueStore + Sync>(key_value_store: C) {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     let value_size = 100;
     let n_entry = 200000;
@@ -449,7 +446,10 @@ async fn tombstone_triggering_test<C: KeyValueStore + Sync>(
     }
     run_test_batch_from_blank(&key_value_store, key_prefix.clone(), batch_insert).await;
     // Deleting them all
-    key_value_store.write_batch(batch_delete, &[]).await.unwrap();
+    key_value_store
+        .write_batch(batch_delete, &[])
+        .await
+        .unwrap();
     // Reading everything and seeing that it is now cleaned.
     let key_values = read_key_values_prefix(&key_value_store, &key_prefix).await;
     assert_eq!(key_values, remaining_key_values);
