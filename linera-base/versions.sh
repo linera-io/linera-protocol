@@ -15,14 +15,15 @@ else
     exit 1
 fi
 
+# git commit
 if [ -n "$GIT_COMMIT" ]
 then
     echo GIT_COMMIT=$GIT_COMMIT
+    echo GIT_DIRTY=false
 else
-    # git commit
-    git=$(git rev-parse @)
-    git diff-index --quiet @ || git="$git-dirty"
-    echo GIT_COMMIT=$git
+    echo GIT_COMMIT=$(git rev-parse @)
+    git diff-index --quiet @ || git_dirty=true
+    echo GIT_DIRTY=${git_dirty-false}
 fi
 
 {

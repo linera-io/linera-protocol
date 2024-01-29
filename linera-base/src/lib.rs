@@ -21,7 +21,7 @@ pub use graphql::BcsHexParseError;
 pub use {async_graphql, bcs, hex};
 
 mod version_info;
-pub use version_info::{VersionInfo, VERSION_INFO};
+pub use version_info::VersionInfo;
 
 /// A macro for asserting that a condition is true, returning an error if it is not.
 ///

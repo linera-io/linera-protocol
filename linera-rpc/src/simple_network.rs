@@ -288,7 +288,7 @@ where
                 Ok(None)
             }
 
-            RpcMessage::VersionInfoQuery => Ok(Some(linera_base::VERSION_INFO.into())),
+            RpcMessage::VersionInfoQuery => Ok(Some(linera_base::VersionInfo::default().into())),
 
             RpcMessage::Vote(_)
             | RpcMessage::Error(_)

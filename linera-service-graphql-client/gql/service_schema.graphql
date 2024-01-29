@@ -744,6 +744,10 @@ type VersionInfo {
 	"""
 	gitCommit: String!
 	"""
+	Whether the git worktree was dirty
+	"""
+	gitDirty: Boolean!
+	"""
 	A hash of the RPC API
 	"""
 	rpcHash: String!

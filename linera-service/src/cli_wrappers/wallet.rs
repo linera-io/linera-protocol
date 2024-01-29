@@ -988,7 +988,8 @@ impl Faucet {
     }
 
     pub async fn version_info(&self) -> Result<VersionInfo> {
-        let query = "query { version { crateVersion gitCommit rpcHash graphqlHash witHash } }";
+        let query =
+            "query { version { crateVersion gitCommit gitDirty rpcHash graphqlHash witHash } }";
         let client = reqwest_client();
         let response = client
             .post(&self.url)
@@ -1013,6 +1014,8 @@ impl Faucet {
             .context("could not parse crate version")?;
         let git_commit = serde_json::from_value(value["data"]["version"]["gitCommit"].take())
             .context("could not parse git commit")?;
+        let git_dirty = serde_json::from_value(value["data"]["version"]["gitDirty"].take())
+            .context("could not parse git dirty")?;
         let rpc_hash = serde_json::from_value(value["data"]["version"]["rpcHash"].take())
             .context("could not parse rpc hash")?;
         let graphql_hash = serde_json::from_value(value["data"]["version"]["graphqlHash"].take())
@@ -1022,6 +1025,7 @@ impl Faucet {
         Ok(VersionInfo {
             crate_version,
             git_commit,
+            git_dirty,
             rpc_hash,
             graphql_hash,
             wit_hash,

@@ -57,6 +57,7 @@ impl From<linera_base::VersionInfo> for grpc::VersionInfo {
         grpc::VersionInfo {
             crate_version: version_info.crate_version.into(),
             git_commit: version_info.git_commit.into(),
+            git_dirty: version_info.git_dirty,
             rpc_hash: version_info.rpc_hash.into(),
             graphql_hash: version_info.graphql_hash.into(),
             wit_hash: version_info.wit_hash.into(),
@@ -69,6 +70,7 @@ impl From<grpc::VersionInfo> for linera_base::VersionInfo {
         linera_base::VersionInfo {
             crate_version: version_info.crate_version.into(),
             git_commit: version_info.git_commit.into(),
+            git_dirty: version_info.git_dirty,
             rpc_hash: version_info.rpc_hash.into(),
             graphql_hash: version_info.graphql_hash.into(),
             wit_hash: version_info.wit_hash.into(),

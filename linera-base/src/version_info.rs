@@ -13,6 +13,8 @@ pub struct VersionInfo {
     pub crate_version: Cow<'static, str>,
     /// The git commit hash
     pub git_commit: Cow<'static, str>,
+    /// Whether the git worktree was dirty
+    pub git_dirty: bool,
     /// A hash of the RPC API
     pub rpc_hash: Cow<'static, str>,
     /// A hash of the GraphQL API
@@ -21,21 +23,13 @@ pub struct VersionInfo {
     pub wit_hash: Cow<'static, str>,
 }
 
-/// The version info of this build of Linera.
-pub const VERSION_INFO: VersionInfo = VersionInfo {
-    crate_version: Cow::Borrowed(env!("CARGO_PKG_VERSION")),
-    git_commit: Cow::Borrowed(env!("LINERA_VERSION_GIT_COMMIT")),
-    rpc_hash: Cow::Borrowed(env!("LINERA_VERSION_RPC_HASH")),
-    graphql_hash: Cow::Borrowed(env!("LINERA_VERSION_GRAPHQL_HASH")),
-    wit_hash: Cow::Borrowed(env!("LINERA_VERSION_WIT_HASH")),
-};
-
 impl VersionInfo {
     /// Print a human-readable listing of the version information.
     pub fn log(&self) {
         let VersionInfo {
             crate_version,
             git_commit,
+            git_dirty,
             rpc_hash,
             graphql_hash,
             wit_hash,
@@ -46,7 +40,8 @@ impl VersionInfo {
         tracing::info!("GraphQL API hash: {graphql_hash}");
         tracing::info!("WIT API hash: {wit_hash}");
         tracing::info!(
-            "Source code: https://github.com/linera-io/linera-protocol/commit/{git_commit}"
+            "Source code: https://github.com/linera-io/linera-protocol/commit/{git_commit}{}",
+            if *git_dirty { " (dirty)" } else { "" },
         );
     }
 
@@ -68,7 +63,7 @@ impl VersionInfo {
 
     /// A static string corresponding to `VersionInfo::default().to_string()`.
     pub fn default_str() -> &'static str {
-        static STRING: Lazy<String> = Lazy::new(|| VERSION_INFO.to_string());
+        static STRING: Lazy<String> = Lazy::new(|| VersionInfo::default().to_string());
         STRING.as_str()
     }
 }
@@ -78,6 +73,7 @@ impl std::fmt::Display for VersionInfo {
         let VersionInfo {
             crate_version,
             git_commit,
+            git_dirty,
             rpc_hash,
             graphql_hash,
             wit_hash,
@@ -92,14 +88,23 @@ Linera protocol: v{crate_version}
 RPC API hash: {rpc_hash}
 GraphQL API hash: {graphql_hash}
 WIT API hash: {wit_hash}
-Source code: https://github.com/linera-io/linera-protocol/commit/{git_commit}
-"
+Source code: https://github.com/linera-io/linera-protocol/commit/{git_commit}{}
+",
+            if *git_dirty { " (dirty)" } else { "" },
         )
     }
 }
 
 impl Default for VersionInfo {
     fn default() -> Self {
-        VERSION_INFO
+        #![allow(clippy::eq_op)]
+        Self {
+            crate_version: Cow::Borrowed(env!("CARGO_PKG_VERSION")),
+            git_commit: Cow::Borrowed(env!("LINERA_VERSION_GIT_COMMIT")),
+            git_dirty: env!("LINERA_VERSION_GIT_DIRTY") == "true",
+            rpc_hash: Cow::Borrowed(env!("LINERA_VERSION_RPC_HASH")),
+            graphql_hash: Cow::Borrowed(env!("LINERA_VERSION_GRAPHQL_HASH")),
+            wit_hash: Cow::Borrowed(env!("LINERA_VERSION_WIT_HASH")),
+        }
     }
 }

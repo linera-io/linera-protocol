@@ -348,7 +348,7 @@ impl ValidatorNode for GrpcProxy {
         _request: Request<()>,
     ) -> Result<Response<VersionInfo>, Status> {
         // We assume each shard is running the same version as the proxy
-        Ok(Response::new(linera_base::VERSION_INFO.into()))
+        Ok(Response::new(linera_base::VersionInfo::default().into()))
     }
 }
 

@@ -409,7 +409,7 @@ fn main() {
 }
 
 async fn run(options: ServerOptions) {
-    linera_base::VERSION_INFO.log();
+    linera_base::VersionInfo::default().log();
 
     match options.command {
         ServerCommand::Run {

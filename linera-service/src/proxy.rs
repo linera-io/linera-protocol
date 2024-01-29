@@ -118,7 +118,7 @@ impl MessageHandler for SimpleProxy {
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage> {
         if let RpcMessage::VersionInfoQuery = message {
             // We assume each shard is running the same version as the proxy
-            return Some(linera_base::VERSION_INFO.into());
+            return Some(linera_base::VersionInfo::default().into());
         }
 
         let Some(chain_id) = message.target_chain_id() else {
