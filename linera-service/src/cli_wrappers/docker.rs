@@ -65,6 +65,21 @@ impl DockerImage {
             command.args(["--build-arg", &target_arg]);
         }
 
+        #[cfg(not(any(test, feature = "test")))]
+        command
+            .args([
+                "--build-arg",
+                &format!("git_commit={}", linera_base::VersionInfo::get()?.git_commit),
+            ])
+            .args([
+                "--build-arg",
+                &format!(
+                    "build_date={}",
+                    // Same format as $(TZ=UTC date)
+                    chrono::Utc::now().format("%a %b %d %T UTC %Y").to_string()
+                ),
+            ]);
+
         command
             .arg(".")
             .args(["-t", &name])

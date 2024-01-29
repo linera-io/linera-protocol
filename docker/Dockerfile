@@ -2,6 +2,8 @@
 #
 # - `git_commit` is the hash of the current git commit — used for
 #   versioning information inside the binaries.
+# - `build_date` is the date and time of when the docker image was
+#   built
 # - `binaries` is the path to the directory containing the Linera
 #   binaries.  Leave unset to build the binaries from scratch.
 # - `target` is a Rust target quadruple.  Currently known to be
@@ -14,6 +16,7 @@
 # provide enough information to reconstruct the whole Rust target and
 # switching on them to map to a subset of targets seems unwise
 ARG git_commit
+ARG build_date
 ARG target=x86_64-unknown-linux-gnu
 ARG binaries=
 ARG copy=${binaries:+_copy}
@@ -80,6 +83,12 @@ FROM builder$copy AS binaries
 
 # Setup running environment for container
 FROM debian:latest
+
+ARG git_commit
+LABEL git_commit=$git_commit
+
+ARG build_date
+LABEL build_date=$build_date
 
 RUN apt-get update && apt-get install -y \
     ca-certificates \
