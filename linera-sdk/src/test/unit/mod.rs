@@ -57,9 +57,9 @@ pub fn mock_application_parameters(application_parameters: &impl Serialize) {
     unsafe { MOCK_APPLICATION_PARAMETERS = Some(serialized_parameters) };
 }
 
-/// Sets the mocked system balance.
-pub fn mock_system_balance(system_balance: impl Into<Option<Amount>>) {
-    unsafe { MOCK_SYSTEM_BALANCE = system_balance.into() };
+/// Sets the mocked chain balance.
+pub fn mock_chain_balance(chain_balance: impl Into<Option<Amount>>) {
+    unsafe { MOCK_SYSTEM_BALANCE = chain_balance.into() };
 }
 
 /// Sets the mocked system timestamp.
@@ -116,11 +116,11 @@ impl wit::MockSystemApi for MockSystemApi {
             .into()
     }
 
-    fn mocked_read_system_balance() -> wit::Amount {
+    fn mocked_read_chain_balance() -> wit::Amount {
         unsafe { MOCK_SYSTEM_BALANCE }
             .expect(
-                "Unexpected call to the `read_system_balance` system API. \
-                Please call `mock_system_balance` first",
+                "Unexpected call to the `read_chain_balance` system API. \
+                Please call `mock_chain_balance` first",
             )
             .into()
     }

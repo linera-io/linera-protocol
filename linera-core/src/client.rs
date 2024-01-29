@@ -1612,8 +1612,8 @@ where
             .await
         {
             Ok((_, response)) => Ok((
-                response.info.system_balance,
-                response.info.requested_system_balance,
+                response.info.chain_balance,
+                response.info.requested_owner_balance,
             )),
             Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
                 WorkerError::ChainError(error),
@@ -1663,11 +1663,11 @@ where
             ChainClientError::WalletSynchronizationError
         );
         let mut query = ChainInfoQuery::new(self.chain_id);
-        query.request_system_balance = owner;
+        query.request_owner_balance = owner;
         let response = self.node_client.handle_chain_info_query(query).await?;
         Ok((
-            response.info.system_balance,
-            response.info.requested_system_balance,
+            response.info.chain_balance,
+            response.info.requested_owner_balance,
         ))
     }
 

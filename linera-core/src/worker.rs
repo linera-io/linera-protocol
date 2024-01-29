@@ -403,7 +403,7 @@ where
         let executed_block = chain.execute_block(&block, local_time).await?.with(block);
         let mut response = ChainInfoResponse::new(&chain, None);
         if let Some(signer) = signer {
-            response.info.requested_system_balance =
+            response.info.requested_owner_balance =
                 chain.execution_state.system.balances.get(&signer).await?;
         }
         // Do not save the new state.
@@ -1209,8 +1209,8 @@ where
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
         }
-        if let Some(owner) = query.request_system_balance {
-            info.requested_system_balance =
+        if let Some(owner) = query.request_owner_balance {
+            info.requested_owner_balance =
                 chain.execution_state.system.balances.get(&owner).await?;
         }
         if let Some(next_block_height) = query.test_next_block_height {

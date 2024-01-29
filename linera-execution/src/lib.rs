@@ -329,8 +329,8 @@ pub trait BaseRuntime {
     /// The current application parameters.
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError>;
 
-    /// Reads the system balance.
-    fn read_system_balance(&mut self) -> Result<Amount, ExecutionError>;
+    /// Reads the balance of the chain.
+    fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError>;
 
     /// Reads the system timestamp.
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError>;

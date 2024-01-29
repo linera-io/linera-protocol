@@ -80,15 +80,15 @@ fn mock_application_parameters() {
     );
 }
 
-/// Test if the system balance getter API is mocked successfully.
+/// Test if the chain balance getter API is mocked successfully.
 #[webassembly_test]
-fn mock_system_balance() {
+fn mock_chain_balance() {
     let balance = Amount::from_atto(0x00010203_04050607_08090a0b_0c0d0e0f);
 
-    test::mock_system_balance(balance);
+    test::mock_chain_balance(balance);
 
-    assert_eq!(contract::system_api::current_system_balance(), balance);
-    assert_eq!(service::system_api::current_system_balance(), balance);
+    assert_eq!(contract::system_api::current_chain_balance(), balance);
+    assert_eq!(service::system_api::current_chain_balance(), balance);
 }
 
 /// Test if the system timestamp getter API is mocked successfully.

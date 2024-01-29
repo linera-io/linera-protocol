@@ -28,9 +28,9 @@ pub fn current_application_id() -> ApplicationId {
     wit::application_id().into()
 }
 
-/// Retrieves the current system balance.
-pub fn current_system_balance() -> Amount {
-    wit::read_system_balance().into()
+/// Retrieves the current chain balance.
+pub fn current_chain_balance() -> Amount {
+    wit::read_chain_balance().into()
 }
 
 /// Retrieves the current system time, i.e. the timestamp of the block in which this is called.

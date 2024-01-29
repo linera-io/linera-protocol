@@ -152,7 +152,7 @@ ChainInfo:
           TYPENAME: ChainDescription
     - manager:
         TYPENAME: ChainManagerInfo
-    - system_balance:
+    - chain_balance:
         TYPENAME: Amount
     - block_hash:
         OPTION:
@@ -164,7 +164,7 @@ ChainInfo:
     - state_hash:
         OPTION:
           TYPENAME: CryptoHash
-    - requested_system_balance:
+    - requested_owner_balance:
         OPTION:
           TYPENAME: Amount
     - requested_committees:
@@ -194,7 +194,7 @@ ChainInfoQuery:
     - test_next_block_height:
         OPTION:
           TYPENAME: BlockHeight
-    - request_system_balance:
+    - request_owner_balance:
         OPTION:
           TYPENAME: Owner
     - request_committees: BOOL

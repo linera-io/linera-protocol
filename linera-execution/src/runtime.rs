@@ -587,8 +587,8 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().application_parameters()
     }
 
-    fn read_system_balance(&mut self) -> Result<Amount, ExecutionError> {
-        self.inner().read_system_balance()
+    fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError> {
+        self.inner().read_chain_balance()
     }
 
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
@@ -684,9 +684,9 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(self.current_application().parameters.clone())
     }
 
-    fn read_system_balance(&mut self) -> Result<Amount, ExecutionError> {
+    fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError> {
         self.execution_state_sender
-            .send_request(|callback| Request::SystemBalance { callback })?
+            .send_request(|callback| Request::ChainBalance { callback })?
             .recv_response()
     }
 
