@@ -6,6 +6,8 @@
 mod fields;
 mod specialization;
 
+#[cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
+pub use self::specialization::Specialization;
 pub use self::{fields::FieldsInformation, specialization::Specializations};
 use heck::ToKebabCase;
 use proc_macro2::{Span, TokenStream};
@@ -52,7 +54,7 @@ pub fn extract_namespace(
 
 /// Changes the [`DeriveInput`] by replacing some generic type parameters with specialized types.
 pub fn apply_specialization_attribute(input: &mut DeriveInput) -> Specializations {
-    Specializations::new(input)
+    Specializations::prepare_derive_input(input)
 }
 
 /// A type representing the parameters for an attribute procedural macro.

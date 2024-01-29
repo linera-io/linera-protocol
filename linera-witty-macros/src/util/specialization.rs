@@ -30,19 +30,30 @@ use syn::{
 #[derive(Debug)]
 pub struct Specializations(Vec<Specialization>);
 
+impl FromIterator<Specialization> for Specializations {
+    fn from_iter<I>(specializations: I) -> Self
+    where
+        I: IntoIterator<Item = Specialization>,
+    {
+        Specializations(specializations.into_iter().collect())
+    }
+}
+
 impl Specializations {
-    /// Creates a new [`Specializations`] instance by parsing the `witty_specialize_with`
-    /// attributes from the [`DeriveInput`].
+    /// Changes the [`DeriveInput`] based on the specializations requested through the
+    /// `witty_specialize_with` attributes.
     ///
     /// The [`DeriveInput`] is changed so that its `where` clause and field types are specialized.
-    pub fn new(input: &mut DeriveInput) -> Self {
-        let specializations: Vec<_> = Self::parse_specialization_attributes(&input.attrs).collect();
+    /// Returns the[`Specializations`] instance created from parsing the `witty_specialize_with`
+    /// attributes from the [`DeriveInput`].
+    pub fn prepare_derive_input(input: &mut DeriveInput) -> Self {
+        let this: Self = Self::parse_specialization_attributes(&input.attrs).collect();
 
-        for specialization in &specializations {
-            specialization.apply_to(input);
+        for specialization in &this.0 {
+            specialization.apply_to_derive_input(input);
         }
 
-        Specializations(specializations)
+        this
     }
 
     /// Creates a list of [`Specialization`]s based on the `witty_specialize_with` attributes found
@@ -178,7 +189,7 @@ impl Specializations {
 }
 
 /// A single specialization of a generic type parameter.
-struct Specialization {
+pub struct Specialization {
     /// The type parameter to be specialized.
     type_parameter: Ident,
     /// The type to use as the specialized argument.
@@ -199,12 +210,22 @@ impl Parse for Specialization {
 }
 
 impl Specialization {
+    /// Creates a new specialization for the `type_parameter`, to specialize it into the
+    /// `specialized_type`.
+    #[cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
+    pub fn new(type_parameter: Ident, specialized_type: Type) -> Self {
+        Specialization {
+            type_parameter,
+            specialized_type,
+        }
+    }
+
     /// Replaces a type parameter in the [`DeriveInput`] with a specialized type.
     ///
     /// Note that the specialization is only done to the `where` clause and the type's fields. The
     /// types generic parameters needs to be changed separately (see
     /// [`Specializatons::specialize_type_generics`].
-    pub fn apply_to(&self, input: &mut DeriveInput) {
+    pub fn apply_to_derive_input(&self, input: &mut DeriveInput) {
         self.remove_from_where_clause(input.generics.where_clause.as_mut());
         self.change_types_in_where_clause(input.generics.where_clause.as_mut());
         self.change_types_in_fields(&mut input.data);
