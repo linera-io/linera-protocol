@@ -4,10 +4,11 @@
 //! Representation of a shared generic type parameter for the caller.
 
 use proc_macro_error::abort;
+use std::collections::HashMap;
 use syn::{
     punctuated::Punctuated, AngleBracketedGenericArguments, AssocType, GenericArgument, Generics,
     Ident, PathArguments, PathSegment, PredicateType, Token, TraitBound, TraitBoundModifier, Type,
-    TypeParamBound, TypePath, WhereClause, WherePredicate,
+    TypeParam, TypeParamBound, TypePath, WhereClause, WherePredicate,
 };
 
 /// Information on the  generic type parameter to use for the caller parameter, if present.
@@ -24,72 +25,98 @@ pub enum CallerTypeParameter<'input> {
 impl<'input> CallerTypeParameter<'input> {
     /// Parses a type's [`Generics`] to determine if a caller type parameter should be used.
     pub fn new(generics: &'input Generics) -> Self {
-        let caller_type_parameter = Self::extract_caller_type_parameter(generics);
-        let user_data_type =
-            caller_type_parameter.and_then(|caller| Self::extract_user_data_type(generics, caller));
-
-        match (caller_type_parameter, user_data_type) {
-            (None, None) => CallerTypeParameter::NotPresent,
-            (Some(caller), None) => CallerTypeParameter::WithoutUserData(caller),
-            (Some(caller), Some(user_data)) => {
-                CallerTypeParameter::WithUserData { caller, user_data }
-            }
-            (None, Some(_)) => unreachable!("Missing caller type parameter"),
-        }
-    }
-
-    /// Extracts the [`Ident`]ifier used for the caller type parameter, if present.
-    fn extract_caller_type_parameter(generics: &'input Generics) -> Option<&'input Ident> {
-        if generics.type_params().count() > 1 {
-            abort!(
-                generics.params,
-                "`#[wit_export]` supports only one generic type parameter \
-                which is assumed to be the caller instance"
-            );
-        }
+        let where_bounds = Self::parse_bounds_from_where_clause(generics.where_clause.as_ref());
 
         generics
             .type_params()
+            .filter_map(|parameter| Self::try_from_parameter(parameter, &where_bounds))
             .next()
-            .map(|parameter| &parameter.ident)
+            .unwrap_or(CallerTypeParameter::NotPresent)
     }
 
-    /// Extracts the [`Ident`]ifier used for the caller type parameter, if present.
-    fn extract_user_data_type(
-        generics: &'input Generics,
-        caller_parameter: &Ident,
-    ) -> Option<&'input Type> {
-        Self::extract_caller_bounds(generics.where_clause.as_ref()?, caller_parameter)?
-            .filter_map(Self::extract_caller_bound_path)
-            .filter_map(Self::extract_caller_bound_arguments)
-            .filter_map(Self::extract_caller_user_data_type_argument)
-            .next()
-    }
-
-    /// Extracts the type bounds inside a `where` clause specific to the generic
-    /// `caller_parameter`.
-    fn extract_caller_bounds(
-        where_clause: &'input WhereClause,
-        caller_parameter: &Ident,
-    ) -> Option<impl Iterator<Item = &'input TypeParamBound> + 'input> {
+    /// Parses the bounds present in an optional `where_clause`.
+    ///
+    /// Returns a map between constrained types and its predicates.
+    fn parse_bounds_from_where_clause(
+        where_clause: Option<&'input WhereClause>,
+    ) -> HashMap<&'input Ident, Vec<&'input TypeParamBound>> {
         where_clause
-            .predicates
-            .iter()
+            .into_iter()
+            .flat_map(|where_clause| where_clause.predicates.iter())
             .filter_map(|predicate| match predicate {
-                WherePredicate::Type(PredicateType {
-                    bounded_ty: Type::Path(TypePath { qself: None, path }),
-                    bounds,
-                    ..
-                }) if path.is_ident(caller_parameter) => Some(bounds.iter()),
+                WherePredicate::Type(predicate) => Self::extract_predicate_bounds(predicate),
                 _ => None,
             })
-            .next()
+            .collect()
+    }
+
+    /// Extracts the constrained type and its bounds from a predicate.
+    ///
+    /// Returns [`None`] if the predicate does not apply to a type that's a single identifier
+    /// (which could be a generic type parameter).
+    fn extract_predicate_bounds(
+        predicate: &'input PredicateType,
+    ) -> Option<(&'input Ident, Vec<&'input TypeParamBound>)> {
+        let target_identifier = Self::extract_identifier(&predicate.bounded_ty)?;
+
+        Some((target_identifier, predicate.bounds.iter().collect()))
+    }
+
+    /// Extracts the [`Ident`] that forms the `candidate_type`, if the [`Type`] is a single
+    /// identifier.
+    fn extract_identifier(candidate_type: &'input Type) -> Option<&'input Ident> {
+        let Type::Path(TypePath { qself: None, path }) = candidate_type else {
+            return None;
+        };
+
+        if path.leading_colon.is_some() || path.segments.len() != 1 {
+            return None;
+        }
+
+        let segment = path.segments.first()?;
+
+        if !matches!(&segment.arguments, PathArguments::None) {
+            return None;
+        }
+
+        Some(&segment.ident)
+    }
+
+    /// Attempts to create a [`CallerTypeParameter`] from a generic [`TypeParam`].
+    ///
+    /// Succeeds if and only if the `where_bounds` map contains a predicate for the `parameter`.
+    fn try_from_parameter(
+        parameter: &'input TypeParam,
+        where_bounds: &HashMap<&'input Ident, Vec<&'input TypeParamBound>>,
+    ) -> Option<Self> {
+        let caller = &parameter.ident;
+
+        let bounds = where_bounds
+            .get(caller)
+            .into_iter()
+            .flatten()
+            .copied()
+            .chain(parameter.bounds.iter());
+
+        let instance_bound_path_segment = bounds
+            .filter_map(Self::extract_trait_bound_path)
+            .filter_map(Self::extract_instance_bound_path_segment)
+            .next()?;
+
+        let maybe_user_data =
+            Self::extract_instance_bound_arguments(&instance_bound_path_segment.arguments)
+                .and_then(Self::extract_instance_bound_user_data);
+
+        match maybe_user_data {
+            Some(user_data) => Some(CallerTypeParameter::WithUserData { caller, user_data }),
+            None => Some(CallerTypeParameter::WithoutUserData(caller)),
+        }
     }
 
     /// Extracts the path from a trait `bound`.
-    fn extract_caller_bound_path(
+    fn extract_trait_bound_path(
         bound: &'input TypeParamBound,
-    ) -> Option<impl Iterator<Item = &'input PathSegment> + 'input> {
+    ) -> Option<impl Iterator<Item = &'input PathSegment> + Clone + 'input> {
         match bound {
             TypeParamBound::Trait(TraitBound {
                 paren_token: None,
@@ -101,10 +128,33 @@ impl<'input> CallerTypeParameter<'input> {
         }
     }
 
-    /// Extracts the generic arguments inside the caller parameter path's `segments`.
-    fn extract_caller_bound_arguments(
+    /// Extracts the [`PathSegment`] with the generic type parameters that could contain the user
+    /// data type.
+    fn extract_instance_bound_path_segment(
+        segments: impl Iterator<Item = &'input PathSegment> + Clone,
+    ) -> Option<&'input PathSegment> {
+        Self::extract_aliased_instance_bound_path_segment(segments.clone())
+            .or_else(|| Self::extract_direct_instance_bound_path_segment(segments))
+    }
+
+    /// Extracts the [`PathSegment`] for the identifier that uses an `InstanceFor..` trait alias
+    /// generated by Witty.
+    fn extract_aliased_instance_bound_path_segment(
+        mut segments: impl Iterator<Item = &'input PathSegment>,
+    ) -> Option<&'input PathSegment> {
+        let segment = segments.next()?;
+
+        if segment.ident.to_string().starts_with("InstanceFor") && segments.next().is_none() {
+            Some(segment)
+        } else {
+            None
+        }
+    }
+
+    /// Extracts the [`PathSegment`] for the identifier that uses an `Instance` trait directly.
+    fn extract_direct_instance_bound_path_segment(
         segments: impl Iterator<Item = &'input PathSegment>,
-    ) -> Option<&'input Punctuated<GenericArgument, Token![,]>> {
+    ) -> Option<&'input PathSegment> {
         let mut segments = segments.peekable();
 
         if matches!(
@@ -115,28 +165,31 @@ impl<'input> CallerTypeParameter<'input> {
             segments.next();
         }
 
-        match segments.next()? {
-            PathSegment {
-                ident,
-                arguments:
-                    PathArguments::AngleBracketed(AngleBracketedGenericArguments {
-                        colon2_token: None,
-                        args,
-                        ..
-                    }),
-            } if ident == "Instance" => {
-                if segments.next().is_some() {
-                    return None;
-                }
+        let segment = segments.next()?;
 
-                Some(args)
-            }
+        if segment.ident == "Instance" && segments.next().is_none() {
+            Some(segment)
+        } else {
+            None
+        }
+    }
+
+    /// Extracts the generic arguments from `arguments`.
+    fn extract_instance_bound_arguments(
+        arguments: &'input PathArguments,
+    ) -> Option<&'input Punctuated<GenericArgument, Token![,]>> {
+        match arguments {
+            PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                colon2_token: None,
+                args,
+                ..
+            }) => Some(args),
             _ => None,
         }
     }
 
     /// Extracts the custom user data [`Type`] from the caller bound's generic `arguments`.
-    fn extract_caller_user_data_type_argument(
+    fn extract_instance_bound_user_data(
         arguments: &'input Punctuated<GenericArgument, Token![,]>,
     ) -> Option<&'input Type> {
         if arguments.len() != 1 {
