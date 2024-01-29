@@ -1631,12 +1631,17 @@ where
     let manager = client.chain_info().await.unwrap().manager;
 
     // The round has not timed out yet, so validators will not sign a timeout certificate.
-    assert!(matches!(
-        client.request_leader_timeout().await,
-        Err(ChainClientError::CommunicationError(
-            CommunicationError::Trusted(NodeError::MissingVoteInValidatorResponse)
-        ))
-    ));
+    let result = client.request_leader_timeout().await;
+    assert!(
+        matches!(
+            result,
+            Err(ChainClientError::CommunicationError(
+                CommunicationError::Trusted(NodeError::MissingVoteInValidatorResponse)
+            ))
+        ),
+        "unexpected leader timeout result: {:?}",
+        result
+    );
 
     clock.set(manager.round_timeout.unwrap());
 
