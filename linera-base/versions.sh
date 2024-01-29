@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-cd $(git rev-parse --show-toplevel)
+set -e
+
+cd "$(dirname $(cargo locate-project --workspace --message-format plain))"
 
 if type -P sha256sum &>/dev/null
 then
@@ -13,10 +15,15 @@ else
     exit 1
 fi
 
-# git commit
-git=$(git rev-parse @)
-git diff-index --quiet @ || git="$git-dirty"
-echo GIT_COMMIT=$git
+if [ -n "$GIT_COMMIT" ]
+then
+    echo GIT_COMMIT=$GIT_COMMIT
+else
+    # git commit
+    git=$(git rev-parse @)
+    git diff-index --quiet @ || git="$git-dirty"
+    echo GIT_COMMIT=$git
+fi
 
 {
     # GraphQL API hash
