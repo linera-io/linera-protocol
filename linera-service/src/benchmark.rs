@@ -105,7 +105,7 @@ async fn benchmark_with_fungible(
     info!("Synchronizing balances (sanity check)");
     try_join_all(clients.iter().map(|user| async move {
         let chain = user.default_chain().context("missing default chain")?;
-        user.synchronize(chain).await?;
+        user.sync(chain).await?;
         let balance = user.query_balance(system::Account::chain(chain)).await?;
         info!("User {:?} has {}", user.get_owner(), balance);
         Ok::<_, anyhow::Error>(())

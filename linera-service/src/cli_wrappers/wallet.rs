@@ -418,7 +418,7 @@ impl ClientWrapper {
     }
 
     /// Runs `linera sync`.
-    pub async fn synchronize(&self, chain_id: ChainId) -> Result<()> {
+    pub async fn sync(&self, chain_id: ChainId) -> Result<()> {
         self.command()
             .await?
             .arg("sync")
