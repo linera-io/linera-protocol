@@ -4,6 +4,7 @@ sysctls:
 datacenter: validator
 racks:
   - name: rack-1
+    scyllaConfig: "scylla-config"
     members: 1
     storage:
       capacity: 2Gi
