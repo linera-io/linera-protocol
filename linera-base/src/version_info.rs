@@ -50,16 +50,24 @@ impl VersionInfo {
         );
     }
 
+    fn crate_version_without_patch(&self) -> String {
+        let parts = self.crate_version.split('.').collect::<Vec<_>>();
+        if parts.len() != 3 {
+            return self.crate_version.to_string();
+        }
+        format!("{}.{}", parts[0], parts[1])
+    }
+
     /// Returns true if `other` is probably incompatible with `self`. Currently, the
     /// commit hash of the source code is the only field that can differ.
     pub fn is_probably_incompatible_with(&self, other: &Self) -> bool {
         (
-            &self.crate_version,
+            self.crate_version_without_patch(),
             &self.rpc_hash,
             &self.graphql_hash,
             &self.wit_hash,
         ) != (
-            &other.crate_version,
+            other.crate_version_without_patch(),
             &other.rpc_hash,
             &other.graphql_hash,
             &other.wit_hash,
@@ -102,4 +110,16 @@ impl Default for VersionInfo {
     fn default() -> Self {
         VERSION_INFO
     }
+}
+
+#[test]
+fn test_basic_semver() {
+    let mut v1 = VERSION_INFO.clone();
+    let mut v2 = VERSION_INFO.clone();
+    v1.crate_version = "1.2.0".into();
+    v2.crate_version = "1.2.1".into();
+    assert!(!v1.is_probably_incompatible_with(&v2));
+
+    v2.crate_version = "1.3.0".into();
+    assert!(v1.is_probably_incompatible_with(&v2));
 }
