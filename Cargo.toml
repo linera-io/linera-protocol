@@ -58,6 +58,7 @@ derive_more = "0.99.17"
 dirs = "5.0.1"
 ed25519 = "1.5.3"
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
+envy = "0.4.2"
 either = "1.9.0"
 frunk = "0.4.2"
 fs-err = { version = "2.11.0", features = ["tokio"] }

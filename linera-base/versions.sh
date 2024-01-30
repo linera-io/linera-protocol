@@ -15,7 +15,12 @@ else
     exit 1
 fi
 
-if [ -n "$GIT_COMMIT" ]
+if [ -n "${CARGO_PKG_VERSION-}"]
+then
+    echo CRATE_VERSION="$CARGO_PKG_VERSION"
+fi
+
+if [ -n "${GIT_COMMIT-}" ]
 then
     echo GIT_COMMIT=$GIT_COMMIT
 else

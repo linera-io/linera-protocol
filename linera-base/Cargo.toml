@@ -17,6 +17,7 @@ test = ["test-strategy", "proptest"]
 async-graphql = { workspace = true }
 bcs = { workspace = true }
 ed25519-dalek = { workspace = true }
+envy = { workspace = true }
 generic-array = { workspace = true }
 hex = { workspace = true }
 proptest = { workspace = true, optional = true }
