@@ -83,8 +83,8 @@ where
     ViewError: From<S::ContextError>,
 {
     /// Returns the version information on this faucet service.
-    async fn version(&self) -> linera_base::VersionInfo {
-        linera_base::VersionInfo::default()
+    async fn version(&self) -> linera_version::VersionInfo {
+        linera_version::VersionInfo::default()
     }
 
     /// Returns the genesis config.

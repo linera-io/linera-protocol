@@ -33,6 +33,7 @@ bcs.workspace = true
 futures.workspace = true
 linera-base.workspace = true
 linera-sdk-derive.workspace = true
+linera-version.workspace = true
 linera-views.workspace = true
 log.workspace = true
 serde.workspace = true

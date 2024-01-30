@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use linera_base::{crypto::KeyPair, data_types::Timestamp, identifiers::ChainId, VersionInfo};
+use linera_base::{crypto::KeyPair, data_types::Timestamp, identifiers::ChainId};
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
     client::ChainClient,
@@ -19,6 +19,7 @@ use linera_service::{
     node_service::NodeService,
 };
 use linera_storage::{MemoryStorage, Storage, WallClock};
+use linera_version::VersionInfo;
 use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
 
 #[derive(Clone)]
@@ -84,7 +85,7 @@ impl ValidatorNodeProvider for DummyValidatorNodeProvider {
 #[command(
     name = "linera-schema-export",
     about = "Export the GraphQL schema for the core data in a Linera chain",
-    version = linera_base::VersionInfo::default_str(),
+    version = linera_version::VersionInfo::default_str(),
 )]
 struct Options {}
 

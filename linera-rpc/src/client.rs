@@ -97,7 +97,7 @@ impl ValidatorNode for Client {
         })
     }
 
-    async fn get_version_info(&mut self) -> Result<linera_base::VersionInfo, NodeError> {
+    async fn get_version_info(&mut self) -> Result<linera_version::VersionInfo, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.get_version_info().await?,
             Client::Simple(simple_client) => simple_client.get_version_info().await?,

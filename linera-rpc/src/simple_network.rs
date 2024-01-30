@@ -14,7 +14,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
-use linera_base::{identifiers::ChainId, VersionInfo};
+use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
@@ -22,6 +22,7 @@ use linera_core::{
     worker::{NetworkActions, ValidatorWorker, WorkerError, WorkerState},
 };
 use linera_storage::Storage;
+use linera_version::VersionInfo;
 use linera_views::views::ViewError;
 use rand::Rng;
 use std::{io, time::Duration};
@@ -288,7 +289,7 @@ where
                 Ok(None)
             }
 
-            RpcMessage::VersionInfoQuery => Ok(Some(linera_base::VERSION_INFO.into())),
+            RpcMessage::VersionInfoQuery => Ok(Some(linera_version::VersionInfo::default().into())),
 
             RpcMessage::Vote(_)
             | RpcMessage::Error(_)

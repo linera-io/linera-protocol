@@ -66,7 +66,7 @@ enum Action {
 #[command(
     name = "Format generator",
     about = "Trace serde (de)serialization to generate format descriptions",
-    version = linera_base::VersionInfo::default_str(),
+    version = linera_version::VersionInfo::default_str(),
 )]
 struct Options {
     #[arg(value_enum, default_value_t = Action::Print, ignore_case = true)]

@@ -27,7 +27,7 @@ use crate::Job;
 #[derive(clap::Parser)]
 #[command(
     name = "linera",
-    version = linera_base::VersionInfo::default_str(),
+    version = linera_version::VersionInfo::default_str(),
     about = "A Byzantine-fault tolerant sidechain with low-latency finality and high throughput",
 )]
 pub struct ClientOptions {

@@ -731,8 +731,8 @@ where
     }
 
     /// Returns the version information on this node service.
-    async fn version(&self) -> linera_base::VersionInfo {
-        linera_base::VersionInfo::default()
+    async fn version(&self) -> linera_version::VersionInfo {
+        linera_version::VersionInfo::default()
     }
 }
 

@@ -2136,7 +2136,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
 
     // Test version info.
     let info = faucet.version_info().await.unwrap();
-    assert_eq!(linera_base::VERSION_INFO, info);
+    assert_eq!(linera_version::VERSION_INFO, info);
 
     // Use the faucet directly to initialize client 3.
     let client3 = net.make_client().await;

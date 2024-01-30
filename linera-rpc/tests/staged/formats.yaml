@@ -925,6 +925,7 @@ VersionInfo:
   STRUCT:
     - crate_version: STR
     - git_commit: STR
+    - git_dirty: BOOL
     - rpc_hash: STR
     - graphql_hash: STR
     - wit_hash: STR

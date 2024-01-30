@@ -12,7 +12,6 @@ use linera_base::{
     crypto::CryptoError,
     data_types::{ArithmeticError, BlockHeight},
     identifiers::ChainId,
-    VersionInfo,
 };
 use linera_chain::{
     data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate, Origin},
@@ -22,6 +21,7 @@ use linera_execution::{
     committee::{Committee, ValidatorName},
     BytecodeLocation,
 };
+use linera_version::VersionInfo;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;

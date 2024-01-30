@@ -52,11 +52,12 @@ impl From<ProtoConversionError> for Status {
     }
 }
 
-impl From<linera_base::VersionInfo> for grpc::VersionInfo {
-    fn from(version_info: linera_base::VersionInfo) -> grpc::VersionInfo {
+impl From<linera_version::VersionInfo> for grpc::VersionInfo {
+    fn from(version_info: linera_version::VersionInfo) -> grpc::VersionInfo {
         grpc::VersionInfo {
             crate_version: version_info.crate_version.into(),
             git_commit: version_info.git_commit.into(),
+            git_dirty: version_info.git_dirty,
             rpc_hash: version_info.rpc_hash.into(),
             graphql_hash: version_info.graphql_hash.into(),
             wit_hash: version_info.wit_hash.into(),
@@ -64,11 +65,12 @@ impl From<linera_base::VersionInfo> for grpc::VersionInfo {
     }
 }
 
-impl From<grpc::VersionInfo> for linera_base::VersionInfo {
-    fn from(version_info: grpc::VersionInfo) -> linera_base::VersionInfo {
-        linera_base::VersionInfo {
+impl From<grpc::VersionInfo> for linera_version::VersionInfo {
+    fn from(version_info: grpc::VersionInfo) -> linera_version::VersionInfo {
+        linera_version::VersionInfo {
             crate_version: version_info.crate_version.into(),
             git_commit: version_info.git_commit.into(),
+            git_dirty: version_info.git_dirty,
             rpc_hash: version_info.rpc_hash.into(),
             graphql_hash: version_info.graphql_hash.into(),
             wit_hash: version_info.wit_hash.into(),
