@@ -15,15 +15,15 @@ else
     exit 1
 fi
 
-if [ -n "$GIT_COMMIT" ]
-then
-    echo GIT_COMMIT=$GIT_COMMIT
-else
-    # git commit
-    git=$(git rev-parse @)
-    git diff-index --quiet @ || git="$git-dirty"
-    echo -n $git > linera-base/git_commit.txt
-fi
+#if [ -n "$GIT_COMMIT" ]
+#then
+#    echo GIT_COMMIT=$GIT_COMMIT
+#else
+#    # git commit
+#    git=$(git rev-parse @)
+#    git diff-index --quiet @ || git="$git-dirty"
+#    echo -n $git > linera-base/git_commit.txt
+#fi
 
 
 # GraphQL API hash

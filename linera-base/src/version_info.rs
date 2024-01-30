@@ -46,7 +46,7 @@ impl VersionInfo {
         tracing::info!("GraphQL API hash: {graphql_hash}");
         tracing::info!("WIT API hash: {wit_hash}");
         tracing::info!(
-            "Source code: https://github.com/linera-io/linera-protocol/commit/{git_commit}"
+            "Source code: https://github.com/linera-io/linera-protocol/tree/{git_commit}"
         );
     }
 
@@ -100,7 +100,7 @@ Linera protocol: v{crate_version}
 RPC API hash: {rpc_hash}
 GraphQL API hash: {graphql_hash}
 WIT API hash: {wit_hash}
-Source code: https://github.com/linera-io/linera-protocol/commit/{git_commit}
+Source code: https://github.com/linera-io/linera-protocol/tree/{git_commit}
 "
         )
     }
