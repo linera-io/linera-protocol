@@ -277,10 +277,24 @@ pub enum ClientCommand {
         chain_id: ChainId,
     },
 
+    /// Read the current native-token balance of the given account directly from the local
+    /// state.
+    ///
+    /// NOTE: The local balance does not reflect messages that are waiting to be picked in
+    /// the local inbox, or that have not been synchronized from validators yet. Use
+    /// `linera sync` then either `linera query-balance` or `linera process-inbox &&
+    /// linera local-balance` for a consolidated balance.
+    LocalBalance {
+        /// The account to read, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
+        /// chain balance. By defaults, we read the chain balance of the default chain in
+        /// the wallet.
+        account: Option<Account>,
+    },
+
     /// Simulate the execution of one block made of pending messages from the local inbox,
     /// then read the native-token balance of the account from the local state.
     ///
-    /// The balance does not reflect messages that have not been synchronized from
+    /// NOTE: The balance does not reflect messages that have not been synchronized from
     /// validators yet. Call `linera sync` first to do so.
     QueryBalance {
         /// The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
@@ -289,13 +303,30 @@ pub enum ClientCommand {
         account: Option<Account>,
     },
 
-    /// Synchronize the local state of the chain with a quorum validators, then query the
+    /// (DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the
     /// local balance.
+    ///
+    /// This command is deprecated. Use `linera sync && linera query-balance` instead.
     SyncBalance {
         /// The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
         /// chain balance. By defaults, we read the chain balance of the default chain in
         /// the wallet.
         account: Option<Account>,
+    },
+
+    /// Synchronize the local state of the chain with a quorum validators.
+    Sync {
+        /// The chain to synchronize with validators. If omitted, synchronizes the
+        /// default chain of the wallet.
+        chain_id: Option<ChainId>,
+    },
+
+    /// Process all pending incoming messages from the inbox of the given chain by creating as many
+    /// blocks as needed to execute all (non-failing) messages. Failing messages will be
+    /// marked as rejected and may bounce to their sender depending on their configuration.
+    ProcessInbox {
+        /// The chain to process. If omitted, uses the default chain of the wallet.
+        chain_id: Option<ChainId>,
     },
 
     /// Show the current set of validators for a chain.

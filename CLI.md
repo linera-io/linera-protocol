@@ -11,8 +11,11 @@ This document contains the help content for the `linera` command-line program.
 * [`linera unsubscribe`↴](#linera-unsubscribe)
 * [`linera open-multi-owner-chain`↴](#linera-open-multi-owner-chain)
 * [`linera close-chain`↴](#linera-close-chain)
+* [`linera local-balance`↴](#linera-local-balance)
 * [`linera query-balance`↴](#linera-query-balance)
 * [`linera sync-balance`↴](#linera-sync-balance)
+* [`linera sync`↴](#linera-sync)
+* [`linera process-inbox`↴](#linera-process-inbox)
 * [`linera query-validators`↴](#linera-query-validators)
 * [`linera set-validator`↴](#linera-set-validator)
 * [`linera remove-validator`↴](#linera-remove-validator)
@@ -54,8 +57,11 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `unsubscribe` — Unsubscribes from a system channel
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
 * `close-chain` — Close (i.e. deactivate) an existing chain
+* `local-balance` — Read the current native-token balance of the given account directly from the local state
 * `query-balance` — Simulate the execution of one block made of pending messages from the local inbox, then read the native-token balance of the account from the local state
-* `sync-balance` — Synchronize the local state of the chain with a quorum validators, then query the local balance
+* `sync-balance` — (DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the local balance
+* `sync` — Synchronize the local state of the chain with a quorum validators
+* `process-inbox` — Process all pending incoming messages from the inbox of the given chain by creating as many blocks as needed to execute all (non-failing) messages. Failing messages will be marked as rejected and may bounce to their sender depending on their configuration
 * `query-validators` — Show the current set of validators for a chain
 * `set-validator` — Add or modify a validator (admin only)
 * `remove-validator` — Remove a validator (admin only)
@@ -220,11 +226,25 @@ Close (i.e. deactivate) an existing chain
 
 
 
+## `linera local-balance`
+
+Read the current native-token balance of the given account directly from the local state.
+
+NOTE: The local balance does not reflect messages that are waiting to be picked in the local inbox, or that have not been synchronized from validators yet. Use `linera sync` then either `linera query-balance` or `linera process-inbox && linera local-balance` for a consolidated balance.
+
+**Usage:** `linera local-balance [ACCOUNT]`
+
+###### **Arguments:**
+
+* `<ACCOUNT>` — The account to read, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By defaults, we read the chain balance of the default chain in the wallet
+
+
+
 ## `linera query-balance`
 
 Simulate the execution of one block made of pending messages from the local inbox, then read the native-token balance of the account from the local state.
 
-The balance does not reflect messages that have not been synchronized from validators yet. Call `linera sync` first to do so.
+NOTE: The balance does not reflect messages that have not been synchronized from validators yet. Call `linera sync` first to do so.
 
 **Usage:** `linera query-balance [ACCOUNT]`
 
@@ -236,13 +256,39 @@ The balance does not reflect messages that have not been synchronized from valid
 
 ## `linera sync-balance`
 
-Synchronize the local state of the chain with a quorum validators, then query the local balance
+(DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the local balance.
+
+This command is deprecated. Use `linera sync && linera query-balance` instead.
 
 **Usage:** `linera sync-balance [ACCOUNT]`
 
 ###### **Arguments:**
 
 * `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By defaults, we read the chain balance of the default chain in the wallet
+
+
+
+## `linera sync`
+
+Synchronize the local state of the chain with a quorum validators
+
+**Usage:** `linera sync [CHAIN_ID]`
+
+###### **Arguments:**
+
+* `<CHAIN_ID>` — The chain to synchronize with validators. If omitted, synchronizes the default chain of the wallet
+
+
+
+## `linera process-inbox`
+
+Process all pending incoming messages from the inbox of the given chain by creating as many blocks as needed to execute all (non-failing) messages. Failing messages will be marked as rejected and may bounce to their sender depending on their configuration
+
+**Usage:** `linera process-inbox [CHAIN_ID]`
+
+###### **Arguments:**
+
+* `<CHAIN_ID>` — The chain to process. If omitted, uses the default chain of the wallet
 
 
 

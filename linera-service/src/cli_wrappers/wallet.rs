@@ -385,6 +385,22 @@ impl ClientWrapper {
         bail!("Failed to start faucet");
     }
 
+    /// Runs `linera local-balance`.
+    pub async fn local_balance(&self, account: Account) -> Result<Amount> {
+        let stdout = self
+            .command()
+            .await?
+            .arg("local-balance")
+            .arg(account.to_string())
+            .spawn_and_wait_for_stdout()
+            .await?;
+        let amount = stdout
+            .trim()
+            .parse()
+            .context("error while parsing the result of `linera local-balance`")?;
+        Ok(amount)
+    }
+
     /// Runs `linera query-balance`.
     pub async fn query_balance(&self, account: Account) -> Result<Amount> {
         let stdout = self
@@ -401,20 +417,26 @@ impl ClientWrapper {
         Ok(amount)
     }
 
-    /// Runs `linera sync-balance`.
-    pub async fn synchronize_balance(&self, account: Account) -> Result<Amount> {
-        let stdout = self
-            .command()
+    /// Runs `linera sync`.
+    pub async fn sync(&self, chain_id: ChainId) -> Result<()> {
+        self.command()
             .await?
-            .arg("sync-balance")
-            .arg(account.to_string())
+            .arg("sync")
+            .arg(&chain_id.to_string())
             .spawn_and_wait_for_stdout()
             .await?;
-        let amount = stdout
-            .trim()
-            .parse()
-            .context("error while parsing the result of `linera sync-balance`")?;
-        Ok(amount)
+        Ok(())
+    }
+
+    /// Runs `linera process-inbox`.
+    pub async fn process_inbox(&self, chain_id: ChainId) -> Result<()> {
+        self.command()
+            .await?
+            .arg("process-inbox")
+            .arg(&chain_id.to_string())
+            .spawn_and_wait_for_stdout()
+            .await?;
+        Ok(())
     }
 
     /// Runs `linera transfer`.
