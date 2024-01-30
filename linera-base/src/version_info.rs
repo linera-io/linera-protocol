@@ -24,10 +24,10 @@ pub struct VersionInfo {
 /// The version info of this build of Linera.
 pub const VERSION_INFO: VersionInfo = VersionInfo {
     crate_version: Cow::Borrowed(env!("CARGO_PKG_VERSION")),
-    git_commit: Cow::Borrowed(env!("LINERA_VERSION_GIT_COMMIT")),
-    rpc_hash: Cow::Borrowed(env!("LINERA_VERSION_RPC_HASH")),
-    graphql_hash: Cow::Borrowed(env!("LINERA_VERSION_GRAPHQL_HASH")),
-    wit_hash: Cow::Borrowed(env!("LINERA_VERSION_WIT_HASH")),
+    git_commit: Cow::Borrowed(include_str!("../git_commit.txt")),
+    rpc_hash: Cow::Borrowed(include_str!("../rpc_hash.txt")),
+    graphql_hash: Cow::Borrowed(include_str!("../graphql_hash.txt")),
+    wit_hash: Cow::Borrowed(include_str!("../wit_hash.txt")),
 };
 
 impl VersionInfo {

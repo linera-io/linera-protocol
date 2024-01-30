@@ -22,19 +22,15 @@ else
     # git commit
     git=$(git rev-parse @)
     git diff-index --quiet @ || git="$git-dirty"
-    echo GIT_COMMIT=$git
+    echo -n $git > linera-base/git_commit.txt
 fi
 
-{
-    # GraphQL API hash
-    echo -n GRAPHQL_HASH=
-    cat linera-service-graphql-client/gql/*.graphql | $hash
 
-    # WIT API hash
-    echo -n WIT_HASH=
-    cat linera-sdk/*.wit | $hash
+# GraphQL API hash
+cat linera-service-graphql-client/gql/*.graphql | $hash | awk '{print $1}' | tr -d "\n" > linera-base/graphql_hash.txt
 
-    # RPC API hash
-    echo -n RPC_HASH=
-    $hash linera-rpc/tests/staged/formats.yaml
-} | awk '{print $1}'
+# WIT API hash
+cat linera-sdk/*.wit | $hash | awk '{print $1}' | tr -d "\n" > linera-base/wit_hash.txt
+
+# RPC API hash
+$hash linera-rpc/tests/staged/formats.yaml | awk '{print $1}' | tr -d "\n" > linera-base/rpc_hash.txt
