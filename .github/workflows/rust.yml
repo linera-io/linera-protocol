@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'devnet_*' ]
   pull_request:
     branches:
       - "**"
