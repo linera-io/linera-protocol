@@ -1,6 +1,6 @@
 [package]
 name = "linera-indexer-plugins"
-version = "0.7.0"
+version = "0.7.1"
 description = "Indexer plugins."
 authors = ["Linera <contact@linera.io>"]
 readme = "README.md"
