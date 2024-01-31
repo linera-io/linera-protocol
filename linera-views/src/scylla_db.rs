@@ -47,9 +47,34 @@ use scylla::{
 use std::{ops::Deref, sync::Arc};
 use thiserror::Error;
 
+struct ScyllaDbQueries {
+    read_value: Query,
+    contains_key: Query,
+}
+
+impl ScyllaDbQueries {
+    fn new(table_name: &String) -> Self {
+        let query = format!(
+            "SELECT v FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
+            table_name
+        );
+        let read_value = Query::new(query);
+        let query = format!(
+            "SELECT dummy FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
+            table_name
+        );
+        let contains_key = Query::new(query);
+        Self { read_value, contains_key }
+    }
+}
+
+
+
+
+
 /// The creation of a ScyllaDB client that can be used for accessing it.
 /// The `Vec<u8>`is a primary key.
-type ScyllaDbStorePair = (Session, String);
+type ScyllaDbStorePair = (Session, String, ScyllaDbQueries);
 
 /// We limit the number of connections that can be done for tests.
 #[cfg(any(test, feature = "test"))]
@@ -236,14 +261,10 @@ impl ScyllaDbStoreInternal {
     ) -> Result<Option<Vec<u8>>, ScyllaDbContextError> {
         ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
         let session = &store.0;
-        let table_name = &store.1;
         // Read the value of a key
         let values = (key,);
-        let query = format!(
-            "SELECT v FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
-            table_name
-        );
-        let result = session.query(query, values).await?;
+        let query = &store.2.read_value;
+        let result = session.query(query.clone(), values).await?;
         if let Some(rows) = result.rows {
             if let Some(row) = rows.into_typed::<(Vec<u8>,)>().next() {
                 let value = row?;
@@ -259,14 +280,10 @@ impl ScyllaDbStoreInternal {
     ) -> Result<bool, ScyllaDbContextError> {
         ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
         let session = &store.0;
-        let table_name = &store.1;
         // Read the value of a key
         let values = (key,);
-        let query = format!(
-            "SELECT dummy FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
-            table_name
-        );
-        let result = session.query(query, values).await?;
+        let query = &store.2.contains_key;
+        let result = session.query(query.clone(), values).await?;
         if let Some(rows) = result.rows {
             if let Some(_row) = rows.into_typed::<(Vec<u8>,)>().next() {
                 return Ok(true);
@@ -662,7 +679,8 @@ impl ScyllaDbStoreInternal {
         } else {
             TableStatus::New
         };
-        let store = (session, store_config.table_name);
+        let queries = ScyllaDbQueries::new(&store_config.table_name);
+        let store = (session, store_config.table_name, queries);
         let store = Arc::new(store);
         let semaphore = store_config
             .common_config
