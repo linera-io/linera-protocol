@@ -15,23 +15,22 @@ pub static VERSION_INFO: VersionInfo = include!(env!("LINERA_VERSION_STATIC_PATH
 
 impl std::fmt::Display for VersionInfo {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(formatter, "\n\
+        write!(
+            formatter,
+            "\n\
             Linera protocol: v{crate_version}\n\
             RPC API hash: {rpc_hash}\n\
             GraphQL API hash: {graphql_hash}\n\
             WIT API hash: {wit_hash}\n\
-            Source code: https://github.com/linera-io/linera-protocol/commit/{git_commit}{git_dirty}\n\
+            Source code: {repo}/commit/{git_commit}{git_dirty}\n\
             ",
-            crate_version=self.crate_version,
-            rpc_hash=self.rpc_hash,
-            graphql_hash=self.graphql_hash,
-            wit_hash=self.wit_hash,
-            git_commit=self.git_commit,
-            git_dirty=if self.git_dirty {
-                " (dirty)"
-            } else {
-                ""
-            }
+            repo = env!("CARGO_PKG_REPOSITORY"),
+            crate_version = self.crate_version,
+            rpc_hash = self.rpc_hash,
+            graphql_hash = self.graphql_hash,
+            wit_hash = self.wit_hash,
+            git_commit = self.git_commit,
+            git_dirty = if self.git_dirty { " (dirty)" } else { "" }
         )
     }
 }
@@ -48,12 +47,6 @@ impl CrateVersion {
         } else {
             self.major == other.major && self.minor <= other.minor
         }
-    }
-}
-
-impl std::fmt::Display for CrateVersion {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(formatter, "{}.{}.{}", self.major, self.minor, self.patch)
     }
 }
 

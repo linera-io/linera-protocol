@@ -34,6 +34,12 @@ impl From<semver::Version> for CrateVersion {
     }
 }
 
+impl std::fmt::Display for CrateVersion {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(formatter, "{}.{}.{}", self.major, self.minor, self.patch)
+    }
+}
+
 pub type Hash = std::borrow::Cow<'static, str>;
 
 #[cfg_attr(
@@ -61,6 +67,8 @@ pub struct VersionInfo {
 pub enum Error {
     #[error("failed to interpret cargo-metadata: {0}")]
     CargoMetadata(#[from] cargo_metadata::Error),
+    #[error("no such package: {0}")]
+    NoSuchPackage(String),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
     #[error("glob error: {0}")]
@@ -76,14 +84,25 @@ struct Outcome {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-fn get_hash(relevant_paths: &mut Vec<PathBuf>, glob: &str) -> Result<String> {
+fn get_hash(
+    relevant_paths: &mut Vec<PathBuf>,
+    metadata: &cargo_metadata::Metadata,
+    package: &str,
+    glob: &str,
+) -> Result<String> {
     use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
     use sha3::Digest as _;
+
+    let Some(package_root) = get_package_root(metadata, package) else {
+        return Ok("package not used".to_owned());
+    };
 
     let mut hasher = sha3::Sha3_256::new();
     let mut buffer = [0u8; 4096];
 
-    for path in glob::glob(glob)? {
+    let package_glob = format!("{}/{}", package_root.display(), glob);
+
+    for path in glob::glob(&package_glob)? {
         let path = path?;
         let mut file = std::fs::File::open(&path)?;
         relevant_paths.push(path);
@@ -122,50 +141,71 @@ fn run<'a>(cmd: &str, args: &[&str], stdin: impl Into<Option<&'a str>>) -> Resul
     })
 }
 
+fn get_package<'r>(
+    metadata: &'r cargo_metadata::Metadata,
+    package_name: &str,
+) -> Option<&'r cargo_metadata::Package> {
+    metadata.packages.iter().find(|p| p.name == package_name)
+}
+
+fn get_package_root<'r>(
+    metadata: &'r cargo_metadata::Metadata,
+    package_name: &str,
+) -> Option<&'r std::path::Path> {
+    Some(
+        get_package(metadata, package_name)?
+            .targets
+            .first()
+            .expect("package must have at least one target")
+            .src_path
+            .ancestors()
+            .find(|p| p.join("Cargo.toml").exists())
+            .expect("package should have a Cargo.toml")
+            .as_std_path(),
+    )
+}
+
 impl VersionInfo {
     pub fn get() -> Result<Self> {
         Self::trace_get(&mut vec![])
     }
 
     fn trace_get(paths: &mut Vec<PathBuf>) -> Result<Self> {
-        let metadata = cargo_metadata::MetadataCommand::new().no_deps().exec()?;
-        let workspace = metadata.workspace_root.as_std_path().display();
+        let metadata = cargo_metadata::MetadataCommand::new()
+            .current_dir(env!("PWD"))
+            .exec()?;
 
-        let crate_version = metadata
-            .packages
-            .into_iter()
-            .filter_map(|x| {
-                if x.name == "linera-version" {
-                    Some(x.version)
-                } else {
-                    None
-                }
-            })
-            .next()
-            .expect("no `linera-version` package found")
+        let crate_version = get_package(&metadata, env!("CARGO_PKG_NAME"))
+            .expect("this package must be in the dependency tree")
+            .version
+            .clone()
             .into();
+        let git_outcome = run("git", &["rev-parse", "HEAD"], None)?;
+        let mut git_dirty = false;
 
-        let git_commit = run("git", &["rev-parse", "HEAD"], None)?.output[..10]
-            .to_owned()
-            .into();
-
-        let git_dirty = !run("git", &["diff-index", "--quiet", "HEAD"], None)?
-            .status
-            .success();
-
-        let rpc_hash = get_hash(
-            paths,
-            &format!("{workspace}/linera-rpc/tests/staged/formats.yaml"),
-        )?
+        let git_commit = if git_outcome.status.success() {
+            git_dirty = run("git", &["diff-index", "--quiet", "HEAD"], None)?
+                .status
+                .code()
+                == Some(1);
+            git_outcome.output[..10].to_owned()
+        } else {
+            format!("v{}", crate_version)
+        }
         .into();
+
+        let rpc_hash =
+            get_hash(paths, &metadata, "linera-rpc", "tests/staged/formats.yaml")?.into();
 
         let graphql_hash = get_hash(
             paths,
-            &format!("{workspace}/linera-service-graphql-client/gql/*.graphql"),
+            &metadata,
+            "linera-service-graphql-client",
+            "gql/*.graphql",
         )?
         .into();
 
-        let wit_hash = get_hash(paths, &format!("{workspace}/linera-sdk/*.wit"))?.into();
+        let wit_hash = get_hash(paths, &metadata, "linera-sdk", "*.wit")?.into();
 
         Ok(Self {
             crate_version,
