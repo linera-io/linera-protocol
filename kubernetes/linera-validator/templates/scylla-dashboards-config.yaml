@@ -5,7 +5,7 @@ metadata:
   labels:
     grafana_dashboard: "1"
 data:
-    alternator.4.3.json: {{ .Files.Get "grafana-dashboards/scylla/alternator.4.3.json" | quote | indent 4 }}
+    scylla-alternator.4.3.json: {{ .Files.Get "grafana-dashboards/scylla/scylla-alternator.4.3.json" | quote | indent 4 }}
     scylla-overview.4.3.json: {{ .Files.Get "grafana-dashboards/scylla/scylla-overview.4.3.json" | quote | indent 4 }}
     scylla-os.4.3.json: {{ .Files.Get "grafana-dashboards/scylla/scylla-os.4.3.json" | quote | indent 4 }}
     scylla-detailed.4.3.json: {{ .Files.Get "grafana-dashboards/scylla/scylla-detailed.4.3.json" | quote | indent 4 }}

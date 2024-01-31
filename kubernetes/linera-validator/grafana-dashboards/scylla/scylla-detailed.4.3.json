@@ -8809,7 +8809,7 @@
     "schemaVersion": 26,
     "style": "dark",
     "tags": [
-        "4.3"
+        "scylla-4.3"
     ],
     "templating": {
         "list": [
