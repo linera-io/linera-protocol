@@ -1388,7 +1388,7 @@
     "schemaVersion": 26,
     "style": "dark",
     "tags": [
-        "2.2"
+        "scylla-manager-2.2"
     ],
     "templating": {
         "list": [
