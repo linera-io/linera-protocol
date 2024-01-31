@@ -1011,7 +1011,7 @@ impl Faucet {
 
     pub async fn version_info(&self) -> Result<VersionInfo> {
         let query =
-            "query { version { crateVersion gitCommit gitDirty rpcHash graphqlHash witHash } }";
+            "query { version { crateVersion { major minor patch } gitCommit gitDirty rpcHash graphqlHash witHash } }";
         let client = reqwest_client();
         let response = client
             .post(&self.url)
