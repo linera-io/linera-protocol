@@ -50,6 +50,10 @@ use thiserror::Error;
 struct ScyllaDbQueries {
     read_value: Query,
     contains_key: Query,
+    write_batch_delete_prefix_unbounded: Query,
+    write_batch_delete_prefix_bounded: Query,
+    write_batch_deletion: Query,
+    write_batch_insertion: Query,
 }
 
 impl ScyllaDbQueries {
@@ -64,7 +68,31 @@ impl ScyllaDbQueries {
             table_name
         );
         let contains_key = Query::new(query);
-        Self { read_value, contains_key }
+
+        let query = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k >= ?", table_name);
+        let write_batch_delete_prefix_unbounded = Query::new(query);
+        let query = format!(
+            "DELETE FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ?",
+            table_name
+        );
+        let write_batch_delete_prefix_bounded = Query::new(query);
+        let query = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k = ?", table_name);
+        let write_batch_deletion = Query::new(query);
+        let query = format!(
+            "INSERT INTO kv.{} (dummy, k, v) VALUES (0, ?, ?)",
+            table_name
+        );
+        let write_batch_insertion = Query::new(query);
+
+
+
+        Self { read_value,
+               contains_key,
+               write_batch_delete_prefix_unbounded,
+               write_batch_delete_prefix_bounded,
+               write_batch_deletion,
+               write_batch_insertion,
+        }
     }
 }
 
@@ -297,14 +325,10 @@ impl ScyllaDbStoreInternal {
         batch: UnorderedBatch,
     ) -> Result<(), ScyllaDbContextError> {
         let session = &store.0;
-        let table_name = &store.1;
         let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Logged);
         let mut batch_values = Vec::new();
-        let query1 = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k >= ?", table_name);
-        let query2 = format!(
-            "DELETE FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ?",
-            table_name
-        );
+        let query1 = &store.2.write_batch_delete_prefix_unbounded;
+        let query2 = &store.2.write_batch_delete_prefix_bounded;
         for key_prefix in batch.key_prefix_deletions {
             ensure!(
                 key_prefix.len() <= MAX_KEY_SIZE,
@@ -314,30 +338,27 @@ impl ScyllaDbStoreInternal {
                 None => {
                     let values = vec![key_prefix];
                     batch_values.push(values);
-                    batch_query.append_statement(Query::new(query1.clone()));
+                    batch_query.append_statement(query1.clone());
                 }
                 Some(upper_bound) => {
                     let values = vec![key_prefix, upper_bound];
                     batch_values.push(values);
-                    batch_query.append_statement(Query::new(query2.clone()));
+                    batch_query.append_statement(query2.clone());
                 }
             }
         }
-        let query3 = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k = ?", table_name);
+        let query3 = &store.2.write_batch_deletion;
         for key in batch.simple_unordered_batch.deletions {
             let values = vec![key];
             batch_values.push(values);
-            batch_query.append_statement(Query::new(query3.clone()));
+            batch_query.append_statement(query3.clone());
         }
-        let query4 = format!(
-            "INSERT INTO kv.{} (dummy, k, v) VALUES (0, ?, ?)",
-            table_name
-        );
+        let query4 = &store.2.write_batch_insertion;
         for (key, value) in batch.simple_unordered_batch.insertions {
             ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
             let values = vec![key, value];
             batch_values.push(values);
-            batch_query.append_statement(Query::new(query4.clone()));
+            batch_query.append_statement(query4.clone());
         }
         session.batch(&batch_query, batch_values).await?;
         Ok(())
