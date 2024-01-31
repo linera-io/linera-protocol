@@ -1559,8 +1559,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                             .version_info()
                             .await
                             .context("Failed to obtain version information from the faucet")?;
-                        if version_info.is_probably_incompatible_with(&linera_version::VERSION_INFO)
-                        {
+                        if !version_info.is_compatible_with(&linera_version::VERSION_INFO) {
                             warn!(
                                 "\
 Make sure to use a Linera client compatible with this network.

@@ -1978,6 +1978,8 @@ dependencies = [
  "cargo_metadata",
  "glob",
  "once_cell",
+ "quote",
+ "semver",
  "serde",
  "sha3",
  "thiserror",

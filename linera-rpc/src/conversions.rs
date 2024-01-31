@@ -52,10 +52,42 @@ impl From<ProtoConversionError> for Status {
     }
 }
 
+impl From<linera_version::CrateVersion> for grpc::CrateVersion {
+    fn from(
+        linera_version::CrateVersion {
+            major,
+            minor,
+            patch,
+        }: linera_version::CrateVersion,
+    ) -> Self {
+        Self {
+            major,
+            minor,
+            patch,
+        }
+    }
+}
+
+impl From<grpc::CrateVersion> for linera_version::CrateVersion {
+    fn from(
+        grpc::CrateVersion {
+            major,
+            minor,
+            patch,
+        }: grpc::CrateVersion,
+    ) -> Self {
+        Self {
+            major,
+            minor,
+            patch,
+        }
+    }
+}
+
 impl From<linera_version::VersionInfo> for grpc::VersionInfo {
     fn from(version_info: linera_version::VersionInfo) -> grpc::VersionInfo {
         grpc::VersionInfo {
-            crate_version: version_info.crate_version.into(),
+            crate_version: Some(version_info.crate_version.into()),
             git_commit: version_info.git_commit.into(),
             git_dirty: version_info.git_dirty,
             rpc_hash: version_info.rpc_hash.into(),
@@ -68,7 +100,14 @@ impl From<linera_version::VersionInfo> for grpc::VersionInfo {
 impl From<grpc::VersionInfo> for linera_version::VersionInfo {
     fn from(version_info: grpc::VersionInfo) -> linera_version::VersionInfo {
         linera_version::VersionInfo {
-            crate_version: version_info.crate_version.into(),
+            crate_version: version_info
+                .crate_version
+                .unwrap_or(grpc::CrateVersion {
+                    major: 0,
+                    minor: 0,
+                    patch: 0,
+                })
+                .into(),
             git_commit: version_info.git_commit.into(),
             git_dirty: version_info.git_dirty,
             rpc_hash: version_info.rpc_hash.into(),

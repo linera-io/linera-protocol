@@ -4,19 +4,7 @@
 mod version_info;
 pub use version_info::*;
 
-use std::borrow::Cow;
-
-pub static VERSION_INFO: VersionInfo = VersionInfo {
-    crate_version: Cow::Borrowed(env!("LINERA_VERSION_CRATE_VERSION")),
-    git_commit: Cow::Borrowed(env!("LINERA_VERSION_GIT_COMMIT")),
-    #[cfg(linera_version_git_dirty)]
-    git_dirty: true,
-    #[cfg(not(linera_version_git_dirty))]
-    git_dirty: false,
-    rpc_hash: Cow::Borrowed(env!("LINERA_VERSION_RPC_HASH")),
-    graphql_hash: Cow::Borrowed(env!("LINERA_VERSION_GRAPHQL_HASH")),
-    wit_hash: Cow::Borrowed(env!("LINERA_VERSION_WIT_HASH")),
-};
+pub static VERSION_INFO: VersionInfo = include!(env!("LINERA_VERSION_STATIC_PATH"));
 
 impl std::fmt::Display for VersionInfo {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -41,6 +29,27 @@ impl std::fmt::Display for VersionInfo {
     }
 }
 
+impl CrateVersion {
+    /// Whether this version is known to be API-compatible with `other`.
+    /// Note that this relation _is not_ symmetric.
+    pub fn is_compatible_with(&self, other: &CrateVersion) -> bool {
+        if self.major == 0 {
+            // Cargo conventions decree that if the major version is 0, minor versions
+            // denote backwards-incompatible changes and patch versions denote
+            // backwards-compatible changes.
+            self.minor == other.minor && self.patch <= other.patch
+        } else {
+            self.major == other.major && self.minor <= other.minor
+        }
+    }
+}
+
+impl std::fmt::Display for CrateVersion {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(formatter, "{}.{}.{}", self.major, self.minor, self.patch)
+    }
+}
+
 impl VersionInfo {
     /// Print a human-readable listing of the version information at `info` level.
     pub fn log(&self) {
@@ -56,20 +65,16 @@ impl VersionInfo {
         STRING.as_str()
     }
 
-    /// Returns true if `other` is probably incompatible with `self`. Currently, the
-    /// commit hash of the source code is the only field that can differ.
-    pub fn is_probably_incompatible_with(&self, other: &Self) -> bool {
-        (
-            &self.crate_version,
-            &self.rpc_hash,
-            &self.graphql_hash,
-            &self.wit_hash,
-        ) != (
-            &other.crate_version,
-            &other.rpc_hash,
-            &other.graphql_hash,
-            &other.wit_hash,
-        )
+    fn api_hashes(&self) -> (&Hash, &Hash, &Hash) {
+        (&self.rpc_hash, &self.graphql_hash, &self.wit_hash)
+    }
+
+    /// Whether this version is known to be (remote!) API-compatible with `other`.
+    /// Note that this relation _is not_ symmetric.
+    /// It also may give false negatives.
+    pub fn is_compatible_with(&self, other: &VersionInfo) -> bool {
+        self.api_hashes() == other.api_hashes()
+            || self.crate_version.is_compatible_with(&other.crate_version)
     }
 }
 

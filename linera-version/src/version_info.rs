@@ -2,33 +2,59 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    borrow::Cow,
     io::{Read as _, Write as _},
     path::PathBuf,
 };
 
-#[cfg_attr(linera_version_building, derive(async_graphql::SimpleObject, serde::Deserialize, serde::Serialize))]
-#[derive(
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    Hash,
+#[cfg_attr(
+    linera_version_building,
+    derive(async_graphql::SimpleObject, serde::Deserialize, serde::Serialize)
 )]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct CrateVersion {
+    pub major: u64,
+    pub minor: u64,
+    pub patch: u64,
+}
+
+impl From<semver::Version> for CrateVersion {
+    fn from(
+        semver::Version {
+            major,
+            minor,
+            patch,
+            ..
+        }: semver::Version,
+    ) -> Self {
+        Self {
+            major,
+            minor,
+            patch,
+        }
+    }
+}
+
+pub type Hash = std::borrow::Cow<'static, str>;
+
+#[cfg_attr(
+    linera_version_building,
+    derive(async_graphql::SimpleObject, serde::Deserialize, serde::Serialize)
+)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 /// The version info of a build of Linera.
 pub struct VersionInfo {
     /// The crate version
-    pub crate_version: Cow<'static, str>,
+    pub crate_version: CrateVersion,
     /// The git commit hash
-    pub git_commit: Cow<'static, str>,
+    pub git_commit: Hash,
     /// Whether the git checkout was dirty
     pub git_dirty: bool,
     /// A hash of the RPC API
-    pub rpc_hash: Cow<'static, str>,
+    pub rpc_hash: Hash,
     /// A hash of the GraphQL API
-    pub graphql_hash: Cow<'static, str>,
+    pub graphql_hash: Hash,
     /// A hash of the WIT API
-    pub wit_hash: Cow<'static, str>,
+    pub wit_hash: Hash,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -105,37 +131,49 @@ impl VersionInfo {
         let metadata = cargo_metadata::MetadataCommand::new().no_deps().exec()?;
         let workspace = metadata.workspace_root.as_std_path().display();
 
+        let crate_version = metadata
+            .packages
+            .into_iter()
+            .filter_map(|x| {
+                if x.name == "linera-version" {
+                    Some(x.version)
+                } else {
+                    None
+                }
+            })
+            .next()
+            .expect("no `linera-version` package found")
+            .into();
+
+        let git_commit = run("git", &["rev-parse", "HEAD"], None)?.output[..10]
+            .to_owned()
+            .into();
+
+        let git_dirty = !run("git", &["diff-index", "--quiet", "HEAD"], None)?
+            .status
+            .success();
+
+        let rpc_hash = get_hash(
+            paths,
+            &format!("{workspace}/linera-rpc/tests/staged/formats.yaml"),
+        )?
+        .into();
+
+        let graphql_hash = get_hash(
+            paths,
+            &format!("{workspace}/linera-service-graphql-client/gql/*.graphql"),
+        )?
+        .into();
+
+        let wit_hash = get_hash(paths, &format!("{workspace}/linera-sdk/*.wit"))?.into();
+
         Ok(Self {
-            crate_version: metadata
-                .packages
-                .iter()
-                .filter_map(|x| {
-                    if x.name == "linera-version" {
-                        Some(x.version.to_string())
-                    } else {
-                        None
-                    }
-                })
-                .next()
-                .expect("no `linera-version` package found")
-                .into(),
-            git_commit: run("git", &["rev-parse", "HEAD"], None)?.output[..10]
-                .to_owned()
-                .into(),
-            git_dirty: !run("git", &["diff-index", "--quiet", "HEAD"], None)?
-                .status
-                .success(),
-            rpc_hash: get_hash(
-                paths,
-                &format!("{workspace}/linera-rpc/tests/staged/formats.yaml"),
-            )?
-            .into(),
-            graphql_hash: get_hash(
-                paths,
-                &format!("{workspace}/linera-service-graphql-client/gql/*.graphql"),
-            )?
-            .into(),
-            wit_hash: get_hash(paths, &format!("{workspace}/linera-sdk/*.wit"))?.into(),
+            crate_version,
+            git_commit,
+            git_dirty,
+            rpc_hash,
+            graphql_hash,
+            wit_hash,
         })
     }
 }

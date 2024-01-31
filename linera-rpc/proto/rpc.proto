@@ -53,9 +53,16 @@ service ValidatorNode {
   rpc GetVersionInfo(google.protobuf.Empty) returns (VersionInfo);
 }
 
+// Information about the Linera crate version the validator is running
+message CrateVersion {
+    uint64 major = 1;
+    uint64 minor = 2;
+    uint64 patch = 3;
+}
+
 // Information about the version of Linera the validator is running
 message VersionInfo {
-    string crate_version = 1;
+    CrateVersion crate_version = 1;
     string git_commit = 2;
     bool git_dirty = 3;
     string rpc_hash = 4;
