@@ -19,37 +19,41 @@ targets = ["wasm32-unknown-unknown", "x86_64-unknown-linux-gnu"]
 
 [features]
 wasmer = ["linera-core/wasmer", "linera-execution/wasmer", "linera-storage/wasmer"]
-wasmtime = ["linera-core/wasmtime", "linera-execution/wasmtime", "linera-storage/wasmtime"]
+wasmtime = [
+    "linera-core/wasmtime",
+    "linera-execution/wasmtime",
+    "linera-storage/wasmtime"
+]
 test = []
 
 [dependencies]
-async-graphql = { workspace = true }
-async-trait = { workspace = true }
-bcs = { workspace = true }
-futures = { workspace = true }
-linera-base = { workspace = true }
-linera-sdk-derive = { workspace = true }
-linera-views = { workspace = true }
-log = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-wit-bindgen-guest-rust = { workspace = true }
+async-graphql.workspace = true
+async-trait.workspace = true
+bcs.workspace = true
+futures.workspace = true
+linera-base.workspace = true
+linera-sdk-derive.workspace = true
+linera-views.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+wit-bindgen-guest-rust.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-async-graphql = { workspace = true }
-anyhow = { workspace = true }
-cargo_toml = { workspace = true }
-clap = { workspace = true }
-dashmap = { workspace = true }
-linera-base = { workspace = true }
-linera-chain = { workspace = true }
+async-graphql.workspace = true
+anyhow.workspace = true
+cargo_toml.workspace = true
+clap.workspace = true
+dashmap.workspace = true
+linera-base.workspace = true
+linera-chain.workspace = true
 linera-core = { workspace = true, features = ["test"] }
-linera-execution = { workspace = true }
-linera-storage = { workspace = true }
-serde_json = { workspace = true }
+linera-execution.workspace = true
+linera-storage.workspace = true
+serde_json.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-wasmtime = { workspace = true }
-wit-bindgen-host-wasmtime-rust = { workspace = true }
+wasmtime.workspace = true
+wit-bindgen-host-wasmtime-rust.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-tokio-test = { workspace = true }
+tokio-test.workspace = true

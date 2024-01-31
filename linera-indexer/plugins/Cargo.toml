@@ -20,15 +20,15 @@ wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]
 
 [dependencies]
-async-graphql = { workspace = true }
-async-trait = { workspace = true }
+async-graphql.workspace = true
+async-trait.workspace = true
 axum = { workspace = true, features = ["ws", "headers"] }
-bcs = { workspace = true }
-linera-base = { workspace = true }
-linera-chain = { workspace = true }
-linera-execution = { workspace = true }
-linera-indexer = { workspace = true }
-linera-views = { workspace = true }
-serde = { workspace = true }
-tokio = { workspace = true }
-tracing = { workspace = true }
+bcs.workspace = true
+linera-base.workspace = true
+linera-chain.workspace = true
+linera-execution.workspace = true
+linera-indexer.workspace = true
+linera-views.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true

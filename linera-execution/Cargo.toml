@@ -14,38 +14,45 @@ edition = "2021"
 default = ["wasmer"]
 test = ["tokio/macros"]
 wasmer = [
-    "bytes", "dep:wasmer", "wasm-encoder", "wasmer-middlewares", "wasmparser",
-    "wit-bindgen-host-wasmer-rust",
+    "bytes",
+    "dep:wasmer",
+    "wasm-encoder",
+    "wasmer-middlewares",
+    "wasmparser",
+    "wit-bindgen-host-wasmer-rust"
 ]
 wasmtime = [
-    "dep:wasmtime", "wasm-encoder", "wasmparser", "wit-bindgen-host-wasmtime-rust",
+    "dep:wasmtime",
+    "wasm-encoder",
+    "wasmparser",
+    "wit-bindgen-host-wasmtime-rust"
 ]
 
 [dependencies]
-anyhow = { workspace = true }
-async-graphql = { workspace = true }
-async-lock = { workspace = true }
-async-trait = { workspace = true }
-bcs = { workspace = true }
+anyhow.workspace = true
+async-graphql.workspace = true
+async-lock.workspace = true
+async-trait.workspace = true
+bcs.workspace = true
 bytes = { workspace = true, optional = true }
-clap = { workspace = true }
-custom_debug_derive = { workspace = true }
-dashmap = { workspace = true }
-derive_more = { workspace = true }
-futures = { workspace = true }
-linera-base = { workspace = true }
+clap.workspace = true
+custom_debug_derive.workspace = true
+dashmap.workspace = true
+derive_more.workspace = true
+futures.workspace = true
+linera-base.workspace = true
 linera-views = { workspace = true, features = ["metrics"] }
-linera-views-derive = { workspace = true }
-lru = { workspace = true }
-once_cell = { workspace = true }
-oneshot = { workspace = true }
-prometheus = { workspace = true }
-serde = { workspace = true }
-serde_bytes = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
+linera-views-derive.workspace = true
+lru.workspace = true
+once_cell.workspace = true
+oneshot.workspace = true
+prometheus.workspace = true
+serde.workspace = true
+serde_bytes.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 tokio = { workspace = true, features = ["fs", "rt-multi-thread"] }
-tracing = { workspace = true }
+tracing.workspace = true
 wasm-encoder = { workspace = true, optional = true }
 wasmer = { workspace = true, optional = true }
 wasmer-middlewares = { workspace = true, optional = true }
@@ -55,12 +62,12 @@ wit-bindgen-host-wasmer-rust = { workspace = true, optional = true }
 wit-bindgen-host-wasmtime-rust = { workspace = true, optional = true }
 
 [dev-dependencies]
-anyhow = { workspace = true }
-bcs = { workspace = true }
-counter = { workspace = true }
+anyhow.workspace = true
+bcs.workspace = true
+counter.workspace = true
 linera-base = { workspace = true, features = ["test"] }
 linera-execution = { path = ".", features = ["test"] }
-test-case = { workspace = true }
+test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }

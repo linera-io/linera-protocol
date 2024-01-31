@@ -182,7 +182,7 @@ A simple way to use this on a laptop is the following:
 1. First of all install the program `tokio-console` via `cargo install --locked tokio-console`.
 2. Replace `tokio = "1.25.0"` by `tokio = { version = "1.25.0", features = ["full", "tracing"] }` in `Cargo.toml`
 3. Add `tokio-console = "0.1.9"` and `console-subscriber = "0.1.10"` to `Cargo.toml`
-4. Add `console-subscriber = { workspace = true }` to the relevant `Cargo.toml` subspace
+4. Add `console-subscriber.workspace = true` to the relevant `Cargo.toml` subspace
 5. For the asynchronous tests in question, they have to be of the form `#[tokio::test]`. Tests of the form `#[test_log::test(tokio::test)]` are using a different instrumentation and we can use only one instrumentation at a time. The error is at runtime.
 6. For the test in question add the line `console_subscriber::init();` at the first line of the test.
 7. Run the test in question as usual.

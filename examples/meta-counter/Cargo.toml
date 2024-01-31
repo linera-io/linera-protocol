@@ -5,19 +5,19 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dependencies]
-async-graphql = { workspace = true }
-async-trait = { workspace = true }
-bcs = { workspace = true }
-counter = { workspace = true }
-linera-sdk = { workspace = true }
-log = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
+async-graphql.workspace = true
+async-trait.workspace = true
+bcs.workspace = true
+counter.workspace = true
+linera-sdk.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 linera-sdk = { workspace = true, features = ["test"] }
-webassembly-test = { workspace = true }
+webassembly-test.workspace = true
 
 [[bin]]
 name = "meta_counter_contract"
