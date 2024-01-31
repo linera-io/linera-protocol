@@ -54,6 +54,10 @@ struct ScyllaDbQueries {
     write_batch_delete_prefix_bounded: Query,
     write_batch_deletion: Query,
     write_batch_insertion: Query,
+    find_keys_by_prefix_unbounded: Query,
+    find_keys_by_prefix_bounded: Query,
+    find_key_values_by_prefix_unbounded: Query,
+    find_key_values_by_prefix_bounded: Query,
 }
 
 impl ScyllaDbQueries {
@@ -84,7 +88,27 @@ impl ScyllaDbQueries {
         );
         let write_batch_insertion = Query::new(query);
 
+        let query = format!(
+            "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
+            table_name
+        );
+        let find_keys_by_prefix_unbounded = Query::new(query);
+        let query = format!(
+            "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
+            table_name
+        );
+        let find_keys_by_prefix_bounded = Query::new(query);
 
+        let query = format!(
+            "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
+            table_name
+        );
+        let find_key_values_by_prefix_unbounded = Query::new(query);
+        let query = format!(
+            "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
+            table_name
+        );
+        let find_key_values_by_prefix_bounded = Query::new(query);
 
         Self { read_value,
                contains_key,
@@ -92,6 +116,10 @@ impl ScyllaDbQueries {
                write_batch_delete_prefix_bounded,
                write_batch_deletion,
                write_batch_insertion,
+               find_keys_by_prefix_unbounded,
+               find_keys_by_prefix_bounded,
+               find_key_values_by_prefix_unbounded,
+               find_key_values_by_prefix_bounded,
         }
     }
 }
@@ -373,28 +401,21 @@ impl ScyllaDbStoreInternal {
             ScyllaDbContextError::KeyTooLong
         );
         let session = &store.0;
-        let table_name = &store.1;
         // Read the value of a key
         let len = key_prefix.len();
         let mut keys = Vec::new();
+        let query_unbounded = &store.2.find_keys_by_prefix_unbounded;
+        let query_bounded = &store.2.find_keys_by_prefix_bounded;
         let mut paging_state = None;
         loop {
             let result = match get_upper_bound_option(&key_prefix) {
                 None => {
                     let values = (key_prefix.clone(),);
-                    let query = format!(
-                        "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
-                        table_name
-                    );
-                    session.query_paged(query, values, paging_state).await?
+                    session.query_paged(query_unbounded.clone(), values, paging_state).await?
                 }
                 Some(upper_bound) => {
                     let values = (key_prefix.clone(), upper_bound);
-                    let query = format!(
-                        "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
-                        table_name
-                    );
-                    session.query_paged(query, values, paging_state).await?
+                    session.query_paged(query_bounded.clone(), values, paging_state).await?
                 }
             };
             if let Some(rows) = result.rows {
@@ -420,28 +441,21 @@ impl ScyllaDbStoreInternal {
             ScyllaDbContextError::KeyTooLong
         );
         let session = &store.0;
-        let table_name = &store.1;
         // Read the value of a key
         let len = key_prefix.len();
         let mut key_values = Vec::new();
+        let query_unbounded = &store.2.find_key_values_by_prefix_unbounded;
+        let query_bounded = &store.2.find_key_values_by_prefix_bounded;
         let mut paging_state = None;
         loop {
             let result = match get_upper_bound_option(&key_prefix) {
                 None => {
                     let values = (key_prefix.clone(),);
-                    let query = format!(
-                        "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
-                        table_name
-                    );
-                    session.query_paged(query, values, paging_state).await?
+                    session.query_paged(query_unbounded.clone(), values, paging_state).await?
                 }
                 Some(upper_bound) => {
                     let values = (key_prefix.clone(), upper_bound);
-                    let query = format!(
-                        "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
-                        table_name
-                    );
-                    session.query_paged(query, values, paging_state).await?
+                    session.query_paged(query_bounded.clone(), values, paging_state).await?
                 }
             };
             if let Some(rows) = result.rows {
