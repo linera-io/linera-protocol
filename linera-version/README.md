@@ -1,8 +1,10 @@
 <!-- cargo-rdme start -->
 
-This module tracks and makes available the version and build information of this build of the Linera protocol.
 
-<!-- carg-rdme end -->
+This crate is in charge of extracting version information from the Linera build, for
+troubleshooting information and version compatibility checks.
+
+<!-- cargo-rdme end -->
 
 ## Contributing
 

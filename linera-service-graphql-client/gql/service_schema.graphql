@@ -252,6 +252,12 @@ input Committee {
 	policy: ResourceControlPolicy!
 }
 
+type CrateVersion {
+	major: Int!
+	minor: Int!
+	patch: Int!
+}
+
 """
 A Sha3-256 value
 """
@@ -738,7 +744,7 @@ type VersionInfo {
 	"""
 	The crate version
 	"""
-	crateVersion: String!
+	crateVersion: CrateVersion!
 	"""
 	The git commit hash
 	"""
