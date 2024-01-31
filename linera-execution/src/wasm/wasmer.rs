@@ -75,6 +75,9 @@ pub(crate) struct WasmerContractInstance<Runtime> {
 
     /// The Wasmer instance.
     instance: Instance,
+
+    /// The starting amount of fuel.
+    initial_fuel: u64,
 }
 
 impl<Runtime> WasmerContractInstance<Runtime>
@@ -82,9 +85,9 @@ where
     Runtime: ContractRuntime + Send + Unpin,
 {
     fn configure_initial_fuel(&mut self) -> Result<(), ExecutionError> {
-        let remaining_points = self.runtime.remaining_fuel()?;
+        self.initial_fuel = self.runtime.remaining_fuel()?;
 
-        metering::set_remaining_points(&mut self.store, &self.instance, remaining_points);
+        metering::set_remaining_points(&mut self.store, &self.instance, self.initial_fuel);
 
         Ok(())
     }
@@ -149,6 +152,7 @@ where
             store,
             runtime,
             instance,
+            initial_fuel: 0,
         })
     }
 }
