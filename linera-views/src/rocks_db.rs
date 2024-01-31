@@ -372,8 +372,10 @@ pub fn create_rocks_db_common_config() -> CommonStoreConfig {
 }
 
 /// Creates a RocksDB database client to be used for tests.
+/// The tempoorary directory has to be carried because if it goes
+/// out of scope then the RocksDb client can become unstable.
 #[cfg(any(test, feature = "test"))]
-pub async fn create_rocks_db_test_store() -> RocksDbStore {
+pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
     let dir = TempDir::new().unwrap();
     let path_buf = dir.path().to_path_buf();
     let common_config = create_rocks_db_common_config();
@@ -384,7 +386,7 @@ pub async fn create_rocks_db_test_store() -> RocksDbStore {
     let (store, _) = RocksDbStore::new_for_testing(store_config)
         .await
         .expect("client");
-    store
+    (store, dir)
 }
 
 /// An implementation of [`crate::common::Context`] based on RocksDB
@@ -457,14 +459,6 @@ impl<E: Clone + Send + Sync> RocksDbContext<E> {
             extra,
         }
     }
-}
-
-/// Create a [`crate::common::Context`] that can be used for tests.
-#[cfg(any(test, feature = "test"))]
-pub async fn create_rocks_db_test_context() -> RocksDbContext<()> {
-    let store = create_rocks_db_test_store().await;
-    let base_key = vec![];
-    RocksDbContext::new(store, base_key, ())
 }
 
 /// The error type for [`RocksDbContext`]

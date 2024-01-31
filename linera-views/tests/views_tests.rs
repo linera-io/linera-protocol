@@ -34,7 +34,10 @@ use std::{
 };
 
 #[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::{create_rocks_db_test_store, RocksDbContext, RocksDbStore};
+use {
+    linera_views::rocks_db::{create_rocks_db_test_store, RocksDbContext, RocksDbStore},
+    tempfile::TempDir,
+};
 
 #[cfg(feature = "aws")]
 use linera_views::{
@@ -162,6 +165,7 @@ impl StateStore for LruMemoryStore {
 pub struct RocksDbTestStore {
     store: RocksDbStore,
     accessed_chains: BTreeSet<usize>,
+    _dir: TempDir,
 }
 
 #[cfg(feature = "rocksdb")]
@@ -170,11 +174,12 @@ impl StateStore for RocksDbTestStore {
     type Context = RocksDbContext<usize>;
 
     async fn new() -> Self {
-        let store = create_rocks_db_test_store().await;
+        let (store, dir) = create_rocks_db_test_store().await;
         let accessed_chains = BTreeSet::new();
         RocksDbTestStore {
             store,
             accessed_chains,
+            _dir: dir,
         }
     }
 
