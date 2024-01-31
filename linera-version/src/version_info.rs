@@ -7,15 +7,13 @@ use std::{
     path::PathBuf,
 };
 
+#[cfg_attr(linera_version_building, derive(async_graphql::SimpleObject, serde::Deserialize, serde::Serialize))]
 #[derive(
     Clone,
     Debug,
     PartialEq,
     Eq,
     Hash,
-    async_graphql::SimpleObject,
-    serde::Deserialize,
-    serde::Serialize,
 )]
 /// The version info of a build of Linera.
 pub struct VersionInfo {

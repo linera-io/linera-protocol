@@ -11,6 +11,8 @@ fn main() {
         println!("cargo:rerun-if-changed={}", path.display());
     }
 
+    println!("cargo:rustc-cfg=linera_version_building");
+
     println!(
         "cargo:rustc-env=LINERA_VERSION_CRATE_VERSION={}",
         version_info.crate_version
@@ -20,7 +22,7 @@ fn main() {
         version_info.git_commit
     );
     if version_info.git_dirty {
-        println!("cargo:rustc-cfg=git_dirty");
+        println!("cargo:rustc-cfg=linera_version_git_dirty");
     }
     println!(
         "cargo:rustc-env=LINERA_VERSION_RPC_HASH={}",

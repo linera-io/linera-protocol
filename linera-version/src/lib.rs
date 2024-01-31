@@ -9,9 +9,9 @@ use std::borrow::Cow;
 pub static VERSION_INFO: VersionInfo = VersionInfo {
     crate_version: Cow::Borrowed(env!("LINERA_VERSION_CRATE_VERSION")),
     git_commit: Cow::Borrowed(env!("LINERA_VERSION_GIT_COMMIT")),
-    #[cfg(git_dirty)]
+    #[cfg(linera_version_git_dirty)]
     git_dirty: true,
-    #[cfg(not(git_dirty))]
+    #[cfg(not(linera_version_git_dirty))]
     git_dirty: false,
     rpc_hash: Cow::Borrowed(env!("LINERA_VERSION_RPC_HASH")),
     graphql_hash: Cow::Borrowed(env!("LINERA_VERSION_GRAPHQL_HASH")),
