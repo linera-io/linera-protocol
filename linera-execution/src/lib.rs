@@ -452,8 +452,8 @@ pub trait ContractRuntime: BaseRuntime {
     /// Returns the amount of execution fuel remaining before execution is aborted.
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError>;
 
-    /// Sets the amount of execution fuel remaining before execution is aborted.
-    fn set_remaining_fuel(&mut self, remaining_fuel: u64) -> Result<(), ExecutionError>;
+    /// Consumes some of the execution fuel.
+    fn consume_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError>;
 
     /// Calls another application. Forwarded sessions will now be visible to
     /// `callee_id` (but not to the caller any more).

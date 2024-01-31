@@ -98,7 +98,10 @@ where
             MeteringPoints::Remaining(fuel) => fuel,
         };
 
-        self.runtime.set_remaining_fuel(remaining_fuel)
+        assert!(self.initial_fuel >= remaining_fuel);
+
+        self.runtime
+            .consume_fuel(self.initial_fuel - remaining_fuel)
     }
 }
 
