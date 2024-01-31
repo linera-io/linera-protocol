@@ -3,6 +3,7 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
+#[allow(dead_code)]
 mod utils;
 
 use self::utils::create_dummy_user_application_description;
