@@ -55,7 +55,7 @@ pub type RocksDbStorage<C> = DbStorage<RocksDbStore, C>;
 
 #[cfg(any(test, feature = "test"))]
 impl RocksDbStorage<TestClock> {
-    pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
+    pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> (Self, TempDir) {
         let dir = TempDir::new().unwrap();
         let path_buf = dir.path().to_path_buf();
         let common_config = create_rocks_db_common_config();
@@ -67,7 +67,7 @@ impl RocksDbStorage<TestClock> {
             RocksDbStorage::new_for_testing(store_config, wasm_runtime, TestClock::new())
                 .await
                 .expect("storage");
-        storage
+        (storage, dir)
     }
 
     pub async fn new_for_testing(

@@ -9,7 +9,7 @@ use std::mem;
 /// Tests if released guards don't use memory.
 #[tokio::test]
 async fn guards_dont_leak() -> Result<(), anyhow::Error> {
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     let chain_id = ChainId::root(1);
     // There should be no active guards when initialized
     assert_eq!(storage.client.guards.active_guards(), 0);

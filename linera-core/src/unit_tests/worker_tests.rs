@@ -382,7 +382,7 @@ async fn test_memory_handle_block_proposal_bad_signature() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_bad_signature() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_block_proposal_bad_signature(storage).await;
 }
 
@@ -452,7 +452,7 @@ async fn test_memory_handle_block_proposal_zero_amount() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_zero_amount() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_block_proposal_zero_amount(storage).await;
 }
 
@@ -527,7 +527,7 @@ async fn test_memory_handle_block_proposal_ticks() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_ticks() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_block_proposal_ticks(storage).await;
 }
 
@@ -618,7 +618,7 @@ async fn test_memory_handle_block_proposal_unknown_sender() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_unknown_sender() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_block_proposal_unknown_sender(storage).await;
 }
 
@@ -688,7 +688,7 @@ async fn test_memory_handle_block_proposal_with_chaining() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_with_chaining() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_block_proposal_with_chaining(storage).await;
 }
 
@@ -797,7 +797,7 @@ async fn test_memory_handle_block_proposal_with_incoming_messages() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_with_incoming_messages() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_block_proposal_with_incoming_messages(storage).await;
 }
 
@@ -1171,7 +1171,7 @@ async fn test_memory_handle_block_proposal_exceed_balance() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_exceed_balance() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_block_proposal_exceed_balance(storage).await;
 }
 
@@ -1243,7 +1243,7 @@ async fn test_memory_handle_block_proposal() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_block_proposal(storage).await;
 }
 
@@ -1311,7 +1311,7 @@ async fn test_memory_handle_block_proposal_replay() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_replay() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_block_proposal_replay(storage).await;
 }
 
@@ -1377,7 +1377,7 @@ async fn test_memory_handle_certificate_unknown_sender() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_unknown_sender() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_certificate_unknown_sender(storage).await;
 }
 
@@ -1434,7 +1434,7 @@ async fn test_memory_handle_certificate_with_open_chain() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_with_open_chain() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_certificate_with_open_chain(storage).await;
 }
 
@@ -1529,7 +1529,7 @@ async fn test_memory_handle_certificate_wrong_owner() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_wrong_owner() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_certificate_wrong_owner(storage).await;
 }
 
@@ -1592,7 +1592,7 @@ async fn test_memory_handle_certificate_bad_block_height() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_bad_block_height() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_certificate_bad_block_height(storage).await;
 }
 
@@ -1661,7 +1661,7 @@ async fn test_memory_handle_certificate_with_anticipated_incoming_message() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_with_anticipated_incoming_message() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_certificate_with_anticipated_incoming_message(storage).await;
 }
 
@@ -1785,7 +1785,7 @@ async fn test_memory_handle_certificate_receiver_balance_overflow() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_receiver_balance_overflow() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_certificate_receiver_balance_overflow(storage).await;
 }
 
@@ -1877,7 +1877,7 @@ async fn test_memory_handle_certificate_receiver_equal_sender() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_receiver_equal_sender() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_certificate_receiver_equal_sender(storage).await;
 }
 
@@ -1974,7 +1974,7 @@ async fn test_memory_handle_cross_chain_request() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_cross_chain_request() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_cross_chain_request(storage).await;
 }
 
@@ -2070,7 +2070,7 @@ async fn test_memory_handle_cross_chain_request_no_recipient_chain() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_cross_chain_request_no_recipient_chain() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_cross_chain_request_no_recipient_chain(storage).await;
 }
 
@@ -2128,7 +2128,7 @@ async fn test_memory_handle_cross_chain_request_no_recipient_chain_on_client() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_cross_chain_request_no_recipient_chain_on_client() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_cross_chain_request_no_recipient_chain_on_client(storage).await;
 }
 
@@ -2198,7 +2198,7 @@ async fn test_memory_handle_certificate_to_active_recipient() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_to_active_recipient() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_certificate_to_active_recipient(storage).await;
 }
 
@@ -2382,7 +2382,7 @@ async fn test_memory_handle_certificate_to_inactive_recipient() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_to_inactive_recipient() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_certificate_to_inactive_recipient(storage).await;
 }
 
@@ -2450,7 +2450,7 @@ async fn test_memory_handle_certificate_with_rejected_transfer() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_with_rejected_transfer() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_handle_certificate_with_rejected_transfer(storage).await;
 }
 
@@ -2734,7 +2734,7 @@ async fn test_memory_chain_creation_with_committee_creation() {
 #[test(tokio::test)]
 async fn test_rocks_db_chain_creation_with_committee_creation() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_chain_creation_with_committee_creation(storage).await;
 }
 
@@ -3171,7 +3171,7 @@ async fn test_memory_transfers_and_committee_creation() {
 #[test(tokio::test)]
 async fn test_rocks_db_transfers_and_committee_creation() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_transfers_and_committee_creation(storage).await;
 }
 
@@ -3314,7 +3314,7 @@ async fn test_memory_transfers_and_committee_removal() {
 #[test(tokio::test)]
 async fn test_rocks_db_transfers_and_committee_removal() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_transfers_and_committee_removal(storage).await;
 }
 
@@ -3726,7 +3726,7 @@ async fn test_memory_leader_timeouts() {
 #[test(tokio::test)]
 async fn test_rocks_db_leader_timeouts() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_leader_timeouts(storage).await;
 }
 
@@ -3962,7 +3962,7 @@ async fn test_memory_round_types() {
 #[test(tokio::test)]
 async fn test_rocks_db_round_types() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_round_types(storage).await;
 }
 
@@ -4075,7 +4075,7 @@ async fn test_memory_fast_proposal_is_locked() {
 #[test(tokio::test)]
 async fn test_rocks_db_fast_proposal_is_locked() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let storage = RocksDbStorage::make_test_storage(None).await;
+    let (storage, _dir) = RocksDbStorage::make_test_storage(None).await;
     run_test_fast_proposal_is_locked(storage).await;
 }
 
