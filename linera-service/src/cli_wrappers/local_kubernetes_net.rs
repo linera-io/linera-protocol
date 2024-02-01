@@ -14,7 +14,13 @@ use futures::{future, lock::Mutex};
 use k8s_openapi::api::core::v1::Pod;
 use kube::{api::ListParams, Api, Client};
 use linera_base::data_types::Amount;
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicU64, AtomicUsize, Ordering},
+        Arc,
+    },
+};
 use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
 
@@ -25,10 +31,8 @@ use {
 };
 
 #[cfg(any(test, feature = "test"))]
-static SHARED_LOCAL_KUBERNETES_TESTING_NET: OnceCell<(
-    Arc<Mutex<LocalKubernetesNet>>,
-    ClientWrapper,
-)> = OnceCell::const_new();
+static SHARED_LOCAL_KUBERNETES_TESTING_NET: OnceCell<(LocalKubernetesNet, ClientWrapper)> =
+    OnceCell::const_new();
 
 /// The information needed to start a [`LocalKubernetesNet`].
 pub struct LocalKubernetesNetConfig {
@@ -52,8 +56,8 @@ pub struct SharedLocalKubernetesNetTestingConfig {
 #[derive(Clone)]
 pub struct LocalKubernetesNet {
     network: Network,
-    testing_prng_seed: Option<u64>,
-    next_client_id: usize,
+    testing_prng_seed: Option<Arc<AtomicU64>>,
+    next_client_id: Arc<AtomicUsize>,
     tmp_dir: Arc<TempDir>,
     binaries: Option<Option<PathBuf>>,
     kubectl_instance: Arc<Mutex<KubectlInstance>>,
@@ -120,7 +124,7 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
             self.num_shards,
         )?;
 
-        let client = net.make_client().await;
+        let client = net.make_client();
         net.generate_initial_validator_config().await.unwrap();
         client
             .create_genesis_config(self.num_other_initial_chains, self.initial_amount)
@@ -135,7 +139,7 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
 #[cfg(any(test, feature = "test"))]
 #[async_trait]
 impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
-    type Net = Arc<Mutex<LocalKubernetesNet>>;
+    type Net = LocalKubernetesNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
         let seed = 37;
@@ -162,7 +166,7 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
                 )
                 .expect("Creating LocalKubernetesNet should not fail");
 
-                let initial_client = net.make_client().await;
+                let initial_client = net.make_client();
                 if num_validators > 0 {
                     net.generate_initial_validator_config().await.unwrap();
                     initial_client
@@ -172,12 +176,12 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
                     net.run().await.unwrap();
                 }
 
-                (Arc::new(Mutex::new(net)), initial_client)
+                (net, initial_client)
             })
             .await;
 
         let mut net = net.clone();
-        let client = net.make_client().await;
+        let client = net.make_client();
         // The tests assume we've created a genesis config with 10
         // chains with 10 tokens each. We create the first chain here
         client.wallet_init(&[], FaucetOption::None).await.unwrap();
@@ -191,28 +195,6 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
         }
 
         Ok((net, client))
-    }
-}
-
-#[async_trait]
-impl LineraNet for Arc<Mutex<LocalKubernetesNet>> {
-    async fn ensure_is_running(&mut self) -> Result<()> {
-        let self_clone = self.clone();
-        let mut self_lock = self_clone.lock().await;
-
-        self_lock.ensure_is_running().await
-    }
-
-    async fn make_client(&mut self) -> ClientWrapper {
-        let self_clone = self.clone();
-        let mut self_lock = self_clone.lock().await;
-
-        self_lock.make_client().await
-    }
-
-    async fn terminate(&mut self) -> Result<()> {
-        // Users are responsible for killing the clusters if they want to
-        Ok(())
     }
 }
 
@@ -257,18 +239,15 @@ impl LineraNet for LocalKubernetesNet {
         Ok(())
     }
 
-    async fn make_client(&mut self) -> ClientWrapper {
-        let client = ClientWrapper::new(
+    fn make_client(&mut self) -> ClientWrapper {
+        ClientWrapper::new(
             self.tmp_dir.clone(),
             self.network,
-            self.testing_prng_seed,
-            self.next_client_id,
-        );
-        if let Some(seed) = self.testing_prng_seed {
-            self.testing_prng_seed = Some(seed + 1);
-        }
-        self.next_client_id += 1;
-        client
+            self.testing_prng_seed
+                .as_ref()
+                .map(|seed| seed.fetch_add(1, Ordering::SeqCst)),
+            self.next_client_id.fetch_add(1, Ordering::SeqCst),
+        )
     }
 
     async fn terminate(&mut self) -> Result<()> {
@@ -316,8 +295,8 @@ impl LocalKubernetesNet {
     ) -> Result<Self> {
         Ok(Self {
             network,
-            testing_prng_seed,
-            next_client_id: 0,
+            testing_prng_seed: testing_prng_seed.map(|seed| Arc::new(AtomicU64::new(seed))),
+            next_client_id: Arc::default(),
             tmp_dir: Arc::new(tempdir()?),
             binaries,
             kubectl_instance: Arc::new(Mutex::new(kubectl_instance)),
@@ -381,9 +360,10 @@ impl LocalKubernetesNet {
     async fn generate_initial_validator_config(&mut self) -> Result<()> {
         let mut command = self.command_for_binary("linera-server").await?;
         command.arg("generate");
-        if let Some(seed) = self.testing_prng_seed {
-            command.arg("--testing-prng-seed").arg(seed.to_string());
-            self.testing_prng_seed = Some(seed + 1);
+        if let Some(seed) = &self.testing_prng_seed {
+            command
+                .arg("--testing-prng-seed")
+                .arg(seed.fetch_add(1, Ordering::SeqCst).to_string());
         }
         command.arg("--validators");
         for i in 0..self.num_initial_validators {

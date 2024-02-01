@@ -160,7 +160,7 @@ impl LineraNetConfig for LocalNetConfig {
             self.num_initial_validators,
             self.num_shards,
         )?;
-        let client = net.make_client().await;
+        let client = net.make_client();
         ensure!(
             self.num_initial_validators > 0,
             "There should be at least one initial validator"
@@ -197,7 +197,7 @@ impl LineraNetConfig for LocalNetTestingConfig {
             num_validators,
             num_shards,
         )?;
-        let client = net.make_client().await;
+        let client = net.make_client();
         if num_validators > 0 {
             net.generate_initial_validator_config().await.unwrap();
             client
@@ -219,7 +219,7 @@ impl LineraNet for LocalNet {
         Ok(())
     }
 
-    async fn make_client(&mut self) -> ClientWrapper {
+    fn make_client(&mut self) -> ClientWrapper {
         let client = ClientWrapper::new(
             self.tmp_dir.clone(),
             self.network,

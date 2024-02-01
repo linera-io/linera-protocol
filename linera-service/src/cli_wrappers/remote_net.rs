@@ -38,7 +38,7 @@ impl LineraNetConfig for RemoteNetTestingConfig {
             .await
             .expect("Creating RemoteNet should not fail");
 
-        let client = net.make_client().await;
+        let client = net.make_client();
         // The tests assume we've created a genesis config with 10
         // chains with 10 tokens each. We create the first chain here
         client
@@ -78,7 +78,7 @@ impl LineraNet for RemoteNet {
         Ok(())
     }
 
-    async fn make_client(&mut self) -> ClientWrapper {
+    fn make_client(&mut self) -> ClientWrapper {
         let client = ClientWrapper::new(
             self.tmp_dir.clone(),
             self.network,
