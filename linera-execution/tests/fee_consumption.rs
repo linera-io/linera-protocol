@@ -24,6 +24,7 @@ use test_case::test_case;
 /// Tests if the chain balance is updated based on the fees spent for consuming resources.
 #[test_case(vec![]; "without any costs")]
 #[test_case(vec![FeeSpend::Fuel(100)]; "with only execution costs")]
+#[test_case(vec![FeeSpend::Read(vec![0, 1], None)]; "with only an empty read")]
 #[tokio::test]
 async fn test_fee_consumption(spends: Vec<FeeSpend>) -> anyhow::Result<()> {
     let state = SystemExecutionState {
@@ -117,6 +118,8 @@ async fn test_fee_consumption(spends: Vec<FeeSpend>) -> anyhow::Result<()> {
 pub enum FeeSpend {
     /// Consume some execution fuel.
     Fuel(u64),
+    /// Reads from storage.
+    Read(Vec<u8>, Option<Vec<u8>>),
 }
 
 impl FeeSpend {
@@ -124,6 +127,14 @@ impl FeeSpend {
     pub fn amount(&self, policy: &ResourceControlPolicy) -> Amount {
         match self {
             FeeSpend::Fuel(units) => policy.fuel_unit.saturating_mul(*units as u128),
+            FeeSpend::Read(_key, value) => {
+                let value_read_fee = value
+                    .as_ref()
+                    .map(|value| Amount::from(value.len() as u128))
+                    .unwrap_or(Amount::ZERO);
+
+                policy.read_operation.saturating_add(value_read_fee)
+            }
         }
     }
 
@@ -131,6 +142,12 @@ impl FeeSpend {
     pub fn execute(self, runtime: &mut impl ContractRuntime) -> Result<(), ExecutionError> {
         match self {
             FeeSpend::Fuel(units) => runtime.consume_fuel(units),
+            FeeSpend::Read(key, value) => {
+                let promise = runtime.read_value_bytes_new(key)?;
+                let response = runtime.read_value_bytes_wait(&promise)?;
+                assert_eq!(response, value);
+                Ok(())
+            }
         }
     }
 }
