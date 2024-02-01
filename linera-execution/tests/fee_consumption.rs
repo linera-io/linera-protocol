@@ -25,6 +25,10 @@ use test_case::test_case;
 #[test_case(vec![]; "without any costs")]
 #[test_case(vec![FeeSpend::Fuel(100)]; "with only execution costs")]
 #[test_case(vec![FeeSpend::Read(vec![0, 1], None)]; "with only an empty read")]
+#[test_case(vec![
+    FeeSpend::Read(vec![0, 1], None),
+    FeeSpend::Fuel(207),
+]; "with execution and an empty read")]
 #[tokio::test]
 async fn test_fee_consumption(spends: Vec<FeeSpend>) -> anyhow::Result<()> {
     let state = SystemExecutionState {
