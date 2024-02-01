@@ -101,10 +101,8 @@ where
             .fuel_consumed()
             .expect("Failed to read consumed fuel");
         let runtime = &mut self.store.data_mut().runtime;
-        let initial_fuel = runtime.remaining_fuel()?;
-        let remaining_fuel = initial_fuel.saturating_sub(consumed_fuel);
 
-        runtime.set_remaining_fuel(remaining_fuel)
+        runtime.consume_fuel(consumed_fuel)
     }
 }
 
