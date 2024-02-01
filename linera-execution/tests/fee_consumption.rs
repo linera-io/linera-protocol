@@ -29,6 +29,7 @@ use test_case::test_case;
     FeeSpend::Read(vec![0, 1], None),
     FeeSpend::Fuel(207),
 ]; "with execution and an empty read")]
+// TODO(#1601): Add more test cases
 #[tokio::test]
 async fn test_fee_consumption(spends: Vec<FeeSpend>) -> anyhow::Result<()> {
     let state = SystemExecutionState {
