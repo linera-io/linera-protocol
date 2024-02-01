@@ -58,7 +58,7 @@ RUN cargo build --release \
     --bin linera-proxy \
     --bin linera-server \
     --bin linera-db \
-    --features scylladb
+    --features scylladb,kubernetes
 
 RUN mv \
     target/"$target"/release/linera \
@@ -67,7 +67,7 @@ RUN mv \
     target/"$target"/release/linera-db \
     ./
 
-RUN strip linera linera-proxy linera-server linera-db
+RUN strip linera linera-db
 
 # Optionally copy binaries instead of using the build images above
 FROM scratch AS builder_copy

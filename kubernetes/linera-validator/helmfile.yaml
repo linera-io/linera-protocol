@@ -8,6 +8,7 @@ repositories:
   - name: grafana
     url: https://grafana.github.io/helm-charts
 
+
 releases:
   - name: linera-core
     namespace: default
@@ -26,6 +27,10 @@ releases:
         value: {{ env "LINERA_HELMFILE_SET_GENESIS_CONFIG" | default "working/genesis.json" }}
       - name: numShards
         value: {{ env "LINERA_HELMFILE_SET_NUM_SHARDS" | default 10 }}
+  - name: pyroscope
+    namespace: pyroscope
+    chart: grafana/pyroscope
+    timeout: 600
   - name: scylla
     namespace: scylla
     chart: scylla/scylla
