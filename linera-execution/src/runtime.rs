@@ -925,9 +925,12 @@ impl ContractRuntime for ContractSyncRuntime {
     fn set_remaining_fuel(&mut self, remaining_fuel: u64) -> Result<(), ExecutionError> {
         let mut this = self.inner();
         let previous_fuel = this.resource_controller.remaining_fuel();
-        assert!(previous_fuel >= remaining_fuel);
-        this.resource_controller
-            .track_fuel(previous_fuel - remaining_fuel)
+        // This is temporary. The real fix is #1599.
+        if previous_fuel > remaining_fuel {
+            this.resource_controller
+                .track_fuel(previous_fuel - remaining_fuel)?;
+        }
+        Ok(())
     }
 
     fn try_call_application(
