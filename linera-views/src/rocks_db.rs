@@ -372,7 +372,7 @@ pub fn create_rocks_db_common_config() -> CommonStoreConfig {
 }
 
 /// Creates a RocksDB database client to be used for tests.
-/// The tempoorary directory has to be carried because if it goes
+/// The temporary directory has to be carried because if it goes
 /// out of scope then the RocksDB client can become unstable.
 #[cfg(any(test, feature = "test"))]
 pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
