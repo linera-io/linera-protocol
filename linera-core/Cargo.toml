@@ -15,8 +15,17 @@ default = ["wasmer", "rocksdb"]
 wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 test = [
-    "anyhow", "linera-base/test", "linera-chain/test", "linera-execution/test", "linera-storage/test",
-    "linera-views/test", "proptest", "tempfile", "test-log", "test-strategy", "tokio/parking_lot",
+    "anyhow",
+    "linera-base/test",
+    "linera-chain/test",
+    "linera-execution/test",
+    "linera-storage/test",
+    "linera-views/test",
+    "proptest",
+    "tempfile",
+    "test-log",
+    "test-strategy",
+    "tokio/parking_lot"
 ]
 rocksdb = ["linera-views/rocksdb", "linera-storage/rocksdb"]
 aws = ["linera-views/aws", "linera-storage/aws"]
@@ -24,41 +33,41 @@ scylladb = ["linera-views/scylladb", "linera-storage/scylladb"]
 
 [dependencies]
 anyhow = { workspace = true, optional = true }
-async-graphql = { workspace = true }
-async-trait = { workspace = true }
-bcs = { workspace = true }
-dashmap = { workspace = true }
-futures = { workspace = true }
-linera-base = { workspace = true }
-linera-chain = { workspace = true }
-linera-execution = { workspace = true }
-linera-storage = { workspace = true }
-linera-views = { workspace = true }
-lru = { workspace = true }
-prometheus = { workspace = true }
+async-graphql.workspace = true
+async-trait.workspace = true
+bcs.workspace = true
+dashmap.workspace = true
+futures.workspace = true
+linera-base.workspace = true
+linera-chain.workspace = true
+linera-execution.workspace = true
+linera-storage.workspace = true
+linera-views.workspace = true
+lru.workspace = true
+prometheus.workspace = true
 proptest = { workspace = true, optional = true }
-rand = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 tempfile = { workspace = true, optional = true }
 test-log = { workspace = true, optional = true }
 test-strategy = { workspace = true, optional = true }
-thiserror = { workspace = true }
-tokio = { workspace = true }
-tokio-stream = { workspace = true }
-tonic = { workspace = true }
-tracing = { workspace = true }
+thiserror.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tonic.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
-counter = { workspace = true }
+counter.workspace = true
 criterion = { workspace = true, features = ["async_tokio"] }
-fungible = { workspace = true }
+fungible.workspace = true
 linera-core = { path = ".", default-features = false, features = ["test"] }
-linera-views = { workspace = true }
-meta-counter = { workspace = true }
-serde_json = { workspace = true }
-social = { workspace = true }
-test-case = { workspace = true }
+linera-views.workspace = true
+meta-counter.workspace = true
+serde_json.workspace = true
+social.workspace = true
+test-case.workspace = true
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 
 [package.metadata.cargo-machete]

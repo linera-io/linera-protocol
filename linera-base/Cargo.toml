@@ -14,28 +14,28 @@ edition = "2021"
 test = ["test-strategy", "proptest"]
 
 [dependencies]
-async-graphql = { workspace = true }
-bcs = { workspace = true }
-ed25519-dalek = { workspace = true }
-envy = { workspace = true }
-generic-array = { workspace = true }
-hex = { workspace = true }
+async-graphql.workspace = true
+bcs.workspace = true
+ed25519-dalek.workspace = true
+envy.workspace = true
+generic-array.workspace = true
+hex.workspace = true
 proptest = { workspace = true, optional = true }
-serde = { workspace = true }
-serde-name = { workspace = true }
-serde_bytes = { workspace = true }
-sha3 = { workspace = true }
+serde.workspace = true
+serde-name.workspace = true
+serde_bytes.workspace = true
+sha3.workspace = true
 test-strategy = { workspace = true, optional = true }
-thiserror = { workspace = true }
-tracing = { workspace = true }
+thiserror.workspace = true
+tracing.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-chrono = { workspace = true }
-rand07 = { workspace = true }
-prometheus = { workspace = true }
+chrono.workspace = true
+rand07.workspace = true
+prometheus.workspace = true
 
 [dev-dependencies]
-custom_debug_derive = { workspace = true }
+custom_debug_derive.workspace = true
 linera-base = { path = ".", features = ["test"] }
 
 [package.metadata.cargo-machete]

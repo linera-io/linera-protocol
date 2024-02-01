@@ -11,17 +11,17 @@ license = "Apache-2.0"
 
 [dependencies]
 graphql_client = { version = "0.13", features = [ "reqwest-rustls" ] }
-linera-base = { workspace = true }
+linera-base.workspace = true
 serde = { workspace = true, features = [ "derive" ] }
-serde_json = { workspace = true }
+serde_json.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-linera-execution = { workspace = true }
+linera-execution.workspace = true
 
 [dev-dependencies]
-linera-service = { workspace = true }
-tempfile = { workspace = true }
+linera-service.workspace = true
+tempfile.workspace = true
 test-log = { workspace = true, features = ["trace"] }
 tokio = { workspace = true, features = ["full", "test-util"] }
-tracing = { workspace = true }
+tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["fmt"] }

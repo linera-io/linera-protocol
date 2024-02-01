@@ -135,7 +135,7 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Install cargo-sort
       run: |
-        cargo install cargo-sort --locked
+        cargo install cargo-sort --git https://github.com/DevinR528/cargo-sort/#v1.1
     - name: Check formatting
       run: |
         cargo fmt -- --check

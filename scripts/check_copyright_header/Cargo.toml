@@ -5,7 +5,7 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dependencies]
-thiserror = { workspace = true }
+thiserror.workspace = true
 
 [[bin]]
 name = "check_copyright_header"

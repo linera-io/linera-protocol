@@ -13,20 +13,20 @@ license = "Apache-2.0"
 crate-type = ["cdylib"]
 
 [dependencies]
-anyhow = { workspace = true }
+anyhow.workspace = true
 console_error_panic_hook = "0.1"
-futures = { workspace = true }
+futures.workspace = true
 graphql_client = { version = "0.13", features = [ "reqwest-rustls" ] }
-hex = { workspace = true }
+hex.workspace = true
 js-sys = "0.3"
-linera-base = { workspace = true }
-linera-indexer-graphql-client = { workspace = true }
-linera-service-graphql-client = { workspace = true }
-once_cell = { workspace = true }
-reqwest = { workspace = true }
+linera-base.workspace = true
+linera-indexer-graphql-client.workspace = true
+linera-service-graphql-client.workspace = true
+once_cell.workspace = true
+reqwest.workspace = true
 serde = { workspace = true, features = [ "derive" ] }
 serde-wasm-bindgen = "0.5"
-serde_json = { workspace = true }
+serde_json.workspace = true
 url = "2.4"
 uuid = { version = "1.5", features = [ "v3" ] }
 wasm-bindgen = "0.2"

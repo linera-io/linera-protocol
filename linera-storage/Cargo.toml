@@ -17,7 +17,7 @@ test = [
     "tokio/test-util",
     "tokio/time",
     "linera-execution/test",
-    "linera-views/test",
+    "linera-views/test"
 ]
 wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]
@@ -26,20 +26,20 @@ rocksdb = ["linera-views/rocksdb"]
 scylladb = ["linera-views/scylladb"]
 
 [dependencies]
-async-trait = { workspace = true }
-bcs = { workspace = true }
-dashmap = { workspace = true }
-futures = { workspace = true }
-linera-base = { workspace = true }
-linera-chain = { workspace = true }
-linera-execution = { workspace = true }
+async-trait.workspace = true
+bcs.workspace = true
+dashmap.workspace = true
+futures.workspace = true
+linera-base.workspace = true
+linera-chain.workspace = true
+linera-execution.workspace = true
 linera-views = { workspace = true, features = ["metrics"] }
-prometheus = { workspace = true }
-serde = { workspace = true }
-tempfile = { workspace = true }
+prometheus.workspace = true
+serde.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["macros"] }
-tracing = { workspace = true }
+tracing.workspace = true
 
 [dev-dependencies]
-anyhow = { workspace = true }
+anyhow.workspace = true
 linera-storage = { path = ".", features = ["test"] }

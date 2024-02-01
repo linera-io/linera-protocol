@@ -1,13 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-        "amm",
-        "counter",
-        "crowd-funding",
-        "fungible",
-        "matching-engine",
-        "meta-counter",
-        "social",
+    "amm",
+    "counter",
+    "crowd-funding",
+    "fungible",
+    "matching-engine",
+    "meta-counter",
+    "social"
 ]
 
 [workspace.dependencies]

@@ -19,15 +19,15 @@ wasmtime = ["dep:wasmtime", "anyhow", "linera-witty-macros?/wasmtime"]
 
 [dependencies]
 anyhow = { workspace = true, optional = true }
-either = { workspace = true }
-frunk = { workspace = true }
+either.workspace = true
+frunk.workspace = true
 linera-witty-macros = { workspace = true, optional = true }
-thiserror = { workspace = true }
+thiserror.workspace = true
 wasmer = { workspace = true, optional = true }
 wasmer-vm = { workspace = true, optional = true }
 wasmtime = { workspace = true, optional = true }
 
 [dev-dependencies]
 linera-witty = { workspace = true, features = ["macros", "test"] }
-test-case = { workspace = true }
-tracing = { workspace = true }
+test-case.workspace = true
+tracing.workspace = true
