@@ -41,13 +41,9 @@ struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
 
 impl FungibleApp {
     async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
-        let query = format!(
-            "accounts {{ entry(key: {}) {{ value }} }}",
-            account_owner.to_value()
-        );
+        let query = format!("balance(owner: {})", account_owner.to_value());
         let response_body = self.0.query(&query).await.unwrap();
-        serde_json::from_value(response_body["accounts"]["entry"]["value"].clone())
-            .unwrap_or_default()
+        serde_json::from_value(response_body["balance"].clone()).unwrap_or_default()
     }
 
     async fn assert_balances(&self, accounts: impl IntoIterator<Item = (AccountOwner, Amount)>) {
@@ -349,13 +345,18 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     net.terminate().await.unwrap();
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
-#[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc), "fungible" ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc), "native-fungible" ; "native_rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "native-fungible" ; "native_aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build), "fungible" ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build), "native-fungible" ; "native_kubernetes_grpc"))]
+#[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None), "fungible" ; "remote_net_grpc"))]
+#[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None), "native-fungible" ; "native_remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
+async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig, example_name: &str) {
     use fungible::{FungibleTokenAbi, InitialState};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -381,8 +382,13 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
-    let (contract, service) = client1.build_example("fungible").await.unwrap();
-    let params = fungible::Parameters::new("FUN");
+    let (contract, service) = client1.build_example(example_name).await.unwrap();
+    let params = if example_name == "native-fungible" {
+        // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
+        fungible::Parameters::new("NAT")
+    } else {
+        fungible::Parameters::new("FUN")
+    };
     let application_id = client1
         .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
         .await
@@ -472,13 +478,21 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
     net.terminate().await.unwrap();
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
-#[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc), "fungible" ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc), "native-fungible" ; "native_rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "native-fungible" ; "native_aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build), "fungible" ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build), "native-fungible" ; "native_kubernetes_grpc"))]
+#[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None), "fungible" ; "remote_net_grpc"))]
+#[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None), "native-fungible" ; "native_remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_wasm_end_to_end_same_wallet_fungible(config: impl LineraNetConfig) {
+async fn test_wasm_end_to_end_same_wallet_fungible(
+    config: impl LineraNetConfig,
+    example_name: &str,
+) {
     use fungible::{FungibleTokenAbi, InitialState};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -509,8 +523,13 @@ async fn test_wasm_end_to_end_same_wallet_fungible(config: impl LineraNetConfig)
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
-    let (contract, service) = client1.build_example("fungible").await.unwrap();
-    let params = fungible::Parameters::new("FUN");
+    let (contract, service) = client1.build_example(example_name).await.unwrap();
+    let params = if example_name == "native-fungible" {
+        // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
+        fungible::Parameters::new("NAT")
+    } else {
+        fungible::Parameters::new("FUN")
+    };
     let application_id = client1
         .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
         .await

@@ -15,8 +15,8 @@ use crate::{
 };
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, Resources},
-    identifiers::{BytecodeId, ChainId, MessageId},
+    data_types::{Amount, BlockHeight, Resources},
+    identifiers::{Account, BytecodeId, ChainId, MessageId, Owner},
 };
 
 impl From<contract::SessionCallOutcome> for (SessionCallOutcome, Vec<u8>) {
@@ -180,6 +180,29 @@ impl From<contract_system_api::CryptoHash> for CryptoHash {
     }
 }
 
+impl From<contract_system_api::CryptoHash> for Owner {
+    fn from(guest: contract_system_api::CryptoHash) -> Self {
+        let integers = [guest.part1, guest.part2, guest.part3, guest.part4];
+        Owner(CryptoHash::from(integers))
+    }
+}
+
+impl From<contract_system_api::Account> for Account {
+    fn from(account: contract_system_api::Account) -> Self {
+        Account {
+            chain_id: account.chain_id.into(),
+            owner: account.owner.map(|owner| owner.into()),
+        }
+    }
+}
+
+impl From<contract_system_api::Amount> for Amount {
+    fn from(amount: contract_system_api::Amount) -> Self {
+        let value = ((amount.upper_half as u128) << 64) | (amount.lower_half as u128);
+        Amount::from_attos(value)
+    }
+}
+
 impl From<service_system_api::ApplicationId> for UserApplicationId {
     fn from(guest: service_system_api::ApplicationId) -> Self {
         UserApplicationId {
@@ -215,5 +238,12 @@ impl From<service_system_api::CryptoHash> for CryptoHash {
     fn from(guest: service_system_api::CryptoHash) -> Self {
         let integers = [guest.part1, guest.part2, guest.part3, guest.part4];
         CryptoHash::from(integers)
+    }
+}
+
+impl From<service_system_api::CryptoHash> for Owner {
+    fn from(guest: service_system_api::CryptoHash) -> Self {
+        let integers = [guest.part1, guest.part2, guest.part3, guest.part4];
+        Owner(CryptoHash::from(integers))
     }
 }

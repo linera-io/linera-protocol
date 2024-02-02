@@ -126,7 +126,7 @@ impl Contract for FungibleToken {
         match call {
             ApplicationCall::Balance { owner } => {
                 let mut outcome = ApplicationCallOutcome::default();
-                let balance = self.balance(&owner).await;
+                let balance = self.balance_or_default(&owner).await;
                 outcome.value = FungibleResponse::Balance(balance);
                 Ok(outcome)
             }
@@ -291,26 +291,22 @@ impl FungibleToken {
     async fn finish_transfer_to_account(
         &mut self,
         amount: Amount,
-        account: Account,
+        target_account: Account,
         source: AccountOwner,
     ) -> ExecutionOutcome<Message> {
-        if account.chain_id == system_api::current_chain_id() {
-            self.credit(account.owner, amount).await;
+        if target_account.chain_id == system_api::current_chain_id() {
+            self.credit(target_account.owner, amount).await;
             ExecutionOutcome::default()
         } else {
             let message = Message::Credit {
-                target: account.owner,
+                target: target_account.owner,
                 amount,
                 source,
             };
-            ExecutionOutcome::default().with_tracked_message(account.chain_id, message)
+            ExecutionOutcome::default().with_tracked_message(target_account.chain_id, message)
         }
     }
 }
-
-// Dummy ComplexObject implementation, required by the graphql(complex) attribute in state.rs.
-#[async_graphql::ComplexObject]
-impl FungibleToken {}
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]

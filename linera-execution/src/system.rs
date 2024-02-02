@@ -499,36 +499,12 @@ where
                 recipient,
                 ..
             } => {
-                if owner.is_some() {
-                    ensure!(
-                        context.authenticated_signer == owner,
-                        SystemExecutionError::UnauthenticatedTransferOwner
-                    );
-                }
-                ensure!(
-                    amount > Amount::ZERO,
-                    SystemExecutionError::IncorrectTransferAmount
-                );
-                let balance = match &owner {
-                    Some(owner) => self.balances.get_mut_or_default(owner).await?,
-                    None => self.balance.get_mut(),
-                };
-                balance
-                    .try_sub_assign(amount)
-                    .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
-                if let Recipient::Account(account) = recipient {
-                    let message = RawOutgoingMessage {
-                        destination: Destination::Recipient(account.chain_id),
-                        authenticated: false,
-                        grant: Amount::ZERO,
-                        kind: MessageKind::Tracked,
-                        message: SystemMessage::Credit {
-                            amount,
-                            source: owner,
-                            target: account.owner,
-                        },
-                    };
-                    outcome.messages.push(message);
+                let message = self
+                    .transfer(context.authenticated_signer, owner, recipient, amount)
+                    .await?;
+
+                if let Some(message) = message {
+                    outcome.messages.push(message)
                 }
             }
             Claim {
@@ -538,27 +514,18 @@ where
                 amount,
                 user_data,
             } => {
-                ensure!(
-                    context.authenticated_signer.as_ref() == Some(&owner),
-                    SystemExecutionError::UnauthenticatedClaimOwner
-                );
-                ensure!(
-                    amount > Amount::ZERO,
-                    SystemExecutionError::IncorrectClaimAmount
-                );
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(target_id),
-                    authenticated: true,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Simple,
-                    message: SystemMessage::Withdraw {
-                        amount,
+                let message = self
+                    .claim(
+                        context.authenticated_signer,
                         owner,
-                        user_data,
+                        target_id,
                         recipient,
-                    },
-                };
-                outcome.messages.push(message);
+                        amount,
+                        user_data,
+                    )
+                    .await?;
+
+                outcome.messages.push(message)
             }
             Admin(admin_operation) => {
                 ensure!(
@@ -716,6 +683,82 @@ where
         }
 
         Ok((outcome, new_application))
+    }
+
+    pub async fn transfer(
+        &mut self,
+        authenticated_signer: Option<Owner>,
+        owner: Option<Owner>,
+        recipient: Recipient,
+        amount: Amount,
+    ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
+        if owner.is_some() {
+            ensure!(
+                authenticated_signer == owner,
+                SystemExecutionError::UnauthenticatedTransferOwner
+            );
+        }
+        ensure!(
+            amount > Amount::ZERO,
+            SystemExecutionError::IncorrectTransferAmount
+        );
+        let balance = match &owner {
+            Some(owner) => self.balances.get_mut_or_default(owner).await?,
+            None => self.balance.get_mut(),
+        };
+        balance
+            .try_sub_assign(amount)
+            .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
+        match recipient {
+            Recipient::Account(account) => {
+                let message = RawOutgoingMessage {
+                    destination: Destination::Recipient(account.chain_id),
+                    authenticated: false,
+                    grant: Amount::ZERO,
+                    kind: MessageKind::Tracked,
+                    message: SystemMessage::Credit {
+                        amount,
+                        source: owner,
+                        target: account.owner,
+                    },
+                };
+
+                Ok(Some(message))
+            }
+            Recipient::Burn => Ok(None),
+        }
+    }
+
+    pub async fn claim(
+        &self,
+        authenticated_signer: Option<Owner>,
+        owner: Owner,
+        target_id: ChainId,
+        recipient: Recipient,
+        amount: Amount,
+        user_data: UserData,
+    ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, SystemExecutionError> {
+        ensure!(
+            authenticated_signer.as_ref() == Some(&owner),
+            SystemExecutionError::UnauthenticatedClaimOwner
+        );
+        ensure!(
+            amount > Amount::ZERO,
+            SystemExecutionError::IncorrectClaimAmount
+        );
+
+        Ok(RawOutgoingMessage {
+            destination: Destination::Recipient(target_id),
+            authenticated: true,
+            grant: Amount::ZERO,
+            kind: MessageKind::Simple,
+            message: SystemMessage::Withdraw {
+                amount,
+                owner,
+                user_data,
+                recipient,
+            },
+        })
     }
 
     /// Executes a cross-chain message that represents the recipient's side of an operation.

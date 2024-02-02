@@ -9,11 +9,7 @@ import tw from "tailwind-styled-components";
 
 const GET_BALANCE = gql`
   query Accounts($owner: AccountOwner) {
-    accounts {
-      entry(key: $owner) {
-        value
-      }
-    }
+    balance(owner: $owner)
   }
 `;
 
@@ -137,7 +133,7 @@ function App({ chainId, owner }) {
         <h1 className="text-2xl font-bold mb-2">Your Balance</h1>
         {balanceData ? (
           <p className="text-3xl font-bold">
-            {parseInt(balanceData.accounts.entry.value ?? '0').toLocaleString()}
+            {parseInt(balanceData.balance ?? '0').toLocaleString()}
             {tickerSymbolData && ' ' + tickerSymbolData.tickerSymbol}
           </p>
         ) : (

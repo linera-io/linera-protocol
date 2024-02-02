@@ -599,6 +599,10 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().read_chain_balance()
     }
 
+    fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError> {
+        self.inner().read_owner_balance(owner)
+    }
+
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
         self.inner().read_system_timestamp()
     }
@@ -695,6 +699,12 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| Request::ChainBalance { callback })?
+            .recv_response()
+    }
+
+    fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError> {
+        self.execution_state_sender
+            .send_request(|callback| Request::OwnerBalance { owner, callback })?
             .recv_response()
     }
 
@@ -945,6 +955,55 @@ impl ContractRuntime for ContractSyncRuntime {
     fn consume_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError> {
         let mut this = self.inner();
         this.resource_controller.track_fuel(fuel)
+    }
+
+    fn transfer(
+        &mut self,
+        source: Option<Owner>,
+        destination: Account,
+        amount: Amount,
+    ) -> Result<(), ExecutionError> {
+        let signer = self.inner().current_application().signer;
+        let execution_outcome = self
+            .inner()
+            .execution_state_sender
+            .send_request(|callback| Request::Transfer {
+                source,
+                destination,
+                amount,
+                signer,
+                callback,
+            })?
+            .recv_response()?;
+        self.inner()
+            .execution_outcomes
+            .push(ExecutionOutcome::System(execution_outcome));
+        Ok(())
+    }
+
+    fn claim(
+        &mut self,
+        source: Account,
+        destination: Account,
+        amount: Amount,
+    ) -> Result<(), ExecutionError> {
+        let signer = self.inner().current_application().signer;
+        let execution_outcome = self
+            .inner()
+            .execution_state_sender
+            .send_request(|callback| Request::Claim {
+                source,
+                destination,
+                amount,
+                signer,
+                callback,
+            })?
+            .recv_response()?
+            .with_authenticated_signer(signer);
+        self.inner()
+            .execution_outcomes
+            .push(ExecutionOutcome::System(execution_outcome));
+        Ok(())
     }
 
     fn try_call_application(

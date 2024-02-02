@@ -12,7 +12,7 @@ pub(crate) use self::private::{current_application_parameters, load_view, query_
 use super::service_system_api as wit;
 use linera_base::{
     data_types::{Amount, Timestamp},
-    identifiers::{ApplicationId, ChainId},
+    identifiers::{ApplicationId, ChainId, Owner},
 };
 use std::fmt;
 
@@ -29,6 +29,11 @@ pub fn current_application_id() -> ApplicationId {
 /// Retrieves the current chain balance.
 pub fn current_chain_balance() -> Amount {
     wit::read_chain_balance().into()
+}
+
+/// Retrieves the current balance for a given owner.
+pub fn current_owner_balance(owner: Owner) -> Amount {
+    wit::read_owner_balance(owner.into()).into()
 }
 
 /// Retrieves the current system time, i.e. the timestamp of the latest block in this chain.
