@@ -3387,6 +3387,7 @@ dependencies = [
  "async-graphql-axum",
  "async-trait",
  "axum 0.7.4",
+ "base64 0.22.0",
  "bcs",
  "cargo_toml",
  "chrono",
@@ -3419,6 +3420,7 @@ dependencies = [
  "linera-views",
  "matching-engine",
  "native-fungible",
+ "non-fungible",
  "pathdiff",
  "port-selector",
  "prometheus",
@@ -4036,6 +4038,22 @@ checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
 dependencies = [
  "memchr",
  "minimal-lexical",
+]
+
+[[package]]
+name = "non-fungible"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-trait",
+ "base64 0.22.0",
+ "bcs",
+ "fungible",
+ "linera-sdk",
+ "serde",
+ "serde_json",
+ "sha3",
+ "thiserror",
 ]
 
 [[package]]

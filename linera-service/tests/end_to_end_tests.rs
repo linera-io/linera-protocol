@@ -11,7 +11,7 @@ use linera_base::{
     command::resolve_binary,
     crypto::{KeyPair, PublicKey},
     data_types::{Amount, Timestamp},
-    identifiers::{Account, AccountOwner, ChainId, Owner},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, Owner},
 };
 use linera_service::cli_wrappers::{
     local_net::{Database, LocalNet, LocalNetConfig},
@@ -79,6 +79,81 @@ impl FungibleApp {
         );
 
         self.0.mutate(mutation).await.unwrap();
+    }
+}
+
+struct NonFungibleApp(ApplicationWrapper<non_fungible::NonFungibleTokenAbi>);
+
+impl NonFungibleApp {
+    pub fn create_token_id(
+        chain_id: &ChainId,
+        application_id: &ApplicationId,
+        name: &String,
+        minter: &AccountOwner,
+        payload: &Vec<u8>,
+    ) -> String {
+        use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
+        let token_id_vec =
+            non_fungible::Nft::create_token_id(chain_id, application_id, name, minter, payload);
+        STANDARD_NO_PAD.encode(token_id_vec.id)
+    }
+
+    async fn get_nft(&self, token_id: &String) -> anyhow::Result<non_fungible::NftOutput> {
+        let query = format!(
+            "nft(tokenId: {}) {{ tokenId, owner, name, minter, payload }}",
+            token_id.to_value()
+        );
+        let response_body = self.0.query(&query).await?;
+        Ok(serde_json::from_value(response_body["nft"].clone())?)
+    }
+
+    async fn get_owned_nfts(&self, owner: &AccountOwner) -> anyhow::Result<Vec<String>> {
+        let query = format!("ownedTokenIdsByOwner(owner: {})", owner.to_value());
+        let response_body = self.0.query(&query).await?;
+        Ok(serde_json::from_value(
+            response_body["ownedTokenIdsByOwner"].clone(),
+        )?)
+    }
+
+    async fn mint(&self, name: &String, payload: &Vec<u8>) -> Value {
+        let mutation = format!(
+            "mint(name: {}, payload: {})",
+            name.to_value(),
+            payload.to_value(),
+        );
+        self.0.mutate(mutation).await.unwrap()
+    }
+
+    async fn transfer(
+        &self,
+        source_owner: &AccountOwner,
+        token_id: &String,
+        target_account: &fungible::Account,
+    ) -> Value {
+        let mutation = format!(
+            "transfer(sourceOwner: {}, tokenId: {}, targetAccount: {})",
+            source_owner.to_value(),
+            token_id.to_value(),
+            target_account.to_value(),
+        );
+        self.0.mutate(mutation).await.unwrap()
+    }
+
+    async fn claim(
+        &self,
+        source_account: &fungible::Account,
+        token_id: &String,
+        target_account: &fungible::Account,
+    ) -> Value {
+        // Claiming tokens from chain1 to chain2.
+        let mutation = format!(
+            "claim(sourceAccount: {}, tokenId: {}, targetAccount: {})",
+            source_account.to_value(),
+            token_id.to_value(),
+            target_account.to_value()
+        );
+
+        self.0.mutate(mutation).await.unwrap()
     }
 }
 
@@ -471,6 +546,279 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig, example_nam
         (account_owner2, Amount::from_tokens(3)),
     ])
     .await;
+
+    node_service1.ensure_is_running().unwrap();
+    node_service2.ensure_is_running().unwrap();
+
+    net.ensure_is_running().await.unwrap();
+    net.terminate().await.unwrap();
+}
+
+#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) {
+    use non_fungible::{NftOutput, NonFungibleTokenAbi};
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let (mut net, client1) = config.instantiate().await.unwrap();
+
+    let client2 = net.make_client().await;
+    client2.wallet_init(&[], FaucetOption::None).await.unwrap();
+
+    let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
+    let chain2 = client1
+        .open_and_assign(&client2, Amount::ONE)
+        .await
+        .unwrap();
+
+    // The players
+    let account_owner1 = get_fungible_account_owner(&client1);
+    let account_owner2 = get_fungible_account_owner(&client2);
+
+    // Setting up the application and verifying
+    let (contract, service) = client1.build_example("non-fungible").await.unwrap();
+    let application_id = client1
+        .publish_and_create::<NonFungibleTokenAbi>(contract, service, &(), &(), &[], None)
+        .await
+        .unwrap();
+
+    let mut node_service1 = client1.run_node_service(8080).await.unwrap();
+    let mut node_service2 = client2.run_node_service(8081).await.unwrap();
+
+    let app1 = NonFungibleApp(
+        node_service1
+            .make_application(&chain1, &application_id)
+            .await
+            .unwrap(),
+    );
+
+    let nft1_name = "nft1".to_string();
+    let nft1_minter = account_owner1;
+    let nft1_payload = "nft1_data".as_bytes().to_vec();
+
+    let nft1_id = NonFungibleApp::create_token_id(
+        &chain1,
+        &application_id.forget_abi(),
+        &nft1_name,
+        &nft1_minter,
+        &nft1_payload,
+    );
+
+    app1.mint(&nft1_name, &nft1_payload).await;
+
+    let mut expected_nft1 = NftOutput {
+        token_id: nft1_id.clone(),
+        owner: account_owner1,
+        name: nft1_name,
+        minter: nft1_minter,
+        payload: nft1_payload,
+    };
+
+    assert_eq!(app1.get_nft(&nft1_id).await.unwrap(), expected_nft1);
+    assert!(app1
+        .get_owned_nfts(&account_owner1)
+        .await
+        .unwrap()
+        .contains(&nft1_id));
+
+    // Transferring to different chain
+    app1.transfer(
+        &account_owner1,
+        &nft1_id,
+        &fungible::Account {
+            chain_id: chain2,
+            owner: account_owner1,
+        },
+    )
+    .await;
+
+    // Checking the NFT is removed from chain1
+    assert!(app1.get_nft(&nft1_id).await.is_err());
+    assert!(!app1
+        .get_owned_nfts(&account_owner1)
+        .await
+        .unwrap()
+        .contains(&nft1_id));
+
+    // Non Fungible didn't exist on chain2 initially but now it does and we can talk to it.
+    let app2 = NonFungibleApp(
+        node_service2
+            .make_application(&chain2, &application_id)
+            .await
+            .unwrap(),
+    );
+
+    // Checking that the NFT is on chain2 now, with the same owner
+    assert_eq!(app2.get_nft(&nft1_id).await.unwrap(), expected_nft1);
+    assert!(app2
+        .get_owned_nfts(&account_owner1)
+        .await
+        .unwrap()
+        .contains(&nft1_id));
+
+    // Claiming another NFT from chain2 to chain1.
+    app1.claim(
+        &fungible::Account {
+            chain_id: chain2,
+            owner: account_owner1,
+        },
+        &nft1_id,
+        &fungible::Account {
+            chain_id: chain1,
+            owner: account_owner1,
+        },
+    )
+    .await;
+
+    // Make sure that the cross-chain communication happens fast enough.
+    node_service1.process_inbox(&chain1).await.unwrap();
+    node_service2.process_inbox(&chain2).await.unwrap();
+
+    // Checking the NFT is removed from chain2
+    assert!(app2.get_nft(&nft1_id).await.is_err());
+    assert!(!app2
+        .get_owned_nfts(&account_owner1)
+        .await
+        .unwrap()
+        .contains(&nft1_id));
+    assert_eq!(app1.get_nft(&nft1_id).await.unwrap(), expected_nft1);
+    assert!(app1
+        .get_owned_nfts(&account_owner1)
+        .await
+        .unwrap()
+        .contains(&nft1_id));
+
+    // Transferring to different chain and owner
+    app1.transfer(
+        &account_owner1,
+        &nft1_id,
+        &fungible::Account {
+            chain_id: chain2,
+            owner: account_owner2,
+        },
+    )
+    .await;
+
+    // Make sure that the cross-chain communication happens fast enough.
+    node_service1.process_inbox(&chain1).await.unwrap();
+    node_service2.process_inbox(&chain2).await.unwrap();
+
+    // Checking the NFT is removed from chain1
+    assert!(app1.get_nft(&nft1_id).await.is_err());
+    assert!(!app1
+        .get_owned_nfts(&account_owner1)
+        .await
+        .unwrap()
+        .contains(&nft1_id));
+
+    expected_nft1.owner = account_owner2;
+    // Checking that the NFT is on chain2 now, with the same updated owner
+    assert_eq!(app2.get_nft(&nft1_id).await.unwrap(), expected_nft1);
+    assert!(app2
+        .get_owned_nfts(&account_owner2)
+        .await
+        .unwrap()
+        .contains(&nft1_id));
+
+    let nft2_name = "nft2".to_string();
+    let nft2_minter = account_owner2;
+    let nft2_payload = "nft2_data".as_bytes().to_vec();
+
+    let nft2_id = NonFungibleApp::create_token_id(
+        &chain2,
+        &application_id.forget_abi(),
+        &nft2_name,
+        &nft2_minter,
+        &nft2_payload,
+    );
+
+    // Minting NFT from chain2
+    app2.mint(&nft2_name, &nft2_payload).await;
+
+    let expected_nft2 = NftOutput {
+        token_id: nft2_id.clone(),
+        owner: account_owner2,
+        name: nft2_name,
+        minter: nft2_minter,
+        payload: nft2_payload,
+    };
+
+    // Confirm it's there
+    assert_eq!(app2.get_nft(&nft2_id).await.unwrap(), expected_nft2);
+    assert!(app2
+        .get_owned_nfts(&account_owner2)
+        .await
+        .unwrap()
+        .contains(&nft2_id));
+
+    // Transferring to another chain, maitaining the owner
+    app2.transfer(
+        &account_owner2,
+        &nft2_id,
+        &fungible::Account {
+            chain_id: chain1,
+            owner: account_owner2,
+        },
+    )
+    .await;
+
+    // Make sure that the cross-chain communication happens fast enough.
+    node_service1.process_inbox(&chain1).await.unwrap();
+    node_service2.process_inbox(&chain2).await.unwrap();
+
+    // Checking the NFT is removed from chain2
+    assert!(app2.get_nft(&nft2_id).await.is_err());
+    assert!(!app2
+        .get_owned_nfts(&account_owner2)
+        .await
+        .unwrap()
+        .contains(&nft2_id));
+    // Checking the NFT is in chain1
+    assert_eq!(app1.get_nft(&nft2_id).await.unwrap(), expected_nft2);
+    assert!(app1
+        .get_owned_nfts(&account_owner2)
+        .await
+        .unwrap()
+        .contains(&nft2_id));
+
+    // Claiming another NFT from chain1 to chain2.
+    app2.claim(
+        &fungible::Account {
+            chain_id: chain1,
+            owner: account_owner2,
+        },
+        &nft2_id,
+        &fungible::Account {
+            chain_id: chain2,
+            owner: account_owner2,
+        },
+    )
+    .await;
+
+    // Make sure that the cross-chain communication happens fast enough.
+    node_service1.process_inbox(&chain1).await.unwrap();
+    node_service2.process_inbox(&chain2).await.unwrap();
+
+    // Checking the final state
+
+    // Checking the NFT is removed from chain1
+    assert!(app1.get_nft(&nft2_id).await.is_err());
+    assert!(!app1
+        .get_owned_nfts(&account_owner2)
+        .await
+        .unwrap()
+        .contains(&nft2_id));
+    assert_eq!(app2.get_nft(&nft2_id).await.unwrap(), expected_nft2);
+    assert!(app2
+        .get_owned_nfts(&account_owner2)
+        .await
+        .unwrap()
+        .contains(&nft2_id));
 
     node_service1.ensure_is_running().unwrap();
     node_service2.ensure_is_running().unwrap();

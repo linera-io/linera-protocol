@@ -161,6 +161,7 @@ counter = { path = "./examples/counter" }
 meta-counter = { path = "./examples/meta-counter" }
 fungible = { path = "./examples/fungible" }
 native-fungible = { path = "./examples/native-fungible" }
+non-fungible = { path = "./examples/non-fungible" }
 crowd-funding = { path = "./examples/crowd-funding" }
 matching-engine = { path = "./examples/matching-engine" }
 social = { path = "./examples/social" }
