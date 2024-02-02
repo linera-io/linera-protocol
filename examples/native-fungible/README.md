@@ -1,7 +1,5 @@
-// Copyright (c) Zefchain Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
+<!-- cargo-rdme start -->
 
-/*!
 # Native Fungible Token Example Application
 
 This app is very similar to the [Fungible Token Example Application](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#fungible-token-example-application). The difference is that this is a native token that will use system API calls for operations.
@@ -47,6 +45,5 @@ APP_ID=$(linera create-application $BYTECODE_ID \
 ## Using the Token Application
 
 Refer to [Fungible Token Example Application - Using the Token Application](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#using-the-token-application).
-*/
 
-pub const TICKER_SYMBOL: &str = "NAT";
+<!-- cargo-rdme end -->
