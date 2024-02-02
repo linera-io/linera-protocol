@@ -78,6 +78,15 @@ where
         self.inner.clear();
         *self.hash.get_mut() = None;
     }
+
+    fn share_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(WrappedHashableContainerView {
+            context: self.context.clone(),
+            stored_hash: self.stored_hash,
+            hash: Mutex::new(*self.hash.get_mut()),
+            inner: self.inner.share_unchecked()?,
+        })
+    }
 }
 
 #[async_trait]

@@ -35,6 +35,12 @@ pub trait View<C>: Sized {
     /// changes in the `batch` variable first. If the view is dropped without calling `flush`, staged
     /// changes are simply lost.
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError>;
+
+    /// Creates a clone of this view, sharing the underlying storage context but prone to
+    /// data races which can corrupt the view state.
+    ///
+    /// Use [`SharedView`][`crate::shared_view::SharedView`] to share a view safely instead.
+    fn share_unchecked(&mut self) -> Result<Self, ViewError>;
 }
 
 /// Main error type for the crate.

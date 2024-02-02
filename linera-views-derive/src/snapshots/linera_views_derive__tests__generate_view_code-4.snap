@@ -48,5 +48,11 @@ impl linera_views::views::View<custom::GenericContext<T>> for TestView {
         self.register.clear();
         self.collection.clear();
     }
+    fn share_unchecked(&mut self) -> Result<Self, linera_views::views::ViewError> {
+        Ok(Self {
+            register: self.register.share_unchecked()?,
+            collection: self.collection.share_unchecked()?,
+        })
+    }
 }
 

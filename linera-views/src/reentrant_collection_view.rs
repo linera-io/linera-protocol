@@ -176,6 +176,35 @@ where
         self.updates.get_mut().clear();
         *self.hash.get_mut() = None;
     }
+
+    fn share_unchecked(&mut self) -> Result<Self, ViewError> {
+        let cloned_updates = self
+            .updates
+            .get_mut()
+            .iter()
+            .map(|(key, value)| {
+                let cloned_value = match value {
+                    Update::Removed => Update::Removed,
+                    Update::Set(view_lock) => {
+                        let mut view = view_lock
+                            .try_write()
+                            .ok_or(ViewError::CannotAcquireCollectionEntry)?;
+
+                        Update::Set(Arc::new(RwLock::new(view.share_unchecked()?)))
+                    }
+                };
+                Ok((key.clone(), cloned_value))
+            })
+            .collect::<Result<_, ViewError>>()?;
+
+        Ok(ReentrantByteCollectionView {
+            context: self.context.clone(),
+            needs_clear: self.needs_clear,
+            updates: Mutex::new(cloned_updates),
+            stored_hash: self.stored_hash,
+            hash: Mutex::new(*self.hash.get_mut()),
+        })
+    }
 }
 
 impl<C: Context, W> ReentrantByteCollectionView<C, W> {
@@ -846,6 +875,13 @@ where
     fn clear(&mut self) {
         self.collection.clear()
     }
+
+    fn share_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(ReentrantCollectionView {
+            collection: self.collection.share_unchecked()?,
+            _phantom: PhantomData,
+        })
+    }
 }
 
 impl<C, I, W> ReentrantCollectionView<C, I, W>
@@ -1258,6 +1294,13 @@ where
 
     fn clear(&mut self) {
         self.collection.clear()
+    }
+
+    fn share_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(ReentrantCustomCollectionView {
+            collection: self.collection.share_unchecked()?,
+            _phantom: PhantomData,
+        })
     }
 }
 

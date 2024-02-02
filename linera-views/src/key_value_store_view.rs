@@ -240,6 +240,20 @@ where
         self.sizes.clear();
         *self.hash.get_mut() = None;
     }
+
+    fn share_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(KeyValueStoreView {
+            context: self.context.clone(),
+            delete_storage_first: self.delete_storage_first,
+            updates: self.updates.clone(),
+            stored_total_size: self.stored_total_size,
+            total_size: self.total_size,
+            sizes: self.sizes.share_unchecked()?,
+            deleted_prefixes: self.deleted_prefixes.clone(),
+            stored_hash: self.stored_hash,
+            hash: Mutex::new(*self.hash.get_mut()),
+        })
+    }
 }
 
 impl<'a, C> KeyValueStoreView<C>

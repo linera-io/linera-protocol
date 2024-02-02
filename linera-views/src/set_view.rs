@@ -116,6 +116,16 @@ where
         self.updates.clear();
         *self.hash.get_mut() = None;
     }
+
+    fn share_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(ByteSetView {
+            context: self.context.clone(),
+            delete_storage_first: self.delete_storage_first,
+            updates: self.updates.clone(),
+            stored_hash: self.stored_hash,
+            hash: Mutex::new(*self.hash.get_mut()),
+        })
+    }
 }
 
 impl<C> ByteSetView<C>
@@ -407,6 +417,13 @@ where
     fn clear(&mut self) {
         self.set.clear()
     }
+
+    fn share_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(SetView {
+            set: self.set.share_unchecked()?,
+            _phantom: PhantomData,
+        })
+    }
 }
 
 impl<C, I> SetView<C, I>
@@ -641,6 +658,13 @@ where
 
     fn clear(&mut self) {
         self.set.clear()
+    }
+
+    fn share_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(CustomSetView {
+            set: self.set.share_unchecked()?,
+            _phantom: PhantomData,
+        })
     }
 }
 
