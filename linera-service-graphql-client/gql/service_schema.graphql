@@ -252,11 +252,10 @@ input Committee {
 	policy: ResourceControlPolicy!
 }
 
-type CrateVersion {
-	major: Int!
-	minor: Int!
-	patch: Int!
-}
+"""
+The version of the Linera crates used in this build
+"""
+scalar CrateVersion
 
 """
 A Sha3-256 value

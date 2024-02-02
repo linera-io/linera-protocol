@@ -6,16 +6,20 @@ use std::{
     path::PathBuf,
 };
 
-#[cfg_attr(
-    linera_version_building,
-    derive(async_graphql::SimpleObject, serde::Deserialize, serde::Serialize)
-)]
+#[cfg_attr(linera_version_building, derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CrateVersion {
     pub major: u64,
     pub minor: u64,
     pub patch: u64,
 }
+
+#[cfg(linera_version_building)]
+async_graphql::scalar!(
+    CrateVersion,
+    "CrateVersion",
+    "The version of the Linera crates used in this build"
+);
 
 impl From<semver::Version> for CrateVersion {
     fn from(
