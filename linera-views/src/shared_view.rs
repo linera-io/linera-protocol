@@ -1,6 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(test)]
+#[path = "unit_tests/shared_view.rs"]
+mod tests;
+
 use crate::{
     batch::Batch,
     common::Context,
