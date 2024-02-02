@@ -11,7 +11,7 @@ use linera_views::{
     views::{View, ViewError},
 };
 use linera_views_derive::RootView;
-use std::time::Duration;
+use std::{mem, time::Duration};
 use tokio::time::sleep;
 
 /// Test if a [`View`] can be shared among multiple readers.
@@ -46,6 +46,33 @@ async fn test_multiple_readers() -> Result<(), ViewError> {
             assert_eq!(read_value.unwrap(), dummy_value);
         })
         .await;
+
+    Ok(())
+}
+
+/// Test if a [`View`] is shared with at most one writer.
+#[tokio::test(start_paused = true)]
+async fn test_if_second_writer_waits_for_first_writer() -> Result<(), ViewError> {
+    let context = create_memory_context();
+    let dummy_view = SimpleView::load(context).await?;
+    let mut shared_view = SharedView::new(dummy_view);
+
+    let writer_reference = shared_view
+        .inner_mut()
+        .now_or_never()
+        .expect("First read-write reference should be immediately available");
+
+    assert!(
+        shared_view.inner_mut().now_or_never().is_none(),
+        "Second read-write reference should wait for first writer to finish"
+    );
+
+    mem::drop(writer_reference);
+
+    let _second_writer_reference = shared_view.inner_mut().now_or_never().expect(
+        "Second read-write reference should be immediately available after the first writer \
+        finishes",
+    );
 
     Ok(())
 }
