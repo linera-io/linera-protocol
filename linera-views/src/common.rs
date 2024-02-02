@@ -33,7 +33,7 @@ pub type HasherOutputSize = <sha3::Sha3_256 as sha3::digest::OutputSizeUser>::Ou
 #[doc(hidden)]
 pub type HasherOutput = generic_array::GenericArray<u8, HasherOutputSize>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) enum Update<T> {
     Removed,
     Set(T),
@@ -458,7 +458,7 @@ impl<E> KeyValueIterable<E> for Vec<(Vec<u8>, Vec<u8>)> {
 /// The context in which a view is operated. Typically, this includes the client to
 /// connect to the database and the address of the current entry.
 #[async_trait]
-pub trait Context {
+pub trait Context: Clone {
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 

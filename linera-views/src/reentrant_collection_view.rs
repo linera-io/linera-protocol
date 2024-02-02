@@ -4,7 +4,7 @@
 use crate::{
     batch::Batch,
     common::{Context, CustomSerialize, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
-    views::{HashableView, Hasher, View, ViewError},
+    views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 use async_lock::{Mutex, RwLock, RwLockReadGuardArc, RwLockWriteGuardArc};
 use async_trait::async_trait;
@@ -175,6 +175,42 @@ where
         self.needs_clear = true;
         self.updates.get_mut().clear();
         *self.hash.get_mut() = None;
+    }
+}
+
+impl<C, W> ClonableView<C> for ReentrantByteCollectionView<C, W>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    W: ClonableView<C> + Send + Sync,
+{
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        let cloned_updates = self
+            .updates
+            .get_mut()
+            .iter()
+            .map(|(key, value)| {
+                let cloned_value = match value {
+                    Update::Removed => Update::Removed,
+                    Update::Set(view_lock) => {
+                        let mut view = view_lock
+                            .try_write()
+                            .ok_or(ViewError::CannotAcquireCollectionEntry)?;
+
+                        Update::Set(Arc::new(RwLock::new(view.clone_unchecked()?)))
+                    }
+                };
+                Ok((key.clone(), cloned_value))
+            })
+            .collect::<Result<_, ViewError>>()?;
+
+        Ok(ReentrantByteCollectionView {
+            context: self.context.clone(),
+            needs_clear: self.needs_clear,
+            updates: Mutex::new(cloned_updates),
+            stored_hash: self.stored_hash,
+            hash: Mutex::new(*self.hash.get_mut()),
+        })
     }
 }
 
@@ -848,6 +884,21 @@ where
     }
 }
 
+impl<C, I, W> ClonableView<C> for ReentrantCollectionView<C, I, W>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Send + Sync + Debug + Serialize + DeserializeOwned,
+    W: ClonableView<C> + Send + Sync,
+{
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(ReentrantCollectionView {
+            collection: self.collection.clone_unchecked()?,
+            _phantom: PhantomData,
+        })
+    }
+}
+
 impl<C, I, W> ReentrantCollectionView<C, I, W>
 where
     C: Context + Send,
@@ -1258,6 +1309,21 @@ where
 
     fn clear(&mut self) {
         self.collection.clear()
+    }
+}
+
+impl<C, I, W> ClonableView<C> for ReentrantCustomCollectionView<C, I, W>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Send + Sync + Debug + CustomSerialize,
+    W: ClonableView<C> + Send + Sync,
+{
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(ReentrantCustomCollectionView {
+            collection: self.collection.clone_unchecked()?,
+            _phantom: PhantomData,
+        })
     }
 }
 
