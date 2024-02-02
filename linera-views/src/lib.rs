@@ -93,6 +93,9 @@ pub mod map_view;
 /// The `SetView` implements a set with ordered entries.
 pub mod set_view;
 
+/// A `SharedView` allows sharing a view between multiple readers and at most one writer.
+pub mod shared_view;
+
 mod graphql;
 
 /// The `CollectionView` implements a map structure whose keys are ordered and the values are views.
