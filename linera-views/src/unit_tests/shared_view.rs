@@ -77,6 +77,41 @@ async fn test_if_second_writer_waits_for_first_writer() -> Result<(), ViewError>
     Ok(())
 }
 
+/// Test if a [`View`] stops sharing with new readers when it is shared with one writer.
+#[tokio::test(start_paused = true)]
+async fn test_writer_blocks_new_readers() -> Result<(), ViewError> {
+    let context = create_memory_context();
+    let dummy_view = SimpleView::load(context).await?;
+    let mut shared_view = SharedView::new(dummy_view);
+
+    let _first_reader_reference = shared_view
+        .inner()
+        .now_or_never()
+        .expect("Initial read-only references should be immediately available");
+    let _second_reader_reference = shared_view
+        .inner()
+        .now_or_never()
+        .expect("Initial read-only references should be immediately available");
+
+    let writer_reference = shared_view
+        .inner_mut()
+        .now_or_never()
+        .expect("First read-write reference should be immediately available");
+
+    assert!(
+        shared_view.inner().now_or_never().is_none(),
+        "Read-only references should wait for writer to finish"
+    );
+
+    mem::drop(writer_reference);
+
+    let _third_reader_reference = shared_view.inner().now_or_never().expect(
+        "Third read-only reference should be immediately available after the writer finishes",
+    );
+
+    Ok(())
+}
+
 /// A simple view used to test sharing views.
 #[derive(RootView)]
 struct SimpleView<C> {
