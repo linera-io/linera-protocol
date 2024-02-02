@@ -8,9 +8,8 @@ use linera_views::{
     memory::create_memory_context,
     register_view::RegisterView,
     shared_view::SharedView,
-    views::{View, ViewError},
+    views::{RootView, View, ViewError},
 };
-use linera_views_derive::RootView;
 use std::{mem, time::Duration};
 use tokio::time::sleep;
 
@@ -107,6 +106,44 @@ async fn test_writer_blocks_new_readers() -> Result<(), ViewError> {
 
     let _third_reader_reference = shared_view.inner().now_or_never().expect(
         "Third read-only reference should be immediately available after the writer finishes",
+    );
+
+    Ok(())
+}
+
+/// Test if writer waits for readers to finish before saving.
+#[tokio::test(start_paused = true)]
+async fn test_writer_waits_for_readers() -> Result<(), ViewError> {
+    let context = create_memory_context();
+    let dummy_view = SimpleView::load(context).await?;
+    let mut shared_view = SharedView::new(dummy_view);
+
+    let reader_delays = [100, 300, 250, 200, 150, 400, 200]
+        .into_iter()
+        .map(Duration::from_millis);
+
+    let reader_tasks = FuturesUnordered::new();
+
+    for delay in reader_delays {
+        let reader_reference = shared_view.inner().await?;
+
+        reader_tasks.push(tokio::spawn(async move {
+            let _reader_reference = reader_reference;
+            sleep(delay).await;
+        }));
+    }
+
+    let mut writer_reference = shared_view.inner_mut().await?;
+    writer_reference.save().await?;
+
+    let readers_collector =
+        reader_tasks.for_each(|task_result| async move { assert!(task_result.is_ok()) });
+
+    assert_eq!(
+        readers_collector.now_or_never(),
+        Some(()),
+        "Reader tasks should have finished before the writer saved, so collecting the task \
+        results should finish immediately"
     );
 
     Ok(())
