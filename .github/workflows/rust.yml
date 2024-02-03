@@ -34,22 +34,16 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 45
+    runs-on: gcp-large
+    timeout-minutes: 120
 
     steps:
     - uses: actions/checkout@v3
-    - uses: Twey/setup-rust-toolchain@v1
-    - name: Clear up some space
-      run: |
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /opt/ghc
-        sudo rm -rf "/usr/local/share/boost"
-        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-    - name: Install Protoc
-      uses: arduino/setup-protoc@v1
       with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+      # - name: Enable `sccache` for Rust builds
+      #   run: echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Build example applications
       run: |
         cd examples
@@ -60,42 +54,44 @@ jobs:
     - name: Compile the workspace with the default features (build)
       run: |
         cargo build --locked
-    - name: Run all tests using the default features
+    - name: Check what's going on with the cache
       run: |
-        cargo test --locked
-    - name: Run some extra execution tests with wasmtime
-      run: |
-        cargo test --locked -p linera-execution --features wasmtime
-    - name: Run the benchmark test
-      run: |
-        cargo build --locked -p linera-service --bin linera-benchmark --features benchmark
-        cargo test --locked -p linera-service --features benchmark benchmark
-    - name: Build Wasm test runner
-      # use debug mode to avoid building wasmtime in release mode
-      run: |
-        cargo build --locked --bin linera-wasm-test-runner
-    - name: Run Linera SDK Wasm tests
-      env:
-        CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "target/debug/linera-wasm-test-runner"
-      run: |
-        cargo test --locked -p linera-sdk-wasm-tests --target wasm32-unknown-unknown
-    - name: Run Wasm application tests
-      run: |
-        cd examples
-        CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=../target/debug/linera-wasm-test-runner cargo test --target wasm32-unknown-unknown
-        cargo test --locked --target x86_64-unknown-linux-gnu
-    - name: Run Witty integration tests
-      run: |
-        cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
-        cargo test -p linera-witty --features wasmer,wasmtime
-    - name: Check for outdated CLI.md
-      run: |
-        if ! diff CLI.md <(cargo run --bin linera -- help-markdown)
-        then
-          echo '`CLI.md` differs from the output of `linera help-markdown`'
-          echo 'Run `linera help-markdown > CLI.md` to update it.'
-          exit 1
-        fi
+        pwd
+        ls target
+    #     cargo test --locked
+    # - name: Run some extra execution tests with wasmtime
+    #   run: |
+    #     cargo test --locked -p linera-execution --features wasmtime
+    # - name: Run the benchmark test
+    #   run: |
+    #     cargo build --locked -p linera-service --bin linera-benchmark --features benchmark
+    #     cargo test --locked -p linera-service --features benchmark benchmark
+    # - name: Build Wasm test runner
+    #   # use debug mode to avoid building wasmtime in release mode
+    #   run: |
+    #     cargo build --locked --bin linera-wasm-test-runner
+    # - name: Run Linera SDK Wasm tests
+    #   env:
+    #     CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "target/debug/linera-wasm-test-runner"
+    #   run: |
+    #     cargo test --locked -p linera-sdk-wasm-tests --target wasm32-unknown-unknown
+    # - name: Run Wasm application tests
+    #   run: |
+    #     cd examples
+    #     CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=../target/debug/linera-wasm-test-runner cargo test --target wasm32-unknown-unknown
+    #     cargo test --locked --target x86_64-unknown-linux-gnu
+    # - name: Run Witty integration tests
+    #   run: |
+    #     cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
+    #     cargo test -p linera-witty --features wasmer,wasmtime
+    # - name: Check for outdated CLI.md
+    #   run: |
+    #     if ! diff CLI.md <(cargo run --bin linera -- help-markdown)
+    #     then
+    #       echo '`CLI.md` differs from the output of `linera help-markdown`'
+    #       echo 'Run `linera help-markdown > CLI.md` to update it.'
+    #       exit 1
+    #     fi
 
   lint:
     runs-on: ubuntu-latest

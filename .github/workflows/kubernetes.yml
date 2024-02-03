@@ -29,17 +29,13 @@ permissions:
 
 jobs:
   kind-deployment-e2e-tests:
-    runs-on: ubuntu-latest-16-cores
+    runs-on: gcp-large
 
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
       - uses: Twey/setup-rust-toolchain@v1
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v1
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build client binary
         run: |
           cargo build --release --locked --bin linera --bin linera-proxy --bin linera-server --bin linera-db --features scylladb,rocksdb,kubernetes
