@@ -47,9 +47,12 @@ use scylla::{
 use std::{ops::Deref, sync::Arc};
 use thiserror::Error;
 
-/// The list of queries compiled for use of the
-/// KeyValueStore in the `ScyllaDbStoreInternal`.
-struct ScyllaDbQueries {
+/// The client for ScyllaDb.
+/// * The session allows to pass queries
+/// * The table_name that is being assigned to the database
+/// * The prepared queries used for implementing the features of `KeyValueStore`.
+struct ScyllaDbClient {
+    session: Session,
     table_name: String,
     read_value: Query,
     contains_key: Query,
@@ -63,8 +66,8 @@ struct ScyllaDbQueries {
     find_key_values_by_prefix_bounded: Query,
 }
 
-impl ScyllaDbQueries {
-    fn new(table_name: String) -> Self {
+impl ScyllaDbClient {
+    fn new(session: Session, table_name: String) -> Self {
         let query = format!(
             "SELECT v FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
             table_name
@@ -114,6 +117,7 @@ impl ScyllaDbQueries {
         let find_key_values_by_prefix_bounded = Query::new(query);
 
         Self {
+            session,
             table_name,
             read_value,
             contains_key,
@@ -128,11 +132,6 @@ impl ScyllaDbQueries {
         }
     }
 }
-
-/// The creation of a ScyllaDB client that can be used for accessing it.
-/// The `Session` is the actual client and the `ScyllaDbQueries` is the
-/// actual queries being compiled.
-type ScyllaDbStorePair = (Session, ScyllaDbQueries);
 
 /// We limit the number of connections that can be done for tests.
 #[cfg(any(test, feature = "test"))]
@@ -153,7 +152,7 @@ const MAX_KEY_SIZE: usize = 1048576;
 /// The client itself and the keeping of the count of active connections.
 #[derive(Clone)]
 pub struct ScyllaDbStoreInternal {
-    store: Arc<ScyllaDbStorePair>,
+    store: Arc<ScyllaDbClient>,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
 }
@@ -296,7 +295,7 @@ impl DirectKeyValueStore for ScyllaDbStoreInternal {
 }
 
 #[async_trait]
-impl DeletePrefixExpander for ScyllaDbStorePair {
+impl DeletePrefixExpander for ScyllaDbClient {
     type Error = ScyllaDbContextError;
 
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
@@ -314,14 +313,14 @@ impl ScyllaDbStoreInternal {
     }
 
     async fn read_value_internal(
-        store: &ScyllaDbStorePair,
+        store: &ScyllaDbClient,
         key: Vec<u8>,
     ) -> Result<Option<Vec<u8>>, ScyllaDbContextError> {
         ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
-        let session = &store.0;
+        let session = &store.session;
         // Read the value of a key
         let values = (key,);
-        let query = &store.1.read_value;
+        let query = &store.read_value;
         let result = session.query(query.clone(), values).await?;
         if let Some(rows) = result.rows {
             if let Some(row) = rows.into_typed::<(Vec<u8>,)>().next() {
@@ -333,14 +332,14 @@ impl ScyllaDbStoreInternal {
     }
 
     async fn contains_key_internal(
-        store: &ScyllaDbStorePair,
+        store: &ScyllaDbClient,
         key: Vec<u8>,
     ) -> Result<bool, ScyllaDbContextError> {
         ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
-        let session = &store.0;
+        let session = &store.session;
         // Read the value of a key
         let values = (key,);
-        let query = &store.1.contains_key;
+        let query = &store.contains_key;
         let result = session.query(query.clone(), values).await?;
         if let Some(rows) = result.rows {
             if let Some(_row) = rows.into_typed::<(Vec<u8>,)>().next() {
@@ -351,14 +350,14 @@ impl ScyllaDbStoreInternal {
     }
 
     async fn write_batch_internal(
-        store: &ScyllaDbStorePair,
+        store: &ScyllaDbClient,
         batch: UnorderedBatch,
     ) -> Result<(), ScyllaDbContextError> {
-        let session = &store.0;
+        let session = &store.session;
         let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Logged);
         let mut batch_values = Vec::new();
-        let query1 = &store.1.write_batch_delete_prefix_unbounded;
-        let query2 = &store.1.write_batch_delete_prefix_bounded;
+        let query1 = &store.write_batch_delete_prefix_unbounded;
+        let query2 = &store.write_batch_delete_prefix_bounded;
         for key_prefix in batch.key_prefix_deletions {
             ensure!(
                 key_prefix.len() <= MAX_KEY_SIZE,
@@ -377,13 +376,13 @@ impl ScyllaDbStoreInternal {
                 }
             }
         }
-        let query3 = &store.1.write_batch_deletion;
+        let query3 = &store.write_batch_deletion;
         for key in batch.simple_unordered_batch.deletions {
             let values = vec![key];
             batch_values.push(values);
             batch_query.append_statement(query3.clone());
         }
-        let query4 = &store.1.write_batch_insertion;
+        let query4 = &store.write_batch_insertion;
         for (key, value) in batch.simple_unordered_batch.insertions {
             ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
             let values = vec![key, value];
@@ -395,19 +394,19 @@ impl ScyllaDbStoreInternal {
     }
 
     async fn find_keys_by_prefix_internal(
-        store: &ScyllaDbStorePair,
+        store: &ScyllaDbClient,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, ScyllaDbContextError> {
         ensure!(
             key_prefix.len() <= MAX_KEY_SIZE,
             ScyllaDbContextError::KeyTooLong
         );
-        let session = &store.0;
+        let session = &store.session;
         // Read the value of a key
         let len = key_prefix.len();
         let mut keys = Vec::new();
-        let query_unbounded = &store.1.find_keys_by_prefix_unbounded;
-        let query_bounded = &store.1.find_keys_by_prefix_bounded;
+        let query_unbounded = &store.find_keys_by_prefix_unbounded;
+        let query_bounded = &store.find_keys_by_prefix_bounded;
         let mut paging_state = None;
         loop {
             let result = match get_upper_bound_option(&key_prefix) {
@@ -439,19 +438,19 @@ impl ScyllaDbStoreInternal {
     }
 
     async fn find_key_values_by_prefix_internal(
-        store: &ScyllaDbStorePair,
+        store: &ScyllaDbClient,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ScyllaDbContextError> {
         ensure!(
             key_prefix.len() <= MAX_KEY_SIZE,
             ScyllaDbContextError::KeyTooLong
         );
-        let session = &store.0;
+        let session = &store.session;
         // Read the value of a key
         let len = key_prefix.len();
         let mut key_values = Vec::new();
-        let query_unbounded = &store.1.find_key_values_by_prefix_unbounded;
-        let query_bounded = &store.1.find_key_values_by_prefix_bounded;
+        let query_unbounded = &store.find_key_values_by_prefix_unbounded;
+        let query_bounded = &store.find_key_values_by_prefix_bounded;
         let mut paging_state = None;
         loop {
             let result = match get_upper_bound_option(&key_prefix) {
@@ -485,7 +484,7 @@ impl ScyllaDbStoreInternal {
     /// Retrieves the table_name from the store
     pub async fn get_table_name(&self) -> String {
         let store = self.store.deref();
-        store.1.table_name.clone()
+        store.table_name.clone()
     }
 
     /// Tests if a table is present in the database or not
@@ -724,8 +723,7 @@ impl ScyllaDbStoreInternal {
         } else {
             TableStatus::New
         };
-        let queries = ScyllaDbQueries::new(store_config.table_name);
-        let store = (session, queries);
+        let store = ScyllaDbClient::new(session, store_config.table_name);
         let store = Arc::new(store);
         let semaphore = store_config
             .common_config
