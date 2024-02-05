@@ -12,7 +12,7 @@ use crate::client::client_tests::{MakeMemoryStorage, StorageBuilder, TestBuilder
 use async_graphql::Request;
 use linera_base::{
     data_types::Amount,
-    identifiers::{ChainDescription, ChainId, Destination, Owner},
+    identifiers::{AccountOwner, ChainDescription, ChainId, Destination, Owner},
 };
 use linera_chain::data_types::{CertificateValue, MessageAction, OutgoingMessage};
 use linera_execution::{
@@ -408,9 +408,8 @@ where
     sender.receive_certificate(pub_cert.clone()).await.unwrap();
     sender.process_inbox().await.unwrap();
 
-    let sender_owner = fungible::AccountOwner::User(Owner::from(sender.key_pair().await?.public()));
-    let receiver_owner =
-        fungible::AccountOwner::User(Owner::from(receiver.key_pair().await?.public()));
+    let sender_owner = AccountOwner::User(Owner::from(sender.key_pair().await?.public()));
+    let receiver_owner = AccountOwner::User(Owner::from(receiver.key_pair().await?.public()));
 
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from_tokens(1_000_000))]);
     let state = fungible::InitialState { accounts };

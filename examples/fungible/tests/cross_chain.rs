@@ -5,10 +5,11 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use fungible::{
-    Account, AccountOwner, FungibleTokenAbi, InitialStateBuilder, Operation, Parameters,
+use fungible::{Account, FungibleTokenAbi, InitialStateBuilder, Operation, Parameters};
+use linera_sdk::{
+    base::{AccountOwner, Amount},
+    test::TestValidator,
 };
-use linera_sdk::{base::Amount, test::TestValidator};
 
 /// Test transferring tokens across microchains.
 ///

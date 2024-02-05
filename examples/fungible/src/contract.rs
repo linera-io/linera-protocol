@@ -8,11 +8,10 @@ mod state;
 use self::state::FungibleToken;
 use async_trait::async_trait;
 use fungible::{
-    Account, AccountOwner, ApplicationCall, Destination, FungibleResponse, Message, Operation,
-    SessionCall,
+    Account, ApplicationCall, Destination, FungibleResponse, Message, Operation, SessionCall,
 };
 use linera_sdk::{
-    base::{Amount, ApplicationId, Owner, SessionId, WithContractAbi},
+    base::{AccountOwner, Amount, ApplicationId, Owner, SessionId, WithContractAbi},
     contract::system_api,
     ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
     OperationContext, SessionCallOutcome, ViewStateStorage,

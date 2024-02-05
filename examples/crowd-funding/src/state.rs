@@ -3,9 +3,8 @@
 
 use async_graphql::scalar;
 use crowd_funding::InitializationArgument;
-use fungible::AccountOwner;
 use linera_sdk::{
-    base::Amount,
+    base::{AccountOwner, Amount},
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 use serde::{Deserialize, Serialize};

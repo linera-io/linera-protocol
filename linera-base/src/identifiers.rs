@@ -9,6 +9,7 @@ use crate::{
     data_types::BlockHeight,
     doc_scalar,
 };
+use anyhow::{anyhow, Context};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Debug, Display},
@@ -21,6 +22,15 @@ use std::{
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default, test_strategy::Arbitrary))]
 pub struct Owner(pub CryptoHash);
+
+/// An account owner.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum AccountOwner {
+    /// An account owned by a user.
+    User(Owner),
+    /// An account for an application.
+    Application(ApplicationId),
+}
 
 /// How to create a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
@@ -574,6 +584,83 @@ impl std::str::FromStr for Owner {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "AccountOwner")]
+enum SerializableAccountOwner {
+    User(Owner),
+    Application(ApplicationId),
+}
+
+impl Serialize for AccountOwner {
+    fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.to_string())
+        } else {
+            match self {
+                AccountOwner::Application(app_id) => SerializableAccountOwner::Application(*app_id),
+                AccountOwner::User(owner) => SerializableAccountOwner::User(*owner),
+            }
+            .serialize(serializer)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for AccountOwner {
+    fn deserialize<D: serde::de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let value = Self::from_str(&s).map_err(serde::de::Error::custom)?;
+            Ok(value)
+        } else {
+            let value = SerializableAccountOwner::deserialize(deserializer)?;
+            match value {
+                SerializableAccountOwner::Application(app_id) => {
+                    Ok(AccountOwner::Application(app_id))
+                }
+                SerializableAccountOwner::User(owner) => Ok(AccountOwner::User(owner)),
+            }
+        }
+    }
+}
+
+impl Display for AccountOwner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AccountOwner::User(owner) => write!(f, "User:{}", owner)?,
+            AccountOwner::Application(app_id) => write!(f, "Application:{}", app_id)?,
+        };
+
+        Ok(())
+    }
+}
+
+impl FromStr for AccountOwner {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Some(owner) = s.strip_prefix("User:") {
+            Ok(AccountOwner::User(
+                Owner::from_str(owner).context("Getting Owner should not fail")?,
+            ))
+        } else if let Some(app_id) = s.strip_prefix("Application:") {
+            Ok(AccountOwner::Application(
+                ApplicationId::from_str(app_id).context("Getting ApplicationId should not fail")?,
+            ))
+        } else {
+            Err(anyhow!("Invalid enum! Enum: {}", s))
+        }
+    }
+}
+
+impl<T> From<T> for AccountOwner
+where
+    T: Into<Owner>,
+{
+    fn from(owner: T) -> Self {
+        AccountOwner::User(owner.into())
+    }
+}
+
 impl Display for ChainId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.0, f)
@@ -645,6 +732,7 @@ doc_scalar!(
     Destination,
     "The destination of a message, relative to a particular application."
 );
+doc_scalar!(AccountOwner, "An owner of an account.");
 
 #[cfg(test)]
 mod tests {

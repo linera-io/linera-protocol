@@ -151,9 +151,9 @@ query{
 */
 
 use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
-use fungible::{AccountOwner, FungibleTokenAbi};
+use fungible::FungibleTokenAbi;
 use linera_sdk::{
-    base::{Amount, ApplicationId, ContractAbi, ServiceAbi},
+    base::{AccountOwner, Amount, ApplicationId, ContractAbi, ServiceAbi},
     graphql::GraphQLMutationRoot,
     views::{CustomSerialize, ViewError},
 };

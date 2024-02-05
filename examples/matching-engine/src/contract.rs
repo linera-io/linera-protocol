@@ -12,9 +12,9 @@ use state::{LevelView, MatchingEngine, MatchingEngineError};
 use std::cmp::min;
 
 use async_trait::async_trait;
-use fungible::{Account, AccountOwner, Destination, FungibleTokenAbi};
+use fungible::{Account, Destination, FungibleTokenAbi};
 use linera_sdk::{
-    base::{Amount, ApplicationId, Owner, SessionId, WithContractAbi},
+    base::{AccountOwner, Amount, ApplicationId, Owner, SessionId, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
     OperationContext, OutgoingMessage, Resources, SessionCallOutcome, ViewStateStorage,

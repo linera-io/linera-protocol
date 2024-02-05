@@ -37,7 +37,7 @@ use {
     linera_base::{
         crypto::PublicKey,
         data_types::Amount,
-        identifiers::{ApplicationId, Owner},
+        identifiers::{AccountOwner, ApplicationId, Owner},
     },
     linera_chain::data_types::{Block, BlockAndRound, BlockProposal, SignatureAggregator, Vote},
     linera_core::{
@@ -841,10 +841,10 @@ impl ClientContext {
     ) -> Operation {
         let target_account = fungible::Account {
             chain_id,
-            owner: fungible::AccountOwner::User(Owner::from(receiver)),
+            owner: AccountOwner::User(Owner::from(receiver)),
         };
         let bytes = bcs::to_bytes(&fungible::Operation::Transfer {
-            owner: fungible::AccountOwner::User(Owner::from(sender)),
+            owner: AccountOwner::User(Owner::from(sender)),
             amount,
             target_account,
         })
