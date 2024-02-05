@@ -1,12 +1,12 @@
 [package]
-name = "linera-shared-storage"
+name = "linera-storage-service"
 version = "0.6.0"
 description = "RPC shared key value store."
 authors = ["Linera <contact@linera.io>"]
 readme = "README.md"
 repository = "https://github.com/linera-io/linera-protocol"
 homepage = "https://linera.dev"
-documentation = "https://docs.rs/linera-shared-storage/latest/linera_shared_storage/"
+documentation = "https://docs.rs/linera-storage-service/latest/linera_storage_service/"
 license = "Apache-2.0"
 edition = "2021"
 
@@ -33,7 +33,7 @@ tokio = { workspace = true }
 tonic = { workspace = true }
 
 [dev-dependencies]
-linera-shared-storage = { path = ".", features = ["test"] }
+linera-storage-service = { path = ".", features = ["test"] }
 proptest = { workspace = true }
 serde-reflection = { workspace = true }
 serde_yaml = { workspace = true }
