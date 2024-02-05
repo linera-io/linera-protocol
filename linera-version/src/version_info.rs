@@ -3,7 +3,6 @@
 
 use std::{io::Read as _, path::PathBuf};
 
-#[cfg_attr(linera_version_building, derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CrateVersion {
     pub major: u32,
@@ -25,6 +24,18 @@ impl From<semver::Version> for CrateVersion {
             minor: minor as u32,
             patch: patch as u32,
         }
+    }
+}
+
+impl From<CrateVersion> for semver::Version {
+    fn from(
+        CrateVersion {
+            major,
+            minor,
+            patch,
+        }: CrateVersion,
+    ) -> Self {
+        Self::new(major as u64, minor as u64, patch as u64)
     }
 }
 
@@ -76,14 +87,12 @@ struct Outcome {
     output: String,
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
-
 fn get_hash(
     relevant_paths: &mut Vec<PathBuf>,
     metadata: &cargo_metadata::Metadata,
     package: &str,
     glob: &str,
-) -> Result<String> {
+) -> Result<String, Error> {
     use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
     use sha3::Digest as _;
 
@@ -108,7 +117,7 @@ fn get_hash(
     Ok(STANDARD_NO_PAD.encode(hasher.finalize()))
 }
 
-fn run(cmd: &str, args: &[&str]) -> Result<Outcome> {
+fn run(cmd: &str, args: &[&str]) -> Result<Outcome, Error> {
     let mut cmd = std::process::Command::new(cmd);
 
     let mut child = cmd
@@ -150,11 +159,11 @@ fn get_package_root<'r>(
 }
 
 impl VersionInfo {
-    pub fn get() -> Result<Self> {
+    pub fn get() -> Result<Self, Error> {
         Self::trace_get(&mut vec![])
     }
 
-    fn trace_get(paths: &mut Vec<PathBuf>) -> Result<Self> {
+    fn trace_get(paths: &mut Vec<PathBuf>) -> Result<Self, Error> {
         let metadata = cargo_metadata::MetadataCommand::new()
             .current_dir(env!("PWD"))
             .exec()?;

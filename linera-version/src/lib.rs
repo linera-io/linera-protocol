@@ -50,6 +50,20 @@ impl CrateVersion {
     }
 }
 
+impl serde::ser::Serialize for CrateVersion {
+    fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        semver::Version::from(self.clone()).serialize(serializer)
+    }
+}
+
+impl<'de> serde::de::Deserialize<'de> for CrateVersion {
+    fn deserialize<D: serde::de::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<CrateVersion, D::Error> {
+        Ok(semver::Version::deserialize(deserializer)?.into())
+    }
+}
+
 async_graphql::scalar!(
     CrateVersion,
     "CrateVersion",

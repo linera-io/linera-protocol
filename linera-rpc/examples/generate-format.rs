@@ -19,6 +19,7 @@ use linera_execution::{
     ChainOwnership, GenericApplicationId, Message, MessageKind, Operation,
 };
 use linera_rpc::RpcMessage;
+use linera_version::CrateVersion;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 
@@ -26,11 +27,28 @@ fn get_registry() -> Result<Registry> {
     let mut tracer = Tracer::new(
         TracerConfig::default()
             .record_samples_for_newtype_structs(true)
-            .record_samples_for_tuple_structs(true),
+            .record_samples_for_tuple_structs(true)
+            .record_samples_for_structs(true),
     );
-    let samples = Samples::new();
+    let mut samples = Samples::new();
+
     // 1. Record samples for types with custom deserializers.
-    // 2. Trace the main entry point(s) + every enum separately.
+    tracer.trace_value::<linera_version::VersionInfo>(
+        &mut samples,
+        &linera_version::VersionInfo {
+            crate_version: CrateVersion {
+                major: 1,
+                minor: 2,
+                patch: 3,
+            },
+            git_commit: "eeeeeeeeee".into(),
+            git_dirty: false,
+            rpc_hash: "cnBjX2hhc2gK".into(),
+            graphql_hash: "Z3JhcGhxbF9oYXNoCg==".into(),
+            wit_hash: "d2l0X2hhc2gK".into(),
+        },
+    )?;
+
     tracer.trace_type::<Round>(&samples)?;
     tracer.trace_type::<Recipient>(&samples)?;
     tracer.trace_type::<SystemChannel>(&samples)?;
