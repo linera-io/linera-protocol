@@ -3,6 +3,10 @@
 
 use std::{io::Read as _, path::PathBuf};
 
+#[cfg(linera_version_building)]
+use crate::serde_pretty::Pretty;
+
+#[cfg_attr(linera_version_building, derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CrateVersion {
     pub major: u32,
@@ -39,12 +43,6 @@ impl From<CrateVersion> for semver::Version {
     }
 }
 
-impl std::fmt::Display for CrateVersion {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(formatter, "{}.{}.{}", self.major, self.minor, self.patch)
-    }
-}
-
 pub type Hash = std::borrow::Cow<'static, str>;
 
 #[cfg_attr(
@@ -55,7 +53,7 @@ pub type Hash = std::borrow::Cow<'static, str>;
 /// The version info of a build of Linera.
 pub struct VersionInfo {
     /// The crate version
-    pub crate_version: CrateVersion,
+    pub crate_version: Pretty<CrateVersion, semver::Version>,
     /// The git commit hash
     pub git_commit: Hash,
     /// Whether the git checkout was dirty
@@ -168,11 +166,13 @@ impl VersionInfo {
             .current_dir(env!("PWD"))
             .exec()?;
 
-        let crate_version = get_package(&metadata, env!("CARGO_PKG_NAME"))
-            .expect("this package must be in the dependency tree")
-            .version
-            .clone()
-            .into();
+        let crate_version = Pretty::new(
+            get_package(&metadata, env!("CARGO_PKG_NAME"))
+                .expect("this package must be in the dependency tree")
+                .version
+                .clone()
+                .into(),
+        );
 
         let mut git_dirty = false;
         let git_commit = if let Ok(git_commit) = std::env::var("GIT_COMMIT") {

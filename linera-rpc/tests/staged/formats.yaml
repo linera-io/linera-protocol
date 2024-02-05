@@ -289,6 +289,11 @@ Committee:
             TYPENAME: ValidatorState
     - policy:
         TYPENAME: ResourceControlPolicy
+CrateVersion:
+  STRUCT:
+    - major: U32
+    - minor: U32
+    - patch: U32
 CrossChainRequest:
   ENUM:
     0:
@@ -923,7 +928,8 @@ ValidatorState:
     - votes: U64
 VersionInfo:
   STRUCT:
-    - crate_version: STR
+    - crate_version:
+        TYPENAME: CrateVersion
     - git_commit: STR
     - git_dirty: BOOL
     - rpc_hash: STR

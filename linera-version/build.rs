@@ -1,15 +1,20 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-include!("src/version_info.rs");
+include!("src/serde_pretty/type.rs");
+include!("src/version_info/type.rs");
 
 fn main() {
     let VersionInfo {
         crate_version:
-            CrateVersion {
-                major,
-                minor,
-                patch,
+            Pretty {
+                value:
+                    CrateVersion {
+                        major,
+                        minor,
+                        patch,
+                    },
+                ..
             },
         git_commit,
         git_dirty,
@@ -27,7 +32,9 @@ fn main() {
 
     let static_code = quote::quote! {
         VersionInfo {
-            crate_version: CrateVersion { major: #major, minor: #minor, patch: #patch },
+            crate_version: crate::serde_pretty::Pretty::new(
+                CrateVersion { major: #major, minor: #minor, patch: #patch },
+            ),
             git_commit: ::std::borrow::Cow::Borrowed(#git_commit),
             git_dirty: #git_dirty,
             rpc_hash: ::std::borrow::Cow::Borrowed(#rpc_hash),
