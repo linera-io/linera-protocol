@@ -291,9 +291,9 @@ Committee:
         TYPENAME: ResourceControlPolicy
 CrateVersion:
   STRUCT:
-    - major: U64
-    - minor: U64
-    - patch: U64
+    - major: U32
+    - minor: U32
+    - patch: U32
 CrossChainRequest:
   ENUM:
     0:

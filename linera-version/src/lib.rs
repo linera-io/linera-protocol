@@ -50,6 +50,12 @@ impl CrateVersion {
     }
 }
 
+async_graphql::scalar!(
+    CrateVersion,
+    "CrateVersion",
+    "The version of the Linera crates used in this build"
+);
+
 impl VersionInfo {
     /// Print a human-readable listing of the version information at `info` level.
     pub fn log(&self) {

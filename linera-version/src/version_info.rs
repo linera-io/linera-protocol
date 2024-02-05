@@ -1,25 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    io::{Read as _, Write as _},
-    path::PathBuf,
-};
+use std::{io::Read as _, path::PathBuf};
 
 #[cfg_attr(linera_version_building, derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CrateVersion {
-    pub major: u64,
-    pub minor: u64,
-    pub patch: u64,
+    pub major: u32,
+    pub minor: u32,
+    pub patch: u32,
 }
-
-#[cfg(linera_version_building)]
-async_graphql::scalar!(
-    CrateVersion,
-    "CrateVersion",
-    "The version of the Linera crates used in this build"
-);
 
 impl From<semver::Version> for CrateVersion {
     fn from(
@@ -31,9 +21,9 @@ impl From<semver::Version> for CrateVersion {
         }: semver::Version,
     ) -> Self {
         Self {
-            major,
-            minor,
-            patch,
+            major: major as u32,
+            minor: minor as u32,
+            patch: patch as u32,
         }
     }
 }
@@ -118,23 +108,13 @@ fn get_hash(
     Ok(STANDARD_NO_PAD.encode(hasher.finalize()))
 }
 
-fn run<'a>(cmd: &str, args: &[&str], stdin: impl Into<Option<&'a str>>) -> Result<Outcome> {
-    let stdin = stdin.into();
-
+fn run(cmd: &str, args: &[&str]) -> Result<Outcome> {
     let mut cmd = std::process::Command::new(cmd);
-
-    if stdin.is_some() {
-        cmd.stdin(std::process::Stdio::piped());
-    }
 
     let mut child = cmd
         .args(args)
         .stdout(std::process::Stdio::piped())
         .spawn()?;
-
-    if let Some(stdin) = stdin {
-        write!(child.stdin.take().unwrap(), "{}", stdin)?;
-    }
 
     let mut output = String::new();
     child.stdout.take().unwrap().read_to_string(&mut output)?;
@@ -184,11 +164,11 @@ impl VersionInfo {
             .version
             .clone()
             .into();
-        let git_outcome = run("git", &["rev-parse", "HEAD"], None)?;
+        let git_outcome = run("git", &["rev-parse", "HEAD"])?;
         let mut git_dirty = false;
 
         let git_commit = if git_outcome.status.success() {
-            git_dirty = run("git", &["diff-index", "--quiet", "HEAD"], None)?
+            git_dirty = run("git", &["diff-index", "--quiet", "HEAD"])?
                 .status
                 .code()
                 == Some(1);
