@@ -164,17 +164,21 @@ impl VersionInfo {
             .version
             .clone()
             .into();
-        let git_outcome = run("git", &["rev-parse", "HEAD"])?;
-        let mut git_dirty = false;
 
-        let git_commit = if git_outcome.status.success() {
-            git_dirty = run("git", &["diff-index", "--quiet", "HEAD"])?
-                .status
-                .code()
-                == Some(1);
-            git_outcome.output[..10].to_owned()
+        let mut git_dirty = false;
+        let git_commit = if let Ok(git_commit) = std::env::var("GIT_COMMIT") {
+            git_commit
         } else {
-            format!("v{}", crate_version)
+            let git_outcome = run("git", &["rev-parse", "HEAD"])?;
+            if git_outcome.status.success() {
+                git_dirty = run("git", &["diff-index", "--quiet", "HEAD"])?
+                    .status
+                    .code()
+                    == Some(1);
+                git_outcome.output[..10].to_owned()
+            } else {
+                format!("v{}", crate_version)
+            }
         }
         .into();
 
