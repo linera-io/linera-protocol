@@ -43,10 +43,7 @@ pub struct LocalKubernetesNetConfig {
 
 /// A simplified version of [`LocalKubernetesNetConfig`]
 #[cfg(any(test, feature = "test"))]
-pub struct SharedLocalKubernetesNetTestingConfig {
-    pub network: Network,
-    pub binaries: Option<Option<PathBuf>>,
-}
+pub struct SharedLocalKubernetesNetTestingConfig(LocalKubernetesNetConfig);
 
 /// A set of Linera validators running locally as native processes.
 #[derive(Clone)]
@@ -64,7 +61,7 @@ pub struct LocalKubernetesNet {
 
 #[cfg(any(test, feature = "test"))]
 impl SharedLocalKubernetesNetTestingConfig {
-    pub fn new(network: Network, binaries: Option<Option<PathBuf>>) -> Self {
+    pub fn new(network: Network, mut binaries: Option<Option<PathBuf>>) -> Self {
         if std::env::var("LINERA_TRY_RELEASE_BINARIES").unwrap_or_default() == "true"
             && binaries.is_none()
         {
@@ -78,18 +75,18 @@ impl SharedLocalKubernetesNetTestingConfig {
                 .join("release");
             if binaries_dir.exists() {
                 // If release exists, use those binaries
-                Self {
-                    network,
-                    binaries: Some(Some(binaries_dir)),
-                }
-            } else {
-                // If release doesn't exist, pass None to build binaries
-                // from within Docker container
-                Self { network, binaries }
+                binaries = Some(Some(binaries_dir));
             }
-        } else {
-            Self { network, binaries }
         }
+        Self(LocalKubernetesNetConfig {
+            network,
+            testing_prng_seed: Some(37),
+            num_other_initial_chains: 10,
+            initial_amount: Amount::from_tokens(2000),
+            num_initial_validators: 4,
+            num_shards: 4,
+            binaries,
+        })
     }
 }
 
@@ -138,40 +135,13 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
     type Net = Arc<Mutex<LocalKubernetesNet>>;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
-        let seed = 37;
         let (net, initial_client) = SHARED_LOCAL_KUBERNETES_TESTING_NET
             .get_or_init(|| async {
-                let num_validators = 4;
-                let num_shards = 4;
-
-                let clusters = future::join_all((0..num_validators).map(|_| async {
-                    KindCluster::create()
-                        .await
-                        .expect("Creating kind cluster should not fail")
-                }))
-                .await;
-
-                let mut net = LocalKubernetesNet::new(
-                    self.network,
-                    Some(seed),
-                    self.binaries,
-                    KubectlInstance::new(Vec::new()),
-                    clusters,
-                    num_validators,
-                    num_shards,
-                )
-                .expect("Creating LocalKubernetesNet should not fail");
-
-                let initial_client = net.make_client().await;
-                if num_validators > 0 {
-                    net.generate_initial_validator_config().await.unwrap();
-                    initial_client
-                        .create_genesis_config(10, Amount::from_tokens(2000))
-                        .await
-                        .unwrap();
-                    net.run().await.unwrap();
-                }
-
+                let (net, initial_client) = self
+                    .0
+                    .instantiate()
+                    .await
+                    .expect("Instantiating LocalKubernetesNetConfig should not fail");
                 (Arc::new(Mutex::new(net)), initial_client)
             })
             .await;
@@ -179,11 +149,9 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
         let mut net = net.clone();
         let client = net.make_client().await;
         // The tests assume we've created a genesis config with 10
-        // chains with 10 tokens each. We create the first chain here
+        // chains with 10 tokens each.
         client.wallet_init(&[], FaucetOption::None).await.unwrap();
-
-        // And the remaining 9 here
-        for _ in 0..9 {
+        for _ in 0..10 {
             initial_client
                 .open_and_assign(&client, Amount::from_tokens(10))
                 .await
