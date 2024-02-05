@@ -10,4 +10,4 @@ pub mod key_value_store {
 }
 
 pub mod common;
-pub mod shared_store_client;
+pub mod client;

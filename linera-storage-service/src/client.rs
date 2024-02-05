@@ -145,7 +145,7 @@ impl WritableKeyValueStore<SharedContextError> for SharedStoreClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), SharedContextError> {
-        use crate::shared_store_client::Operation;
+        use crate::client::Operation;
         use linera_views::batch::WriteOperation;
         let mut statements = Vec::new();
         for operation in batch.operations {

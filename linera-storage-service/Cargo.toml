@@ -18,8 +18,8 @@ scylladb = ["linera-views/scylladb", "linera-service/scylladb"]
 test = ["linera-views/test", "linera-service/test"]
 
 [[bin]]
-name = "shared_store_server"
-path = "src/shared_store_server.rs"
+name = "storage_service_server"
+path = "src/server.rs"
 
 [dependencies]
 async-lock = { workspace = true }

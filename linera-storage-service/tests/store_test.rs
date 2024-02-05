@@ -19,7 +19,7 @@ use linera_views::test_utils::{
     get_random_test_scenarios, run_reads, run_writes_from_blank, run_writes_from_state,
 };
 
-use linera_shared_storage::shared_store_client::create_shared_test_store;
+use linera_storage_service::client::create_shared_test_store;
 
 #[cfg(test)]
 async fn clean_storage() {
