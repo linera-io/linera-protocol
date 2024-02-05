@@ -6,7 +6,7 @@
 
 #[cfg(feature = "kubernetes")]
 /// How to run docker operations
-mod docker;
+pub mod docker;
 
 #[cfg(feature = "kubernetes")]
 /// How to run helmfile operations

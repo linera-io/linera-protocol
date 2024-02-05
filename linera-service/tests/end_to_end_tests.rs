@@ -26,10 +26,12 @@ use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 use test_case::test_case;
 use tracing::{info, warn};
 
-#[cfg(feature = "kubernetes")]
-use linera_service::cli_wrappers::local_kubernetes_net::SharedLocalKubernetesNetTestingConfig;
 #[cfg(feature = "remote_net")]
 use linera_service::cli_wrappers::remote_net::RemoteNetTestingConfig;
+#[cfg(feature = "kubernetes")]
+use linera_service::cli_wrappers::{
+    docker::BuildArg, local_kubernetes_net::SharedLocalKubernetesNetTestingConfig,
+};
 
 fn get_fungible_account_owner(client: &ClientWrapper) -> fungible::AccountOwner {
     let owner = client.get_owner().unwrap();
@@ -164,7 +166,7 @@ impl AmmApp {
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) {
@@ -215,7 +217,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) {
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfig) {
@@ -264,7 +266,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) {
@@ -359,7 +361,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
@@ -482,7 +484,7 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_same_wallet_fungible(config: impl LineraNetConfig) {
@@ -572,7 +574,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(config: impl LineraNetConfig)
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
@@ -704,7 +706,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
 // TODO(#1159): We should enable the matching engine on other storages.
 // #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 // #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-// #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc) ; "kubernetes_grpc"))]
+// #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 // #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[test_log::test(tokio::test)]
@@ -988,7 +990,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
@@ -1497,7 +1499,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_open_chain_node_service(config: impl LineraNetConfig) {
@@ -1653,7 +1655,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) {
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
@@ -1922,7 +1924,7 @@ async fn test_example_publish(database: Database, network: Network) {
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
@@ -2033,7 +2035,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConfig) {
@@ -2108,7 +2110,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
@@ -2217,7 +2219,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) {

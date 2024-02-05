@@ -23,7 +23,10 @@ use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
 
 #[cfg(any(test, feature = "test"))]
-use {crate::cli_wrappers::wallet::FaucetOption, tokio::sync::OnceCell};
+use {
+    crate::{cli_wrappers::wallet::FaucetOption, util::current_binary_parent},
+    tokio::sync::OnceCell,
+};
 
 #[cfg(any(test, feature = "test"))]
 static SHARED_LOCAL_KUBERNETES_TESTING_NET: OnceCell<(
@@ -63,7 +66,24 @@ pub struct LocalKubernetesNet {
 
 #[cfg(any(test, feature = "test"))]
 impl SharedLocalKubernetesNetTestingConfig {
-    pub fn new(network: Network) -> Self {
+    // The second argument is sometimes used locally to use specific binaries for tests.
+    pub fn new(network: Network, mut binaries: BuildArg) -> Self {
+        if std::env::var("LINERA_TRY_RELEASE_BINARIES").unwrap_or_default() == "true"
+            && matches!(binaries, BuildArg::Build)
+        {
+            // For cargo test, current binary should be in debug mode
+            let current_binary_parent =
+                current_binary_parent().expect("Fetching current binaries path should not fail");
+            // But binaries for cluster should be release mode
+            let binaries_dir = current_binary_parent
+                .parent()
+                .expect("Getting parent should not fail")
+                .join("release");
+            if binaries_dir.exists() {
+                // If release exists, use those binaries
+                binaries = BuildArg::Directory(binaries_dir);
+            }
+        }
         Self(LocalKubernetesNetConfig {
             network,
             testing_prng_seed: Some(37),
@@ -71,7 +91,7 @@ impl SharedLocalKubernetesNetTestingConfig {
             initial_amount: Amount::from_tokens(2000),
             num_initial_validators: 4,
             num_shards: 4,
-            binaries: BuildArg::Build,
+            binaries,
         })
     }
 }
