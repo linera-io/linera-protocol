@@ -42,7 +42,8 @@ pub struct LocalKubernetesNetConfig {
     pub binaries: BuildArg,
 }
 
-/// A simplified version of [`LocalKubernetesNetConfig`]
+/// A wrapper of [`LocalKubernetesNetConfig`] to create a shared local Kubernetes network
+/// or use an existing one.
 #[cfg(any(test, feature = "test"))]
 pub struct SharedLocalKubernetesNetTestingConfig(LocalKubernetesNetConfig);
 
