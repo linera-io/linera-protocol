@@ -475,7 +475,7 @@ impl DynamoDbStoreInternal {
         .await
     }
 
-    /// Initializes a RocksDB database from a specified path.
+    /// Initializes a DynamoDB database from a specified path.
     pub async fn initialize(
         store_config: DynamoDbStoreConfig,
     ) -> Result<Self, DynamoDbContextError> {
