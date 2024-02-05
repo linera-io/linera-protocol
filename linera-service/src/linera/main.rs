@@ -1493,7 +1493,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                             initial_amount: Amount::from_tokens(*initial_amount),
                             num_initial_validators: *validators,
                             num_shards: *shards,
-                            binaries: binaries.clone(),
+                            binaries: binaries.clone().into(),
                         };
                         let (mut net, client1) = config.instantiate().await?;
                         let result = Ok(net_up(extra_wallets, &mut net, client1).await?);

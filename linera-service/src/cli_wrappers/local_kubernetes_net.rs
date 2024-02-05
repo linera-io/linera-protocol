@@ -3,8 +3,12 @@
 
 use crate::{
     cli_wrappers::{
-        docker::DockerImage, helmfile::HelmFile, kind::KindCluster, kubectl::KubectlInstance,
-        util::get_github_root, ClientWrapper, LineraNet, LineraNetConfig, Network,
+        docker::{BuildArg, DockerImage},
+        helmfile::HelmFile,
+        kind::KindCluster,
+        kubectl::KubectlInstance,
+        util::get_github_root,
+        ClientWrapper, LineraNet, LineraNetConfig, Network,
     },
     util::{self, CommandExt},
 };
@@ -14,15 +18,12 @@ use futures::{future, lock::Mutex};
 use k8s_openapi::api::core::v1::Pod;
 use kube::{api::ListParams, Api, Client};
 use linera_base::data_types::Amount;
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
 
 #[cfg(any(test, feature = "test"))]
-use {
-    crate::{cli_wrappers::wallet::FaucetOption, util::current_binary_parent},
-    tokio::sync::OnceCell,
-};
+use {crate::cli_wrappers::wallet::FaucetOption, tokio::sync::OnceCell};
 
 #[cfg(any(test, feature = "test"))]
 static SHARED_LOCAL_KUBERNETES_TESTING_NET: OnceCell<(
@@ -38,7 +39,7 @@ pub struct LocalKubernetesNetConfig {
     pub initial_amount: Amount,
     pub num_initial_validators: usize,
     pub num_shards: usize,
-    pub binaries: Option<Option<PathBuf>>,
+    pub binaries: BuildArg,
 }
 
 /// A simplified version of [`LocalKubernetesNetConfig`]
@@ -52,7 +53,7 @@ pub struct LocalKubernetesNet {
     testing_prng_seed: Option<u64>,
     next_client_id: usize,
     tmp_dir: Arc<TempDir>,
-    binaries: Option<Option<PathBuf>>,
+    binaries: BuildArg,
     kubectl_instance: Arc<Mutex<KubectlInstance>>,
     kind_clusters: Vec<KindCluster>,
     num_initial_validators: usize,
@@ -61,23 +62,7 @@ pub struct LocalKubernetesNet {
 
 #[cfg(any(test, feature = "test"))]
 impl SharedLocalKubernetesNetTestingConfig {
-    pub fn new(network: Network, mut binaries: Option<Option<PathBuf>>) -> Self {
-        if std::env::var("LINERA_TRY_RELEASE_BINARIES").unwrap_or_default() == "true"
-            && binaries.is_none()
-        {
-            // For cargo test, current binary should be in debug mode
-            let current_binary_parent =
-                current_binary_parent().expect("Fetching current binaries path should not fail");
-            // But binaries for cluster should be release mode
-            let binaries_dir = current_binary_parent
-                .parent()
-                .expect("Getting parent should not fail")
-                .join("release");
-            if binaries_dir.exists() {
-                // If release exists, use those binaries
-                binaries = Some(Some(binaries_dir));
-            }
-        }
+    pub fn new(network: Network) -> Self {
         Self(LocalKubernetesNetConfig {
             network,
             testing_prng_seed: Some(37),
@@ -85,7 +70,7 @@ impl SharedLocalKubernetesNetTestingConfig {
             initial_amount: Amount::from_tokens(2000),
             num_initial_validators: 4,
             num_shards: 4,
-            binaries,
+            binaries: BuildArg::Build,
         })
     }
 }
@@ -276,7 +261,7 @@ impl LocalKubernetesNet {
     fn new(
         network: Network,
         testing_prng_seed: Option<u64>,
-        binaries: Option<Option<PathBuf>>,
+        binaries: BuildArg,
         kubectl_instance: KubectlInstance,
         kind_clusters: Vec<KindCluster>,
         num_initial_validators: usize,
