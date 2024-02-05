@@ -30,25 +30,7 @@ RUN apt-get update && apt-get install -y \
     protobuf-compiler \
     clang
 
-COPY examples examples
-COPY linera-base linera-base
-COPY linera-chain linera-chain
-COPY linera-core linera-core
-COPY linera-execution linera-execution
-COPY linera-explorer linera-explorer
-COPY linera-indexer linera-indexer
-COPY linera-rpc linera-rpc
-COPY linera-sdk linera-sdk
-COPY linera-sdk-derive linera-sdk-derive
-COPY linera-service linera-service
-COPY linera-service-graphql-client linera-service-graphql-client
-COPY linera-storage linera-storage
-COPY linera-views linera-views
-COPY linera-views-derive linera-views-derive
-COPY linera-witty linera-witty
-COPY linera-witty-macros linera-witty-macros
-COPY scripts scripts
-COPY rust-toolchain* Cargo.* ./
+COPY . .
 
 ENV GIT_COMMIT=${git_commit}
 
