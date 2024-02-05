@@ -370,6 +370,28 @@ pub trait WritableKeyValueStore<E> {
 }
 
 /// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
+#[async_trait]
+pub trait AdminKeyValueStore<E>: Sized {
+    /// The configuration needed to interact with a new store.
+    type Config;
+
+    /// Connects to an existing namespace using the given configuration.
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, E>;
+
+    /// Obtains the list of existing namespaces.
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, E>;
+
+    /// Tests if a given namespace exists.
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, E>;
+
+    /// Creates a namespace. Returns an error if the namespace exists.
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), E>;
+
+    /// Deletes the given namespace.
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), E>;
+}
+
+/// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
 pub trait KeyValueStore:
     ReadableKeyValueStore<Self::Error> + WritableKeyValueStore<Self::Error>
 {
