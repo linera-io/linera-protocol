@@ -1,15 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// The store created by the create_shared_test_store
+/// The stores created by the `create_shared_test_store`
 /// are all pointing to the same storage.
 /// This is in contrast to other storage that are not
 /// persistent (e.g. memory) or uses a random table_name
-/// (e.g. rocksDb, DynamoDb, ScyllaDb)
+/// (e.g. RocksDb, DynamoDb, ScyllaDb)
 /// This requires two changes:
 /// * Only one test being run at a time with a semaphore.
 /// * After the test, the storage is cleaned
-
 pub static SHARED_STORE_SEMAPHORE: Semaphore = Semaphore::const_new(1);
 
 use linera_views::{batch::Batch, common::WritableKeyValueStore};
