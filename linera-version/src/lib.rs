@@ -22,7 +22,7 @@ impl std::fmt::Display for VersionInfo {
             RPC API hash: {rpc_hash}\n\
             GraphQL API hash: {graphql_hash}\n\
             WIT API hash: {wit_hash}\n\
-            Source code: {repo}/commit/{git_commit}{git_dirty}\n\
+            Source code: {repo}/tree/{git_commit}{git_dirty}\n\
             ",
             repo = env!("CARGO_PKG_REPOSITORY"),
             crate_version = self.crate_version,
