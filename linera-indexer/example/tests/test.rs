@@ -10,7 +10,7 @@ use linera_indexer_graphql_client::{
 };
 use linera_service::{
     cli_wrappers::{
-        local_net::{Database, LocalNetTestingConfig},
+        local_net::{Database, LocalNetConfig},
         LineraNet, LineraNetConfig, Network,
     },
     util::resolve_binary,
@@ -85,9 +85,9 @@ const TRANSFER_DELAY_MILLIS: u64 = 1000;
 #[cfg(not(debug_assertions))]
 const TRANSFER_DELAY_MILLIS: u64 = 100;
 
-#[cfg_attr(feature = "rocksdb", test_case(LocalNetTestingConfig::new(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetTestingConfig::new(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetTestingConfig::new(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
     // launching network, service and indexer

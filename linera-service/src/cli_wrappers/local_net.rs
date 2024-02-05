@@ -34,15 +34,6 @@ pub struct LocalNetConfig {
     pub num_shards: usize,
 }
 
-/// A simplified version of [`LocalNetConfig`]
-#[cfg(any(test, feature = "test"))]
-pub struct LocalNetTestingConfig {
-    pub database: Database,
-    pub network: Network,
-    pub num_other_initial_chains: u32,
-    pub initial_amount: Amount,
-}
-
 /// A set of Linera validators running locally as native processes.
 pub struct LocalNet {
     database: Database,
@@ -122,13 +113,22 @@ impl Validator {
 }
 
 #[cfg(any(test, feature = "test"))]
-impl LocalNetTestingConfig {
-    pub fn new(database: Database, network: Network) -> Self {
+impl LocalNetConfig {
+    pub fn new_test(database: Database, network: Network) -> Self {
+        let num_shards = match database {
+            Database::RocksDb => 1,
+            Database::DynamoDb => 4,
+            Database::ScyllaDb => 4,
+        };
         Self {
             database,
             network,
             num_other_initial_chains: 10,
             initial_amount: Amount::from_tokens(10),
+            testing_prng_seed: Some(37),
+            table_name: linera_views::test_utils::get_table_name(),
+            num_initial_validators: 4,
+            num_shards,
         }
     }
 
@@ -171,41 +171,6 @@ impl LineraNetConfig for LocalNetConfig {
             .await
             .unwrap();
         net.run().await.unwrap();
-        Ok((net, client))
-    }
-}
-
-#[cfg(any(test, feature = "test"))]
-#[async_trait]
-impl LineraNetConfig for LocalNetTestingConfig {
-    type Net = LocalNet;
-
-    async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
-        let seed = 37;
-        let table_name = linera_views::test_utils::get_table_name();
-        let num_validators = 4;
-        let num_shards = match self.database {
-            Database::RocksDb => 1,
-            Database::DynamoDb => 4,
-            Database::ScyllaDb => 4,
-        };
-        let mut net = LocalNet::new(
-            self.database,
-            self.network,
-            Some(seed),
-            table_name,
-            num_validators,
-            num_shards,
-        )?;
-        let client = net.make_client().await;
-        if num_validators > 0 {
-            net.generate_initial_validator_config().await.unwrap();
-            client
-                .create_genesis_config(self.num_other_initial_chains, self.initial_amount)
-                .await
-                .unwrap();
-            net.run().await.unwrap();
-        }
         Ok((net, client))
     }
 }
