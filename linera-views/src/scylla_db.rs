@@ -132,7 +132,6 @@ impl ScyllaDbClient {
         }
     }
 
-
     async fn read_value_internal(
         &self,
         key: Vec<u8>,
@@ -152,10 +151,7 @@ impl ScyllaDbClient {
         Ok(None)
     }
 
-    async fn contains_key_internal(
-        &self,
-        key: Vec<u8>,
-    ) -> Result<bool, ScyllaDbContextError> {
+    async fn contains_key_internal(&self, key: Vec<u8>) -> Result<bool, ScyllaDbContextError> {
         ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
         let session = &self.session;
         // Read the value of a key
@@ -408,9 +404,7 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        let handles = keys
-            .into_iter()
-            .map(|key| store.read_value_internal(key));
+        let handles = keys.into_iter().map(|key| store.read_value_internal(key));
         let result = join_all(handles).await;
         Ok(result.into_iter().collect::<Result<_, _>>()?)
     }
@@ -421,7 +415,9 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     ) -> Result<Self::Keys, ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        store.find_keys_by_prefix_internal(key_prefix.to_vec()).await
+        store
+            .find_keys_by_prefix_internal(key_prefix.to_vec())
+            .await
     }
 
     async fn find_key_values_by_prefix(
@@ -430,7 +426,9 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     ) -> Result<Self::KeyValues, ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        store.find_key_values_by_prefix_internal(key_prefix.to_vec()).await
+        store
+            .find_key_values_by_prefix_internal(key_prefix.to_vec())
+            .await
     }
 }
 
