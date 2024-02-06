@@ -4,7 +4,7 @@
 use crate::{
     batch::{Batch, SimpleUnorderedBatch},
     common::{
-        CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore,
+        AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore,
         ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
     },
     journaling::{
@@ -310,29 +310,6 @@ impl TransactionBuilder {
     }
 }
 
-/// A DynamoDB table name.
-///
-/// Namespaces are named table names in DynamoDb [naming
-/// rules](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.NamingRules),
-/// so we need to check correctness of the namespace
-fn check_namespace(string: &str) -> Result<(), InvalidTableName> {
-    if string.len() < 3 {
-        return Err(InvalidTableName::TooShort);
-    }
-    if string.len() > 255 {
-        return Err(InvalidTableName::TooLong);
-    }
-    if !string.chars().all(|character| {
-        character.is_ascii_alphanumeric()
-            || character == '.'
-            || character == '-'
-            || character == '_'
-    }) {
-        return Err(InvalidTableName::InvalidCharacter);
-    }
-    Ok(())
-}
-
 /// A DynamoDB client.
 #[derive(Debug, Clone)]
 pub struct DynamoDbStoreInternal {
@@ -351,7 +328,149 @@ pub struct DynamoDbStoreConfig {
     pub common_config: CommonStoreConfig,
 }
 
+#[async_trait]
+impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
+    type Config = DynamoDbStoreConfig;
+
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, DynamoDbContextError> {
+        let client = Client::from_conf(config.config.clone());
+        Self::check_namespace(namespace)?;
+        let semaphore = config.common_config
+            .max_concurrent_queries
+            .map(|n| Arc::new(Semaphore::new(n)));
+        let max_stream_queries = config.common_config.max_stream_queries;
+        let namespace = namespace.to_string();
+        Ok(Self {
+            client,
+            namespace,
+            semaphore,
+            max_stream_queries,
+        })
+    }
+
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbContextError> {
+        let client = Client::from_conf(config.config.clone());
+        Ok(client
+           .list_tables()
+           .send()
+           .await?
+           .table_names
+           .expect("List of tables was not returned"))
+    }
+
+    async fn delete_all(config: &Self::Config) -> Result<(), DynamoDbContextError> {
+        let client = Client::from_conf(config.config.clone());
+        let tables = client
+            .list_tables()
+            .send()
+            .await?
+            .table_names
+            .expect("List of tables was not returned");
+        for table in tables {
+            client.delete_table().table_name(&table).send().await?;
+        }
+        Ok(())
+    }
+
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, DynamoDbContextError> {
+        let client = Client::from_conf(config.config.clone());
+        let key_db = build_key(DB_KEY.to_vec());
+        let response = client
+            .get_item()
+            .table_name(namespace)
+            .set_key(Some(key_db))
+            .send()
+            .await;
+        let Err(error) = response else {
+            return Ok(true);
+        };
+        let test = match &error {
+            SdkError::ServiceError(error) => match error.err() {
+                GetItemError::ResourceNotFoundException(error) => {
+                    error.message
+                        == Some("Cannot do operations on a non-existent table".to_string())
+                }
+                _ => false,
+            },
+            _ => false,
+        };
+        if test {
+            Ok(false)
+        } else {
+            Err(error.into())
+        }
+    }
+
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbContextError> {
+        let client = Client::from_conf(config.config.clone());
+        let _result = client
+            .create_table()
+            .table_name(namespace)
+            .attribute_definitions(
+                AttributeDefinition::builder()
+                    .attribute_name(PARTITION_ATTRIBUTE)
+                    .attribute_type(ScalarAttributeType::B)
+                    .build()?,
+            )
+            .attribute_definitions(
+                AttributeDefinition::builder()
+                    .attribute_name(KEY_ATTRIBUTE)
+                    .attribute_type(ScalarAttributeType::B)
+                    .build()?,
+            )
+            .key_schema(
+                KeySchemaElement::builder()
+                    .attribute_name(PARTITION_ATTRIBUTE)
+                    .key_type(KeyType::Hash)
+                    .build()?,
+            )
+            .key_schema(
+                KeySchemaElement::builder()
+                    .attribute_name(KEY_ATTRIBUTE)
+                    .key_type(KeyType::Range)
+                    .build()?,
+            )
+            .provisioned_throughput(
+                ProvisionedThroughput::builder()
+                    .read_capacity_units(10)
+                    .write_capacity_units(10)
+                    .build()?,
+            )
+            .send()
+            .await?;
+        Ok(())
+    }
+
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbContextError> {
+        let client = Client::from_conf(config.config.clone());
+        client.delete_table().table_name(namespace).send().await?;
+        Ok(())
+    }
+}
+
+
 impl DynamoDbStoreInternal {
+    /// Namespaces are named table names in DynamoDb [naming
+    /// rules](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.NamingRules),
+    /// so we need to check correctness of the namespace
+    fn check_namespace(string: &str) -> Result<(), InvalidTableName> {
+        if string.len() < 3 {
+            return Err(InvalidTableName::TooShort);
+        }
+        if string.len() > 255 {
+            return Err(InvalidTableName::TooLong);
+        }
+        if !string.chars().all(|character| {
+            character.is_ascii_alphanumeric()
+                || character == '.'
+                || character == '-'
+                || character == '_'
+        }) {
+            return Err(InvalidTableName::InvalidCharacter);
+        }
+        Ok(())
+    }
+
     fn build_delete_transact(
         &self,
         key: Vec<u8>,
@@ -524,7 +643,7 @@ impl DynamoDbStoreInternal {
         stop_if_table_exists: bool,
         create_if_missing: bool,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        check_namespace(namespace)?;
+        Self::check_namespace(namespace)?;
         let kv_name = format!(
             "namespace={:?} common_config={:?}",
             namespace, common_config

@@ -515,6 +515,16 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
         Ok(namespaces)
     }
 
+    async fn delete_all(store_config: &Self::Config) -> Result<(), ScyllaDbContextError> {
+        let session = SessionBuilder::new()
+            .known_node(store_config.uri.as_str())
+            .build()
+            .await?;
+        let query = "DROP KEYSPACE IF EXISTS kv;".to_string();
+        session.query(query, &[]).await?;
+        Ok(())
+    }
+
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
@@ -707,16 +717,6 @@ impl ScyllaDbStoreInternal {
         }
     }
 
-    async fn delete_all(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
-        let session = SessionBuilder::new()
-            .known_node(store_config.uri.as_str())
-            .build()
-            .await?;
-        let query = "DROP KEYSPACE IF EXISTS kv;".to_string();
-        session.query(query, &[]).await?;
-        Ok(())
-    }
-
     async fn delete_single(
         store_config: ScyllaDbStoreConfig,
         namespace: &str,
@@ -881,7 +881,7 @@ impl ScyllaDbStore {
 
     /// Delete all the tables of a database
     pub async fn delete_all(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
-        ScyllaDbStoreInternal::delete_all(store_config).await
+        ScyllaDbStoreInternal::delete_all(&store_config).await
     }
 
     /// Delete all the tables of a database
