@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scylla-config
+  namespace: scylla
+data:
+  scylla.yaml: |
+    query_tombstone_page_limit: 200000
