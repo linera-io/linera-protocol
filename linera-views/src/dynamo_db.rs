@@ -4,8 +4,8 @@
 use crate::{
     batch::{Batch, SimpleUnorderedBatch},
     common::{
-        AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore,
-        ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
+        AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
+        KeyValueStore, ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
     },
     journaling::{
         DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
@@ -335,7 +335,8 @@ impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, DynamoDbContextError> {
         let client = Client::from_conf(config.config.clone());
         Self::check_namespace(namespace)?;
-        let semaphore = config.common_config
+        let semaphore = config
+            .common_config
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = config.common_config.max_stream_queries;
@@ -351,11 +352,11 @@ impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbContextError> {
         let client = Client::from_conf(config.config.clone());
         Ok(client
-           .list_tables()
-           .send()
-           .await?
-           .table_names
-           .expect("List of tables was not returned"))
+            .list_tables()
+            .send()
+            .await?
+            .table_names
+            .expect("List of tables was not returned"))
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), DynamoDbContextError> {
@@ -447,7 +448,6 @@ impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
         Ok(())
     }
 }
-
 
 impl DynamoDbStoreInternal {
     /// Namespaces are named table names in DynamoDb [naming
@@ -564,7 +564,7 @@ impl DynamoDbStoreInternal {
         let client = Client::from_conf(store_config.config);
         Self::test_table_existence(&client, namespace).await
     }
-/*
+    /*
     async fn delete_all(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
         clear_tables(&client).await?;

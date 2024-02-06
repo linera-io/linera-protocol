@@ -24,8 +24,8 @@ use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::get_namespace};
 use crate::{
     batch::{Batch, DeletePrefixExpander, UnorderedBatch},
     common::{
-        get_upper_bound_option, AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyValueStore,
-        ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
+        get_upper_bound_option, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
+        KeyValueStore, ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
     },
     journaling::{
         DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
@@ -597,8 +597,6 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
         Ok(())
     }
 }
-
-
 
 impl DirectKeyValueStore for ScyllaDbStoreInternal {
     type Error = ScyllaDbContextError;

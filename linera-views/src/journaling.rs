@@ -20,7 +20,8 @@
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     common::{
-        AdminKeyValueStore, KeyIterable, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore, MIN_VIEW_TAG,
+        AdminKeyValueStore, KeyIterable, KeyValueStore, ReadableKeyValueStore,
+        WritableKeyValueStore, MIN_VIEW_TAG,
     },
 };
 use async_trait::async_trait;
@@ -189,9 +190,7 @@ where
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), E> {
         K::delete(config, namespace).await
     }
-
 }
-
 
 #[async_trait]
 impl<K> WritableKeyValueStore<K::Error> for JournalingKeyValueStore<K>
