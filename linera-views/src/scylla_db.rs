@@ -590,8 +590,8 @@ impl DirectKeyValueStore for ScyllaDbStoreInternal {
 }
 
 #[async_trait]
-impl DeletePrefixExpander for ScyllaDbClient {
-    type Error = ScyllaDbContextError;
+impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
+    type Config = ScyllaDbStoreConfig;
 
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         self.find_keys_by_prefix_internal(key_prefix.to_vec()).await
