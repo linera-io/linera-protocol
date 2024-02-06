@@ -16,6 +16,8 @@ use linera_base::{
     data_types::{Amount, ArithmeticError, Timestamp},
     ensure, hex_debug,
     identifiers::{BytecodeId, ChainDescription, ChainId, MessageId, Owner},
+    prometheus_util,
+    sync::Lazy,
 };
 use linera_views::{
     common::Context,
@@ -24,6 +26,7 @@ use linera_views::{
     set_view::SetView,
     views::{HashableView, View, ViewError},
 };
+use prometheus::IntCounterVec;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -44,6 +47,16 @@ pub static CREATE_APPLICATION_MESSAGE_INDEX: u32 = 0;
 /// The relative index of the `BytecodePublished` message created by the `PublishBytecode`
 /// operation.
 pub static PUBLISH_BYTECODE_MESSAGE_INDEX: u32 = 0;
+
+/// The number of times the [`SystemOperation::OpenChain`] was executed.
+static OPEN_CHAIN_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "open_chain_count",
+        "The number of times the `OpenChain` operation was executed",
+        &[],
+    )
+    .expect("Counter creation should not fail")
+});
 
 /// A view accessing the execution state of the system of a chain.
 #[derive(Debug, HashableView)]
@@ -547,6 +560,7 @@ where
                     },
                 };
                 outcome.messages.extend([e1, e2]);
+                OPEN_CHAIN_COUNT.with_label_values(&[]).inc();
             }
             ChangeOwnership {
                 super_owners,
