@@ -20,7 +20,7 @@ members = [
     "linera-views-derive",
     "linera-witty",
     "linera-witty-macros",
-    "linera-witty/test-modules"
+    "linera-witty/test-modules",
 ]
 exclude = ["examples", "scripts"]
 resolver = "2"

@@ -16,7 +16,7 @@ test = [
     "linera-chain/test",
     "linera-core/test",
     "linera-execution/test",
-    "linera-storage/test"
+    "linera-storage/test",
 ]
 
 [dependencies]

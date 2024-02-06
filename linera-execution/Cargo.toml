@@ -19,13 +19,13 @@ wasmer = [
     "wasm-encoder",
     "wasmer-middlewares",
     "wasmparser",
-    "wit-bindgen-host-wasmer-rust"
+    "wit-bindgen-host-wasmer-rust",
 ]
 wasmtime = [
     "dep:wasmtime",
     "wasm-encoder",
     "wasmparser",
-    "wit-bindgen-host-wasmtime-rust"
+    "wit-bindgen-host-wasmtime-rust",
 ]
 
 [dependencies]
