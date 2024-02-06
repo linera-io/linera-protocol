@@ -47,9 +47,257 @@ use scylla::{
 use std::{ops::Deref, sync::Arc};
 use thiserror::Error;
 
-/// The creation of a ScyllaDB client that can be used for accessing it.
-/// The `Vec<u8>`is a primary key.
-type ScyllaDbStorePair = (Session, String);
+/// The client for ScyllaDb.
+/// * The session allows to pass queries
+/// * The table_name that is being assigned to the database
+/// * The prepared queries used for implementing the features of `KeyValueStore`.
+struct ScyllaDbClient {
+    session: Session,
+    table_name: String,
+    read_value: Query,
+    contains_key: Query,
+    write_batch_delete_prefix_unbounded: Query,
+    write_batch_delete_prefix_bounded: Query,
+    write_batch_deletion: Query,
+    write_batch_insertion: Query,
+    find_keys_by_prefix_unbounded: Query,
+    find_keys_by_prefix_bounded: Query,
+    find_key_values_by_prefix_unbounded: Query,
+    find_key_values_by_prefix_bounded: Query,
+}
+
+impl ScyllaDbClient {
+    fn new(session: Session, table_name: String) -> Self {
+        let query = format!(
+            "SELECT v FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
+            table_name
+        );
+        let read_value = Query::new(query);
+        let query = format!(
+            "SELECT dummy FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
+            table_name
+        );
+        let contains_key = Query::new(query);
+
+        let query = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k >= ?", table_name);
+        let write_batch_delete_prefix_unbounded = Query::new(query);
+        let query = format!(
+            "DELETE FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ?",
+            table_name
+        );
+        let write_batch_delete_prefix_bounded = Query::new(query);
+        let query = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k = ?", table_name);
+        let write_batch_deletion = Query::new(query);
+        let query = format!(
+            "INSERT INTO kv.{} (dummy, k, v) VALUES (0, ?, ?)",
+            table_name
+        );
+        let write_batch_insertion = Query::new(query);
+
+        let query = format!(
+            "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
+            table_name
+        );
+        let find_keys_by_prefix_unbounded = Query::new(query);
+        let query = format!(
+            "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
+            table_name
+        );
+        let find_keys_by_prefix_bounded = Query::new(query);
+
+        let query = format!(
+            "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
+            table_name
+        );
+        let find_key_values_by_prefix_unbounded = Query::new(query);
+        let query = format!(
+            "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
+            table_name
+        );
+        let find_key_values_by_prefix_bounded = Query::new(query);
+
+        Self {
+            session,
+            table_name,
+            read_value,
+            contains_key,
+            write_batch_delete_prefix_unbounded,
+            write_batch_delete_prefix_bounded,
+            write_batch_deletion,
+            write_batch_insertion,
+            find_keys_by_prefix_unbounded,
+            find_keys_by_prefix_bounded,
+            find_key_values_by_prefix_unbounded,
+            find_key_values_by_prefix_bounded,
+        }
+    }
+
+    async fn read_value_internal(
+        &self,
+        key: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, ScyllaDbContextError> {
+        ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
+        let session = &self.session;
+        // Read the value of a key
+        let values = (key,);
+        let query = &self.read_value;
+        let result = session.query(query.clone(), values).await?;
+        if let Some(rows) = result.rows {
+            if let Some(row) = rows.into_typed::<(Vec<u8>,)>().next() {
+                let value = row?;
+                return Ok(Some(value.0));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn contains_key_internal(&self, key: Vec<u8>) -> Result<bool, ScyllaDbContextError> {
+        ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
+        let session = &self.session;
+        // Read the value of a key
+        let values = (key,);
+        let query = &self.contains_key;
+        let result = session.query(query.clone(), values).await?;
+        if let Some(rows) = result.rows {
+            if let Some(_row) = rows.into_typed::<(Vec<u8>,)>().next() {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    async fn write_batch_internal(
+        &self,
+        batch: UnorderedBatch,
+    ) -> Result<(), ScyllaDbContextError> {
+        let session = &self.session;
+        let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Logged);
+        let mut batch_values = Vec::new();
+        let query1 = &self.write_batch_delete_prefix_unbounded;
+        let query2 = &self.write_batch_delete_prefix_bounded;
+        for key_prefix in batch.key_prefix_deletions {
+            ensure!(
+                key_prefix.len() <= MAX_KEY_SIZE,
+                ScyllaDbContextError::KeyTooLong
+            );
+            match get_upper_bound_option(&key_prefix) {
+                None => {
+                    let values = vec![key_prefix];
+                    batch_values.push(values);
+                    batch_query.append_statement(query1.clone());
+                }
+                Some(upper_bound) => {
+                    let values = vec![key_prefix, upper_bound];
+                    batch_values.push(values);
+                    batch_query.append_statement(query2.clone());
+                }
+            }
+        }
+        let query3 = &self.write_batch_deletion;
+        for key in batch.simple_unordered_batch.deletions {
+            let values = vec![key];
+            batch_values.push(values);
+            batch_query.append_statement(query3.clone());
+        }
+        let query4 = &self.write_batch_insertion;
+        for (key, value) in batch.simple_unordered_batch.insertions {
+            ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
+            let values = vec![key, value];
+            batch_values.push(values);
+            batch_query.append_statement(query4.clone());
+        }
+        session.batch(&batch_query, batch_values).await?;
+        Ok(())
+    }
+
+    async fn find_keys_by_prefix_internal(
+        &self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Vec<Vec<u8>>, ScyllaDbContextError> {
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            ScyllaDbContextError::KeyTooLong
+        );
+        let session = &self.session;
+        // Read the value of a key
+        let len = key_prefix.len();
+        let mut keys = Vec::new();
+        let query_unbounded = &self.find_keys_by_prefix_unbounded;
+        let query_bounded = &self.find_keys_by_prefix_bounded;
+        let mut paging_state = None;
+        loop {
+            let result = match get_upper_bound_option(&key_prefix) {
+                None => {
+                    let values = (key_prefix.clone(),);
+                    session
+                        .query_paged(query_unbounded.clone(), values, paging_state)
+                        .await?
+                }
+                Some(upper_bound) => {
+                    let values = (key_prefix.clone(), upper_bound);
+                    session
+                        .query_paged(query_bounded.clone(), values, paging_state)
+                        .await?
+                }
+            };
+            if let Some(rows) = result.rows {
+                for row in rows.into_typed::<(Vec<u8>,)>() {
+                    let key = row?;
+                    let short_key = key.0[len..].to_vec();
+                    keys.push(short_key);
+                }
+            }
+            if result.paging_state.is_none() {
+                return Ok(keys);
+            }
+            paging_state = result.paging_state;
+        }
+    }
+
+    async fn find_key_values_by_prefix_internal(
+        &self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ScyllaDbContextError> {
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            ScyllaDbContextError::KeyTooLong
+        );
+        let session = &self.session;
+        // Read the value of a key
+        let len = key_prefix.len();
+        let mut key_values = Vec::new();
+        let query_unbounded = &self.find_key_values_by_prefix_unbounded;
+        let query_bounded = &self.find_key_values_by_prefix_bounded;
+        let mut paging_state = None;
+        loop {
+            let result = match get_upper_bound_option(&key_prefix) {
+                None => {
+                    let values = (key_prefix.clone(),);
+                    session
+                        .query_paged(query_unbounded.clone(), values, paging_state)
+                        .await?
+                }
+                Some(upper_bound) => {
+                    let values = (key_prefix.clone(), upper_bound);
+                    session
+                        .query_paged(query_bounded.clone(), values, paging_state)
+                        .await?
+                }
+            };
+            if let Some(rows) = result.rows {
+                for row in rows.into_typed::<(Vec<u8>, Vec<u8>)>() {
+                    let key = row?;
+                    let short_key = key.0[len..].to_vec();
+                    key_values.push((short_key, key.1));
+                }
+            }
+            if result.paging_state.is_none() {
+                return Ok(key_values);
+            }
+            paging_state = result.paging_state;
+        }
+    }
+}
 
 /// We limit the number of connections that can be done for tests.
 #[cfg(any(test, feature = "test"))]
@@ -70,7 +318,7 @@ const MAX_KEY_SIZE: usize = 1048576;
 /// The client itself and the keeping of the count of active connections.
 #[derive(Clone)]
 pub struct ScyllaDbStoreInternal {
-    store: Arc<ScyllaDbStorePair>,
+    store: Arc<ScyllaDbClient>,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
 }
@@ -141,13 +389,13 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        Self::read_value_internal(store, key.to_vec()).await
+        store.read_value_internal(key.to_vec()).await
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        Self::contains_key_internal(store, key.to_vec()).await
+        store.contains_key_internal(key.to_vec()).await
     }
 
     async fn read_multi_values_bytes(
@@ -156,9 +404,7 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        let handles = keys
-            .into_iter()
-            .map(|key| Self::read_value_internal(store, key));
+        let handles = keys.into_iter().map(|key| store.read_value_internal(key));
         let result = join_all(handles).await;
         Ok(result.into_iter().collect::<Result<_, _>>()?)
     }
@@ -169,7 +415,9 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     ) -> Result<Self::Keys, ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        Self::find_keys_by_prefix_internal(store, key_prefix.to_vec()).await
+        store
+            .find_keys_by_prefix_internal(key_prefix.to_vec())
+            .await
     }
 
     async fn find_key_values_by_prefix(
@@ -178,7 +426,9 @@ impl ReadableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     ) -> Result<Self::KeyValues, ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        Self::find_key_values_by_prefix_internal(store, key_prefix.to_vec()).await
+        store
+            .find_key_values_by_prefix_internal(key_prefix.to_vec())
+            .await
     }
 }
 
@@ -204,7 +454,7 @@ impl DirectWritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal
     async fn write_batch(&self, batch: Self::Batch) -> Result<(), ScyllaDbContextError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        Self::write_batch_internal(store, batch).await
+        store.write_batch_internal(batch).await
     }
 }
 
@@ -213,11 +463,11 @@ impl DirectKeyValueStore for ScyllaDbStoreInternal {
 }
 
 #[async_trait]
-impl DeletePrefixExpander for ScyllaDbStorePair {
+impl DeletePrefixExpander for ScyllaDbClient {
     type Error = ScyllaDbContextError;
 
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        ScyllaDbStoreInternal::find_keys_by_prefix_internal(self, key_prefix.to_vec()).await
+        self.find_keys_by_prefix_internal(key_prefix.to_vec()).await
     }
 }
 
@@ -230,200 +480,10 @@ impl ScyllaDbStoreInternal {
         }
     }
 
-    async fn read_value_internal(
-        store: &ScyllaDbStorePair,
-        key: Vec<u8>,
-    ) -> Result<Option<Vec<u8>>, ScyllaDbContextError> {
-        ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
-        let session = &store.0;
-        let table_name = &store.1;
-        // Read the value of a key
-        let values = (key,);
-        let query = format!(
-            "SELECT v FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
-            table_name
-        );
-        let result = session.query(query, values).await?;
-        if let Some(rows) = result.rows {
-            if let Some(row) = rows.into_typed::<(Vec<u8>,)>().next() {
-                let value = row?;
-                return Ok(Some(value.0));
-            }
-        }
-        Ok(None)
-    }
-
-    async fn contains_key_internal(
-        store: &ScyllaDbStorePair,
-        key: Vec<u8>,
-    ) -> Result<bool, ScyllaDbContextError> {
-        ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
-        let session = &store.0;
-        let table_name = &store.1;
-        // Read the value of a key
-        let values = (key,);
-        let query = format!(
-            "SELECT dummy FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
-            table_name
-        );
-        let result = session.query(query, values).await?;
-        if let Some(rows) = result.rows {
-            if let Some(_row) = rows.into_typed::<(Vec<u8>,)>().next() {
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
-    async fn write_batch_internal(
-        store: &ScyllaDbStorePair,
-        batch: UnorderedBatch,
-    ) -> Result<(), ScyllaDbContextError> {
-        let session = &store.0;
-        let table_name = &store.1;
-        let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Logged);
-        let mut batch_values = Vec::new();
-        let query1 = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k >= ?", table_name);
-        let query2 = format!(
-            "DELETE FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ?",
-            table_name
-        );
-        for key_prefix in batch.key_prefix_deletions {
-            ensure!(
-                key_prefix.len() <= MAX_KEY_SIZE,
-                ScyllaDbContextError::KeyTooLong
-            );
-            match get_upper_bound_option(&key_prefix) {
-                None => {
-                    let values = vec![key_prefix];
-                    batch_values.push(values);
-                    batch_query.append_statement(Query::new(query1.clone()));
-                }
-                Some(upper_bound) => {
-                    let values = vec![key_prefix, upper_bound];
-                    batch_values.push(values);
-                    batch_query.append_statement(Query::new(query2.clone()));
-                }
-            }
-        }
-        let query3 = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k = ?", table_name);
-        for key in batch.simple_unordered_batch.deletions {
-            let values = vec![key];
-            batch_values.push(values);
-            batch_query.append_statement(Query::new(query3.clone()));
-        }
-        let query4 = format!(
-            "INSERT INTO kv.{} (dummy, k, v) VALUES (0, ?, ?)",
-            table_name
-        );
-        for (key, value) in batch.simple_unordered_batch.insertions {
-            ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbContextError::KeyTooLong);
-            let values = vec![key, value];
-            batch_values.push(values);
-            batch_query.append_statement(Query::new(query4.clone()));
-        }
-        session.batch(&batch_query, batch_values).await?;
-        Ok(())
-    }
-
-    async fn find_keys_by_prefix_internal(
-        store: &ScyllaDbStorePair,
-        key_prefix: Vec<u8>,
-    ) -> Result<Vec<Vec<u8>>, ScyllaDbContextError> {
-        ensure!(
-            key_prefix.len() <= MAX_KEY_SIZE,
-            ScyllaDbContextError::KeyTooLong
-        );
-        let session = &store.0;
-        let table_name = &store.1;
-        // Read the value of a key
-        let len = key_prefix.len();
-        let mut keys = Vec::new();
-        let mut paging_state = None;
-        loop {
-            let result = match get_upper_bound_option(&key_prefix) {
-                None => {
-                    let values = (key_prefix.clone(),);
-                    let query = format!(
-                        "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
-                        table_name
-                    );
-                    session.query_paged(query, values, paging_state).await?
-                }
-                Some(upper_bound) => {
-                    let values = (key_prefix.clone(), upper_bound);
-                    let query = format!(
-                        "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
-                        table_name
-                    );
-                    session.query_paged(query, values, paging_state).await?
-                }
-            };
-            if let Some(rows) = result.rows {
-                for row in rows.into_typed::<(Vec<u8>,)>() {
-                    let key = row?;
-                    let short_key = key.0[len..].to_vec();
-                    keys.push(short_key);
-                }
-            }
-            if result.paging_state.is_none() {
-                return Ok(keys);
-            }
-            paging_state = result.paging_state;
-        }
-    }
-
-    async fn find_key_values_by_prefix_internal(
-        store: &ScyllaDbStorePair,
-        key_prefix: Vec<u8>,
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ScyllaDbContextError> {
-        ensure!(
-            key_prefix.len() <= MAX_KEY_SIZE,
-            ScyllaDbContextError::KeyTooLong
-        );
-        let session = &store.0;
-        let table_name = &store.1;
-        // Read the value of a key
-        let len = key_prefix.len();
-        let mut key_values = Vec::new();
-        let mut paging_state = None;
-        loop {
-            let result = match get_upper_bound_option(&key_prefix) {
-                None => {
-                    let values = (key_prefix.clone(),);
-                    let query = format!(
-                        "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
-                        table_name
-                    );
-                    session.query_paged(query, values, paging_state).await?
-                }
-                Some(upper_bound) => {
-                    let values = (key_prefix.clone(), upper_bound);
-                    let query = format!(
-                        "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
-                        table_name
-                    );
-                    session.query_paged(query, values, paging_state).await?
-                }
-            };
-            if let Some(rows) = result.rows {
-                for row in rows.into_typed::<(Vec<u8>, Vec<u8>)>() {
-                    let key = row?;
-                    let short_key = key.0[len..].to_vec();
-                    key_values.push((short_key, key.1));
-                }
-            }
-            if result.paging_state.is_none() {
-                return Ok(key_values);
-            }
-            paging_state = result.paging_state;
-        }
-    }
-
     /// Retrieves the table_name from the store
     pub async fn get_table_name(&self) -> String {
         let store = self.store.deref();
-        store.1.clone()
+        store.table_name.clone()
     }
 
     /// Tests if a table is present in the database or not
@@ -662,7 +722,7 @@ impl ScyllaDbStoreInternal {
         } else {
             TableStatus::New
         };
-        let store = (session, store_config.table_name);
+        let store = ScyllaDbClient::new(session, store_config.table_name);
         let store = Arc::new(store);
         let semaphore = store_config
             .common_config
