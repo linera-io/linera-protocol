@@ -420,7 +420,7 @@ pub trait AdminKeyValueStore: Sized {
 #[async_trait]
 pub trait AdminKeyValueStore<E>: Sized {
     /// The configuration needed to interact with a new store.
-    type Config;
+    type Config: Send + Sync;
 
     /// Connects to an existing namespace using the given configuration.
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, E>;
