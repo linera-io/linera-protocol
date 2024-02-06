@@ -53,7 +53,7 @@ use {
 };
 
 #[cfg(any(feature = "aws", feature = "scylladb"))]
-use linera_views::test_utils::get_table_name;
+use linera_views::test_utils::get_namespace;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum FaultType {
@@ -748,7 +748,7 @@ impl StorageBuilder for MakeDynamoDbStorage {
             self.localstack = Some(LocalStackTestContext::new().await?);
         }
         let config = self.localstack.as_ref().unwrap().dynamo_db_config();
-        let namespace = get_table_name();
+        let namespace = get_namespace();
         let namespace = format!("{}_{}", namespace, self.instance_counter);
         let common_config = create_dynamo_db_common_config();
         let store_config = DynamoDbStoreConfig {
@@ -812,12 +812,12 @@ impl StorageBuilder for MakeScyllaDbStorage {
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
         self.instance_counter += 1;
-        let table_name = get_table_name();
-        let table_name = format!("{}_{}", table_name, self.instance_counter);
+        let namespace = get_namespace();
+        let namespace = format!("{}_{}", namespace, self.instance_counter);
         let common_config = create_scylla_db_common_config();
         let store_config = ScyllaDbStoreConfig {
             uri: self.uri.clone(),
-            table_name,
+            namespace,
             common_config,
         };
         let (storage, _) =

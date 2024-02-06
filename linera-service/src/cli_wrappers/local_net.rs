@@ -129,7 +129,7 @@ impl LocalNetConfig {
             initial_amount: Amount::from_tokens(1_000_000),
             policy: ResourceControlPolicy::devnet(),
             testing_prng_seed: Some(37),
-            table_name: linera_views::test_utils::get_table_name(),
+            table_name: linera_views::test_utils::get_namespace(),
             num_initial_validators: 4,
             num_shards,
         }

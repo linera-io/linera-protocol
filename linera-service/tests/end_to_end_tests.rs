@@ -1685,7 +1685,6 @@ async fn test_project_test() {
 #[test_log::test(tokio::test)]
 async fn test_project_publish(database: Database, network: Network) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     let config = LocalNetConfig {
         num_initial_validators: 1,
         num_shards: 1,
@@ -1778,7 +1777,6 @@ async fn test_linera_net_up_simple() {
 #[test_log::test(tokio::test)]
 async fn test_example_publish(database: Database, network: Network) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     let config = LocalNetConfig {
         num_initial_validators: 1,
         num_shards: 1,

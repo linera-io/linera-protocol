@@ -28,7 +28,7 @@ use crate::{
     dynamo_db::DynamoDbStoreConfig,
     dynamo_db::LocalStackTestContext,
     dynamo_db::{create_dynamo_db_common_config, DynamoDbContext},
-    test_utils::get_table_name,
+    test_utils::get_namespace,
 };
 
 #[cfg(feature = "scylladb")]
@@ -260,7 +260,7 @@ impl TestContextFactory for DynamoDbContextFactory {
         }
         let config = self.localstack.as_ref().unwrap().dynamo_db_config();
 
-        let namespace = get_table_name();
+        let namespace = get_namespace();
         let namespace = format!("{}_{}", namespace, self.table_counter);
         self.table_counter += 1;
         let common_config = create_dynamo_db_common_config();
@@ -290,7 +290,7 @@ impl TestContextFactory for ScyllaDbContextFactory {
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let store = create_scylla_db_test_store().await;
-        let table_name = store.get_table_name().await;
+        let table_name = store.get_namespace().await;
         let context = ScyllaDbContext::new(store, vec![], ());
 
         self.table_names.push(table_name);

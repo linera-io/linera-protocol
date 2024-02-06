@@ -28,12 +28,12 @@ fn generate_random_alphanumeric_string(length: usize) -> String {
     alphanumeric_string
 }
 
-/// Returns a unique table name for testing.
-pub fn get_table_name() -> String {
+/// Returns a unique namespace for testing.
+pub fn get_namespace() -> String {
     let entry = generate_random_alphanumeric_string(20);
-    let table_name = format!("table_{}", entry);
-    warn!("Generating table_name={}", table_name);
-    table_name
+    let namespace = format!("table_{}", entry);
+    warn!("Generating namespace={}", namespace);
+    namespace
 }
 
 /// Returns a random key_prefix used for tests

@@ -48,7 +48,7 @@ use crate::metering::{
 #[cfg(any(test, feature = "test"))]
 use {
     crate::lru_caching::TEST_CACHE_SIZE,
-    crate::test_utils::get_table_name,
+    crate::test_utils::get_namespace,
     anyhow::Error,
     tokio::sync::{Mutex, MutexGuard},
 };
@@ -1376,7 +1376,7 @@ pub fn create_dynamo_db_common_config() -> CommonStoreConfig {
 #[cfg(any(test, feature = "test"))]
 pub async fn create_dynamo_db_test_store() -> DynamoDbStore {
     let common_config = create_dynamo_db_common_config();
-    let namespace = get_table_name();
+    let namespace = get_namespace();
     check_namespace(&namespace).expect("A correct namespace");
     let use_localstack = true;
     let config = get_config(use_localstack).await.expect("config");

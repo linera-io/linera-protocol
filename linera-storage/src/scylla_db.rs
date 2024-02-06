@@ -12,7 +12,7 @@ use std::sync::Arc;
 #[cfg(any(test, feature = "test"))]
 use {
     crate::db_storage::TestClock, linera_views::scylla_db::create_scylla_db_common_config,
-    linera_views::test_utils::get_table_name,
+    linera_views::test_utils::get_namespace,
 };
 
 #[cfg(test)]
@@ -57,11 +57,11 @@ pub type ScyllaDbStorage<C> = DbStorage<ScyllaDbStore, C>;
 impl ScyllaDbStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let uri = "localhost:9042".to_string();
-        let table_name = get_table_name();
+        let namespace = get_namespace();
         let common_config = create_scylla_db_common_config();
         let store_config = ScyllaDbStoreConfig {
             uri,
-            table_name,
+            namespace,
             common_config,
         };
         let (client, _) =

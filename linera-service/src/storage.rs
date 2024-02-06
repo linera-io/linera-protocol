@@ -73,8 +73,8 @@ pub enum StorageConfig {
     ScyllaDb {
         /// The URI for accessing the database
         uri: String,
-        /// The table name
-        table_name: String,
+        /// The namespace
+        namespace: String,
     },
 }
 
@@ -124,7 +124,7 @@ impl FromStr for StorageConfig {
         #[cfg(feature = "scylladb")]
         if let Some(s) = input.strip_prefix(SCYLLA_DB) {
             let mut uri: Option<String> = None;
-            let mut table_name: Option<String> = None;
+            let mut namespace: Option<String> = None;
             let parse_error: &'static str = "Correct format is tcp:db_hostname:port.";
             if !s.is_empty() {
                 let mut parts = s.split(':');
@@ -150,10 +150,10 @@ impl FromStr for StorageConfig {
                         }
                         _ if part.starts_with("table") => {
                             anyhow::ensure!(
-                                table_name.is_none(),
-                                "The table_name has already been assigned"
+                                namespace.is_none(),
+                                "The namespace has already been assigned"
                             );
-                            table_name = Some(part.to_string());
+                            namespace = Some(part.to_string());
                         }
                         _ => {
                             bail!("the entry \"{}\" is not matching", part);
@@ -162,8 +162,8 @@ impl FromStr for StorageConfig {
                 }
             }
             let uri = uri.unwrap_or("localhost:9042".to_string());
-            let table_name = table_name.unwrap_or("table_storage".to_string());
-            let db = Self::ScyllaDb { uri, table_name };
+            let namespace = namespace.unwrap_or("namespace_storage".to_string());
+            let db = Self::ScyllaDb { uri, namespace };
             debug!("ScyllaDB connection info: {:?}", db);
             return Ok(db);
         }
@@ -212,10 +212,10 @@ impl StorageConfig {
                 Ok(StoreConfig::DynamoDb(config))
             }
             #[cfg(feature = "scylladb")]
-            StorageConfig::ScyllaDb { uri, table_name } => {
+            StorageConfig::ScyllaDb { uri, namespace } => {
                 let config = ScyllaDbStoreConfig {
                     uri: uri.to_string(),
-                    table_name: table_name.to_string(),
+                    namespace: namespace.to_string(),
                     common_config,
                 };
                 Ok(StoreConfig::ScyllaDb(config))
@@ -497,21 +497,21 @@ fn test_scylla_db_storage_config_from_str() {
         StorageConfig::from_str("scylladb:").unwrap(),
         StorageConfig::ScyllaDb {
             uri: "localhost:9042".to_string(),
-            table_name: "table_storage".to_string(),
+            namespace: "namespace_storage".to_string(),
         }
     );
     assert_eq!(
-        StorageConfig::from_str("scylladb:tcp:db_hostname:230:table_other_storage").unwrap(),
+        StorageConfig::from_str("scylladb:tcp:db_hostname:230:namespace_other_storage").unwrap(),
         StorageConfig::ScyllaDb {
             uri: "db_hostname:230".to_string(),
-            table_name: "table_other_storage".to_string(),
+            namespace: "namespace_other_storage".to_string(),
         }
     );
     assert_eq!(
         StorageConfig::from_str("scylladb:tcp:db_hostname:230").unwrap(),
         StorageConfig::ScyllaDb {
             uri: "db_hostname:230".to_string(),
-            table_name: "table_storage".to_string(),
+            namespace: "namespace_storage".to_string(),
         }
     );
     assert!(StorageConfig::from_str("scylladb:-10").is_err());
