@@ -18,6 +18,7 @@ use {
 #[path = "unit_tests/scylla_db.rs"]
 mod tests;
 
+
 pub type ScyllaDbStorage<C> = DbStorage<ScyllaDbStore, C>;
 
 #[cfg(any(test, feature = "test"))]
