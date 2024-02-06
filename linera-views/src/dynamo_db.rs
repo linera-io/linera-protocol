@@ -351,12 +351,24 @@ impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbContextError> {
         let client = Client::from_conf(config.config.clone());
-        Ok(client
-            .list_tables()
-            .send()
-            .await?
-            .table_names
-            .expect("List of tables was not returned"))
+        let mut namespaces = Vec::new();
+        let mut start_table = None;
+        loop {
+            let response = client
+                .list_tables()
+                .set_exclusive_start_table_name(start_table)
+                .send()
+                .await?;
+            if let Some(namespaces_blk) = response.table_names {
+                namespaces.extend(namespaces_blk);
+            }
+            if response.last_evaluated_table_name.is_none() {
+                break;
+            } else {
+                start_table = response.last_evaluated_table_name;
+            }
+        }
+        Ok(namespaces)
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), DynamoDbContextError> {
@@ -563,12 +575,6 @@ impl DynamoDbStoreInternal {
     ) -> Result<bool, DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
         Self::test_table_existence(&client, namespace).await
-    }
-
-    async fn list_tables(
-        store_config: DynamoDbStoreConfig,
-    ) -> Result<Vec<String>, DynamoDbContextError> {
-        Self::list_all(&store_config).await
     }
 
     async fn delete_single(
@@ -1119,18 +1125,6 @@ impl DynamoDbStore {
         DynamoDbStoreInternal::test_existence(store_config, namespace).await
     }
 
-    /// List all the tables of the database
-    pub async fn list_tables(
-        store_config: DynamoDbStoreConfig,
-    ) -> Result<Vec<String>, DynamoDbContextError> {
-        DynamoDbStoreInternal::list_tables(store_config).await
-    }
-
-    /// Deletes all the tables from the database
-    pub async fn delete_all(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
-        DynamoDbStoreInternal::delete_all(&store_config).await
-    }
-
     /// Deletes a single table from the database
     pub async fn delete_single(
         store_config: DynamoDbStoreConfig,
@@ -1391,54 +1385,28 @@ pub fn create_dynamo_db_common_config() -> CommonStoreConfig {
     }
 }
 
+/// Creates a configuration for tests
+#[cfg(any(test, feature = "test"))]
+pub async fn create_dynamo_db_test_config() -> DynamoDbStoreConfig {
+    let common_config = create_dynamo_db_common_config();
+    let use_localstack = true;
+    let config = get_config(use_localstack).await.expect("config");
+    DynamoDbStoreConfig {
+        config,
+        common_config,
+    }
+}
+
+
 /// Creates a basic client that can be used for tests.
 #[cfg(any(test, feature = "test"))]
 pub async fn create_dynamo_db_test_store() -> DynamoDbStore {
-    let common_config = create_dynamo_db_common_config();
+    let store_config = create_dynamo_db_test_config().await;
     let namespace = get_namespace();
-    let use_localstack = true;
-    let config = get_config(use_localstack).await.expect("config");
-    let store_config = DynamoDbStoreConfig {
-        config,
-        common_config,
-    };
     let (key_value_store, _) = DynamoDbStore::new_for_testing(store_config, &namespace)
         .await
         .expect("key_value_store");
     key_value_store
-}
-
-/// Helper function to list the names of tables registered on DynamoDB.
-pub async fn list_tables_from_client(
-    client: &aws_sdk_dynamodb::Client,
-) -> Result<Vec<String>, DynamoDbContextError> {
-    let mut table_names = Vec::new();
-    let mut start_table = None;
-    loop {
-        let response = client
-            .list_tables()
-            .set_exclusive_start_table_name(start_table)
-            .send()
-            .await?;
-        if let Some(table_names_blk) = response.table_names {
-            table_names.extend(table_names_blk);
-        }
-        if response.last_evaluated_table_name.is_none() {
-            break;
-        } else {
-            start_table = response.last_evaluated_table_name;
-        }
-    }
-    Ok(table_names)
-}
-
-/// Helper function to clear all the tables from the database
-pub async fn clear_tables(client: &aws_sdk_dynamodb::Client) -> Result<(), DynamoDbContextError> {
-    let tables = list_tables_from_client(client).await?;
-    for table in tables {
-        client.delete_table().table_name(&table).send().await?;
-    }
-    Ok(())
 }
 
 #[cfg(test)]

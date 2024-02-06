@@ -6,6 +6,7 @@ use anyhow::{bail, format_err};
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
 use linera_storage::{MemoryStorage, Storage, WallClock};
+use linera_views::common::AdminKeyValueStore;
 use linera_views::{common::CommonStoreConfig, memory::MemoryStoreConfig, views::ViewError};
 use std::str::FromStr;
 use tracing::error;
@@ -239,12 +240,12 @@ impl StoreConfig {
             }
             #[cfg(feature = "aws")]
             StoreConfig::DynamoDb(config, _namespace) => {
-                DynamoDbStore::delete_all(config).await?;
+                DynamoDbStore::delete_all(&config).await?;
                 Ok(())
             }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(config, _namespace) => {
-                ScyllaDbStore::delete_all(config).await?;
+                ScyllaDbStore::delete_all(&config).await?;
                 Ok(())
             }
         }
@@ -320,26 +321,26 @@ impl StoreConfig {
         }
     }
 
-    /// List all the tables of the database
-    pub async fn list_tables(self) -> Result<Vec<String>, ViewError> {
+    /// List all the namespaces of the storage
+    pub async fn list_all(self) -> Result<Vec<String>, ViewError> {
         match self {
             StoreConfig::Memory(_) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
-                error: "list_tables is not supported for the memory storage".to_string(),
+                error: "list_all is not supported for the memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(_) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
-                error: "list_tables is not currently supported for the RocksDb storage".to_string(),
+                error: "list_all is not currently supported for the RocksDb storage".to_string(),
             }),
             #[cfg(feature = "aws")]
             StoreConfig::DynamoDb(config, _namespace) => {
-                let tables = DynamoDbStore::list_tables(config).await?;
+                let tables = DynamoDbStore::list_all(&config).await?;
                 Ok(tables)
             }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(config, _namespace) => {
-                let tables = ScyllaDbStore::list_tables(config).await?;
+                let tables = ScyllaDbStore::list_all(&config).await?;
                 Ok(tables)
             }
         }

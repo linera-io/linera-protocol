@@ -499,20 +499,50 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbContextError> {
         let session = SessionBuilder::new()
-            .known_node(config.uri.as_str())
+            .known_node(store_config.uri.as_str())
             .build()
             .await?;
-        let result = session.query("DESCRIBE KEYSPACE kv", &[]).await?;
+        let miss_msg = "'kv' not found in keyspaces";
+        let mut paging_state = None;
         let mut namespaces = Vec::new();
-        if let Some(rows) = result.rows {
-            for row in rows.into_typed::<(String, String, String, String)>() {
-                let value = row?;
-                if value.1 == "table" {
-                    namespaces.push(value.2);
+        loop {
+            let result = session
+                .query_paged("DESCRIBE KEYSPACE kv", &[], paging_state)
+                .await;
+            let result = match result {
+                Ok(result) => result,
+                Err(error) => {
+                    let invalid_or_not_found = match &error {
+                        QueryError::DbError(db_error, msg) => {
+                            *db_error == DbError::Invalid && msg.as_str() == miss_msg
+                        }
+                        _ => false,
+                    };
+                    if invalid_or_not_found {
+                        return Ok(Vec::new());
+                    } else {
+                        return Err(ScyllaDbContextError::ScyllaDbQueryError(error));
+                    }
+                }
+            };
+            if let Some(rows) = result.rows {
+                // The output of the description is the following:
+                // * The first column is the keyspace (in that case kv)
+                // * The second column is the nature of the object.
+                // * The third column is the name
+                // * The fourth column is the command that built it.
+                for row in rows.into_typed::<(String, String, String, String)>() {
+                    let value = row?;
+                    if value.1 == "table" {
+                        namespaces.push(value.2);
+                    }
                 }
             }
+            if result.paging_state.is_none() {
+                return Ok(namespaces);
+            }
+            paging_state = result.paging_state;
         }
-        Ok(namespaces)
     }
 
     async fn delete_all(store_config: &Self::Config) -> Result<(), ScyllaDbContextError> {
@@ -663,56 +693,6 @@ impl ScyllaDbStoreInternal {
             Self::create(&store_config, namespace).await?;
         }
         Self::connect(&store_config, namespace).await
-    }
-
-    async fn list_tables(
-        store_config: ScyllaDbStoreConfig,
-    ) -> Result<Vec<String>, ScyllaDbContextError> {
-        let session = SessionBuilder::new()
-            .known_node(store_config.uri.as_str())
-            .build()
-            .await?;
-        let miss_msg = "'kv' not found in keyspaces";
-        let mut paging_state = None;
-        let mut table_names = Vec::new();
-        loop {
-            let result = session
-                .query_paged("DESCRIBE KEYSPACE kv", &[], paging_state)
-                .await;
-            let result = match result {
-                Ok(result) => result,
-                Err(error) => {
-                    let invalid_or_not_found = match &error {
-                        QueryError::DbError(db_error, msg) => {
-                            *db_error == DbError::Invalid && msg.as_str() == miss_msg
-                        }
-                        _ => false,
-                    };
-                    if invalid_or_not_found {
-                        return Ok(Vec::new());
-                    } else {
-                        return Err(ScyllaDbContextError::ScyllaDbQueryError(error));
-                    }
-                }
-            };
-            if let Some(rows) = result.rows {
-                // The output of the description is the following:
-                // * The first column is the keyspace (in that case kv)
-                // * The second column is the nature of the object.
-                // * The third column is the name
-                // * The fourth column is the command that built it.
-                for row in rows.into_typed::<(String, String, String, String)>() {
-                    let value = row?;
-                    if value.1 == "table" {
-                        table_names.push(value.2);
-                    }
-                }
-            }
-            if result.paging_state.is_none() {
-                return Ok(table_names);
-            }
-            paging_state = result.paging_state;
-        }
     }
 
     async fn delete_single(
@@ -886,8 +866,7 @@ impl ScyllaDbStore {
         let cache_size = store_config.common_config.cache_size;
         let (simple_store, table_status) =
             ScyllaDbStoreInternal::new_for_testing(store_config, namespace).await?;
-        let store = JournalingKeyValueStore::new(simple_store);
-        let store = Self::get_complete_store(store, cache_size);
+        let store = Self::get_complete_store(simple_store, cache_size);
         Ok((store, table_status))
     }
 
@@ -908,18 +887,6 @@ impl ScyllaDbStore {
         namespace: &str,
     ) -> Result<bool, ScyllaDbContextError> {
         ScyllaDbStoreInternal::test_existence(store_config, namespace).await
-    }
-
-    /// Delete all the tables of a database
-    pub async fn delete_all(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
-        ScyllaDbStoreInternal::delete_all(&store_config).await
-    }
-
-    /// Delete all the tables of a database
-    pub async fn list_tables(
-        store_config: ScyllaDbStoreConfig,
-    ) -> Result<Vec<String>, ScyllaDbContextError> {
-        ScyllaDbStoreInternal::list_tables(store_config).await
     }
 
     /// Deletes a single table from the database
