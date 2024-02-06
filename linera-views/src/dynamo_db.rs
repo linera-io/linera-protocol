@@ -548,20 +548,12 @@ impl DynamoDbStoreInternal {
         store_config: DynamoDbStoreConfig,
         namespace: &str,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let client = Client::from_conf(store_config.config);
-        if Self::test_table_existence(&client, namespace).await? {
-            client.delete_table().table_name(namespace).send().await?;
+        if Self::exists(&store_config, namespace).await? {
+            Self::delete(&store_config, namespace).await?;
         }
-        let stop_if_table_exists = true;
-        let create_if_missing = true;
-        Self::new_internal(
-            client,
-            namespace,
-            store_config.common_config,
-            stop_if_table_exists,
-            create_if_missing,
-        )
-        .await
+        Self::create(&store_config, namespace).await?;
+        let store = Self::connect(&store_config, namespace).await?;
+        Ok((store, TableStatus::New))
     }
 
     /// Testing the existence of a table
@@ -572,18 +564,18 @@ impl DynamoDbStoreInternal {
         let client = Client::from_conf(store_config.config);
         Self::test_table_existence(&client, namespace).await
     }
-
+/*
     async fn delete_all(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
         clear_tables(&client).await?;
         Ok(())
     }
+     */
 
     async fn list_tables(
         store_config: DynamoDbStoreConfig,
     ) -> Result<Vec<String>, DynamoDbContextError> {
-        let client = Client::from_conf(store_config.config);
-        list_tables_from_client(&client).await
+        Self::list_all(&store_config).await
     }
 
     async fn delete_single(
@@ -600,17 +592,8 @@ impl DynamoDbStoreInternal {
         store_config: DynamoDbStoreConfig,
         namespace: &str,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let client = Client::from_conf(store_config.config);
-        let stop_if_table_exists = false;
-        let create_if_missing = false;
-        Self::new_internal(
-            client,
-            namespace,
-            store_config.common_config,
-            stop_if_table_exists,
-            create_if_missing,
-        )
-        .await
+        let store = Self::connect(&store_config, namespace).await?;
+        Ok((store, TableStatus::Existing))
     }
 
     /// Initializes a DynamoDB database from a specified path.
@@ -618,61 +601,10 @@ impl DynamoDbStoreInternal {
         store_config: DynamoDbStoreConfig,
         namespace: &str,
     ) -> Result<Self, DynamoDbContextError> {
-        let client = Client::from_conf(store_config.config);
-        let stop_if_table_exists = false;
-        let create_if_missing = true;
-        let (client, table_status) = Self::new_internal(
-            client,
-            namespace,
-            store_config.common_config,
-            stop_if_table_exists,
-            create_if_missing,
-        )
-        .await?;
-        if table_status == TableStatus::Existing {
-            return Err(DynamoDbContextError::AlreadyExistingDatabase);
+        if !Self::exists(&store_config, namespace).await? {
+            Self::create(&store_config, namespace).await?;
         }
-        Ok(client)
-    }
-
-    /// Creates a new [`DynamoDbStoreInternal`] instance using the provided `config` parameters.
-    async fn new_internal(
-        client: Client,
-        namespace: &str,
-        common_config: CommonStoreConfig,
-        stop_if_table_exists: bool,
-        create_if_missing: bool,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::check_namespace(namespace)?;
-        let kv_name = format!(
-            "namespace={:?} common_config={:?}",
-            namespace, common_config
-        );
-        let mut existing_table = Self::test_table_existence(&client, namespace).await?;
-        let semaphore = common_config
-            .max_concurrent_queries
-            .map(|n| Arc::new(Semaphore::new(n)));
-        let max_stream_queries = common_config.max_stream_queries;
-        let store = Self {
-            client,
-            namespace: namespace.to_string(),
-            semaphore,
-            max_stream_queries,
-        };
-        if !existing_table {
-            if create_if_missing {
-                existing_table = store.create_table(stop_if_table_exists).await?;
-            } else {
-                tracing::info!("DynamoDb: Missing database for kv_name={}", kv_name);
-                return Err(DynamoDbContextError::MissingDatabase(kv_name));
-            }
-        }
-        let table_status = if existing_table {
-            TableStatus::Existing
-        } else {
-            TableStatus::New
-        };
-        Ok((store, table_status))
+        Self::connect(&store_config, namespace).await
     }
 
     async fn get_query_output(
@@ -738,68 +670,6 @@ impl DynamoDbStoreInternal {
             .await?;
 
         Ok(response.item.is_some())
-    }
-
-    /// Creates the table. Returns whether there was already a table.
-    /// If `stop_if_exists` is true then an already present table raises an error.
-    ///
-    /// We need that because the `test_table_existence` might return `false`
-    /// from several processes but only one creates it.
-    async fn create_table(&self, stop_if_table_exists: bool) -> Result<bool, DynamoDbContextError> {
-        let _guard = self.acquire().await;
-        let result = self
-            .client
-            .create_table()
-            .table_name(&self.namespace)
-            .attribute_definitions(
-                AttributeDefinition::builder()
-                    .attribute_name(PARTITION_ATTRIBUTE)
-                    .attribute_type(ScalarAttributeType::B)
-                    .build()?,
-            )
-            .attribute_definitions(
-                AttributeDefinition::builder()
-                    .attribute_name(KEY_ATTRIBUTE)
-                    .attribute_type(ScalarAttributeType::B)
-                    .build()?,
-            )
-            .key_schema(
-                KeySchemaElement::builder()
-                    .attribute_name(PARTITION_ATTRIBUTE)
-                    .key_type(KeyType::Hash)
-                    .build()?,
-            )
-            .key_schema(
-                KeySchemaElement::builder()
-                    .attribute_name(KEY_ATTRIBUTE)
-                    .key_type(KeyType::Range)
-                    .build()?,
-            )
-            .provisioned_throughput(
-                ProvisionedThroughput::builder()
-                    .read_capacity_units(10)
-                    .write_capacity_units(10)
-                    .build()?,
-            )
-            .send()
-            .await;
-        let Err(error) = result else {
-            return Ok(false);
-        };
-        if stop_if_table_exists {
-            return Err(error.into());
-        }
-        let test = match &error {
-            SdkError::ServiceError(error) => {
-                matches!(error.err(), CreateTableError::ResourceInUseException(_))
-            }
-            _ => false,
-        };
-        if test {
-            Ok(true)
-        } else {
-            Err(error.into())
-        }
     }
 
     async fn get_list_responses(
@@ -1232,7 +1102,7 @@ impl DynamoDbStore {
 
     /// Deletes all the tables from the database
     pub async fn delete_all(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
-        DynamoDbStoreInternal::delete_all(store_config).await
+        DynamoDbStoreInternal::delete_all(&store_config).await
     }
 
     /// Deletes a single table from the database
@@ -1501,7 +1371,6 @@ pub fn create_dynamo_db_common_config() -> CommonStoreConfig {
 pub async fn create_dynamo_db_test_store() -> DynamoDbStore {
     let common_config = create_dynamo_db_common_config();
     let namespace = get_namespace();
-    check_namespace(&namespace).expect("A correct namespace");
     let use_localstack = true;
     let config = get_config(use_localstack).await.expect("config");
     let store_config = DynamoDbStoreConfig {
