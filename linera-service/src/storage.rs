@@ -148,6 +148,7 @@ impl FromStr for StorageConfig {
                 }
             };
             return Ok(Self::DynamoDb {
+                namespace,
                 use_localstack,
                 namespace,
             });

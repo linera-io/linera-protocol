@@ -306,6 +306,29 @@ impl TransactionBuilder {
     }
 }
 
+/// A DynamoDB table name.
+///
+/// Namespaces are named table names in DynamoDb [naming
+/// rules](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.NamingRules),
+/// so we need to check correctness of the namespace
+fn check_namespace(string: &str) -> Result<(), InvalidTableName> {
+    if string.len() < 3 {
+        return Err(InvalidTableName::TooShort);
+    }
+    if string.len() > 255 {
+        return Err(InvalidTableName::TooLong);
+    }
+    if !string.chars().all(|character| {
+        character.is_ascii_alphanumeric()
+            || character == '.'
+            || character == '-'
+            || character == '_'
+    }) {
+        return Err(InvalidTableName::InvalidCharacter);
+    }
+    Ok(())
+}
+
 /// A DynamoDB client.
 #[derive(Debug, Clone)]
 pub struct DynamoDbStoreInternal {
@@ -322,6 +345,8 @@ pub struct DynamoDbStoreConfig {
     pub config: Config,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
+    /// The namespace used
+    pub namespace: String,
 }
 
 #[async_trait]
@@ -979,11 +1004,6 @@ impl AdminKeyValueStore for DynamoDbStore {
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbContextError> {
         DynamoDbStoreInternal::delete(config, namespace).await
     }
-}
-
-#[async_trait]
-impl KeyValueStore for DynamoDbStore {
-    type Error = DynamoDbContextError;
 }
 
 /// An implementation of [`Context`][trait1] based on [`DynamoDbStore`].
