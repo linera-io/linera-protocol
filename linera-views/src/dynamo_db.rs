@@ -306,29 +306,6 @@ impl TransactionBuilder {
     }
 }
 
-/// A DynamoDB table name.
-///
-/// Namespaces are named table names in DynamoDb [naming
-/// rules](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.NamingRules),
-/// so we need to check correctness of the namespace
-fn check_namespace(string: &str) -> Result<(), InvalidTableName> {
-    if string.len() < 3 {
-        return Err(InvalidTableName::TooShort);
-    }
-    if string.len() > 255 {
-        return Err(InvalidTableName::TooLong);
-    }
-    if !string.chars().all(|character| {
-        character.is_ascii_alphanumeric()
-            || character == '.'
-            || character == '-'
-            || character == '_'
-    }) {
-        return Err(InvalidTableName::InvalidCharacter);
-    }
-    Ok(())
-}
-
 /// A DynamoDB client.
 #[derive(Debug, Clone)]
 pub struct DynamoDbStoreInternal {
