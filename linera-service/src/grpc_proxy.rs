@@ -212,7 +212,7 @@ impl GrpcProxy {
             .set_serving::<ValidatorNodeServer<GrpcProxy>>()
             .await;
         let internal_server = Server::builder()
-            .add_service(self.as_notifier_service())
+            .add_service(tonic_web::enable(self.as_notifier_service()))
             .serve(self.internal_address());
         let public_server = self
             .public_server()?
