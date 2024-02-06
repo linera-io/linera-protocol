@@ -564,13 +564,6 @@ impl DynamoDbStoreInternal {
         let client = Client::from_conf(store_config.config);
         Self::test_table_existence(&client, namespace).await
     }
-    /*
-    async fn delete_all(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
-        let client = Client::from_conf(store_config.config);
-        clear_tables(&client).await?;
-        Ok(())
-    }
-     */
 
     async fn list_tables(
         store_config: DynamoDbStoreConfig,
@@ -1031,6 +1024,39 @@ impl WritableKeyValueStore<DynamoDbContextError> for DynamoDbStore {
 }
 
 #[async_trait]
+impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStore {
+    type Config = DynamoDbStoreConfig;
+
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, DynamoDbContextError> {
+        let cache_size = config.common_config.cache_size;
+        let store = DynamoDbStoreInternal::connect(config, namespace).await?;
+        let store = Self::get_complete_store(store, cache_size);
+        Ok(store)
+    }
+
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbContextError> {
+        DynamoDbStoreInternal::list_all(config).await
+    }
+
+    async fn delete_all(config: &Self::Config) -> Result<(), DynamoDbContextError> {
+        DynamoDbStoreInternal::delete_all(config).await
+    }
+
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, DynamoDbContextError> {
+        DynamoDbStoreInternal::exists(config, namespace).await
+    }
+
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbContextError> {
+        DynamoDbStoreInternal::create(config, namespace).await
+    }
+
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbContextError> {
+        DynamoDbStoreInternal::delete(config, namespace).await
+    }
+}
+
+
+#[async_trait]
 impl KeyValueStore for DynamoDbStore {
     type Error = DynamoDbContextError;
 }
@@ -1038,9 +1064,10 @@ impl KeyValueStore for DynamoDbStore {
 impl DynamoDbStore {
     #[cfg(not(feature = "metrics"))]
     fn get_complete_store(
-        store: JournalingKeyValueStore<DynamoDbStoreInternal>,
+        simple_store: DynamoDbStoreInternal,
         cache_size: usize,
     ) -> Self {
+        let store = JournalingKeyValueStore::new(simple_store);
         let store = ValueSplittingStore::new(store);
         let store = LruCachingStore::new(store, cache_size);
         Self { store }
@@ -1048,9 +1075,10 @@ impl DynamoDbStore {
 
     #[cfg(feature = "metrics")]
     fn get_complete_store(
-        store: JournalingKeyValueStore<DynamoDbStoreInternal>,
+        simple_store: DynamoDbStoreInternal,
         cache_size: usize,
     ) -> Self {
+        let store = JournalingKeyValueStore::new(simple_store);
         let store = MeteredStore::new(&DYNAMO_DB_METRICS, store);
         let store = ValueSplittingStore::new(store);
         let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
@@ -1068,8 +1096,7 @@ impl DynamoDbStore {
         let cache_size = store_config.common_config.cache_size;
         let (simple_store, table_status) =
             DynamoDbStoreInternal::new_for_testing(store_config, namespace).await?;
-        let store = JournalingKeyValueStore::new(simple_store);
-        let store = Self::get_complete_store(store, cache_size);
+        let store = Self::get_complete_store(simple_store, cache_size);
         Ok((store, table_status))
     }
 
@@ -1080,8 +1107,7 @@ impl DynamoDbStore {
     ) -> Result<Self, DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let simple_store = DynamoDbStoreInternal::initialize(store_config, namespace).await?;
-        let store = JournalingKeyValueStore::new(simple_store);
-        let store = Self::get_complete_store(store, cache_size);
+        let store = Self::get_complete_store(simple_store, cache_size);
         Ok(store)
     }
 
@@ -1121,8 +1147,7 @@ impl DynamoDbStore {
         let cache_size = store_config.common_config.cache_size;
         let (simple_store, table_status) =
             DynamoDbStoreInternal::new(store_config, namespace).await?;
-        let store = JournalingKeyValueStore::new(simple_store);
-        let store = Self::get_complete_store(store, cache_size);
+        let store = Self::get_complete_store(simple_store, cache_size);
         Ok((store, table_status))
     }
 }
