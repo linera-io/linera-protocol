@@ -44,7 +44,7 @@ use {
 use linera_views::{
     common::CommonStoreConfig, dynamo_db::create_dynamo_db_common_config,
     dynamo_db::DynamoDbContext, dynamo_db::DynamoDbStoreConfig, dynamo_db::LocalStackTestContext,
-    dynamo_db::TableName, test_utils::get_table_name,
+    test_utils::get_table_name,
 };
 
 #[cfg(feature = "scylladb")]
@@ -259,7 +259,7 @@ impl StateStore for ScyllaDbTestStore {
 #[cfg(feature = "aws")]
 pub struct DynamoDbTestStore {
     localstack: LocalStackTestContext,
-    table_name: TableName,
+    namespace: String,
     is_created: bool,
     common_config: CommonStoreConfig,
     accessed_chains: BTreeSet<usize>,
@@ -272,14 +272,13 @@ impl StateStore for DynamoDbTestStore {
 
     async fn new() -> Self {
         let localstack = LocalStackTestContext::new().await.expect("localstack");
-        let table = get_table_name();
-        let table_name = table.parse().expect("Invalid table name");
+        let namespace = get_table_name();
         let is_created = false;
         let common_config = create_dynamo_db_common_config();
         let accessed_chains = BTreeSet::new();
         DynamoDbTestStore {
             localstack,
-            table_name,
+            namespace,
             is_created,
             common_config,
             accessed_chains,
@@ -293,7 +292,7 @@ impl StateStore for DynamoDbTestStore {
         let base_key = bcs::to_bytes(&id)?;
         let store_config = DynamoDbStoreConfig {
             config: self.localstack.dynamo_db_config(),
-            table_name: self.table_name.clone(),
+            namespace: self.namespace.clone(),
             common_config: self.common_config.clone(),
         };
         let (context, _) = if self.is_created {

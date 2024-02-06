@@ -748,13 +748,12 @@ impl StorageBuilder for MakeDynamoDbStorage {
             self.localstack = Some(LocalStackTestContext::new().await?);
         }
         let config = self.localstack.as_ref().unwrap().dynamo_db_config();
-        let table = get_table_name();
-        let table = format!("{}_{}", table, self.instance_counter);
-        let table_name = table.parse()?;
+        let namespace = get_table_name();
+        let namespace = format!("{}_{}", namespace, self.instance_counter);
         let common_config = create_dynamo_db_common_config();
         let store_config = DynamoDbStoreConfig {
             config,
-            table_name,
+            namespace,
             common_config,
         };
         self.instance_counter += 1;

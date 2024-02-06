@@ -59,13 +59,12 @@ pub type DynamoDbStorage<C> = DbStorage<DynamoDbStore, C>;
 #[cfg(any(test, feature = "test"))]
 impl DynamoDbStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
-        let table = get_table_name();
-        let table_name = table.parse().expect("Invalid table name");
+        let namespace = get_table_name();
         let localstack = LocalStackTestContext::new().await.expect("localstack");
         let common_config = create_dynamo_db_common_config();
         let store_config = DynamoDbStoreConfig {
             config: localstack.dynamo_db_config(),
-            table_name,
+            namespace,
             common_config,
         };
         let (client, _) =

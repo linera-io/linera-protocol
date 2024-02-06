@@ -37,7 +37,7 @@ use aws_sdk_dynamodb::{
 use aws_smithy_types::error::operation::BuildError;
 use futures::future::join_all;
 use linera_base::ensure;
-use std::{collections::HashMap, env, str::FromStr, sync::Arc};
+use std::{collections::HashMap, env, sync::Arc};
 use thiserror::Error;
 
 #[cfg(feature = "metrics")]
@@ -310,11 +310,34 @@ impl TransactionBuilder {
     }
 }
 
+/// A DynamoDB table name.
+///
+/// Namespaces are named table names in DynamoDb [naming
+/// rules](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.NamingRules),
+/// so we need to check correctness of the namespace
+fn check_namespace(string: &str) -> Result<(), InvalidTableName> {
+    if string.len() < 3 {
+        return Err(InvalidTableName::TooShort);
+    }
+    if string.len() > 255 {
+        return Err(InvalidTableName::TooLong);
+    }
+    if !string.chars().all(|character| {
+        character.is_ascii_alphanumeric()
+            || character == '.'
+            || character == '-'
+            || character == '_'
+    }) {
+        return Err(InvalidTableName::InvalidCharacter);
+    }
+    Ok(())
+}
+
 /// A DynamoDB client.
 #[derive(Debug, Clone)]
 pub struct DynamoDbStoreInternal {
     client: Client,
-    table: TableName,
+    namespace: String,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
 }
@@ -324,10 +347,10 @@ pub struct DynamoDbStoreInternal {
 pub struct DynamoDbStoreConfig {
     /// The AWS configuration
     pub config: Config,
-    /// The table_name used
-    pub table_name: TableName,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
+    /// The namespace used
+    pub namespace: String,
 }
 
 impl DynamoDbStoreInternal {
@@ -338,7 +361,7 @@ impl DynamoDbStoreInternal {
         ensure!(!key.is_empty(), DynamoDbContextError::ZeroLengthKey);
         ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbContextError::KeyTooLong);
         let request = Delete::builder()
-            .table_name(&self.table.0)
+            .table_name(&self.namespace)
             .set_key(Some(build_key(key)))
             .build()?;
         Ok(TransactWriteItem::builder().delete(request).build())
@@ -356,7 +379,7 @@ impl DynamoDbStoreInternal {
             DynamoDbContextError::ValueLengthTooLarge
         );
         let request = Put::builder()
-            .table_name(&self.table.0)
+            .table_name(&self.namespace)
             .set_item(Some(build_key_value(key, value)))
             .build()?;
         Ok(TransactWriteItem::builder().put(request).build())
@@ -373,12 +396,12 @@ impl DynamoDbStoreInternal {
     /// Testing the existence of a table
     pub async fn test_table_existence(
         client: &Client,
-        table: &TableName,
+        namespace: &String,
     ) -> Result<bool, DynamoDbContextError> {
         let key_db = build_key(DB_KEY.to_vec());
         let response = client
             .get_item()
-            .table_name(table.as_ref())
+            .table_name(namespace)
             .set_key(Some(key_db))
             .send()
             .await;
@@ -408,10 +431,10 @@ impl DynamoDbStoreInternal {
         store_config: DynamoDbStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
-        if Self::test_table_existence(&client, &store_config.table_name).await? {
+        if Self::test_table_existence(&client, &store_config.namespace).await? {
             client
                 .delete_table()
-                .table_name(&store_config.table_name.0)
+                .table_name(&store_config.namespace)
                 .send()
                 .await?;
         }
@@ -419,7 +442,7 @@ impl DynamoDbStoreInternal {
         let create_if_missing = true;
         Self::new_internal(
             client,
-            store_config.table_name,
+            store_config.namespace,
             store_config.common_config,
             stop_if_table_exists,
             create_if_missing,
@@ -432,7 +455,7 @@ impl DynamoDbStoreInternal {
         store_config: DynamoDbStoreConfig,
     ) -> Result<bool, DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
-        Self::test_table_existence(&client, &store_config.table_name).await
+        Self::test_table_existence(&client, &store_config.namespace).await
     }
 
     async fn delete_all(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
@@ -452,7 +475,7 @@ impl DynamoDbStoreInternal {
         let client = Client::from_conf(store_config.config);
         client
             .delete_table()
-            .table_name(&store_config.table_name.0)
+            .table_name(&store_config.namespace)
             .send()
             .await?;
         Ok(())
@@ -467,7 +490,7 @@ impl DynamoDbStoreInternal {
         let create_if_missing = false;
         Self::new_internal(
             client,
-            store_config.table_name,
+            store_config.namespace,
             store_config.common_config,
             stop_if_table_exists,
             create_if_missing,
@@ -484,7 +507,7 @@ impl DynamoDbStoreInternal {
         let create_if_missing = true;
         let (client, table_status) = Self::new_internal(
             client,
-            store_config.table_name,
+            store_config.namespace,
             store_config.common_config,
             stop_if_table_exists,
             create_if_missing,
@@ -499,20 +522,24 @@ impl DynamoDbStoreInternal {
     /// Creates a new [`DynamoDbStoreInternal`] instance using the provided `config` parameters.
     async fn new_internal(
         client: Client,
-        table: TableName,
+        namespace: String,
         common_config: CommonStoreConfig,
         stop_if_table_exists: bool,
         create_if_missing: bool,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let kv_name = format!("table={:?} common_config={:?}", table, common_config);
-        let mut existing_table = Self::test_table_existence(&client, &table).await?;
+        check_namespace(&namespace)?;
+        let kv_name = format!(
+            "namespace={:?} common_config={:?}",
+            namespace, common_config
+        );
+        let mut existing_table = Self::test_table_existence(&client, &namespace).await?;
         let semaphore = common_config
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = common_config.max_stream_queries;
         let store = Self {
             client,
-            table,
+            namespace,
             semaphore,
             max_stream_queries,
         };
@@ -542,7 +569,7 @@ impl DynamoDbStoreInternal {
         let response = self
             .client
             .query()
-            .table_name(self.table.as_ref())
+            .table_name(&self.namespace)
             .projection_expression(attribute_str)
             .key_condition_expression(format!(
                 "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
@@ -566,7 +593,7 @@ impl DynamoDbStoreInternal {
         let response = self
             .client
             .get_item()
-            .table_name(self.table.as_ref())
+            .table_name(&self.namespace)
             .set_key(Some(key_db))
             .send()
             .await?;
@@ -588,7 +615,7 @@ impl DynamoDbStoreInternal {
         let response = self
             .client
             .get_item()
-            .table_name(self.table.as_ref())
+            .table_name(&self.namespace)
             .set_key(Some(key_db))
             .projection_expression(PARTITION_ATTRIBUTE)
             .send()
@@ -607,7 +634,7 @@ impl DynamoDbStoreInternal {
         let result = self
             .client
             .create_table()
-            .table_name(self.table.as_ref())
+            .table_name(&self.namespace)
             .attribute_definitions(
                 AttributeDefinition::builder()
                     .attribute_name(PARTITION_ATTRIBUTE)
@@ -1101,10 +1128,10 @@ impl DynamoDbStore {
         store_config: DynamoDbStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (simple_store, table_name) = DynamoDbStoreInternal::new(store_config).await?;
+        let (simple_store, table_status) = DynamoDbStoreInternal::new(store_config).await?;
         let store = JournalingKeyValueStore::new(simple_store);
         let store = Self::get_complete_store(store, cache_size);
-        Ok((store, table_name))
+        Ok((store, table_status))
     }
 }
 
@@ -1146,42 +1173,6 @@ where
             extra,
         };
         Ok((storage, table_status))
-    }
-}
-
-/// A DynamoDB table name.
-///
-/// Table names must follow some [naming
-/// rules](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.NamingRules),
-/// so this type ensures that they are properly validated.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TableName(String);
-
-impl FromStr for TableName {
-    type Err = InvalidTableName;
-
-    fn from_str(string: &str) -> Result<Self, Self::Err> {
-        if string.len() < 3 {
-            return Err(InvalidTableName::TooShort);
-        }
-        if string.len() > 255 {
-            return Err(InvalidTableName::TooLong);
-        }
-        if !string.chars().all(|character| {
-            character.is_ascii_alphanumeric()
-                || character == '.'
-                || character == '-'
-                || character == '_'
-        }) {
-            return Err(InvalidTableName::InvalidCharacter);
-        }
-        Ok(TableName(string.to_owned()))
-    }
-}
-
-impl AsRef<String> for TableName {
-    fn as_ref(&self) -> &String {
-        &self.0
     }
 }
 
@@ -1292,6 +1283,10 @@ pub enum DynamoDbContextError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
+    /// A wrong table name error occurred
+    #[error(transparent)]
+    InvalidTableName(#[from] InvalidTableName),
+
     /// An error occurred while creating the table.
     #[error(transparent)]
     CreateTable(#[from] SdkError<CreateTableError>),
@@ -1381,13 +1376,13 @@ pub fn create_dynamo_db_common_config() -> CommonStoreConfig {
 #[cfg(any(test, feature = "test"))]
 pub async fn create_dynamo_db_test_store() -> DynamoDbStore {
     let common_config = create_dynamo_db_common_config();
-    let table = get_table_name();
-    let table_name = table.parse().expect("Invalid table name");
+    let namespace = get_table_name();
+    check_namespace(&namespace).expect("A correct namespace");
     let use_localstack = true;
     let config = get_config(use_localstack).await.expect("config");
     let store_config = DynamoDbStoreConfig {
         config,
-        table_name,
+        namespace,
         common_config,
     };
     let (key_value_store, _) = DynamoDbStore::new_for_testing(store_config)

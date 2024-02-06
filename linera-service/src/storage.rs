@@ -20,7 +20,7 @@ use {
 #[cfg(feature = "aws")]
 use {
     linera_storage::DynamoDbStorage,
-    linera_views::dynamo_db::{get_config, DynamoDbStore, DynamoDbStoreConfig, TableName},
+    linera_views::dynamo_db::{get_config, DynamoDbStore, DynamoDbStoreConfig},
 };
 
 #[cfg(feature = "scylladb")]
@@ -64,7 +64,7 @@ pub enum StorageConfig {
     #[cfg(feature = "aws")]
     DynamoDb {
         /// The table name used
-        table: TableName,
+        namespace: String,
         /// Whether to use the localstack system
         use_localstack: bool,
     },
@@ -102,10 +102,10 @@ impl FromStr for StorageConfig {
         #[cfg(feature = "aws")]
         if let Some(s) = input.strip_prefix(DYNAMO_DB) {
             let mut parts = s.splitn(2, ':');
-            let table = parts
+            let namespace = parts
                 .next()
                 .ok_or_else(|| format_err!("Missing DynamoDB table name, e.g. {DYNAMO_DB}TABLE"))?
-                .parse()?;
+                .to_string();
             let use_localstack = match parts.next() {
                 None | Some("env") => false,
                 Some("localstack") => true,
@@ -117,7 +117,7 @@ impl FromStr for StorageConfig {
                 }
             };
             return Ok(Self::DynamoDb {
-                table,
+                namespace,
                 use_localstack,
             });
         }
@@ -200,13 +200,13 @@ impl StorageConfig {
             }
             #[cfg(feature = "aws")]
             StorageConfig::DynamoDb {
-                table,
+                namespace,
                 use_localstack,
             } => {
                 let aws_config = get_config(*use_localstack).await?;
                 let config = DynamoDbStoreConfig {
                     config: aws_config,
-                    table_name: table.clone(),
+                    namespace: namespace.clone(),
                     common_config,
                 };
                 Ok(StoreConfig::DynamoDb(config))
@@ -466,21 +466,21 @@ fn test_aws_storage_config_from_str() {
     assert_eq!(
         StorageConfig::from_str("dynamodb:table").unwrap(),
         StorageConfig::DynamoDb {
-            table: "table".parse().unwrap(),
+            namespace: "table".to_string(),
             use_localstack: false,
         }
     );
     assert_eq!(
         StorageConfig::from_str("dynamodb:table:env").unwrap(),
         StorageConfig::DynamoDb {
-            table: "table".parse().unwrap(),
+            namespace: "table".to_string(),
             use_localstack: false,
         }
     );
     assert_eq!(
         StorageConfig::from_str("dynamodb:table:localstack").unwrap(),
         StorageConfig::DynamoDb {
-            table: "table".parse().unwrap(),
+            namespace: "table".to_string(),
             use_localstack: true,
         }
     );
