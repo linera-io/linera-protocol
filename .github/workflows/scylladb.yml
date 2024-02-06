@@ -52,7 +52,10 @@ jobs:
         cargo build --locked --features scylladb
     - name: Setup local ScyllaDB instance
       run: |
-        docker run --name my_scylla_container -d -p 9042:9042 scylladb/scylla
+        cd docker_scylla
+        docker build -t scylla_modified .
+        docker run --name my_scylla_container -d -p 9042:9042 scylla_modified
+        cd ..
     - name: Run ScyllaDB tests
       run: |
         cargo test --locked --features scylladb -- scylla

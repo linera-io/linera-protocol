@@ -411,6 +411,57 @@ async fn test_big_value_read_write() {
     }
 }
 
+// That test is especially challenging for ScyllaDB.
+// In its default settings, Scylla has a limitation to 10000 tombstones.
+// A tombstone is an indication that the data has been deleted. That
+// is thus a trie data structure for checking whether a requested key
+// is deleted or not.
+//
+// In this test we insert 200000 keys into the database.
+// Then we select half of them at random and delete them. By the random
+// selection, Scylla is forced to introduce around 100000 tombstones
+// which triggers the crash with the default settings.
+#[cfg(feature = "scylladb")]
+#[cfg(test)]
+async fn tombstone_triggering_test<C: KeyValueStore + Sync>(key_value_store: C) {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    let value_size = 100;
+    let n_entry = 200000;
+    // Putting the keys
+    let mut batch_insert = Batch::new();
+    let key_prefix = vec![0];
+    let mut batch_delete = Batch::new();
+    let mut remaining_key_values = BTreeMap::new();
+    for i in 0..n_entry {
+        let mut key = key_prefix.clone();
+        bcs::serialize_into(&mut key, &i).unwrap();
+        let value = get_random_byte_vector(&mut rng, &[], value_size);
+        batch_insert.put_key_value_bytes(key.clone(), value.clone());
+        let to_delete = rng.gen::<bool>();
+        if to_delete {
+            batch_delete.delete_key(key);
+        } else {
+            remaining_key_values.insert(key, value);
+        }
+    }
+    run_test_batch_from_blank(&key_value_store, key_prefix.clone(), batch_insert).await;
+    // Deleting them all
+    key_value_store
+        .write_batch(batch_delete, &[])
+        .await
+        .unwrap();
+    // Reading everything and seeing that it is now cleaned.
+    let key_values = read_key_values_prefix(&key_value_store, &key_prefix).await;
+    assert_eq!(key_values, remaining_key_values);
+}
+
+#[cfg(feature = "scylladb")]
+#[tokio::test]
+async fn scylla_db_tombstone_triggering_test() {
+    let key_value_store = create_scylla_db_test_store().await;
+    tombstone_triggering_test(key_value_store).await;
+}
+
 // DynamoDb has limits at 1M (for pagination), 4M (for write)
 // Let us go right past them at 20M of data with writing and then
 // reading it. And 20M is not huge by any mean. All KeyValueStore
