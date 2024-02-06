@@ -53,13 +53,21 @@ service ValidatorNode {
   rpc GetVersionInfo(google.protobuf.Empty) returns (VersionInfo);
 }
 
+// Information about the Linera crate version the validator is running
+message CrateVersion {
+    uint32 major = 1;
+    uint32 minor = 2;
+    uint32 patch = 3;
+}
+
 // Information about the version of Linera the validator is running
 message VersionInfo {
-    string crate_version = 1;
+    CrateVersion crate_version = 1;
     string git_commit = 2;
-    string rpc_hash = 3;
-    string graphql_hash = 4;
-    string wit_hash = 5;
+    bool git_dirty = 3;
+    string rpc_hash = 4;
+    string graphql_hash = 5;
+    string wit_hash = 6;
 }
 
 // A request for client to subscribe to notifications for a given `ChainId`

@@ -11,7 +11,7 @@ use linera_views::{
 };
 
 #[derive(clap::Parser, Clone, Debug)]
-#[command(version = linera_base::VersionInfo::default_str())]
+#[command(version = linera_version::VersionInfo::default_str())]
 pub struct ScyllaDbConfig {
     /// ScyllaDB address
     #[arg(long, default_value = "localhost:9042")]

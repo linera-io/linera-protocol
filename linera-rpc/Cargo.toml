@@ -35,6 +35,7 @@ linera-chain.workspace = true
 linera-core.workspace = true
 linera-execution.workspace = true
 linera-storage.workspace = true
+linera-version.workspace = true
 linera-views.workspace = true
 prometheus.workspace = true
 proptest = { workspace = true, optional = true }

@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{identifiers::ChainId, VersionInfo};
+use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{
     BlockProposal, Certificate, HashedValue, LiteCertificate, LiteVote,
 };
@@ -10,6 +10,7 @@ use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     node::NodeError,
 };
+use linera_version::VersionInfo;
 
 use serde::{Deserialize, Serialize};
 

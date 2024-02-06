@@ -59,7 +59,10 @@ impl DockerImage {
         command
             .args([
                 "--build-arg",
-                &format!("git_commit={}", linera_base::VersionInfo::get()?.git_commit),
+                &format!(
+                    "git_commit={}",
+                    linera_version::VersionInfo::get()?.git_commit
+                ),
             ])
             .args([
                 "--build-arg",

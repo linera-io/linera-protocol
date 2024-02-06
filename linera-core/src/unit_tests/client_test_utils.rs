@@ -14,7 +14,6 @@ use linera_base::{
     crypto::*,
     data_types::*,
     identifiers::{ChainDescription, ChainId},
-    VersionInfo,
 };
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_execution::{
@@ -23,6 +22,7 @@ use linera_execution::{
     WasmRuntime,
 };
 use linera_storage::{MemoryStorage, Storage, TestClock};
+use linera_version::VersionInfo;
 use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},

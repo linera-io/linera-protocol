@@ -480,6 +480,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "camino"
+version = "1.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c59e92b5a388f549b863a7bea62612c09f24c8393560709a54558a9abdfb3b9c"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "cargo-platform"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ceed8ef69d8518a5dda55c07425450b58a4e1946f4951eab6d7191ee86c2443d"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "cargo_metadata"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d886547e41f740c616ae73108f6eb70afe6d940c7bc697cb30f13daec073037"
+dependencies = [
+ "camino",
+ "cargo-platform",
+ "semver",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "cargo_toml"
 version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1155,15 +1187,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "envy"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f47e0157f2cb54f5ae1bd371b30a2ae4311e1c028f575cd4e81de7353215965"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "equivalent"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1434,6 +1457,12 @@ name = "gimli"
 version = "0.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4271d37baee1b8c7e4b708028c57d816cf9d2434acb33a549475f78c181f6253"
+
+[[package]]
+name = "glob"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "h2"
@@ -1783,7 +1812,6 @@ dependencies = [
  "bcs",
  "chrono",
  "ed25519-dalek",
- "envy",
  "generic-array",
  "hex",
  "prometheus",
@@ -1795,7 +1823,6 @@ dependencies = [
  "sha3",
  "test-strategy",
  "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -1832,6 +1859,7 @@ dependencies = [
  "linera-chain",
  "linera-execution",
  "linera-storage",
+ "linera-version",
  "linera-views",
  "lru",
  "prometheus",
@@ -1902,6 +1930,7 @@ dependencies = [
  "linera-execution",
  "linera-sdk-derive",
  "linera-storage",
+ "linera-version",
  "linera-views",
  "linera-wit-bindgen-guest-rust",
  "linera-wit-bindgen-host-wasmtime-rust",
@@ -1937,6 +1966,23 @@ dependencies = [
  "serde",
  "tempfile",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "linera-version"
+version = "0.8.0"
+dependencies = [
+ "async-graphql",
+ "base64 0.21.7",
+ "cargo_metadata",
+ "glob",
+ "once_cell",
+ "quote",
+ "semver",
+ "serde",
+ "sha3",
+ "thiserror",
  "tracing",
 ]
 
@@ -3163,6 +3209,9 @@ name = "semver"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "836fa6a3e1e547f9a2c4040802ec865b5d85f4014efe00555d7090a3dcaa1090"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "serde"

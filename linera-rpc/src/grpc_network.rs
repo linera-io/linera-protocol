@@ -35,13 +35,14 @@ use grpc::{
     BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
     LiteCertificate, SubscriptionRequest,
 };
-use linera_base::{identifiers::ChainId, prometheus_util, sync::Lazy, VersionInfo};
+use linera_base::{identifiers::ChainId, prometheus_util, sync::Lazy};
 use linera_chain::data_types;
 use linera_core::{
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     worker::{NetworkActions, Notification, ValidatorWorker, WorkerError, WorkerState},
 };
 use linera_storage::Storage;
+use linera_version::VersionInfo;
 use linera_views::views::ViewError;
 use prometheus::{HistogramVec, IntCounterVec};
 use rand::Rng;

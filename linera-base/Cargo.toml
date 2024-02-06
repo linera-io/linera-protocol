@@ -17,7 +17,6 @@ test = ["test-strategy", "proptest"]
 async-graphql.workspace = true
 bcs.workspace = true
 ed25519-dalek.workspace = true
-envy.workspace = true
 generic-array.workspace = true
 hex.workspace = true
 proptest = { workspace = true, optional = true }
@@ -27,7 +26,6 @@ serde_bytes.workspace = true
 sha3.workspace = true
 test-strategy = { workspace = true, optional = true }
 thiserror.workspace = true
-tracing.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono.workspace = true

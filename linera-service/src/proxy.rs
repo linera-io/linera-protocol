@@ -25,7 +25,7 @@ use tracing::{error, info, instrument};
 #[command(
     name = "Linera Proxy",
     about = "A proxy to redirect incoming requests to Linera Server shards",
-    version = linera_base::VersionInfo::default_str(),
+    version = linera_version::VersionInfo::default_str(),
 )]
 pub struct ProxyOptions {
     /// Path to server configuration.
@@ -118,7 +118,7 @@ impl MessageHandler for SimpleProxy {
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage> {
         if let RpcMessage::VersionInfoQuery = message {
             // We assume each shard is running the same version as the proxy
-            return Some(linera_base::VERSION_INFO.into());
+            return Some(linera_version::VersionInfo::default().into());
         }
 
         let Some(chain_id) = message.target_chain_id() else {
