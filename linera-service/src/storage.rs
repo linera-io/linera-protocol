@@ -287,11 +287,11 @@ impl StoreConfig {
             StoreConfig::RocksDb(config) => Ok(RocksDbStore::test_existence(config).await?),
             #[cfg(feature = "aws")]
             StoreConfig::DynamoDb(config, namespace) => {
-                Ok(DynamoDbStore::test_existence(config, &namespace).await?)
+                Ok(DynamoDbStore::exists(&config, &namespace).await?)
             }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(config, namespace) => {
-                Ok(ScyllaDbStore::test_existence(config, &namespace).await?)
+                Ok(ScyllaDbStore::exists(&config, &namespace).await?)
             }
         }
     }
@@ -427,25 +427,6 @@ pub async fn full_initialize_storage(
             let wasm_runtime = None;
             let mut storage = ScyllaDbStorage::initialize(config, &namespace, wasm_runtime).await?;
             genesis_config.initialize_storage(&mut storage).await
-        }
-    }
-}
-
-#[allow(unused_variables)]
-pub async fn test_existence_storage(config: StoreConfig) -> Result<bool, anyhow::Error> {
-    match config {
-        StoreConfig::Memory(_) => {
-            bail!("The initialization should not be called for memory");
-        }
-        #[cfg(feature = "rocksdb")]
-        StoreConfig::RocksDb(config) => Ok(RocksDbStore::test_existence(config).await?),
-        #[cfg(feature = "aws")]
-        StoreConfig::DynamoDb(config, namespace) => {
-            Ok(DynamoDbStore::test_existence(config, &namespace).await?)
-        }
-        #[cfg(feature = "scylladb")]
-        StoreConfig::ScyllaDb(config, namespace) => {
-            Ok(ScyllaDbStore::test_existence(config, &namespace).await?)
         }
     }
 }

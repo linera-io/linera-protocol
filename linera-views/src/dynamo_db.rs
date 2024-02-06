@@ -522,38 +522,6 @@ impl DynamoDbStoreInternal {
         }
     }
 
-    /// Testing the existence of a table
-    pub async fn test_table_existence(
-        client: &Client,
-        namespace: &str,
-    ) -> Result<bool, DynamoDbContextError> {
-        let key_db = build_key(DB_KEY.to_vec());
-        let response = client
-            .get_item()
-            .table_name(namespace)
-            .set_key(Some(key_db))
-            .send()
-            .await;
-        let Err(error) = response else {
-            return Ok(true);
-        };
-        let test = match &error {
-            SdkError::ServiceError(error) => match error.err() {
-                GetItemError::ResourceNotFoundException(error) => {
-                    error.message
-                        == Some("Cannot do operations on a non-existent table".to_string())
-                }
-                _ => false,
-            },
-            _ => false,
-        };
-        if test {
-            Ok(false)
-        } else {
-            Err(error.into())
-        }
-    }
-
     /// Creates a new [`DynamoDbStoreInternal`] instance from scratch using the provided `config` parameters.
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
@@ -566,15 +534,6 @@ impl DynamoDbStoreInternal {
         Self::create(&store_config, namespace).await?;
         let store = Self::connect(&store_config, namespace).await?;
         Ok((store, TableStatus::New))
-    }
-
-    /// Testing the existence of a table
-    pub async fn test_existence(
-        store_config: DynamoDbStoreConfig,
-        namespace: &str,
-    ) -> Result<bool, DynamoDbContextError> {
-        let client = Client::from_conf(store_config.config);
-        Self::test_table_existence(&client, namespace).await
     }
 
     /// Creates a new [`DynamoDbStoreInternal`] instance using the provided `config` parameters.
@@ -1106,14 +1065,6 @@ impl DynamoDbStore {
         let simple_store = DynamoDbStoreInternal::initialize(store_config, namespace).await?;
         let store = Self::get_complete_store(simple_store, cache_size);
         Ok(store)
-    }
-
-    /// Deletes all the tables from the database
-    pub async fn test_existence(
-        store_config: DynamoDbStoreConfig,
-        namespace: &str,
-    ) -> Result<bool, DynamoDbContextError> {
-        DynamoDbStoreInternal::test_existence(store_config, namespace).await
     }
 
     /// Creates a `DynamoDbStore` with an LRU cache

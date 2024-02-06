@@ -656,14 +656,6 @@ impl ScyllaDbStoreInternal {
         store.namespace.clone()
     }
 
-    /// Tests if a table is present in the database or not
-    pub async fn test_existence(
-        store_config: ScyllaDbStoreConfig,
-        namespace: &str,
-    ) -> Result<bool, ScyllaDbContextError> {
-        Self::exists(&store_config, namespace).await
-    }
-
     fn is_allowed_name(namespace: &str) -> bool {
         !namespace.is_empty()
             && namespace.len() <= 48
@@ -872,14 +864,6 @@ impl ScyllaDbStore {
         let simple_store = ScyllaDbStoreInternal::initialize(store_config, namespace).await?;
         let store = Self::get_complete_store(simple_store, cache_size);
         Ok(store)
-    }
-
-    /// Delete all the tables of a database
-    pub async fn test_existence(
-        store_config: ScyllaDbStoreConfig,
-        namespace: &str,
-    ) -> Result<bool, ScyllaDbContextError> {
-        ScyllaDbStoreInternal::test_existence(store_config, namespace).await
     }
 
     /// Creates a [`ScyllaDbStore`] from the input parameters.
