@@ -34,8 +34,8 @@ enum DatabaseToolCommand {
     },
 
     /// Delete a single table from the database
-    #[command(name = "delete_single")]
-    DeleteSingle {
+    #[command(name = "delete_namespace")]
+    DeleteNamespace {
         /// Storage configuration for the blockchain history.
         #[arg(long = "storage")]
         storage_config: String,
@@ -82,10 +82,10 @@ async fn evaluate_options(options: DatabaseToolOptions) -> Result<i32, anyhow::E
             let full_storage_config = storage_config.add_common_config(common_config).await?;
             full_storage_config.delete_all().await?;
         }
-        DatabaseToolCommand::DeleteSingle { storage_config } => {
+        DatabaseToolCommand::DeleteNamespace { storage_config } => {
             let storage_config: StorageConfig = storage_config.parse()?;
             let full_storage_config = storage_config.add_common_config(common_config).await?;
-            full_storage_config.delete_single().await?;
+            full_storage_config.delete_namespace().await?;
         }
         DatabaseToolCommand::CheckExistence { storage_config } => {
             let storage_config: StorageConfig = storage_config.parse()?;

@@ -695,13 +695,6 @@ impl ScyllaDbStoreInternal {
         Self::connect(&store_config, namespace).await
     }
 
-    async fn delete_single(
-        store_config: ScyllaDbStoreConfig,
-        namespace: &str,
-    ) -> Result<(), ScyllaDbContextError> {
-        Self::delete(&store_config, namespace).await
-    }
-
     async fn new(
         store_config: ScyllaDbStoreConfig,
         namespace: &str,
@@ -887,14 +880,6 @@ impl ScyllaDbStore {
         namespace: &str,
     ) -> Result<bool, ScyllaDbContextError> {
         ScyllaDbStoreInternal::test_existence(store_config, namespace).await
-    }
-
-    /// Deletes a single table from the database
-    pub async fn delete_single(
-        store_config: ScyllaDbStoreConfig,
-        namespace: &str,
-    ) -> Result<(), ScyllaDbContextError> {
-        ScyllaDbStoreInternal::delete_single(store_config, namespace).await
     }
 
     /// Creates a [`ScyllaDbStore`] from the input parameters.

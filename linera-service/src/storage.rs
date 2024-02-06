@@ -252,11 +252,11 @@ impl StoreConfig {
     }
 
     /// Deletes only one table of the database
-    pub async fn delete_single(self) -> Result<(), ViewError> {
+    pub async fn delete_namespace(self) -> Result<(), ViewError> {
         match self {
             StoreConfig::Memory(_) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
-                error: "delete_single does not make sense for memory storage".to_string(),
+                error: "delete_namespace does not make sense for memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config) => {
@@ -265,12 +265,12 @@ impl StoreConfig {
             }
             #[cfg(feature = "aws")]
             StoreConfig::DynamoDb(config, namespace) => {
-                DynamoDbStore::delete_single(config, &namespace).await?;
+                DynamoDbStore::delete(&config, &namespace).await?;
                 Ok(())
             }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(config, namespace) => {
-                ScyllaDbStore::delete_single(config, &namespace).await?;
+                ScyllaDbStore::delete(&config, &namespace).await?;
                 Ok(())
             }
         }
@@ -301,7 +301,7 @@ impl StoreConfig {
         match self {
             StoreConfig::Memory(_) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
-                error: "delete_single does not make sense for memory storage".to_string(),
+                error: "initialize does not make sense for memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config) => {

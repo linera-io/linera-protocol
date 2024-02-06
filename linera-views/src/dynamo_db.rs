@@ -577,15 +577,6 @@ impl DynamoDbStoreInternal {
         Self::test_table_existence(&client, namespace).await
     }
 
-    async fn delete_single(
-        store_config: DynamoDbStoreConfig,
-        namespace: &str,
-    ) -> Result<(), DynamoDbContextError> {
-        let client = Client::from_conf(store_config.config);
-        client.delete_table().table_name(namespace).send().await?;
-        Ok(())
-    }
-
     /// Creates a new [`DynamoDbStoreInternal`] instance using the provided `config` parameters.
     pub async fn new(
         store_config: DynamoDbStoreConfig,
@@ -1123,14 +1114,6 @@ impl DynamoDbStore {
         namespace: &str,
     ) -> Result<bool, DynamoDbContextError> {
         DynamoDbStoreInternal::test_existence(store_config, namespace).await
-    }
-
-    /// Deletes a single table from the database
-    pub async fn delete_single(
-        store_config: DynamoDbStoreConfig,
-        namespace: &str,
-    ) -> Result<(), DynamoDbContextError> {
-        DynamoDbStoreInternal::delete_single(store_config, namespace).await
     }
 
     /// Creates a `DynamoDbStore` with an LRU cache
