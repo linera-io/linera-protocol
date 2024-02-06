@@ -345,8 +345,6 @@ pub struct DynamoDbStoreConfig {
     pub config: Config,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
-    /// The namespace used
-    pub namespace: String,
 }
 
 #[async_trait]

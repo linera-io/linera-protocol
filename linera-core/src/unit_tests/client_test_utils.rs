@@ -758,7 +758,6 @@ impl StorageBuilder for MakeDynamoDbStorage {
         let common_config = create_dynamo_db_common_config();
         let store_config = DynamoDbStoreConfig {
             config,
-            namespace,
             common_config,
         };
         self.instance_counter += 1;
