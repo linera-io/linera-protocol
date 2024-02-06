@@ -13,7 +13,6 @@ edition = "2021"
 [features]
 default = ["wasmer", "rocksdb"]
 test = ["linera-views/test", "linera-execution/test"]
-benchmark = ["linera-base/test", "dep:fungible", "dep:port-selector"]
 wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 rocksdb = [
@@ -48,7 +47,6 @@ dirs.workspace = true
 file-lock = "2.1.10"
 fs-err.workspace = true
 fs_extra = { workspace = true, optional = true }
-fungible = { workspace = true, optional = true }
 futures.workspace = true
 hex.workspace = true
 http.workspace = true
