@@ -979,11 +979,3 @@ impl<E: Clone + Send + Sync> ScyllaDbContext<E> {
         }
     }
 }
-
-/// Creates a [`crate::common::Context`] for testing purposes.
-#[cfg(any(test, feature = "test"))]
-pub async fn create_scylla_db_test_context() -> ScyllaDbContext<()> {
-    let base_key = vec![];
-    let db = create_scylla_db_test_store().await;
-    ScyllaDbContext::new(db, base_key, ())
-}
