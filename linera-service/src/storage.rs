@@ -45,7 +45,7 @@ pub enum StoreConfig {
     DynamoDb(DynamoDbStoreConfig),
     /// The ScyllaDb key value store
     #[cfg(feature = "scylladb")]
-    ScyllaDb(ScyllaDbStoreConfig),
+    ScyllaDb(ScyllaDbStoreConfig, String),
 }
 
 /// The description of a storage implementation.
@@ -213,12 +213,12 @@ impl StorageConfig {
             }
             #[cfg(feature = "scylladb")]
             StorageConfig::ScyllaDb { uri, namespace } => {
+                let namespace = namespace.to_string();
                 let config = ScyllaDbStoreConfig {
                     uri: uri.to_string(),
-                    namespace: namespace.to_string(),
                     common_config,
                 };
-                Ok(StoreConfig::ScyllaDb(config))
+                Ok(StoreConfig::ScyllaDb(config, namespace))
             }
         }
     }
@@ -243,7 +243,7 @@ impl StoreConfig {
                 Ok(())
             }
             #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config) => {
+            StoreConfig::ScyllaDb(config, _namespace) => {
                 ScyllaDbStore::delete_all(config).await?;
                 Ok(())
             }
@@ -268,8 +268,8 @@ impl StoreConfig {
                 Ok(())
             }
             #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config) => {
-                ScyllaDbStore::delete_single(config).await?;
+            StoreConfig::ScyllaDb(config, namespace) => {
+                ScyllaDbStore::delete_single(config, &namespace).await?;
                 Ok(())
             }
         }
@@ -287,7 +287,9 @@ impl StoreConfig {
             #[cfg(feature = "aws")]
             StoreConfig::DynamoDb(config) => Ok(DynamoDbStore::test_existence(config).await?),
             #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config) => Ok(ScyllaDbStore::test_existence(config).await?),
+            StoreConfig::ScyllaDb(config, namespace) => {
+                Ok(ScyllaDbStore::test_existence(config, &namespace).await?)
+            }
         }
     }
 
@@ -309,8 +311,8 @@ impl StoreConfig {
                 Ok(())
             }
             #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config) => {
-                ScyllaDbStore::initialize(config).await?;
+            StoreConfig::ScyllaDb(config, namespace) => {
+                ScyllaDbStore::initialize(config, &namespace).await?;
                 Ok(())
             }
         }
@@ -334,7 +336,7 @@ impl StoreConfig {
                 Ok(tables)
             }
             #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(config) => {
+            StoreConfig::ScyllaDb(config, _namespace) => {
                 let tables = ScyllaDbStore::list_tables(config).await?;
                 Ok(tables)
             }
@@ -387,8 +389,9 @@ where
             job.run(storage).await
         }
         #[cfg(feature = "scylladb")]
-        StoreConfig::ScyllaDb(config) => {
-            let (storage, table_status) = ScyllaDbStorage::new(config, wasm_runtime).await?;
+        StoreConfig::ScyllaDb(config, namespace) => {
+            let (storage, table_status) =
+                ScyllaDbStorage::new(config, &namespace, wasm_runtime).await?;
             job.run(storage).await
         }
     }
@@ -416,9 +419,9 @@ pub async fn full_initialize_storage(
             genesis_config.initialize_storage(&mut storage).await
         }
         #[cfg(feature = "scylladb")]
-        StoreConfig::ScyllaDb(config) => {
+        StoreConfig::ScyllaDb(config, namespace) => {
             let wasm_runtime = None;
-            let mut storage = ScyllaDbStorage::initialize(config, wasm_runtime).await?;
+            let mut storage = ScyllaDbStorage::initialize(config, &namespace, wasm_runtime).await?;
             genesis_config.initialize_storage(&mut storage).await
         }
     }
@@ -435,7 +438,9 @@ pub async fn test_existence_storage(config: StoreConfig) -> Result<bool, anyhow:
         #[cfg(feature = "aws")]
         StoreConfig::DynamoDb(config) => Ok(DynamoDbStore::test_existence(config).await?),
         #[cfg(feature = "scylladb")]
-        StoreConfig::ScyllaDb(config) => Ok(ScyllaDbStore::test_existence(config).await?),
+        StoreConfig::ScyllaDb(config, namespace) => {
+            Ok(ScyllaDbStore::test_existence(config, &namespace).await?)
+        }
     }
 }
 

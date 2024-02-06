@@ -39,12 +39,12 @@ impl ScyllaDbRunner {
             max_stream_queries: config.client.max_stream_queries,
             cache_size: config.client.cache_size,
         };
+        let namespace = config.client.table.clone();
         let store_config = ScyllaDbStoreConfig {
             uri: config.client.uri.clone(),
-            namespace: config.client.table.clone(),
             common_config,
         };
-        let (store, _) = ScyllaDbStore::new(store_config).await?;
+        let (store, _) = ScyllaDbStore::new(store_config, &namespace).await?;
         Self::new(config, store).await
     }
 }

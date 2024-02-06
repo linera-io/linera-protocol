@@ -817,12 +817,15 @@ impl StorageBuilder for MakeScyllaDbStorage {
         let common_config = create_scylla_db_common_config();
         let store_config = ScyllaDbStoreConfig {
             uri: self.uri.clone(),
-            namespace,
             common_config,
         };
-        let (storage, _) =
-            ScyllaDbStorage::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
-                .await?;
+        let (storage, _) = ScyllaDbStorage::new_for_testing(
+            store_config,
+            &namespace,
+            self.wasm_runtime,
+            self.clock.clone(),
+        )
+        .await?;
         Ok(storage)
     }
 

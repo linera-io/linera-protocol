@@ -505,18 +505,19 @@ impl ScyllaDbStoreInternal {
     /// Tests if a table is present in the database or not
     pub async fn test_existence(
         store_config: ScyllaDbStoreConfig,
+        namespace: &str,
     ) -> Result<bool, ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
             .await?;
-        Self::test_table_existence(&session, &store_config.namespace).await
+        Self::test_table_existence(&session, namespace).await
     }
 
     /// Tests if a table is present in the database or not
     pub async fn test_table_existence(
         session: &Session,
-        namespace: &String,
+        namespace: &str,
     ) -> Result<bool, ScyllaDbContextError> {
         // We check the way the test can fail. It can fail in different ways.
         let query = format!("SELECT dummy FROM kv.{} ALLOW FILTERING", namespace);
@@ -572,7 +573,7 @@ impl ScyllaDbStoreInternal {
     /// two times.
     async fn create_table(
         session: &Session,
-        namespace: &String,
+        namespace: &str,
         stop_if_table_exists: bool,
     ) -> Result<bool, ScyllaDbContextError> {
         if !Self::is_allowed_name(namespace) {
@@ -615,13 +616,14 @@ impl ScyllaDbStoreInternal {
     #[cfg(any(test, feature = "test"))]
     async fn new_for_testing(
         store_config: ScyllaDbStoreConfig,
+        namespace: &str,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
             .await?;
-        if Self::test_table_existence(&session, &store_config.namespace).await? {
-            let query = format!("DROP TABLE kv.{};", store_config.namespace);
+        if Self::test_table_existence(&session, namespace).await? {
+            let query = format!("DROP TABLE kv.{};", namespace);
             session.query(query, &[]).await?;
         }
         let stop_if_table_exists = true;
@@ -629,13 +631,17 @@ impl ScyllaDbStoreInternal {
         Self::new_internal(
             session,
             store_config,
+            namespace,
             stop_if_table_exists,
             create_if_missing,
         )
         .await
     }
 
-    async fn initialize(store_config: ScyllaDbStoreConfig) -> Result<Self, ScyllaDbContextError> {
+    async fn initialize(
+        store_config: ScyllaDbStoreConfig,
+        namespace: &str,
+    ) -> Result<Self, ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
@@ -645,6 +651,7 @@ impl ScyllaDbStoreInternal {
         let (store, table_status) = Self::new_internal(
             session,
             store_config,
+            namespace,
             stop_if_table_exists,
             create_if_missing,
         )
@@ -715,18 +722,22 @@ impl ScyllaDbStoreInternal {
         Ok(())
     }
 
-    async fn delete_single(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
+    async fn delete_single(
+        store_config: ScyllaDbStoreConfig,
+        namespace: &str,
+    ) -> Result<(), ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
             .await?;
-        let query = format!("DROP TABLE IF EXISTS kv.{};", store_config.namespace);
+        let query = format!("DROP TABLE IF EXISTS kv.{};", namespace);
         session.query(query, &[]).await?;
         Ok(())
     }
 
     async fn new(
         store_config: ScyllaDbStoreConfig,
+        namespace: &str,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
@@ -737,6 +748,7 @@ impl ScyllaDbStoreInternal {
         Self::new_internal(
             session,
             store_config,
+            namespace,
             stop_if_table_exists,
             create_if_missing,
         )
@@ -746,18 +758,17 @@ impl ScyllaDbStoreInternal {
     async fn new_internal(
         session: Session,
         store_config: ScyllaDbStoreConfig,
+        namespace: &str,
         stop_if_table_exists: bool,
         create_if_missing: bool,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         // Create a session builder and specify the ScyllaDB contact points
         let kv_name = format!("{:?}", store_config);
-        let mut existing_table =
-            Self::test_table_existence(&session, &store_config.namespace).await?;
+        let mut existing_table = Self::test_table_existence(&session, namespace).await?;
         if !existing_table {
             if create_if_missing {
                 existing_table =
-                    Self::create_table(&session, &store_config.namespace, stop_if_table_exists)
-                        .await?;
+                    Self::create_table(&session, namespace, stop_if_table_exists).await?;
             } else {
                 tracing::info!("ScyllaDb: Missing database for kv_name={}", kv_name);
                 return Err(ScyllaDbContextError::MissingDatabase(kv_name));
@@ -768,7 +779,7 @@ impl ScyllaDbStoreInternal {
         } else {
             TableStatus::New
         };
-        let store = ScyllaDbClient::new(session, store_config.namespace);
+        let store = ScyllaDbClient::new(session, namespace.to_string());
         let store = Arc::new(store);
         let semaphore = store_config
             .common_config
@@ -799,8 +810,6 @@ pub struct ScyllaDbStore {
 pub struct ScyllaDbStoreConfig {
     /// The url to which the requests have to be sent
     pub uri: String,
-    /// The name of the table that we create
-    pub namespace: String,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
 }
@@ -902,10 +911,11 @@ impl ScyllaDbStore {
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
         store_config: ScyllaDbStoreConfig,
+        namespace: &str,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let (simple_store, table_status) =
-            ScyllaDbStoreInternal::new_for_testing(store_config).await?;
+            ScyllaDbStoreInternal::new_for_testing(store_config, namespace).await?;
         let store = JournalingKeyValueStore::new(simple_store);
         let store = Self::get_complete_store(store, cache_size);
         Ok((store, table_status))
@@ -914,9 +924,10 @@ impl ScyllaDbStore {
     /// Creates a [`ScyllaDbStore`] from the input parameters.
     pub async fn initialize(
         store_config: ScyllaDbStoreConfig,
+        namespace: &str,
     ) -> Result<Self, ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let simple_store = ScyllaDbStoreInternal::initialize(store_config).await?;
+        let simple_store = ScyllaDbStoreInternal::initialize(store_config, namespace).await?;
         let store = JournalingKeyValueStore::new(simple_store);
         let store = Self::get_complete_store(store, cache_size);
         Ok(store)
@@ -925,8 +936,9 @@ impl ScyllaDbStore {
     /// Delete all the tables of a database
     pub async fn test_existence(
         store_config: ScyllaDbStoreConfig,
+        namespace: &str,
     ) -> Result<bool, ScyllaDbContextError> {
-        ScyllaDbStoreInternal::test_existence(store_config).await
+        ScyllaDbStoreInternal::test_existence(store_config, namespace).await
     }
 
     /// Delete all the tables of a database
@@ -944,16 +956,19 @@ impl ScyllaDbStore {
     /// Deletes a single table from the database
     pub async fn delete_single(
         store_config: ScyllaDbStoreConfig,
+        namespace: &str,
     ) -> Result<(), ScyllaDbContextError> {
-        ScyllaDbStoreInternal::delete_single(store_config).await
+        ScyllaDbStoreInternal::delete_single(store_config, namespace).await
     }
 
     /// Creates a [`ScyllaDbStore`] from the input parameters.
     pub async fn new(
         store_config: ScyllaDbStoreConfig,
+        namespace: &str,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (simple_store, table_status) = ScyllaDbStoreInternal::new(store_config).await?;
+        let (simple_store, table_status) =
+            ScyllaDbStoreInternal::new(store_config, namespace).await?;
         let store = JournalingKeyValueStore::new(simple_store);
         let store = Self::get_complete_store(store, cache_size);
         Ok((store, table_status))
@@ -976,12 +991,8 @@ pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
     let uri = "localhost:9042".to_string();
     let namespace = get_namespace();
     let common_config = create_scylla_db_common_config();
-    let store_config = ScyllaDbStoreConfig {
-        uri,
-        namespace,
-        common_config,
-    };
-    let (store, _) = ScyllaDbStore::new_for_testing(store_config)
+    let store_config = ScyllaDbStoreConfig { uri, common_config };
+    let (store, _) = ScyllaDbStore::new_for_testing(store_config, &namespace)
         .await
         .expect("store");
     store
