@@ -349,8 +349,6 @@ pub struct DynamoDbStoreConfig {
     pub config: Config,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
-    /// The namespace used
-    pub namespace: String,
 }
 
 impl DynamoDbStoreInternal {
@@ -396,7 +394,7 @@ impl DynamoDbStoreInternal {
     /// Testing the existence of a table
     pub async fn test_table_existence(
         client: &Client,
-        namespace: &String,
+        namespace: &str,
     ) -> Result<bool, DynamoDbContextError> {
         let key_db = build_key(DB_KEY.to_vec());
         let response = client
@@ -429,20 +427,17 @@ impl DynamoDbStoreInternal {
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
-        if Self::test_table_existence(&client, &store_config.namespace).await? {
-            client
-                .delete_table()
-                .table_name(&store_config.namespace)
-                .send()
-                .await?;
+        if Self::test_table_existence(&client, namespace).await? {
+            client.delete_table().table_name(namespace).send().await?;
         }
         let stop_if_table_exists = true;
         let create_if_missing = true;
         Self::new_internal(
             client,
-            store_config.namespace,
+            namespace,
             store_config.common_config,
             stop_if_table_exists,
             create_if_missing,
@@ -453,9 +448,10 @@ impl DynamoDbStoreInternal {
     /// Testing the existence of a table
     pub async fn test_existence(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
     ) -> Result<bool, DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
-        Self::test_table_existence(&client, &store_config.namespace).await
+        Self::test_table_existence(&client, namespace).await
     }
 
     async fn delete_all(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
@@ -471,26 +467,26 @@ impl DynamoDbStoreInternal {
         list_tables_from_client(&client).await
     }
 
-    async fn delete_single(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
+    async fn delete_single(
+        store_config: DynamoDbStoreConfig,
+        namespace: &str,
+    ) -> Result<(), DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
-        client
-            .delete_table()
-            .table_name(&store_config.namespace)
-            .send()
-            .await?;
+        client.delete_table().table_name(namespace).send().await?;
         Ok(())
     }
 
     /// Creates a new [`DynamoDbStoreInternal`] instance using the provided `config` parameters.
     pub async fn new(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
         let stop_if_table_exists = false;
         let create_if_missing = false;
         Self::new_internal(
             client,
-            store_config.namespace,
+            namespace,
             store_config.common_config,
             stop_if_table_exists,
             create_if_missing,
@@ -501,13 +497,14 @@ impl DynamoDbStoreInternal {
     /// Initializes a DynamoDB database from a specified path.
     pub async fn initialize(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
     ) -> Result<Self, DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
         let stop_if_table_exists = false;
         let create_if_missing = true;
         let (client, table_status) = Self::new_internal(
             client,
-            store_config.namespace,
+            namespace,
             store_config.common_config,
             stop_if_table_exists,
             create_if_missing,
@@ -522,24 +519,24 @@ impl DynamoDbStoreInternal {
     /// Creates a new [`DynamoDbStoreInternal`] instance using the provided `config` parameters.
     async fn new_internal(
         client: Client,
-        namespace: String,
+        namespace: &str,
         common_config: CommonStoreConfig,
         stop_if_table_exists: bool,
         create_if_missing: bool,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        check_namespace(&namespace)?;
+        check_namespace(namespace)?;
         let kv_name = format!(
             "namespace={:?} common_config={:?}",
             namespace, common_config
         );
-        let mut existing_table = Self::test_table_existence(&client, &namespace).await?;
+        let mut existing_table = Self::test_table_existence(&client, namespace).await?;
         let semaphore = common_config
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = common_config.max_stream_queries;
         let store = Self {
             client,
-            namespace,
+            namespace: namespace.to_string(),
             semaphore,
             max_stream_queries,
         };
@@ -1077,10 +1074,11 @@ impl DynamoDbStore {
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let (simple_store, table_status) =
-            DynamoDbStoreInternal::new_for_testing(store_config).await?;
+            DynamoDbStoreInternal::new_for_testing(store_config, namespace).await?;
         let store = JournalingKeyValueStore::new(simple_store);
         let store = Self::get_complete_store(store, cache_size);
         Ok((store, table_status))
@@ -1089,9 +1087,10 @@ impl DynamoDbStore {
     /// Initializes a `DynamoDbStore`.
     pub async fn initialize(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
     ) -> Result<Self, DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let simple_store = DynamoDbStoreInternal::initialize(store_config).await?;
+        let simple_store = DynamoDbStoreInternal::initialize(store_config, namespace).await?;
         let store = JournalingKeyValueStore::new(simple_store);
         let store = Self::get_complete_store(store, cache_size);
         Ok(store)
@@ -1100,8 +1099,9 @@ impl DynamoDbStore {
     /// Deletes all the tables from the database
     pub async fn test_existence(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
     ) -> Result<bool, DynamoDbContextError> {
-        DynamoDbStoreInternal::test_existence(store_config).await
+        DynamoDbStoreInternal::test_existence(store_config, namespace).await
     }
 
     /// List all the tables of the database
@@ -1119,16 +1119,19 @@ impl DynamoDbStore {
     /// Deletes a single table from the database
     pub async fn delete_single(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
     ) -> Result<(), DynamoDbContextError> {
-        DynamoDbStoreInternal::delete_single(store_config).await
+        DynamoDbStoreInternal::delete_single(store_config, namespace).await
     }
 
     /// Creates a `DynamoDbStore` with an LRU cache
     pub async fn new(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (simple_store, table_status) = DynamoDbStoreInternal::new(store_config).await?;
+        let (simple_store, table_status) =
+            DynamoDbStoreInternal::new(store_config, namespace).await?;
         let store = JournalingKeyValueStore::new(simple_store);
         let store = Self::get_complete_store(store, cache_size);
         Ok((store, table_status))
@@ -1148,10 +1151,11 @@ where
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (store, table_status) = DynamoDbStore::new_for_testing(store_config).await?;
+        let (store, table_status) = DynamoDbStore::new_for_testing(store_config, namespace).await?;
         let storage = DynamoDbContext {
             store,
             base_key,
@@ -1163,10 +1167,11 @@ where
     /// Creates a new [`DynamoDbContext`] instance from the given AWS configuration.
     pub async fn new(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (store, table_status) = DynamoDbStore::new(store_config).await?;
+        let (store, table_status) = DynamoDbStore::new(store_config, namespace).await?;
         let storage = DynamoDbContext {
             store,
             base_key,
@@ -1382,10 +1387,9 @@ pub async fn create_dynamo_db_test_store() -> DynamoDbStore {
     let config = get_config(use_localstack).await.expect("config");
     let store_config = DynamoDbStoreConfig {
         config,
-        namespace,
         common_config,
     };
-    let (key_value_store, _) = DynamoDbStore::new_for_testing(store_config)
+    let (key_value_store, _) = DynamoDbStore::new_for_testing(store_config, &namespace)
         .await
         .expect("key_value_store");
     key_value_store

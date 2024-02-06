@@ -42,7 +42,7 @@ pub enum StoreConfig {
     RocksDb(RocksDbStoreConfig),
     /// The DynamoDb key value store
     #[cfg(feature = "aws")]
-    DynamoDb(DynamoDbStoreConfig),
+    DynamoDb(DynamoDbStoreConfig, String),
     /// The ScyllaDb key value store
     #[cfg(feature = "scylladb")]
     ScyllaDb(ScyllaDbStoreConfig, String),
@@ -206,10 +206,10 @@ impl StorageConfig {
                 let aws_config = get_config(*use_localstack).await?;
                 let config = DynamoDbStoreConfig {
                     config: aws_config,
-                    namespace: namespace.clone(),
                     common_config,
                 };
-                Ok(StoreConfig::DynamoDb(config))
+                let namespace = namespace.clone();
+                Ok(StoreConfig::DynamoDb(config, namespace))
             }
             #[cfg(feature = "scylladb")]
             StorageConfig::ScyllaDb { uri, namespace } => {
@@ -238,7 +238,7 @@ impl StoreConfig {
                 Ok(())
             }
             #[cfg(feature = "aws")]
-            StoreConfig::DynamoDb(config) => {
+            StoreConfig::DynamoDb(config, _namespace) => {
                 DynamoDbStore::delete_all(config).await?;
                 Ok(())
             }
@@ -263,8 +263,8 @@ impl StoreConfig {
                 Ok(())
             }
             #[cfg(feature = "aws")]
-            StoreConfig::DynamoDb(config) => {
-                DynamoDbStore::delete_single(config).await?;
+            StoreConfig::DynamoDb(config, namespace) => {
+                DynamoDbStore::delete_single(config, &namespace).await?;
                 Ok(())
             }
             #[cfg(feature = "scylladb")]
@@ -285,7 +285,9 @@ impl StoreConfig {
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config) => Ok(RocksDbStore::test_existence(config).await?),
             #[cfg(feature = "aws")]
-            StoreConfig::DynamoDb(config) => Ok(DynamoDbStore::test_existence(config).await?),
+            StoreConfig::DynamoDb(config, namespace) => {
+                Ok(DynamoDbStore::test_existence(config, &namespace).await?)
+            }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(config, namespace) => {
                 Ok(ScyllaDbStore::test_existence(config, &namespace).await?)
@@ -306,8 +308,8 @@ impl StoreConfig {
                 Ok(())
             }
             #[cfg(feature = "aws")]
-            StoreConfig::DynamoDb(config) => {
-                DynamoDbStore::initialize(config).await?;
+            StoreConfig::DynamoDb(config, namespace) => {
+                DynamoDbStore::initialize(config, &namespace).await?;
                 Ok(())
             }
             #[cfg(feature = "scylladb")]
@@ -331,7 +333,7 @@ impl StoreConfig {
                 error: "list_tables is not currently supported for the RocksDb storage".to_string(),
             }),
             #[cfg(feature = "aws")]
-            StoreConfig::DynamoDb(config) => {
+            StoreConfig::DynamoDb(config, _namespace) => {
                 let tables = DynamoDbStore::list_tables(config).await?;
                 Ok(tables)
             }
@@ -384,8 +386,9 @@ where
             job.run(storage).await
         }
         #[cfg(feature = "aws")]
-        StoreConfig::DynamoDb(config) => {
-            let (storage, table_status) = DynamoDbStorage::new(config, wasm_runtime).await?;
+        StoreConfig::DynamoDb(config, namespace) => {
+            let (storage, table_status) =
+                DynamoDbStorage::new(config, &namespace, wasm_runtime).await?;
             job.run(storage).await
         }
         #[cfg(feature = "scylladb")]
@@ -413,9 +416,9 @@ pub async fn full_initialize_storage(
             genesis_config.initialize_storage(&mut storage).await
         }
         #[cfg(feature = "aws")]
-        StoreConfig::DynamoDb(config) => {
+        StoreConfig::DynamoDb(config, namespace) => {
             let wasm_runtime = None;
-            let mut storage = DynamoDbStorage::initialize(config, wasm_runtime).await?;
+            let mut storage = DynamoDbStorage::initialize(config, &namespace, wasm_runtime).await?;
             genesis_config.initialize_storage(&mut storage).await
         }
         #[cfg(feature = "scylladb")]
@@ -436,7 +439,9 @@ pub async fn test_existence_storage(config: StoreConfig) -> Result<bool, anyhow:
         #[cfg(feature = "rocksdb")]
         StoreConfig::RocksDb(config) => Ok(RocksDbStore::test_existence(config).await?),
         #[cfg(feature = "aws")]
-        StoreConfig::DynamoDb(config) => Ok(DynamoDbStore::test_existence(config).await?),
+        StoreConfig::DynamoDb(config, namespace) => {
+            Ok(DynamoDbStore::test_existence(config, &namespace).await?)
+        }
         #[cfg(feature = "scylladb")]
         StoreConfig::ScyllaDb(config, namespace) => {
             Ok(ScyllaDbStore::test_existence(config, &namespace).await?)

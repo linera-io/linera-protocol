@@ -15,11 +15,10 @@ async fn get_table_status(
     let common_config = create_dynamo_db_common_config();
     let store_config = DynamoDbStoreConfig {
         config: localstack.dynamo_db_config(),
-        namespace: namespace.to_owned(),
         common_config,
     };
     let (_storage, table_status) =
-        DynamoDbContext::new_for_testing(store_config, vec![], ()).await?;
+        DynamoDbContext::new_for_testing(store_config, namespace, vec![], ()).await?;
     Ok(table_status)
 }
 

@@ -267,11 +267,11 @@ impl TestContextFactory for DynamoDbContextFactory {
         let dummy_key_prefix = vec![0];
         let store_config = DynamoDbStoreConfig {
             config,
-            namespace,
             common_config,
         };
         let (context, _) =
-            DynamoDbContext::new_for_testing(store_config, dummy_key_prefix, ()).await?;
+            DynamoDbContext::new_for_testing(store_config, &namespace, dummy_key_prefix, ())
+                .await?;
 
         Ok(context)
     }

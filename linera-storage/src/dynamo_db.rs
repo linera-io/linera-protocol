@@ -28,27 +28,30 @@ impl DynamoDbStorageInner {
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (store, table_status) = DynamoDbStore::new_for_testing(store_config).await?;
+        let (store, table_status) = DynamoDbStore::new_for_testing(store_config, namespace).await?;
         let storage = Self::new(store, wasm_runtime);
         Ok((storage, table_status))
     }
 
     async fn initialize(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, DynamoDbContextError> {
-        let store = DynamoDbStore::initialize(store_config).await?;
+        let store = DynamoDbStore::initialize(store_config, namespace).await?;
         let storage = Self::new(store, wasm_runtime);
         Ok(storage)
     }
 
     async fn make(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (store, table_status) = DynamoDbStore::new(store_config).await?;
+        let (store, table_status) = DynamoDbStore::new(store_config, namespace).await?;
         let storage = Self::new(store, wasm_runtime);
         Ok((storage, table_status))
     }
@@ -64,23 +67,27 @@ impl DynamoDbStorage<TestClock> {
         let common_config = create_dynamo_db_common_config();
         let store_config = DynamoDbStoreConfig {
             config: localstack.dynamo_db_config(),
-            namespace,
             common_config,
         };
-        let (client, _) =
-            DynamoDbStorage::new_for_testing(store_config, wasm_runtime, TestClock::new())
-                .await
-                .expect("client and table_name");
+        let (client, _) = DynamoDbStorage::new_for_testing(
+            store_config,
+            &namespace,
+            wasm_runtime,
+            TestClock::new(),
+        )
+        .await
+        .expect("client and table_name");
         client
     }
 
     pub async fn new_for_testing(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let (storage, table_status) =
-            DynamoDbStorageInner::new_for_testing(store_config, wasm_runtime).await?;
+            DynamoDbStorageInner::new_for_testing(store_config, namespace, wasm_runtime).await?;
         let storage = DynamoDbStorage {
             client: Arc::new(storage),
             clock,
@@ -93,9 +100,11 @@ impl DynamoDbStorage<TestClock> {
 impl DynamoDbStorage<WallClock> {
     pub async fn initialize(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, DynamoDbContextError> {
-        let storage = DynamoDbStorageInner::initialize(store_config, wasm_runtime).await?;
+        let storage =
+            DynamoDbStorageInner::initialize(store_config, namespace, wasm_runtime).await?;
         let storage = DynamoDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
@@ -106,10 +115,11 @@ impl DynamoDbStorage<WallClock> {
 
     pub async fn new(
         store_config: DynamoDbStoreConfig,
+        namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let (storage, table_status) =
-            DynamoDbStorageInner::make(store_config, wasm_runtime).await?;
+            DynamoDbStorageInner::make(store_config, namespace, wasm_runtime).await?;
         let storage = DynamoDbStorage {
             client: Arc::new(storage),
             clock: WallClock,

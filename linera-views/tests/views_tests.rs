@@ -292,13 +292,14 @@ impl StateStore for DynamoDbTestStore {
         let base_key = bcs::to_bytes(&id)?;
         let store_config = DynamoDbStoreConfig {
             config: self.localstack.dynamo_db_config(),
-            namespace: self.namespace.clone(),
             common_config: self.common_config.clone(),
         };
+        let namespace = &self.namespace;
+
         let (context, _) = if self.is_created {
-            DynamoDbContext::new(store_config, base_key, id).await
+            DynamoDbContext::new(store_config, namespace, base_key, id).await
         } else {
-            DynamoDbContext::new_for_testing(store_config, base_key, id).await
+            DynamoDbContext::new_for_testing(store_config, namespace, base_key, id).await
         }
         .expect("Failed to create DynamoDB context");
         self.is_created = true;
