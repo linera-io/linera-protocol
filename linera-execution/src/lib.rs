@@ -827,6 +827,7 @@ impl Bytecode {
         Bytecode { bytes }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// Load bytecode from a Wasm module file.
     pub async fn load_from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let bytes = tokio::fs::read(path).await?;

@@ -26,10 +26,14 @@ use crate::{
     Bytecode, ContractSyncRuntime, ExecutionError, ServiceSyncRuntime, UserContractInstance,
     UserContractModule, UserServiceInstance, UserServiceModule, WasmRuntime,
 };
+
+#[cfg(metrics)]
 use linera_base::{
     prometheus_util::{self, MeasureLatency},
     sync::Lazy,
 };
+
+#[cfg(metrics)]
 use prometheus::HistogramVec;
 use std::{path::Path, sync::Arc};
 use thiserror::Error;
@@ -39,6 +43,7 @@ use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 #[cfg(feature = "wasmtime")]
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
 
+#[cfg(metrics)]
 static CONTRACT_INSTANTIATION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "contract_instantiation_latency",
@@ -51,6 +56,7 @@ static CONTRACT_INSTANTIATION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Histogram creation should not fail")
 });
 
+#[cfg(metrics)]
 static SERVICE_INSTANTIATION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "service_instantiation_latency",
@@ -121,6 +127,7 @@ impl UserContractModule for WasmContractModule {
         &self,
         runtime: ContractSyncRuntime,
     ) -> Result<UserContractInstance, ExecutionError> {
+        #[cfg(metrics)]
         let _instantiation_latency = CONTRACT_INSTANTIATION_LATENCY.measure_latency();
 
         let instance: UserContractInstance = match self {
@@ -186,6 +193,7 @@ impl UserServiceModule for WasmServiceModule {
         &self,
         runtime: ServiceSyncRuntime,
     ) -> Result<UserServiceInstance, ExecutionError> {
+        #[cfg(metrics)]
         let _instantiation_latency = SERVICE_INSTANTIATION_LATENCY.measure_latency();
 
         let instance: UserServiceInstance = match self {
