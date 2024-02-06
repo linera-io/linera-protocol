@@ -12,7 +12,7 @@ use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::{AccountOwner, ChainId},
 };
-use linera_execution::system;
+use linera_execution::system::Account;
 use linera_service::{
     cli_wrappers::{
         local_net::{Database, LocalNet, LocalNetConfig},
@@ -20,7 +20,6 @@ use linera_service::{
     },
     util,
 };
-use linera_views::test_utils::get_table_name;
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 use test_case::test_case;
@@ -272,7 +271,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1
-        .open_and_assign(&client2, Amount::ZERO)
+        .open_and_assign(&client2, Amount::ONE)
         .await
         .unwrap();
     let (contract, service) = client1.build_example("social").await.unwrap();
@@ -368,7 +367,7 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig) {
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1
-        .open_and_assign(&client2, Amount::ZERO)
+        .open_and_assign(&client2, Amount::ONE)
         .await
         .unwrap();
 
@@ -582,7 +581,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1
-        .open_and_assign(&client2, Amount::ZERO)
+        .open_and_assign(&client2, Amount::ONE)
         .await
         .unwrap();
 
@@ -726,11 +725,11 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
 
     let chain_admin = client_admin.get_wallet().unwrap().default_chain().unwrap();
     let chain_a = client_admin
-        .open_and_assign(&client_a, Amount::ZERO)
+        .open_and_assign(&client_a, Amount::ONE)
         .await
         .unwrap();
     let chain_b = client_admin
-        .open_and_assign(&client_b, Amount::ZERO)
+        .open_and_assign(&client_b, Amount::ONE)
         .await
         .unwrap();
 
@@ -1006,11 +1005,11 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
 
     // User chains
     let chain0 = client_admin
-        .open_and_assign(&client0, Amount::ZERO)
+        .open_and_assign(&client0, Amount::ONE)
         .await
         .unwrap();
     let chain1 = client_admin
-        .open_and_assign(&client1, Amount::ZERO)
+        .open_and_assign(&client1, Amount::ONE)
         .await
         .unwrap();
 
@@ -1337,46 +1336,33 @@ async fn test_resolve_binary() {
 async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = config.network;
+    let policy = config.policy().await;
     let (mut net, client) = config.instantiate().await.unwrap();
 
     let client_2 = net.make_client().await;
     client_2.wallet_init(&[], FaucetOption::None).await.unwrap();
-    let chain_1 = client.get_wallet().unwrap().default_chain().unwrap();
+    let chain_1 = ChainId::root(0);
+    let balance_1 = client.local_balance(Account::chain(chain_1)).await.unwrap();
 
-    let (node_service_2, chain_2) = match network {
-        Network::Grpc => {
-            let chain_2 = client
-                .open_and_assign(&client_2, Amount::ZERO)
-                .await
-                .unwrap();
-            let node_service_2 = client_2.run_node_service(8081).await.unwrap();
-            (Some(node_service_2), chain_2)
-        }
-        _ => {
-            client
-                .transfer(Amount::from_tokens(10), ChainId::root(9), ChainId::root(8))
-                .await
-                .unwrap();
-            (None, ChainId::root(9))
-        }
+    let chain_2 = client
+        .open_and_assign(&client_2, Amount::ZERO)
+        .await
+        .unwrap();
+    let node_service_2 = match network {
+        Network::Grpc => Some(client_2.run_node_service(8081).await.unwrap()),
+        Network::Tcp | Network::Udp => None,
     };
 
     client.query_validators(None).await.unwrap();
 
-    // Query balance for first and last user chain
+    // Query balance for both chains.
     assert_eq!(
-        client
-            .query_balance(system::Account::chain(chain_1))
-            .await
-            .unwrap(),
-        Amount::from_tokens(10)
+        client.query_balance(Account::chain(chain_1)).await.unwrap(),
+        balance_1 - policy.block_price() * 2
     );
     assert_eq!(
-        client
-            .query_balance(system::Account::chain(chain_2))
-            .await
-            .unwrap(),
-        Amount::from_tokens(0)
+        client.query_balance(Account::chain(chain_2)).await.unwrap(),
+        Amount::ZERO
     );
 
     // Transfer 3 units
@@ -1391,25 +1377,16 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
 
     // Query balances again
     assert_eq!(
-        client
-            .query_balance(system::Account::chain(chain_1))
-            .await
-            .unwrap(),
-        Amount::from_tokens(7)
+        client.query_balance(Account::chain(chain_1)).await.unwrap(),
+        balance_1 - Amount::from_tokens(3) - policy.block_price() * 3
     );
     assert_eq!(
-        client
-            .query_balance(system::Account::chain(chain_2))
-            .await
-            .unwrap(),
-        Amount::from_tokens(3)
+        client.query_balance(Account::chain(chain_2)).await.unwrap(),
+        Amount::from_tokens(3) - policy.block_price()
     );
 
     // Create derived chain
-    let (_, chain_3) = client
-        .open_chain(chain_1, None, Amount::ZERO)
-        .await
-        .unwrap();
+    let (_, chain_3) = client.open_chain(chain_1, None, Amount::ONE).await.unwrap();
 
     // Inspect state of derived chain
     assert!(client.is_chain_present_in_wallet(chain_3).await);
@@ -1452,6 +1429,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
         let name = net.validator_name(i).unwrap();
         client.remove_validator(name).await.unwrap();
         net.remove_validator(i).unwrap();
+        if node_service_2.is_none() {
+            client_2.process_inbox(chain_2).await.unwrap();
+        }
     }
 
     client
@@ -1459,13 +1439,6 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
         .await
         .unwrap();
     client.sync(chain_2).await.unwrap();
-    assert_eq!(
-        client
-            .query_balance(system::Account::chain(chain_2))
-            .await
-            .unwrap(),
-        Amount::from_tokens(8)
-    );
 
     if let Some(node_service_2) = node_service_2 {
         for i in 0..10 {
@@ -1477,11 +1450,21 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
                 ))
                 .await
                 .unwrap();
-            if response["chain"]["executionState"]["system"]["balance"].as_str() == Some("8.") {
-                return;
+            if let Some(balance_str) =
+                response["chain"]["executionState"]["system"]["balance"].as_str()
+            {
+                let balance = balance_str.parse::<Amount>().expect("should parse balance");
+                if balance > Amount::from_tokens(7) {
+                    return;
+                }
             }
         }
         panic!("Failed to receive new block");
+    } else {
+        assert_eq!(
+            client.query_balance(Account::chain(chain_2)).await.unwrap(),
+            Amount::from_tokens(8) - policy.block_price() * 5
+        );
     }
 
     net.ensure_is_running().await.unwrap();
@@ -1496,13 +1479,22 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
 #[test_log::test(tokio::test)]
 async fn test_open_chain_node_service(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let policy = config.policy().await;
     let (mut net, client) = config.instantiate().await.unwrap();
 
-    let default_chain = client.get_wallet().unwrap().default_chain().unwrap();
+    let chain = client
+        .get_wallet()
+        .unwrap()
+        .chain_ids()
+        .into_iter()
+        .find(|c| *c != ChainId::root(0))
+        .unwrap();
+    client.process_inbox(chain).await.unwrap();
+    let balance = client.local_balance(Account::chain(chain)).await.unwrap();
     let public_key = client
         .get_wallet()
         .unwrap()
-        .get(default_chain)
+        .get(chain)
         .unwrap()
         .key_pair
         .as_ref()
@@ -1515,7 +1507,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
     // The node service should automatically create a client for it internally.
     let query = format!(
         "mutation {{ openChain(\
-            chainId:\"{default_chain}\", \
+            chainId:\"{chain}\", \
             publicKey:\"{public_key}\"\
         ) }}"
     );
@@ -1526,7 +1518,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
     // https://github.com/linera-io/linera-protocol/pull/899
     let query = format!(
         "mutation {{ openChain(\
-            chainId:\"{default_chain}\", \
+            chainId:\"{chain}\", \
             publicKey:\"{public_key}\"\
         ) }}"
     );
@@ -1536,7 +1528,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
     // Send 8 tokens to the new chain.
     let query = format!(
         "mutation {{ transfer(\
-            chainId:\"{default_chain}\", \
+            chainId:\"{chain}\", \
             recipient: {{ Account: {{ chain_id:\"{new_chain}\" }} }}, \
             amount:\"8\"\
         ) }}"
@@ -1547,18 +1539,20 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
     let query = format!(
         "mutation {{ transfer(\
             chainId:\"{new_chain}\", \
-            recipient: {{ Account: {{ chain_id:\"{default_chain}\" }} }}, \
+            recipient: {{ Account: {{ chain_id:\"{chain}\" }} }}, \
             amount:\"4\"\
         ) }}"
     );
     node_service.query_node(query).await.unwrap();
 
     // Verify that the default chain now has 6 and the new one has 4 tokens.
+    let expected1 = (balance - Amount::from_tokens(4) - policy.block_price() * 4).to_string();
+    let expected2 = (Amount::from_tokens(4) - policy.block_price() * 2).to_string();
     for i in 0..10 {
         tokio::time::sleep(Duration::from_secs(i)).await;
         let response1 = node_service
             .query_node(format!(
-                "query {{ chain(chainId:\"{default_chain}\") \
+                "query {{ chain(chainId:\"{chain}\") \
                     {{ executionState {{ system {{ balance }} }} }} }}"
             ))
             .await
@@ -1570,8 +1564,9 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
             ))
             .await
             .unwrap();
-        if response1["chain"]["executionState"]["system"]["balance"].as_str() == Some("6.")
-            && response2["chain"]["executionState"]["system"]["balance"].as_str() == Some("4.")
+        if response1["chain"]["executionState"]["system"]["balance"].as_str() == Some(&*expected1)
+            && response2["chain"]["executionState"]["system"]["balance"].as_str()
+                == Some(&*expected2)
         {
             net.ensure_is_running().await.unwrap();
             net.terminate().await.unwrap();
@@ -1652,6 +1647,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) {
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let policy = config.policy().await;
 
     // Create net and two clients.
     let (mut net, client1) = config.instantiate().await.unwrap();
@@ -1661,6 +1657,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
 
     // Get some chain owned by Client 1.
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
+    let balance1 = client1.local_balance(Account::chain(chain1)).await.unwrap();
 
     // Generate a key for Client 2.
     let client2_key = client2.keygen().await.unwrap();
@@ -1677,15 +1674,6 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
         client2.assign(client2_key, message_id).await.unwrap()
     );
 
-    // Check initial balance of Chain 1.
-    assert_eq!(
-        client1
-            .query_balance(system::Account::chain(chain1))
-            .await
-            .unwrap(),
-        Amount::from_tokens(10)
-    );
-
     // Transfer 5 units from Chain 1 to Chain 2.
     client1
         .transfer(Amount::from_tokens(5), chain1, chain2)
@@ -1694,18 +1682,12 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
     client2.sync(chain2).await.unwrap();
 
     assert_eq!(
-        client1
-            .query_balance(system::Account::chain(chain1))
-            .await
-            .unwrap(),
-        Amount::from_tokens(5)
+        client1.query_balance(Account::chain(chain1)).await.unwrap(),
+        balance1 - Amount::from_tokens(5) - policy.block_price() * 3
     );
     assert_eq!(
-        client2
-            .query_balance(system::Account::chain(chain2))
-            .await
-            .unwrap(),
-        Amount::from_tokens(5)
+        client2.query_balance(Account::chain(chain2)).await.unwrap(),
+        Amount::from_tokens(5) - policy.block_price()
     );
 
     // Transfer 2 units from Chain 2 to the owner of Chain 1.
@@ -1713,33 +1695,27 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
     client2
         .transfer_with_accounts(
             Amount::from_tokens(2),
-            system::Account::chain(chain2),
-            system::Account::owner(chain1, owner1),
+            Account::chain(chain2),
+            Account::owner(chain1, owner1),
         )
         .await
         .unwrap();
     client1.sync(chain1).await.unwrap();
 
     assert_eq!(
-        client1
-            .query_balance(system::Account::chain(chain1))
-            .await
-            .unwrap(),
-        Amount::from_tokens(5)
+        client1.query_balance(Account::chain(chain1)).await.unwrap(),
+        balance1 - Amount::from_tokens(5) - policy.block_price() * 3
     );
     assert_eq!(
         client1
-            .query_balance(system::Account::owner(chain1, owner1))
+            .query_balance(Account::owner(chain1, owner1))
             .await
             .unwrap(),
-        Amount::from_tokens(2)
+        Amount::from_tokens(2) - policy.block_price()
     );
     assert_eq!(
-        client2
-            .query_balance(system::Account::chain(chain2))
-            .await
-            .unwrap(),
-        Amount::from_tokens(3)
+        client2.query_balance(Account::chain(chain2)).await.unwrap(),
+        Amount::from_tokens(3) - policy.block_price() * 2
     );
 
     net.ensure_is_running().await.unwrap();
@@ -1779,16 +1755,10 @@ async fn test_project_test() {
 async fn test_project_publish(database: Database, network: Network) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let table_name = get_table_name();
     let config = LocalNetConfig {
-        database,
-        network,
-        testing_prng_seed: Some(37),
-        table_name,
-        num_other_initial_chains: 10,
-        initial_amount: Amount::from_tokens(10),
         num_initial_validators: 1,
         num_shards: 1,
+        ..LocalNetConfig::new_test(database, network)
     };
 
     let (mut net, client) = config.instantiate().await.unwrap();
@@ -1878,16 +1848,10 @@ async fn test_linera_net_up_simple() {
 async fn test_example_publish(database: Database, network: Network) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    let table_name = get_table_name();
     let config = LocalNetConfig {
-        database,
-        network,
-        testing_prng_seed: Some(37),
-        table_name,
-        num_other_initial_chains: 10,
-        initial_amount: Amount::from_tokens(10),
         num_initial_validators: 1,
         num_shards: 1,
+        ..LocalNetConfig::new_test(database, network)
     };
     let (mut net, client) = config.instantiate().await.unwrap();
 
@@ -1921,6 +1885,7 @@ async fn test_example_publish(database: Database, network: Network) {
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let policy = config.policy().await;
 
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await.unwrap();
@@ -1929,6 +1894,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     client2.wallet_init(&[], FaucetOption::None).await.unwrap();
 
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
+    let balance1 = client1.local_balance(Account::chain(chain1)).await.unwrap();
 
     // Generate keys for both clients.
     let client1_key = client1.keygen().await.unwrap();
@@ -1965,25 +1931,16 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     client2.sync(chain2).await.unwrap();
 
     assert_eq!(
-        client1
-            .query_balance(system::Account::chain(chain1))
-            .await
-            .unwrap(),
-        Amount::from_tokens(4)
+        client1.query_balance(Account::chain(chain1)).await.unwrap(),
+        balance1 - Amount::from_tokens(6) - policy.block_price() * 3
     );
     assert_eq!(
-        client1
-            .query_balance(system::Account::chain(chain2))
-            .await
-            .unwrap(),
-        Amount::from_tokens(6)
+        client1.query_balance(Account::chain(chain2)).await.unwrap(),
+        Amount::from_tokens(6) - policy.block_price()
     );
     assert_eq!(
-        client2
-            .query_balance(system::Account::chain(chain2))
-            .await
-            .unwrap(),
-        Amount::from_tokens(6)
+        client2.query_balance(Account::chain(chain2)).await.unwrap(),
+        Amount::from_tokens(6) - policy.block_price()
     );
 
     // Transfer 2 + 1 units from Chain 2 to Chain 1 using both clients.
@@ -1999,25 +1956,16 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     client2.sync(chain2).await.unwrap();
 
     assert_eq!(
-        client1
-            .query_balance(system::Account::chain(chain1))
-            .await
-            .unwrap(),
-        Amount::from_tokens(7)
+        client1.query_balance(Account::chain(chain1)).await.unwrap(),
+        balance1 - Amount::from_tokens(3) - policy.block_price() * 3
     );
     assert_eq!(
-        client1
-            .query_balance(system::Account::chain(chain2))
-            .await
-            .unwrap(),
-        Amount::from_tokens(3)
+        client1.query_balance(Account::chain(chain2)).await.unwrap(),
+        Amount::from_tokens(3) - policy.block_price() * 3
     );
     assert_eq!(
-        client2
-            .query_balance(system::Account::chain(chain2))
-            .await
-            .unwrap(),
-        Amount::from_tokens(3)
+        client2.query_balance(Account::chain(chain2)).await.unwrap(),
+        Amount::from_tokens(3) - policy.block_price() * 3
     );
 
     net.ensure_is_running().await.unwrap();
@@ -2032,6 +1980,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let policy = config.policy().await;
 
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await.unwrap();
@@ -2040,37 +1989,36 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     client2.wallet_init(&[], FaucetOption::None).await.unwrap();
 
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
+    let balance1 = client1.local_balance(Account::chain(chain1)).await.unwrap();
 
     // Generate keys for client 2.
     let client2_key = client2.keygen().await.unwrap();
 
     // Open a great-grandchild chain on behalf of client 2.
     let (_, grandparent) = client1
-        .open_chain(chain1, None, Amount::ZERO)
+        .open_chain(chain1, None, Amount::from_tokens(3))
         .await
         .unwrap();
     let (_, parent) = client1
-        .open_chain(grandparent, None, Amount::ZERO)
+        .open_chain(grandparent, None, Amount::from_tokens(2))
         .await
         .unwrap();
     let (message_id, chain2) = client1
-        .open_chain(parent, Some(client2_key), Amount::ZERO)
+        .open_chain(parent, Some(client2_key), Amount::ONE)
         .await
         .unwrap();
     client2.assign(client2_key, message_id).await.unwrap();
 
-    // Transfer 6 units from Chain 1 to Chain 2.
+    // Transfer 6 units from Chain 1 to Chain 2. Remaining:
+    // 100 - 3 - 6 - two one block fees = 90.998
     client1
         .transfer(Amount::from_tokens(6), chain1, chain2)
         .await
         .unwrap();
     client2.sync(chain2).await.unwrap();
     assert_eq!(
-        client2
-            .query_balance(system::Account::chain(chain2))
-            .await
-            .unwrap(),
-        Amount::from_tokens(6)
+        client2.query_balance(Account::chain(chain2)).await.unwrap(),
+        Amount::from_tokens(7) - policy.block_price()
     );
 
     // Transfer 2 units from Chain 2 to Chain 1.
@@ -2081,18 +2029,12 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     client1.sync(chain1).await.unwrap();
     client2.sync(chain2).await.unwrap();
     assert_eq!(
-        client1
-            .query_balance(system::Account::chain(chain1))
-            .await
-            .unwrap(),
-        Amount::from_tokens(6)
+        client1.query_balance(Account::chain(chain1)).await.unwrap(),
+        balance1 - Amount::from_tokens(7) - policy.block_price() * 3
     );
     assert_eq!(
-        client2
-            .query_balance(system::Account::chain(chain2))
-            .await
-            .unwrap(),
-        Amount::from_tokens(4)
+        client2.query_balance(Account::chain(chain2)).await.unwrap(),
+        Amount::from_tokens(5) - policy.block_price() * 2
     );
 
     net.ensure_is_running().await.unwrap();
@@ -2107,6 +2049,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let policy = config.policy().await;
 
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await.unwrap();
@@ -2115,6 +2058,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     client2.wallet_init(&[], FaucetOption::None).await.unwrap();
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
+    let balance1 = client1.local_balance(Account::chain(chain1)).await.unwrap();
 
     // Generate keys for client 2.
     let client2_key = client2.keygen().await.unwrap();
@@ -2147,14 +2091,12 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     faucet_service.ensure_is_running().unwrap();
     faucet_service.terminate().await.unwrap();
 
-    // Chain 1 should have transferred four tokens, two to each child. So it should have six left.
+    // Chain 1 should have transferred four tokens, two to each child. So it should have 96 left,
+    // minus three block fees.
     client1.sync(chain1).await.unwrap();
     assert_eq!(
-        client1
-            .query_balance(system::Account::chain(chain1))
-            .await
-            .unwrap(),
-        Amount::from_tokens(6)
+        client1.query_balance(Account::chain(chain1)).await.unwrap(),
+        balance1 - Amount::from_tokens(4) - policy.block_price() * 3
     );
 
     // Assign chain2 to client2_key.
@@ -2166,41 +2108,33 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     // Clients 2 and 3 should have the tokens, and own the chain.
     client2.sync(chain2).await.unwrap();
     assert_eq!(
-        client2
-            .query_balance(system::Account::chain(chain2))
-            .await
-            .unwrap(),
-        Amount::from_tokens(2)
+        client2.query_balance(Account::chain(chain2)).await.unwrap(),
+        Amount::from_tokens(2) - policy.block_price()
     );
     client2
         .transfer(Amount::from_tokens(1), chain2, chain1)
         .await
         .unwrap();
     assert_eq!(
-        client2
-            .query_balance(system::Account::chain(chain2))
-            .await
-            .unwrap(),
-        Amount::from_tokens(1)
+        client2.query_balance(Account::chain(chain2)).await.unwrap(),
+        Amount::from_tokens(1) - policy.block_price() * 2
     );
 
     client3.sync(chain3).await.unwrap();
     assert_eq!(
-        client3
-            .query_balance(system::Account::chain(chain3))
-            .await
-            .unwrap(),
-        Amount::from_tokens(2)
+        client3.query_balance(Account::chain(chain3)).await.unwrap(),
+        Amount::from_tokens(2) - policy.block_price()
     );
     client3
-        .transfer(Amount::from_tokens(2), chain3, chain1)
+        .transfer(
+            Amount::from_tokens(2) - policy.block_price() * 2,
+            chain3,
+            chain1,
+        )
         .await
         .unwrap();
     assert_eq!(
-        client3
-            .query_balance(system::Account::chain(chain3))
-            .await
-            .unwrap(),
+        client3.query_balance(Account::chain(chain3)).await.unwrap(),
         Amount::ZERO
     );
     net.ensure_is_running().await.unwrap();
@@ -2225,10 +2159,7 @@ async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) {
 
     let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
 
-    let mut faucet_service = client1
-        .run_faucet(None, chain1, Amount::from_tokens(1))
-        .await
-        .unwrap();
+    let mut faucet_service = client1.run_faucet(None, chain1, Amount::ONE).await.unwrap();
     let faucet = faucet_service.instance();
 
     let path = util::resolve_binary("linera-benchmark", env!("CARGO_PKG_NAME"))
@@ -2261,16 +2192,14 @@ async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) {
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let policy = config.policy().await;
     // Create runner and client.
     let (mut net, client) = config.instantiate().await.unwrap();
     let chain_id = client.get_wallet().unwrap().default_chain().unwrap();
-    assert_eq!(
-        client
-            .local_balance(system::Account::chain(chain_id))
-            .await
-            .unwrap(),
-        Amount::from_tokens(10)
-    );
+    let balance = client
+        .local_balance(Account::chain(chain_id))
+        .await
+        .unwrap();
     // Stop validators.
     for i in 0..4 {
         net.remove_validator(i).unwrap();
@@ -2281,10 +2210,10 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) {
     assert!(result.is_err());
     assert_eq!(
         client
-            .query_balance(system::Account::chain(chain_id))
+            .query_balance(Account::chain(chain_id))
             .await
             .unwrap(),
-        Amount::from_tokens(10)
+        balance - policy.block_price()
     );
     // Restart validators.
     for i in 0..4 {
@@ -2295,10 +2224,10 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) {
     client.sync(chain_id).await.unwrap();
     assert_eq!(
         client
-            .query_balance(system::Account::chain(chain_id))
+            .query_balance(Account::chain(chain_id))
             .await
             .unwrap(),
-        Amount::from_tokens(8)
+        balance - Amount::from_tokens(2) - policy.block_price() * 2
     );
     let result = client.retry_pending_block(Some(chain_id)).await;
     assert!(result.unwrap().is_none());
@@ -2315,10 +2244,10 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) {
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_benchmark(config: LocalNetConfig) {
+async fn test_end_to_end_benchmark(mut config: LocalNetConfig) {
     use fungible::{FungibleTokenAbi, InitialState};
 
-    let config = config.with_num_other_initial_chains(2);
+    config.num_other_initial_chains = 2;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let (mut net, client) = config.instantiate().await.unwrap();
 

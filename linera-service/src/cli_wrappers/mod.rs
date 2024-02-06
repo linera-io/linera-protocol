@@ -31,6 +31,7 @@ mod util;
 /// How to run a linera wallet and its GraphQL service.
 mod wallet;
 
+use linera_execution::policy::ResourceControlPolicy;
 pub use wallet::{ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, NodeService};
 
 use anyhow::Result;
@@ -42,6 +43,8 @@ pub trait LineraNetConfig {
     type Net: LineraNet + Sized + Send + Sync + 'static;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)>;
+
+    async fn policy(&self) -> ResourceControlPolicy;
 }
 
 /// A running Linera net.

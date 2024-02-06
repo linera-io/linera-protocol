@@ -425,7 +425,7 @@ pub enum ClientCommand {
 
         /// How many tokens to assign to each newly created chain.
         /// These need to cover the transaction fees per chain for the benchmark.
-        #[arg(long, default_value = "0.001")]
+        #[arg(long, default_value = "0.1")]
         tokens_per_chain: Amount,
 
         /// How many transactions to put in each block.
@@ -711,7 +711,7 @@ pub enum NetCommand {
 
         /// The initial amount of native tokens credited in the initial "root" chains,
         /// including the default "admin" chain.
-        #[arg(long, default_value = "10")]
+        #[arg(long, default_value = "1000000")]
         initial_amount: u128,
 
         /// The number of validators in the local test network. Default is 1.

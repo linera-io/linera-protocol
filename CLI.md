@@ -729,7 +729,7 @@ Start a Local Linera Network
   Default value: `10`
 * `--initial-amount <INITIAL_AMOUNT>` — The initial amount of native tokens credited in the initial "root" chains, including the default "admin" chain
 
-  Default value: `10`
+  Default value: `1000000`
 * `--validators <VALIDATORS>` — The number of validators in the local test network. Default is 1
 
   Default value: `1`
