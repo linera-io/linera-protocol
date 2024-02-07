@@ -56,7 +56,7 @@ pub struct ResourceTracker {
 
 /// How to access the balance of an account.
 pub trait BalanceHolder {
-    fn as_amount(&self) -> Amount;
+    fn balance(&self) -> Result<Amount, ArithmeticError>;
 
     fn try_add_assign(&mut self, other: Amount) -> Result<(), ArithmeticError>;
 
@@ -69,9 +69,10 @@ where
     Account: BalanceHolder,
     Tracker: AsMut<ResourceTracker>,
 {
-    /// Obtains the balance of the account.
-    pub fn balance(&self) -> Amount {
-        self.account.as_amount()
+    /// Obtains the balance of the account. The only possible error is an arithmetic
+    /// overflow, which should not happen in practice due to final token supply.
+    pub fn balance(&self) -> Result<Amount, ArithmeticError> {
+        self.account.balance()
     }
 
     /// Operates a 3-way merge by transferring the difference between `initial`
@@ -81,7 +82,7 @@ where
             self.account
                 .try_sub_assign(initial.try_sub(other).expect("other <= initial"))
                 .map_err(|_| SystemExecutionError::InsufficientFundingForFees {
-                    balance: self.balance(),
+                    balance: self.balance().unwrap_or(Amount::MAX),
                 })?;
         } else {
             self.account
@@ -94,7 +95,7 @@ where
     fn update_balance(&mut self, fees: Amount) -> Result<(), ExecutionError> {
         self.account.try_sub_assign(fees).map_err(|_| {
             SystemExecutionError::InsufficientFundingForFees {
-                balance: self.balance(),
+                balance: self.balance().unwrap_or(Amount::MAX),
             }
         })?;
         Ok(())
@@ -102,7 +103,8 @@ where
 
     /// Obtains the amount of fuel that could be spent by consuming the entire balance.
     pub(crate) fn remaining_fuel(&self) -> u64 {
-        self.policy.remaining_fuel(self.balance())
+        self.policy
+            .remaining_fuel(self.balance().unwrap_or(Amount::MAX))
     }
 
     /// Tracks the allocation of a grant.
@@ -251,8 +253,8 @@ where
 
 // The simplest `BalanceHolder` is an `Amount`.
 impl BalanceHolder for Amount {
-    fn as_amount(&self) -> Amount {
-        *self
+    fn balance(&self) -> Result<Amount, ArithmeticError> {
+        Ok(*self)
     }
 
     fn try_add_assign(&mut self, other: Amount) -> Result<(), ArithmeticError> {
@@ -277,33 +279,20 @@ pub struct Sources<'a> {
     sources: Vec<&'a mut Amount>,
 }
 
-impl Sources<'_> {
-    fn check_overflow(&self) -> Result<(), ArithmeticError> {
+impl BalanceHolder for Sources<'_> {
+    fn balance(&self) -> Result<Amount, ArithmeticError> {
         let mut amount = Amount::ZERO;
         for source in self.sources.iter() {
             amount.try_add_assign(**source)?;
         }
-        Ok(())
-    }
-}
-
-impl BalanceHolder for Sources<'_> {
-    fn as_amount(&self) -> Amount {
-        let mut amount = Amount::ZERO;
-        for source in self.sources.iter() {
-            amount
-                .try_add_assign(**source)
-                .expect("Overflow was tested in `ResourceController::with_*` and `add_assign`");
-        }
-        amount
+        Ok(amount)
     }
 
     fn try_add_assign(&mut self, other: Amount) -> Result<(), ArithmeticError> {
         // Try to credit the owner account first.
         // TODO(#1648): This may need some additional design work.
         let source = self.sources.last_mut().expect("at least one source");
-        source.try_add_assign(other)?;
-        self.check_overflow()
+        source.try_add_assign(other)
     }
 
     fn try_sub_assign(&mut self, mut other: Amount) -> Result<(), ArithmeticError> {
@@ -365,13 +354,10 @@ impl ResourceController<Option<Owner>, ResourceTracker> {
             }
         }
 
-        let account = Sources { sources };
-        account.check_overflow()?;
-
         Ok(ResourceController {
             policy: self.policy.clone(),
             tracker: &mut self.tracker,
-            account,
+            account: Sources { sources },
         })
     }
 }

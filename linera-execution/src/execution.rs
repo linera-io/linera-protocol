@@ -214,7 +214,7 @@ where
         let initial_balance = resource_controller
             .with_state_and_grant(self, cloned_grant.as_mut())
             .await?
-            .balance();
+            .balance()?;
         let controller = ResourceController {
             policy: resource_controller.policy.clone(),
             tracker: resource_controller.tracker,
@@ -239,7 +239,7 @@ where
         resource_controller
             .with_state_and_grant(self, grant)
             .await?
-            .merge_balance(initial_balance, controller.balance())?;
+            .merge_balance(initial_balance, controller.balance()?)?;
         resource_controller.tracker = controller.tracker;
         Ok(execution_outcomes)
     }
