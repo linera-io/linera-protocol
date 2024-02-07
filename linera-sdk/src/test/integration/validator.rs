@@ -49,11 +49,8 @@ impl Default for TestValidator {
     fn default() -> Self {
         let key_pair = KeyPair::generate();
         let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
-        let storage = MemoryStorage::new(
-            Some(WasmRuntime::default()),
-            TEST_MEMORY_MAX_STREAM_QUERIES,
-            WallClock,
-        );
+        let storage =
+            MemoryStorage::new(Some(WasmRuntime::default()), TEST_MEMORY_MAX_STREAM_QUERIES);
 
         let worker = WorkerState::new(
             "Single validator node".to_string(),

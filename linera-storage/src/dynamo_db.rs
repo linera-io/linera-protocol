@@ -63,12 +63,11 @@ impl DynamoDbStorage<WallClock> {
     ) -> Result<Self, DynamoDbContextError> {
         let storage =
             DynamoDbStorageInner::initialize(store_config, namespace, wasm_runtime).await?;
-        let storage = DynamoDbStorage {
+        Ok(DynamoDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
             execution_runtime_config: ExecutionRuntimeConfig::default(),
-        };
-        Ok(storage)
+        })
     }
 
     pub async fn new(
@@ -77,11 +76,10 @@ impl DynamoDbStorage<WallClock> {
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, DynamoDbContextError> {
         let storage = DynamoDbStorageInner::make(store_config, namespace, wasm_runtime).await?;
-        let storage = DynamoDbStorage {
+        Ok(DynamoDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
             execution_runtime_config: ExecutionRuntimeConfig::default(),
-        };
-        Ok(storage)
+        })
     }
 }

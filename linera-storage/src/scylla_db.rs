@@ -40,12 +40,11 @@ impl ScyllaDbStorage<TestClock> {
     ) -> Result<Self, ScyllaDbContextError> {
         let storage =
             ScyllaDbStorageInner::new_for_testing(store_config, namespace, wasm_runtime).await?;
-        let storage = ScyllaDbStorage {
+        Ok(ScyllaDbStorage {
             client: Arc::new(storage),
             clock,
             execution_runtime_config: ExecutionRuntimeConfig::default(),
-        };
-        Ok(storage)
+        })
     }
 }
 
@@ -57,12 +56,11 @@ impl ScyllaDbStorage<WallClock> {
     ) -> Result<Self, ScyllaDbContextError> {
         let storage =
             ScyllaDbStorageInner::initialize(store_config, namespace, wasm_runtime).await?;
-        let storage = ScyllaDbStorage {
+        Ok(ScyllaDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
             execution_runtime_config: ExecutionRuntimeConfig::default(),
-        };
-        Ok(storage)
+        })
     }
 
     pub async fn new(
@@ -71,11 +69,10 @@ impl ScyllaDbStorage<WallClock> {
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, ScyllaDbContextError> {
         let storage = ScyllaDbStorageInner::make(store_config, namespace, wasm_runtime).await?;
-        let storage = ScyllaDbStorage {
+        Ok(ScyllaDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
             execution_runtime_config: ExecutionRuntimeConfig::default(),
-        };
-        Ok(storage)
+        })
     }
 }

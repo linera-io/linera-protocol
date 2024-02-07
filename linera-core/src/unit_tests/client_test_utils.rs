@@ -646,7 +646,7 @@ impl StorageBuilder for MakeMemoryStorage {
     type Storage = MemoryStorage<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        Ok(MemoryStorage::new(
+        Ok(MemoryStorage::new_for_testing(
             self.wasm_runtime,
             TEST_MEMORY_MAX_STREAM_QUERIES,
             self.clock.clone(),

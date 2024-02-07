@@ -5,7 +5,7 @@ use crate::config::GenesisConfig;
 use anyhow::{bail, format_err};
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
-use linera_storage::{MemoryStorage, Storage, WallClock};
+use linera_storage::{MemoryStorage, Storage};
 use linera_views::{
     common::{AdminKeyValueStore, CommonStoreConfig},
     memory::MemoryStoreConfig,
@@ -390,12 +390,8 @@ where
 {
     match config {
         StoreConfig::Memory(config) => {
-            let mut storage = MemoryStorage::new(
-                wasm_runtime,
-                config.common_config.max_stream_queries,
-                WallClock,
-            )
-            .await?;
+            let mut storage =
+                MemoryStorage::new(wasm_runtime, config.common_config.max_stream_queries).await?;
             genesis_config.initialize_storage(&mut storage).await?;
             job.run(storage).await
         }

@@ -18,7 +18,7 @@ use linera_service::{
     config::WalletState,
     node_service::NodeService,
 };
-use linera_storage::{MemoryStorage, Storage, WallClock};
+use linera_storage::{MemoryStorage, Storage};
 use linera_version::VersionInfo;
 use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
 
@@ -117,7 +117,7 @@ impl ClientContext<DummyValidatorNodeProvider> for DummyContext {
 async fn main() -> std::io::Result<()> {
     let _options = <Options as clap::Parser>::parse();
 
-    let storage = MemoryStorage::new(None, TEST_MEMORY_MAX_STREAM_QUERIES, WallClock)
+    let storage = MemoryStorage::new(None, TEST_MEMORY_MAX_STREAM_QUERIES)
         .await
         .expect("storage");
     let config = ChainListenerConfig {

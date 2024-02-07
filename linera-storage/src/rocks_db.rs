@@ -67,12 +67,11 @@ impl RocksDbStorage<WallClock> {
     ) -> Result<Self, RocksDbContextError> {
         let storage =
             RocksDbStorageInner::initialize(store_config, namespace, wasm_runtime).await?;
-        let storage = RocksDbStorage {
+        Ok(RocksDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
             execution_runtime_config: ExecutionRuntimeConfig::default(),
-        };
-        Ok(storage)
+        })
     }
 
     pub async fn new(
