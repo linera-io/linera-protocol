@@ -73,5 +73,8 @@ test-log = { workspace = true, features = ["trace"] }
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 
+[build-dependencies]
+cfg_aliases.workspace = true
+
 [package.metadata.cargo-machete]
 ignored = ["serde_bytes"]
