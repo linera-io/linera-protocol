@@ -95,7 +95,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
     };
     let mut controller = ResourceController::default();
     let outcomes = view
-        .execute_message(context, Message::System(message), &mut controller)
+        .execute_message(context, Message::System(message), None, &mut controller)
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::from_tokens(4));

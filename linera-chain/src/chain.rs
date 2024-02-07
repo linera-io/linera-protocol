@@ -676,15 +676,36 @@ where
                 refund_grant_to: message.event.refund_grant_to,
             };
             let outcomes = match message.action {
-                MessageAction::Accept => self
-                    .execution_state
-                    .execute_message(
-                        context,
-                        message.event.message.clone(),
-                        &mut resource_controller,
-                    )
-                    .await
-                    .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?,
+                MessageAction::Accept => {
+                    let mut grant = message.event.grant;
+                    let mut outcomes = self
+                        .execution_state
+                        .execute_message(
+                            context,
+                            message.event.message.clone(),
+                            if grant > Amount::ZERO {
+                                Some(&mut grant)
+                            } else {
+                                None
+                            },
+                            &mut resource_controller,
+                        )
+                        .await
+                        .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
+                    if grant > Amount::ZERO {
+                        if let Some(refund_grant_to) = message.event.refund_grant_to {
+                            let outcome = self
+                                .execution_state
+                                .send_refund(context, grant, refund_grant_to)
+                                .await
+                                .map_err(|err| {
+                                    ChainError::ExecutionError(err, chain_execution_context)
+                                })?;
+                            outcomes.push(outcome);
+                        }
+                    }
+                    outcomes
+                }
                 MessageAction::Reject => {
                     ensure!(
                         !message.event.is_protected(),
@@ -708,8 +729,22 @@ where
                                 ChainError::ExecutionError(err, chain_execution_context)
                             })?
                     } else {
-                        // Nothing to do.
-                        Vec::new()
+                        // Nothing to do except maybe refund the grant.
+                        let mut outcomes = Vec::new();
+                        if message.event.grant > Amount::ZERO {
+                            if let Some(refund_grant_to) = message.event.refund_grant_to {
+                                // Refund grant.
+                                let outcome = self
+                                    .execution_state
+                                    .send_refund(context, message.event.grant, refund_grant_to)
+                                    .await
+                                    .map_err(|err| {
+                                        ChainError::ExecutionError(err, chain_execution_context)
+                                    })?;
+                                outcomes.push(outcome);
+                            }
+                        }
+                        outcomes
                     }
                 }
             };
