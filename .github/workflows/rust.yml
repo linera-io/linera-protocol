@@ -115,7 +115,7 @@ jobs:
     - name: Check Copyright headers
       run: >
         find linera-* examples -name '*.rs' -a -not -wholename '*/target/*' -print0
-        | xargs -0 -L1 ./scripts/target/release/check_copyright_header
+        | xargs -0 scripts/target/release/check_copyright_header
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/lint/rust-toolchain.toml

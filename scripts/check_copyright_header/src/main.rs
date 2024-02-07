@@ -61,14 +61,22 @@ fn check_file_header(
     Err(CheckFileHeaderError::IncorrectCopyrightHeaderError)
 }
 
-fn main() -> Result<(), CheckFileHeaderError> {
-    let args = env::args().collect::<Vec<_>>();
-    let file_path = args.get(1).expect("Usage: FILE");
+fn main() -> std::process::ExitCode {
+    let args = env::args().skip(1).collect::<Vec<_>>();
 
-    let file = File::open(file_path).expect("Failed to open file");
-    let reader = BufReader::new(file);
+    let mut exit_code = std::process::ExitCode::SUCCESS;
 
-    check_file_header(reader.lines())
+    for file_path in args {
+        let file = File::open(&file_path).expect("Failed to open file");
+        let reader = BufReader::new(file);
+
+        if let Err(e) = check_file_header(reader.lines()) {
+            exit_code = std::process::ExitCode::FAILURE;
+            eprintln!("{}: {}", file_path, e);
+        }
+    }
+
+    exit_code
 }
 
 #[cfg(test)]
