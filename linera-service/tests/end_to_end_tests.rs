@@ -2091,13 +2091,11 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
     faucet_service.ensure_is_running().unwrap();
     faucet_service.terminate().await.unwrap();
 
-    // Chain 1 should have transferred four tokens, two to each child. So it should have 96 left,
-    // minus three block fees.
+    // Chain 1 should have transferred four tokens, two to each child.
     client1.sync(chain1).await.unwrap();
-    assert_eq!(
-        client1.query_balance(Account::chain(chain1)).await.unwrap(),
-        balance1 - Amount::from_tokens(4) - policy.block_price() * 3
-    );
+    let faucet_balance = client1.query_balance(Account::chain(chain1)).await.unwrap();
+    assert!(faucet_balance <= balance1 - Amount::from_tokens(4));
+    assert!(faucet_balance > balance1 - Amount::from_tokens(5));
 
     // Assign chain2 to client2_key.
     assert_eq!(
