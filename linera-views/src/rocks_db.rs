@@ -448,11 +448,9 @@ pub fn create_rocks_db_common_config() -> CommonStoreConfig {
     }
 }
 
-/// Creates a RocksDB database client to be used for tests.
-/// The temporary directory has to be carried because if it goes
-/// out of scope then the RocksDB client can become unstable.
+/// Returns the test config and a guard for the temporary directory
 #[cfg(any(test, feature = "test"))]
-pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
+pub async fn create_rocks_db_test_config() -> (RocksDbStoreConfig, TempDir) {
     let dir = TempDir::new().unwrap();
     let path_buf = dir.path().to_path_buf();
     let common_config = create_rocks_db_common_config();
@@ -460,6 +458,16 @@ pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
         path_buf,
         common_config,
     };
+    (store_config, dir)
+}
+
+
+/// Creates a RocksDB database client to be used for tests.
+/// The temporary directory has to be carried because if it goes
+/// out of scope then the RocksDB client can become unstable.
+#[cfg(any(test, feature = "test"))]
+pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
+    let (store_config, dir) = create_rocks_db_test_config().await;
     let (store, _) = RocksDbStore::new_for_testing(store_config)
         .await
         .expect("client");
@@ -519,6 +527,38 @@ impl WritableKeyValueStore<RocksDbContextError> for RocksDbStore {
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), RocksDbContextError> {
         self.store.clear_journal(base_key).await
+    }
+}
+
+#[async_trait]
+impl AdminKeyValueStore<RocksDbContextError> for RocksDbStore {
+    type Config = RocksDbStoreConfig;
+
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, RocksDbContextError> {
+        let store = RocksDbStoreInternal::connect(config, namespace).await?;
+        let cache_size = config.common_config.cache_size;
+        let store = Self::get_complete_store(store, cache_size);
+        Ok(store)
+    }
+
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, RocksDbContextError> {
+        RocksDbStoreInternal::list_all(config).await
+    }
+
+    async fn delete_all(config: &Self::Config) -> Result<(), RocksDbContextError> {
+        RocksDbStoreInternal::delete_all(config).await
+    }
+
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, RocksDbContextError> {
+        RocksDbStoreInternal::exists(config, namespace).await
+    }
+
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), RocksDbContextError> {
+        RocksDbStoreInternal::create(config, namespace).await
+    }
+
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), RocksDbContextError> {
+        RocksDbStoreInternal::delete(config, namespace).await
     }
 }
 

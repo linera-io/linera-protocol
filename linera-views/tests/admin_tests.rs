@@ -10,7 +10,7 @@ use rand::{Rng, SeedableRng};
 use std::fmt::Debug;
 
 #[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::create_rocks_db_test_store;
+use linera_views::rocks_db::{create_rocks_db_test_config, RocksDbContextError, RocksDbStore};
 
 #[cfg(feature = "aws")]
 use linera_views::dynamo_db::{create_dynamo_db_test_config, DynamoDbContextError, DynamoDbStore};
@@ -94,14 +94,12 @@ async fn admin_test<E: Debug, S: AdminKeyValueStore<E>>(config: &S::Config) {
     }
 }
 
-/*
 #[cfg(feature = "rocksdb")]
 #[tokio::test]
 async fn test_rocks_db_writes_from_blank() {
-    let (key_value_store, _dir) = create_rocks_db_test_store().await;
-    run_writes_from_blank(&key_value_store).await;
+    let (config, _dir) = create_rocks_db_test_config().await;
+    admin_test::<RocksDbContextError, RocksDbStore>(&config).await;
 }
- */
 
 #[cfg(feature = "aws")]
 #[tokio::test]
