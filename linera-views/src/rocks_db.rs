@@ -4,8 +4,8 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_upper_bound, CommonStoreConfig, ContextFromStore, KeyValueStore, ReadableKeyValueStore,
-        TableStatus, WritableKeyValueStore,
+        get_upper_bound, AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyValueStore,
+        ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
@@ -13,6 +13,7 @@ use crate::{
 use async_trait::async_trait;
 use linera_base::ensure;
 use std::{
+    ffi::OsString,
     fs,
     ops::{Bound, Bound::Excluded},
     path::PathBuf,
@@ -226,6 +227,82 @@ impl WritableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
     }
 
     async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), RocksDbContextError> {
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl AdminKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
+    type Config = RocksDbStoreConfig;
+
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, RocksDbContextError> {
+        let options = rocksdb::Options::default();
+        let mut path_buf = config.path_buf.clone();
+        path_buf.push(namespace);
+        let db = DB::open(&options, path_buf)?;
+        let max_stream_queries = config.common_config.max_stream_queries;
+        Ok(RocksDbStoreInternal {
+            db: Arc::new(db),
+            max_stream_queries,
+        })
+    }
+
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, RocksDbContextError> {
+        let entries = std::fs::read_dir(config.path_buf.clone())?;
+        let mut namespaces = Vec::new();
+        for entry in entries {
+            let entry = entry?;
+            if !entry.file_type()?.is_dir() {
+                return Err(RocksDbContextError::NonDirectoryNamespace);
+            }
+            let namespace = match entry.file_name().into_string() {
+                Err(error) => {
+                    return Err(RocksDbContextError::IntoStringError(error));
+                }
+                Ok(namespace) => namespace,
+            };
+            namespaces.push(namespace);
+        }
+        Ok(namespaces)
+    }
+
+    async fn delete_all(config: &Self::Config) -> Result<(), RocksDbContextError> {
+        let namespaces = RocksDbStoreInternal::list_all(config).await?;
+        for namespace in namespaces {
+            let mut path_buf = config.path_buf.clone();
+            path_buf.push(&namespace);
+            std::fs::remove_dir_all(path_buf.as_path())?;
+        }
+        Ok(())
+    }
+
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, RocksDbContextError> {
+        let options = rocksdb::Options::default();
+        let mut path_buf = config.path_buf.clone();
+        path_buf.push(namespace);
+        let result = DB::open(&options, path_buf);
+        match result {
+            Ok(_) => Ok(true),
+            Err(error) => match error.kind() {
+                rocksdb::ErrorKind::InvalidArgument => Ok(false),
+                _ => Err(RocksDbContextError::RocksDb(error)),
+            },
+        }
+    }
+
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), RocksDbContextError> {
+        let mut options = rocksdb::Options::default();
+        options.create_if_missing(true);
+        let mut path_buf = config.path_buf.clone();
+        path_buf.push(namespace);
+        let _db = DB::open(&options, path_buf)?;
+        Ok(())
+    }
+
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), RocksDbContextError> {
+        let mut path_buf = config.path_buf.clone();
+        path_buf.push(&namespace);
+        std::fs::remove_dir_all(path_buf.as_path())?;
         Ok(())
     }
 }
@@ -471,6 +548,14 @@ pub enum RocksDbContextError {
     /// RocksDb error.
     #[error("RocksDb error: {0}")]
     RocksDb(#[from] rocksdb::Error),
+
+    /// The database contains a file which is not a directory
+    #[error("Namespaces should be directory")]
+    NonDirectoryNamespace,
+
+    /// OString error
+    #[error("error in the conversion from OsString")]
+    IntoStringError(OsString),
 
     /// The key must have at most 8M
     #[error("The key must have at most 8M")]

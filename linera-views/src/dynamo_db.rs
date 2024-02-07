@@ -124,10 +124,6 @@ impl LocalStackTestContext {
     }
 }
 
-#[cfg(test)]
-#[path = "unit_tests/dynamo_db_context_tests.rs"]
-mod dynamo_db_context_tests;
-
 /// The attribute name of the partition key.
 const PARTITION_ATTRIBUTE: &str = "item_partition";
 
