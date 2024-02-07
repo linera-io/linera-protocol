@@ -38,7 +38,7 @@ fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
 }
 
 fn eq_approx(amount0: Amount, amount1: Amount) -> bool {
-    let fee_margin = Amount::from_milli(100);
+    let fee_margin = Amount::from_millis(100);
     amount0 + fee_margin > amount1 && amount0 < amount1 + fee_margin
 }
 
@@ -1261,9 +1261,9 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     app_fungible1_admin
         .assert_balances([
             (owner0, Amount::from_tokens(50)),
-            (owner1, Amount::from_milli(79_680)),
+            (owner1, Amount::from_millis(79_680)),
             (owner_admin, Amount::ZERO),
-            (owner_amm, Amount::from_milli(120_320)),
+            (owner_amm, Amount::from_millis(120_320)),
         ])
         .await;
 
@@ -1284,9 +1284,9 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
     app_fungible1_admin
         .assert_balances([
             (owner0, Amount::from_tokens(50)),
-            (owner1, Amount::from_atto(104_957310924369747899)),
+            (owner1, Amount::from_attos(104_957310924369747899)),
             (owner_admin, Amount::ZERO),
-            (owner_amm, Amount::from_atto(95_042689075630252101)),
+            (owner_amm, Amount::from_attos(95_042689075630252101)),
         ])
         .await;
 
@@ -1298,18 +1298,18 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
 
     app_fungible0_admin
         .assert_balances([
-            (owner0, Amount::from_atto(82_044810916287757646)),
+            (owner0, Amount::from_attos(82_044810916287757646)),
             (owner1, Amount::from_tokens(12)),
             (owner_admin, Amount::ZERO),
-            (owner_amm, Amount::from_atto(155_955189083712242354)),
+            (owner_amm, Amount::from_attos(155_955189083712242354)),
         ])
         .await;
     app_fungible1_admin
         .assert_balances([
             (owner0, Amount::ZERO),
-            (owner1, Amount::from_atto(104_957310924369747899)),
+            (owner1, Amount::from_attos(104_957310924369747899)),
             (owner_admin, Amount::ZERO),
-            (owner_amm, Amount::from_atto(145_042689075630252101)),
+            (owner_amm, Amount::from_attos(145_042689075630252101)),
         ])
         .await;
 
@@ -1390,7 +1390,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
     );
     assert!(
         client.query_balance(Account::chain(chain_2)).await.unwrap()
-            > Amount::from_tokens(3) - Amount::from_milli(50)
+            > Amount::from_tokens(3) - Amount::from_millis(50)
     );
 
     // Create derived chain
@@ -1462,7 +1462,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
                 response["chain"]["executionState"]["system"]["balance"].as_str()
             {
                 let balance = balance_str.parse::<Amount>().expect("should parse balance");
-                if balance > Amount::from_tokens(8) - Amount::from_milli(50) {
+                if balance > Amount::from_tokens(8) - Amount::from_millis(50) {
                     return;
                 }
             }
@@ -1471,7 +1471,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
     } else {
         assert!(
             client.query_balance(Account::chain(chain_2)).await.unwrap()
-                > Amount::from_tokens(8) - Amount::from_milli(50)
+                > Amount::from_tokens(8) - Amount::from_millis(50)
         );
     }
 
