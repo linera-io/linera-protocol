@@ -400,20 +400,17 @@ where
         }
         #[cfg(feature = "rocksdb")]
         StoreConfig::RocksDb(config, namespace) => {
-            let (storage, table_status) =
-                RocksDbStorage::new(config, &namespace, wasm_runtime).await?;
+            let storage = RocksDbStorage::new(config, &namespace, wasm_runtime).await?;
             job.run(storage).await
         }
         #[cfg(feature = "aws")]
         StoreConfig::DynamoDb(config, namespace) => {
-            let (storage, table_status) =
-                DynamoDbStorage::new(config, &namespace, wasm_runtime).await?;
+            let storage = DynamoDbStorage::new(config, &namespace, wasm_runtime).await?;
             job.run(storage).await
         }
         #[cfg(feature = "scylladb")]
         StoreConfig::ScyllaDb(config, namespace) => {
-            let (storage, table_status) =
-                ScyllaDbStorage::new(config, &namespace, wasm_runtime).await?;
+            let storage = ScyllaDbStorage::new(config, &namespace, wasm_runtime).await?;
             job.run(storage).await
         }
     }

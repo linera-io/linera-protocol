@@ -5,7 +5,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::{
         get_upper_bound, AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyValueStore,
-        ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
+        ReadableKeyValueStore, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
@@ -334,22 +334,22 @@ impl RocksDbStore {
     pub async fn new_for_testing(
         store_config: RocksDbStoreConfig,
         namespace: &str,
-    ) -> Result<(Self, TableStatus), RocksDbContextError> {
+    ) -> Result<Self, RocksDbContextError> {
         if Self::exists(&store_config, namespace).await? {
             Self::delete(&store_config, namespace).await?;
         }
         Self::create(&store_config, namespace).await?;
         let store = Self::connect(&store_config, namespace).await?;
-        Ok((store, TableStatus::New))
+        Ok(store)
     }
 
     /// Creates a RocksDB database from a specified path.
     pub async fn new(
         store_config: RocksDbStoreConfig,
         namespace: &str,
-    ) -> Result<(Self, TableStatus), RocksDbContextError> {
+    ) -> Result<Self, RocksDbContextError> {
         let store = Self::connect(&store_config, namespace).await?;
-        Ok((store, TableStatus::Existing))
+        Ok(store)
     }
 
     /// Initializes a RocksDB database from a specified path.
@@ -411,7 +411,7 @@ pub async fn create_rocks_db_test_config() -> (RocksDbStoreConfig, TempDir) {
 pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
     let (store_config, dir) = create_rocks_db_test_config().await;
     let namespace = get_namespace();
-    let (store, _) = RocksDbStore::new_for_testing(store_config, &namespace)
+    let store = RocksDbStore::new_for_testing(store_config, &namespace)
         .await
         .expect("client");
     (store, dir)

@@ -3,10 +3,7 @@
 
 use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
 use linera_execution::{ExecutionRuntimeConfig, WasmRuntime};
-use linera_views::{
-    common::TableStatus,
-    scylla_db::{ScyllaDbContextError, ScyllaDbStore, ScyllaDbStoreConfig},
-};
+use linera_views::scylla_db::{ScyllaDbContextError, ScyllaDbStore, ScyllaDbStoreConfig};
 use std::sync::Arc;
 
 #[cfg(any(test, feature = "test"))]
@@ -27,10 +24,10 @@ impl ScyllaDbStorageInner {
         store_config: ScyllaDbStoreConfig,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
-        let (store, table_status) = ScyllaDbStore::new_for_testing(store_config, namespace).await?;
+    ) -> Result<Self, ScyllaDbContextError> {
+        let store = ScyllaDbStore::new_for_testing(store_config, namespace).await?;
         let storage = Self::new(store, wasm_runtime);
-        Ok((storage, table_status))
+        Ok(storage)
     }
 
     async fn initialize(
@@ -47,10 +44,10 @@ impl ScyllaDbStorageInner {
         store_config: ScyllaDbStoreConfig,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
-        let (store, table_status) = ScyllaDbStore::new(store_config, namespace).await?;
+    ) -> Result<Self, ScyllaDbContextError> {
+        let store = ScyllaDbStore::new(store_config, namespace).await?;
         let storage = Self::new(store, wasm_runtime);
-        Ok((storage, table_status))
+        Ok(storage)
     }
 }
 
@@ -63,15 +60,9 @@ impl ScyllaDbStorage<TestClock> {
         let namespace = get_namespace();
         let common_config = create_scylla_db_common_config();
         let store_config = ScyllaDbStoreConfig { uri, common_config };
-        let (client, _) = ScyllaDbStorage::new_for_testing(
-            store_config,
-            &namespace,
-            wasm_runtime,
-            TestClock::new(),
-        )
-        .await
-        .expect("client");
-        client
+        ScyllaDbStorage::new_for_testing(store_config, &namespace, wasm_runtime, TestClock::new())
+            .await
+            .expect("client")
     }
 
     pub async fn new_for_testing(
@@ -79,15 +70,15 @@ impl ScyllaDbStorage<TestClock> {
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
-    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
-        let (storage, table_status) =
+    ) -> Result<Self, ScyllaDbContextError> {
+        let storage =
             ScyllaDbStorageInner::new_for_testing(store_config, namespace, wasm_runtime).await?;
         let storage = ScyllaDbStorage {
             client: Arc::new(storage),
             clock,
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         };
-        Ok((storage, table_status))
+        Ok(storage)
     }
 }
 
@@ -111,14 +102,13 @@ impl ScyllaDbStorage<WallClock> {
         store_config: ScyllaDbStoreConfig,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
-        let (storage, table_status) =
-            ScyllaDbStorageInner::make(store_config, namespace, wasm_runtime).await?;
+    ) -> Result<Self, ScyllaDbContextError> {
+        let storage = ScyllaDbStorageInner::make(store_config, namespace, wasm_runtime).await?;
         let storage = ScyllaDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         };
-        Ok((storage, table_status))
+        Ok(storage)
     }
 }

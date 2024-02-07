@@ -296,7 +296,7 @@ impl StateStore for DynamoDbTestStore {
         };
         let namespace = &self.namespace;
 
-        let (context, _) = if self.is_created {
+        let context = if self.is_created {
             DynamoDbContext::new(store_config, namespace, base_key, id).await
         } else {
             DynamoDbContext::new_for_testing(store_config, namespace, base_key, id).await

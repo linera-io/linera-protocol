@@ -44,7 +44,7 @@ impl ScyllaDbRunner {
             uri: config.client.uri.clone(),
             common_config,
         };
-        let (store, _) = ScyllaDbStore::new(store_config, &namespace).await?;
+        let store = ScyllaDbStore::new(store_config, &namespace).await?;
         Self::new(config, store).await
     }
 }

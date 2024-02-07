@@ -706,7 +706,7 @@ impl StorageBuilder for MakeRocksDbStorage {
             common_config,
         };
         let namespace = get_namespace();
-        let (storage, _) = RocksDbStorage::new_for_testing(
+        let storage = RocksDbStorage::new_for_testing(
             store_config,
             &namespace,
             self.wasm_runtime,
@@ -761,7 +761,7 @@ impl StorageBuilder for MakeDynamoDbStorage {
             common_config,
         };
         self.instance_counter += 1;
-        let (storage, _) = DynamoDbStorage::new_for_testing(
+        let storage = DynamoDbStorage::new_for_testing(
             store_config,
             &namespace,
             self.wasm_runtime,
@@ -827,7 +827,7 @@ impl StorageBuilder for MakeScyllaDbStorage {
             uri: self.uri.clone(),
             common_config,
         };
-        let (storage, _) = ScyllaDbStorage::new_for_testing(
+        let storage = ScyllaDbStorage::new_for_testing(
             store_config,
             &namespace,
             self.wasm_runtime,

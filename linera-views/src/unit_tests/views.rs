@@ -224,7 +224,7 @@ impl TestContextFactory for RocksDbContextFactory {
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let (store_config, directory) = create_rocks_db_test_config().await;
         let namespace = get_namespace();
-        let (store, _) = RocksDbStore::new_for_testing(store_config, &namespace)
+        let store = RocksDbStore::new_for_testing(store_config, &namespace)
             .await
             .expect("store");
         let context = RocksDbContext::new(store, vec![], ());
@@ -262,7 +262,7 @@ impl TestContextFactory for DynamoDbContextFactory {
             config,
             common_config,
         };
-        let (context, _) =
+        let context =
             DynamoDbContext::new_for_testing(store_config, &namespace, dummy_key_prefix, ())
                 .await?;
 
@@ -282,7 +282,7 @@ impl TestContextFactory for ScyllaDbContextFactory {
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let config = create_scylla_db_test_config().await;
         let namespace = get_namespace();
-        let (store, _) = ScyllaDbStore::new_for_testing(config, &namespace).await?;
+        let store = ScyllaDbStore::new_for_testing(config, &namespace).await?;
         let dummy_key_prefix = vec![0];
         let context = ScyllaDbContext::new(store, dummy_key_prefix, ());
         Ok(context)

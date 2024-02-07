@@ -39,15 +39,6 @@ pub(crate) enum Update<T> {
     Set(T),
 }
 
-/// Status of a table at the creation time of a [`KeyValueStore`] instance.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TableStatus {
-    /// Table was created during the construction of the [`KeyValueStore`] instance.
-    New,
-    /// Table already existed when the [`KeyValueStore`] instance was created.
-    Existing,
-}
-
 /// The common initialization parameters for the `KeyValueStore`
 #[derive(Debug, Clone)]
 pub struct CommonStoreConfig {

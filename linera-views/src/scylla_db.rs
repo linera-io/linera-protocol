@@ -25,7 +25,7 @@ use crate::{
     batch::{Batch, DeletePrefixExpander, UnorderedBatch},
     common::{
         get_upper_bound_option, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
-        KeyValueStore, ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
+        KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
     journaling::{
         DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
@@ -668,13 +668,13 @@ impl ScyllaDbStoreInternal {
     async fn new_for_testing(
         store_config: ScyllaDbStoreConfig,
         namespace: &str,
-    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
+    ) -> Result<Self, ScyllaDbContextError> {
         if Self::exists(&store_config, namespace).await? {
             Self::delete(&store_config, namespace).await?;
         }
         Self::create(&store_config, namespace).await?;
         let store = Self::connect(&store_config, namespace).await?;
-        Ok((store, TableStatus::New))
+        Ok(store)
     }
 
     async fn initialize(
@@ -690,9 +690,9 @@ impl ScyllaDbStoreInternal {
     async fn new(
         store_config: ScyllaDbStoreConfig,
         namespace: &str,
-    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
+    ) -> Result<Self, ScyllaDbContextError> {
         let store = Self::connect(&store_config, namespace).await?;
-        Ok((store, TableStatus::Existing))
+        Ok(store)
     }
 }
 
@@ -841,12 +841,11 @@ impl ScyllaDbStore {
     pub async fn new_for_testing(
         store_config: ScyllaDbStoreConfig,
         namespace: &str,
-    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
+    ) -> Result<Self, ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (simple_store, table_status) =
-            ScyllaDbStoreInternal::new_for_testing(store_config, namespace).await?;
+        let simple_store = ScyllaDbStoreInternal::new_for_testing(store_config, namespace).await?;
         let store = Self::get_complete_store(simple_store, cache_size);
-        Ok((store, table_status))
+        Ok(store)
     }
 
     /// Creates a [`ScyllaDbStore`] from the input parameters.
@@ -864,12 +863,11 @@ impl ScyllaDbStore {
     pub async fn new(
         store_config: ScyllaDbStoreConfig,
         namespace: &str,
-    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
+    ) -> Result<Self, ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
-        let (simple_store, table_status) =
-            ScyllaDbStoreInternal::new(store_config, namespace).await?;
+        let simple_store = ScyllaDbStoreInternal::new(store_config, namespace).await?;
         let store = Self::get_complete_store(simple_store, cache_size);
-        Ok((store, table_status))
+        Ok(store)
     }
 }
 
@@ -896,10 +894,9 @@ pub async fn create_scylla_db_test_config() -> ScyllaDbStoreConfig {
 pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
     let config = create_scylla_db_test_config().await;
     let namespace = get_namespace();
-    let (store, _) = ScyllaDbStore::new_for_testing(config, &namespace)
+    ScyllaDbStore::new_for_testing(config, &namespace)
         .await
-        .expect("store");
-    store
+        .expect("store")
 }
 
 /// An implementation of [`crate::common::Context`] based on ScyllaDB
