@@ -6,11 +6,11 @@ on:
   pull_request:
     branches:
       - "**"
-    paths-ignore:
-      - 'CONTRIBUTING.md'
-      - 'INSTALL.md'
-      - 'docker/**'
-      - 'kubernetes/**'
+    paths:
+      - '.github/workflows/dynamodb.yml'
+      - 'toolchains/**'
+      - 'linera-views/**'
+      - 'linera-storage/**'
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull-requests

@@ -6,8 +6,12 @@ on:
   pull_request:
     branches:
       - "**"
-    paths-ignore:
-      - '*.md'
+    paths:
+      - '.github/workflows/kubernetes.yml'
+      - 'toolchains/**'
+      - 'configuration/**'
+      - 'docker/**'
+      - 'kubernetes/**'
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull-requests
