@@ -452,7 +452,9 @@ pub async fn full_initialize_storage(
 fn test_storage_config_from_str() {
     assert_eq!(
         StorageConfig::from_str("memory").unwrap(),
-        StorageConfig::Memory { namespace: "".into() }
+        StorageConfig::Memory {
+            namespace: "".into()
+        }
     );
     assert!(StorageConfig::from_str("memory_").is_err());
 }

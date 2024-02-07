@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
+use crate::db_storage::{DbStorage, DbStorageInner};
 use linera_execution::WasmRuntime;
 use linera_views::scylla_db::{ScyllaDbContextError, ScyllaDbStore, ScyllaDbStoreConfig};
 
@@ -38,16 +38,5 @@ impl ScyllaDbStorage<TestClock> {
         let storage =
             ScyllaDbStorageInner::new_for_testing(store_config, namespace, wasm_runtime).await?;
         Ok(Self::create(storage, clock))
-    }
-}
-
-impl ScyllaDbStorage<WallClock> {
-    pub async fn new(
-        store_config: ScyllaDbStoreConfig,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, ScyllaDbContextError> {
-        let storage = ScyllaDbStorageInner::make(store_config, namespace, wasm_runtime).await?;
-        Ok(Self::create(storage, WallClock))
     }
 }

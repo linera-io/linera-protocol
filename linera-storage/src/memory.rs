@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
+use crate::db_storage::{DbStorage, DbStorageInner};
 use linera_execution::WasmRuntime;
 use linera_views::memory::{MemoryContextError, MemoryStore, MemoryStoreConfig};
 
@@ -31,16 +31,5 @@ impl MemoryStorage<crate::TestClock> {
         let namespace = "unused_namespace";
         let storage = MemoryStorageInner::make(store_config, namespace, wasm_runtime).await?;
         Ok(Self::create(storage, clock))
-    }
-}
-
-impl MemoryStorage<WallClock> {
-    pub async fn new(
-        store_config: MemoryStoreConfig,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, MemoryContextError> {
-        let storage = MemoryStorageInner::make(store_config, namespace, wasm_runtime).await?;
-        Ok(Self::create(storage, WallClock))
     }
 }

@@ -12,7 +12,6 @@ use linera_core::{
         ValidatorNodeProvider,
     },
 };
-use linera_views::memory::MemoryStoreConfig;
 use linera_execution::committee::Committee;
 use linera_service::{
     chain_listener::{ChainListenerConfig, ClientContext},
@@ -21,7 +20,10 @@ use linera_service::{
 };
 use linera_storage::{MemoryStorage, Storage};
 use linera_version::VersionInfo;
-use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
+use linera_views::{
+    memory::{MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
+    views::ViewError,
+};
 
 #[derive(Clone)]
 struct DummyValidatorNode;
