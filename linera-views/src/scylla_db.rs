@@ -821,20 +821,14 @@ impl ScyllaDbStore {
     }
 
     #[cfg(not(feature = "metrics"))]
-    fn get_complete_store(
-        simple_store: ScyllaDbStoreInternal,
-        cache_size: usize,
-    ) -> Self {
+    fn get_complete_store(simple_store: ScyllaDbStoreInternal, cache_size: usize) -> Self {
         let store = JournalingKeyValueStore::new(simple_store);
         let store = LruCachingStore::new(store, cache_size);
         Self { store }
     }
 
     #[cfg(feature = "metrics")]
-    fn get_complete_store(
-        simple_store: ScyllaDbStoreInternal,
-        cache_size: usize,
-    ) -> Self {
+    fn get_complete_store(simple_store: ScyllaDbStoreInternal, cache_size: usize) -> Self {
         let store = JournalingKeyValueStore::new(simple_store);
         let store = MeteredStore::new(&SCYLLA_DB_METRICS, store);
         let store = LruCachingStore::new(store, cache_size);

@@ -4,8 +4,8 @@
 use crate::{
     batch::{Batch, DeletePrefixExpander, WriteOperation},
     common::{
-        get_interval, CommonStoreConfig, Context, ContextFromStore, KeyIterable, KeyValueStore,
-        ReadableKeyValueStore, WritableKeyValueStore,
+        get_interval, AdminKeyValueStore, CommonStoreConfig, Context, ContextFromStore,
+        KeyIterable, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
@@ -127,6 +127,42 @@ impl WritableKeyValueStore<MemoryContextError> for MemoryStore {
     }
 
     async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), MemoryContextError> {
+        Ok(())
+    }
+}
+
+// For the memory container the namespace container
+#[async_trait]
+impl AdminKeyValueStore<MemoryContextError> for MemoryStore {
+    type Config = MemoryStoreConfig;
+
+    async fn connect(config: &Self::Config, _namespace: &str) -> Result<Self, MemoryContextError> {
+        let state = Arc::new(Mutex::new(BTreeMap::new()));
+        let guard = state
+            .try_lock_arc()
+            .expect("We should acquire the lock just after creating the object");
+        let max_stream_queries = config.common_config.max_stream_queries;
+        let store = MemoryStore::new(guard, max_stream_queries);
+        Ok(store)
+    }
+
+    async fn list_all(_config: &Self::Config) -> Result<Vec<String>, MemoryContextError> {
+        Ok(Vec::new())
+    }
+
+    async fn delete_all(_config: &Self::Config) -> Result<(), MemoryContextError> {
+        Ok(())
+    }
+
+    async fn exists(_config: &Self::Config, _namespace: &str) -> Result<bool, MemoryContextError> {
+        Ok(false)
+    }
+
+    async fn create(_config: &Self::Config, _namespace: &str) -> Result<(), MemoryContextError> {
+        Ok(())
+    }
+
+    async fn delete(_config: &Self::Config, _namespace: &str) -> Result<(), MemoryContextError> {
         Ok(())
     }
 }

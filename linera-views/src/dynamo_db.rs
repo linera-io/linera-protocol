@@ -1011,7 +1011,6 @@ impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStore {
     }
 }
 
-
 #[async_trait]
 impl KeyValueStore for DynamoDbStore {
     type Error = DynamoDbContextError;
@@ -1019,10 +1018,7 @@ impl KeyValueStore for DynamoDbStore {
 
 impl DynamoDbStore {
     #[cfg(not(feature = "metrics"))]
-    fn get_complete_store(
-        simple_store: DynamoDbStoreInternal,
-        cache_size: usize,
-    ) -> Self {
+    fn get_complete_store(simple_store: DynamoDbStoreInternal, cache_size: usize) -> Self {
         let store = JournalingKeyValueStore::new(simple_store);
         let store = ValueSplittingStore::new(store);
         let store = LruCachingStore::new(store, cache_size);
@@ -1030,10 +1026,7 @@ impl DynamoDbStore {
     }
 
     #[cfg(feature = "metrics")]
-    fn get_complete_store(
-        simple_store: DynamoDbStoreInternal,
-        cache_size: usize,
-    ) -> Self {
+    fn get_complete_store(simple_store: DynamoDbStoreInternal, cache_size: usize) -> Self {
         let store = JournalingKeyValueStore::new(simple_store);
         let store = MeteredStore::new(&DYNAMO_DB_METRICS, store);
         let store = ValueSplittingStore::new(store);
@@ -1330,7 +1323,6 @@ pub async fn create_dynamo_db_test_config() -> DynamoDbStoreConfig {
         common_config,
     }
 }
-
 
 /// Creates a basic client that can be used for tests.
 #[cfg(any(test, feature = "test"))]
