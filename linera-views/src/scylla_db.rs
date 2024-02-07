@@ -677,16 +677,6 @@ impl ScyllaDbStoreInternal {
         Ok(store)
     }
 
-    async fn initialize(
-        store_config: ScyllaDbStoreConfig,
-        namespace: &str,
-    ) -> Result<Self, ScyllaDbContextError> {
-        if !Self::exists(&store_config, namespace).await? {
-            Self::create(&store_config, namespace).await?;
-        }
-        Self::connect(&store_config, namespace).await
-    }
-
     async fn new(
         store_config: ScyllaDbStoreConfig,
         namespace: &str,
@@ -844,17 +834,6 @@ impl ScyllaDbStore {
     ) -> Result<Self, ScyllaDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let simple_store = ScyllaDbStoreInternal::new_for_testing(store_config, namespace).await?;
-        let store = Self::get_complete_store(simple_store, cache_size);
-        Ok(store)
-    }
-
-    /// Creates a [`ScyllaDbStore`] from the input parameters.
-    pub async fn initialize(
-        store_config: ScyllaDbStoreConfig,
-        namespace: &str,
-    ) -> Result<Self, ScyllaDbContextError> {
-        let cache_size = store_config.common_config.cache_size;
-        let simple_store = ScyllaDbStoreInternal::initialize(store_config, namespace).await?;
         let store = Self::get_complete_store(simple_store, cache_size);
         Ok(store)
     }

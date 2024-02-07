@@ -383,6 +383,15 @@ pub trait AdminKeyValueStore<E>: Sized {
 
     /// Deletes the given namespace.
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), E>;
+
+    /// Initialize a storage if missing and provides it.
+    async fn initialize(config: &Self::Config, namespace: &str) -> Result<Self, E> {
+        if !Self::exists(config, namespace).await? {
+            Self::create(config, namespace).await?;
+        }
+	Self::connect(config, namespace).await
+    }
+
 }
 
 /// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.

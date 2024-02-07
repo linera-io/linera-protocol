@@ -352,17 +352,6 @@ impl RocksDbStore {
         Ok(store)
     }
 
-    /// Initializes a RocksDB database from a specified path.
-    pub async fn initialize(
-        store_config: RocksDbStoreConfig,
-        namespace: &str,
-    ) -> Result<Self, RocksDbContextError> {
-        if !Self::exists(&store_config, namespace).await? {
-            Self::create(&store_config, namespace).await?;
-        }
-        Self::connect(&store_config, namespace).await
-    }
-
     #[cfg(not(feature = "metrics"))]
     fn get_complete_store(store: RocksDbStoreInternal, cache_size: usize) -> Self {
         let store = ValueSplittingStore::new(store);

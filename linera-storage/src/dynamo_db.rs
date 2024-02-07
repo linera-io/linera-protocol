@@ -5,6 +5,7 @@ use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
 use linera_execution::{ExecutionRuntimeConfig, WasmRuntime};
 use linera_views::dynamo_db::{DynamoDbContextError, DynamoDbStore, DynamoDbStoreConfig};
 use std::sync::Arc;
+use linera_views::common::AdminKeyValueStore;
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -38,7 +39,7 @@ impl DynamoDbStorageInner {
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, DynamoDbContextError> {
-        let store = DynamoDbStore::initialize(store_config, namespace).await?;
+        let store = DynamoDbStore::initialize(&store_config, namespace).await?;
         let storage = Self::new(store, wasm_runtime);
         Ok(storage)
     }

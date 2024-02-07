@@ -5,6 +5,7 @@ use crate::{
     common::IndexerError,
     runner::{IndexerConfig, Runner},
 };
+use linera_views::common::AdminKeyValueStore;
 use clap::Parser as _;
 use linera_views::{
     common::CommonStoreConfig,
@@ -46,7 +47,7 @@ impl RocksDbRunner {
             common_config,
         };
         let namespace = config.client.table.clone();
-        let store = RocksDbStore::initialize(store_config, &namespace).await?;
+        let store = RocksDbStore::initialize(&store_config, &namespace).await?;
         Self::new(config, store).await
     }
 }

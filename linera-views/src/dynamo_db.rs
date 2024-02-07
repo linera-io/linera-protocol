@@ -541,17 +541,6 @@ impl DynamoDbStoreInternal {
         Ok(store)
     }
 
-    /// Initializes a DynamoDB database from a specified path.
-    pub async fn initialize(
-        store_config: DynamoDbStoreConfig,
-        namespace: &str,
-    ) -> Result<Self, DynamoDbContextError> {
-        if !Self::exists(&store_config, namespace).await? {
-            Self::create(&store_config, namespace).await?;
-        }
-        Self::connect(&store_config, namespace).await
-    }
-
     async fn get_query_output(
         &self,
         attribute_str: &str,
@@ -1040,17 +1029,6 @@ impl DynamoDbStore {
     ) -> Result<Self, DynamoDbContextError> {
         let cache_size = store_config.common_config.cache_size;
         let simple_store = DynamoDbStoreInternal::new_for_testing(store_config, namespace).await?;
-        let store = Self::get_complete_store(simple_store, cache_size);
-        Ok(store)
-    }
-
-    /// Initializes a `DynamoDbStore`.
-    pub async fn initialize(
-        store_config: DynamoDbStoreConfig,
-        namespace: &str,
-    ) -> Result<Self, DynamoDbContextError> {
-        let cache_size = store_config.common_config.cache_size;
-        let simple_store = DynamoDbStoreInternal::initialize(store_config, namespace).await?;
         let store = Self::get_complete_store(simple_store, cache_size);
         Ok(store)
     }

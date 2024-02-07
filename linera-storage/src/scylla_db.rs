@@ -5,6 +5,7 @@ use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
 use linera_execution::{ExecutionRuntimeConfig, WasmRuntime};
 use linera_views::scylla_db::{ScyllaDbContextError, ScyllaDbStore, ScyllaDbStoreConfig};
 use std::sync::Arc;
+use linera_views::common::AdminKeyValueStore;
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -35,7 +36,7 @@ impl ScyllaDbStorageInner {
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, ScyllaDbContextError> {
-        let store = ScyllaDbStore::initialize(store_config, namespace).await?;
+        let store = ScyllaDbStore::initialize(&store_config, namespace).await?;
         let storage = Self::new(store, wasm_runtime);
         Ok(storage)
     }
