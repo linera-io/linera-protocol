@@ -235,7 +235,7 @@ impl StoreConfig {
             }),
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config) => {
-                RocksDbStore::delete_all(config).await?;
+                RocksDbStore::delete_all(&config).await?;
                 Ok(())
             }
             #[cfg(feature = "aws")]
@@ -329,10 +329,10 @@ impl StoreConfig {
                 error: "list_all is not supported for the memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(_) => Err(ViewError::ContextError {
-                backend: "memory".to_string(),
-                error: "list_all is not currently supported for the RocksDb storage".to_string(),
-            }),
+            StoreConfig::RocksDb(config) => {
+                let tables = RocksDbStore::list_all(&config).await?;
+                Ok(tables)
+            }
             #[cfg(feature = "aws")]
             StoreConfig::DynamoDb(config, _namespace) => {
                 let tables = DynamoDbStore::list_all(&config).await?;

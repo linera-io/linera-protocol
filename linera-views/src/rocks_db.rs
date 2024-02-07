@@ -354,13 +354,6 @@ impl RocksDbStore {
     }
 
     /// Creates all RocksDB databases
-    pub async fn delete_all(store_config: RocksDbStoreConfig) -> Result<(), RocksDbContextError> {
-        let path = store_config.path_buf.as_path();
-        fs::remove_dir_all(path)?;
-        Ok(())
-    }
-
-    /// Creates all RocksDB databases
     pub async fn delete_single(
         store_config: RocksDbStoreConfig,
     ) -> Result<(), RocksDbContextError> {
