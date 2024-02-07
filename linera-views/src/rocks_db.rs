@@ -8,7 +8,6 @@ use crate::{
         ReadableKeyValueStore, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
-    test_utils::get_namespace,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
 use async_trait::async_trait;
