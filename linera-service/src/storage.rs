@@ -40,7 +40,7 @@ use {
 #[allow(clippy::large_enum_variant)]
 pub enum StoreConfig {
     /// The memory key value store
-    Memory(MemoryStoreConfig),
+    Memory(MemoryStoreConfig, String),
     /// The RocksDb key value store
     #[cfg(feature = "rocksdb")]
     RocksDb(RocksDbStoreConfig, String),
@@ -57,7 +57,10 @@ pub enum StoreConfig {
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
 pub enum StorageConfig {
     /// The memory description
-    Memory,
+    Memory {
+        /// The namespace used
+        namespace: String,
+    },
     /// The RocksDb description
     #[cfg(feature = "rocksdb")]
     RocksDb {
@@ -96,8 +99,9 @@ impl FromStr for StorageConfig {
     type Err = anyhow::Error;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        if input == MEMORY {
-            return Ok(Self::Memory);
+        if let Some(s) = input.strip_prefix(MEMORY) {
+            let namespace = s.to_string();
+            return Ok(Self::Memory { namespace });
         }
         #[cfg(feature = "rocksdb")]
         if let Some(s) = input.strip_prefix(ROCKS_DB) {
@@ -200,9 +204,10 @@ impl StorageConfig {
         common_config: CommonStoreConfig,
     ) -> Result<StoreConfig, anyhow::Error> {
         match self {
-            StorageConfig::Memory => {
+            StorageConfig::Memory { namespace } => {
                 let config = MemoryStoreConfig { common_config };
-                Ok(StoreConfig::Memory(config))
+                let namespace = namespace.clone();
+                Ok(StoreConfig::Memory(config, namespace))
             }
             #[cfg(feature = "rocksdb")]
             StorageConfig::RocksDb { path, namespace } => {
@@ -244,7 +249,7 @@ impl StoreConfig {
     /// Deletes all the entries in the database
     pub async fn delete_all(self) -> Result<(), ViewError> {
         match self {
-            StoreConfig::Memory(_) => Err(ViewError::ContextError {
+            StoreConfig::Memory(_, _) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
                 error: "delete_all does not make sense for memory storage".to_string(),
             }),
@@ -269,7 +274,7 @@ impl StoreConfig {
     /// Deletes only one table of the database
     pub async fn delete_namespace(self) -> Result<(), ViewError> {
         match self {
-            StoreConfig::Memory(_) => Err(ViewError::ContextError {
+            StoreConfig::Memory(_, _) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
                 error: "delete_namespace does not make sense for memory storage".to_string(),
             }),
@@ -294,7 +299,7 @@ impl StoreConfig {
     /// Test existence of one table in the database
     pub async fn test_existence(self) -> Result<bool, ViewError> {
         match self {
-            StoreConfig::Memory(_) => Err(ViewError::ContextError {
+            StoreConfig::Memory(_, _) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
                 error: "existence not make sense for memory storage".to_string(),
             }),
@@ -316,7 +321,7 @@ impl StoreConfig {
     /// Deletes only one table of the database
     pub async fn initialize(self) -> Result<(), ViewError> {
         match self {
-            StoreConfig::Memory(_) => Err(ViewError::ContextError {
+            StoreConfig::Memory(_, _) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
                 error: "initialize does not make sense for memory storage".to_string(),
             }),
@@ -341,7 +346,7 @@ impl StoreConfig {
     /// List all the namespaces of the storage
     pub async fn list_all(self) -> Result<Vec<String>, ViewError> {
         match self {
-            StoreConfig::Memory(_) => Err(ViewError::ContextError {
+            StoreConfig::Memory(_, _) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
                 error: "list_all is not supported for the memory storage".to_string(),
             }),
@@ -389,9 +394,9 @@ where
     Job: Runnable,
 {
     match config {
-        StoreConfig::Memory(config) => {
-            let mut storage =
-                MemoryStorage::new(wasm_runtime, config.common_config.max_stream_queries).await?;
+        StoreConfig::Memory(config, namespace) => {
+            let store_config = MemoryStoreConfig::new(config.common_config.max_stream_queries);
+            let mut storage = MemoryStorage::new(store_config, &namespace, wasm_runtime).await?;
             genesis_config.initialize_storage(&mut storage).await?;
             job.run(storage).await
         }
@@ -419,7 +424,7 @@ pub async fn full_initialize_storage(
     genesis_config: &GenesisConfig,
 ) -> Result<(), anyhow::Error> {
     match config {
-        StoreConfig::Memory(_) => {
+        StoreConfig::Memory(_, _) => {
             bail!("The initialization should not be called for memory");
         }
         #[cfg(feature = "rocksdb")]
@@ -447,7 +452,7 @@ pub async fn full_initialize_storage(
 fn test_storage_config_from_str() {
     assert_eq!(
         StorageConfig::from_str("memory").unwrap(),
-        StorageConfig::Memory
+        StorageConfig::Memory { namespace: "".into() }
     );
     assert!(StorageConfig::from_str("memory_").is_err());
 }

@@ -49,6 +49,13 @@ impl Default for TestValidator {
     fn default() -> Self {
         let key_pair = KeyPair::generate();
         let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
+        let store_config = MemoryStoreConfig::new(TEST_MEMORY_MAX_STREAM_QUERIES);
+        let namespace = "validator";
+        let wasm_runtime = Some(WasmRuntime::default());
+        let storage = MemoryStorage::new(store_config, namespace, wasm_runtime)
+            .now_or_never()
+            .expect("execution of MemoryStorage::new should not await anything")
+            .expec("storage");
         let storage =
             MemoryStorage::new(Some(WasmRuntime::default()), TEST_MEMORY_MAX_STREAM_QUERIES);
 

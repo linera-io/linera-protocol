@@ -12,6 +12,7 @@ use linera_core::{
         ValidatorNodeProvider,
     },
 };
+use linera_views::memory::MemoryStoreConfig;
 use linera_execution::committee::Committee;
 use linera_service::{
     chain_listener::{ChainListenerConfig, ClientContext},
@@ -117,7 +118,9 @@ impl ClientContext<DummyValidatorNodeProvider> for DummyContext {
 async fn main() -> std::io::Result<()> {
     let _options = <Options as clap::Parser>::parse();
 
-    let storage = MemoryStorage::new(None, TEST_MEMORY_MAX_STREAM_QUERIES)
+    let store_config = MemoryStoreConfig::new(TEST_MEMORY_MAX_STREAM_QUERIES);
+    let namespace = "schema_export";
+    let storage = MemoryStorage::new(store_config, namespace, None)
         .await
         .expect("storage");
     let config = ChainListenerConfig {
