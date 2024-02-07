@@ -10,7 +10,7 @@ use async_graphql::InputType;
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::{
     data_types::{Amount, Timestamp},
-    identifiers::ChainId,
+    identifiers::{AccountOwner, ChainId},
 };
 use linera_execution::system;
 use linera_service::{
@@ -33,15 +33,15 @@ use linera_service::cli_wrappers::{
     docker::BuildArg, local_kubernetes_net::SharedLocalKubernetesNetTestingConfig,
 };
 
-fn get_fungible_account_owner(client: &ClientWrapper) -> fungible::AccountOwner {
+fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     let owner = client.get_owner().unwrap();
-    fungible::AccountOwner::User(owner)
+    AccountOwner::User(owner)
 }
 
 struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
 
 impl FungibleApp {
-    async fn get_amount(&self, account_owner: &fungible::AccountOwner) -> Amount {
+    async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
         let query = format!(
             "accounts {{ entry(key: {}) {{ value }} }}",
             account_owner.to_value()
@@ -51,10 +51,7 @@ impl FungibleApp {
             .unwrap_or_default()
     }
 
-    async fn assert_balances(
-        &self,
-        accounts: impl IntoIterator<Item = (fungible::AccountOwner, Amount)>,
-    ) {
+    async fn assert_balances(&self, accounts: impl IntoIterator<Item = (AccountOwner, Amount)>) {
         for (account_owner, amount) in accounts {
             let value = self.get_amount(&account_owner).await;
             assert_eq!(value, amount);
@@ -63,7 +60,7 @@ impl FungibleApp {
 
     async fn transfer(
         &self,
-        account_owner: &fungible::AccountOwner,
+        account_owner: &AccountOwner,
         amount_transfer: Amount,
         destination: fungible::Account,
     ) -> Value {
@@ -94,7 +91,7 @@ struct MatchingEngineApp(ApplicationWrapper<matching_engine::MatchingEngineAbi>)
 impl MatchingEngineApp {
     async fn get_account_info(
         &self,
-        account_owner: &fungible::AccountOwner,
+        account_owner: &AccountOwner,
     ) -> Vec<matching_engine::OrderId> {
         let query = format!(
             "accountInfo {{ entry(key: {}) {{ value {{ orders }} }} }}",
@@ -116,7 +113,7 @@ struct AmmApp(ApplicationWrapper<amm::AmmAbi>);
 impl AmmApp {
     async fn add_liquidity(
         &self,
-        owner: fungible::AccountOwner,
+        owner: AccountOwner,
         max_token0_amount: Amount,
         max_token1_amount: Amount,
     ) {
@@ -132,7 +129,7 @@ impl AmmApp {
 
     async fn remove_liquidity(
         &self,
-        owner: fungible::AccountOwner,
+        owner: AccountOwner,
         token_to_remove_idx: u32,
         token_to_remove_amount: Amount,
     ) {
@@ -146,12 +143,7 @@ impl AmmApp {
         self.0.mutate(mutation).await.unwrap();
     }
 
-    async fn swap(
-        &self,
-        owner: fungible::AccountOwner,
-        input_token_idx: u32,
-        input_amount: Amount,
-    ) {
+    async fn swap(&self, owner: AccountOwner, input_token_idx: u32, input_amount: Amount) {
         let operation = amm::Operation::Swap {
             owner,
             input_token_idx,
@@ -509,7 +501,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(config: impl LineraNetConfig)
         let wallet = client1.get_wallet().unwrap();
         let user_chain = wallet.get(chain2).unwrap();
         let public_key = user_chain.key_pair.as_ref().unwrap().public();
-        fungible::AccountOwner::User(public_key.into())
+        AccountOwner::User(public_key.into())
     };
     // The initial accounts on chain1
     let accounts = BTreeMap::from([
@@ -1131,7 +1123,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
         .await
         .unwrap();
 
-    let owner_amm = fungible::AccountOwner::Application(application_id_amm.forget_abi());
+    let owner_amm = AccountOwner::Application(application_id_amm.forget_abi());
 
     // Create AMM wrappers
     let app_amm_admin = AmmApp(

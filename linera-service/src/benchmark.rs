@@ -3,12 +3,12 @@
 
 use anyhow::{bail, Context as _, Result};
 use clap::Parser as _;
-use fungible::{self, AccountOwner, FungibleTokenAbi, InitialState, Parameters};
+use fungible::{self, FungibleTokenAbi, InitialState, Parameters};
 use futures::future::{join_all, try_join_all};
 use linera_base::{
     async_graphql::InputType,
     data_types::Amount,
-    identifiers::{ApplicationId, ChainId, Owner},
+    identifiers::{AccountOwner, ApplicationId, ChainId, Owner},
 };
 use linera_execution::system::{self, SystemChannel};
 use linera_service::cli_wrappers::{
@@ -274,7 +274,7 @@ async fn benchmark_with_fungible(
 struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
 
 impl FungibleApp {
-    async fn get_amount(&self, account_owner: &fungible::AccountOwner) -> Amount {
+    async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
         let query = format!(
             "accounts {{ entry(key: {}) {{ value }} }}",
             account_owner.to_value()
@@ -286,7 +286,7 @@ impl FungibleApp {
 
     async fn transfer(
         &self,
-        account_owner: fungible::AccountOwner,
+        account_owner: AccountOwner,
         amount_transfer: Amount,
         destination: fungible::Account,
     ) -> Result<Value> {

@@ -172,9 +172,9 @@ mutation {
 use std::convert::Infallible;
 
 use async_graphql::{scalar, Request, Response};
-use fungible::{AccountOwner, FungibleResponse};
+use fungible::FungibleResponse;
 use linera_sdk::{
-    base::{Amount, ArithmeticError, ContractAbi, ServiceAbi},
+    base::{AccountOwner, Amount, ArithmeticError, ContractAbi, ServiceAbi},
     views::ViewError,
 };
 pub use matching_engine::Parameters;

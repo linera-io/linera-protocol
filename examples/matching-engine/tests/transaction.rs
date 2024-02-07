@@ -6,9 +6,9 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use async_graphql::InputType;
-use fungible::{AccountOwner, FungibleTokenAbi, InitialStateBuilder};
+use fungible::{FungibleTokenAbi, InitialStateBuilder};
 use linera_sdk::{
-    base::{Amount, ApplicationId},
+    base::{AccountOwner, Amount, ApplicationId},
     test::{ActiveChain, TestValidator},
 };
 use matching_engine::{

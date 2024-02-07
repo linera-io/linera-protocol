@@ -3129,6 +3129,7 @@ dependencies = [
 name = "linera-base"
 version = "0.8.0"
 dependencies = [
+ "anyhow",
  "async-graphql",
  "bcs",
  "chrono",

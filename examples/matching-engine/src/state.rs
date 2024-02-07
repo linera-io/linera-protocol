@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::SimpleObject;
-use fungible::AccountOwner;
 use linera_sdk::{
-    base::{Amount, ArithmeticError},
+    base::{AccountOwner, Amount, ArithmeticError},
     views::{
         linera_views, CustomCollectionView, MapView, QueueView, RegisterView, RootView, View,
         ViewError, ViewStorageContext,

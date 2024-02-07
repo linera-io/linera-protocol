@@ -7,9 +7,9 @@ mod state;
 
 use async_trait::async_trait;
 use crowd_funding::{ApplicationCall, InitializationArgument, Message, Operation};
-use fungible::{Account, AccountOwner, Destination, FungibleResponse, FungibleTokenAbi};
+use fungible::{Account, Destination, FungibleResponse, FungibleTokenAbi};
 use linera_sdk::{
-    base::{Amount, ApplicationId, SessionId, WithContractAbi},
+    base::{AccountOwner, Amount, ApplicationId, SessionId, WithContractAbi},
     contract::system_api,
     ensure,
     views::View,

@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fungible::{AccountOwner, InitialState};
+use fungible::InitialState;
 use linera_sdk::{
-    base::Amount,
+    base::{AccountOwner, Amount},
     views::{linera_views, MapView, RootView, ViewStorageContext},
 };
 use thiserror::Error;
