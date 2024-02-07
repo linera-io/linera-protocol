@@ -6,7 +6,7 @@ use crate::{
     runner::{IndexerConfig, Runner},
 };
 use linera_views::{
-    common::CommonStoreConfig,
+    common::{AdminKeyValueStore, CommonStoreConfig},
     scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
 };
 
@@ -44,7 +44,7 @@ impl ScyllaDbRunner {
             uri: config.client.uri.clone(),
             common_config,
         };
-        let store = ScyllaDbStore::new(store_config, &namespace).await?;
+        let store = ScyllaDbStore::connect(&store_config, &namespace).await?;
         Self::new(config, store).await
     }
 }

@@ -518,15 +518,6 @@ impl DynamoDbStoreInternal {
         }
     }
 
-    /// Creates a new [`DynamoDbStoreInternal`] instance using the provided `config` parameters.
-    pub async fn new(
-        store_config: DynamoDbStoreConfig,
-        namespace: &str,
-    ) -> Result<Self, DynamoDbContextError> {
-        let store = Self::connect(&store_config, namespace).await?;
-        Ok(store)
-    }
-
     async fn get_query_output(
         &self,
         attribute_str: &str,
@@ -1005,17 +996,6 @@ impl DynamoDbStore {
         let store = LruCachingStore::new(store, cache_size);
         let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
         Self { store }
-    }
-
-    /// Creates a `DynamoDbStore` with an LRU cache
-    pub async fn new(
-        store_config: DynamoDbStoreConfig,
-        namespace: &str,
-    ) -> Result<Self, DynamoDbContextError> {
-        let cache_size = store_config.common_config.cache_size;
-        let simple_store = DynamoDbStoreInternal::new(store_config, namespace).await?;
-        let store = Self::get_complete_store(simple_store, cache_size);
-        Ok(store)
     }
 }
 

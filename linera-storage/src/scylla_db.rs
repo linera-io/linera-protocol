@@ -48,7 +48,7 @@ impl ScyllaDbStorageInner {
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, ScyllaDbContextError> {
-        let store = ScyllaDbStore::new(store_config, namespace).await?;
+        let store = ScyllaDbStore::connect(&store_config, namespace).await?;
         let storage = Self::new(store, wasm_runtime);
         Ok(storage)
     }

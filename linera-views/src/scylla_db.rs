@@ -663,14 +663,6 @@ impl ScyllaDbStoreInternal {
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '_')
     }
-
-    async fn new(
-        store_config: ScyllaDbStoreConfig,
-        namespace: &str,
-    ) -> Result<Self, ScyllaDbContextError> {
-        let store = Self::connect(&store_config, namespace).await?;
-        Ok(store)
-    }
 }
 
 /// A shared DB store for ScyllaDB implementing LruCaching
@@ -811,17 +803,6 @@ impl ScyllaDbStore {
         let store = LruCachingStore::new(store, cache_size);
         let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
         Self { store }
-    }
-
-    /// Creates a [`ScyllaDbStore`] from the input parameters.
-    pub async fn new(
-        store_config: ScyllaDbStoreConfig,
-        namespace: &str,
-    ) -> Result<Self, ScyllaDbContextError> {
-        let cache_size = store_config.common_config.cache_size;
-        let simple_store = ScyllaDbStoreInternal::new(store_config, namespace).await?;
-        let store = Self::get_complete_store(simple_store, cache_size);
-        Ok(store)
     }
 }
 

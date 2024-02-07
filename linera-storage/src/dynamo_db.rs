@@ -51,7 +51,7 @@ impl DynamoDbStorageInner {
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, DynamoDbContextError> {
-        let store = DynamoDbStore::new(store_config, namespace).await?;
+        let store = DynamoDbStore::connect(&store_config, namespace).await?;
         let storage = Self::new(store, wasm_runtime);
         Ok(storage)
     }

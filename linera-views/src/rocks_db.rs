@@ -329,15 +329,6 @@ pub struct RocksDbStore {
 }
 
 impl RocksDbStore {
-    /// Creates a RocksDB database from a specified path.
-    pub async fn new(
-        store_config: RocksDbStoreConfig,
-        namespace: &str,
-    ) -> Result<Self, RocksDbContextError> {
-        let store = Self::connect(&store_config, namespace).await?;
-        Ok(store)
-    }
-
     #[cfg(not(feature = "metrics"))]
     fn get_complete_store(store: RocksDbStoreInternal, cache_size: usize) -> Self {
         let store = ValueSplittingStore::new(store);
