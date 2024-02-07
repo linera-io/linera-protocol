@@ -20,7 +20,7 @@ use linera_execution::{
 };
 use linera_views::{
     batch::Batch,
-    common::{ContextFromStore, KeyValueStore},
+    common::{AdminKeyValueStore, ContextFromStore, KeyValueStore},
     value_splitting::DatabaseConsistencyError,
     views::{View, ViewError},
 };
@@ -115,7 +115,13 @@ pub struct DbStorageInner<Client> {
     wasm_runtime: Option<WasmRuntime>,
 }
 
-impl<Client> DbStorageInner<Client> {
+impl<Client> DbStorageInner<Client>
+where
+    Client: KeyValueStore + AdminKeyValueStore<<Client as KeyValueStore>::Error> + Clone + Send + Sync + 'static,
+    ViewError: From<<Client as KeyValueStore>::Error>,
+    <Client as KeyValueStore>::Error:
+        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+{
     pub(crate) fn new(client: Client, wasm_runtime: Option<WasmRuntime>) -> Self {
         Self {
             client,
