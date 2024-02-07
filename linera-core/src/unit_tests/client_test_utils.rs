@@ -705,9 +705,14 @@ impl StorageBuilder for MakeRocksDbStorage {
             path_buf,
             common_config,
         };
-        let (storage, _) =
-            RocksDbStorage::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
-                .await?;
+        let namespace = get_namespace();
+        let (storage, _) = RocksDbStorage::new_for_testing(
+            store_config,
+            &namespace,
+            self.wasm_runtime,
+            self.clock.clone(),
+        )
+        .await?;
         Ok(storage)
     }
 

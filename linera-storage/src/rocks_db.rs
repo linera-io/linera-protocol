@@ -6,6 +6,7 @@ use linera_execution::{ExecutionRuntimeConfig, WasmRuntime};
 use linera_views::{
     common::TableStatus,
     rocks_db::{RocksDbContextError, RocksDbStore, RocksDbStoreConfig},
+    test_utils::get_namespace,
 };
 use std::sync::Arc;
 
@@ -25,27 +26,30 @@ impl RocksDbStorageInner {
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
         store_config: RocksDbStoreConfig,
+        namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), RocksDbContextError> {
-        let (client, table_status) = RocksDbStore::new_for_testing(store_config).await?;
+        let (client, table_status) = RocksDbStore::new_for_testing(store_config, namespace).await?;
         let storage = Self::new(client, wasm_runtime);
         Ok((storage, table_status))
     }
 
     async fn initialize(
         store_config: RocksDbStoreConfig,
+        namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, RocksDbContextError> {
-        let store = RocksDbStore::initialize(store_config).await?;
+        let store = RocksDbStore::initialize(store_config, namespace).await?;
         let storage = Self::new(store, wasm_runtime);
         Ok(storage)
     }
 
     async fn make(
         store_config: RocksDbStoreConfig,
+        namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), RocksDbContextError> {
-        let (client, table_status) = RocksDbStore::new(store_config).await?;
+        let (client, table_status) = RocksDbStore::new(store_config, namespace).await?;
         let storage = Self::new(client, wasm_runtime);
         Ok((storage, table_status))
     }
@@ -63,20 +67,26 @@ impl RocksDbStorage<TestClock> {
             path_buf,
             common_config,
         };
-        let (storage, _) =
-            RocksDbStorage::new_for_testing(store_config, wasm_runtime, TestClock::new())
-                .await
-                .expect("storage");
+        let namespace = get_namespace();
+        let (storage, _) = RocksDbStorage::new_for_testing(
+            store_config,
+            &namespace,
+            wasm_runtime,
+            TestClock::new(),
+        )
+        .await
+        .expect("storage");
         (storage, dir)
     }
 
     pub async fn new_for_testing(
         store_config: RocksDbStoreConfig,
+        namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
     ) -> Result<(Self, TableStatus), RocksDbContextError> {
         let (storage, table_status) =
-            RocksDbStorageInner::new_for_testing(store_config, wasm_runtime).await?;
+            RocksDbStorageInner::new_for_testing(store_config, namespace, wasm_runtime).await?;
         let storage = RocksDbStorage {
             client: Arc::new(storage),
             clock,
@@ -89,9 +99,11 @@ impl RocksDbStorage<TestClock> {
 impl RocksDbStorage<WallClock> {
     pub async fn initialize(
         store_config: RocksDbStoreConfig,
+        namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, RocksDbContextError> {
-        let storage = RocksDbStorageInner::initialize(store_config, wasm_runtime).await?;
+        let storage =
+            RocksDbStorageInner::initialize(store_config, namespace, wasm_runtime).await?;
         let storage = RocksDbStorage {
             client: Arc::new(storage),
             clock: WallClock,
@@ -102,9 +114,11 @@ impl RocksDbStorage<WallClock> {
 
     pub async fn new(
         store_config: RocksDbStoreConfig,
+        namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), RocksDbContextError> {
-        let (storage, table_status) = RocksDbStorageInner::make(store_config, wasm_runtime).await?;
+        let (storage, table_status) =
+            RocksDbStorageInner::make(store_config, namespace, wasm_runtime).await?;
         let storage = RocksDbStorage {
             client: Arc::new(storage),
             clock: WallClock,

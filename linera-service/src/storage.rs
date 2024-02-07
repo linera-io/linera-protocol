@@ -6,8 +6,11 @@ use anyhow::{bail, format_err};
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
 use linera_storage::{MemoryStorage, Storage, WallClock};
-use linera_views::common::AdminKeyValueStore;
-use linera_views::{common::CommonStoreConfig, memory::MemoryStoreConfig, views::ViewError};
+use linera_views::{
+    common::{AdminKeyValueStore, CommonStoreConfig},
+    memory::MemoryStoreConfig,
+    views::ViewError,
+};
 use std::str::FromStr;
 use tracing::error;
 
@@ -40,7 +43,7 @@ pub enum StoreConfig {
     Memory(MemoryStoreConfig),
     /// The RocksDb key value store
     #[cfg(feature = "rocksdb")]
-    RocksDb(RocksDbStoreConfig),
+    RocksDb(RocksDbStoreConfig, String),
     /// The DynamoDb key value store
     #[cfg(feature = "aws")]
     DynamoDb(DynamoDbStoreConfig, String),
@@ -60,11 +63,13 @@ pub enum StorageConfig {
     RocksDb {
         /// The path used
         path: PathBuf,
+        /// The namespace used
+        namespace: String,
     },
     /// The DynamoDb description
     #[cfg(feature = "aws")]
     DynamoDb {
-        /// The table name used
+        /// The namespace used
         namespace: String,
         /// Whether to use the localstack system
         use_localstack: bool,
@@ -96,9 +101,18 @@ impl FromStr for StorageConfig {
         }
         #[cfg(feature = "rocksdb")]
         if let Some(s) = input.strip_prefix(ROCKS_DB) {
-            return Ok(Self::RocksDb {
-                path: s.to_string().into(),
-            });
+            if s.is_empty() {
+                return Err(format_err!(
+                    "For RocksDB, the formatting has to be rocksdb:directory:namespace"
+                ));
+            }
+            let parts = s.split(':').collect::<Vec<_>>();
+            if parts.len() != 2 {
+                return Err(format_err!("We should have two parts"));
+            }
+            let path = parts[0].to_string().into();
+            let namespace = parts[1].to_string();
+            return Ok(Self::RocksDb { path, namespace });
         }
         #[cfg(feature = "aws")]
         if let Some(s) = input.strip_prefix(DYNAMO_DB) {
@@ -191,13 +205,14 @@ impl StorageConfig {
                 Ok(StoreConfig::Memory(config))
             }
             #[cfg(feature = "rocksdb")]
-            StorageConfig::RocksDb { path } => {
+            StorageConfig::RocksDb { path, namespace } => {
                 let path_buf = path.to_path_buf();
                 let config = RocksDbStoreConfig {
                     path_buf,
                     common_config,
                 };
-                Ok(StoreConfig::RocksDb(config))
+                let namespace = namespace.clone();
+                Ok(StoreConfig::RocksDb(config, namespace))
             }
             #[cfg(feature = "aws")]
             StorageConfig::DynamoDb {
@@ -234,7 +249,7 @@ impl StoreConfig {
                 error: "delete_all does not make sense for memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config) => {
+            StoreConfig::RocksDb(config, _namespace) => {
                 RocksDbStore::delete_all(&config).await?;
                 Ok(())
             }
@@ -259,8 +274,8 @@ impl StoreConfig {
                 error: "delete_namespace does not make sense for memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config) => {
-                RocksDbStore::delete_single(config).await?;
+            StoreConfig::RocksDb(config, namespace) => {
+                RocksDbStore::delete(&config, &namespace).await?;
                 Ok(())
             }
             #[cfg(feature = "aws")]
@@ -284,7 +299,9 @@ impl StoreConfig {
                 error: "existence not make sense for memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config) => Ok(RocksDbStore::test_existence(config).await?),
+            StoreConfig::RocksDb(config, namespace) => {
+                Ok(RocksDbStore::exists(&config, &namespace).await?)
+            }
             #[cfg(feature = "aws")]
             StoreConfig::DynamoDb(config, namespace) => {
                 Ok(DynamoDbStore::exists(&config, &namespace).await?)
@@ -304,8 +321,8 @@ impl StoreConfig {
                 error: "initialize does not make sense for memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config) => {
-                RocksDbStore::initialize(config).await?;
+            StoreConfig::RocksDb(config, namespace) => {
+                RocksDbStore::initialize(config, &namespace).await?;
                 Ok(())
             }
             #[cfg(feature = "aws")]
@@ -329,7 +346,7 @@ impl StoreConfig {
                 error: "list_all is not supported for the memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(config) => {
+            StoreConfig::RocksDb(config, _namespace) => {
                 let tables = RocksDbStore::list_all(&config).await?;
                 Ok(tables)
             }
@@ -382,8 +399,9 @@ where
             job.run(storage).await
         }
         #[cfg(feature = "rocksdb")]
-        StoreConfig::RocksDb(config) => {
-            let (storage, table_status) = RocksDbStorage::new(config, wasm_runtime).await?;
+        StoreConfig::RocksDb(config, namespace) => {
+            let (storage, table_status) =
+                RocksDbStorage::new(config, &namespace, wasm_runtime).await?;
             job.run(storage).await
         }
         #[cfg(feature = "aws")]
@@ -411,9 +429,9 @@ pub async fn full_initialize_storage(
             bail!("The initialization should not be called for memory");
         }
         #[cfg(feature = "rocksdb")]
-        StoreConfig::RocksDb(config) => {
+        StoreConfig::RocksDb(config, namespace) => {
             let wasm_runtime = None;
-            let mut storage = RocksDbStorage::initialize(config, wasm_runtime).await?;
+            let mut storage = RocksDbStorage::initialize(config, &namespace, wasm_runtime).await?;
             genesis_config.initialize_storage(&mut storage).await
         }
         #[cfg(feature = "aws")]
@@ -444,12 +462,14 @@ fn test_storage_config_from_str() {
 #[test]
 fn test_rocks_db_storage_config_from_str() {
     assert_eq!(
-        StorageConfig::from_str("rocksdb:foo.db").unwrap(),
+        StorageConfig::from_str("rocksdb:foo.db:linera").unwrap(),
         StorageConfig::RocksDb {
             path: "foo.db".into(),
+            namespace: "linera".into(),
         }
     );
     assert!(StorageConfig::from_str("rocksdb_foo.db").is_err());
+    assert!(StorageConfig::from_str("rocksdb:foo.db").is_err());
 }
 
 #[cfg(feature = "aws")]

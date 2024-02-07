@@ -18,6 +18,8 @@ pub struct RocksDbConfig {
     /// RocksDB storage path
     #[arg(long, default_value = "./indexer.db")]
     pub storage: PathBuf,
+    #[arg(long, default_value = "linera")]
+    pub table: String,
     /// The maximal number of simultaneous queries to the database
     #[arg(long)]
     max_concurrent_queries: Option<usize>,
@@ -43,7 +45,8 @@ impl RocksDbRunner {
             path_buf: config.client.storage.as_path().to_path_buf(),
             common_config,
         };
-        let store = RocksDbStore::initialize(store_config).await?;
+        let namespace = config.client.table.clone();
+        let store = RocksDbStore::initialize(store_config, &namespace).await?;
         Self::new(config, store).await
     }
 }

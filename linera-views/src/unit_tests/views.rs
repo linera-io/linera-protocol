@@ -231,7 +231,8 @@ impl TestContextFactory for RocksDbContextFactory {
             path_buf,
             common_config,
         };
-        let (store, _) = RocksDbStore::new_for_testing(store_config)
+        let namespace = get_namespace();
+        let (store, _) = RocksDbStore::new_for_testing(store_config, &namespace)
             .await
             .expect("store");
         let context = RocksDbContext::new(store, vec![], ());
