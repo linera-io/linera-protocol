@@ -37,3 +37,19 @@ impl MemoryStorage<crate::TestClock> {
         Ok(Self::create(storage, clock))
     }
 }
+
+impl MemoryStorage<WallClock> {
+    pub async fn new(
+        wasm_runtime: Option<WasmRuntime>,
+        max_stream_queries: usize,
+    ) -> Result<Self, MemoryContextError> {
+        let store_config = MemoryStoreConfig::new(max_stream_queries);
+        let namespace = "unused_namespace";
+        let storage = MemoryStorageInner::make(store_config, namespace, wasm_runtime).await?;
+        Ok(Self {
+            client: Arc::new(storage),
+            clock: WallClock,
+            execution_runtime_config: ExecutionRuntimeConfig::default(),
+        })
+    }
+}
