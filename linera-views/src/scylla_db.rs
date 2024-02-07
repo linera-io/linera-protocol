@@ -664,19 +664,6 @@ impl ScyllaDbStoreInternal {
                 .all(|c| c.is_ascii_alphanumeric() || c == '_')
     }
 
-    #[cfg(any(test, feature = "test"))]
-    async fn new_for_testing(
-        store_config: ScyllaDbStoreConfig,
-        namespace: &str,
-    ) -> Result<Self, ScyllaDbContextError> {
-        if Self::exists(&store_config, namespace).await? {
-            Self::delete(&store_config, namespace).await?;
-        }
-        Self::create(&store_config, namespace).await?;
-        let store = Self::connect(&store_config, namespace).await?;
-        Ok(store)
-    }
-
     async fn new(
         store_config: ScyllaDbStoreConfig,
         namespace: &str,
@@ -827,18 +814,6 @@ impl ScyllaDbStore {
     }
 
     /// Creates a [`ScyllaDbStore`] from the input parameters.
-    #[cfg(any(test, feature = "test"))]
-    pub async fn new_for_testing(
-        store_config: ScyllaDbStoreConfig,
-        namespace: &str,
-    ) -> Result<Self, ScyllaDbContextError> {
-        let cache_size = store_config.common_config.cache_size;
-        let simple_store = ScyllaDbStoreInternal::new_for_testing(store_config, namespace).await?;
-        let store = Self::get_complete_store(simple_store, cache_size);
-        Ok(store)
-    }
-
-    /// Creates a [`ScyllaDbStore`] from the input parameters.
     pub async fn new(
         store_config: ScyllaDbStoreConfig,
         namespace: &str,
@@ -873,7 +848,7 @@ pub async fn create_scylla_db_test_config() -> ScyllaDbStoreConfig {
 pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
     let config = create_scylla_db_test_config().await;
     let namespace = get_namespace();
-    ScyllaDbStore::new_for_testing(config, &namespace)
+    ScyllaDbStore::new_from_scratch(&config, &namespace)
         .await
         .expect("store")
 }

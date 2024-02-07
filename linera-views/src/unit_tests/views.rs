@@ -3,7 +3,7 @@
 
 use crate::{
     batch::Batch,
-    common::Context,
+    common::{AdminKeyValueStore, Context},
     memory::{create_memory_context, MemoryContext},
     queue_view::QueueView,
     test_utils::test_views::{
@@ -26,7 +26,8 @@ use {
 
 #[cfg(feature = "aws")]
 use crate::dynamo_db::{
-    create_dynamo_db_common_config, DynamoDbContext, DynamoDbStoreConfig, LocalStackTestContext,
+    create_dynamo_db_common_config, DynamoDbContext, DynamoDbStore, DynamoDbStoreConfig,
+    LocalStackTestContext,
 };
 
 #[cfg(feature = "scylladb")]
@@ -224,10 +225,11 @@ impl TestContextFactory for RocksDbContextFactory {
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let (store_config, directory) = create_rocks_db_test_config().await;
         let namespace = get_namespace();
-        let store = RocksDbStore::new_for_testing(store_config, &namespace)
+        let store = RocksDbStore::new_from_scratch(&store_config, &namespace)
             .await
             .expect("store");
-        let context = RocksDbContext::new(store, vec![], ());
+        let dummy_key_prefix = vec![0];
+        let context = RocksDbContext::new(store, dummy_key_prefix, ());
 
         self.temporary_directories.push(directory);
 
@@ -239,7 +241,6 @@ impl TestContextFactory for RocksDbContextFactory {
 #[derive(Default)]
 struct DynamoDbContextFactory {
     localstack: Option<LocalStackTestContext>,
-    table_counter: usize,
 }
 
 #[cfg(feature = "aws")]
@@ -254,19 +255,14 @@ impl TestContextFactory for DynamoDbContextFactory {
         let config = self.localstack.as_ref().unwrap().dynamo_db_config();
 
         let namespace = get_namespace();
-        let namespace = format!("{}_{}", namespace, self.table_counter);
-        self.table_counter += 1;
         let common_config = create_dynamo_db_common_config();
-        let dummy_key_prefix = vec![0];
         let store_config = DynamoDbStoreConfig {
             config,
             common_config,
         };
-        let context =
-            DynamoDbContext::new_for_testing(store_config, &namespace, dummy_key_prefix, ())
-                .await?;
-
-        Ok(context)
+        let store = DynamoDbStore::new_from_scratch(&store_config, &namespace).await?;
+        let dummy_key_prefix = vec![0];
+        Ok(DynamoDbContext::new(store, dummy_key_prefix, ()))
     }
 }
 
@@ -282,7 +278,7 @@ impl TestContextFactory for ScyllaDbContextFactory {
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let config = create_scylla_db_test_config().await;
         let namespace = get_namespace();
-        let store = ScyllaDbStore::new_for_testing(config, &namespace).await?;
+        let store = ScyllaDbStore::new_from_scratch(&config, &namespace).await?;
         let dummy_key_prefix = vec![0];
         let context = ScyllaDbContext::new(store, dummy_key_prefix, ());
         Ok(context)

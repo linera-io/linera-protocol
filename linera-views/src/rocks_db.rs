@@ -329,20 +329,6 @@ pub struct RocksDbStore {
 }
 
 impl RocksDbStore {
-    /// Creates a RocksDB database for unit tests from a specified path.
-    #[cfg(any(test, feature = "test"))]
-    pub async fn new_for_testing(
-        store_config: RocksDbStoreConfig,
-        namespace: &str,
-    ) -> Result<Self, RocksDbContextError> {
-        if Self::exists(&store_config, namespace).await? {
-            Self::delete(&store_config, namespace).await?;
-        }
-        Self::create(&store_config, namespace).await?;
-        let store = Self::connect(&store_config, namespace).await?;
-        Ok(store)
-    }
-
     /// Creates a RocksDB database from a specified path.
     pub async fn new(
         store_config: RocksDbStoreConfig,
@@ -400,7 +386,7 @@ pub async fn create_rocks_db_test_config() -> (RocksDbStoreConfig, TempDir) {
 pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
     let (store_config, dir) = create_rocks_db_test_config().await;
     let namespace = get_namespace();
-    let store = RocksDbStore::new_for_testing(store_config, &namespace)
+    let store = RocksDbStore::new_from_scratch(&store_config, &namespace)
         .await
         .expect("client");
     (store, dir)

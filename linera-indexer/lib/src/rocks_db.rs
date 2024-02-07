@@ -5,10 +5,9 @@ use crate::{
     common::IndexerError,
     runner::{IndexerConfig, Runner},
 };
-use linera_views::common::AdminKeyValueStore;
 use clap::Parser as _;
 use linera_views::{
-    common::CommonStoreConfig,
+    common::{AdminKeyValueStore, CommonStoreConfig},
     rocks_db::{RocksDbStore, RocksDbStoreConfig},
 };
 use std::path::PathBuf;

@@ -42,8 +42,11 @@ use {
 
 #[cfg(feature = "aws")]
 use linera_views::{
-    common::CommonStoreConfig, dynamo_db::create_dynamo_db_common_config,
-    dynamo_db::DynamoDbContext, dynamo_db::DynamoDbStoreConfig, dynamo_db::LocalStackTestContext,
+    common::CommonStoreConfig,
+    dynamo_db::{
+        create_dynamo_db_common_config, DynamoDbContext, DynamoDbStore, DynamoDbStoreConfig,
+        LocalStackTestContext,
+    },
     test_utils::get_namespace,
 };
 
@@ -51,7 +54,7 @@ use linera_views::{
 use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbContext, ScyllaDbStore};
 
 #[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
-use std::collections::BTreeSet;
+use {linera_views::common::AdminKeyValueStore, std::collections::BTreeSet};
 
 #[allow(clippy::type_complexity)]
 #[derive(CryptoHashRootView)]
@@ -296,12 +299,16 @@ impl StateStore for DynamoDbTestStore {
         };
         let namespace = &self.namespace;
 
-        let context = if self.is_created {
-            DynamoDbContext::new(store_config, namespace, base_key, id).await
+        let store = if self.is_created {
+            DynamoDbStore::connect(&store_config, namespace)
+                .await
+                .expect("failed to connect")
         } else {
-            DynamoDbContext::new_for_testing(store_config, namespace, base_key, id).await
-        }
-        .expect("Failed to create DynamoDB context");
+            DynamoDbStore::new_from_scratch(&store_config, namespace)
+                .await
+                .expect("failed to create from scratch")
+        };
+        let context = DynamoDbContext::new(store, base_key, id);
         self.is_created = true;
         StateView::load(context).await
     }

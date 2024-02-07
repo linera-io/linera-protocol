@@ -518,20 +518,6 @@ impl DynamoDbStoreInternal {
         }
     }
 
-    /// Creates a new [`DynamoDbStoreInternal`] instance from scratch using the provided `config` parameters.
-    #[cfg(any(test, feature = "test"))]
-    pub async fn new_for_testing(
-        store_config: DynamoDbStoreConfig,
-        namespace: &str,
-    ) -> Result<Self, DynamoDbContextError> {
-        if Self::exists(&store_config, namespace).await? {
-            Self::delete(&store_config, namespace).await?;
-        }
-        Self::create(&store_config, namespace).await?;
-        let store = Self::connect(&store_config, namespace).await?;
-        Ok(store)
-    }
-
     /// Creates a new [`DynamoDbStoreInternal`] instance using the provided `config` parameters.
     pub async fn new(
         store_config: DynamoDbStoreConfig,
@@ -1021,18 +1007,6 @@ impl DynamoDbStore {
         Self { store }
     }
 
-    /// Creates a `DynamoDbStore` from scratch with an LRU cache
-    #[cfg(any(test, feature = "test"))]
-    pub async fn new_for_testing(
-        store_config: DynamoDbStoreConfig,
-        namespace: &str,
-    ) -> Result<Self, DynamoDbContextError> {
-        let cache_size = store_config.common_config.cache_size;
-        let simple_store = DynamoDbStoreInternal::new_for_testing(store_config, namespace).await?;
-        let store = Self::get_complete_store(simple_store, cache_size);
-        Ok(store)
-    }
-
     /// Creates a `DynamoDbStore` with an LRU cache
     pub async fn new(
         store_config: DynamoDbStoreConfig,
@@ -1054,37 +1028,13 @@ impl<E> DynamoDbContext<E>
 where
     E: Clone + Sync + Send,
 {
-    /// Creates a new [`DynamoDbContext`] instance from scratch from the given AWS configuration.
-    #[cfg(any(test, feature = "test"))]
-    pub async fn new_for_testing(
-        store_config: DynamoDbStoreConfig,
-        namespace: &str,
-        base_key: Vec<u8>,
-        extra: E,
-    ) -> Result<Self, DynamoDbContextError> {
-        let store = DynamoDbStore::new_for_testing(store_config, namespace).await?;
-        let storage = DynamoDbContext {
-            store,
-            base_key,
-            extra,
-        };
-        Ok(storage)
-    }
-
     /// Creates a new [`DynamoDbContext`] instance from the given AWS configuration.
-    pub async fn new(
-        store_config: DynamoDbStoreConfig,
-        namespace: &str,
-        base_key: Vec<u8>,
-        extra: E,
-    ) -> Result<Self, DynamoDbContextError> {
-        let store = DynamoDbStore::new(store_config, namespace).await?;
-        let storage = DynamoDbContext {
+    pub fn new(store: DynamoDbStore, base_key: Vec<u8>, extra: E) -> Self {
+        DynamoDbContext {
             store,
             base_key,
             extra,
-        };
-        Ok(storage)
+        }
     }
 }
 
@@ -1301,7 +1251,7 @@ pub async fn create_dynamo_db_test_config() -> DynamoDbStoreConfig {
 pub async fn create_dynamo_db_test_store() -> DynamoDbStore {
     let store_config = create_dynamo_db_test_config().await;
     let namespace = get_namespace();
-    DynamoDbStore::new_for_testing(store_config, &namespace)
+    DynamoDbStore::new_from_scratch(&store_config, &namespace)
         .await
         .expect("key_value_store")
 }

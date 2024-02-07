@@ -3,9 +3,11 @@
 
 use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
 use linera_execution::{ExecutionRuntimeConfig, WasmRuntime};
-use linera_views::rocks_db::{RocksDbContextError, RocksDbStore, RocksDbStoreConfig};
+use linera_views::{
+    common::AdminKeyValueStore,
+    rocks_db::{RocksDbContextError, RocksDbStore, RocksDbStoreConfig},
+};
 use std::sync::Arc;
-use linera_views::common::AdminKeyValueStore;
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -26,7 +28,7 @@ impl RocksDbStorageInner {
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, RocksDbContextError> {
-        let client = RocksDbStore::new_for_testing(store_config, namespace).await?;
+        let client = RocksDbStore::new_from_scratch(&store_config, namespace).await?;
         let storage = Self::new(client, wasm_runtime);
         Ok(storage)
     }
