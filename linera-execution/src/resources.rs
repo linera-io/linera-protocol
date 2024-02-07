@@ -51,6 +51,8 @@ pub struct ResourceTracker {
     pub messages: u32,
     /// The total size of the arguments of outgoing user messages.
     pub message_bytes: u64,
+    /// The amount allocated to message grants.
+    pub grants: Amount,
 }
 
 /// How to access the balance of an account.
@@ -104,6 +106,12 @@ where
         self.policy.remaining_fuel(self.balance())
     }
 
+    /// Tracks the allocation of a grant.
+    pub fn track_grant(&mut self, grant: Amount) -> Result<(), ExecutionError> {
+        self.tracker.as_mut().grants.try_add_assign(grant)?;
+        self.update_balance(grant)
+    }
+
     /// Tracks the creation of a block.
     pub fn track_block(&mut self) -> Result<(), ExecutionError> {
         self.tracker.as_mut().blocks = self
@@ -134,7 +142,7 @@ where
                     .operation_bytes
                     .checked_add(size as u64)
                     .ok_or(ArithmeticError::Overflow)?;
-                self.update_balance(self.policy.operation_byte_price(size as u64)?)?;
+                self.update_balance(self.policy.operation_bytes_price(size as u64)?)?;
                 Ok(())
             }
         }
@@ -159,7 +167,7 @@ where
                     .message_bytes
                     .checked_add(size as u64)
                     .ok_or(ArithmeticError::Overflow)?;
-                self.update_balance(self.policy.message_byte_price(size as u64)?)?;
+                self.update_balance(self.policy.message_bytes_price(size as u64)?)?;
                 Ok(())
             }
         }

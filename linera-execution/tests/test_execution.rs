@@ -11,7 +11,7 @@ use self::utils::{
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::PublicKey,
-    data_types::{Amount, BlockHeight},
+    data_types::{Amount, BlockHeight, Resources},
     identifiers::{Account, ChainDescription, ChainId, Destination, Owner},
 };
 use linera_execution::{
@@ -459,7 +459,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
     let dummy_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
-        grant: Amount::ZERO,
+        grant: Resources::default(),
         kind: MessageKind::Simple,
         message: b"msg".to_vec(),
     };
@@ -504,6 +504,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
             applications: vec![application_description],
         },
     };
+    let dummy_message = dummy_message.into_priced(&Default::default())?;
     let account = Account {
         chain_id: ChainId::root(0),
         owner: None,
@@ -564,7 +565,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     let dummy_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
-        grant: Amount::ZERO,
+        grant: Resources::default(),
         kind: MessageKind::Simple,
         message: b"msg".to_vec(),
     };
@@ -609,6 +610,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
             applications: vec![target_description],
         },
     };
+    let dummy_message = dummy_message.into_priced(&Default::default())?;
     let account = Account {
         chain_id: ChainId::root(0),
         owner: None,
@@ -696,7 +698,7 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
     let dummy_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
-        grant: Amount::ZERO,
+        grant: Resources::default(),
         kind: MessageKind::Simple,
         message: b"msg".to_vec(),
     };
@@ -750,6 +752,7 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
             applications: vec![target_description],
         },
     };
+    let dummy_message = dummy_message.into_priced(&Default::default())?;
     let account = Account {
         chain_id: ChainId::root(0),
         owner: None,
@@ -823,7 +826,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     let first_message = RawOutgoingMessage {
         destination: Destination::from(first_destination_chain),
         authenticated: false,
-        grant: Amount::ZERO,
+        grant: Resources::default(),
         kind: MessageKind::Simple,
         message: b"first".to_vec(),
     };
@@ -858,7 +861,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     let second_message = RawOutgoingMessage {
         destination: Destination::from(second_destination_chain),
         authenticated: false,
-        grant: Amount::ZERO,
+        grant: Resources::default(),
         kind: MessageKind::Simple,
         message: b"second".to_vec(),
     };
@@ -952,6 +955,8 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         owner: None,
     };
 
+    let first_message = first_message.into_priced(&Default::default())?;
+    let second_message = second_message.into_priced(&Default::default())?;
     // Return to checking the user application outcomes
     assert_eq!(
         outcomes,

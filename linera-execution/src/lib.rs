@@ -44,7 +44,7 @@ use derive_more::Display;
 use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
-    data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
+    data_types::{Amount, ArithmeticError, BlockHeight, Resources, Timestamp},
     doc_scalar, hex_debug,
     identifiers::{
         Account, BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId,
@@ -536,13 +536,13 @@ pub enum Response {
 /// A message together with routing information.
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct RawOutgoingMessage<Message> {
+pub struct RawOutgoingMessage<Message, Grant = Resources> {
     /// The destination of the message.
     pub destination: Destination,
     /// Whether the message is authenticated.
     pub authenticated: bool,
-    /// A grant to pay for the message execution.
-    pub grant: Amount,
+    /// The grant needed for message execution, typically specified as an `Amount` or as `Resources`.
+    pub grant: Grant,
     /// The kind of outgoing message being sent.
     pub kind: MessageKind,
     /// The message itself.
@@ -568,14 +568,14 @@ pub enum MessageKind {
 /// the application that created them.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct RawExecutionOutcome<Message> {
+pub struct RawExecutionOutcome<Message, Grant = Resources> {
     /// The signer who created the messages.
     pub authenticated_signer: Option<Owner>,
     /// Where to send a refund for the unused part of each grant after execution, if any.
     pub refund_grant_to: Option<Account>,
     /// Sends messages to the given destinations, possibly forwarding the authenticated
     /// signer and including grant with the refund policy described above.
-    pub messages: Vec<RawOutgoingMessage<Message>>,
+    pub messages: Vec<RawOutgoingMessage<Message, Grant>>,
     /// Subscribe chains to channels.
     pub subscribe: Vec<(ChannelName, ChainId)>,
     /// Unsubscribe chains to channels.
@@ -598,8 +598,8 @@ pub struct ChannelSubscription {
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 #[allow(clippy::large_enum_variant)]
 pub enum ExecutionOutcome {
-    System(RawExecutionOutcome<SystemMessage>),
-    User(UserApplicationId, RawExecutionOutcome<Vec<u8>>),
+    System(RawExecutionOutcome<SystemMessage, Amount>),
+    User(UserApplicationId, RawExecutionOutcome<Vec<u8>, Amount>),
 }
 
 impl ExecutionOutcome {
@@ -611,7 +611,7 @@ impl ExecutionOutcome {
     }
 }
 
-impl<Message> RawExecutionOutcome<Message> {
+impl<Message, Grant> RawExecutionOutcome<Message, Grant> {
     pub fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
         self.authenticated_signer = authenticated_signer;
         self
@@ -623,13 +623,13 @@ impl<Message> RawExecutionOutcome<Message> {
     }
 
     /// Adds a `message` to this [`RawExecutionOutcome`].
-    pub fn with_message(mut self, message: RawOutgoingMessage<Message>) -> Self {
+    pub fn with_message(mut self, message: RawOutgoingMessage<Message, Grant>) -> Self {
         self.messages.push(message);
         self
     }
 }
 
-impl<Message> Default for RawExecutionOutcome<Message> {
+impl<Message, Grant> Default for RawExecutionOutcome<Message, Grant> {
     fn default() -> Self {
         Self {
             authenticated_signer: None,
@@ -638,6 +638,54 @@ impl<Message> Default for RawExecutionOutcome<Message> {
             subscribe: Vec::new(),
             unsubscribe: Vec::new(),
         }
+    }
+}
+
+impl<Message> RawOutgoingMessage<Message, Resources> {
+    pub fn into_priced(
+        self,
+        policy: &ResourceControlPolicy,
+    ) -> Result<RawOutgoingMessage<Message, Amount>, ArithmeticError> {
+        let RawOutgoingMessage {
+            destination,
+            authenticated,
+            grant,
+            kind,
+            message,
+        } = self;
+        Ok(RawOutgoingMessage {
+            destination,
+            authenticated,
+            grant: policy.total_price(&grant)?,
+            kind,
+            message,
+        })
+    }
+}
+
+impl<Message> RawExecutionOutcome<Message, Resources> {
+    pub fn into_priced(
+        self,
+        policy: &ResourceControlPolicy,
+    ) -> Result<RawExecutionOutcome<Message, Amount>, ArithmeticError> {
+        let RawExecutionOutcome {
+            authenticated_signer,
+            refund_grant_to,
+            messages,
+            subscribe,
+            unsubscribe,
+        } = self;
+        let messages = messages
+            .into_iter()
+            .map(|message| message.into_priced(policy))
+            .collect::<Result<_, _>>()?;
+        Ok(RawExecutionOutcome {
+            authenticated_signer,
+            refund_grant_to,
+            messages,
+            subscribe,
+            unsubscribe,
+        })
     }
 }
 

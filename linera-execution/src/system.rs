@@ -448,7 +448,7 @@ where
         operation: SystemOperation,
     ) -> Result<
         (
-            RawExecutionOutcome<SystemMessage>,
+            RawExecutionOutcome<SystemMessage, Amount>,
             Option<(UserApplicationId, Vec<u8>)>,
         ),
         SystemExecutionError,
@@ -787,7 +787,7 @@ where
         &mut self,
         context: MessageContext,
         message: SystemMessage,
-    ) -> Result<RawExecutionOutcome<SystemMessage>, SystemExecutionError> {
+    ) -> Result<RawExecutionOutcome<SystemMessage, Amount>, SystemExecutionError> {
         let mut outcome = RawExecutionOutcome::default();
         use SystemMessage::*;
         match message {

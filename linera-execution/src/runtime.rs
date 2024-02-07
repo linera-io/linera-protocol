@@ -383,14 +383,17 @@ impl SyncRuntimeInternal<UserContractInstance> {
             ..
         } = self.pop_application();
 
-        // Interpret the results of the call.
-        self.execution_outcomes.push(ExecutionOutcome::User(
-            callee_id,
-            raw_outcome
-                .execution_outcome
-                .with_refund_grant_to(self.refund_grant_to)
-                .with_authenticated_signer(signer),
-        ));
+        // Interpret the results of the call and charge for the message grants.
+        let outcome = raw_outcome
+            .execution_outcome
+            .with_refund_grant_to(self.refund_grant_to)
+            .with_authenticated_signer(signer)
+            .into_priced(&self.resource_controller.policy)?;
+        for message in &outcome.messages {
+            self.resource_controller.track_grant(message.grant)?;
+        }
+        self.execution_outcomes
+            .push(ExecutionOutcome::User(callee_id, outcome));
         let caller_id = self.application_id()?;
         let sessions = self.make_sessions(raw_outcome.create_sessions, callee_id, caller_id);
         let outcome = CallOutcome {
@@ -918,13 +921,18 @@ impl ContractSyncRuntime {
         if let Some(session_id) = runtime.session_manager.states.keys().next() {
             return Err(ExecutionError::SessionWasNotClosed(*session_id));
         }
-        // Adds the results of the last call to the execution results.
-        runtime.execution_outcomes.push(ExecutionOutcome::User(
-            application_id,
-            execution_outcome
-                .with_authenticated_signer(signer)
-                .with_refund_grant_to(refund_grant_to),
-        ));
+        // Charge for the message grants and add the results of the last call to the
+        // execution results.
+        let outcome = execution_outcome
+            .with_authenticated_signer(signer)
+            .with_refund_grant_to(refund_grant_to)
+            .into_priced(&runtime.resource_controller.policy)?;
+        for message in &outcome.messages {
+            runtime.resource_controller.track_grant(message.grant)?;
+        }
+        runtime
+            .execution_outcomes
+            .push(ExecutionOutcome::User(application_id, outcome));
         Ok((runtime.execution_outcomes, runtime.resource_controller))
     }
 }

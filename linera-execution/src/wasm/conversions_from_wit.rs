@@ -15,7 +15,7 @@ use crate::{
 };
 use linera_base::{
     crypto::CryptoHash,
-    data_types::BlockHeight,
+    data_types::{BlockHeight, Resources},
     identifiers::{BytecodeId, ChainId, MessageId},
 };
 
@@ -42,12 +42,27 @@ impl From<contract::ApplicationCallOutcome> for ApplicationCallOutcome {
     }
 }
 
-impl From<contract::OutgoingMessage> for RawOutgoingMessage<Vec<u8>> {
+impl From<contract::Resources> for Resources {
+    fn from(value: contract::Resources) -> Self {
+        Self {
+            fuel: value.fuel,
+            read_operations: value.read_operations,
+            write_operations: value.write_operations,
+            bytes_to_read: value.bytes_to_read,
+            bytes_to_write: value.bytes_to_write,
+            messages: value.messages,
+            message_size: value.message_size,
+            storage_size_delta: value.storage_size_delta,
+        }
+    }
+}
+
+impl From<contract::OutgoingMessage> for RawOutgoingMessage<Vec<u8>, Resources> {
     fn from(message: contract::OutgoingMessage) -> Self {
         Self {
             destination: message.destination.into(),
             authenticated: message.authenticated,
-            grant: crate::Amount::ZERO, // TODO
+            grant: message.resources.into(),
             kind: if message.is_tracked {
                 MessageKind::Tracked
             } else {
@@ -58,7 +73,7 @@ impl From<contract::OutgoingMessage> for RawOutgoingMessage<Vec<u8>> {
     }
 }
 
-impl From<contract::ExecutionOutcome> for RawExecutionOutcome<Vec<u8>> {
+impl From<contract::ExecutionOutcome> for RawExecutionOutcome<Vec<u8>, Resources> {
     fn from(outcome: contract::ExecutionOutcome) -> Self {
         let messages = outcome
             .messages

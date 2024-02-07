@@ -856,7 +856,7 @@ where
         lift: F,
         messages: &mut Vec<OutgoingMessage>,
         height: BlockHeight,
-        raw_outcome: RawExecutionOutcome<E>,
+        raw_outcome: RawExecutionOutcome<E, Amount>,
     ) -> Result<(), ChainError>
     where
         F: Fn(E) -> Message,
