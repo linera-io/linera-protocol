@@ -37,14 +37,3 @@ impl MemoryStorage<crate::TestClock> {
         Ok(Self::create(storage, clock))
     }
 }
-
-impl MemoryStorage<WallClock> {
-    pub async fn new(
-        store_config: MemoryStoreConfig,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, MemoryContextError> {
-        let storage = MemoryStorageInner::make(store_config, namespace, wasm_runtime).await?;
-        Ok(Self::create(storage, WallClock))
-    }
-}
