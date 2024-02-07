@@ -48,16 +48,6 @@ impl RocksDbStorage<TestClock> {
 }
 
 impl RocksDbStorage<WallClock> {
-    pub async fn initialize(
-        store_config: RocksDbStoreConfig,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, RocksDbContextError> {
-        let storage =
-            RocksDbStorageInner::initialize(store_config, namespace, wasm_runtime).await?;
-        Ok(Self::create(storage, WallClock))
-    }
-
     pub async fn new(
         store_config: RocksDbStoreConfig,
         namespace: &str,

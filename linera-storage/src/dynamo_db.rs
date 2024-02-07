@@ -45,16 +45,6 @@ impl DynamoDbStorage<TestClock> {
 }
 
 impl DynamoDbStorage<WallClock> {
-    pub async fn initialize(
-        store_config: DynamoDbStoreConfig,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, DynamoDbContextError> {
-        let storage =
-            DynamoDbStorageInner::initialize(store_config, namespace, wasm_runtime).await?;
-        Ok(Self::create(storage, WallClock))
-    }
-
     pub async fn new(
         store_config: DynamoDbStoreConfig,
         namespace: &str,

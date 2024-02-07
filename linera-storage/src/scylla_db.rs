@@ -42,16 +42,6 @@ impl ScyllaDbStorage<TestClock> {
 }
 
 impl ScyllaDbStorage<WallClock> {
-    pub async fn initialize(
-        store_config: ScyllaDbStoreConfig,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, ScyllaDbContextError> {
-        let storage =
-            ScyllaDbStorageInner::initialize(store_config, namespace, wasm_runtime).await?;
-        Ok(Self::create(storage, WallClock))
-    }
-
     pub async fn new(
         store_config: ScyllaDbStoreConfig,
         namespace: &str,
