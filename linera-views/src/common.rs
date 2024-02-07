@@ -445,9 +445,17 @@ pub trait AdminKeyValueStore<E>: Sized {
         if !Self::exists(config, namespace).await? {
             Self::create(config, namespace).await?;
         }
-	Self::connect(config, namespace).await
+        Self::connect(config, namespace).await
     }
 
+    /// Create a new storage and erase the preceding if existing
+    async fn new_from_scratch(config: &Self::Config, namespace: &str) -> Result<Self, E> {
+        if Self::exists(config, namespace).await? {
+            Self::delete(config, namespace).await?;
+        }
+        Self::create(config, namespace).await?;
+        Self::connect(config, namespace).await
+    }
 }
 
 /// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
