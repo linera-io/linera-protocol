@@ -12,6 +12,7 @@ use linera_core::{
         ValidatorNodeProvider,
     },
 };
+use linera_views::memory::MemoryStoreConfig;
 use linera_execution::committee::Committee;
 use linera_service::{
     chain_listener::{ChainListenerConfig, ClientContext},
