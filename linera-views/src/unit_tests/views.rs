@@ -15,7 +15,7 @@ use async_trait::async_trait;
 use std::{collections::VecDeque, marker::PhantomData};
 use test_case::test_case;
 
-#[cfg(any(feature = "rocksdb", feature = "scylladb", feature = "dynamodb"))]
+#[cfg(any(feature = "rocksdb", feature = "scylladb", feature = "aws"))]
 use crate::test_utils::get_namespace;
 
 #[cfg(feature = "rocksdb")]
@@ -30,7 +30,7 @@ use crate::dynamo_db::{
 };
 
 #[cfg(feature = "scylladb")]
-use crate::scylla_db::{create_scylla_db_test_store, ScyllaDbContext};
+use crate::scylla_db::{create_scylla_db_test_config, ScyllaDbContext, ScyllaDbStore};
 
 #[tokio::test]
 async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error> {
@@ -280,8 +280,11 @@ impl TestContextFactory for ScyllaDbContextFactory {
     type Context = ScyllaDbContext<()>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let store = create_scylla_db_test_store().await;
-        let context = ScyllaDbContext::new(store, vec![], ());
+        let config = create_scylla_db_test_config().await;
+        let namespace = get_namespace();
+        let (store, _) = ScyllaDbStore::new_for_testing(config, &namespace).await?;
+        let dummy_key_prefix = vec![0];
+        let context = ScyllaDbContext::new(store, dummy_key_prefix, ());
         Ok(context)
     }
 }
