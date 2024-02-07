@@ -6,7 +6,7 @@ use crate::{
     execution_state_actor::{ExecutionStateSender, Request},
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
-    Account, ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
+    ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
     ExecutionError, ExecutionOutcome, ServiceRuntime, SessionId, UserApplicationDescription,
     UserApplicationId, UserContractCode, UserContractInstance, UserServiceInstance,
 };
@@ -14,7 +14,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{Amount, ArithmeticError, Timestamp},
     ensure,
-    identifiers::{ChainId, Owner},
+    identifiers::{Account, ChainId, Owner},
 };
 use linera_views::batch::Batch;
 use oneshot::Receiver;

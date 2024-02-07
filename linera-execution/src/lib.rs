@@ -9,7 +9,7 @@ mod execution;
 mod execution_state_actor;
 mod graphql;
 mod ownership;
-pub mod policy;
+mod policy;
 mod resources;
 mod runtime;
 pub mod system;
@@ -23,6 +23,7 @@ pub use applications::{
 };
 pub use execution::ExecutionStateView;
 pub use ownership::{ChainOwnership, TimeoutConfig};
+pub use policy::ResourceControlPolicy;
 pub use resources::{ResourceController, ResourceTracker};
 pub use system::{
     SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation, SystemQuery,

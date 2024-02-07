@@ -31,10 +31,9 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    policy::ResourceControlPolicy,
     system::{Recipient, SystemOperation, UserData},
-    ChainOwnership, ExecutionError, Message, Operation, SystemExecutionError, SystemMessage,
-    SystemQuery, SystemResponse, TimeoutConfig,
+    ChainOwnership, ExecutionError, Message, Operation, ResourceControlPolicy,
+    SystemExecutionError, SystemMessage, SystemQuery, SystemResponse, TimeoutConfig,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;

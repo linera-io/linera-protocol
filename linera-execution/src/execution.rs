@@ -25,7 +25,7 @@ use std::collections::{BTreeSet, HashMap};
 #[cfg(any(test, feature = "test"))]
 use {
     crate::{
-        policy::ResourceControlPolicy, system::SystemExecutionState, ResourceTracker,
+        system::SystemExecutionState, ResourceControlPolicy, ResourceTracker,
         TestExecutionRuntimeContext, UserContractCode,
     },
     linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},

@@ -4,8 +4,8 @@
 //! This module tracks the resources used during the execution of a transaction.
 
 use crate::{
-    policy::ResourceControlPolicy, system::SystemExecutionError, ExecutionError,
-    ExecutionStateView, Message, Operation,
+    system::SystemExecutionError, ExecutionError, ExecutionStateView, Message, Operation,
+    ResourceControlPolicy,
 };
 use custom_debug_derive::Debug;
 use futures::FutureExt;

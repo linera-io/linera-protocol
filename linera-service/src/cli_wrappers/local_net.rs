@@ -9,7 +9,7 @@ use crate::{
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use async_trait::async_trait;
 use linera_base::data_types::Amount;
-use linera_execution::policy::ResourceControlPolicy;
+use linera_execution::ResourceControlPolicy;
 use std::{
     collections::{BTreeMap, HashSet},
     env,

@@ -18,7 +18,7 @@ use futures::{future, lock::Mutex};
 use k8s_openapi::api::core::v1::Pod;
 use kube::{api::ListParams, Api, Client};
 use linera_base::data_types::Amount;
-use linera_execution::policy::ResourceControlPolicy;
+use linera_execution::ResourceControlPolicy;
 use std::sync::Arc;
 use tempfile::{tempdir, TempDir};
 use tokio::process::Command;

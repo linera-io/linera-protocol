@@ -25,9 +25,8 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
-    policy::ResourceControlPolicy,
     system::{SystemChannel, UserData},
-    ChainOwnership, Message, SystemMessage, TimeoutConfig,
+    ChainOwnership, Message, ResourceControlPolicy, SystemMessage, TimeoutConfig,
 };
 use linera_service::{
     chain_listener::ClientContext as _,

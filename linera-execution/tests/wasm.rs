@@ -13,9 +13,9 @@ use linera_base::{
     identifiers::{Account, ChainDescription, ChainId},
 };
 use linera_execution::{
-    policy::ResourceControlPolicy, ExecutionOutcome, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, ExecutionStateView, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, ResourceController, ResourceTracker, Response, SystemExecutionState,
+    ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, ExecutionStateView,
+    Operation, OperationContext, Query, QueryContext, RawExecutionOutcome, ResourceControlPolicy,
+    ResourceController, ResourceTracker, Response, SystemExecutionState,
     TestExecutionRuntimeContext, WasmContractModule, WasmRuntime, WasmServiceModule,
 };
 use linera_views::{memory::MemoryContext, views::View};

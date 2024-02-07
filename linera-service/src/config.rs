@@ -18,7 +18,7 @@ use linera_chain::data_types::Block;
 use linera_core::{client::ChainClient, node::ValidatorNodeProvider};
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
-    policy::ResourceControlPolicy,
+    ResourceControlPolicy,
 };
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Storage;

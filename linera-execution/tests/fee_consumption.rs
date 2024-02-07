@@ -14,9 +14,9 @@ use linera_base::{
     identifiers::{Account, ChainDescription, ChainId, Owner},
 };
 use linera_execution::{
-    policy::ResourceControlPolicy, ContractRuntime, ExecutionError, ExecutionOutcome,
-    ExecutionRuntimeConfig, ExecutionStateView, Operation, OperationContext, RawExecutionOutcome,
-    ResourceController, SystemExecutionState, TestExecutionRuntimeContext,
+    ContractRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionStateView,
+    Operation, OperationContext, RawExecutionOutcome, ResourceControlPolicy, ResourceController,
+    SystemExecutionState, TestExecutionRuntimeContext,
 };
 use linera_views::memory::MemoryContext;
 use std::{sync::Arc, vec};
