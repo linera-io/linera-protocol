@@ -4,10 +4,12 @@ on:
   push:
     branches: [ main ]
     paths-ignore:
-      - 'CONTRIBUTING.md'
-      - 'INSTALL.md'
+      - '*.md'
       - 'docker/**'
+      - 'docker_scylla/**'
+      - 'configuration/**'
       - 'kubernetes/**'
+      - 'scripts/**'
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull-requests
@@ -22,7 +24,7 @@ env:
   RUST_BACKTRACE: short
   RUSTFLAGS: "-D warnings"
   RUSTUP_MAX_RETRIES: 10
-  LINERA_CRATES: base chain core execution rpc sdk service storage views views-derive
+  LINERA_CRATES: base chain core execution rpc sdk sdk-derive service service-graphql-client storage version views views-derive witty witty-macros
   VERSION: 0.1.0
 
 permissions:

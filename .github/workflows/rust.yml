@@ -10,6 +10,8 @@ on:
       - 'CONTRIBUTING.md'
       - 'INSTALL.md'
       - 'docker/**'
+      - 'docker_scylla/**'
+      - 'configuration/**'
       - 'kubernetes/**'
   workflow_dispatch:
 
