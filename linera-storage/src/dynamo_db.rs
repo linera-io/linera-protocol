@@ -10,7 +10,7 @@ use std::sync::Arc;
 use {
     crate::db_storage::TestClock,
     linera_views::{
-        dynamo_db::{create_dynamo_db_common_config, LocalStackTestContext},
+        dynamo_db::create_dynamo_db_test_config,
         test_utils::get_namespace,
     },
 };
@@ -26,13 +26,8 @@ pub type DynamoDbStorage<C> = DbStorage<DynamoDbStore, C>;
 #[cfg(any(test, feature = "test"))]
 impl DynamoDbStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
+        let store_config = create_dynamo_db_test_config().await;
         let namespace = get_namespace();
-        let localstack = LocalStackTestContext::new().await.expect("localstack");
-        let common_config = create_dynamo_db_common_config();
-        let store_config = DynamoDbStoreConfig {
-            config: localstack.dynamo_db_config(),
-            common_config,
-        };
         DynamoDbStorage::new_for_testing(store_config, &namespace, wasm_runtime, TestClock::new())
             .await
             .expect("storage")

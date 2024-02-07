@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::db_storage::TestClock, linera_views::rocks_db::create_rocks_db_common_config,
+    crate::db_storage::TestClock, linera_views::rocks_db::create_rocks_db_test_config,
     linera_views::test_utils::get_namespace, tempfile::TempDir,
 };
 
@@ -23,13 +23,7 @@ pub type RocksDbStorage<C> = DbStorage<RocksDbStore, C>;
 #[cfg(any(test, feature = "test"))]
 impl RocksDbStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> (Self, TempDir) {
-        let dir = TempDir::new().unwrap();
-        let path_buf = dir.path().to_path_buf();
-        let common_config = create_rocks_db_common_config();
-        let store_config = RocksDbStoreConfig {
-            path_buf,
-            common_config,
-        };
+        let (store_config, dir) = create_rocks_db_test_config().await;
         let namespace = get_namespace();
         let storage = RocksDbStorage::new_for_testing(
             store_config,

@@ -407,3 +407,11 @@ where
         Ok(())
     }
 }
+
+impl<Client> DbStorage<Client, WallClock>
+where
+    Client: KeyValueStore + AdminKeyValueStore<<Client as KeyValueStore>::Error> + Clone + Send + Sync + 'static,
+    ViewError: From<<Client as KeyValueStore>::Error>,
+    <Client as KeyValueStore>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
+{
+}
