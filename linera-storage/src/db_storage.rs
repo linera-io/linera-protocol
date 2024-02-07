@@ -117,7 +117,12 @@ pub struct DbStorageInner<Client> {
 
 impl<Client> DbStorageInner<Client>
 where
-    Client: KeyValueStore + AdminKeyValueStore<<Client as KeyValueStore>::Error> + Clone + Send + Sync + 'static,
+    Client: KeyValueStore
+        + AdminKeyValueStore<<Client as KeyValueStore>::Error>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     ViewError: From<<Client as KeyValueStore>::Error>,
     <Client as KeyValueStore>::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
@@ -130,6 +135,37 @@ where
             user_services: Arc::new(DashMap::new()),
             wasm_runtime,
         }
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    pub async fn new_for_testing(
+        store_config: Client::Config,
+        namespace: &str,
+        wasm_runtime: Option<WasmRuntime>,
+    ) -> Result<Self, <Client as KeyValueStore>::Error> {
+        let client = Client::new_from_scratch(&store_config, namespace).await?;
+        let storage = Self::new(client, wasm_runtime);
+        Ok(storage)
+    }
+
+    pub async fn initialize(
+        store_config: Client::Config,
+        namespace: &str,
+        wasm_runtime: Option<WasmRuntime>,
+    ) -> Result<Self, <Client as KeyValueStore>::Error> {
+        let store = Client::initialize(&store_config, namespace).await?;
+        let storage = Self::new(store, wasm_runtime);
+        Ok(storage)
+    }
+
+    pub async fn make(
+        store_config: Client::Config,
+        namespace: &str,
+        wasm_runtime: Option<WasmRuntime>,
+    ) -> Result<Self, <Client as KeyValueStore>::Error> {
+        let client = Client::connect(&store_config, namespace).await?;
+        let storage = Self::new(client, wasm_runtime);
+        Ok(storage)
     }
 }
 

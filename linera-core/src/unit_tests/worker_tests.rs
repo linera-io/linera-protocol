@@ -3504,10 +3504,10 @@ where
 #[test(tokio::test)]
 async fn test_cross_chain_helper() {
     // Make a committee and worker (only used for signing certificates)
-    let (committee, worker) = init_worker(
-        MemoryStorage::new(None, TEST_MEMORY_MAX_STREAM_QUERIES, TestClock::new()),
-        true,
-    );
+    let store = MemoryStorage::new(None, TEST_MEMORY_MAX_STREAM_QUERIES, TestClock::new())
+        .await
+        .expect("store");
+    let (committee, worker) = init_worker(store, true);
     let committees = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
 
     let key_pair0 = KeyPair::generate();

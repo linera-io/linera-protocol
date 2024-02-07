@@ -650,7 +650,8 @@ impl StorageBuilder for MakeMemoryStorage {
             self.wasm_runtime,
             TEST_MEMORY_MAX_STREAM_QUERIES,
             self.clock.clone(),
-        ))
+        )
+        .await?)
     }
 
     fn clock(&self) -> &TestClock {

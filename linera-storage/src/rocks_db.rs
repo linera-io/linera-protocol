@@ -3,10 +3,7 @@
 
 use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
 use linera_execution::{ExecutionRuntimeConfig, WasmRuntime};
-use linera_views::{
-    common::AdminKeyValueStore,
-    rocks_db::{RocksDbContextError, RocksDbStore, RocksDbStoreConfig},
-};
+use linera_views::rocks_db::{RocksDbContextError, RocksDbStore, RocksDbStoreConfig};
 use std::sync::Arc;
 
 #[cfg(any(test, feature = "test"))]
@@ -20,39 +17,6 @@ use {
 mod tests;
 
 type RocksDbStorageInner = DbStorageInner<RocksDbStore>;
-
-impl RocksDbStorageInner {
-    #[cfg(any(test, feature = "test"))]
-    pub async fn new_for_testing(
-        store_config: RocksDbStoreConfig,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, RocksDbContextError> {
-        let client = RocksDbStore::new_from_scratch(&store_config, namespace).await?;
-        let storage = Self::new(client, wasm_runtime);
-        Ok(storage)
-    }
-
-    async fn initialize(
-        store_config: RocksDbStoreConfig,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, RocksDbContextError> {
-        let store = RocksDbStore::initialize(&store_config, namespace).await?;
-        let storage = Self::new(store, wasm_runtime);
-        Ok(storage)
-    }
-
-    async fn make(
-        store_config: RocksDbStoreConfig,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, RocksDbContextError> {
-        let client = RocksDbStore::connect(&store_config, namespace).await?;
-        let storage = Self::new(client, wasm_runtime);
-        Ok(storage)
-    }
-}
 
 pub type RocksDbStorage<C> = DbStorage<RocksDbStore, C>;
 

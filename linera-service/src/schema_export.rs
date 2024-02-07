@@ -113,10 +113,13 @@ impl ClientContext<DummyValidatorNodeProvider> for DummyContext {
     }
 }
 
-fn main() -> std::io::Result<()> {
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
     let _options = <Options as clap::Parser>::parse();
 
-    let storage = MemoryStorage::new(None, TEST_MEMORY_MAX_STREAM_QUERIES, WallClock);
+    let storage = MemoryStorage::new(None, TEST_MEMORY_MAX_STREAM_QUERIES, WallClock)
+        .await
+        .expect("storage");
     let config = ChainListenerConfig {
         delay_before_ms: 0,
         delay_after_ms: 0,

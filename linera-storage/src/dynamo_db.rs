@@ -3,10 +3,7 @@
 
 use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
 use linera_execution::{ExecutionRuntimeConfig, WasmRuntime};
-use linera_views::{
-    common::AdminKeyValueStore,
-    dynamo_db::{DynamoDbContextError, DynamoDbStore, DynamoDbStoreConfig},
-};
+use linera_views::dynamo_db::{DynamoDbContextError, DynamoDbStore, DynamoDbStoreConfig};
 use std::sync::Arc;
 
 #[cfg(any(test, feature = "test"))]
@@ -24,39 +21,6 @@ mod tests;
 
 type DynamoDbStorageInner = DbStorageInner<DynamoDbStore>;
 
-impl DynamoDbStorageInner {
-    #[cfg(any(test, feature = "test"))]
-    pub async fn new_for_testing(
-        store_config: DynamoDbStoreConfig,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, DynamoDbContextError> {
-        let store = DynamoDbStore::new_from_scratch(&store_config, namespace).await?;
-        let storage = Self::new(store, wasm_runtime);
-        Ok(storage)
-    }
-
-    async fn initialize(
-        store_config: DynamoDbStoreConfig,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, DynamoDbContextError> {
-        let store = DynamoDbStore::initialize(&store_config, namespace).await?;
-        let storage = Self::new(store, wasm_runtime);
-        Ok(storage)
-    }
-
-    async fn make(
-        store_config: DynamoDbStoreConfig,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, DynamoDbContextError> {
-        let store = DynamoDbStore::connect(&store_config, namespace).await?;
-        let storage = Self::new(store, wasm_runtime);
-        Ok(storage)
-    }
-}
-
 pub type DynamoDbStorage<C> = DbStorage<DynamoDbStore, C>;
 
 #[cfg(any(test, feature = "test"))]
@@ -71,7 +35,7 @@ impl DynamoDbStorage<TestClock> {
         };
         DynamoDbStorage::new_for_testing(store_config, &namespace, wasm_runtime, TestClock::new())
             .await
-            .expect("client and table_name")
+            .expect("storage")
     }
 
     pub async fn new_for_testing(

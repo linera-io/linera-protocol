@@ -394,7 +394,8 @@ where
                 wasm_runtime,
                 config.common_config.max_stream_queries,
                 WallClock,
-            );
+            )
+            .await?;
             genesis_config.initialize_storage(&mut storage).await?;
             job.run(storage).await
         }

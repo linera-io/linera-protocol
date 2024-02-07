@@ -22,6 +22,18 @@ pub struct MemoryStoreConfig {
     pub common_config: CommonStoreConfig,
 }
 
+impl MemoryStoreConfig {
+    /// Create a `MemoryStoreConfig`. The max_concurrent_queries and cache_size are not used.
+    pub fn new(max_stream_queries: usize) -> Self {
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries: None,
+            max_stream_queries,
+            cache_size: 1000,
+        };
+        Self { common_config }
+    }
+}
+
 /// The number of streams for the test
 pub const TEST_MEMORY_MAX_STREAM_QUERIES: usize = 10;
 
