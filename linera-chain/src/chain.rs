@@ -707,6 +707,9 @@ where
                     outcomes
                 }
                 MessageAction::Reject => {
+                    // If rejecting a message fails, the entire block proposal should be
+                    // scrapped.
+                    let chain_execution_context = ChainExecutionContext::Block;
                     ensure!(
                         !message.event.is_protected(),
                         ChainError::CannotRejectMessage {
