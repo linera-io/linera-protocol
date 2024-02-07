@@ -883,14 +883,20 @@ pub fn create_scylla_db_common_config() -> CommonStoreConfig {
     }
 }
 
+/// Creates a ScyllaDb test store config
+#[cfg(any(test, feature = "test"))]
+pub async fn create_scylla_db_initial_config() -> ScyllaDbStoreConfig {
+    let uri = "localhost:9042".to_string();
+    let common_config = create_scylla_db_common_config();
+    ScyllaDbStoreConfig { uri, common_config }
+}
+
 /// Creates a ScyllaDB test store.
 #[cfg(any(test, feature = "test"))]
 pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
-    let uri = "localhost:9042".to_string();
+    let config = create_scylla_db_initial_config().await;
     let namespace = get_namespace();
-    let common_config = create_scylla_db_common_config();
-    let store_config = ScyllaDbStoreConfig { uri, common_config };
-    let (store, _) = ScyllaDbStore::new_for_testing(store_config, &namespace)
+    let (store, _) = ScyllaDbStore::new_for_testing(config, &namespace)
         .await
         .expect("store");
     store
