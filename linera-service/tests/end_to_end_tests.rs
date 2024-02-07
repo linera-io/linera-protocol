@@ -42,6 +42,8 @@ fn eq_approx(amount0: Amount, amount1: Amount) -> bool {
     amount0 + fee_margin > amount1 && amount0 < amount1 + fee_margin
 }
 
+/// Asserts that the balance approximately matches the expected amount, up to 0.1 tokens.
+/// The tests usually transfer integer token amounts, and have lower total fees than 0.1.
 #[track_caller]
 fn assert_approx(balance: Amount, expected: Amount) {
     assert!(
@@ -1384,13 +1386,13 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
     net.start_server(3, 0).await.unwrap();
 
     // Chain 1 should have three tokens less, chain 2 three more (minus fees).
-    assert!(
-        client.query_balance(Account::chain(chain_1)).await.unwrap()
-            <= balance_1 - Amount::from_tokens(3)
+    assert_approx(
+        client.query_balance(Account::chain(chain_1)).await.unwrap(),
+        balance_1 - Amount::from_tokens(3),
     );
-    assert!(
-        client.query_balance(Account::chain(chain_2)).await.unwrap()
-            > Amount::from_tokens(3) - Amount::from_millis(50)
+    assert_approx(
+        client.query_balance(Account::chain(chain_2)).await.unwrap(),
+        Amount::from_tokens(3),
     );
 
     // Create derived chain
@@ -1462,16 +1464,16 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
                 response["chain"]["executionState"]["system"]["balance"].as_str()
             {
                 let balance = balance_str.parse::<Amount>().expect("should parse balance");
-                if balance > Amount::from_tokens(8) - Amount::from_millis(50) {
+                if eq_approx(balance, Amount::from_tokens(8)) {
                     return;
                 }
             }
         }
         panic!("Failed to receive new block");
     } else {
-        assert!(
-            client.query_balance(Account::chain(chain_2)).await.unwrap()
-                > Amount::from_tokens(8) - Amount::from_millis(50)
+        assert_approx(
+            client.query_balance(Account::chain(chain_2)).await.unwrap(),
+            Amount::from_tokens(8),
         );
     }
 
