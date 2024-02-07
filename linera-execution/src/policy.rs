@@ -147,7 +147,7 @@ impl ResourceControlPolicy {
         }
     }
 
-    /// Creates a policy that matches the Devnet launched in January 2024.
+    /// Creates a policy that matches the Devnet.
     pub fn devnet() -> Self {
         Self {
             block: Amount::from_milli(1),
@@ -155,11 +155,14 @@ impl ResourceControlPolicy {
             byte_read: Amount::from_nano(10),
             byte_written: Amount::from_nano(100),
             read_operation: Amount::from_micro(10),
+            write_operation: Amount::from_micro(20),
             byte_stored: Amount::from_nano(10),
             message_byte: Amount::from_nano(100),
+            operation_byte: Amount::from_nano(10),
+            operation: Amount::from_micro(10),
+            message: Amount::from_micro(10),
             maximum_bytes_read_per_block: 100_000_000,
             maximum_bytes_written_per_block: 10_000_000,
-            ..Self::default()
         }
     }
 }
