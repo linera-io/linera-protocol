@@ -330,6 +330,8 @@ where
         match self.owner {
             None => self.view.system.balance.get_mut().try_add_assign(other),
             Some(owner) => {
+                // Try to credit the owner account first.
+                // TODO(#1648): This may need some additional design work.
                 let balance = self.get_owner_balance_mut(&owner);
                 balance.try_add_assign(other)?;
                 // Safety check. (See discussion below in `ResourceController::with`).
@@ -343,17 +345,19 @@ where
         match self.owner {
             None => self.view.system.balance.get_mut().try_sub_assign(other),
             Some(owner) => {
-                // Charge the owner's account first, then the chain's account for the
-                // reminder.
+                // Charge the chain account first then the owner's account.
                 if self
-                    .get_owner_balance_mut(&owner)
+                    .view
+                    .system
+                    .balance
+                    .get_mut()
                     .try_sub_assign(other)
                     .is_err()
                 {
-                    let balance = self.get_owner_balance(&owner);
+                    let balance = *self.view.system.balance.get();
+                    *self.view.system.balance.get_mut() = Amount::ZERO;
                     let delta = other.try_sub(balance).expect("balance < other");
-                    self.view.system.balance.get_mut().try_sub_assign(delta)?;
-                    *self.get_owner_balance_mut(&owner) = Amount::ZERO;
+                    self.get_owner_balance_mut(&owner).try_sub_assign(delta)?;
                 }
                 Ok(())
             }
