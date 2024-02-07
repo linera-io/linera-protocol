@@ -280,11 +280,14 @@ impl AdminKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
         let options = rocksdb::Options::default();
         let mut path_buf = config.path_buf.clone();
         path_buf.push(namespace);
-        let result = DB::open(&options, path_buf);
+        let result = DB::open(&options, path_buf.clone());
         match result {
             Ok(_) => Ok(true),
             Err(error) => match error.kind() {
-                rocksdb::ErrorKind::InvalidArgument => Ok(false),
+                rocksdb::ErrorKind::InvalidArgument => {
+                    std::fs::remove_dir_all(path_buf)?;
+                    Ok(false)
+                }
                 _ => Err(RocksDbContextError::RocksDb(error)),
             },
         }
@@ -301,8 +304,9 @@ impl AdminKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), RocksDbContextError> {
         let mut path_buf = config.path_buf.clone();
-        path_buf.push(&namespace);
-        std::fs::remove_dir_all(path_buf.as_path())?;
+        path_buf.push(namespace);
+        let path = path_buf.as_path();
+        std::fs::remove_dir_all(path)?;
         Ok(())
     }
 }
@@ -460,7 +464,6 @@ pub async fn create_rocks_db_test_config() -> (RocksDbStoreConfig, TempDir) {
     };
     (store_config, dir)
 }
-
 
 /// Creates a RocksDB database client to be used for tests.
 /// The temporary directory has to be carried because if it goes

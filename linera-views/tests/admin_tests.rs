@@ -42,7 +42,7 @@ async fn admin_test<E: Debug, S: AdminKeyValueStore<E>>(config: &S::Config) {
     for size in [1, 3, 9] {
         // Creating the initial list of namespaces
         let mut working_namespaces = Vec::new();
-        for _i in 1..size {
+        for _i in 0..size {
             let namespace = get_namespace();
             let test = S::exists(config, &namespace).await.expect("test");
             assert!(!test);
@@ -96,7 +96,7 @@ async fn admin_test<E: Debug, S: AdminKeyValueStore<E>>(config: &S::Config) {
 
 #[cfg(feature = "rocksdb")]
 #[tokio::test]
-async fn test_rocks_db_writes_from_blank() {
+async fn admin_test_rocks_db() {
     let (config, _dir) = create_rocks_db_test_config().await;
     admin_test::<RocksDbContextError, RocksDbStore>(&config).await;
 }
