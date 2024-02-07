@@ -52,7 +52,7 @@ use {
     linera_views::scylla_db::ScyllaDbStoreConfig,
 };
 
-#[cfg(any(feature = "aws", feature = "scylladb"))]
+#[cfg(any(feature = "aws", feature = "scylladb", feature = "rocksdb"))]
 use linera_views::test_utils::get_namespace;
 
 #[derive(Debug, PartialEq, Clone, Copy)]

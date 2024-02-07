@@ -6,14 +6,13 @@ use linera_execution::{ExecutionRuntimeConfig, WasmRuntime};
 use linera_views::{
     common::TableStatus,
     rocks_db::{RocksDbContextError, RocksDbStore, RocksDbStoreConfig},
-    test_utils::get_namespace,
 };
 use std::sync::Arc;
 
 #[cfg(any(test, feature = "test"))]
 use {
     crate::db_storage::TestClock, linera_views::rocks_db::create_rocks_db_common_config,
-    tempfile::TempDir,
+    tempfile::TempDir, test_utils::get_namespace,
 };
 
 #[cfg(test)]

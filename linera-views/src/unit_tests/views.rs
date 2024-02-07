@@ -15,24 +15,22 @@ use async_trait::async_trait;
 use std::{collections::VecDeque, marker::PhantomData};
 use test_case::test_case;
 
+#[cfg(any(feature = "rocksdb", feature = "scylladb", feature = "dynamodb"))]
+use crate::test_utils::get_namespace;
+
 #[cfg(feature = "rocksdb")]
 use {
-    crate::rocks_db::create_rocks_db_common_config,
-    crate::rocks_db::RocksDbStoreConfig,
-    crate::rocks_db::{RocksDbContext, RocksDbStore},
+    crate::rocks_db::{create_rocks_db_test_config, RocksDbContext, RocksDbStore},
     tempfile::TempDir,
 };
 
 #[cfg(feature = "aws")]
-use crate::{
-    dynamo_db::DynamoDbStoreConfig,
-    dynamo_db::LocalStackTestContext,
-    dynamo_db::{create_dynamo_db_common_config, DynamoDbContext},
-    test_utils::get_namespace,
+use crate::dynamo_db::{
+    create_dynamo_db_common_config, DynamoDbContext, DynamoDbStoreConfig, LocalStackTestContext,
 };
 
 #[cfg(feature = "scylladb")]
-use crate::{scylla_db::create_scylla_db_test_store, scylla_db::ScyllaDbContext};
+use crate::scylla_db::{create_scylla_db_test_store, ScyllaDbContext};
 
 #[tokio::test]
 async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error> {
@@ -224,13 +222,7 @@ impl TestContextFactory for RocksDbContextFactory {
     type Context = RocksDbContext<()>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let directory = TempDir::new()?;
-        let common_config = create_rocks_db_common_config();
-        let path_buf = directory.path().to_path_buf();
-        let store_config = RocksDbStoreConfig {
-            path_buf,
-            common_config,
-        };
+        let (store_config, directory) = create_rocks_db_test_config().await;
         let namespace = get_namespace();
         let (store, _) = RocksDbStore::new_for_testing(store_config, &namespace)
             .await
@@ -280,9 +272,7 @@ impl TestContextFactory for DynamoDbContextFactory {
 
 #[cfg(feature = "scylladb")]
 #[derive(Default)]
-struct ScyllaDbContextFactory {
-    table_names: Vec<String>,
-}
+struct ScyllaDbContextFactory {}
 
 #[cfg(feature = "scylladb")]
 #[async_trait]
@@ -291,11 +281,7 @@ impl TestContextFactory for ScyllaDbContextFactory {
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let store = create_scylla_db_test_store().await;
-        let table_name = store.get_namespace().await;
         let context = ScyllaDbContext::new(store, vec![], ());
-
-        self.table_names.push(table_name);
-
         Ok(context)
     }
 }

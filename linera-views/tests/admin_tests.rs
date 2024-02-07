@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
+
 // Those tests exercise the Admin, therefore they should not be run
 // simultaneously with other tests. That should not be an issue
 // since each test file is run separately.
