@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
-use linera_execution::{ExecutionRuntimeConfig, WasmRuntime};
+use linera_execution::WasmRuntime;
 use linera_views::scylla_db::{ScyllaDbContextError, ScyllaDbStore, ScyllaDbStoreConfig};
-use std::sync::Arc;
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -38,11 +37,7 @@ impl ScyllaDbStorage<TestClock> {
     ) -> Result<Self, ScyllaDbContextError> {
         let storage =
             ScyllaDbStorageInner::new_for_testing(store_config, namespace, wasm_runtime).await?;
-        Ok(ScyllaDbStorage {
-            client: Arc::new(storage),
-            clock,
-            execution_runtime_config: ExecutionRuntimeConfig::default(),
-        })
+        Ok(Self::create(storage, clock))
     }
 }
 
@@ -54,11 +49,7 @@ impl ScyllaDbStorage<WallClock> {
     ) -> Result<Self, ScyllaDbContextError> {
         let storage =
             ScyllaDbStorageInner::initialize(store_config, namespace, wasm_runtime).await?;
-        Ok(ScyllaDbStorage {
-            client: Arc::new(storage),
-            clock: WallClock,
-            execution_runtime_config: ExecutionRuntimeConfig::default(),
-        })
+        Ok(Self::create(storage, WallClock))
     }
 
     pub async fn new(
@@ -67,10 +58,6 @@ impl ScyllaDbStorage<WallClock> {
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, ScyllaDbContextError> {
         let storage = ScyllaDbStorageInner::make(store_config, namespace, wasm_runtime).await?;
-        Ok(ScyllaDbStorage {
-            client: Arc::new(storage),
-            clock: WallClock,
-            execution_runtime_config: ExecutionRuntimeConfig::default(),
-        })
+        Ok(Self::create(storage, WallClock))
     }
 }

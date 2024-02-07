@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
-use linera_execution::{ExecutionRuntimeConfig, WasmRuntime};
+use linera_execution::WasmRuntime;
 use linera_views::dynamo_db::{DynamoDbContextError, DynamoDbStore, DynamoDbStoreConfig};
-use std::sync::Arc;
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -41,12 +40,7 @@ impl DynamoDbStorage<TestClock> {
     ) -> Result<Self, DynamoDbContextError> {
         let storage =
             DynamoDbStorageInner::new_for_testing(store_config, namespace, wasm_runtime).await?;
-        let storage = DynamoDbStorage {
-            client: Arc::new(storage),
-            clock,
-            execution_runtime_config: ExecutionRuntimeConfig::default(),
-        };
-        Ok(storage)
+        Ok(Self::create(storage, clock))
     }
 }
 
@@ -58,11 +52,7 @@ impl DynamoDbStorage<WallClock> {
     ) -> Result<Self, DynamoDbContextError> {
         let storage =
             DynamoDbStorageInner::initialize(store_config, namespace, wasm_runtime).await?;
-        Ok(DynamoDbStorage {
-            client: Arc::new(storage),
-            clock: WallClock,
-            execution_runtime_config: ExecutionRuntimeConfig::default(),
-        })
+        Ok(Self::create(storage, WallClock))
     }
 
     pub async fn new(
@@ -71,10 +61,6 @@ impl DynamoDbStorage<WallClock> {
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, DynamoDbContextError> {
         let storage = DynamoDbStorageInner::make(store_config, namespace, wasm_runtime).await?;
-        Ok(DynamoDbStorage {
-            client: Arc::new(storage),
-            clock: WallClock,
-            execution_runtime_config: ExecutionRuntimeConfig::default(),
-        })
+        Ok(Self::create(storage, WallClock))
     }
 }

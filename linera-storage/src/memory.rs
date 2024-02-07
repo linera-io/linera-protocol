@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
-use linera_execution::{ExecutionRuntimeConfig, WasmRuntime};
+use linera_execution::WasmRuntime;
 use linera_views::memory::{MemoryContextError, MemoryStore, MemoryStoreConfig};
-use std::sync::Arc;
 
 type MemoryStorageInner = DbStorageInner<MemoryStore>;
 
@@ -31,11 +30,7 @@ impl MemoryStorage<crate::TestClock> {
         let store_config = MemoryStoreConfig::new(max_stream_queries);
         let namespace = "unused_namespace";
         let storage = MemoryStorageInner::make(store_config, namespace, wasm_runtime).await?;
-        Ok(Self {
-            client: Arc::new(storage),
-            clock,
-            execution_runtime_config: ExecutionRuntimeConfig::default(),
-        })
+        Ok(Self::create(storage, clock))
     }
 }
 
@@ -47,10 +42,6 @@ impl MemoryStorage<WallClock> {
         let store_config = MemoryStoreConfig::new(max_stream_queries);
         let namespace = "unused_namespace";
         let storage = MemoryStorageInner::make(store_config, namespace, wasm_runtime).await?;
-        Ok(Self {
-            client: Arc::new(storage),
-            clock: WallClock,
-            execution_runtime_config: ExecutionRuntimeConfig::default(),
-        })
+        Ok(Self::create(storage, WallClock))
     }
 }

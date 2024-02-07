@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::db_storage::{DbStorage, DbStorageInner, WallClock};
-use linera_execution::{ExecutionRuntimeConfig, WasmRuntime};
+use linera_execution::WasmRuntime;
 use linera_views::rocks_db::{RocksDbContextError, RocksDbStore, RocksDbStoreConfig};
-use std::sync::Arc;
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -44,12 +43,7 @@ impl RocksDbStorage<TestClock> {
     ) -> Result<Self, RocksDbContextError> {
         let storage =
             RocksDbStorageInner::new_for_testing(store_config, namespace, wasm_runtime).await?;
-        let storage = RocksDbStorage {
-            client: Arc::new(storage),
-            clock,
-            execution_runtime_config: ExecutionRuntimeConfig::default(),
-        };
-        Ok(storage)
+        Ok(Self::create(storage, clock))
     }
 }
 
@@ -61,11 +55,7 @@ impl RocksDbStorage<WallClock> {
     ) -> Result<Self, RocksDbContextError> {
         let storage =
             RocksDbStorageInner::initialize(store_config, namespace, wasm_runtime).await?;
-        Ok(RocksDbStorage {
-            client: Arc::new(storage),
-            clock: WallClock,
-            execution_runtime_config: ExecutionRuntimeConfig::default(),
-        })
+        Ok(Self::create(storage, WallClock))
     }
 
     pub async fn new(
@@ -74,10 +64,6 @@ impl RocksDbStorage<WallClock> {
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, RocksDbContextError> {
         let storage = RocksDbStorageInner::make(store_config, namespace, wasm_runtime).await?;
-        Ok(RocksDbStorage {
-            client: Arc::new(storage),
-            clock: WallClock,
-            execution_runtime_config: ExecutionRuntimeConfig::default(),
-        })
+        Ok(Self::create(storage, WallClock))
     }
 }

@@ -406,6 +406,10 @@ where
         self.client.client.write_batch(batch, &[]).await?;
         Ok(())
     }
+
+    pub fn create(storage: DbStorageInner<Client>, clock: C) -> Self {
+        Self { client: Arc::new(storage), clock, execution_runtime_config: ExecutionRuntimeConfig::default() }
+    }
 }
 
 impl<Client> DbStorage<Client, WallClock>
@@ -414,4 +418,5 @@ where
     ViewError: From<<Client as KeyValueStore>::Error>,
     <Client as KeyValueStore>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
+
 }
