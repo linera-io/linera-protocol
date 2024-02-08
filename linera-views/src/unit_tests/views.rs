@@ -6,10 +6,14 @@ use crate::{
     common::Context,
     memory::{create_memory_context, MemoryContext},
     queue_view::QueueView,
+    test_utils::test_views::{
+        TestCollectionView, TestLogView, TestMapView, TestRegisterView, TestView,
+    },
     views::{View, ViewError},
 };
 use async_trait::async_trait;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, marker::PhantomData};
+use test_case::test_case;
 
 #[cfg(feature = "rocksdb")]
 use {
@@ -294,4 +298,58 @@ impl TestContextFactory for ScyllaDbContextFactory {
 
         Ok(context)
     }
+}
+
+/// Check if a cloned view contains the staged changes from its source.
+#[test_case(PhantomData::<TestCollectionView<_>>; "with CollectionView")]
+#[test_case(PhantomData::<TestLogView<_>>; "with LogView")]
+#[test_case(PhantomData::<TestMapView<_>>; "with MapView")]
+#[test_case(PhantomData::<TestRegisterView<_>>; "with RegisterView")]
+#[tokio::test]
+async fn test_clone_includes_staged_changes<V>(
+    _view_type: PhantomData<V>,
+) -> Result<(), anyhow::Error>
+where
+    V: TestView,
+{
+    let context = create_memory_context();
+    let mut original = V::load(context).await?;
+    let original_state = original.stage_initial_changes().await?;
+
+    let clone = original.clone_unchecked()?;
+    let clone_state = clone.read().await?;
+
+    assert_eq!(original_state, clone_state);
+
+    Ok(())
+}
+
+/// Check if new staged changes are separate between the cloned view and its source.
+#[test_case(PhantomData::<TestCollectionView<_>>; "with CollectionView")]
+#[test_case(PhantomData::<TestLogView<_>>; "with LogView")]
+#[test_case(PhantomData::<TestMapView<_>>; "with MapView")]
+#[test_case(PhantomData::<TestRegisterView<_>>; "with RegisterView")]
+#[tokio::test]
+async fn test_original_and_clone_stage_changes_separately<V>(
+    _view_type: PhantomData<V>,
+) -> Result<(), anyhow::Error>
+where
+    V: TestView,
+{
+    let context = create_memory_context();
+    let mut original = V::load(context).await?;
+    original.stage_initial_changes().await?;
+
+    let mut first_clone = original.clone_unchecked()?;
+    let second_clone = original.clone_unchecked()?;
+
+    let original_state = original.stage_changes_to_be_discarded().await?;
+    let first_clone_state = first_clone.stage_changes_to_be_persisted().await?;
+    let second_clone_state = second_clone.read().await?;
+
+    assert_ne!(original_state, first_clone_state);
+    assert_ne!(original_state, second_clone_state);
+    assert_ne!(first_clone_state, second_clone_state);
+
+    Ok(())
 }

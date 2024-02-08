@@ -4,7 +4,9 @@
 use crate::{batch::Batch, common::HasherOutput};
 use async_trait::async_trait;
 use linera_base::{crypto::CryptoHash, data_types::ArithmeticError};
-pub use linera_views_derive::{CryptoHashRootView, CryptoHashView, HashableView, RootView, View};
+pub use linera_views_derive::{
+    ClonableView, CryptoHashRootView, CryptoHashView, HashableView, RootView, View,
+};
 use serde::Serialize;
 use std::{fmt::Debug, io::Write};
 use thiserror::Error;
@@ -173,3 +175,16 @@ pub trait CryptoHashView<C>: HashableView<C> {
 /// A [`RootView`] that also supports crypto hash
 #[async_trait]
 pub trait CryptoHashRootView<C>: RootView<C> + CryptoHashView<C> {}
+
+/// A [`ClonableView`] supports being shared (unsafely) by cloning it.
+///
+/// Sharing is unsafe because by having two view instances for the same data, they may have invalid
+/// state if both are used for writing.
+///
+/// Sharing the view is guaranteed to not cause data races if only one of the shared view instances
+/// is used for writing at any given point in time.
+pub trait ClonableView<C>: View<C> {
+    /// Creates a clone of this view, sharing the underlying storage context but prone to
+    /// data races which can corrupt the view state.
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError>;
+}

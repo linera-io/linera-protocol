@@ -4,7 +4,7 @@
 use crate::{
     batch::Batch,
     common::{Context, CustomSerialize, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
-    views::{HashableView, Hasher, View, ViewError},
+    views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -115,6 +115,22 @@ where
         self.delete_storage_first = true;
         self.updates.clear();
         *self.hash.get_mut() = None;
+    }
+}
+
+impl<C> ClonableView<C> for ByteSetView<C>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+{
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(ByteSetView {
+            context: self.context.clone(),
+            delete_storage_first: self.delete_storage_first,
+            updates: self.updates.clone(),
+            stored_hash: self.stored_hash,
+            hash: Mutex::new(*self.hash.get_mut()),
+        })
     }
 }
 
@@ -409,6 +425,20 @@ where
     }
 }
 
+impl<C, I> ClonableView<C> for SetView<C, I>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Send + Sync + Serialize,
+{
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(SetView {
+            set: self.set.clone_unchecked()?,
+            _phantom: PhantomData,
+        })
+    }
+}
+
 impl<C, I> SetView<C, I>
 where
     C: Context,
@@ -641,6 +671,20 @@ where
 
     fn clear(&mut self) {
         self.set.clear()
+    }
+}
+
+impl<C, I> ClonableView<C> for CustomSetView<C, I>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Send + Sync + CustomSerialize,
+{
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(CustomSetView {
+            set: self.set.clone_unchecked()?,
+            _phantom: PhantomData,
+        })
     }
 }
 

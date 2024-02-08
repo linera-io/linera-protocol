@@ -4,7 +4,7 @@
 use crate::{
     batch::Batch,
     common::{from_bytes_opt, Context, HasherOutput, MIN_VIEW_TAG},
-    views::{HashableView, Hasher, View, ViewError},
+    views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -126,6 +126,24 @@ where
         self.delete_storage_first = true;
         self.new_values.clear();
         *self.hash.get_mut() = None;
+    }
+}
+
+impl<C, T> ClonableView<C> for LogView<C, T>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    T: Clone + Send + Sync + Serialize,
+{
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(LogView {
+            context: self.context.clone(),
+            delete_storage_first: self.delete_storage_first,
+            stored_count: self.stored_count,
+            new_values: self.new_values.clone(),
+            stored_hash: self.stored_hash,
+            hash: Mutex::new(*self.hash.get_mut()),
+        })
     }
 }
 

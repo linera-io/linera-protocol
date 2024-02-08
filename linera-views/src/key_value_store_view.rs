@@ -8,7 +8,7 @@ use crate::{
         KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
     },
     map_view::ByteMapView,
-    views::{HashableView, Hasher, View, ViewError},
+    views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -239,6 +239,26 @@ where
         self.total_size = SizeData::default();
         self.sizes.clear();
         *self.hash.get_mut() = None;
+    }
+}
+
+impl<C> ClonableView<C> for KeyValueStoreView<C>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+{
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(KeyValueStoreView {
+            context: self.context.clone(),
+            delete_storage_first: self.delete_storage_first,
+            updates: self.updates.clone(),
+            stored_total_size: self.stored_total_size,
+            total_size: self.total_size,
+            sizes: self.sizes.clone_unchecked()?,
+            deleted_prefixes: self.deleted_prefixes.clone(),
+            stored_hash: self.stored_hash,
+            hash: Mutex::new(*self.hash.get_mut()),
+        })
     }
 }
 

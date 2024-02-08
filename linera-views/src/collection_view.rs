@@ -4,7 +4,7 @@
 use crate::{
     batch::Batch,
     common::{Context, CustomSerialize, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
-    views::{HashableView, Hasher, View, ViewError},
+    views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 use async_lock::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use async_trait::async_trait;
@@ -156,6 +156,36 @@ where
         self.delete_storage_first = true;
         self.updates.get_mut().clear();
         *self.hash.get_mut() = None;
+    }
+}
+
+impl<C, W> ClonableView<C> for ByteCollectionView<C, W>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    W: ClonableView<C> + Send + Sync,
+{
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        let cloned_updates = self
+            .updates
+            .get_mut()
+            .iter_mut()
+            .map(|(key, value)| {
+                let cloned_value = match value {
+                    Update::Removed => Update::Removed,
+                    Update::Set(view) => Update::Set(view.clone_unchecked()?),
+                };
+                Ok((key.clone(), cloned_value))
+            })
+            .collect::<Result<_, ViewError>>()?;
+
+        Ok(ByteCollectionView {
+            context: self.context.clone(),
+            delete_storage_first: self.delete_storage_first,
+            updates: RwLock::new(cloned_updates),
+            stored_hash: self.stored_hash,
+            hash: Mutex::new(*self.hash.get_mut()),
+        })
     }
 }
 
@@ -646,6 +676,21 @@ where
     }
 }
 
+impl<C, I, W> ClonableView<C> for CollectionView<C, I, W>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Send + Sync + Debug + Serialize + DeserializeOwned,
+    W: ClonableView<C> + Send + Sync,
+{
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(CollectionView {
+            collection: self.collection.clone_unchecked()?,
+            _phantom: PhantomData,
+        })
+    }
+}
+
 impl<C, I, W> CollectionView<C, I, W>
 where
     C: Context + Send,
@@ -963,6 +1008,21 @@ where
 
     fn clear(&mut self) {
         self.collection.clear()
+    }
+}
+
+impl<C, I, W> ClonableView<C> for CustomCollectionView<C, I, W>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Send + Sync + Debug,
+    W: ClonableView<C> + Send + Sync,
+{
+    fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(CustomCollectionView {
+            collection: self.collection.clone_unchecked()?,
+            _phantom: PhantomData,
+        })
     }
 }
 
