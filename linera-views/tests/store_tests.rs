@@ -8,7 +8,7 @@ use linera_views::{
     memory::{create_memory_context, create_memory_store},
     test_utils::{
         get_random_test_scenarios, run_big_write_read, run_reads, run_writes_from_blank,
-        run_writes_from_state, tombstone_triggering_test,
+        run_writes_from_state,
     },
     value_splitting::create_test_memory_store,
 };
@@ -21,7 +21,7 @@ use linera_views::rocks_db::create_rocks_db_test_store;
 use linera_views::dynamo_db::create_dynamo_db_test_store;
 
 #[cfg(feature = "scylladb")]
-use linera_views::scylla_db::create_scylla_db_test_store;
+use linera_views::{scylla_db::create_scylla_db_test_store, test_utils::tombstone_triggering_test};
 
 #[tokio::test]
 async fn test_reads_test_memory() {
