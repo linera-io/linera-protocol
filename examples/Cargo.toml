@@ -7,7 +7,7 @@ members = [
     "fungible",
     "matching-engine",
     "meta-counter",
-    "social"
+    "social",
 ]
 
 [workspace.dependencies]
