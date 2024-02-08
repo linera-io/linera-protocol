@@ -290,6 +290,33 @@ macro_rules! impl_wrapped_number {
                 Self(value)
             }
         }
+
+        #[cfg(any(test, feature = "test"))]
+        impl std::ops::Add for $name {
+            type Output = Self;
+
+            fn add(self, other: Self) -> Self {
+                Self(self.0 + other.0)
+            }
+        }
+
+        #[cfg(any(test, feature = "test"))]
+        impl std::ops::Sub for $name {
+            type Output = Self;
+
+            fn sub(self, other: Self) -> Self {
+                Self(self.0 - other.0)
+            }
+        }
+
+        #[cfg(any(test, feature = "test"))]
+        impl std::ops::Mul<$wrapped> for $name {
+            type Output = Self;
+
+            fn mul(self, other: $wrapped) -> Self {
+                Self(self.0 * other)
+            }
+        }
     };
 }
 
@@ -462,12 +489,22 @@ impl Amount {
     }
 
     /// Returns an `Amount` corresponding to that many millitokens, or `Amount::MAX` if saturated.
-    pub fn from_milli(millitokens: u128) -> Amount {
+    pub fn from_millis(millitokens: u128) -> Amount {
         Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 3)).saturating_mul(millitokens)
     }
 
+    /// Returns an `Amount` corresponding to that many microtokens, or `Amount::MAX` if saturated.
+    pub fn from_micros(microtokens: u128) -> Amount {
+        Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 6)).saturating_mul(microtokens)
+    }
+
+    /// Returns an `Amount` corresponding to that many nanotokens, or `Amount::MAX` if saturated.
+    pub fn from_nanos(nanotokens: u128) -> Amount {
+        Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 9)).saturating_mul(nanotokens)
+    }
+
     /// Returns an `Amount` corresponding to that many attotokens.
-    pub fn from_atto(attotokens: u128) -> Amount {
+    pub fn from_attos(attotokens: u128) -> Amount {
         Amount(attotokens)
     }
 

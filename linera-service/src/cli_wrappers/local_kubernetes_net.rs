@@ -18,6 +18,7 @@ use futures::{future, lock::Mutex};
 use k8s_openapi::api::core::v1::Pod;
 use kube::{api::ListParams, Api, Client};
 use linera_base::data_types::Amount;
+use linera_execution::policy::ResourceControlPolicy;
 use std::sync::Arc;
 use tempfile::{tempdir, TempDir};
 use tokio::process::Command;
@@ -43,6 +44,7 @@ pub struct LocalKubernetesNetConfig {
     pub num_initial_validators: usize,
     pub num_shards: usize,
     pub binaries: BuildArg,
+    pub policy: ResourceControlPolicy,
 }
 
 /// A wrapper of [`LocalKubernetesNetConfig`] to create a shared local Kubernetes network
@@ -92,6 +94,7 @@ impl SharedLocalKubernetesNetTestingConfig {
             num_initial_validators: 4,
             num_shards: 4,
             binaries,
+            policy: ResourceControlPolicy::devnet(),
         })
     }
 }
@@ -126,12 +129,20 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
         let client = net.make_client().await;
         net.generate_initial_validator_config().await.unwrap();
         client
-            .create_genesis_config(self.num_other_initial_chains, self.initial_amount)
+            .create_genesis_config(
+                self.num_other_initial_chains,
+                self.initial_amount,
+                self.policy,
+            )
             .await
             .unwrap();
         net.run().await.unwrap();
 
         Ok((net, client))
+    }
+
+    async fn policy(&self) -> ResourceControlPolicy {
+        self.policy.clone()
     }
 }
 
@@ -165,6 +176,10 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
         }
 
         Ok((net, client))
+    }
+
+    async fn policy(&self) -> ResourceControlPolicy {
+        self.0.policy().await
     }
 }
 

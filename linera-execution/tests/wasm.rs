@@ -79,7 +79,7 @@ async fn test_fuel_for_counter_wasm_application(
     };
     let increments = [2_u64, 9, 7, 1000];
     let policy = ResourceControlPolicy {
-        fuel_unit: Amount::from_atto(1),
+        fuel_unit: Amount::from_attos(1),
         ..ResourceControlPolicy::default()
     };
     let amount = Amount::from_tokens(1);
@@ -109,7 +109,7 @@ async fn test_fuel_for_counter_wasm_application(
     assert_eq!(
         controller.with(&mut view).await?.balance(),
         Amount::ONE
-            .try_sub(Amount::from_atto(expected_fuel as u128))
+            .try_sub(Amount::from_attos(expected_fuel as u128))
             .unwrap()
     );
 

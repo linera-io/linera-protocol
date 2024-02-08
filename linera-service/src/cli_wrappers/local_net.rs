@@ -9,6 +9,7 @@ use crate::{
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use async_trait::async_trait;
 use linera_base::data_types::Amount;
+use linera_execution::policy::ResourceControlPolicy;
 use std::{
     collections::{BTreeMap, HashSet},
     env,
@@ -32,6 +33,7 @@ pub struct LocalNetConfig {
     pub initial_amount: Amount,
     pub num_initial_validators: usize,
     pub num_shards: usize,
+    pub policy: ResourceControlPolicy,
 }
 
 /// A set of Linera validators running locally as native processes.
@@ -124,22 +126,13 @@ impl LocalNetConfig {
             database,
             network,
             num_other_initial_chains: 10,
-            initial_amount: Amount::from_tokens(10),
+            initial_amount: Amount::from_tokens(1_000_000),
+            policy: ResourceControlPolicy::devnet(),
             testing_prng_seed: Some(37),
             table_name: linera_views::test_utils::get_table_name(),
             num_initial_validators: 4,
             num_shards,
         }
-    }
-
-    pub fn with_num_other_initial_chains(mut self, num: u32) -> Self {
-        self.num_other_initial_chains = num;
-        self
-    }
-
-    pub fn with_initial_amount(mut self, amount: Amount) -> Self {
-        self.initial_amount = amount;
-        self
     }
 }
 
@@ -167,11 +160,19 @@ impl LineraNetConfig for LocalNetConfig {
         );
         net.generate_initial_validator_config().await.unwrap();
         client
-            .create_genesis_config(self.num_other_initial_chains, self.initial_amount)
+            .create_genesis_config(
+                self.num_other_initial_chains,
+                self.initial_amount,
+                self.policy,
+            )
             .await
             .unwrap();
         net.run().await.unwrap();
         Ok((net, client))
+    }
+
+    async fn policy(&self) -> ResourceControlPolicy {
+        self.policy.clone()
     }
 }
 
@@ -179,7 +180,7 @@ impl LineraNetConfig for LocalNetConfig {
 impl LineraNet for LocalNet {
     async fn ensure_is_running(&mut self) -> Result<()> {
         for validator in self.running_validators.values_mut() {
-            validator.ensure_is_running().context("in local network")?
+            validator.ensure_is_running().context("in local network")?;
         }
         Ok(())
     }

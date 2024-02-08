@@ -8,6 +8,7 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 use linera_base::data_types::Amount;
+use linera_execution::policy::ResourceControlPolicy;
 use std::sync::Arc;
 use tempfile::{tempdir, TempDir};
 
@@ -55,6 +56,14 @@ impl LineraNetConfig for RemoteNetTestingConfig {
         }
 
         Ok((net, client))
+    }
+
+    async fn policy(&self) -> ResourceControlPolicy {
+        self.faucet
+            .genesis_config()
+            .await
+            .expect("should get genesis config from faucet")
+            .policy
     }
 }
 

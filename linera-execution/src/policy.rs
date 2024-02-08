@@ -105,45 +105,64 @@ impl ResourceControlPolicy {
     pub(crate) fn remaining_fuel(&self, balance: Amount) -> u64 {
         u64::try_from(balance.saturating_div(self.fuel_unit)).unwrap_or(u64::MAX)
     }
+}
 
-    #[cfg(any(test, feature = "test"))]
+#[cfg(any(test, feature = "test"))]
+impl ResourceControlPolicy {
     /// Creates a policy with no cost for anything except fuel.
     ///
     /// This can be used in tests that need whole numbers in their chain balance and don't expect
     /// to execute any Wasm code.
     pub fn only_fuel() -> Self {
         Self {
-            fuel_unit: Amount::from_atto(1_000_000_000_000),
+            fuel_unit: Amount::from_micros(1),
             ..Self::default()
         }
     }
 
-    #[cfg(any(test, feature = "test"))]
     /// Creates a policy with no cost for anything except fuel, and 0.001 per block.
     ///
     /// This can be used in tests that don't expect to execute any Wasm code, and that keep track of
     /// how many blocks were created.
     pub fn fuel_and_block() -> Self {
         Self {
-            block: Amount::from_milli(1),
-            fuel_unit: Amount::from_atto(1_000_000_000_000),
+            block: Amount::from_millis(1),
+            fuel_unit: Amount::from_micros(1),
             ..Self::default()
         }
     }
 
-    #[cfg(any(test, feature = "test"))]
     /// Creates a policy where all categories have a small non-zero cost.
     pub fn all_categories() -> Self {
         Self {
-            block: Amount::from_milli(1),
-            fuel_unit: Amount::from_atto(1_000_000_000),
-            byte_read: Amount::from_atto(100),
-            byte_written: Amount::from_atto(1_000),
-            operation: Amount::from_atto(10),
-            operation_byte: Amount::from_atto(1),
-            message: Amount::from_atto(10),
-            message_byte: Amount::from_atto(1),
+            block: Amount::from_millis(1),
+            fuel_unit: Amount::from_nanos(1),
+            byte_read: Amount::from_attos(100),
+            byte_written: Amount::from_attos(1_000),
+            operation: Amount::from_attos(10),
+            operation_byte: Amount::from_attos(1),
+            message: Amount::from_attos(10),
+            message_byte: Amount::from_attos(1),
             ..Self::default()
+        }
+    }
+
+    /// Creates a policy that matches the Devnet.
+    pub fn devnet() -> Self {
+        Self {
+            block: Amount::from_millis(1),
+            fuel_unit: Amount::from_nanos(10),
+            byte_read: Amount::from_nanos(10),
+            byte_written: Amount::from_nanos(100),
+            read_operation: Amount::from_micros(10),
+            write_operation: Amount::from_micros(20),
+            byte_stored: Amount::from_nanos(10),
+            message_byte: Amount::from_nanos(100),
+            operation_byte: Amount::from_nanos(10),
+            operation: Amount::from_micros(10),
+            message: Amount::from_micros(10),
+            maximum_bytes_read_per_block: 100_000_000,
+            maximum_bytes_written_per_block: 10_000_000,
         }
     }
 }

@@ -186,12 +186,12 @@ impl Amm {
                     {
                         let token0_amount_bigint =
                             (&balance0_bigint * &max_token1_amount_bigint) / &balance1_bigint;
-                        token0_amount = Amount::from_atto(
+                        token0_amount = Amount::from_attos(
                             token0_amount_bigint
                                 .to_u128()
                                 .expect("Couldn't convert token0_amount_bigint to u128"),
                         );
-                        token1_amount = Amount::from_atto(
+                        token1_amount = Amount::from_attos(
                             max_token1_amount_bigint
                                 .to_u128()
                                 .expect("Couldn't convert max_token1_amount_bigint to u128"),
@@ -199,12 +199,12 @@ impl Amm {
                     } else {
                         let token1_amount_bigint =
                             (&balance1_bigint * &max_token0_amount_bigint) / &balance0_bigint;
-                        token0_amount = Amount::from_atto(
+                        token0_amount = Amount::from_attos(
                             max_token0_amount_bigint
                                 .to_u128()
                                 .expect("Couldn't convert max_token0_amount_bigint to u128"),
                         );
-                        token1_amount = Amount::from_atto(
+                        token1_amount = Amount::from_attos(
                             token1_amount_bigint
                                 .to_u128()
                                 .expect("Couldn't convert token1_amount_bigint to u128"),
@@ -253,13 +253,13 @@ impl Amm {
                     .expect("Couldn't generate balance1 in bigint");
 
                 let other_amount = if token_to_remove_idx == 0 {
-                    Amount::from_atto(
+                    Amount::from_attos(
                         ((token_to_remove_amount_bigint * balance1_bigint) / balance0_bigint)
                             .to_u128()
                             .expect("Couldn't convert other_amount to u128"),
                     )
                 } else {
-                    Amount::from_atto(
+                    Amount::from_attos(
                         ((token_to_remove_amount_bigint * balance0_bigint) / balance1_bigint)
                             .to_u128()
                             .expect("Couldn't convert other_amount to u128"),
@@ -409,7 +409,7 @@ impl Amm {
 
         // Dividing 36 decimal points with 18 decimal points = 18 decimal points
         let output_amount_bigint = numerator_bigint / denominator_bigint;
-        let output_amount = Amount::from_atto(
+        let output_amount = Amount::from_attos(
             output_amount_bigint
                 .to_u128()
                 .expect("Couldn't convert output_amount_bigint to u128"),
