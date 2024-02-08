@@ -13,7 +13,7 @@ use tokio::select;
 use tracing::{info, warn};
 
 #[derive(clap::Parser, Debug, Clone)]
-#[command(version = linera_version::VersionInfo::default_str())]
+#[command(version = linera_version::VersionInfo::default_clap_str())]
 pub enum IndexerCommand {
     Schema {
         plugin: Option<String>,

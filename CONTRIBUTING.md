@@ -84,7 +84,7 @@ cargo +nightly fmt
 
 * All executables should use `clap_derive`. When tools call each other, the `--version` is
   checked and must match the package version of the caller.  This means that all executables
-  should include a `command(version = linera_version::VersionInfo::default_str())` annotation.
+  should include a `command(version = linera_version::VersionInfo::default_clap_str())` annotation.
 
 * Only structured data should be printed to the standard output, preferably as newline-separated JSON values.
 

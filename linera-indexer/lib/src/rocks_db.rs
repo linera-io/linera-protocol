@@ -13,7 +13,7 @@ use linera_views::{
 use std::path::PathBuf;
 
 #[derive(clap::Parser, Clone, Debug)]
-#[command(version = linera_version::VersionInfo::default_str())]
+#[command(version = linera_version::VersionInfo::default_clap_str())]
 pub struct RocksDbConfig {
     /// RocksDB storage path
     #[arg(long, default_value = "./indexer.db")]

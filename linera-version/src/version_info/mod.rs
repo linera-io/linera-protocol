@@ -12,7 +12,7 @@ impl std::fmt::Display for VersionInfo {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             formatter,
-            "\n\
+            "\
             Linera protocol: v{crate_version}\n\
             RPC API hash: {rpc_hash}\n\
             GraphQL API hash: {graphql_hash}\n\
@@ -65,10 +65,12 @@ impl VersionInfo {
         }
     }
 
-    /// A static string corresponding to `VersionInfo::default().to_string()`.
-    pub fn default_str() -> &'static str {
+    /// A static string corresponding to `VersionInfo::default().to_string()` preceded by
+    /// a newline. The newline is meant for `clap` as in `#[command(version =
+    /// linera_version::VersionInfo::default_clap_str())]`
+    pub fn default_clap_str() -> &'static str {
         use once_cell::sync::Lazy;
-        static STRING: Lazy<String> = Lazy::new(|| VersionInfo::default().to_string());
+        static STRING: Lazy<String> = Lazy::new(|| format!("\n{}", VersionInfo::default()));
         STRING.as_str()
     }
 

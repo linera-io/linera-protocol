@@ -25,7 +25,7 @@ use tracing::{error, info, instrument};
 #[command(
     name = "Linera Proxy",
     about = "A proxy to redirect incoming requests to Linera Server shards",
-    version = linera_version::VersionInfo::default_str(),
+    version = linera_version::VersionInfo::default_clap_str(),
 )]
 pub struct ProxyOptions {
     /// Path to server configuration.
