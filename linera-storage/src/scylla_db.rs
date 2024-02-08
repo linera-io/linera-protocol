@@ -1,21 +1,22 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::db_storage::{DbStorage, DbStorageInner};
-use linera_execution::WasmRuntime;
-use linera_views::scylla_db::{ScyllaDbContextError, ScyllaDbStore, ScyllaDbStoreConfig};
+use crate::db_storage::DbStorage;
+use linera_views::scylla_db::ScyllaDbStore;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::db_storage::TestClock, linera_views::scylla_db::create_scylla_db_test_config,
+    crate::db_storage::{DbStorageInner, TestClock},
+    linera_execution::WasmRuntime,
+    linera_views::scylla_db::{
+        create_scylla_db_test_config, ScyllaDbContextError, ScyllaDbStoreConfig,
+    },
     linera_views::test_utils::get_namespace,
 };
 
 #[cfg(test)]
 #[path = "unit_tests/scylla_db.rs"]
 mod tests;
-
-type ScyllaDbStorageInner = DbStorageInner<ScyllaDbStore>;
 
 pub type ScyllaDbStorage<C> = DbStorage<ScyllaDbStore, C>;
 
@@ -36,7 +37,8 @@ impl ScyllaDbStorage<TestClock> {
         clock: TestClock,
     ) -> Result<Self, ScyllaDbContextError> {
         let storage =
-            ScyllaDbStorageInner::new_for_testing(store_config, namespace, wasm_runtime).await?;
+            DbStorageInner::<ScyllaDbStore>::new_for_testing(store_config, namespace, wasm_runtime)
+                .await?;
         Ok(Self::create(storage, clock))
     }
 }

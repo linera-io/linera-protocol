@@ -111,12 +111,17 @@ impl FromStr for StorageConfig {
                 ));
             }
             let parts = s.split(':').collect::<Vec<_>>();
-            if parts.len() != 2 {
-                return Err(format_err!("We should have two parts"));
+            if parts.len() == 1 {
+                let path = parts[0].to_string().into();
+                let namespace = "linera".to_string();
+                return Ok(Self::RocksDb { path, namespace });
             }
-            let path = parts[0].to_string().into();
-            let namespace = parts[1].to_string();
-            return Ok(Self::RocksDb { path, namespace });
+            if parts.len() == 2 {
+                let path = parts[0].to_string().into();
+                let namespace = parts[1].to_string();
+                return Ok(Self::RocksDb { path, namespace });
+            }
+            return Err(format_err!("We should have one or two parts"));
         }
         #[cfg(feature = "aws")]
         if let Some(s) = input.strip_prefix(DYNAMO_DB) {
@@ -181,7 +186,7 @@ impl FromStr for StorageConfig {
                 }
             }
             let uri = uri.unwrap_or("localhost:9042".to_string());
-            let namespace = namespace.unwrap_or("namespace_storage".to_string());
+            let namespace = namespace.unwrap_or("table_namespace_storage".to_string());
             let db = Self::ScyllaDb { uri, namespace };
             debug!("ScyllaDB connection info: {:?}", db);
             return Ok(db);
@@ -449,28 +454,39 @@ pub async fn full_initialize_storage(
 }
 
 #[test]
-fn test_storage_config_from_str() {
+fn test_memory_storage_config_from_str() {
     assert_eq!(
         StorageConfig::from_str("memory").unwrap(),
         StorageConfig::Memory {
             namespace: "".into()
         }
     );
-    assert!(StorageConfig::from_str("memory_").is_err());
+    assert_eq!(
+        StorageConfig::from_str("memorylinera").unwrap(),
+        StorageConfig::Memory {
+            namespace: "linera".into()
+        }
+    );
 }
 
 #[cfg(feature = "rocksdb")]
 #[test]
 fn test_rocks_db_storage_config_from_str() {
     assert_eq!(
-        StorageConfig::from_str("rocksdb:foo.db:linera").unwrap(),
+        StorageConfig::from_str("rocksdb:foo.db:chosen_namespace").unwrap(),
+        StorageConfig::RocksDb {
+            path: "foo.db".into(),
+            namespace: "chosen_namespace".into(),
+        }
+    );
+    assert!(StorageConfig::from_str("rocksdb_foo.db").is_err());
+    assert_eq!(
+        StorageConfig::from_str("rocksdb:foo.db").unwrap(),
         StorageConfig::RocksDb {
             path: "foo.db".into(),
             namespace: "linera".into(),
         }
     );
-    assert!(StorageConfig::from_str("rocksdb_foo.db").is_err());
-    assert!(StorageConfig::from_str("rocksdb:foo.db").is_err());
 }
 
 #[cfg(feature = "aws")]
@@ -510,21 +526,21 @@ fn test_scylla_db_storage_config_from_str() {
         StorageConfig::from_str("scylladb:").unwrap(),
         StorageConfig::ScyllaDb {
             uri: "localhost:9042".to_string(),
-            namespace: "namespace_storage".to_string(),
+            namespace: "table_namespace_storage".to_string(),
         }
     );
     assert_eq!(
-        StorageConfig::from_str("scylladb:tcp:db_hostname:230:namespace_other_storage").unwrap(),
+        StorageConfig::from_str("scylladb:tcp:db_hostname:230:table_other_storage").unwrap(),
         StorageConfig::ScyllaDb {
             uri: "db_hostname:230".to_string(),
-            namespace: "namespace_other_storage".to_string(),
+            namespace: "table_other_storage".to_string(),
         }
     );
     assert_eq!(
         StorageConfig::from_str("scylladb:tcp:db_hostname:230").unwrap(),
         StorageConfig::ScyllaDb {
             uri: "db_hostname:230".to_string(),
-            namespace: "namespace_storage".to_string(),
+            namespace: "table_namespace_storage".to_string(),
         }
     );
     assert!(StorageConfig::from_str("scylladb:-10").is_err());

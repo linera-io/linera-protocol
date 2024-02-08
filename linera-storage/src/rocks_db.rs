@@ -1,21 +1,23 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::db_storage::{DbStorage, DbStorageInner};
-use linera_execution::WasmRuntime;
-use linera_views::rocks_db::{RocksDbContextError, RocksDbStore, RocksDbStoreConfig};
+use crate::db_storage::DbStorage;
+use linera_views::rocks_db::RocksDbStore;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::db_storage::TestClock, linera_views::rocks_db::create_rocks_db_test_config,
-    linera_views::test_utils::get_namespace, tempfile::TempDir,
+    crate::db_storage::{DbStorageInner, TestClock},
+    linera_execution::WasmRuntime,
+    linera_views::rocks_db::{
+        create_rocks_db_test_config, RocksDbContextError, RocksDbStoreConfig,
+    },
+    linera_views::test_utils::get_namespace,
+    tempfile::TempDir,
 };
 
 #[cfg(test)]
 #[path = "unit_tests/rocks_db.rs"]
 mod tests;
-
-type RocksDbStorageInner = DbStorageInner<RocksDbStore>;
 
 pub type RocksDbStorage<C> = DbStorage<RocksDbStore, C>;
 
@@ -42,7 +44,8 @@ impl RocksDbStorage<TestClock> {
         clock: TestClock,
     ) -> Result<Self, RocksDbContextError> {
         let storage =
-            RocksDbStorageInner::new_for_testing(store_config, namespace, wasm_runtime).await?;
+            DbStorageInner::<RocksDbStore>::new_for_testing(store_config, namespace, wasm_runtime)
+                .await?;
         Ok(Self::create(storage, clock))
     }
 }

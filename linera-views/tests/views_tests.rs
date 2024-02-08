@@ -53,8 +53,10 @@ use linera_views::{
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbContext, ScyllaDbStore};
 
+#[cfg(feature = "aws")]
+use linera_views::common::AdminKeyValueStore;
 #[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
-use {linera_views::common::AdminKeyValueStore, std::collections::BTreeSet};
+use std::collections::BTreeSet;
 
 #[allow(clippy::type_complexity)]
 #[derive(CryptoHashRootView)]

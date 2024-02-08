@@ -1,21 +1,22 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::db_storage::{DbStorage, DbStorageInner};
-use linera_execution::WasmRuntime;
-use linera_views::dynamo_db::{DynamoDbContextError, DynamoDbStore, DynamoDbStoreConfig};
+use crate::db_storage::DbStorage;
+use linera_views::dynamo_db::DynamoDbStore;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::db_storage::TestClock,
-    linera_views::{dynamo_db::create_dynamo_db_test_config, test_utils::get_namespace},
+    crate::db_storage::{DbStorageInner, TestClock},
+    linera_execution::WasmRuntime,
+    linera_views::{
+        dynamo_db::{create_dynamo_db_test_config, DynamoDbContextError, DynamoDbStoreConfig},
+        test_utils::get_namespace,
+    },
 };
 
 #[cfg(test)]
 #[path = "unit_tests/dynamo_db.rs"]
 mod tests;
-
-type DynamoDbStorageInner = DbStorageInner<DynamoDbStore>;
 
 pub type DynamoDbStorage<C> = DbStorage<DynamoDbStore, C>;
 
@@ -36,7 +37,8 @@ impl DynamoDbStorage<TestClock> {
         clock: TestClock,
     ) -> Result<Self, DynamoDbContextError> {
         let storage =
-            DynamoDbStorageInner::new_for_testing(store_config, namespace, wasm_runtime).await?;
+            DbStorageInner::<DynamoDbStore>::new_for_testing(store_config, namespace, wasm_runtime)
+                .await?;
         Ok(Self::create(storage, clock))
     }
 }

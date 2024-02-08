@@ -3,13 +3,13 @@
 
 #![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 
-// Those tests exercise the Admin, therefore they should not be run
-// simultaneously with other tests. That should not be an issue
-// since each test file is run separately.
+// We exercise the functionality of the `AdminKeyValueStore`. We use a prefix
+// to the list of tables created so that this test can be run in parallel to
+// other tests.
 
 use linera_views::{common::AdminKeyValueStore, test_utils::get_namespace};
 use rand::{Rng, SeedableRng};
-use std::fmt::Debug;
+use std::{collections::BTreeSet, fmt::Debug};
 
 #[cfg(feature = "rocksdb")]
 use linera_views::rocks_db::{create_rocks_db_test_config, RocksDbContextError, RocksDbStore};
@@ -21,34 +21,32 @@ use linera_views::dynamo_db::{create_dynamo_db_test_config, DynamoDbContextError
 use linera_views::scylla_db::{create_scylla_db_test_config, ScyllaDbContextError, ScyllaDbStore};
 
 #[cfg(test)]
-fn is_equal_vect(vec1: &Vec<String>, vec2: &Vec<String>) -> bool {
-    if vec1.len() != vec2.len() {
-        return false;
-    }
-    for x1 in vec1 {
-        if !vec2.contains(x1) {
-            return false;
-        }
-    }
-    true
+async fn get_table_matching_prefix<E: Debug, S: AdminKeyValueStore<E>>(
+    config: &S::Config,
+    prefix: &str,
+) -> BTreeSet<String> {
+    let namespaces = S::list_all(config).await.expect("namespaces");
+    namespaces
+        .into_iter()
+        .filter(|x| x.starts_with(prefix))
+        .collect::<BTreeSet<_>>()
 }
 
 #[cfg(test)]
 async fn admin_test<E: Debug, S: AdminKeyValueStore<E>>(config: &S::Config) {
-    S::delete_all(config)
-        .await
-        .expect("complete deletion needed before working");
-    let namespaces = S::list_all(config).await.expect("tables");
+    let prefix = get_namespace();
+    let namespaces = get_table_matching_prefix::<E, S>(config, &prefix).await;
     assert_eq!(namespaces.len(), 0);
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     for size in [1, 3, 9] {
         // Creating the initial list of namespaces
-        let mut working_namespaces = Vec::new();
+        let mut working_namespaces = BTreeSet::new();
         for _i in 0..size {
-            let namespace = get_namespace();
+            let pre_namespace = get_namespace();
+            let namespace = format!("{}_{}", prefix, pre_namespace);
             let test = S::exists(config, &namespace).await.expect("test");
             assert!(!test);
-            working_namespaces.push(namespace);
+            working_namespaces.insert(namespace);
         }
         // Creating the namespaces
         for namespace in &working_namespaces {
@@ -62,20 +60,20 @@ async fn admin_test<E: Debug, S: AdminKeyValueStore<E>>(config: &S::Config) {
             assert!(test);
         }
         // Listing all of them
-        let namespaces = S::list_all(config).await.expect("tables");
-        assert!(is_equal_vect(&namespaces, &working_namespaces));
+        let namespaces = get_table_matching_prefix::<E, S>(config, &prefix).await;
+        assert_eq!(namespaces, working_namespaces);
         // Selecting at random some for deletion
-        let mut deleted_namespaces = Vec::new();
-        let mut kept_namespaces = Vec::new();
+        let mut deleted_namespaces = BTreeSet::new();
+        let mut kept_namespaces = BTreeSet::new();
         for namespace in working_namespaces {
             let delete = rng.gen::<bool>();
             if delete {
                 S::delete(config, &namespace)
                     .await
                     .expect("A successful deletion");
-                deleted_namespaces.push(namespace);
+                deleted_namespaces.insert(namespace);
             } else {
-                kept_namespaces.push(namespace);
+                kept_namespaces.insert(namespace);
             }
         }
         // Checking that the status is as we expect
@@ -87,12 +85,13 @@ async fn admin_test<E: Debug, S: AdminKeyValueStore<E>>(config: &S::Config) {
             let test = S::exists(config, namespace).await.expect("test");
             assert!(test);
         }
-        let namespaces = S::list_all(config).await.expect("tables");
-        assert!(is_equal_vect(&namespaces, &kept_namespaces));
-        // deleting everything
-        S::delete_all(config).await.expect("complete deletion");
-        let namespaces = S::list_all(config).await.expect("tables");
-        assert_eq!(namespaces.len(), 0);
+        let namespaces = get_table_matching_prefix::<E, S>(config, &prefix).await;
+        assert_eq!(namespaces, kept_namespaces);
+        for namespace in kept_namespaces {
+            S::delete(config, &namespace)
+                .await
+                .expect("A successful deletion");
+        }
     }
 }
 

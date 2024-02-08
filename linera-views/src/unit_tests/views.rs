@@ -3,7 +3,7 @@
 
 use crate::{
     batch::Batch,
-    common::{AdminKeyValueStore, Context},
+    common::Context,
     memory::{create_memory_context, MemoryContext},
     queue_view::QueueView,
     test_utils::test_views::{
@@ -16,7 +16,7 @@ use std::{collections::VecDeque, marker::PhantomData};
 use test_case::test_case;
 
 #[cfg(any(feature = "rocksdb", feature = "scylladb", feature = "aws"))]
-use crate::test_utils::get_namespace;
+use crate::{common::AdminKeyValueStore, test_utils::get_namespace};
 
 #[cfg(feature = "rocksdb")]
 use {
