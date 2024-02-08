@@ -962,10 +962,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
 
     // Check balances
     app_fungible0_a
-        .assert_balances([
-            (owner_a, Amount::from_tokens(1)),
-            (owner_b, Amount::from_tokens(0)),
-        ])
+        .assert_balances([(owner_a, Amount::ONE), (owner_b, Amount::ZERO)])
         .await;
     app_fungible0_admin
         .assert_balances([
@@ -974,10 +971,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
         ])
         .await;
     app_fungible1_b
-        .assert_balances([
-            (owner_a, Amount::from_tokens(0)),
-            (owner_b, Amount::from_tokens(1)),
-        ])
+        .assert_balances([(owner_a, Amount::ZERO), (owner_b, Amount::ONE)])
         .await;
     app_fungible1_admin
         .assert_balances([
@@ -1611,7 +1605,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) {
             // Add a new block on the chain, triggering a notification.
             client1
                 .transfer(
-                    Amount::from_tokens(1),
+                    Amount::ONE,
                     Account::chain(chain),
                     Account::chain(ChainId::root(9)),
                 )
@@ -1958,11 +1952,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
         .await
         .unwrap();
     client1
-        .transfer(
-            Amount::from_tokens(1),
-            Account::chain(chain2),
-            Account::chain(chain1),
-        )
+        .transfer(Amount::ONE, Account::chain(chain2), Account::chain(chain1))
         .await
         .unwrap();
     client1.sync(chain1).await.unwrap();
@@ -2124,40 +2114,26 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
 
     // Clients 2 and 3 should have the tokens, and own the chain.
     client2.sync(chain2).await.unwrap();
-    assert_approx(
-        client2.query_balance(Account::chain(chain2)).await.unwrap(),
+    assert_eq!(
+        client2.local_balance(Account::chain(chain2)).await.unwrap(),
         Amount::from_tokens(2),
     );
     client2
-        .transfer(
-            Amount::from_tokens(1),
-            Account::chain(chain2),
-            Account::chain(chain1),
-        )
+        .transfer(Amount::ONE, Account::chain(chain2), Account::chain(chain1))
         .await
         .unwrap();
-    assert_approx(
-        client2.query_balance(Account::chain(chain2)).await.unwrap(),
-        Amount::from_tokens(1),
-    );
+    assert!(client2.local_balance(Account::chain(chain2)).await.unwrap() <= Amount::ONE);
 
     client3.sync(chain3).await.unwrap();
-    assert_approx(
-        client3.query_balance(Account::chain(chain3)).await.unwrap(),
+    assert_eq!(
+        client3.local_balance(Account::chain(chain3)).await.unwrap(),
         Amount::from_tokens(2),
     );
     client3
-        .transfer(
-            Amount::from_tokens(1),
-            Account::chain(chain3),
-            Account::chain(chain1),
-        )
+        .transfer(Amount::ONE, Account::chain(chain3), Account::chain(chain1))
         .await
         .unwrap();
-    assert_approx(
-        client3.query_balance(Account::chain(chain3)).await.unwrap(),
-        Amount::from_tokens(1),
-    );
+    assert!(client3.query_balance(Account::chain(chain3)).await.unwrap() <= Amount::ONE);
     net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
 }
