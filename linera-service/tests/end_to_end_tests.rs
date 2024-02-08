@@ -38,11 +38,6 @@ fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     AccountOwner::User(owner)
 }
 
-fn eq_approx(amount0: Amount, amount1: Amount) -> bool {
-    let fee_margin = Amount::from_millis(100);
-    amount0 + fee_margin > amount1 && amount0 < amount1 + fee_margin
-}
-
 struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
 
 impl FungibleApp {
@@ -1450,27 +1445,32 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_open_chain_node_service(config: impl LineraNetConfig) {
+    use fungible::{FungibleTokenAbi, InitialState};
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let (mut net, client) = config.instantiate().await.unwrap();
 
-    let chain = client
-        .get_wallet()
-        .unwrap()
-        .chain_ids()
-        .into_iter()
-        .find(|c| *c != ChainId::root(0))
-        .unwrap();
-    client.process_inbox(chain).await.unwrap();
-    let balance = client.local_balance(Account::chain(chain)).await.unwrap();
+    let chain1 = client.get_wallet().unwrap().default_chain().unwrap();
     let public_key = client
         .get_wallet()
         .unwrap()
-        .get(chain)
+        .get(chain1)
         .unwrap()
         .key_pair
         .as_ref()
         .unwrap()
         .public();
+
+    // Create a fungible token application with 10 tokens for owner 1.
+    let owner = get_fungible_account_owner(&client);
+    let accounts = BTreeMap::from([(owner, Amount::from_tokens(10))]);
+    let state = InitialState { accounts };
+    let (contract, service) = client.build_example("fungible").await.unwrap();
+    let params = fungible::Parameters::new("FUN");
+    let application_id = client
+        .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
+        .await
+        .unwrap();
 
     let node_service = client.run_node_service(8080).await.unwrap();
 
@@ -1478,7 +1478,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
     // The node service should automatically create a client for it internally.
     let query = format!(
         "mutation {{ openChain(\
-            chainId:\"{chain}\", \
+            chainId:\"{chain1}\", \
             publicKey:\"{public_key}\"\
         ) }}"
     );
@@ -1489,67 +1489,57 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
     // https://github.com/linera-io/linera-protocol/pull/899
     let query = format!(
         "mutation {{ openChain(\
-            chainId:\"{chain}\", \
-            publicKey:\"{public_key}\"\
+            chainId:\"{chain1}\", \
+            publicKey:\"{public_key}\", \
+            balance:\"1\"
         ) }}"
     );
     let data = node_service.query_node(query).await.unwrap();
-    let new_chain: ChainId = serde_json::from_value(data["openChain"].clone()).unwrap();
+    let chain2: ChainId = serde_json::from_value(data["openChain"].clone()).unwrap();
 
     // Send 8 tokens to the new chain.
-    let query = format!(
-        "mutation {{ transfer(\
-            chainId:\"{chain}\", \
-            recipient: {{ Account: {{ chain_id:\"{new_chain}\" }} }}, \
-            amount:\"8\"\
-        ) }}"
+    let app1 = FungibleApp(
+        node_service
+            .make_application(&chain1, &application_id)
+            .await
+            .unwrap(),
     );
-    node_service.query_node(query).await.unwrap();
+    app1.transfer(
+        &owner,
+        Amount::from_tokens(8),
+        fungible::Account {
+            chain_id: chain2,
+            owner,
+        },
+    )
+    .await;
 
     // Send 4 tokens back.
-    let query = format!(
-        "mutation {{ transfer(\
-            chainId:\"{new_chain}\", \
-            recipient: {{ Account: {{ chain_id:\"{chain}\" }} }}, \
-            amount:\"4\"\
-        ) }}"
+    let app2 = FungibleApp(
+        node_service
+            .make_application(&chain2, &application_id)
+            .await
+            .unwrap(),
     );
-    node_service.query_node(query).await.unwrap();
+    app2.transfer(
+        &owner,
+        Amount::from_tokens(4),
+        fungible::Account {
+            chain_id: chain1,
+            owner,
+        },
+    )
+    .await;
 
     // Verify that the default chain now has 6 and the new one has 4 tokens.
     for i in 0..10 {
         tokio::time::sleep(Duration::from_secs(i)).await;
-        let response1 = node_service
-            .query_node(format!(
-                "query {{ chain(chainId:\"{chain}\") \
-                    {{ executionState {{ system {{ balance }} }} }} }}"
-            ))
-            .await
-            .unwrap();
-        let response2 = node_service
-            .query_node(format!(
-                "query {{ chain(chainId:\"{new_chain}\") \
-                    {{ executionState {{ system {{ balance }} }} }} }}"
-            ))
-            .await
-            .unwrap();
-        if let (Some(balance1_str), Some(balance2_str)) = (
-            response1["chain"]["executionState"]["system"]["balance"].as_str(),
-            response2["chain"]["executionState"]["system"]["balance"].as_str(),
-        ) {
-            let balance1 = balance1_str
-                .parse::<Amount>()
-                .expect("should parse balance");
-            let balance2 = balance2_str
-                .parse::<Amount>()
-                .expect("should parse balance");
-            if eq_approx(balance1, balance - Amount::from_tokens(4))
-                && eq_approx(balance2, Amount::from_tokens(4))
-            {
-                net.ensure_is_running().await.unwrap();
-                net.terminate().await.unwrap();
-                return;
-            }
+        let balance1 = app1.get_amount(&owner).await;
+        let balance2 = app2.get_amount(&owner).await;
+        if balance1 == Amount::from_tokens(6) && balance2 == Amount::from_tokens(4) {
+            net.ensure_is_running().await.unwrap();
+            net.terminate().await.unwrap();
+            return;
         }
     }
     panic!("Failed to receive new block");
