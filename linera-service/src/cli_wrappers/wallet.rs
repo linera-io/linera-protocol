@@ -600,6 +600,7 @@ impl ClientWrapper {
         to_public_keys: Vec<PublicKey>,
         weights: Vec<u64>,
         multi_leader_rounds: u32,
+        balance: Amount,
     ) -> Result<(MessageId, ChainId)> {
         let mut command = self.command().await?;
         command
@@ -609,7 +610,8 @@ impl ClientWrapper {
             .args(to_public_keys.iter().map(PublicKey::to_string))
             .arg("--weights")
             .args(weights.iter().map(u64::to_string))
-            .args(["--multi-leader-rounds", &multi_leader_rounds.to_string()]);
+            .args(["--multi-leader-rounds", &multi_leader_rounds.to_string()])
+            .args(["--initial-balance", &balance.to_string()]);
 
         let stdout = command.spawn_and_wait_for_stdout().await?;
         let mut split = stdout.split('\n');
