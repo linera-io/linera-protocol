@@ -280,6 +280,31 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
     }
 }
 
+fn generate_clonable_view_code(input: ItemStruct) -> TokenStream2 {
+    let struct_name = input.ident;
+    let generics = input.generics;
+    let template_vect = get_seq_parameter(generics.clone());
+
+    let (context, context_constraints) = context_and_constraints(&input.attrs, &template_vect);
+
+    let clone_unchecked_quotes = input.fields.iter().map(|field| {
+        let name = &field.ident;
+        quote! { #name: self.#name.clone_unchecked()?, }
+    });
+
+    quote! {
+        impl #generics linera_views::views::ClonableView<#context> for #struct_name #generics
+        #context_constraints
+        {
+            fn clone_unchecked(&mut self) -> Result<Self, linera_views::views::ViewError> {
+                Ok(Self {
+                    #(#clone_unchecked_quotes)*
+                })
+            }
+        }
+    }
+}
+
 #[proc_macro_derive(View, attributes(view))]
 pub fn derive_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
@@ -329,6 +354,12 @@ pub fn derive_hashable_root_view(input: TokenStream) -> TokenStream {
     stream.extend(generate_save_delete_view_code(input.clone()));
     stream.extend(generate_hash_view_code(input));
     stream.into()
+}
+
+#[proc_macro_derive(ClonableView, attributes(view))]
+pub fn derive_clonable_view(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ItemStruct);
+    generate_clonable_view_code(input).into()
 }
 
 #[cfg(test)]
