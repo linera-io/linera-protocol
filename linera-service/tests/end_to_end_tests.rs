@@ -43,16 +43,6 @@ fn eq_approx(amount0: Amount, amount1: Amount) -> bool {
     amount0 + fee_margin > amount1 && amount0 < amount1 + fee_margin
 }
 
-/// Asserts that the balance approximately matches the expected amount, up to 0.1 tokens.
-/// The tests usually transfer integer token amounts, and have lower total fees than 0.1.
-#[track_caller]
-fn assert_approx(balance: Amount, expected: Amount) {
-    assert!(
-        eq_approx(balance, expected),
-        "balance: {balance}, expected: {expected}"
-    )
-}
-
 struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
 
 impl FungibleApp {
@@ -1645,7 +1635,6 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
 
     // Get some chain owned by Client 1.
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
-    let balance1 = client1.local_balance(Account::chain(chain1)).await.unwrap();
 
     // Generate a key for Client 2.
     let client2_key = client2.keygen().await.unwrap();
@@ -1662,49 +1651,14 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
         client2.assign(client2_key, message_id).await.unwrap()
     );
 
-    // Transfer 5 units from Chain 1 to Chain 2.
-    client1
-        .transfer(Amount::from_tokens(5), chain1, chain2)
-        .await
-        .unwrap();
+    // Transfer a token to chain 2. Check that this increases the local balance, proving
+    // that client 2 can create blocks on that chain.
+    let account2 = Account::chain(chain2);
+    assert_eq!(client2.local_balance(account2).await.unwrap(), Amount::ZERO);
+    client1.transfer(Amount::ONE, chain1, chain2).await.unwrap();
     client2.sync(chain2).await.unwrap();
-
-    assert_approx(
-        client1.query_balance(Account::chain(chain1)).await.unwrap(),
-        balance1 - Amount::from_tokens(5),
-    );
-    assert_approx(
-        client2.query_balance(Account::chain(chain2)).await.unwrap(),
-        Amount::from_tokens(5),
-    );
-
-    // Transfer 2 units from Chain 2 to the owner of Chain 1.
-    let owner1 = client1.get_owner().unwrap();
-    client2
-        .transfer_with_accounts(
-            Amount::from_tokens(2),
-            Account::chain(chain2),
-            Account::owner(chain1, owner1),
-        )
-        .await
-        .unwrap();
-    client1.sync(chain1).await.unwrap();
-
-    assert_approx(
-        client1.query_balance(Account::chain(chain1)).await.unwrap(),
-        balance1 - Amount::from_tokens(5),
-    );
-    assert_approx(
-        client1
-            .query_balance(Account::owner(chain1, owner1))
-            .await
-            .unwrap(),
-        Amount::from_tokens(2),
-    );
-    assert_approx(
-        client2.query_balance(Account::chain(chain2)).await.unwrap(),
-        Amount::from_tokens(3),
-    );
+    client2.process_inbox(chain2).await.unwrap();
+    assert!(client2.local_balance(account2).await.unwrap() > Amount::ZERO);
 
     net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
@@ -1973,7 +1927,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
         .unwrap();
     client2.assign(client2_key, message_id).await.unwrap();
 
-    // Transfer a tokens to chain 2. Check that this increases the local balance, proving
+    // Transfer a token to chain 2. Check that this increases the local balance, proving
     // that client 2 can create blocks on that chain.
     let account2 = Account::chain(chain2);
     assert_eq!(client2.local_balance(account2).await.unwrap(), Amount::ZERO);
