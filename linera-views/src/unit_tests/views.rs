@@ -3,7 +3,7 @@
 
 use crate::{
     batch::Batch,
-    common::{AdminKeyValueStore, Context},
+    common::Context,
     memory::{create_memory_context, MemoryContext},
     queue_view::QueueView,
     test_utils::test_views::{

@@ -54,8 +54,10 @@ use linera_views::{
 use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbContext, ScyllaDbStore};
 
 #[cfg(any(with_dynamodb, with_rocksdb, with_scylladb))]
-use {linera_views::common::AdminKeyValueStore, std::collections::BTreeSet};
 use std::collections::BTreeSet;
+
+#[cfg(with_dynamodb)]
+use linera_views::common::AdminKeyValueStore;
 
 #[allow(clippy::type_complexity)]
 #[derive(CryptoHashRootView)]
