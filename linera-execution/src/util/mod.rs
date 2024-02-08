@@ -5,7 +5,7 @@
 
 mod sync_response;
 
-pub use self::sync_response::{SyncReceiver, SyncSender};
+pub use self::sync_response::SyncSender;
 use crate::ExecutionError;
 use futures::channel::mpsc;
 
