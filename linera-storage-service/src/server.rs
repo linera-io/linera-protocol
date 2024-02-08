@@ -9,12 +9,10 @@ use crate::key_value_store::{
     RequestClearJournal, RequestContainsKey, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
     RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
 };
-use linera_service::storage::{StorageConfig, StoreConfig};
 use linera_views::{
     common::{CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
-    memory::MemoryStore,
-    rocks_db::RocksDbStore,
-    views::ViewError,
+    memory::{create_memory_store_stream_queries, MemoryStore},
+    rocks_db::{RocksDbStore, RocksDbStoreConfig},
 };
 use tonic::{transport::Server, Request, Response, Status};
 
@@ -32,28 +30,6 @@ pub enum SharedStoreServer {
 }
 
 impl SharedStoreServer {
-    async fn new(store_config: StoreConfig) -> Result<Self, ViewError> {
-        match store_config {
-            StoreConfig::Memory(memory_store_config) => {
-                let store = MemoryStore::new(memory_store_config);
-                Ok(SharedStoreServer::Memory(store))
-            }
-            #[cfg(feature = "rocksdb")]
-            StoreConfig::RocksDb(rocksdb_store_config) => {
-                let store = RocksDbStore::new(rocksdb_store_config).await?;
-                Ok(SharedStoreServer::RocksDb(store.0))
-            }
-            #[cfg(feature = "aws")]
-            StoreConfig::DynamoDb(_dynamodb_store_config) => {
-                panic!("DynamoDb not supported in the shared system since it is already shared");
-            }
-            #[cfg(feature = "scylladb")]
-            StoreConfig::ScyllaDb(_scylladb_store_config) => {
-                panic!("ScyllaDb not supported in the shared system since it is already shared");
-            }
-        }
-    }
-
     pub async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Status> {
         match self {
             SharedStoreServer::Memory(store) => store
@@ -164,13 +140,20 @@ impl SharedStoreServer {
 }
 
 #[derive(clap::Parser)]
-struct SharedStoreServerOptions {
-    /// Subcommands. Acceptable values are run and generate.
-    #[arg(long = "storage")]
-    storage_config: String,
+enum SharedStoreServerOptions {
+    #[command(name = "memory")]
+    Memory {
+        #[arg(long = "endpoint")]
+        endpoint: String,
+    },
 
-    #[arg(long = "endpoint")]
-    endpoint: String,
+    #[command(name = "rocksdb")]
+    RocksDb {
+        #[arg(long = "endpoint")]
+        path: String,
+        #[arg(long = "endpoint")]
+        endpoint: String,
+    },
 }
 
 #[tonic::async_trait]
@@ -284,21 +267,23 @@ impl StoreProcessor for SharedStoreServer {
 #[tokio::main]
 async fn main() {
     let options = <SharedStoreServerOptions as clap::Parser>::parse();
-
-    let storage_config = options.storage_config;
     let common_config = CommonStoreConfig::default();
-    let storage_config: StorageConfig = storage_config.parse().expect("storage_config");
-    let full_storage_config = storage_config
-        .add_common_config(common_config)
-        .await
-        .expect("full_storage_config");
-
-    let endpoint = options.endpoint;
+    let (shared_store, endpoint) = match options {
+        SharedStoreServerOptions::Memory { endpoint } => {
+            let store = create_memory_store_stream_queries(common_config.max_stream_queries);
+            (SharedStoreServer::Memory(store), endpoint)
+        }
+        SharedStoreServerOptions::RocksDb { path, endpoint } => {
+            let path_buf = path.into();
+            let config = RocksDbStoreConfig {
+                path_buf,
+                common_config,
+            };
+            let (store, _) = RocksDbStore::new(config).await.expect("store");
+            (SharedStoreServer::RocksDb(store), endpoint)
+        }
+    };
     let endpoint = endpoint.parse().unwrap();
-    let shared_store = SharedStoreServer::new(full_storage_config)
-        .await
-        .expect("A shared_store");
-
     Server::builder()
         .add_service(StoreProcessorServer::new(shared_store))
         .serve(endpoint)
