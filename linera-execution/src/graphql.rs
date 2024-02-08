@@ -11,9 +11,9 @@ use async_graphql::{Error, Object};
 use linera_base::{
     data_types::{Amount, Timestamp},
     doc_scalar,
-    identifiers::{ChainDescription, ChainId},
+    identifiers::{ChainDescription, ChainId, Owner},
 };
-use linera_views::{common::Context, views::ViewError};
+use linera_views::{common::Context, map_view::MapView, views::ViewError};
 use std::collections::BTreeMap;
 
 doc_scalar!(
@@ -106,6 +106,11 @@ where
     #[graphql(derived(name = "balance"))]
     async fn _balance(&self) -> &Amount {
         self.balance.get()
+    }
+
+    #[graphql(derived(name = "balances"))]
+    async fn _balances(&self) -> &MapView<C, Owner, Amount> {
+        &self.balances
     }
 
     #[graphql(derived(name = "timestamp"))]

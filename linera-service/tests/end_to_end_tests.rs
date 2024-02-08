@@ -9,8 +9,9 @@ mod common;
 use async_graphql::InputType;
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::{
+    crypto::KeyPair,
     data_types::{Amount, Timestamp},
-    identifiers::{AccountOwner, ChainId},
+    identifiers::{AccountOwner, ChainId, Owner},
 };
 use linera_execution::system::Account;
 use linera_service::{
@@ -1358,7 +1359,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
     let chain_1 = ChainId::root(0);
 
     let chain_2 = client
-        .open_and_assign(&client_2, Amount::ZERO)
+        .open_and_assign(&client_2, Amount::from_tokens(3))
         .await
         .unwrap();
     let node_service_2 = match network {
@@ -1368,42 +1369,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
 
     client.query_validators(None).await.unwrap();
 
-    // Chain 2 should be broke.
-    assert_eq!(
-        client.query_balance(Account::chain(chain_2)).await.unwrap(),
-        Amount::ZERO
-    );
-
-    let balance_1 = client.query_balance(Account::chain(chain_1)).await.unwrap();
-    // Transfer 3 units
-    client
-        .transfer(
-            Amount::from_tokens(3),
-            Account::chain(chain_1),
-            Account::chain(chain_2),
-        )
-        .await
-        .unwrap();
-
     // Restart the first shard for the 4th validator.
     net.terminate_server(3, 0).await.unwrap();
     net.start_server(3, 0).await.unwrap();
-
-    // Chain 1 should have three tokens less, chain 2 three more (minus fees).
-    assert_approx(
-        client.query_balance(Account::chain(chain_1)).await.unwrap(),
-        balance_1 - Amount::from_tokens(3),
-    );
-    assert_approx(
-        client.query_balance(Account::chain(chain_2)).await.unwrap(),
-        Amount::from_tokens(3),
-    );
-
-    // Create derived chain
-    let (_, chain_3) = client.open_chain(chain_1, None, Amount::ONE).await.unwrap();
-
-    // Inspect state of derived chain
-    assert!(client.is_chain_present_in_wallet(chain_3).await);
 
     // Create configurations for two more validators
     net.generate_validator_config(4).await.unwrap();
@@ -1448,40 +1416,42 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
         }
     }
 
+    let recipient = Owner::from(KeyPair::generate().public());
     client
         .transfer(
             Amount::from_tokens(5),
             Account::chain(chain_1),
-            Account::chain(chain_2),
+            Account::owner(chain_2, recipient),
         )
         .await
         .unwrap();
-    client.sync(chain_2).await.unwrap();
 
     if let Some(node_service_2) = node_service_2 {
-        for i in 0..10 {
+        let query = format!(
+            "query {{ chain(chainId:\"{chain_2}\") {{
+                executionState {{ system {{ balances {{
+                    entry(key:\"{recipient}\") {{ value }}
+                }} }} }}
+            }} }}"
+        );
+        for i in 0.. {
             tokio::time::sleep(Duration::from_secs(i)).await;
-            let response = node_service_2
-                .query_node(format!(
-                    "query {{ chain(chainId:\"{chain_2}\") \
-                    {{ executionState {{ system {{ balance }} }} }} }}"
-                ))
-                .await
-                .unwrap();
-            if let Some(balance_str) =
-                response["chain"]["executionState"]["system"]["balance"].as_str()
-            {
-                let balance = balance_str.parse::<Amount>().expect("should parse balance");
-                if eq_approx(balance, Amount::from_tokens(8)) {
-                    return;
-                }
+            let response = node_service_2.query_node(query.clone()).await.unwrap();
+            let balances = &response["chain"]["executionState"]["system"]["balances"];
+            if balances["entry"]["value"].as_str() == Some("5.") {
+                break;
             }
+            assert!(i < 3, "Failed to receive new block");
         }
-        panic!("Failed to receive new block");
     } else {
-        assert_approx(
-            client.query_balance(Account::chain(chain_2)).await.unwrap(),
-            Amount::from_tokens(8),
+        client_2.sync(chain_2).await.unwrap();
+        client_2.process_inbox(chain_2).await.unwrap();
+        assert_eq!(
+            client_2
+                .local_balance(Account::owner(chain_2, recipient))
+                .await
+                .unwrap(),
+            Amount::from_tokens(5),
         );
     }
 

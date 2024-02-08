@@ -291,6 +291,14 @@ type Entry_Origin_InboxStateView {
 """
 A GraphQL-visible map item, complete with key.
 """
+type Entry_Owner_Amount {
+	key: Owner!
+	value: Amount
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
 type Entry_Target_OutboxStateView {
 	key: Target!
 	value: OutboxStateView!
@@ -406,6 +414,10 @@ input MapFilters_Origin {
 	keys: [Origin!]
 }
 
+input MapFilters_Owner {
+	keys: [Owner!]
+}
+
 input MapFilters_Target {
 	keys: [Target!]
 }
@@ -418,8 +430,18 @@ input MapInput_Origin {
 	filters: MapFilters_Origin
 }
 
+input MapInput_Owner {
+	filters: MapFilters_Owner
+}
+
 input MapInput_Target {
 	filters: MapFilters_Target
+}
+
+type MapView_Owner_Amount {
+	keys(count: Int): [Owner!]!
+	entry(key: Owner!): Entry_Owner_Amount!
+	entries(input: MapInput_Owner): [Entry_Owner_Amount!]!
 }
 
 """
@@ -713,6 +735,7 @@ type SystemExecutionStateView {
 	committees: JSONObject!
 	ownership: ChainOwnership!
 	balance: Amount!
+	balances: MapView_Owner_Amount!
 	timestamp: Timestamp!
 }
 
