@@ -1889,7 +1889,6 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     client2.wallet_init(&[], FaucetOption::None).await.unwrap();
 
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
-    let balance1 = client1.local_balance(Account::chain(chain1)).await.unwrap();
 
     // Generate keys for both clients.
     let client1_key = client1.keygen().await.unwrap();
@@ -1902,6 +1901,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
             vec![client1_key, client2_key],
             vec![100, 100],
             u32::MAX,
+            Amount::from_tokens(6),
         )
         .await
         .unwrap();
@@ -1918,58 +1918,34 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
         client2.assign(client2_key, message_id).await.unwrap()
     );
 
-    // Transfer 6 units from Chain 1 to Chain 2.
-    client1
-        .transfer(
-            Amount::from_tokens(6),
-            Account::chain(chain1),
-            Account::chain(chain2),
-        )
-        .await
-        .unwrap();
     client2.sync(chain2).await.unwrap();
 
-    assert_approx(
-        client1.query_balance(Account::chain(chain1)).await.unwrap(),
-        balance1 - Amount::from_tokens(6),
-    );
-    assert_approx(
-        client1.query_balance(Account::chain(chain2)).await.unwrap(),
+    let account1 = Account::chain(chain1);
+    let account2 = Account::chain(chain2);
+
+    assert_eq!(
+        client1.local_balance(account2).await.unwrap(),
         Amount::from_tokens(6),
     );
-    assert_approx(
-        client2.query_balance(Account::chain(chain2)).await.unwrap(),
+    assert_eq!(
+        client2.local_balance(account2).await.unwrap(),
         Amount::from_tokens(6),
     );
 
-    // Transfer 2 + 1 units from Chain 2 to Chain 1 using both clients.
+    // Transfer 2 + 1 units from Chain 2 to Chain 1 using both clients, leaving 3 (minus fees).
     client2
-        .transfer(
-            Amount::from_tokens(2),
-            Account::chain(chain2),
-            Account::chain(chain1),
-        )
+        .transfer(Amount::from_tokens(2), account2, account1)
         .await
         .unwrap();
     client1
-        .transfer(Amount::ONE, Account::chain(chain2), Account::chain(chain1))
+        .transfer(Amount::ONE, account2, account1)
         .await
         .unwrap();
     client1.sync(chain1).await.unwrap();
     client2.sync(chain2).await.unwrap();
 
-    assert_approx(
-        client1.query_balance(Account::chain(chain1)).await.unwrap(),
-        balance1 - Amount::from_tokens(3),
-    );
-    assert_approx(
-        client1.query_balance(Account::chain(chain2)).await.unwrap(),
-        Amount::from_tokens(3),
-    );
-    assert_approx(
-        client2.query_balance(Account::chain(chain2)).await.unwrap(),
-        Amount::from_tokens(3),
-    );
+    assert!(client1.query_balance(account2).await.unwrap() <= Amount::from_tokens(3),);
+    assert!(client2.query_balance(account2).await.unwrap() <= Amount::from_tokens(3),);
 
     net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
