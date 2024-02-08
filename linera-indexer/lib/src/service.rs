@@ -47,7 +47,7 @@ fn reqwest_client() -> reqwest::Client {
 }
 
 #[derive(clap::Parser, Debug, Clone)]
-#[command(version = linera_version::VersionInfo::default_str())]
+#[command(version = linera_version::VersionInfo::default_clap_str())]
 pub struct Service {
     /// The port of the node service
     #[arg(long, default_value = "8080")]
