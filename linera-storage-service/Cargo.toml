@@ -28,7 +28,7 @@ clap = { workspace = true }
 linera-views = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 tonic = { workspace = true }
 
 [dev-dependencies]
