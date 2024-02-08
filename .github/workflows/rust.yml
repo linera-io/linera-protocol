@@ -41,7 +41,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - uses: Twey/setup-rust-toolchain@v1
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Clear up some space
       run: |
         sudo rm -rf /usr/share/dotnet
@@ -121,7 +121,7 @@ jobs:
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/lint/rust-toolchain.toml
-    - uses: Twey/setup-rust-toolchain@v1
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install cargo-machete
       run: |
         cargo install cargo-machete --locked

@@ -38,7 +38,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - uses: Twey/setup-rust-toolchain@v1
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
       with:
