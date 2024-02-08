@@ -476,7 +476,7 @@ impl ClientWrapper {
     }
 
     /// Runs `linera transfer`.
-    pub async fn transfer(&self, amount: Amount, from: Account, to: Account) -> Result<()> {
+    pub async fn transfer(&self, amount: Amount, from: ChainId, to: ChainId) -> Result<()> {
         self.command()
             .await?
             .arg("transfer")

@@ -1412,7 +1412,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
 
     let recipient = Owner::from(KeyPair::generate().public());
     client
-        .transfer(
+        .transfer_with_accounts(
             Amount::from_tokens(5),
             Account::chain(chain_1),
             Account::owner(chain_2, recipient),
@@ -1604,11 +1604,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) {
         for i in 0..10 {
             // Add a new block on the chain, triggering a notification.
             client1
-                .transfer(
-                    Amount::ONE,
-                    Account::chain(chain),
-                    Account::chain(ChainId::root(9)),
-                )
+                .transfer(Amount::from_tokens(1), chain, ChainId::root(9))
                 .await
                 .unwrap();
             tokio::time::sleep(Duration::from_secs(i)).await;
@@ -1668,11 +1664,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
 
     // Transfer 5 units from Chain 1 to Chain 2.
     client1
-        .transfer(
-            Amount::from_tokens(5),
-            Account::chain(chain1),
-            Account::chain(chain2),
-        )
+        .transfer(Amount::from_tokens(5), chain1, chain2)
         .await
         .unwrap();
     client2.sync(chain2).await.unwrap();
@@ -1920,9 +1912,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
 
     client2.sync(chain2).await.unwrap();
 
-    let account1 = Account::chain(chain1);
     let account2 = Account::chain(chain2);
-
     assert_eq!(
         client1.local_balance(account2).await.unwrap(),
         Amount::from_tokens(6),
@@ -1934,13 +1924,10 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
 
     // Transfer 2 + 1 units from Chain 2 to Chain 1 using both clients, leaving 3 (minus fees).
     client2
-        .transfer(Amount::from_tokens(2), account2, account1)
+        .transfer(Amount::from_tokens(2), chain2, chain1)
         .await
         .unwrap();
-    client1
-        .transfer(Amount::ONE, account2, account1)
-        .await
-        .unwrap();
+    client1.transfer(Amount::ONE, chain2, chain1).await.unwrap();
     client1.sync(chain1).await.unwrap();
     client2.sync(chain2).await.unwrap();
 
@@ -1987,14 +1974,9 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
         .unwrap();
     client2.assign(client2_key, message_id).await.unwrap();
 
-    // Transfer 6 units from Chain 1 to Chain 2. Remaining:
-    // 100 - 3 - 6 - two one block fees = 90.998
+    // Transfer 6 units from Chain 1 to Chain 2.
     client1
-        .transfer(
-            Amount::from_tokens(6),
-            Account::chain(chain1),
-            Account::chain(chain2),
-        )
+        .transfer(Amount::from_tokens(6), chain1, chain2)
         .await
         .unwrap();
     client2.sync(chain2).await.unwrap();
@@ -2005,11 +1987,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
 
     // Transfer 2 units from Chain 2 to Chain 1.
     client2
-        .transfer(
-            Amount::from_tokens(2),
-            Account::chain(chain2),
-            Account::chain(chain1),
-        )
+        .transfer(Amount::from_tokens(2), chain2, chain1)
         .await
         .unwrap();
     client1.sync(chain1).await.unwrap();
@@ -2094,10 +2072,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
         client2.local_balance(Account::chain(chain2)).await.unwrap(),
         Amount::from_tokens(2),
     );
-    client2
-        .transfer(Amount::ONE, Account::chain(chain2), Account::chain(chain1))
-        .await
-        .unwrap();
+    client2.transfer(Amount::ONE, chain2, chain1).await.unwrap();
     assert!(client2.local_balance(Account::chain(chain2)).await.unwrap() <= Amount::ONE);
 
     client3.sync(chain3).await.unwrap();
@@ -2105,10 +2080,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
         client3.local_balance(Account::chain(chain3)).await.unwrap(),
         Amount::from_tokens(2),
     );
-    client3
-        .transfer(Amount::ONE, Account::chain(chain3), Account::chain(chain1))
-        .await
-        .unwrap();
+    client3.transfer(Amount::ONE, chain3, chain1).await.unwrap();
     assert!(client3.query_balance(Account::chain(chain3)).await.unwrap() <= Amount::ONE);
     net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
