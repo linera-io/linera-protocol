@@ -111,7 +111,7 @@ async fn test_fuel_for_counter_wasm_application(
     }
     assert_eq!(controller.tracker.fuel, expected_fuel);
     assert_eq!(
-        controller.with(&mut view).await?.balance(),
+        controller.with_state(&mut view).await?.balance(),
         Amount::ONE
             .try_sub(Amount::from_attos(expected_fuel as u128))
             .unwrap()

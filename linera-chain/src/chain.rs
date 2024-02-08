@@ -719,7 +719,7 @@ where
             if let MessageAction::Accept = message.action {
                 for message_out in &messages_out {
                     resource_controller
-                        .with(&mut self.execution_state)
+                        .with_state(&mut self.execution_state)
                         .await?
                         .track_message(&message_out.message)
                         .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
@@ -752,13 +752,13 @@ where
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;
             resource_controller
-                .with(&mut self.execution_state)
+                .with_state(&mut self.execution_state)
                 .await?
                 .track_operation(operation)
                 .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
             for message_out in &messages_out {
                 resource_controller
-                    .with(&mut self.execution_state)
+                    .with_state(&mut self.execution_state)
                     .await?
                     .track_message(&message_out.message)
                     .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
@@ -770,7 +770,7 @@ where
 
         // Finally, charge for the block fee.
         resource_controller
-            .with(&mut self.execution_state)
+            .with_state(&mut self.execution_state)
             .await?
             .track_block()
             .map_err(|err| ChainError::ExecutionError(err, ChainExecutionContext::Block))?;

@@ -206,7 +206,7 @@ where
         refund_grant_to: Option<Account>,
         resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
-        let initial_balance = resource_controller.with(self).await?.balance();
+        let initial_balance = resource_controller.with_state(self).await?.balance();
         let controller = ResourceController {
             policy: resource_controller.policy.clone(),
             tracker: resource_controller.tracker,
@@ -229,7 +229,7 @@ where
         }
         let (execution_outcomes, controller) = execution_outcomes_future.await??;
         resource_controller
-            .with(self)
+            .with_state(self)
             .await?
             .merge_balance(initial_balance, controller.balance())?;
         resource_controller.tracker = controller.tracker;
