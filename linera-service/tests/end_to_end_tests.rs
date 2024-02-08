@@ -2192,10 +2192,8 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) {
     // Create runner and client.
     let (mut net, client) = config.instantiate().await.unwrap();
     let chain_id = client.get_wallet().unwrap().default_chain().unwrap();
-    let balance = client
-        .local_balance(Account::chain(chain_id))
-        .await
-        .unwrap();
+    let account = Account::chain(chain_id);
+    let balance = client.local_balance(account).await.unwrap();
     // Stop validators.
     for i in 0..4 {
         net.remove_validator(i).unwrap();
@@ -2204,13 +2202,8 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) {
         .transfer_with_silent_logs(Amount::from_tokens(2), chain_id, ChainId::root(5))
         .await;
     assert!(result.is_err());
-    assert_approx(
-        client
-            .query_balance(Account::chain(chain_id))
-            .await
-            .unwrap(),
-        balance,
-    );
+    // The transfer didn't get confirmed.
+    assert_eq!(client.local_balance(account).await.unwrap(), balance,);
     // Restart validators.
     for i in 0..4 {
         net.start_validator(i).await.unwrap();
@@ -2218,13 +2211,8 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) {
     let result = client.retry_pending_block(Some(chain_id)).await;
     assert!(result.unwrap().is_some());
     client.sync(chain_id).await.unwrap();
-    assert_approx(
-        client
-            .query_balance(Account::chain(chain_id))
-            .await
-            .unwrap(),
-        balance - Amount::from_tokens(2),
-    );
+    // After retrying, the transfer got confirmed.
+    assert!(client.local_balance(account).await.unwrap() <= balance - Amount::from_tokens(2));
     let result = client.retry_pending_block(Some(chain_id)).await;
     assert!(result.unwrap().is_none());
 
