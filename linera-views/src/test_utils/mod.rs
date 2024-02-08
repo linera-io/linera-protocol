@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod test_views;
 use crate::{
     batch::{
         Batch, WriteOperation,
