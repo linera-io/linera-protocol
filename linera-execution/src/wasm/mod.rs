@@ -8,13 +8,13 @@
 //! - `wasmer` enables the [Wasmer](https://wasmer.io/) runtime
 //! - `wasmtime` enables the [Wasmtime](https://wasmtime.dev/) runtime
 
-#![cfg(any(feature = "wasmer", with_wasmtime))]
+#![cfg(any(with_wasmer, with_wasmtime))]
 
 mod module_cache;
 mod sanitizer;
 #[macro_use]
 mod system_api;
-#[cfg(feature = "wasmer")]
+#[cfg(with_wasmer)]
 #[path = "wasmer.rs"]
 mod wasmer;
 #[cfg(with_wasmtime)]
@@ -38,7 +38,7 @@ use prometheus::HistogramVec;
 use std::{path::Path, sync::Arc};
 use thiserror::Error;
 
-#[cfg(feature = "wasmer")]
+#[cfg(with_wasmer)]
 use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 #[cfg(with_wasmtime)]
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
@@ -72,7 +72,7 @@ static SERVICE_INSTANTIATION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
 /// A user contract in a compiled WebAssembly module.
 #[derive(Clone)]
 pub enum WasmContractModule {
-    #[cfg(feature = "wasmer")]
+    #[cfg(with_wasmer)]
     Wasmer {
         engine: ::wasmer::Engine,
         module: ::wasmer::Module,
@@ -95,7 +95,7 @@ impl WasmContractModule {
             contract_bytecode
         };
         match runtime {
-            #[cfg(feature = "wasmer")]
+            #[cfg(with_wasmer)]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
                 Self::from_wasmer(contract_bytecode).await
             }
@@ -135,7 +135,7 @@ impl UserContractModule for WasmContractModule {
             WasmContractModule::Wasmtime { module } => {
                 Box::new(WasmtimeContractInstance::prepare(module, runtime)?)
             }
-            #[cfg(feature = "wasmer")]
+            #[cfg(with_wasmer)]
             WasmContractModule::Wasmer { engine, module } => {
                 Box::new(WasmerContractInstance::prepare(engine, module, runtime)?)
             }
@@ -148,7 +148,7 @@ impl UserContractModule for WasmContractModule {
 /// A user service in a compiled WebAssembly module.
 #[derive(Clone)]
 pub enum WasmServiceModule {
-    #[cfg(feature = "wasmer")]
+    #[cfg(with_wasmer)]
     Wasmer { module: Arc<::wasmer::Module> },
     #[cfg(with_wasmtime)]
     Wasmtime { module: Arc<::wasmtime::Module> },
@@ -161,7 +161,7 @@ impl WasmServiceModule {
         runtime: WasmRuntime,
     ) -> Result<Self, WasmExecutionError> {
         match runtime {
-            #[cfg(feature = "wasmer")]
+            #[cfg(with_wasmer)]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
                 Self::from_wasmer(service_bytecode).await
             }
@@ -201,7 +201,7 @@ impl UserServiceModule for WasmServiceModule {
             WasmServiceModule::Wasmtime { module } => {
                 Box::new(WasmtimeServiceInstance::prepare(module, runtime)?)
             }
-            #[cfg(feature = "wasmer")]
+            #[cfg(with_wasmer)]
             WasmServiceModule::Wasmer { module } => {
                 Box::new(WasmerServiceInstance::prepare(module, runtime)?)
             }
@@ -212,7 +212,7 @@ impl UserServiceModule for WasmServiceModule {
 }
 
 /// Errors that can occur when executing a user application in a WebAssembly module.
-#[cfg(any(feature = "wasmer", with_wasmtime))]
+#[cfg(any(with_wasmer, with_wasmtime))]
 #[derive(Debug, Error)]
 pub enum WasmExecutionError {
     #[error("Failed to load contract Wasm module: {_0}")]
@@ -222,7 +222,7 @@ pub enum WasmExecutionError {
     #[cfg(with_wasmtime)]
     #[error("Failed to create and configure Wasmtime runtime")]
     CreateWasmtimeEngine(#[source] anyhow::Error),
-    #[cfg(feature = "wasmer")]
+    #[cfg(with_wasmer)]
     #[error("Failed to execute Wasm module (Wasmer)")]
     ExecuteModuleInWasmer(#[from] ::wasmer::RuntimeError),
     #[cfg(with_wasmtime)]

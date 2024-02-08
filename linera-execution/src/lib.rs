@@ -28,9 +28,9 @@ pub use system::{
     SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation, SystemQuery,
     SystemResponse,
 };
-#[cfg(all(any(test, feature = "test"), any(feature = "wasmer", with_wasmtime)))]
+#[cfg(all(any(test, feature = "test"), any(with_wasmer, with_wasmtime)))]
 pub use wasm::test as wasm_test;
-#[cfg(any(feature = "wasmer", with_wasmtime))]
+#[cfg(any(with_wasmer, with_wasmtime))]
 pub use wasm::{WasmContractModule, WasmExecutionError, WasmServiceModule};
 #[cfg(any(test, feature = "test"))]
 pub use {applications::ApplicationRegistry, system::SystemExecutionState};
@@ -91,7 +91,7 @@ pub enum ExecutionError {
     SystemError(#[from] SystemExecutionError),
     #[error("User application reported an error: {0}")]
     UserError(String),
-    #[cfg(any(feature = "wasmer", with_wasmtime))]
+    #[cfg(any(with_wasmer, with_wasmtime))]
     #[error(transparent)]
     WasmError(#[from] WasmExecutionError),
     #[error(transparent)]
@@ -819,7 +819,7 @@ pub struct Bytecode {
 
 impl Bytecode {
     /// Creates a new [`Bytecode`] instance using the provided `bytes`.
-    #[cfg(any(feature = "wasmer", with_wasmtime))]
+    #[cfg(any(with_wasmer, with_wasmtime))]
     pub(crate) fn new(bytes: Vec<u8>) -> Self {
         Bytecode { bytes }
     }
@@ -846,17 +846,17 @@ impl std::fmt::Debug for Bytecode {
 
 /// The runtime to use for running the application.
 #[derive(Clone, Copy, Display)]
-#[cfg_attr(any(with_wasmtime, feature = "wasmer"), derive(Debug, Default))]
+#[cfg_attr(any(with_wasmtime, with_wasmer), derive(Debug, Default))]
 pub enum WasmRuntime {
-    #[cfg(feature = "wasmer")]
+    #[cfg(with_wasmer)]
     #[default]
     #[display(fmt = "wasmer")]
     Wasmer,
     #[cfg(with_wasmtime)]
-    #[cfg_attr(not(feature = "wasmer"), default)]
+    #[cfg_attr(not(with_wasmer), default)]
     #[display(fmt = "wasmtime")]
     Wasmtime,
-    #[cfg(feature = "wasmer")]
+    #[cfg(with_wasmer)]
     WasmerWithSanitizer,
     #[cfg(with_wasmtime)]
     WasmtimeWithSanitizer,
@@ -868,13 +868,13 @@ pub trait WithWasmDefault {
 }
 
 impl WasmRuntime {
-    #[cfg(any(feature = "wasmer", with_wasmtime))]
+    #[cfg(any(with_wasmer, with_wasmtime))]
     pub fn default_with_sanitizer() -> Self {
-        #[cfg(feature = "wasmer")]
+        #[cfg(with_wasmer)]
         {
             WasmRuntime::WasmerWithSanitizer
         }
-        #[cfg(not(feature = "wasmer"))]
+        #[cfg(not(with_wasmer))]
         {
             WasmRuntime::WasmtimeWithSanitizer
         }
@@ -882,23 +882,23 @@ impl WasmRuntime {
 
     pub fn needs_sanitizer(self) -> bool {
         match self {
-            #[cfg(feature = "wasmer")]
+            #[cfg(with_wasmer)]
             WasmRuntime::WasmerWithSanitizer => true,
             #[cfg(with_wasmtime)]
             WasmRuntime::WasmtimeWithSanitizer => true,
-            #[cfg(any(with_wasmtime, feature = "wasmer"))]
+            #[cfg(any(with_wasmtime, with_wasmer))]
             _ => false,
         }
     }
 }
 
 impl WithWasmDefault for Option<WasmRuntime> {
-    #[cfg(any(feature = "wasmer", with_wasmtime))]
+    #[cfg(any(with_wasmer, with_wasmtime))]
     fn with_wasm_default(self) -> Self {
         Some(self.unwrap_or_default())
     }
 
-    #[cfg(not(any(feature = "wasmer", with_wasmtime)))]
+    #[cfg(not(any(with_wasmer, with_wasmtime)))]
     fn with_wasm_default(self) -> Self {
         None
     }
@@ -909,7 +909,7 @@ impl FromStr for WasmRuntime {
 
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         match string {
-            #[cfg(feature = "wasmer")]
+            #[cfg(with_wasmer)]
             "wasmer" => Ok(WasmRuntime::Wasmer),
             #[cfg(with_wasmtime)]
             "wasmtime" => Ok(WasmRuntime::Wasmtime),
