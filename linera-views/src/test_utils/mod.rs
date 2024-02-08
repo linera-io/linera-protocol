@@ -418,19 +418,17 @@ pub async fn run_writes_from_blank<C: KeyValueStore + Sync>(key_value_store: &C)
     }
 }
 
-// That test is especially challenging for ScyllaDB.
-// In its default settings, Scylla has a limitation to 10000 tombstones.
-// A tombstone is an indication that the data has been deleted. That
-// is thus a trie data structure for checking whether a requested key
-// is deleted or not.
-//
-// In this test we insert 200000 keys into the database.
-// Then we select half of them at random and delete them. By the random
-// selection, Scylla is forced to introduce around 100000 tombstones
-// which triggers the crash with the default settings.
-#[cfg(feature = "scylladb")]
-#[cfg(test)]
-async fn tombstone_triggering_test<C: KeyValueStore + Sync>(key_value_store: C) {
+/// That test is especially challenging for ScyllaDB.
+/// In its default settings, Scylla has a limitation to 10000 tombstones.
+/// A tombstone is an indication that the data has been deleted. That
+/// is thus a trie data structure for checking whether a requested key
+/// is deleted or not.
+///
+/// In this test we insert 200000 keys into the database.
+/// Then we select half of them at random and delete them. By the random
+/// selection, Scylla is forced to introduce around 100000 tombstones
+/// which triggers the crash with the default settings.
+pub async fn tombstone_triggering_test<C: KeyValueStore + Sync>(key_value_store: C) {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     let value_size = 100;
     let n_entry = 200000;
@@ -462,14 +460,13 @@ async fn tombstone_triggering_test<C: KeyValueStore + Sync>(key_value_store: C) 
     assert_eq!(key_values, remaining_key_values);
 }
 
-// DynamoDb has limits at 1M (for pagination), 4M (for write)
-// Let us go right past them at 20M of data with writing and then
-// reading it. And 20M is not huge by any mean. All KeyValueStore
-// must handle that.
-//
-// The size of the value vary as each size has its own issues.
-#[cfg(test)]
-async fn run_big_write_read<C: KeyValueStore + Sync>(
+/// DynamoDb has limits at 1M (for pagination), 4M (for write)
+/// Let us go right past them at 20M of data with writing and then
+/// reading it. And 20M is not huge by any mean. All KeyValueStore
+/// must handle that.
+///
+/// The size of the value vary as each size has its own issues.
+pub async fn run_big_write_read<C: KeyValueStore + Sync>(
     key_value_store: C,
     target_size: usize,
     value_sizes: Vec<usize>,

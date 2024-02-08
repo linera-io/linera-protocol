@@ -3592,6 +3592,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-version"
+version = "0.8.0"
+dependencies = [
+ "async-graphql",
+ "base64 0.21.7",
+ "cargo_metadata",
+ "glob",
+ "once_cell",
+ "quote",
+ "semver",
+ "serde",
+ "sha3",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "linera-views"
 version = "0.8.0"
 dependencies = [
