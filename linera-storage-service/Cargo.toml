@@ -12,10 +12,10 @@ edition = "2021"
 
 [features]
 default = ["rocksdb"]
-rocksdb = ["linera-views/rocksdb", "linera-service/rocksdb"]
-aws = ["linera-views/aws", "linera-service/aws"]
-scylladb = ["linera-views/scylladb", "linera-service/scylladb"]
-test = ["linera-views/test", "linera-service/test"]
+rocksdb = ["linera-views/rocksdb"]
+aws = ["linera-views/aws"]
+scylladb = ["linera-views/scylladb"]
+test = ["linera-views/test"]
 
 [[bin]]
 name = "storage_service_server"
@@ -25,7 +25,6 @@ path = "src/server.rs"
 async-lock = { workspace = true }
 async-trait = { workspace = true }
 clap = { workspace = true }
-linera-service = { workspace = true }
 linera-views = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }

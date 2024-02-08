@@ -3576,7 +3576,6 @@ dependencies = [
  "async-lock",
  "async-trait",
  "clap 4.4.11",
- "linera-service",
  "linera-storage-service",
  "linera-views",
  "proptest",
