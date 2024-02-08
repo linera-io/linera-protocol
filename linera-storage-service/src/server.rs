@@ -4,9 +4,10 @@
 use crate::key_value_store::{
     statement::Operation,
     store_processor_server::{StoreProcessor, StoreProcessorServer},
-    store_reply::Reply,
-    store_request::Query,
-    KeyValue, KeyValues, Keys, OptValue, OptValues, StoreReply, StoreRequest,
+    KeyValue, OptValue, ReplyClearJournal, ReplyContainsKey, ReplyFindKeyValuesByPrefix,
+    ReplyFindKeysByPrefix, ReplyReadMultiValues, ReplyReadValue, ReplyWriteBatch,
+    RequestClearJournal, RequestContainsKey, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
+    RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
 };
 use linera_service::storage::{StorageConfig, StoreConfig};
 use linera_views::{
@@ -174,86 +175,108 @@ struct SharedStoreServerOptions {
 
 #[tonic::async_trait]
 impl StoreProcessor for SharedStoreServer {
-    async fn store_process(
+    async fn process_read_value(
         &self,
-        request: Request<StoreRequest>,
-    ) -> Result<Response<StoreReply>, Status> {
-        use crate::key_value_store::UnitType;
+        request: Request<RequestReadValue>,
+    ) -> Result<Response<ReplyReadValue>, Status> {
         let request = request.into_inner();
-        let response = match request.query.unwrap() {
-            Query::ReadValue(key) => {
-                let value = self.read_value_bytes(&key).await?;
-                let value = OptValue { value };
-                StoreReply {
-                    reply: Some(Reply::ReadValue(value)),
+        let RequestReadValue { key } = request;
+        let value = self.read_value_bytes(&key).await?;
+        let response = ReplyReadValue { value };
+        Ok(Response::new(response))
+    }
+
+    async fn process_contains_key(
+        &self,
+        request: Request<RequestContainsKey>,
+    ) -> Result<Response<ReplyContainsKey>, Status> {
+        let request = request.into_inner();
+        let RequestContainsKey { key } = request;
+        let test = self.contains_key(&key).await?;
+        let response = ReplyContainsKey { test };
+        Ok(Response::new(response))
+    }
+
+    async fn process_read_multi_values(
+        &self,
+        request: Request<RequestReadMultiValues>,
+    ) -> Result<Response<ReplyReadMultiValues>, Status> {
+        let request = request.into_inner();
+        let RequestReadMultiValues { keys } = request;
+        let values = self.read_multi_values_bytes(keys).await?;
+        let values = values
+            .into_iter()
+            .map(|value| OptValue { value })
+            .collect::<Vec<_>>();
+        let response = ReplyReadMultiValues { values };
+        Ok(Response::new(response))
+    }
+
+    async fn process_find_keys_by_prefix(
+        &self,
+        request: Request<RequestFindKeysByPrefix>,
+    ) -> Result<Response<ReplyFindKeysByPrefix>, Status> {
+        let request = request.into_inner();
+        let RequestFindKeysByPrefix { key_prefix } = request;
+        let keys = self.find_keys_by_prefix(&key_prefix).await?;
+        let response = ReplyFindKeysByPrefix { keys };
+        Ok(Response::new(response))
+    }
+
+    async fn process_find_key_values_by_prefix(
+        &self,
+        request: Request<RequestFindKeyValuesByPrefix>,
+    ) -> Result<Response<ReplyFindKeyValuesByPrefix>, Status> {
+        let request = request.into_inner();
+        let RequestFindKeyValuesByPrefix { key_prefix } = request;
+        let key_values = self.find_key_values_by_prefix(&key_prefix).await?;
+        let key_values = key_values
+            .into_iter()
+            .map(|x| KeyValue {
+                key: x.0,
+                value: x.1,
+            })
+            .collect::<Vec<_>>();
+        let response = ReplyFindKeyValuesByPrefix { key_values };
+        Ok(Response::new(response))
+    }
+
+    async fn process_write_batch(
+        &self,
+        request: Request<RequestWriteBatch>,
+    ) -> Result<Response<ReplyWriteBatch>, Status> {
+        let request = request.into_inner();
+        let RequestWriteBatch {
+            statements,
+            base_key,
+        } = request;
+        let mut batch = linera_views::batch::Batch::default();
+        for statement in statements {
+            match statement.operation.unwrap() {
+                Operation::Delete(key) => {
+                    batch.delete_key(key);
+                }
+                Operation::Put(key_value) => {
+                    batch.put_key_value_bytes(key_value.key, key_value.value);
+                }
+                Operation::DeletePrefix(key_prefix) => {
+                    batch.delete_key_prefix(key_prefix);
                 }
             }
-            Query::ContainsKey(key) => {
-                let test = self.contains_key(&key).await?;
-                StoreReply {
-                    reply: Some(Reply::ContainsKey(test)),
-                }
-            }
-            Query::ReadMultiValues(keys) => {
-                let values = self.read_multi_values_bytes(keys.keys).await?;
-                let values = values
-                    .into_iter()
-                    .map(|value| OptValue { value })
-                    .collect::<Vec<_>>();
-                let values = OptValues { values };
-                StoreReply {
-                    reply: Some(Reply::ReadMultiValues(values)),
-                }
-            }
-            Query::FindKeysByPrefix(key_prefix) => {
-                let keys = self.find_keys_by_prefix(&key_prefix).await?;
-                let keys = Keys { keys };
-                StoreReply {
-                    reply: Some(Reply::FindKeysByPrefix(keys)),
-                }
-            }
-            Query::FindKeyValuesByPrefix(key_prefix) => {
-                let key_values = self.find_key_values_by_prefix(&key_prefix).await?;
-                let key_values = key_values
-                    .into_iter()
-                    .map(|x| KeyValue {
-                        key: x.0,
-                        value: x.1,
-                    })
-                    .collect::<Vec<_>>();
-                let key_values = KeyValues { key_values };
-                StoreReply {
-                    reply: Some(Reply::FindKeyValuesByPrefix(key_values)),
-                }
-            }
-            Query::WriteBatch(batch) => {
-                let mut new_batch = linera_views::batch::Batch::default();
-                for statement in batch.statements {
-                    match statement.operation.unwrap() {
-                        Operation::Delete(key) => {
-                            new_batch.delete_key(key);
-                        }
-                        Operation::Put(key_value) => {
-                            new_batch.put_key_value_bytes(key_value.key, key_value.value);
-                        }
-                        Operation::DeletePrefix(key_prefix) => {
-                            new_batch.delete_key_prefix(key_prefix);
-                        }
-                    }
-                }
-                let base_key = batch.base_key;
-                self.write_batch(new_batch, &base_key).await?;
-                StoreReply {
-                    reply: Some(Reply::WriteBatch(UnitType {})),
-                }
-            }
-            Query::ClearJournal(base_key) => {
-                self.clear_journal(&base_key).await?;
-                StoreReply {
-                    reply: Some(Reply::ClearJournal(UnitType {})),
-                }
-            }
-        };
+        }
+        self.write_batch(batch, &base_key).await?;
+        let response = ReplyWriteBatch {};
+        Ok(Response::new(response))
+    }
+
+    async fn process_clear_journal(
+        &self,
+        request: Request<RequestClearJournal>,
+    ) -> Result<Response<ReplyClearJournal>, Status> {
+        let request = request.into_inner();
+        let RequestClearJournal { base_key } = request;
+        self.clear_journal(&base_key).await?;
+        let response = ReplyClearJournal {};
         Ok(Response::new(response))
     }
 }

@@ -486,9 +486,6 @@ pub async fn run_big_write_read<C: KeyValueStore + Sync>(
     }
 }
 
-
-
-
 type StateBatch = (Vec<(Vec<u8>, Vec<u8>)>, Batch);
 
 async fn run_test_batch_from_state<C: KeyValueStore + Sync>(

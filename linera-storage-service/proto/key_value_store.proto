@@ -14,54 +14,79 @@ message Statement {
   }
 }
 
-message BatchBaseKey {
-  repeated Statement statements = 1;
-  bytes base_key = 2;
-}
-
-message UnitType {
-}
-
-message StoreRequest {
-  oneof query {
-    bytes read_value = 1;
-    bytes contains_key = 2;
-    Keys read_multi_values = 3;
-    bytes find_keys_by_prefix = 4;
-    bytes find_key_values_by_prefix = 5;
-    BatchBaseKey write_batch = 6;
-    bytes clear_journal = 7;
-  }
-}
-
 message OptValue {
   optional bytes value = 1;
 }
 
-message OptValues {
-  repeated OptValue values = 1;
+
+message RequestReadValue {
+  bytes key = 1;
 }
 
-message Keys {
+message ReplyReadValue {
+  optional bytes value = 1;
+}
+
+
+message RequestContainsKey {
+  bytes key = 1;
+}
+
+message ReplyContainsKey {
+  bool test = 1;
+}
+
+
+message RequestReadMultiValues {
   repeated bytes keys = 1;
 }
 
-message KeyValues {
+message ReplyReadMultiValues {
+  repeated OptValue values = 1;
+}
+
+
+message RequestFindKeysByPrefix {
+  bytes key_prefix = 1;
+}
+
+message ReplyFindKeysByPrefix {
+  repeated bytes keys = 1;
+}
+
+
+message RequestFindKeyValuesByPrefix {
+  bytes key_prefix = 1;
+}
+
+message ReplyFindKeyValuesByPrefix {
   repeated KeyValue key_values = 1;
 }
 
-message StoreReply {
-  oneof reply {
-    OptValue read_value = 1;
-    bool contains_key = 2;
-    OptValues read_multi_values = 3;
-    Keys find_keys_by_prefix = 4;
-    KeyValues find_key_values_by_prefix = 5;
-    UnitType write_batch = 6;
-    UnitType clear_journal = 7;
-  }
+
+message RequestWriteBatch {
+  repeated Statement statements = 1;
+  bytes base_key = 2;
 }
 
+message ReplyWriteBatch {
+}
+
+
+message RequestClearJournal {
+  bytes base_key = 1;
+}
+
+message ReplyClearJournal {
+}
+
+
 service StoreProcessor {
-  rpc StoreProcess (StoreRequest) returns (StoreReply) {}
+  rpc ProcessReadValue (RequestReadValue) returns (ReplyReadValue) {}
+  rpc ProcessContainsKey (RequestContainsKey) returns (ReplyContainsKey) {}
+  rpc ProcessReadMultiValues (RequestReadMultiValues) returns (ReplyReadMultiValues) {}
+  rpc ProcessFindKeysByPrefix (RequestFindKeysByPrefix) returns (ReplyFindKeysByPrefix) {}
+  rpc ProcessFindKeyValuesByPrefix (RequestFindKeyValuesByPrefix) returns (ReplyFindKeyValuesByPrefix) {}
+  rpc ProcessWriteBatch (RequestWriteBatch) returns (ReplyWriteBatch) {}
+  rpc ProcessClearJournal (RequestClearJournal) returns (ReplyClearJournal) {}
 }

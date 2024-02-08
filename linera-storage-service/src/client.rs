@@ -7,8 +7,11 @@ use linera_views::lru_caching::TEST_CACHE_SIZE;
 use crate::{
     common::{SharedContextError, SharedStoreConfig},
     key_value_store::{
-        statement::Operation, store_processor_client::StoreProcessorClient, store_reply::Reply,
-        store_request::Query, BatchBaseKey, KeyValue, Keys, Statement, StoreReply, StoreRequest,
+        statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
+        ReplyContainsKey, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyReadMultiValues,
+        ReplyReadValue, RequestClearJournal, RequestContainsKey, RequestFindKeyValuesByPrefix,
+        RequestFindKeysByPrefix, RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
+        Statement,
     },
 };
 use async_lock::{RwLock, Semaphore, SemaphoreGuard};
@@ -51,52 +54,39 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, SharedContextError> {
-        let query = Some(Query::ReadValue(key.to_vec()));
-        let request = tonic::Request::new(StoreRequest { query });
+        let query = RequestReadValue { key: key.to_vec() };
+        let request = tonic::Request::new(query);
         let mut client = self.client.write().await;
         let _guard = self.acquire().await;
-        let response = client.store_process(request).await?;
+        let response = client.process_read_value(request).await?;
         let response = response.get_ref();
-        let StoreReply { reply } = response;
-        let Some(Reply::ReadValue(value)) = reply else {
-            return Err(SharedContextError::NotMatchingEntry);
-        };
-        Ok(value.value.clone())
+        let ReplyReadValue { value } = response;
+        Ok(value.clone())
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, SharedContextError> {
-        let query = Some(Query::ContainsKey(key.to_vec()));
-        let request = tonic::Request::new(StoreRequest { query });
+        let query = RequestContainsKey { key: key.to_vec() };
+        let request = tonic::Request::new(query);
         let mut client = self.client.write().await;
         let _guard = self.acquire().await;
-        let response = client.store_process(request).await?;
+        let response = client.process_contains_key(request).await?;
         let response = response.into_inner();
-        let StoreReply { reply } = response;
-        let Some(Reply::ContainsKey(value)) = reply else {
-            return Err(SharedContextError::NotMatchingEntry);
-        };
-        Ok(value)
+        let ReplyContainsKey { test } = response;
+        Ok(test)
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, SharedContextError> {
-        let query = Some(Query::ReadMultiValues(Keys { keys }));
-        let request = tonic::Request::new(StoreRequest { query });
+        let query = RequestReadMultiValues { keys };
+        let request = tonic::Request::new(query);
         let mut client = self.client.write().await;
         let _guard = self.acquire().await;
-        let response = client.store_process(request).await?;
+        let response = client.process_read_multi_values(request).await?;
         let response = response.into_inner();
-        let StoreReply { reply } = response;
-        let Some(Reply::ReadMultiValues(values)) = reply else {
-            return Err(SharedContextError::NotMatchingEntry);
-        };
-        let values = values
-            .values
-            .into_iter()
-            .map(|x| x.value)
-            .collect::<Vec<_>>();
+        let ReplyReadMultiValues { values } = response;
+        let values = values.into_iter().map(|x| x.value).collect::<Vec<_>>();
         Ok(values)
     }
 
@@ -104,35 +94,32 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, SharedContextError> {
-        let query = Some(Query::FindKeysByPrefix(key_prefix.to_vec()));
-        let request = tonic::Request::new(StoreRequest { query });
+        let query = RequestFindKeysByPrefix {
+            key_prefix: key_prefix.to_vec(),
+        };
+        let request = tonic::Request::new(query);
         let mut client = self.client.write().await;
         let _guard = self.acquire().await;
-        let response = client.store_process(request).await?;
+        let response = client.process_find_keys_by_prefix(request).await?;
         let response = response.into_inner();
-        let StoreReply { reply } = response;
-        let Some(Reply::FindKeysByPrefix(keys)) = reply else {
-            return Err(SharedContextError::NotMatchingEntry);
-        };
-        Ok(keys.keys)
+        let ReplyFindKeysByPrefix { keys } = response;
+        Ok(keys)
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, SharedContextError> {
-        let query = Some(Query::FindKeyValuesByPrefix(key_prefix.to_vec()));
-        let request = tonic::Request::new(StoreRequest { query });
+        let query = RequestFindKeyValuesByPrefix {
+            key_prefix: key_prefix.to_vec(),
+        };
+        let request = tonic::Request::new(query);
         let mut client = self.client.write().await;
         let _guard = self.acquire().await;
-        let response = client.store_process(request).await?;
+        let response = client.process_find_key_values_by_prefix(request).await?;
         let response = response.into_inner();
-        let StoreReply { reply } = response;
-        let Some(Reply::FindKeyValuesByPrefix(key_values)) = reply else {
-            return Err(SharedContextError::NotMatchingEntry);
-        };
+        let ReplyFindKeyValuesByPrefix { key_values } = response;
         let key_values = key_values
-            .key_values
             .into_iter()
             .map(|x| (x.key, x.value))
             .collect::<Vec<_>>();
@@ -159,34 +146,25 @@ impl WritableKeyValueStore<SharedContextError> for SharedStoreClient {
             };
             statements.push(statement);
         }
-        let batch_base_key = BatchBaseKey {
+        let query = RequestWriteBatch {
             statements,
             base_key: base_key.to_vec(),
         };
-        let query = Some(Query::WriteBatch(batch_base_key));
-        let request = tonic::Request::new(StoreRequest { query });
+        let request = tonic::Request::new(query);
         let mut client = self.client.write().await;
         let _guard = self.acquire().await;
-        let response = client.store_process(request).await?;
-        let response = response.get_ref();
-        let StoreReply { reply } = response;
-        let Some(Reply::WriteBatch(_unit)) = reply else {
-            return Err(SharedContextError::NotMatchingEntry);
-        };
+        let _response = client.process_write_batch(request).await?;
         Ok(())
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), SharedContextError> {
-        let query = Some(Query::ClearJournal(base_key.to_vec()));
-        let request = tonic::Request::new(StoreRequest { query });
+        let query = RequestClearJournal {
+            base_key: base_key.to_vec(),
+        };
+        let request = tonic::Request::new(query);
         let mut client = self.client.write().await;
         let _guard = self.acquire().await;
-        let response = client.store_process(request).await?;
-        let response = response.get_ref();
-        let StoreReply { reply } = response;
-        let Some(Reply::WriteBatch(_unit)) = reply else {
-            return Err(SharedContextError::NotMatchingEntry);
-        };
+        let _response = client.process_clear_journal(request).await?;
         Ok(())
     }
 }
