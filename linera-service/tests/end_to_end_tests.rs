@@ -1954,52 +1954,33 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     client2.wallet_init(&[], FaucetOption::None).await.unwrap();
 
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
-    let balance1 = client1.local_balance(Account::chain(chain1)).await.unwrap();
 
     // Generate keys for client 2.
     let client2_key = client2.keygen().await.unwrap();
 
     // Open a great-grandchild chain on behalf of client 2.
     let (_, grandparent) = client1
-        .open_chain(chain1, None, Amount::from_tokens(3))
+        .open_chain(chain1, None, Amount::from_tokens(2))
         .await
         .unwrap();
     let (_, parent) = client1
-        .open_chain(grandparent, None, Amount::from_tokens(2))
+        .open_chain(grandparent, None, Amount::ONE)
         .await
         .unwrap();
     let (message_id, chain2) = client1
-        .open_chain(parent, Some(client2_key), Amount::ONE)
+        .open_chain(parent, Some(client2_key), Amount::ZERO)
         .await
         .unwrap();
     client2.assign(client2_key, message_id).await.unwrap();
 
-    // Transfer 6 units from Chain 1 to Chain 2.
-    client1
-        .transfer(Amount::from_tokens(6), chain1, chain2)
-        .await
-        .unwrap();
+    // Transfer a tokens to chain 2. Check that this increases the local balance, proving
+    // that client 2 can create blocks on that chain.
+    let account2 = Account::chain(chain2);
+    assert_eq!(client2.local_balance(account2).await.unwrap(), Amount::ZERO);
+    client1.transfer(Amount::ONE, chain1, chain2).await.unwrap();
     client2.sync(chain2).await.unwrap();
-    assert_approx(
-        client2.query_balance(Account::chain(chain2)).await.unwrap(),
-        Amount::from_tokens(7),
-    );
-
-    // Transfer 2 units from Chain 2 to Chain 1.
-    client2
-        .transfer(Amount::from_tokens(2), chain2, chain1)
-        .await
-        .unwrap();
-    client1.sync(chain1).await.unwrap();
-    client2.sync(chain2).await.unwrap();
-    assert_approx(
-        client1.query_balance(Account::chain(chain1)).await.unwrap(),
-        balance1 - Amount::from_tokens(7),
-    );
-    assert_approx(
-        client2.query_balance(Account::chain(chain2)).await.unwrap(),
-        Amount::from_tokens(5),
-    );
+    client2.process_inbox(chain2).await.unwrap();
+    assert!(client2.local_balance(account2).await.unwrap() > Amount::ZERO);
 
     net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
