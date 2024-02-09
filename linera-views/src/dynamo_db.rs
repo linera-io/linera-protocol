@@ -369,12 +369,7 @@ impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
 
     async fn delete_all(config: &Self::Config) -> Result<(), DynamoDbContextError> {
         let client = Client::from_conf(config.config.clone());
-        let tables = client
-            .list_tables()
-            .send()
-            .await?
-            .table_names
-            .expect("List of tables was not returned");
+        let tables = Self::list_all(config).await?;
         for table in tables {
             client.delete_table().table_name(&table).send().await?;
         }
