@@ -8,9 +8,9 @@ use futures::future::{join_all, try_join_all};
 use linera_base::{
     async_graphql::InputType,
     data_types::Amount,
-    identifiers::{AccountOwner, ApplicationId, ChainId, Owner},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, Owner},
 };
-use linera_execution::system::{self, SystemChannel};
+use linera_execution::system::SystemChannel;
 use linera_service::cli_wrappers::{
     ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, Network,
 };
@@ -106,7 +106,7 @@ async fn benchmark_with_fungible(
     try_join_all(clients.iter().map(|user| async move {
         let chain = user.default_chain().context("missing default chain")?;
         user.sync(chain).await?;
-        let balance = user.query_balance(system::Account::chain(chain)).await?;
+        let balance = user.query_balance(Account::chain(chain)).await?;
         info!("User {:?} has {}", user.get_owner(), balance);
         Ok::<_, anyhow::Error>(())
     }))

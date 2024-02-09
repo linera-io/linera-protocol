@@ -27,7 +27,7 @@ use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{Amount, ArithmeticError, BlockHeight, Round, Timestamp},
     ensure,
-    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_chain::{
     data_types::{
@@ -39,7 +39,7 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::{
-        Account, AdminOperation, Recipient, SystemChannel, SystemOperation, UserData,
+        AdminOperation, Recipient, SystemChannel, SystemOperation, UserData,
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX, PUBLISH_BYTECODE_MESSAGE_INDEX,
     },
     Bytecode, ChainOwnership, ExecutionError, Message, Operation, Query, Response,
