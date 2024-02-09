@@ -8,20 +8,25 @@ use crate::{
     UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
 };
 use futures::channel::mpsc;
+use linera_base::data_types::{Amount, Timestamp};
+
+#[cfg(with_metrics)]
 use linera_base::{
-    data_types::{Amount, Timestamp},
-    prometheus_util::{self, MeasureLatency},
+    prometheus_util::{self, MeasureLatency as _},
     sync::Lazy,
 };
+
 use linera_views::{
     batch::Batch,
     common::Context,
     views::{View, ViewError},
 };
 use oneshot::Sender;
+#[cfg(with_metrics)]
 use prometheus::HistogramVec;
 use std::fmt::{self, Debug, Formatter};
 
+#[cfg(with_metrics)]
 /// Histogram of the latency to load a contract bytecode.
 static LOAD_CONTRACT_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
@@ -36,6 +41,7 @@ static LOAD_CONTRACT_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Histogram creation should not fail")
 });
 
+#[cfg(with_metrics)]
 /// Histogram of the latency to load a service bytecode.
 static LOAD_SERVICE_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
@@ -63,6 +69,7 @@ where
         use Request::*;
         match request {
             LoadContract { id, callback } => {
+                #[cfg(with_metrics)]
                 let _latency = LOAD_CONTRACT_LATENCY.measure_latency();
                 let description = self.system.registry.describe_application(id).await?;
                 let code = self
@@ -74,6 +81,7 @@ where
             }
 
             LoadService { id, callback } => {
+                #[cfg(with_metrics)]
                 let _latency = LOAD_SERVICE_LATENCY.measure_latency();
                 let description = self.system.registry.describe_application(id).await?;
                 let code = self

@@ -109,7 +109,6 @@ pub mod lru_caching;
 pub mod reentrant_collection_view;
 
 /// The implementation of a key-value store view.
-#[cfg(not(target_arch = "wasm32"))]
 pub mod key_value_store_view;
 
 /// Wrapping a view to compute a hash.

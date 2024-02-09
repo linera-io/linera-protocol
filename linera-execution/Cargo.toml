@@ -11,8 +11,9 @@ license = "Apache-2.0"
 edition = "2021"
 
 [features]
-default = ["wasmer"]
+default = ["wasmer", "metrics"]
 test = ["tokio/macros"]
+metrics = ["prometheus"]
 wasmer = [
     "bytes",
     "dep:wasmer",
@@ -46,7 +47,7 @@ linera-views-derive.workspace = true
 lru.workspace = true
 once_cell.workspace = true
 oneshot.workspace = true
-prometheus.workspace = true
+prometheus = { workspace = true, optional = true }
 serde.workspace = true
 serde_bytes.workspace = true
 serde_json.workspace = true
@@ -71,6 +72,9 @@ test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
+
+[build-dependencies]
+cfg_aliases.workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["serde_bytes"]

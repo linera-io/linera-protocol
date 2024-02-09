@@ -157,6 +157,30 @@ cargo build --release --target wasm32-unknown-unknown
 The Rust flags are suggested to reduce the size of the Wasm bytecodes.
 
 
+## Platform-specific features
+
+Features that compile only on specific platforms are currently
+addressed using a variant of the [`winit`
+convention](https://stackoverflow.com/questions/67373380/can-i-set-cargo-projects-default-features-depending-on-the-platform).
+
+Let's look at an example: imagine our crate has a feature `metrics` that only works on UNIX platforms.
+
+We use `cfg_aliases` in `build.rs` for our crate to define an alias `with_metrics` that also
+includes the supported platform(s):
+
+``` rust
+fn main() {
+    cfg_aliases::cfg_aliases! {
+        with_metrics: { all(feature = "metrics", target_family = "unix") },
+    }
+}
+```
+
+Now, when we conditionally compile the feature in our code, we use `cfg(with_metrics)`
+instead of `cfg(feature = "metrics")`.  This has the effect that the feature is disabled both
+if it isn't requested _and_ if it is unsupported on the current target platform, allowing us
+to test `--all-targets` with impunity.
+
 ## Debugging techniques
 
 The debugging of tests can be complicated and some tools can help this.

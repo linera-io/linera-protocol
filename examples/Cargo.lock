@@ -538,6 +538,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "cfg_aliases"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77e53693616d3075149f4ead59bdeecd204ac6b8192d8969757601b74bddf00f"
+
+[[package]]
 name = "chrono"
 version = "0.4.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1888,6 +1894,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "bytes",
+ "cfg_aliases",
  "clap",
  "custom_debug_derive",
  "dashmap",
@@ -1900,7 +1907,6 @@ dependencies = [
  "lru",
  "once_cell",
  "oneshot",
- "prometheus",
  "serde",
  "serde_bytes",
  "serde_json",

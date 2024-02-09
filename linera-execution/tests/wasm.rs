@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(any(feature = "wasmer", feature = "wasmtime"))]
+#![cfg(any(feature = "wasmer", with_wasmtime))]
 
 #[allow(dead_code)]
 mod utils;
@@ -29,8 +29,8 @@ use test_case::test_case;
 /// To update the bytecode files, run `linera-execution/update_wasm_fixtures.sh`.
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, 37_228, ExecutionRuntimeConfig::Synchronous; "wasmer"))]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, 37_655, ExecutionRuntimeConfig::Synchronous; "wasmer_with_sanitizer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, 37_655, ExecutionRuntimeConfig::Synchronous; "wasmtime"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer, 37_655, ExecutionRuntimeConfig::Synchronous; "wasmtime_with_sanitizer"))]
+#[cfg_attr(with_wasmtime, test_case(WasmRuntime::Wasmtime, 37_655, ExecutionRuntimeConfig::Synchronous; "wasmtime"))]
+#[cfg_attr(with_wasmtime, test_case(WasmRuntime::WasmtimeWithSanitizer, 37_655, ExecutionRuntimeConfig::Synchronous; "wasmtime_with_sanitizer"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_fuel_for_counter_wasm_application(
     wasm_runtime: WasmRuntime,

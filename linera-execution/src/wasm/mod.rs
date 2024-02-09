@@ -8,16 +8,16 @@
 //! - `wasmer` enables the [Wasmer](https://wasmer.io/) runtime
 //! - `wasmtime` enables the [Wasmtime](https://wasmtime.dev/) runtime
 
-#![cfg(any(feature = "wasmer", feature = "wasmtime"))]
+#![cfg(any(with_wasmer, with_wasmtime))]
 
 mod module_cache;
 mod sanitizer;
 #[macro_use]
 mod system_api;
-#[cfg(feature = "wasmer")]
+#[cfg(with_wasmer)]
 #[path = "wasmer.rs"]
 mod wasmer;
-#[cfg(feature = "wasmtime")]
+#[cfg(with_wasmtime)]
 #[path = "wasmtime.rs"]
 mod wasmtime;
 
@@ -26,19 +26,24 @@ use crate::{
     Bytecode, ContractSyncRuntime, ExecutionError, ServiceSyncRuntime, UserContractInstance,
     UserContractModule, UserServiceInstance, UserServiceModule, WasmRuntime,
 };
+
+#[cfg(with_metrics)]
 use linera_base::{
     prometheus_util::{self, MeasureLatency},
     sync::Lazy,
 };
+
+#[cfg(with_metrics)]
 use prometheus::HistogramVec;
 use std::{path::Path, sync::Arc};
 use thiserror::Error;
 
-#[cfg(feature = "wasmer")]
+#[cfg(with_wasmer)]
 use wasmer::{WasmerContractInstance, WasmerServiceInstance};
-#[cfg(feature = "wasmtime")]
+#[cfg(with_wasmtime)]
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
 
+#[cfg(with_metrics)]
 static CONTRACT_INSTANTIATION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "contract_instantiation_latency",
@@ -51,6 +56,7 @@ static CONTRACT_INSTANTIATION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Histogram creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static SERVICE_INSTANTIATION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "service_instantiation_latency",
@@ -66,12 +72,12 @@ static SERVICE_INSTANTIATION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
 /// A user contract in a compiled WebAssembly module.
 #[derive(Clone)]
 pub enum WasmContractModule {
-    #[cfg(feature = "wasmer")]
+    #[cfg(with_wasmer)]
     Wasmer {
         engine: ::wasmer::Engine,
         module: ::wasmer::Module,
     },
-    #[cfg(feature = "wasmtime")]
+    #[cfg(with_wasmtime)]
     Wasmtime { module: Arc<::wasmtime::Module> },
 }
 
@@ -89,11 +95,11 @@ impl WasmContractModule {
             contract_bytecode
         };
         match runtime {
-            #[cfg(feature = "wasmer")]
+            #[cfg(with_wasmer)]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
                 Self::from_wasmer(contract_bytecode).await
             }
-            #[cfg(feature = "wasmtime")]
+            #[cfg(with_wasmtime)]
             WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
                 Self::from_wasmtime(contract_bytecode).await
             }
@@ -121,14 +127,15 @@ impl UserContractModule for WasmContractModule {
         &self,
         runtime: ContractSyncRuntime,
     ) -> Result<UserContractInstance, ExecutionError> {
+        #[cfg(with_metrics)]
         let _instantiation_latency = CONTRACT_INSTANTIATION_LATENCY.measure_latency();
 
         let instance: UserContractInstance = match self {
-            #[cfg(feature = "wasmtime")]
+            #[cfg(with_wasmtime)]
             WasmContractModule::Wasmtime { module } => {
                 Box::new(WasmtimeContractInstance::prepare(module, runtime)?)
             }
-            #[cfg(feature = "wasmer")]
+            #[cfg(with_wasmer)]
             WasmContractModule::Wasmer { engine, module } => {
                 Box::new(WasmerContractInstance::prepare(engine, module, runtime)?)
             }
@@ -141,9 +148,9 @@ impl UserContractModule for WasmContractModule {
 /// A user service in a compiled WebAssembly module.
 #[derive(Clone)]
 pub enum WasmServiceModule {
-    #[cfg(feature = "wasmer")]
+    #[cfg(with_wasmer)]
     Wasmer { module: Arc<::wasmer::Module> },
-    #[cfg(feature = "wasmtime")]
+    #[cfg(with_wasmtime)]
     Wasmtime { module: Arc<::wasmtime::Module> },
 }
 
@@ -154,11 +161,11 @@ impl WasmServiceModule {
         runtime: WasmRuntime,
     ) -> Result<Self, WasmExecutionError> {
         match runtime {
-            #[cfg(feature = "wasmer")]
+            #[cfg(with_wasmer)]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
                 Self::from_wasmer(service_bytecode).await
             }
-            #[cfg(feature = "wasmtime")]
+            #[cfg(with_wasmtime)]
             WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
                 Self::from_wasmtime(service_bytecode).await
             }
@@ -186,14 +193,15 @@ impl UserServiceModule for WasmServiceModule {
         &self,
         runtime: ServiceSyncRuntime,
     ) -> Result<UserServiceInstance, ExecutionError> {
+        #[cfg(with_metrics)]
         let _instantiation_latency = SERVICE_INSTANTIATION_LATENCY.measure_latency();
 
         let instance: UserServiceInstance = match self {
-            #[cfg(feature = "wasmtime")]
+            #[cfg(with_wasmtime)]
             WasmServiceModule::Wasmtime { module } => {
                 Box::new(WasmtimeServiceInstance::prepare(module, runtime)?)
             }
-            #[cfg(feature = "wasmer")]
+            #[cfg(with_wasmer)]
             WasmServiceModule::Wasmer { module } => {
                 Box::new(WasmerServiceInstance::prepare(module, runtime)?)
             }
@@ -204,20 +212,20 @@ impl UserServiceModule for WasmServiceModule {
 }
 
 /// Errors that can occur when executing a user application in a WebAssembly module.
-#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+#[cfg(any(with_wasmer, with_wasmtime))]
 #[derive(Debug, Error)]
 pub enum WasmExecutionError {
     #[error("Failed to load contract Wasm module: {_0}")]
     LoadContractModule(#[source] anyhow::Error),
     #[error("Failed to load service Wasm module: {_0}")]
     LoadServiceModule(#[source] anyhow::Error),
-    #[cfg(feature = "wasmtime")]
+    #[cfg(with_wasmtime)]
     #[error("Failed to create and configure Wasmtime runtime")]
     CreateWasmtimeEngine(#[source] anyhow::Error),
-    #[cfg(feature = "wasmer")]
+    #[cfg(with_wasmer)]
     #[error("Failed to execute Wasm module (Wasmer)")]
     ExecuteModuleInWasmer(#[from] ::wasmer::RuntimeError),
-    #[cfg(feature = "wasmtime")]
+    #[cfg(with_wasmtime)]
     #[error("Failed to execute Wasm module (Wasmtime)")]
     ExecuteModuleInWasmtime(#[from] ::wasmtime::Trap),
 }
