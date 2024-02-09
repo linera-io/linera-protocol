@@ -479,6 +479,9 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     type Config = ScyllaDbStoreConfig;
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ScyllaDbContextError> {
+        if !Self::is_allowed_name(namespace) {
+            return Err(ScyllaDbContextError::InvalidTableName);
+        }
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
@@ -556,6 +559,9 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ScyllaDbContextError> {
+        if !Self::is_allowed_name(namespace) {
+            return Err(ScyllaDbContextError::InvalidTableName);
+        }
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
@@ -618,6 +624,9 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     }
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbContextError> {
+        if !Self::is_allowed_name(namespace) {
+            return Err(ScyllaDbContextError::InvalidTableName);
+        }
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()

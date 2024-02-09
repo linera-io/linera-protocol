@@ -7,7 +7,7 @@
 // to the list of tables created so that this test can be run in parallel to
 // other tests.
 
-use linera_views::{common::AdminKeyValueStore, test_utils::get_namespace};
+use linera_views::{common::AdminKeyValueStore, test_utils::{get_namespace, generate_random_alphanumeric_string}};
 use rand::{Rng, SeedableRng};
 use std::{collections::BTreeSet, fmt::Debug};
 
@@ -42,7 +42,7 @@ async fn admin_test<E: Debug, S: AdminKeyValueStore<E>>(config: &S::Config) {
         // Creating the initial list of namespaces
         let mut working_namespaces = BTreeSet::new();
         for _i in 0..size {
-            let pre_namespace = get_namespace();
+            let pre_namespace = generate_random_alphanumeric_string(10);
             let namespace = format!("{}_{}", prefix, pre_namespace);
             let test = S::exists(config, &namespace).await.expect("test");
             assert!(!test);

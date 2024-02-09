@@ -13,7 +13,8 @@ use rand::{Rng, RngCore, SeedableRng};
 use std::collections::{BTreeMap, HashSet};
 use tracing::warn;
 
-fn generate_random_alphanumeric_string(length: usize) -> String {
+/// Get a random alphanumeric string that can be used for all tests.
+pub fn generate_random_alphanumeric_string(length: usize) -> String {
     // Define the characters that are allowed in the alphanumeric string
     let charset: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 
