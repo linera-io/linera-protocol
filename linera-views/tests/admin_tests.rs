@@ -7,7 +7,10 @@
 // to the list of tables created so that this test can be run in parallel to
 // other tests.
 
-use linera_views::{common::AdminKeyValueStore, test_utils::{get_namespace, generate_random_alphanumeric_string}};
+use linera_views::{
+    common::AdminKeyValueStore,
+    test_utils::{generate_random_alphanumeric_string, get_namespace},
+};
 use rand::{Rng, SeedableRng};
 use std::{collections::BTreeSet, fmt::Debug};
 
