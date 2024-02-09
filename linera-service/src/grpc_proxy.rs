@@ -1,6 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// `tracing::instrument` is not compatible with this nightly Clippy lint
+#![allow(clippy::blocks_in_conditions)]
+
 use crate::prometheus_server;
 use anyhow::Result;
 use async_trait::async_trait;

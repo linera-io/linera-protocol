@@ -1,6 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Some of these items are only used by some tests, but Rust will complain about unused
+// items for the tests where they aren't used
+#![allow(unused_imports)]
+
 mod mock_application;
 
 pub use self::mock_application::{ExpectedCall, MockApplication};

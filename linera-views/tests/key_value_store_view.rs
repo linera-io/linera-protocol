@@ -46,7 +46,7 @@ async fn key_value_store_view_mutability() {
         let save = rng.gen::<bool>();
         let read_state = view.store.index_values().await.unwrap();
         let state_vec = state_map.clone().into_iter().collect::<Vec<_>>();
-        assert!(read_state.iter().map(|(k, v)| (k, v)).eq(&state_map));
+        assert!(read_state.iter().map(|kv| (&kv.0, &kv.1)).eq(&state_map));
         assert_eq!(total_size(&state_vec), view.store.total_size());
 
         let count_oper = rng.gen_range(0..25);

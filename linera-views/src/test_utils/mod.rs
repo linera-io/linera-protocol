@@ -45,7 +45,7 @@ pub fn get_random_key_prefix() -> Vec<u8> {
 }
 
 /// Shuffles the values entries randomly
-pub fn random_shuffle<R: RngCore, T: Clone>(rng: &mut R, values: &mut Vec<T>) {
+pub fn random_shuffle<R: RngCore, T: Clone>(rng: &mut R, values: &mut [T]) {
     let n = values.len();
     for _ in 0..4 * n {
         let index1: usize = rng.gen_range(0..n);
