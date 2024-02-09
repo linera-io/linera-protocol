@@ -11,9 +11,8 @@ use common::INTEGRATION_TEST_GUARD;
 use linera_base::{
     crypto::KeyPair,
     data_types::{Amount, Timestamp},
-    identifiers::{AccountOwner, ChainId, Owner},
+    identifiers::{Account, AccountOwner, ChainId, Owner},
 };
-use linera_execution::system::Account;
 use linera_service::{
     cli_wrappers::{
         local_net::{Database, LocalNet, LocalNetConfig},

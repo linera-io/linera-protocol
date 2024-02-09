@@ -32,6 +32,61 @@ pub enum AccountOwner {
     Application(ApplicationId),
 }
 
+/// A system account.
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
+pub struct Account {
+    /// The chain of the account.
+    pub chain_id: ChainId,
+    /// The owner of the account, or `None` for the chain balance.
+    pub owner: Option<Owner>,
+}
+
+impl Account {
+    /// Creates an Account with a ChainId
+    pub fn chain(chain_id: ChainId) -> Self {
+        Account {
+            chain_id,
+            owner: None,
+        }
+    }
+
+    /// Creates an Account with a ChainId and an Owner
+    pub fn owner(chain_id: ChainId, owner: Owner) -> Self {
+        Account {
+            chain_id,
+            owner: Some(owner),
+        }
+    }
+}
+
+impl std::fmt::Display for Account {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.owner {
+            Some(owner) => write!(f, "{}:{}", self.chain_id, owner),
+            None => write!(f, "{}", self.chain_id),
+        }
+    }
+}
+
+impl FromStr for Account {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts = s.split(':').collect::<Vec<_>>();
+        anyhow::ensure!(
+            parts.len() <= 2,
+            "Expecting format `chain-id:address` or `chain-id`"
+        );
+        if parts.len() == 1 {
+            Ok(Account::chain(s.parse()?))
+        } else {
+            let chain_id = parts[0].parse()?;
+            let owner = parts[1].parse()?;
+            Ok(Account::owner(chain_id, owner))
+        }
+    }
+}
+
 /// How to create a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub enum ChainDescription {

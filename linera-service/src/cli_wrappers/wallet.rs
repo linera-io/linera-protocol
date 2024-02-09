@@ -14,13 +14,10 @@ use linera_base::{
     abi::ContractAbi,
     crypto::{CryptoHash, PublicKey},
     data_types::Amount,
-    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_execution::{
-    committee::ValidatorName,
-    policy::ResourceControlPolicy,
-    system::{Account, SystemChannel},
-    Bytecode,
+    committee::ValidatorName, policy::ResourceControlPolicy, system::SystemChannel, Bytecode,
 };
 use linera_version::VersionInfo;
 use serde::{de::DeserializeOwned, ser::Serialize};

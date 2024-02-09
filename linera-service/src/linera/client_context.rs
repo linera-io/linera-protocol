@@ -8,7 +8,7 @@ use futures::{future, lock::Mutex, Future};
 use linera_base::{
     crypto::{CryptoRng, KeyPair},
     data_types::{BlockHeight, Timestamp},
-    identifiers::{BytecodeId, ChainId},
+    identifiers::{Account, BytecodeId, ChainId},
 };
 use linera_chain::data_types::Certificate;
 use linera_core::{
@@ -16,7 +16,7 @@ use linera_core::{
     data_types::ClientOutcome,
     node::{CrossChainMessageDelivery, ValidatorNodeProvider},
 };
-use linera_execution::{system::Account, Bytecode};
+use linera_execution::Bytecode;
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
     chain_listener,

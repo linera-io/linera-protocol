@@ -16,7 +16,7 @@ use crate::{
 use linera_base::{
     crypto::{BcsSignable, CryptoHash, *},
     data_types::*,
-    identifiers::{ChainDescription, ChainId, ChannelName, Destination, MessageId, Owner},
+    identifiers::{Account, ChainDescription, ChainId, ChannelName, Destination, MessageId, Owner},
 };
 use linera_chain::{
     data_types::{
@@ -29,7 +29,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    system::{Account, AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation},
+    system::{AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation},
     ChainOwnership, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
     ExecutionStateView, GenericApplicationId, Message, MessageKind, Query, Response,
     SystemExecutionError, SystemExecutionState, SystemQuery, SystemResponse, TimeoutConfig,

@@ -22,7 +22,7 @@ use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::*,
     data_types::*,
-    identifiers::{ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{Account, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_chain::{
     data_types::{CertificateValue, Event, ExecutedBlock},
@@ -31,7 +31,7 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch},
     policy::ResourceControlPolicy,
-    system::{Account, Recipient, SystemOperation, UserData},
+    system::{Recipient, SystemOperation, UserData},
     ChainOwnership, ExecutionError, Message, Operation, SystemExecutionError, SystemMessage,
     SystemQuery, SystemResponse, TimeoutConfig,
 };
