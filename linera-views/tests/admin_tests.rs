@@ -7,10 +7,7 @@
 // to the list of tables created so that this test can be run in parallel to
 // other tests.
 
-use linera_views::{
-    common::AdminKeyValueStore,
-    test_utils::{generate_random_alphanumeric_string, get_namespace},
-};
+use linera_views::{common::AdminKeyValueStore, test_utils::get_namespace};
 use rand::{Rng, SeedableRng};
 use std::{collections::BTreeSet, fmt::Debug};
 
@@ -41,12 +38,11 @@ async fn admin_test<E: Debug, S: AdminKeyValueStore<E>>(config: &S::Config) {
     let namespaces = get_table_matching_prefix::<E, S>(config, &prefix).await;
     assert_eq!(namespaces.len(), 0);
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
-    for size in [1, 3, 9] {
+    for size in [1, 3, 6, 9] {
         // Creating the initial list of namespaces
         let mut working_namespaces = BTreeSet::new();
-        for _i in 0..size {
-            let pre_namespace = generate_random_alphanumeric_string(10);
-            let namespace = format!("{}_{}", prefix, pre_namespace);
+        for i in 0..size {
+            let namespace = format!("{}_{}", prefix, i);
             let test = S::exists(config, &namespace).await.expect("test");
             assert!(!test);
             working_namespaces.insert(namespace);
@@ -56,15 +52,13 @@ async fn admin_test<E: Debug, S: AdminKeyValueStore<E>>(config: &S::Config) {
             S::create(config, namespace)
                 .await
                 .expect("creation of a namespace");
-        }
-        // Checking that they exists
-        for namespace in &working_namespaces {
             let test = S::exists(config, namespace).await.expect("test");
             assert!(test);
         }
         // Listing all of them
         let namespaces = get_table_matching_prefix::<E, S>(config, &prefix).await;
-        assert_eq!(namespaces, working_namespaces);
+        let test = namespaces == working_namespaces;
+        assert!(test);
         // Selecting at random some for deletion
         let mut deleted_namespaces = BTreeSet::new();
         let mut kept_namespaces = BTreeSet::new();
@@ -74,15 +68,12 @@ async fn admin_test<E: Debug, S: AdminKeyValueStore<E>>(config: &S::Config) {
                 S::delete(config, &namespace)
                     .await
                     .expect("A successful deletion");
+                let test = S::exists(config, &namespace).await.expect("test");
+                assert!(!test);
                 deleted_namespaces.insert(namespace);
             } else {
                 kept_namespaces.insert(namespace);
             }
-        }
-        // Checking that the status is as we expect
-        for namespace in &deleted_namespaces {
-            let test = S::exists(config, namespace).await.expect("test");
-            assert!(!test);
         }
         for namespace in &kept_namespaces {
             let test = S::exists(config, namespace).await.expect("test");
