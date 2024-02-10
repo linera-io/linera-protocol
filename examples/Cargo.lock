@@ -1682,7 +1682,6 @@ dependencies = [
  "ed25519-dalek",
  "generic-array",
  "hex",
- "prometheus",
  "proptest",
  "rand",
  "serde",

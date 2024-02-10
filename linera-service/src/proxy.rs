@@ -9,7 +9,7 @@ use linera_rpc::{
         NetworkProtocol, ShardConfig, ValidatorInternalNetworkPreConfig,
         ValidatorPublicNetworkPreConfig,
     },
-    transport::{MessageHandler, TransportProtocol},
+    simple::{MessageHandler, TransportProtocol},
     RpcMessage,
 };
 use linera_service::{
