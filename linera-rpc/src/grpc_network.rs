@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // `tracing::instrument` is not compatible with this nightly Clippy lint
+#![allow(unknown_lints)]
 #![allow(clippy::blocks_in_conditions)]
 
 #[allow(clippy::derive_partial_eq_without_eq)]
