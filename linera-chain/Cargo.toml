@@ -15,7 +15,6 @@ test = ["tokio/macros", "linera-base/test", "linera-execution/test"]
 
 [dependencies]
 async-graphql.workspace = true
-async-lock.workspace = true
 async-trait.workspace = true
 futures.workspace = true
 linera-base.workspace = true

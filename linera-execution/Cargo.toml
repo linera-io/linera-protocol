@@ -31,7 +31,6 @@ wasmtime = [
 [dependencies]
 anyhow.workspace = true
 async-graphql.workspace = true
-async-lock.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 bytes = { workspace = true, optional = true }
