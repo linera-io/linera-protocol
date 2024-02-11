@@ -1620,7 +1620,9 @@ where
             ))) if matches!(
                 *error,
                 ChainError::ExecutionError(
-                    ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }),
+                    ExecutionError::SystemError(
+                        SystemExecutionError::InsufficientFundingForFees { .. }
+                    ),
                     ChainExecutionContext::Block
                 )
             ) =>

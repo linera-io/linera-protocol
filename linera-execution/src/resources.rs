@@ -79,8 +79,8 @@ where
         if other <= initial {
             self.account
                 .try_sub_assign(initial.try_sub(other).expect("other <= initial"))
-                .map_err(|_| SystemExecutionError::InsufficientFunding {
-                    current_balance: self.balance(),
+                .map_err(|_| SystemExecutionError::InsufficientFundingForFees {
+                    balance: self.balance(),
                 })?;
         } else {
             self.account
@@ -92,8 +92,8 @@ where
     /// Subtracts an amount from a balance and reports an error if that is impossible.
     fn update_balance(&mut self, fees: Amount) -> Result<(), ExecutionError> {
         self.account.try_sub_assign(fees).map_err(|_| {
-            SystemExecutionError::InsufficientFunding {
-                current_balance: self.balance(),
+            SystemExecutionError::InsufficientFundingForFees {
+                balance: self.balance(),
             }
         })?;
         Ok(())
