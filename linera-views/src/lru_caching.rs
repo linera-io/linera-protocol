@@ -6,7 +6,10 @@ pub const TEST_CACHE_SIZE: usize = 1000;
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_interval, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
+    common::{
+        get_interval, AdminKeyValueStore, KeyValueStore, ReadableKeyValueStore,
+        WritableKeyValueStore,
+    },
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -296,7 +299,10 @@ impl<E> LruCachingMemoryContext<E> {
             cache_size: 1000,
         };
         let config = MemoryStoreConfig { common_config };
-        let store = MemoryStore::new(config);
+        let namespace = "linera";
+        let store = MemoryStore::connect(&config, namespace)
+            .await
+            .expect("store");
         let store = LruCachingStore::new(store, n);
         Ok(Self {
             store,

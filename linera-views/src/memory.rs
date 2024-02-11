@@ -12,6 +12,7 @@ use crate::{
 };
 use async_lock::{Mutex, MutexGuardArc, RwLock};
 use async_trait::async_trait;
+use futures::FutureExt;
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use thiserror::Error;
 
@@ -154,8 +155,11 @@ impl AdminKeyValueStore<MemoryContextError> for MemoryStore {
             .try_lock_arc()
             .expect("We should acquire the lock just after creating the object");
         let max_stream_queries = config.common_config.max_stream_queries;
-        let store = MemoryStore::new(guard, max_stream_queries);
-        Ok(store)
+        let map = Arc::new(RwLock::new(guard));
+        Ok(MemoryStore {
+            map,
+            max_stream_queries,
+        })
     }
 
     async fn list_all(_config: &Self::Config) -> Result<Vec<String>, MemoryContextError> {
@@ -183,22 +187,6 @@ impl KeyValueStore for MemoryStore {
     type Error = MemoryContextError;
 }
 
-impl MemoryStore {
-    /// Creates a `MemoryStore` from a `MemoryStoreConfig`.
-    pub fn new(memory_store_config: MemoryStoreConfig) -> Self {
-        let state = Arc::new(Mutex::new(BTreeMap::new()));
-        let guard = state
-            .try_lock_arc()
-            .expect("We should acquire the lock just after creating the object");
-        let max_stream_queries = memory_store_config.common_config.max_stream_queries;
-        let map = Arc::new(RwLock::new(guard));
-        MemoryStore {
-            map,
-            max_stream_queries,
-        }
-    }
-}
-
 /// An implementation of [`crate::common::Context`] that stores all values in memory.
 pub type MemoryContext<E> = ContextFromStore<E, MemoryStore>;
 
@@ -211,7 +199,11 @@ impl<E> MemoryContext<E> {
             cache_size: 1000,
         };
         let config = MemoryStoreConfig { common_config };
-        let store = MemoryStore::new(config);
+        let namespace = "linera";
+        let store = MemoryStore::connect(&config, namespace)
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         let base_key = Vec::new();
         Self {
             store,
@@ -236,7 +228,11 @@ pub fn create_memory_store_stream_queries(max_stream_queries: usize) -> MemorySt
         cache_size: 1000,
     };
     let config = MemoryStoreConfig { common_config };
-    MemoryStore::new(config)
+    let namespace = "linera";
+    MemoryStore::connect(&config, namespace)
+        .now_or_never()
+        .unwrap()
+        .unwrap()
 }
 
 /// Creates a test memory store for working.

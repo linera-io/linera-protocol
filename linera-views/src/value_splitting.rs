@@ -4,12 +4,13 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        AdminKeyValueStore, ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore,
-        ReadableKeyValueStore, WritableKeyValueStore,
+        AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
+        KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
     memory::{MemoryContextError, MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
 };
 use async_trait::async_trait;
+use futures::FutureExt;
 use linera_base::ensure;
 use std::fmt::Debug;
 use thiserror::Error;
@@ -411,7 +412,11 @@ impl TestMemoryStoreInternal {
             cache_size: 1000,
         };
         let config = MemoryStoreConfig { common_config };
-        let store = MemoryStore::new(config);
+        let namespace = "linera";
+        let store = MemoryStore::connect(&config, namespace)
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         TestMemoryStoreInternal { store }
     }
 }

@@ -10,7 +10,7 @@ use crate::key_value_store::{
     RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
 };
 use linera_views::{
-    common::{CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
+    common::{AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
     memory::{create_memory_store_stream_queries, MemoryStore},
     rocks_db::{RocksDbStore, RocksDbStoreConfig},
 };
@@ -279,7 +279,10 @@ async fn main() {
                 path_buf,
                 common_config,
             };
-            let (store, _) = RocksDbStore::new(config).await.expect("store");
+            let namespace = "linera";
+            let store = RocksDbStore::initialize(&config, namespace)
+                .await
+                .expect("store");
             (SharedStoreServer::RocksDb(store), endpoint)
         }
     };
