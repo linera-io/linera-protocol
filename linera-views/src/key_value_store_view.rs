@@ -47,8 +47,8 @@ use {
     crate::common::{
         ContextFromStore, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
-    crate::memory::{MemoryContext, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
-    async_lock::{MutexGuardArc, RwLock},
+    crate::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
+    async_lock::RwLock,
     std::sync::Arc,
 };
 
@@ -1111,12 +1111,8 @@ pub type KeyValueStoreMemoryContext<E> = ContextFromStore<E, ViewContainer<Memor
 #[cfg(any(test, feature = "test"))]
 impl<E> KeyValueStoreMemoryContext<E> {
     /// Creates a [`KeyValueStoreMemoryContext`].
-    pub async fn new(
-        guard: MutexGuardArc<MemoryStoreMap>,
-        base_key: Vec<u8>,
-        extra: E,
-    ) -> Result<Self, ViewError> {
-        let context = MemoryContext::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES, ());
+    pub async fn new(base_key: Vec<u8>, extra: E) -> Result<Self, ViewError> {
+        let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, ());
         let store = ViewContainer::new(context).await?;
         Ok(Self {
             store,

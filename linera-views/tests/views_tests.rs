@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_lock::Mutex;
+use async_lock::{Mutex, RwLock};
 use async_trait::async_trait;
 use linera_views::{
     batch::{
@@ -10,12 +10,13 @@ use linera_views::{
     },
     collection_view::CollectionView,
     common::Context,
-    key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
+    key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView, ViewContainer},
     log_view::LogView,
-    lru_caching::LruCachingMemoryContext,
+    lru_caching::{LruCachingMemoryContext, LruCachingStore},
     map_view::MapView,
     memory::{
-        create_memory_context, MemoryContext, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES,
+        create_memory_context, MemoryContext, MemoryStore, MemoryStoreMap,
+        TEST_MEMORY_MAX_STREAM_QUERIES,
     },
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
@@ -97,11 +98,18 @@ impl StateStore for MemoryTestStore {
             .entry(id)
             .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
         tracing::trace!("Acquiring lock on {:?}", id);
-        let context = MemoryContext::new(
-            state.clone().lock_arc().await,
-            TEST_MEMORY_MAX_STREAM_QUERIES,
-            id,
-        );
+        let guard = state.clone().lock_arc().await;
+        let map = Arc::new(RwLock::new(guard));
+        let store = MemoryStore {
+            map,
+            max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
+        };
+        let base_key = bcs::to_bytes(&id)?;
+        let context = MemoryContext {
+            store,
+            base_key,
+            extra: id,
+        };
         StateView::load(context).await
     }
 }
@@ -127,8 +135,23 @@ impl StateStore for KeyValueStoreTestStore {
             .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
         tracing::trace!("Acquiring lock on {:?}", id);
         let guard = state.clone().lock_arc().await;
+        let map = Arc::new(RwLock::new(guard));
+        let store = MemoryStore {
+            map,
+            max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
+        };
+        let context = MemoryContext {
+            store,
+            base_key: Vec::new(),
+            extra: (),
+        };
         let base_key = bcs::to_bytes(&id)?;
-        let context = KeyValueStoreMemoryContext::new(guard, base_key, id).await?;
+        let store = ViewContainer::new(context).await?;
+        let context = KeyValueStoreMemoryContext {
+            store,
+            base_key,
+            extra: id,
+        };
         StateView::load(context).await
     }
 }
@@ -154,9 +177,19 @@ impl StateStore for LruMemoryStore {
             .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
         tracing::trace!("Acquiring lock on {:?}", id);
         let guard = state.clone().lock_arc().await;
-        let base_key = bcs::to_bytes(&id)?;
+        let map = Arc::new(RwLock::new(guard));
+        let store = MemoryStore {
+            map,
+            max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
+        };
         let n = 1000;
-        let context = LruCachingMemoryContext::new(guard, base_key, id, n).await?;
+        let store = LruCachingStore::new(store, n);
+        let base_key = bcs::to_bytes(&id)?;
+        let context = LruCachingMemoryContext {
+            store,
+            base_key,
+            extra: id,
+        };
         StateView::load(context).await
     }
 }
