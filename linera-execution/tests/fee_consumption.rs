@@ -51,7 +51,7 @@ async fn test_fee_consumption(
     spends: Vec<FeeSpend>,
     chain_balance: Amount,
     owner_balance: Option<Amount>,
-) -> anyhow::Result<()> {
+) {
     let state = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
         ..SystemExecutionState::default()
@@ -66,10 +66,10 @@ async fn test_fee_consumption(
     let owner = Owner::from(PublicKey::debug(0));
     view.system.balance.set(chain_balance);
     if let Some(owner_balance) = owner_balance {
-        view.system.balances.insert(&owner, owner_balance)?;
+        view.system.balances.insert(&owner, owner_balance).unwrap();
     }
 
-    let mut applications = register_mock_applications(&mut view, 1).await?;
+    let mut applications = register_mock_applications(&mut view, 1).await.unwrap();
     let (application_id, application) = applications
         .next()
         .expect("Caller mock application should be registered");
@@ -111,7 +111,7 @@ async fn test_fee_consumption(
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             for spend in spends {
-                spend.execute(runtime)?;
+                spend.execute(runtime).unwrap();
             }
             Ok(RawExecutionOutcome::default())
         },
@@ -133,7 +133,8 @@ async fn test_fee_consumption(
             },
             &mut controller,
         )
-        .await?;
+        .await
+        .unwrap();
 
     let (expected_chain_balance, expected_owner_balance) = if chain_balance >= consumed_fees {
         (chain_balance.saturating_sub(consumed_fees), owner_balance)
@@ -162,7 +163,6 @@ async fn test_fee_consumption(
             RawExecutionOutcome::default().with_authenticated_signer(authenticated_signer),
         )]
     );
-    Ok(())
 }
 
 /// A runtime operation that costs some amount of fees.
