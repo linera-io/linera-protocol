@@ -25,9 +25,7 @@ use {
         policy::ResourceControlPolicy, system::SystemExecutionState, ResourceTracker,
         TestExecutionRuntimeContext, UserContractCode,
     },
-    async_lock::Mutex,
     linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
-    std::collections::BTreeMap,
     std::sync::Arc,
 };
 
@@ -66,12 +64,11 @@ where
             timestamp,
             registry,
         } = state;
-        let guard = Arc::new(Mutex::new(BTreeMap::new())).lock_arc().await;
         let extra = TestExecutionRuntimeContext::new(
             description.expect("Chain description should be set").into(),
             execution_runtime_config,
         );
-        let context = MemoryContext::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES, extra);
+        let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, extra);
         let mut view = Self::load(context)
             .await
             .expect("Loading from memory should work");

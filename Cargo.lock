@@ -3160,7 +3160,6 @@ name = "linera-chain"
 version = "0.8.0"
 dependencies = [
  "async-graphql",
- "async-lock",
  "async-trait",
  "futures",
  "linera-base",
@@ -3222,7 +3221,6 @@ version = "0.8.0"
 dependencies = [
  "anyhow",
  "async-graphql",
- "async-lock",
  "async-trait",
  "bcs",
  "bytes",
@@ -3574,6 +3572,27 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "linera-storage-service"
+version = "0.6.0"
+dependencies = [
+ "async-lock",
+ "async-trait",
+ "clap 4.4.11",
+ "linera-storage-service",
+ "linera-views",
+ "proptest",
+ "prost",
+ "serde-reflection",
+ "serde_yaml 0.8.26",
+ "similar-asserts",
+ "test-strategy",
+ "thiserror",
+ "tokio",
+ "tonic",
+ "tonic-build",
 ]
 
 [[package]]

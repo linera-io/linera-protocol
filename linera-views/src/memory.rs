@@ -32,8 +32,10 @@ pub type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 /// A virtual DB client where data are persisted in memory.
 #[derive(Clone)]
 pub struct MemoryStore {
-    map: Arc<RwLock<MutexGuardArc<MemoryStoreMap>>>,
-    max_stream_queries: usize,
+    /// The map used for storing the data.
+    pub map: Arc<RwLock<MutexGuardArc<MemoryStoreMap>>>,
+    /// The maximum number of queries used for the stream.
+    pub max_stream_queries: usize,
 }
 
 #[async_trait]
@@ -134,8 +136,13 @@ impl KeyValueStore for MemoryStore {
 }
 
 impl MemoryStore {
-    /// constructor of MemoryStore
-    pub fn new(guard: MutexGuardArc<MemoryStoreMap>, max_stream_queries: usize) -> Self {
+    /// Creates a `MemoryStore` from a `MemoryStoreConfig`.
+    pub fn new(memory_store_config: MemoryStoreConfig) -> Self {
+        let state = Arc::new(Mutex::new(BTreeMap::new()));
+        let guard = state
+            .try_lock_arc()
+            .expect("We should acquire the lock just after creating the object");
+        let max_stream_queries = memory_store_config.common_config.max_stream_queries;
         let map = Arc::new(RwLock::new(guard));
         MemoryStore {
             map,
@@ -149,8 +156,14 @@ pub type MemoryContext<E> = ContextFromStore<E, MemoryStore>;
 
 impl<E> MemoryContext<E> {
     /// Creates a [`MemoryContext`].
-    pub fn new(guard: MutexGuardArc<MemoryStoreMap>, max_stream_queries: usize, extra: E) -> Self {
-        let store = MemoryStore::new(guard, max_stream_queries);
+    pub fn new(max_stream_queries: usize, extra: E) -> Self {
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries: None,
+            max_stream_queries,
+            cache_size: 1000,
+        };
+        let config = MemoryStoreConfig { common_config };
+        let store = MemoryStore::new(config);
         let base_key = Vec::new();
         Self {
             store,
@@ -164,20 +177,18 @@ impl<E> MemoryContext<E> {
 /// It is not named create_memory_test_context because it is massively
 /// used and so we want to have a short name.
 pub fn create_memory_context() -> MemoryContext<()> {
-    let state = Arc::new(Mutex::new(BTreeMap::new()));
-    let guard = state
-        .try_lock_arc()
-        .expect("We should acquire the lock just after creating the object");
-    MemoryContext::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES, ())
+    MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, ())
 }
 
 /// Creates a test memory client for working.
 pub fn create_memory_store_stream_queries(max_stream_queries: usize) -> MemoryStore {
-    let state = Arc::new(Mutex::new(BTreeMap::new()));
-    let guard = state
-        .try_lock_arc()
-        .expect("We should acquire the lock just after creating the object");
-    MemoryStore::new(guard, max_stream_queries)
+    let common_config = CommonStoreConfig {
+        max_concurrent_queries: None,
+        max_stream_queries,
+        cache_size: 1000,
+    };
+    let config = MemoryStoreConfig { common_config };
+    MemoryStore::new(config)
 }
 
 /// Creates a test memory store for working.

@@ -4,15 +4,14 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore, ReadableKeyValueStore,
-        WritableKeyValueStore,
+        CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore,
+        ReadableKeyValueStore, WritableKeyValueStore,
     },
-    memory::{MemoryContextError, MemoryStore, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
+    memory::{MemoryContextError, MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
 };
-use async_lock::{Mutex, MutexGuardArc};
 use async_trait::async_trait;
 use linera_base::ensure;
-use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
+use std::fmt::Debug;
 use thiserror::Error;
 
 /// Data type indicating that the database is not consistent
@@ -301,6 +300,12 @@ pub struct TestMemoryStoreInternal {
     store: MemoryStore,
 }
 
+impl Default for TestMemoryStoreInternal {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl ReadableKeyValueStore<MemoryContextError> for TestMemoryStoreInternal {
     const MAX_KEY_SIZE: usize = usize::MAX;
@@ -366,8 +371,14 @@ impl KeyValueStore for TestMemoryStoreInternal {
 
 impl TestMemoryStoreInternal {
     /// Creates a `TestMemoryStore` from the guard
-    pub fn new(guard: MutexGuardArc<MemoryStoreMap>) -> Self {
-        let store = MemoryStore::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES);
+    pub fn new() -> Self {
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries: None,
+            max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
+            cache_size: 1000,
+        };
+        let config = MemoryStoreConfig { common_config };
+        let store = MemoryStore::new(config);
         TestMemoryStoreInternal { store }
     }
 }
@@ -437,10 +448,16 @@ impl KeyValueStore for TestMemoryStore {
 
 impl TestMemoryStore {
     /// Creates a `TestMemoryStore` from the guard
-    pub fn new(guard: MutexGuardArc<MemoryStoreMap>) -> Self {
-        let store = TestMemoryStoreInternal::new(guard);
+    pub fn new() -> Self {
+        let store = TestMemoryStoreInternal::new();
         let store = ValueSplittingStore::new(store);
         TestMemoryStore { store }
+    }
+}
+
+impl Default for TestMemoryStore {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -449,8 +466,8 @@ pub type TestMemoryContext<E> = ContextFromStore<E, TestMemoryStore>;
 
 impl<E> TestMemoryContext<E> {
     /// Creates a [`TestMemoryContext`].
-    pub fn new(guard: MutexGuardArc<MemoryStoreMap>, extra: E) -> Self {
-        let store = TestMemoryStore::new(guard);
+    pub fn new(extra: E) -> Self {
+        let store = TestMemoryStore::new();
         let base_key = Vec::new();
         Self {
             store,
@@ -464,20 +481,12 @@ impl<E> TestMemoryContext<E> {
 /// It is not named create_memory_test_context because it is massively
 /// used and so we want to have a short name.
 pub fn create_test_memory_context() -> TestMemoryContext<()> {
-    let state = Arc::new(Mutex::new(BTreeMap::new()));
-    let guard = state
-        .try_lock_arc()
-        .expect("We should acquire the lock just after creating the object");
-    TestMemoryContext::new(guard, ())
+    TestMemoryContext::new(())
 }
 
 /// Creates a `TestMemoryStore` for working.
 pub fn create_test_memory_store() -> TestMemoryStore {
-    let state = Arc::new(Mutex::new(BTreeMap::new()));
-    let guard = state
-        .try_lock_arc()
-        .expect("We should acquire the lock just after creating the object");
-    TestMemoryStore::new(guard)
+    TestMemoryStore::new()
 }
 
 /// An implementation of [`crate::common::Context`] that stores all values in memory.
@@ -485,8 +494,8 @@ pub type TestMemoryContextInternal<E> = ContextFromStore<E, TestMemoryStoreInter
 
 impl<E> TestMemoryContextInternal<E> {
     /// Creates a [`TestMemoryContextInternal`].
-    pub fn new(guard: MutexGuardArc<MemoryStoreMap>, extra: E) -> Self {
-        let store = TestMemoryStoreInternal::new(guard);
+    pub fn new(extra: E) -> Self {
+        let store = TestMemoryStoreInternal::new();
         let base_key = Vec::new();
         Self {
             store,
@@ -498,20 +507,12 @@ impl<E> TestMemoryContextInternal<E> {
 
 /// Provides a `TestMemoryStoreInternal<()>` that can be used for tests.
 pub fn create_test_memory_store_internal() -> TestMemoryStoreInternal {
-    let state = Arc::new(Mutex::new(BTreeMap::new()));
-    let guard = state
-        .try_lock_arc()
-        .expect("We should acquire the lock just after creating the object");
-    TestMemoryStoreInternal::new(guard)
+    TestMemoryStoreInternal::new()
 }
 
 /// Provides a `TestMemoryContextInternal<()>` that can be used for tests.
 pub fn create_test_memory_context_internal() -> TestMemoryContextInternal<()> {
-    let state = Arc::new(Mutex::new(BTreeMap::new()));
-    let guard = state
-        .try_lock_arc()
-        .expect("We should acquire the lock just after creating the object");
-    TestMemoryContextInternal::new(guard, ())
+    TestMemoryContextInternal::new(())
 }
 
 #[cfg(test)]

@@ -1,0 +1,46 @@
+[package]
+name = "linera-storage-service"
+version = "0.6.0"
+description = "RPC shared key value store."
+authors = ["Linera <contact@linera.io>"]
+readme = "README.md"
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.dev"
+documentation = "https://docs.rs/linera-storage-service/latest/linera_storage_service/"
+license = "Apache-2.0"
+edition = "2021"
+
+[features]
+default = ["rocksdb"]
+rocksdb = ["linera-views/rocksdb"]
+aws = ["linera-views/aws"]
+scylladb = ["linera-views/scylladb"]
+test = ["linera-views/test"]
+
+[[bin]]
+name = "storage_service_server"
+path = "src/server.rs"
+
+[dependencies]
+async-lock = { workspace = true }
+async-trait = { workspace = true }
+clap = { workspace = true }
+linera-views = { workspace = true }
+prost = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+tonic = { workspace = true }
+
+[dev-dependencies]
+linera-storage-service = { path = ".", features = ["test"] }
+proptest = { workspace = true }
+serde-reflection = { workspace = true }
+serde_yaml = { workspace = true }
+similar-asserts = { workspace = true }
+test-strategy = { workspace = true }
+
+[build-dependencies]
+tonic-build = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["proptest", "prost"]

@@ -10,12 +10,7 @@ use linera_views::{
 };
 
 #[cfg(any(test, feature = "test"))]
-use {
-    async_lock::Mutex,
-    linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
-    std::collections::BTreeMap,
-    std::sync::Arc,
-};
+use linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES};
 
 #[cfg(test)]
 #[path = "unit_tests/outbox_tests.rs"]
@@ -85,10 +80,7 @@ where
     ViewError: From<<MemoryContext<()> as linera_views::common::Context>::Error>,
 {
     pub async fn new() -> Self {
-        let guard = Arc::new(Mutex::new(BTreeMap::new()))
-            .try_lock_arc()
-            .expect("a guard");
-        let context = MemoryContext::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES, ());
+        let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, ());
         Self::load(context)
             .await
             .expect("Loading from memory should work")

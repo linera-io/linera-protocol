@@ -16,6 +16,7 @@ members = [
     "linera-service",
     "linera-service-graphql-client",
     "linera-storage",
+    "linera-storage-service",
     "linera-views",
     "linera-views-derive",
     "linera-witty",

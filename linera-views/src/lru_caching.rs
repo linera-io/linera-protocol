@@ -24,10 +24,9 @@ use {
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::common::ContextFromStore,
-    crate::memory::{MemoryStore, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
+    crate::common::{CommonStoreConfig, ContextFromStore},
+    crate::memory::{MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
     crate::views::ViewError,
-    async_lock::MutexGuardArc,
 };
 
 #[cfg(feature = "metrics")]
@@ -290,13 +289,14 @@ pub type LruCachingMemoryContext<E> = ContextFromStore<E, LruCachingStore<Memory
 #[cfg(any(test, feature = "test"))]
 impl<E> LruCachingMemoryContext<E> {
     /// Creates a [`crate::key_value_store_view::KeyValueStoreMemoryContext`].
-    pub async fn new(
-        guard: MutexGuardArc<MemoryStoreMap>,
-        base_key: Vec<u8>,
-        extra: E,
-        n: usize,
-    ) -> Result<Self, ViewError> {
-        let store = MemoryStore::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES);
+    pub async fn new(base_key: Vec<u8>, extra: E, n: usize) -> Result<Self, ViewError> {
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries: None,
+            max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
+            cache_size: 1000,
+        };
+        let config = MemoryStoreConfig { common_config };
+        let store = MemoryStore::new(config);
         let store = LruCachingStore::new(store, n);
         Ok(Self {
             store,

@@ -1837,7 +1837,6 @@ name = "linera-chain"
 version = "0.8.0"
 dependencies = [
  "async-graphql",
- "async-lock",
  "async-trait",
  "futures",
  "linera-base",
@@ -1890,7 +1889,6 @@ version = "0.8.0"
 dependencies = [
  "anyhow",
  "async-graphql",
- "async-lock",
  "async-trait",
  "bcs",
  "bytes",

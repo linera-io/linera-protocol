@@ -1,0 +1,92 @@
+syntax = "proto3";
+package key_value_store.v1;
+
+message KeyValue {
+  bytes key = 1;
+  bytes value = 2;
+}
+
+message Statement {
+  oneof Operation {
+    bytes delete = 1;
+    KeyValue put = 2;
+    bytes delete_prefix = 3;
+  }
+}
+
+message OptValue {
+  optional bytes value = 1;
+}
+
+
+message RequestReadValue {
+  bytes key = 1;
+}
+
+message ReplyReadValue {
+  optional bytes value = 1;
+}
+
+
+message RequestContainsKey {
+  bytes key = 1;
+}
+
+message ReplyContainsKey {
+  bool test = 1;
+}
+
+
+message RequestReadMultiValues {
+  repeated bytes keys = 1;
+}
+
+message ReplyReadMultiValues {
+  repeated OptValue values = 1;
+}
+
+
+message RequestFindKeysByPrefix {
+  bytes key_prefix = 1;
+}
+
+message ReplyFindKeysByPrefix {
+  repeated bytes keys = 1;
+}
+
+
+message RequestFindKeyValuesByPrefix {
+  bytes key_prefix = 1;
+}
+
+message ReplyFindKeyValuesByPrefix {
+  repeated KeyValue key_values = 1;
+}
+
+
+message RequestWriteBatch {
+  repeated Statement statements = 1;
+  bytes base_key = 2;
+}
+
+message ReplyWriteBatch {
+}
+
+
+message RequestClearJournal {
+  bytes base_key = 1;
+}
+
+message ReplyClearJournal {
+}
+
+
+service StoreProcessor {
+  rpc ProcessReadValue (RequestReadValue) returns (ReplyReadValue) {}
+  rpc ProcessContainsKey (RequestContainsKey) returns (ReplyContainsKey) {}
+  rpc ProcessReadMultiValues (RequestReadMultiValues) returns (ReplyReadMultiValues) {}
+  rpc ProcessFindKeysByPrefix (RequestFindKeysByPrefix) returns (ReplyFindKeysByPrefix) {}
+  rpc ProcessFindKeyValuesByPrefix (RequestFindKeyValuesByPrefix) returns (ReplyFindKeyValuesByPrefix) {}
+  rpc ProcessWriteBatch (RequestWriteBatch) returns (ReplyWriteBatch) {}
+  rpc ProcessClearJournal (RequestClearJournal) returns (ReplyClearJournal) {}
+}
