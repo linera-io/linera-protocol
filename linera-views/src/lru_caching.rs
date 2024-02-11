@@ -6,7 +6,10 @@ pub const TEST_CACHE_SIZE: usize = 1000;
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_interval, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
+    common::{
+        get_interval, AdminKeyValueStore, KeyValueStore, ReadableKeyValueStore,
+        WritableKeyValueStore,
+    },
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
