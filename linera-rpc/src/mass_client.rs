@@ -10,7 +10,7 @@ pub enum MassClientError {
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("tonic transport: {0}")]
-    Tonic(#[from] tonic::transport::Error),
+    TonicTransport(#[from] crate::grpc::transport::Error),
     #[error("conversion error: {0}")]
     Conversion(#[from] crate::grpc::GrpcProtoConversionError),
     #[error("error while making a remote call: {0}")]

@@ -904,7 +904,7 @@ pub struct Bytecode {
 
 impl Bytecode {
     /// Creates a new [`Bytecode`] instance using the provided `bytes`.
-    #[cfg(any(test, with_wasm_runtime))]
+    #[allow(dead_code)]
     pub(crate) fn new(bytes: Vec<u8>) -> Self {
         Bytecode { bytes }
     }

@@ -5,7 +5,7 @@ use super::{
     api::{
         chain_info_result::Inner, validator_node_client::ValidatorNodeClient, SubscriptionRequest,
     },
-    GrpcError, GrpcProtoConversionError, GRPC_MAX_MESSAGE_SIZE,
+    transport, GrpcError, GrpcProtoConversionError, GRPC_MAX_MESSAGE_SIZE,
 };
 use crate::{
     config::ValidatorPublicNetworkConfig, mass_client, node_provider::NodeOptions,
@@ -31,7 +31,7 @@ use tracing::{debug, info, instrument, warn};
 #[derive(Clone)]
 pub struct GrpcClient {
     address: String,
-    client: ValidatorNodeClient<tonic::transport::Channel>,
+    client: ValidatorNodeClient<transport::Channel>,
     notification_retry_delay: Duration,
     notification_retries: u32,
 }
@@ -42,10 +42,9 @@ impl GrpcClient {
         options: NodeOptions,
     ) -> Result<Self, GrpcError> {
         let address = network.http_address();
-        let channel = tonic::transport::Channel::from_shared(address.clone())?
-            .connect_timeout(options.send_timeout)
-            .timeout(options.recv_timeout)
-            .connect_lazy();
+
+        let channel =
+            transport::create_channel(address.clone(), &transport::Options::from(&options))?;
         let client = ValidatorNodeClient::new(channel)
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);

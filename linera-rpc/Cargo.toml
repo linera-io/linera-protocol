@@ -80,7 +80,8 @@ test-strategy.workspace = true
 tonic = { workspace = true, features = ["prost", "codegen", "transport"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-tonic = { workspace = true, features = ["prost", "codegen"] }
+tonic = { workspace = true, features = ["codegen", "prost"] }
+tonic-web-wasm-client.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
