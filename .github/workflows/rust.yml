@@ -37,7 +37,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
     - uses: actions/checkout@v3
@@ -59,6 +59,14 @@ jobs:
     - name: Compile the workspace with the default features (test)
       run: |
         cargo test --locked --no-run
+    - name: Compile `linera-core` for the browser
+      run: |
+        cargo test -p linera-core \
+          --no-run \
+          --locked \
+          --target wasm32-unknown-unknown \
+          --no-default-features \
+          --features web
     - name: Compile the workspace with the default features (build)
       run: |
         cargo build --locked
@@ -141,6 +149,13 @@ jobs:
     - name: Check formatting
       run: |
         cargo fmt -- --check
+    - name: Check if Cargo.toml files are sorted
+      run: |
+        cargo sort --check --workspace --grouped
+    - name: Check if example Cargo.toml files are sorted
+      run: |
+        cd examples
+        cargo sort --check --workspace --grouped
     - name: Check for unused dependencies
       run: |
         cargo machete
@@ -164,13 +179,6 @@ jobs:
     - name: Run cargo check-all-features
       run: |
         cargo check-all-features --all-targets
-    - name: Check if Cargo.toml files are sorted
-      run: |
-        cargo sort -c -w
-    - name: Check if Cargo.toml files are sorted
-      run: |
-        cd examples
-        cargo sort -c -w
     - name: Restore `rust-toolchain.toml` file
       if: '!cancelled()'
       run: |
