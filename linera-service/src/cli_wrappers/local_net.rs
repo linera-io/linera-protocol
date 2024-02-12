@@ -18,7 +18,7 @@ use std::{
 };
 use tempfile::{tempdir, TempDir};
 use tokio::process::{Child, Command};
-use tonic_health::proto::{
+use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
 use tracing::{info, warn};
