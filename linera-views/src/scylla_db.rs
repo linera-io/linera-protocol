@@ -141,14 +141,22 @@ impl ScyllaDbClient {
         // Read the value of a key
         let values = (key,);
         let query = &self.read_value;
-        let result = session.query(query.clone(), values).await?;
-        if let Some(rows) = result.rows {
-            if let Some(row) = rows.into_typed::<(Vec<u8>,)>().next() {
-                let value = row?;
-                return Ok(Some(value.0));
+        let mut paging_state = None;
+        loop {
+            let result = session
+                .query_paged(query.clone(), &values, paging_state)
+                .await?;
+            if let Some(rows) = result.rows {
+                if let Some(row) = rows.into_typed::<(Vec<u8>,)>().next() {
+                    let value = row?;
+                    return Ok(Some(value.0));
+                }
             }
+            if result.paging_state.is_none() {
+                return Ok(None);
+            }
+            paging_state = result.paging_state;
         }
-        Ok(None)
     }
 
     async fn contains_key_internal(&self, key: Vec<u8>) -> Result<bool, ScyllaDbContextError> {
@@ -157,13 +165,21 @@ impl ScyllaDbClient {
         // Read the value of a key
         let values = (key,);
         let query = &self.contains_key;
-        let result = session.query(query.clone(), values).await?;
-        if let Some(rows) = result.rows {
-            if let Some(_row) = rows.into_typed::<(Vec<u8>,)>().next() {
-                return Ok(true);
+        let mut paging_state = None;
+        loop {
+            let result = session
+                .query_paged(query.clone(), &values, paging_state)
+                .await?;
+            if let Some(rows) = result.rows {
+                if let Some(_row) = rows.into_typed::<(Vec<u8>,)>().next() {
+                    return Ok(true);
+                }
             }
+            if result.paging_state.is_none() {
+                return Ok(false);
+            }
+            paging_state = result.paging_state;
         }
-        Ok(false)
     }
 
     async fn write_batch_internal(
@@ -509,22 +525,22 @@ impl ScyllaDbStoreInternal {
         let result = session.query(query, &[]).await;
 
         // The missing table translates into a very specific error that we matched
-        let mesg_miss1 = format!("unconfigured table {}", table_name);
-        let mesg_miss1 = mesg_miss1.as_str();
-        let mesg_miss2 = "Undefined name dummy in selection clause";
-        let mesg_miss3 = "Keyspace kv does not exist";
+        let miss_msg1 = format!("unconfigured table {}", table_name);
+        let miss_msg1 = miss_msg1.as_str();
+        let miss_msg2 = "Undefined name dummy in selection clause";
+        let miss_msg3 = "Keyspace kv does not exist";
         let Err(error) = result else {
             // If ok, then the table exists
             return Ok(true);
         };
         let test = match &error {
-            QueryError::DbError(db_error, mesg) => {
+            QueryError::DbError(db_error, msg) => {
                 if *db_error != DbError::Invalid {
                     false
                 } else {
-                    mesg.as_str() == mesg_miss1
-                        || mesg.as_str() == mesg_miss2
-                        || mesg.as_str() == mesg_miss3
+                    msg.as_str() == miss_msg1
+                        || msg.as_str() == miss_msg2
+                        || msg.as_str() == miss_msg3
                 }
             }
             _ => false,
@@ -646,17 +662,47 @@ impl ScyllaDbStoreInternal {
             .known_node(store_config.uri.as_str())
             .build()
             .await?;
-        let result = session.query("DESCRIBE KEYSPACE kv", &[]).await?;
-        let mut tables = Vec::new();
-        if let Some(rows) = result.rows {
-            for row in rows.into_typed::<(String, String, String, String)>() {
-                let value = row?;
-                if value.1 == "table" {
-                    tables.push(value.2);
+        let miss_msg = "'kv' not found in keyspaces";
+        let mut paging_state = None;
+        let mut table_names = Vec::new();
+        loop {
+            let result = session
+                .query_paged("DESCRIBE KEYSPACE kv", &[], paging_state)
+                .await;
+            let result = match result {
+                Ok(result) => result,
+                Err(error) => {
+                    let invalid_or_not_found = match &error {
+                        QueryError::DbError(db_error, msg) => {
+                            *db_error == DbError::Invalid && msg.as_str() == miss_msg
+                        }
+                        _ => false,
+                    };
+                    if invalid_or_not_found {
+                        return Ok(Vec::new());
+                    } else {
+                        return Err(ScyllaDbContextError::ScyllaDbQueryError(error));
+                    }
+                }
+            };
+            if let Some(rows) = result.rows {
+                // The output of the description is the following:
+                // * The first column is the keyspace (in that case kv)
+                // * The second column is the nature of the object.
+                // * The third column is the name
+                // * The fourth column is the command that built it.
+                for row in rows.into_typed::<(String, String, String, String)>() {
+                    let value = row?;
+                    if value.1 == "table" {
+                        table_names.push(value.2);
+                    }
                 }
             }
+            if result.paging_state.is_none() {
+                return Ok(table_names);
+            }
+            paging_state = result.paging_state;
         }
-        Ok(tables)
     }
 
     async fn delete_all(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
