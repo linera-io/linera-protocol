@@ -11,17 +11,20 @@
 //! instance is dropped.
 
 use dashmap::DashMap;
-use linera_base::{
-    identifiers::ChainId,
-    prometheus_util::{register_histogram_vec, MeasureLatency},
-    sync::Lazy,
-};
-use prometheus::HistogramVec;
+use linera_base::identifiers::ChainId;
 use std::{
     fmt::{self, Debug, Formatter},
     sync::{Arc, Weak},
 };
 use tokio::sync::{Mutex, OwnedMutexGuard};
+#[cfg(with_metrics)]
+use {
+    linera_base::{
+        prometheus_util::{register_histogram_vec, MeasureLatency},
+        sync::Lazy,
+    },
+    prometheus::HistogramVec,
+};
 
 #[cfg(test)]
 #[path = "unit_tests/chain_guards.rs"]
@@ -55,6 +58,7 @@ impl ChainGuards {
     /// the same chain.
     pub async fn guard(&self, chain_id: ChainId) -> ChainGuard {
         let guard = self.get_or_create_lock(chain_id);
+        #[cfg(with_metrics)]
         let _measurement = CHAIN_GUARD_LOCK_LATENCY.measure_latency();
 
         ChainGuard {
@@ -160,6 +164,7 @@ impl Debug for ChainGuard {
 }
 
 /// The time spent waiting to acquire a [`ChainGuard`].
+#[cfg(with_metrics)]
 static CHAIN_GUARD_LOCK_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec(
         "chain_guard_lock_atency",

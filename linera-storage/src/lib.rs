@@ -5,28 +5,30 @@
 
 mod chain_guards;
 mod db_storage;
-#[cfg(feature = "aws")]
+#[cfg(with_dynamodb)]
 mod dynamo_db;
 mod memory;
-#[cfg(feature = "rocksdb")]
+#[cfg(with_rocksdb)]
 mod rocks_db;
-#[cfg(feature = "scylladb")]
+#[cfg(with_scylladb)]
 mod scylla_db;
 
 #[cfg(any(test, feature = "test"))]
 pub use crate::db_storage::TestClock;
-#[cfg(feature = "aws")]
+#[cfg(with_dynamodb)]
 pub use crate::dynamo_db::DynamoDbStorage;
-#[cfg(feature = "rocksdb")]
+#[cfg(with_rocksdb)]
 pub use crate::rocks_db::RocksDbStorage;
-#[cfg(feature = "scylladb")]
+#[cfg(with_scylladb)]
 pub use crate::scylla_db::ScyllaDbStorage;
 pub use crate::{
-    db_storage::{
-        Clock, DbStorage, WallClock, READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER,
-        WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
-    },
+    db_storage::{Clock, DbStorage, WallClock},
     memory::MemoryStorage,
+};
+
+#[cfg(with_metrics)]
+pub use crate::db_storage::{
+    READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
 };
 
 use async_trait::async_trait;
@@ -55,7 +57,7 @@ use linera_views::{
 };
 use std::{fmt::Debug, sync::Arc};
 
-#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+#[cfg(with_wasm_runtime)]
 use {
     linera_chain::data_types::CertificateValue,
     linera_execution::{Operation, SystemOperation, WasmContractModule, WasmServiceModule},
@@ -216,7 +218,7 @@ pub trait Storage: Sized {
 
     /// Creates a [`UserContractCode`] instance using the bytecode in storage referenced
     /// by the `application_description`.
-    #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+    #[cfg(with_wasm_runtime)]
     async fn load_contract(
         &self,
         application_description: &UserApplicationDescription,
@@ -234,7 +236,7 @@ pub trait Storage: Sized {
         ))
     }
 
-    #[cfg(not(any(feature = "wasmer", feature = "wasmtime")))]
+    #[cfg(not(with_wasm_runtime))]
     #[allow(clippy::diverging_sub_expression)]
     async fn load_contract(
         &self,
@@ -249,7 +251,7 @@ pub trait Storage: Sized {
 
     /// Creates a [`linera-sdk::UserContract`] instance using the bytecode in storage referenced
     /// by the `application_description`.
-    #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+    #[cfg(with_wasm_runtime)]
     async fn load_service(
         &self,
         application_description: &UserApplicationDescription,
@@ -267,7 +269,7 @@ pub trait Storage: Sized {
         ))
     }
 
-    #[cfg(not(any(feature = "wasmer", feature = "wasmtime")))]
+    #[cfg(not(with_wasm_runtime))]
     #[allow(clippy::diverging_sub_expression)]
     async fn load_service(
         &self,
@@ -281,7 +283,7 @@ pub trait Storage: Sized {
     }
 }
 
-#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+#[cfg(with_wasm_runtime)]
 async fn read_publish_bytecode_operation(
     storage: &impl Storage,
     application_description: &UserApplicationDescription,
