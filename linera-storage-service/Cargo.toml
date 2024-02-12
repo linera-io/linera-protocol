@@ -31,7 +31,7 @@ linera-views.workspace = true
 prost.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread"] }
-tonic.workspace = true
+tonic = { workspace = true, features = ["transport"] }
 
 [dev-dependencies]
 linera-storage-service = { path = ".", features = ["test"] }

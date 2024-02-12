@@ -75,7 +75,7 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-stream.workspace = true
 toml.workspace = true
-tonic.workspace = true
+tonic = { workspace = true, features = ["transport", "tls", "tls-roots"] }
 tonic-health.workspace = true
 tower.workspace = true
 tower-http = { workspace = true, features = ["cors"] }

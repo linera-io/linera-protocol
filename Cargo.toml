@@ -55,7 +55,7 @@ clap-markdown = "0.1.3"
 colored = "2.0.4"
 comfy-table = "6.2.0"
 convert_case = "0.6.0"
-criterion = "0.4.0"
+criterion = { version = "0.4.0", default-features = false }
 custom_debug_derive = "0.5.1"
 dashmap = "5.5.3"
 derive_more = "0.99.17"
@@ -83,7 +83,7 @@ prettyplease = "0.2.15"
 prometheus = "0.13.3"
 proc-macro-error = "1.0.4"
 proc-macro2 = "1.0"
-proptest = { version = "1.3.1", default-features = false, features = ["std"] }
+proptest = { version = "1.3.1", default-features = false }
 prost = "0.11"
 quote = "1.0"
 rand = { version = "0.8.5", default-features = false }
@@ -112,7 +112,7 @@ test-case = "3.2.1"
 test-log = { version = "0.2.13", default-features = false, features = ["trace"] }
 test-strategy = "0.2.1"
 thiserror = "1.0.50"
-tonic = { version = "0.8", features = ["tls", "tls-roots", "transport"] }
+tonic = { version = "0.8", default-features = false }
 tonic-build = "0.8"
 tonic-health = "0.8"
 tokio = "1.33.0"
