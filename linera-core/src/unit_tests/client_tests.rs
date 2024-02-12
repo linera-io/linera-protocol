@@ -1371,6 +1371,7 @@ where
     // Client2 does not know about the money yet.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Sending money from client2 fails, as a consequence.
+    // TODO(#1649): Make this code nicer.
     assert_matches!(client2
         .transfer_to_account_unsafe_unconfirmed(
             None,
@@ -1574,6 +1575,8 @@ where
             UserData(Some(*b"I'm giving away all of my money!")),
         )
         .await;
+
+    // TODO(#1649): Make this code nicer.
     assert_matches!(obtained_error,
         Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
             WorkerError::ChainError(error)
@@ -1590,6 +1593,7 @@ where
             UserData(Some(*b"I'm giving away all of my money!")),
         )
         .await;
+    // TODO(#1649): Make this code nicer.
     assert_matches!(obtained_error,
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
