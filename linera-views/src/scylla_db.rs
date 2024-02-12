@@ -502,7 +502,7 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbContextError> {
         let session = SessionBuilder::new()
-            .known_node(store_config.uri.as_str())
+            .known_node(config.uri.as_str())
             .build()
             .await?;
         let miss_msg = "'kv' not found in keyspaces";
@@ -573,7 +573,7 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
         let result = session.query(query, &[]).await;
 
         // The missing table translates into a very specific error that we matched
-        let miss_msg1 = format!("unconfigured table {}", table_name);
+        let miss_msg1 = format!("unconfigured table {}", namespace);
         let miss_msg1 = miss_msg1.as_str();
         let miss_msg2 = "Undefined name dummy in selection clause";
         let miss_msg3 = "Keyspace kv does not exist";
