@@ -22,7 +22,7 @@ aws = [
     "aws-sdk-s3",
     "aws-smithy-http",
     "aws-smithy-types",
-    "aws-types",
+    "aws-types"
 ]
 scylladb = ["scylla"]
 db_timings = []

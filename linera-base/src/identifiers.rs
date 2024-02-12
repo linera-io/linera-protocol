@@ -20,7 +20,7 @@ use std::{
 /// The owner of a chain. This is currently the hash of the owner's public key used to
 /// verify signatures.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Default, test_strategy::Arbitrary))]
+#[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
 pub struct Owner(pub CryptoHash);
 
 /// An account owner.
@@ -106,12 +106,13 @@ impl ChainDescription {
 /// The unique identifier (UID) of a chain. This is currently computed as the hash value
 /// of a [`ChainDescription`].
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(test_strategy::Arbitrary, Default))]
+#[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
+#[cfg_attr(with_testing, derive(Default))]
 pub struct ChainId(pub CryptoHash);
 
 /// The index of a message in a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Default))]
+#[cfg_attr(with_testing, derive(Default))]
 pub struct MessageId {
     /// The chain ID that created the message.
     pub chain_id: ChainId,
@@ -122,7 +123,7 @@ pub struct MessageId {
 }
 
 /// A unique identifier for a user application.
-#[cfg_attr(any(test, feature = "test"), derive(Default))]
+#[cfg_attr(with_testing, derive(Default))]
 pub struct ApplicationId<A = ()> {
     /// The bytecode to use for the application.
     pub bytecode_id: BytecodeId<A>,
@@ -131,7 +132,7 @@ pub struct ApplicationId<A = ()> {
 }
 
 /// A unique identifier for an application bytecode.
-#[cfg_attr(any(test, feature = "test"), derive(Default))]
+#[cfg_attr(with_testing, derive(Default))]
 pub struct BytecodeId<A = ()> {
     /// The message ID that published the bytecode.
     pub message_id: MessageId,
@@ -139,7 +140,7 @@ pub struct BytecodeId<A = ()> {
 }
 
 /// The identifier of a session.
-#[cfg_attr(any(test, feature = "test"), derive(Default))]
+#[cfg_attr(with_testing, derive(Default))]
 pub struct SessionId<A = ()> {
     /// The user application that runs the session.
     pub application_id: ApplicationId<A>,

@@ -22,7 +22,7 @@ wasmer = ["linera-core/wasmer", "linera-execution/wasmer", "linera-storage/wasme
 wasmtime = [
     "linera-core/wasmtime",
     "linera-execution/wasmtime",
-    "linera-storage/wasmtime",
+    "linera-storage/wasmtime"
 ]
 test = []
 

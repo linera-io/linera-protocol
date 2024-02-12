@@ -12,7 +12,7 @@ use thiserror::Error;
 
 use crate::doc_scalar;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use {
     proptest::{
         collection::{vec, VecStrategy},
@@ -34,7 +34,7 @@ type HasherOutput = generic_array::GenericArray<u8, HasherOutputSize>;
 
 /// A Sha3-256 value.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
-#[cfg_attr(any(test, feature = "test"), derive(Default))]
+#[cfg_attr(with_testing, derive(Default))]
 pub struct CryptoHash(HasherOutput);
 
 /// A signature value.
@@ -67,21 +67,21 @@ pub enum CryptoError {
 
 impl PublicKey {
     /// A fake public key used for testing.
-    #[cfg(any(test, feature = "test"))]
+    #[cfg(with_testing)]
     pub fn test_key(name: u8) -> PublicKey {
         let addr = [name; dalek::PUBLIC_KEY_LENGTH];
         PublicKey(addr)
     }
 }
 
+#[cfg(with_getrandom)]
 /// Wrapper around [`rand::CryptoRng`] and [`rand::RngCore`].
-#[cfg(not(target_arch = "wasm32"))]
 pub trait CryptoRng: rand::CryptoRng + rand::RngCore + Send + Sync {}
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(with_getrandom)]
 impl<T: rand::CryptoRng + rand::RngCore + Send + Sync> CryptoRng for T {}
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(with_getrandom)]
 impl From<Option<u64>> for Box<dyn CryptoRng> {
     fn from(seed: Option<u64>) -> Self {
         use rand::SeedableRng;
@@ -94,15 +94,15 @@ impl From<Option<u64>> for Box<dyn CryptoRng> {
 }
 
 impl KeyPair {
+    #[cfg(with_testing)]
     /// Generates a new key-pair.
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn generate() -> Self {
         let mut rng = rand::rngs::OsRng;
         Self::generate_from(&mut rng)
     }
 
+    #[cfg(with_getrandom)]
     /// Generates a new key-pair from the given RNG. Use with care.
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn generate_from<R: CryptoRng>(rng: &mut R) -> Self {
         let keypair = dalek::SigningKey::generate(rng);
         KeyPair(keypair)
@@ -522,7 +522,7 @@ impl Signature {
     }
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl Arbitrary for CryptoHash {
     type Parameters = ();
     type Strategy = strategy::Map<VecStrategy<RangeInclusive<u8>>, fn(Vec<u8>) -> CryptoHash>;
@@ -556,6 +556,7 @@ impl TestString {
 #[cfg(any(test, feature = "test"))]
 impl BcsSignable for TestString {}
 
+#[cfg(with_getrandom)]
 #[test]
 #[allow(clippy::disallowed_names)]
 fn test_signatures() {

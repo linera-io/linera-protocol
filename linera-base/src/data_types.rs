@@ -53,7 +53,7 @@ impl<'de> Deserialize<'de> for Amount {
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
-#[cfg_attr(any(test, feature = "test"), derive(test_strategy::Arbitrary))]
+#[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub struct BlockHeight(pub u64);
 
 /// An identifier for successive attempts to decide a value in a consensus protocol.
@@ -131,7 +131,6 @@ impl From<u64> for Timestamp {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl fmt::Display for Timestamp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(date_time) = chrono::NaiveDateTime::from_timestamp_opt(
@@ -284,14 +283,14 @@ macro_rules! impl_wrapped_number {
         }
 
         // Cannot directly create values for a wrapped type, except for testing.
-        #[cfg(any(test, feature = "test"))]
+        #[cfg(with_testing)]
         impl From<$wrapped> for $name {
             fn from(value: $wrapped) -> Self {
                 Self(value)
             }
         }
 
-        #[cfg(any(test, feature = "test"))]
+        #[cfg(with_testing)]
         impl std::ops::Add for $name {
             type Output = Self;
 
@@ -300,7 +299,7 @@ macro_rules! impl_wrapped_number {
             }
         }
 
-        #[cfg(any(test, feature = "test"))]
+        #[cfg(with_testing)]
         impl std::ops::Sub for $name {
             type Output = Self;
 
@@ -309,7 +308,7 @@ macro_rules! impl_wrapped_number {
             }
         }
 
-        #[cfg(any(test, feature = "test"))]
+        #[cfg(with_testing)]
         impl std::ops::Mul<$wrapped> for $name {
             type Output = Self;
 

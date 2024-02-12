@@ -25,11 +25,18 @@ test = [
     "tempfile",
     "test-log",
     "test-strategy",
-    "tokio/parking_lot",
+    "tokio/parking_lot"
 ]
 rocksdb = ["linera-views/rocksdb", "linera-storage/rocksdb"]
 aws = ["linera-views/aws", "linera-storage/aws"]
 scylladb = ["linera-views/scylladb", "linera-storage/scylladb"]
+metrics = [
+    "prometheus",
+    "linera-views/metrics",
+    "linera-storage/metrics",
+    "linera-execution/metrics",
+]
+web = ["linera-base/web"]
 
 [dependencies]
 anyhow = { workspace = true, optional = true }
