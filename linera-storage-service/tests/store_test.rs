@@ -1,24 +1,18 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// The stores created by the `create_shared_test_store`
-/// are all pointing to the same storage.
-/// This is in contrast to other storage that are not
-/// persistent (e.g. memory) or uses a random table_name
-/// (e.g. RocksDb, DynamoDb, ScyllaDb)
-/// This requires two changes:
-/// * Only one test being run at a time with a semaphore.
-/// * After the test, the storage is cleaned
-pub static SHARED_STORE_SEMAPHORE: Semaphore = Semaphore::const_new(1);
+use linera_storage_service::child::StorageServiceChild;
 
 use linera_views::{batch::Batch, common::WritableKeyValueStore};
-use tokio::sync::Semaphore;
 
 use linera_views::test_utils::{
     get_random_test_scenarios, run_reads, run_writes_from_blank, run_writes_from_state,
 };
 
 use linera_storage_service::client::create_shared_test_store;
+
+/// The endpoint used for the storage service tests.
+const STORAGE_SERVICE_ENDPOINT: &str = "127.0.0.1:8942";
 
 #[cfg(test)]
 async fn clean_storage() {
@@ -30,7 +24,9 @@ async fn clean_storage() {
 
 #[tokio::test]
 async fn test_reads_shared_store() {
-    let _lock = SHARED_STORE_SEMAPHORE.acquire().await;
+    let _guard = StorageServiceChild::new(STORAGE_SERVICE_ENDPOINT.to_string())
+        .run_service()
+        .await;
     for scenario in get_random_test_scenarios() {
         let key_value_store = create_shared_test_store().await;
         run_reads(key_value_store, scenario).await;
@@ -40,7 +36,9 @@ async fn test_reads_shared_store() {
 
 #[tokio::test]
 async fn test_shared_store_writes_from_blank() {
-    let _lock = SHARED_STORE_SEMAPHORE.acquire().await;
+    let _guard = StorageServiceChild::new(STORAGE_SERVICE_ENDPOINT.to_string())
+        .run_service()
+        .await;
     let key_value_store = create_shared_test_store().await;
     run_writes_from_blank(&key_value_store).await;
     clean_storage().await;
@@ -48,7 +46,9 @@ async fn test_shared_store_writes_from_blank() {
 
 #[tokio::test]
 async fn test_shared_store_writes_from_state() {
-    let _lock = SHARED_STORE_SEMAPHORE.acquire().await;
+    let _guard = StorageServiceChild::new(STORAGE_SERVICE_ENDPOINT.to_string())
+        .run_service()
+        .await;
     let key_value_store = create_shared_test_store().await;
     run_writes_from_state(&key_value_store).await;
     clean_storage().await;

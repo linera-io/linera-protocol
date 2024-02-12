@@ -3583,9 +3583,11 @@ dependencies = [
 name = "linera-storage-service"
 version = "0.6.0"
 dependencies = [
+ "anyhow",
  "async-lock",
  "async-trait",
  "clap 4.4.11",
+ "linera-service",
  "linera-storage-service",
  "linera-views",
  "proptest",

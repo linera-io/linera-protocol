@@ -22,6 +22,7 @@ name = "storage_service_server"
 path = "src/server.rs"
 
 [dependencies]
+anyhow.workspace = true
 async-lock = { workspace = true }
 async-trait = { workspace = true }
 clap = { workspace = true }
@@ -30,6 +31,7 @@ prost = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 tonic = { workspace = true }
+linera-service.workspace = true
 
 [dev-dependencies]
 linera-storage-service = { path = ".", features = ["test"] }

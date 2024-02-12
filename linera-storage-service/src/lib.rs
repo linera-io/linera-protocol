@@ -9,5 +9,6 @@ pub mod key_value_store {
     tonic::include_proto!("key_value_store.v1");
 }
 
+pub mod child;
 pub mod client;
 pub mod common;
