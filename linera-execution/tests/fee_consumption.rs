@@ -9,13 +9,13 @@ mod utils;
 
 use self::utils::{register_mock_applications, ExpectedCall};
 use linera_base::{
-    crypto::PublicKey,
+    crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight},
-    identifiers::{Account, ChainDescription, ChainId, Owner},
+    identifiers::{Account, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_execution::{
     ContractRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionStateView,
-    Operation, OperationContext, RawExecutionOutcome, ResourceControlPolicy, ResourceController,
+    Message, MessageContext, RawExecutionOutcome, ResourceControlPolicy, ResourceController,
     SystemExecutionState, TestExecutionRuntimeContext,
 };
 use linera_views::memory::MemoryContext;
@@ -24,33 +24,101 @@ use test_case::test_case;
 
 /// Tests if the chain balance is updated based on the fees spent for consuming resources.
 // Chain account only.
-#[test_case(vec![], Amount::ZERO, None; "without any costs")]
-#[test_case(vec![FeeSpend::Fuel(100)], Amount::from_tokens(1_000), None; "with only execution costs")]
-#[test_case(vec![FeeSpend::Read(vec![0, 1], None)], Amount::from_tokens(1_000), None; "with only an empty read")]
-#[test_case(vec![
-    FeeSpend::Read(vec![0, 1], None),
-    FeeSpend::Fuel(207),
-], Amount::from_tokens(1_000), None; "with execution and an empty read")]
+#[test_case(vec![], Amount::ZERO, None, None; "without any costs")]
+#[test_case(vec![FeeSpend::Fuel(100)], Amount::from_tokens(1_000), None, None; "with only execution costs")]
+#[test_case(vec![FeeSpend::Read(vec![0, 1], None)], Amount::from_tokens(1_000), None, None; "with only an empty read")]
+#[test_case(
+    vec![
+        FeeSpend::Read(vec![0, 1], None),
+        FeeSpend::Fuel(207),
+    ],
+    Amount::from_tokens(1_000),
+    None,
+    None;
+    "with execution and an empty read"
+)]
 // Chain account and small owner account.
-#[test_case(vec![FeeSpend::Fuel(100)], Amount::from_tokens(1_000), Some(Amount::from_tokens(1)); "with only execution costs and with owner account")]
-#[test_case(vec![FeeSpend::Read(vec![0, 1], None)], Amount::from_tokens(1_000), Some(Amount::from_tokens(1)); "with only an empty read and with owner account")]
-#[test_case(vec![
-    FeeSpend::Read(vec![0, 1], None),
-    FeeSpend::Fuel(207),
-], Amount::from_tokens(1_000), Some(Amount::from_tokens(1)); "with execution and an empty read and with owner account")]
+#[test_case(
+    vec![FeeSpend::Fuel(100)],
+    Amount::from_tokens(1_000),
+    Some(Amount::from_tokens(1)),
+    None;
+    "with only execution costs and with owner account"
+)]
+#[test_case(
+    vec![FeeSpend::Read(vec![0, 1], None)],
+    Amount::from_tokens(1_000),
+    Some(Amount::from_tokens(1)),
+    None;
+    "with only an empty read and with owner account"
+)]
+#[test_case(
+    vec![
+        FeeSpend::Read(vec![0, 1], None),
+        FeeSpend::Fuel(207),
+    ],
+    Amount::from_tokens(1_000),
+    Some(Amount::from_tokens(1)),
+    None;
+    "with execution and an empty read and with owner account"
+)]
 // Small chain account and larger owner account.
-#[test_case(vec![FeeSpend::Fuel(100)], Amount::from_tokens(1), Some(Amount::from_tokens(1_000)); "with only execution costs and with larger owner account")]
-#[test_case(vec![FeeSpend::Read(vec![0, 1], None)], Amount::from_tokens(1), Some(Amount::from_tokens(1_000)); "with only an empty read and with larger owner account")]
-#[test_case(vec![
-    FeeSpend::Read(vec![0, 1], None),
-    FeeSpend::Fuel(207),
-], Amount::from_tokens(1), Some(Amount::from_tokens(1_000)); "with execution and an empty read and with larger owner account")]
+#[test_case(
+    vec![FeeSpend::Fuel(100)],
+    Amount::from_tokens(1),
+    Some(Amount::from_tokens(1_000)),
+    None;
+    "with only execution costs and with larger owner account"
+)]
+#[test_case(
+    vec![FeeSpend::Read(vec![0, 1], None)],
+    Amount::from_tokens(1),
+    Some(Amount::from_tokens(1_000)),
+    None;
+    "with only an empty read and with larger owner account"
+)]
+#[test_case(
+    vec![
+        FeeSpend::Read(vec![0, 1], None),
+        FeeSpend::Fuel(207),
+    ],
+    Amount::from_tokens(1),
+    Some(Amount::from_tokens(1_000)),
+    None;
+    "with execution and an empty read and with larger owner account"
+)]
+// Small chain account, small owner account, large grant.
+#[test_case(
+    vec![FeeSpend::Fuel(100)],
+    Amount::from_tokens(2),
+    Some(Amount::from_tokens(1)),
+    Some(Amount::from_tokens(1_000));
+    "with only execution costs and with owner account and grant"
+)]
+#[test_case(
+    vec![FeeSpend::Read(vec![0, 1], None)],
+    Amount::from_tokens(2),
+    Some(Amount::from_tokens(1)),
+    Some(Amount::from_tokens(1_000));
+    "with only an empty read and with owner account and grant"
+)]
+#[test_case(
+    vec![
+        FeeSpend::Read(vec![0, 1], None),
+        FeeSpend::Fuel(207),
+    ],
+    Amount::from_tokens(2),
+    Some(Amount::from_tokens(1)),
+    Some(Amount::from_tokens(1_000));
+    "with execution and an empty read and with owner account and grant"
+)]
 // TODO(#1601): Add more test cases
 #[tokio::test]
 async fn test_fee_consumption(
     spends: Vec<FeeSpend>,
     chain_balance: Amount,
     owner_balance: Option<Amount>,
+    initial_grant: Option<Amount>,
 ) {
     let state = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
@@ -108,7 +176,7 @@ async fn test_fee_consumption(
         ..ResourceController::default()
     };
 
-    application.expect_call(ExpectedCall::execute_operation(
+    application.expect_call(ExpectedCall::execute_message(
         move |runtime, _context, _operation| {
             for spend in spends {
                 spend.execute(runtime).unwrap();
@@ -117,59 +185,98 @@ async fn test_fee_consumption(
         },
     ));
 
-    let context = OperationContext {
+    let refund_grant_to = Some(Account {
         chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
+        owner: authenticated_signer,
+    });
+    let context = MessageContext {
+        chain_id: ChainId::root(0),
+        is_bouncing: false,
         authenticated_signer,
-        next_message_index: 0,
+        refund_grant_to,
+        height: BlockHeight(0),
+        certificate_hash: CryptoHash::default(),
+        message_id: MessageId::default(),
     };
+    let mut grant = initial_grant.unwrap_or_default();
     let outcomes = view
-        .execute_operation(
+        .execute_message(
             context,
-            Operation::User {
+            Message::User {
                 application_id,
                 bytes: vec![],
+            },
+            if initial_grant.is_some() {
+                Some(&mut grant)
+            } else {
+                None
             },
             &mut controller,
         )
         .await
         .unwrap();
 
-    let (expected_chain_balance, expected_owner_balance) = if chain_balance >= consumed_fees {
-        (chain_balance.saturating_sub(consumed_fees), owner_balance)
-    } else {
-        let Some(owner_balance) = owner_balance else {
-            panic!("execution should have failed earlier");
-        };
-        (
-            Amount::ZERO,
-            Some(
-                owner_balance
-                    .saturating_add(chain_balance)
-                    .saturating_sub(consumed_fees),
-            ),
-        )
-    };
-    assert_eq!(*view.system.balance.get(), expected_chain_balance);
-    assert_eq!(
-        view.system.balances.get(&owner).await.unwrap(),
-        expected_owner_balance
-    );
     assert_eq!(
         outcomes,
         vec![ExecutionOutcome::User(
             application_id,
             RawExecutionOutcome {
-                refund_grant_to: Some(Account {
-                    chain_id: ChainId::root(0),
-                    owner: authenticated_signer
-                }),
+                refund_grant_to,
                 authenticated_signer,
                 ..Default::default()
             }
         )]
     );
+
+    match initial_grant {
+        None => {
+            let (expected_chain_balance, expected_owner_balance) = if chain_balance >= consumed_fees
+            {
+                (chain_balance.saturating_sub(consumed_fees), owner_balance)
+            } else {
+                let Some(owner_balance) = owner_balance else {
+                    panic!("execution should have failed earlier");
+                };
+                (
+                    Amount::ZERO,
+                    Some(
+                        owner_balance
+                            .saturating_add(chain_balance)
+                            .saturating_sub(consumed_fees),
+                    ),
+                )
+            };
+            assert_eq!(*view.system.balance.get(), expected_chain_balance);
+            assert_eq!(
+                view.system.balances.get(&owner).await.unwrap(),
+                expected_owner_balance
+            );
+            assert_eq!(grant, Amount::ZERO);
+        }
+        Some(initial_grant) => {
+            let (expected_grant, expected_owner_balance) = if initial_grant >= consumed_fees {
+                (initial_grant.saturating_sub(consumed_fees), owner_balance)
+            } else {
+                let Some(owner_balance) = owner_balance else {
+                    panic!("execution should have failed earlier");
+                };
+                (
+                    Amount::ZERO,
+                    Some(
+                        owner_balance
+                            .saturating_add(initial_grant)
+                            .saturating_sub(consumed_fees),
+                    ),
+                )
+            };
+            assert_eq!(*view.system.balance.get(), chain_balance);
+            assert_eq!(
+                view.system.balances.get(&owner).await.unwrap(),
+                expected_owner_balance
+            );
+            assert_eq!(grant, expected_grant);
+        }
+    }
 }
 
 /// A runtime operation that costs some amount of fees.
