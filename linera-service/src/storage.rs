@@ -332,17 +332,17 @@ impl StoreConfig {
             }),
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config, namespace) => {
-                RocksDbStore::initialize(&config, &namespace).await?;
+                RocksDbStore::maybe_create_and_connect(&config, &namespace).await?;
                 Ok(())
             }
             #[cfg(feature = "aws")]
             StoreConfig::DynamoDb(config, namespace) => {
-                DynamoDbStore::initialize(&config, &namespace).await?;
+                DynamoDbStore::maybe_create_and_connect(&config, &namespace).await?;
                 Ok(())
             }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(config, namespace) => {
-                ScyllaDbStore::initialize(&config, &namespace).await?;
+                ScyllaDbStore::maybe_create_and_connect(&config, &namespace).await?;
                 Ok(())
             }
         }

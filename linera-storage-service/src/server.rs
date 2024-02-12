@@ -280,7 +280,7 @@ async fn main() {
                 common_config,
             };
             let namespace = "linera";
-            let store = RocksDbStore::initialize(&config, namespace)
+            let store = RocksDbStore::maybe_create_and_connect(&config, namespace)
                 .await
                 .expect("store");
             (SharedStoreServer::RocksDb(store), endpoint)

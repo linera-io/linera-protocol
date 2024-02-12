@@ -143,7 +143,7 @@ where
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let client = Client::new_from_scratch(&store_config, namespace).await?;
+        let client = Client::recreate_and_connect(&store_config, namespace).await?;
         let storage = Self::new(client, wasm_runtime);
         Ok(storage)
     }
@@ -153,7 +153,7 @@ where
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let store = Client::initialize(&store_config, namespace).await?;
+        let store = Client::maybe_create_and_connect(&store_config, namespace).await?;
         let storage = Self::new(store, wasm_runtime);
         Ok(storage)
     }

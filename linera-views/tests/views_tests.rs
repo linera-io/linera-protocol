@@ -306,7 +306,7 @@ impl StateStore for DynamoDbTestStore {
                 .await
                 .expect("failed to connect")
         } else {
-            DynamoDbStore::new_from_scratch(&store_config, namespace)
+            DynamoDbStore::recreate_and_connect(&store_config, namespace)
                 .await
                 .expect("failed to create from scratch")
         };

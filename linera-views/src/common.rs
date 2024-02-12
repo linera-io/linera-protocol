@@ -384,16 +384,16 @@ pub trait AdminKeyValueStore<E>: Sized {
     /// Deletes the given namespace.
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), E>;
 
-    /// Initialize a storage if missing and provides it.
-    async fn initialize(config: &Self::Config, namespace: &str) -> Result<Self, E> {
+    /// Initializes a storage if missing and provides it.
+    async fn maybe_create_and_connect(config: &Self::Config, namespace: &str) -> Result<Self, E> {
         if !Self::exists(config, namespace).await? {
             Self::create(config, namespace).await?;
         }
         Self::connect(config, namespace).await
     }
 
-    /// Create a new storage and erase the preceding if existing
-    async fn new_from_scratch(config: &Self::Config, namespace: &str) -> Result<Self, E> {
+    /// Creates a new storage and erase the preceding if existing
+    async fn recreate_and_connect(config: &Self::Config, namespace: &str) -> Result<Self, E> {
         if Self::exists(config, namespace).await? {
             Self::delete(config, namespace).await?;
         }
