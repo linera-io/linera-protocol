@@ -3236,6 +3236,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "bytes",
+ "cfg-if",
  "cfg_aliases",
  "clap 4.4.11",
  "counter",
