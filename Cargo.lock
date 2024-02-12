@@ -3429,6 +3429,7 @@ dependencies = [
  "anyhow",
  "async-lock",
  "async-trait",
+ "bcs",
  "clap 4.4.11",
  "linera-service",
  "linera-storage-service",

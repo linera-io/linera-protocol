@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(any(test, feature = "test"))]
-use linera_views::lru_caching::TEST_CACHE_SIZE;
+use linera_views::{lru_caching::TEST_CACHE_SIZE, test_utils::get_namespace};
 
 use crate::{
     common::{SharedContextError, SharedStoreConfig},
@@ -12,8 +12,14 @@ use crate::{
         ReplyReadValue, RequestClearJournal, RequestContainsKey, RequestFindKeyValuesByPrefix,
         RequestFindKeysByPrefix, RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
         Statement,
+        RequestCreateNamespace,
+        RequestExistNamespace, ReplyExistNamespace,
+        RequestDeleteNamespace,
+        RequestListAll, ReplyListAll,
+        RequestDeleteAll,
     },
 };
+use linera_views::common::AdminKeyValueStore;
 use async_lock::{RwLock, Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use linera_views::{
@@ -37,10 +43,21 @@ const TEST_SHARED_STORE_MAX_STREAM_QUERIES: usize = 10;
 /// does not allow it.
 /// * The semaphore and max_stream_queries work as other
 /// stores.
+///
+/// The encoding of namespaces is done by taking their
+/// serialization. This works because the set of serialization
+/// of strings is prefix free.
+/// The data is stored in the following way.
+/// * A `key` in a `namespace` is stored as
+///   [0] + [namespace] + [key]
+/// * An additional key with empty value is stored at
+///   [1] + [namespace]
+/// is stored to indicate the existence of a namespace.
 pub struct SharedStoreClient {
     client: Arc<RwLock<StoreProcessorClient<Channel>>>,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
+    namespace: Vec<u8>,
 }
 
 #[async_trait]
@@ -54,7 +71,9 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, SharedContextError> {
-        let query = RequestReadValue { key: key.to_vec() };
+        let mut full_key = self.namespace.clone();
+        full_key.extend(key);
+        let query = RequestReadValue { key: full_key };
         let request = tonic::Request::new(query);
         let mut client = self.client.write().await;
         let _guard = self.acquire().await;
@@ -65,7 +84,9 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, SharedContextError> {
-        let query = RequestContainsKey { key: key.to_vec() };
+        let mut full_key = self.namespace.clone();
+        full_key.extend(key);
+        let query = RequestContainsKey { key: full_key };
         let request = tonic::Request::new(query);
         let mut client = self.client.write().await;
         let _guard = self.acquire().await;
@@ -79,7 +100,13 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, SharedContextError> {
-        let query = RequestReadMultiValues { keys };
+        let mut full_keys = Vec::new();
+        for key in keys {
+            let mut full_key = self.namespace.clone();
+            full_key.extend(&key);
+            full_keys.push(full_key);
+        }
+        let query = RequestReadMultiValues { keys: full_keys };
         let request = tonic::Request::new(query);
         let mut client = self.client.write().await;
         let _guard = self.acquire().await;
@@ -94,8 +121,10 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, SharedContextError> {
+        let mut full_key_prefix = self.namespace.clone();
+        full_key_prefix.extend(key_prefix);
         let query = RequestFindKeysByPrefix {
-            key_prefix: key_prefix.to_vec(),
+            key_prefix: full_key_prefix,
         };
         let request = tonic::Request::new(query);
         let mut client = self.client.write().await;
@@ -110,8 +139,10 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, SharedContextError> {
+        let mut full_key_prefix = self.namespace.clone();
+        full_key_prefix.extend(key_prefix);
         let query = RequestFindKeyValuesByPrefix {
-            key_prefix: key_prefix.to_vec(),
+            key_prefix: full_key_prefix,
         };
         let request = tonic::Request::new(query);
         let mut client = self.client.write().await;
@@ -137,9 +168,21 @@ impl WritableKeyValueStore<SharedContextError> for SharedStoreClient {
         let mut statements = Vec::new();
         for operation in batch.operations {
             let operation = match operation {
-                WriteOperation::Delete { key } => Operation::Delete(key),
-                WriteOperation::Put { key, value } => Operation::Put(KeyValue { key, value }),
-                WriteOperation::DeletePrefix { key_prefix } => Operation::DeletePrefix(key_prefix),
+                WriteOperation::Delete { key } => {
+                    let mut full_key = self.namespace.clone();
+                    full_key.extend(key);
+                    Operation::Delete(full_key)
+                },
+                WriteOperation::Put { key, value } => {
+                    let mut full_key = self.namespace.clone();
+                    full_key.extend(key);
+                    Operation::Put(KeyValue { key: full_key, value })
+                },
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    let mut full_key_prefix = self.namespace.clone();
+                    full_key_prefix.extend(key_prefix);
+                    Operation::DeletePrefix(full_key_prefix)
+                },
             };
             let statement = Statement {
                 operation: Some(operation),
@@ -158,8 +201,10 @@ impl WritableKeyValueStore<SharedContextError> for SharedStoreClient {
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), SharedContextError> {
+        let mut full_base_key = self.namespace.clone();
+        full_base_key.extend(base_key);
         let query = RequestClearJournal {
-            base_key: base_key.to_vec(),
+            base_key: full_base_key,
         };
         let request = tonic::Request::new(query);
         let mut client = self.client.write().await;
@@ -182,28 +227,92 @@ impl SharedStoreClient {
         }
     }
 
-    async fn new_internal(
-        endpoint: String,
-        common_config: CommonStoreConfig,
-    ) -> Result<Self, SharedContextError> {
-        let endpoint = Endpoint::from_shared(endpoint)?;
+    fn namespace_as_vec(namespace: &str) -> Result<Vec<u8>, SharedContextError> {
+        let mut key = vec![0];
+        bcs::serialize_into(&mut key, namespace)?;
+        Ok(key)
+    }
+
+}
+
+#[async_trait]
+impl AdminKeyValueStore<SharedContextError> for SharedStoreClient {
+    type Config = SharedStoreConfig;
+
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, SharedContextError> {
+        let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
         let client = StoreProcessorClient::connect(endpoint).await?;
         let client = Arc::new(RwLock::new(client));
-        let semaphore = common_config
+        let semaphore = config.common_config
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
-        let max_stream_queries = common_config.max_stream_queries;
+        let max_stream_queries = config.common_config.max_stream_queries;
+        let namespace = Self::namespace_as_vec(namespace)?;
         Ok(SharedStoreClient {
             client,
             semaphore,
             max_stream_queries,
+            namespace,
         })
     }
 
-    pub async fn new(config: SharedStoreConfig) -> Result<Self, SharedContextError> {
-        Self::new_internal(config.endpoint, config.common_config).await
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, SharedContextError> {
+        let query = RequestListAll { };
+        let request = tonic::Request::new(query);
+        let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
+        let mut client = StoreProcessorClient::connect(endpoint).await?;
+        let response = client.process_list_all(request).await?;
+        let response = response.into_inner();
+        let ReplyListAll { namespaces } = response;
+        let namespaces = namespaces
+            .into_iter()
+            .map(|x| bcs::from_bytes(&x))
+            .collect::<Result<_, _>>()?;
+        Ok(namespaces)
+    }
+
+    async fn delete_all(config: &Self::Config) -> Result<(), SharedContextError> {
+        let query = RequestDeleteAll { };
+        let request = tonic::Request::new(query);
+        let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
+        let mut client = StoreProcessorClient::connect(endpoint).await?;
+        let _response = client.process_delete_all(request).await?;
+        Ok(())
+    }
+
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, SharedContextError> {
+        let namespace = Self::namespace_as_vec(namespace)?;
+        let query = RequestExistNamespace { namespace };
+        let request = tonic::Request::new(query);
+        let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
+        let mut client = StoreProcessorClient::connect(endpoint).await?;
+        let response = client.process_exist_namespace(request).await?;
+        let response = response.into_inner();
+        let ReplyExistNamespace { test } = response;
+        Ok(test)
+    }
+
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), SharedContextError> {
+        let namespace = Self::namespace_as_vec(namespace)?;
+        let query = RequestCreateNamespace { namespace };
+        let request = tonic::Request::new(query);
+        let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
+        let mut client = StoreProcessorClient::connect(endpoint).await?;
+        let _response = client.process_create_namespace(request).await?;
+        Ok(())
+    }
+
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), SharedContextError> {
+        let namespace = Self::namespace_as_vec(namespace)?;
+        let query = RequestDeleteNamespace { namespace };
+        let request = tonic::Request::new(query);
+        let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
+        let mut client = StoreProcessorClient::connect(endpoint).await?;
+        let _response = client.process_delete_namespace(request).await?;
+        Ok(())
     }
 }
+
 
 #[cfg(any(test, feature = "test"))]
 pub fn create_shared_store_common_config() -> CommonStoreConfig {

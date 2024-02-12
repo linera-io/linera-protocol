@@ -28,6 +28,10 @@ pub enum SharedContextError {
     /// Transport error
     #[error(transparent)]
     TransportError(#[from] tonic::transport::Error),
+
+    /// An error occurred while doing BCS serialization.
+    #[error("failed to serialize value to calculate its hash")]
+    Serialization(#[from] bcs::Error),
 }
 
 #[cfg(any(test, feature = "test"))]

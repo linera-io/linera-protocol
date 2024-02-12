@@ -81,6 +81,45 @@ message ReplyClearJournal {
 }
 
 
+message RequestCreateNamespace {
+  bytes namespace = 1;
+}
+
+message ReplyCreateNamespace {
+}
+
+
+message RequestExistNamespace {
+  bytes namespace = 1;
+}
+
+message ReplyExistNamespace {
+  bool test = 1;
+}
+
+
+message RequestDeleteNamespace {
+  bytes namespace = 1;
+}
+
+message ReplyDeleteNamespace {
+}
+
+
+message RequestListAll {
+}
+
+message ReplyListAll {
+  repeated bytes namespaces = 1;
+}
+
+
+message RequestDeleteAll {
+}
+
+message ReplyDeleteAll {
+}
+
 service StoreProcessor {
   rpc ProcessReadValue (RequestReadValue) returns (ReplyReadValue) {}
   rpc ProcessContainsKey (RequestContainsKey) returns (ReplyContainsKey) {}
@@ -89,4 +128,9 @@ service StoreProcessor {
   rpc ProcessFindKeyValuesByPrefix (RequestFindKeyValuesByPrefix) returns (ReplyFindKeyValuesByPrefix) {}
   rpc ProcessWriteBatch (RequestWriteBatch) returns (ReplyWriteBatch) {}
   rpc ProcessClearJournal (RequestClearJournal) returns (ReplyClearJournal) {}
+  rpc ProcessCreateNamespace (RequestCreateNamespace) returns (ReplyCreateNamespace) {}
+  rpc ProcessExistNamespace (RequestExistNamespace) returns (ReplyExistNamespace) {}
+  rpc ProcessDeleteNamespace (RequestDeleteNamespace) returns (ReplyDeleteNamespace) {}
+  rpc ProcessListAll (RequestListAll) returns (ReplyListAll) {}
+  rpc ProcessDeleteAll (RequestDeleteAll) returns (ReplyDeleteAll) {}
 }

@@ -8,12 +8,18 @@ use crate::key_value_store::{
     ReplyFindKeysByPrefix, ReplyReadMultiValues, ReplyReadValue, ReplyWriteBatch,
     RequestClearJournal, RequestContainsKey, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
     RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
+    RequestCreateNamespace, ReplyCreateNamespace,
+    RequestExistNamespace, ReplyExistNamespace,
+    RequestDeleteNamespace, ReplyDeleteNamespace,
+    RequestListAll, ReplyListAll,
+    RequestDeleteAll, ReplyDeleteAll,
 };
 use linera_views::{
     common::{AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
     memory::{create_memory_store_stream_queries, MemoryStore},
     rocks_db::{RocksDbStore, RocksDbStoreConfig},
 };
+use linera_views::batch::Batch;
 use tonic::{transport::Server, Request, Response, Status};
 
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -108,7 +114,7 @@ impl SharedStoreServer {
 
     pub async fn write_batch(
         &self,
-        batch: linera_views::batch::Batch,
+        batch: Batch,
         base_key: &[u8],
     ) -> Result<(), Status> {
         match self {
@@ -136,6 +142,48 @@ impl SharedStoreServer {
                 .await
                 .map_err(|_e| Status::not_found("clear_journal")),
         }
+    }
+
+    pub async fn list_all(&self) -> Result<Vec<Vec<u8>>, Status> {
+        self.find_keys_by_prefix(&[1]).await
+    }
+
+    pub async fn delete_all(&self) -> Result<(), Status> {
+        let mut batch = Batch::new();
+        batch.delete_key_prefix(vec![0]);
+        batch.delete_key_prefix(vec![1]);
+        let base_key = vec![];
+        self.write_batch(batch, &base_key).await?;
+        self.clear_journal(&base_key).await
+    }
+
+    pub async fn exist_namespace(&self, namespace: &[u8]) -> Result<bool, Status> {
+        let mut full_key = vec![1];
+        full_key.extend(namespace);
+        self.contains_key(&full_key).await
+    }
+
+    pub async fn create_namespace(&self, namespace: &[u8]) -> Result<(), Status> {
+        let mut full_key = vec![1];
+        full_key.extend(namespace);
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(full_key, vec![]);
+        let base_key = vec![];
+        self.write_batch(batch, &base_key).await?;
+        self.clear_journal(&base_key).await
+    }
+
+    pub async fn delete_namespace(&self, namespace: &[u8]) -> Result<(), Status> {
+        let mut batch = Batch::new();
+        let mut full_key = vec![1];
+        full_key.extend(namespace);
+        batch.delete_key(full_key);
+        let mut key_prefix = vec![0];
+        key_prefix.extend(namespace);
+        batch.delete_key_prefix(key_prefix);
+        let base_key = vec![];
+        self.write_batch(batch, &base_key).await?;
+        self.clear_journal(&base_key).await
     }
 }
 
@@ -233,7 +281,7 @@ impl StoreProcessor for SharedStoreServer {
             statements,
             base_key,
         } = request;
-        let mut batch = linera_views::batch::Batch::default();
+        let mut batch = Batch::default();
         for statement in statements {
             match statement.operation.unwrap() {
                 Operation::Delete(key) => {
@@ -260,6 +308,57 @@ impl StoreProcessor for SharedStoreServer {
         let RequestClearJournal { base_key } = request;
         self.clear_journal(&base_key).await?;
         let response = ReplyClearJournal {};
+        Ok(Response::new(response))
+    }
+
+    async fn process_create_namespace(
+        &self,
+        request: Request<RequestCreateNamespace>,
+    ) -> Result<Response<ReplyCreateNamespace>, Status> {
+        let request = request.into_inner();
+        let RequestCreateNamespace { namespace } = request;
+        self.create_namespace(&namespace).await?;
+        let response = ReplyCreateNamespace {};
+        Ok(Response::new(response))
+    }
+
+    async fn process_exist_namespace(
+        &self,
+        request: Request<RequestExistNamespace>,
+    ) -> Result<Response<ReplyExistNamespace>, Status> {
+        let request = request.into_inner();
+        let RequestExistNamespace { namespace } = request;
+        let test = self.exist_namespace(&namespace).await?;
+        let response = ReplyExistNamespace { test };
+        Ok(Response::new(response))
+    }
+
+    async fn process_delete_namespace(
+        &self,
+        request: Request<RequestDeleteNamespace>,
+    ) -> Result<Response<ReplyDeleteNamespace>, Status> {
+        let request = request.into_inner();
+        let RequestDeleteNamespace { namespace } = request;
+        self.delete_namespace(&namespace).await?;
+        let response = ReplyDeleteNamespace { };
+        Ok(Response::new(response))
+    }
+
+    async fn process_list_all(
+        &self,
+        _request: Request<RequestListAll>,
+    ) -> Result<Response<ReplyListAll>, Status> {
+        let namespaces = self.list_all().await?;
+        let response = ReplyListAll { namespaces };
+        Ok(Response::new(response))
+    }
+
+    async fn process_delete_all(
+        &self,
+        _request: Request<RequestDeleteAll>,
+    ) -> Result<Response<ReplyDeleteAll>, Status> {
+        self.delete_all().await?;
+        let response = ReplyDeleteAll { };
         Ok(Response::new(response))
     }
 }
