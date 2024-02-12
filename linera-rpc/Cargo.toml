@@ -18,6 +18,15 @@ test = [
     "linera-execution/test",
     "linera-storage/test"
 ]
+metrics = [
+    "prometheus",
+    "linera-base/metrics",
+    "linera-chain/metrics",
+    "linera-core/metrics",
+    "linera-execution/metrics",
+    "linera-storage/metrics",
+    "linera-views/metrics",
+]
 
 [dependencies]
 anyhow.workspace = true
@@ -36,17 +45,12 @@ linera-execution.workspace = true
 linera-storage.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true
-prometheus.workspace = true
+prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
 prost.workspace = true
 rand.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
-tokio-util = { workspace = true, features = ["codec", "net"] }
-tonic.workspace = true
-tonic-health.workspace = true
-tower.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
@@ -58,8 +62,16 @@ serde_yaml.workspace = true
 similar-asserts.workspace = true
 test-strategy.workspace = true
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio.workspace = true
+tokio-util = { workspace = true, features = ["codec", "net"] }
+tonic = { workspace = true, features = ["codegen", "prost", "tls"] }
+tonic-health.workspace = true
+tower.workspace = true
+
 [build-dependencies]
-tonic-build.workspace = true
+cfg_aliases.workspace = true
+tonic-build = { workspace = true, features = ["prost"] }
 
 [package.metadata.cargo-machete]
-ignored = ["proptest", "prost"]
+ignored = ["getrandom", "proptest", "prost"]

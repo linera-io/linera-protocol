@@ -39,7 +39,7 @@ use grpc::{
     BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
     LiteCertificate, SubscriptionRequest,
 };
-use linera_base::{identifiers::ChainId, prometheus_util, sync::Lazy};
+use linera_base::identifiers::ChainId;
 use linera_chain::data_types;
 use linera_core::{
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
@@ -48,7 +48,6 @@ use linera_core::{
 use linera_storage::Storage;
 use linera_version::VersionInfo;
 use linera_views::views::ViewError;
-use prometheus::{HistogramVec, IntCounterVec};
 use rand::Rng;
 use std::{
     fmt::Debug,
@@ -70,9 +69,19 @@ use tonic::{
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, error, info, instrument, warn};
 
+#[cfg(with_metrics)]
+use {
+    linera_base::{prometheus_util, sync::Lazy},
+    prometheus::{HistogramVec, IntCounterVec},
+};
+
+const MEBIBYTE: usize = 1024 * 1024;
+pub const MAX_MESSAGE_SIZE: usize = 8 * MEBIBYTE;
+
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
 type NotificationSender = mpsc::Sender<Notification>;
 
+#[cfg(with_metrics)]
 static SERVER_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "server_request_latency",
@@ -83,11 +92,13 @@ static SERVER_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static SERVER_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec("server_request_count", "Server request count", &[])
         .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static SERVER_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "server_request_success",
@@ -97,6 +108,7 @@ static SERVER_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static SERVER_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "server_request_error",
@@ -106,6 +118,7 @@ static SERVER_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "server_request_latency_per_request_type",
@@ -187,14 +200,17 @@ where
     }
 
     fn call(&mut self, request: http::Request<Body>) -> Self::Future {
+        #[cfg(with_metrics)]
         let start = Instant::now();
         let future = self.service.call(request);
         async move {
             let response = future.await?;
-            SERVER_REQUEST_LATENCY
-                .with_label_values(&[])
-                .observe(start.elapsed().as_secs_f64() * 1000.0);
-            SERVER_REQUEST_COUNT.with_label_values(&[]).inc();
+            #[cfg(with_metrics)] {
+                SERVER_REQUEST_LATENCY
+                    .with_label_values(&[])
+                    .observe(start.elapsed().as_secs_f64() * 1000.0);
+                SERVER_REQUEST_COUNT.with_label_values(&[]).inc();
+            }
             Ok(response)
         }
         .boxed()
@@ -273,7 +289,10 @@ where
             cross_chain_sender,
             notification_sender,
         };
-        let worker_node = ValidatorWorkerServer::new(grpc_server);
+
+        let worker_node = ValidatorWorkerServer::new(grpc_server)
+            .max_encoding_message_size(MAX_MESSAGE_SIZE)
+            .max_decoding_message_size(MAX_MESSAGE_SIZE);
 
         let handle = tokio::spawn(
             Server::builder()
@@ -304,7 +323,9 @@ where
         let channel = Channel::from_shared(proxy_address.clone())
             .expect("Proxy URI should be valid")
             .connect_lazy();
-        let mut client = NotifierServiceClient::new(channel);
+        let mut client = NotifierServiceClient::new(channel)
+            .max_encoding_message_size(MAX_MESSAGE_SIZE)
+            .max_decoding_message_size(MAX_MESSAGE_SIZE);
 
         while let Some(notification) = receiver.next().await {
             let notification: grpc::Notification = match notification.clone().try_into() {
@@ -395,7 +416,9 @@ where
                             let cross_chain_request = cross_chain_request.clone().try_into()?;
                             let request = Request::new(cross_chain_request);
                             let mut client =
-                                ValidatorWorkerClient::new(pool.channel(remote_address.clone())?);
+                                ValidatorWorkerClient::new(pool.channel(remote_address.clone())?)
+                                    .max_encoding_message_size(MAX_MESSAGE_SIZE)
+                                    .max_decoding_message_size(MAX_MESSAGE_SIZE);
                             let response = client.handle_cross_chain_request(request).await?;
                             Ok::<_, anyhow::Error>(response)
                         };
@@ -432,12 +455,15 @@ where
     }
 
     fn log_request_success_and_latency(start: Instant, method_name: &str) {
-        SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE
-            .with_label_values(&[method_name])
-            .observe(start.elapsed().as_secs_f64() * 1000.0);
-        SERVER_REQUEST_SUCCESS
-            .with_label_values(&[method_name])
-            .inc();
+        #![allow(unused_variables)]
+        #[cfg(with_metrics)] {
+            SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE
+                .with_label_values(&[method_name])
+                .observe(start.elapsed().as_secs_f64() * 1000.0);
+            SERVER_REQUEST_SUCCESS
+                .with_label_values(&[method_name])
+                .inc();
+        }
     }
 }
 
@@ -463,9 +489,11 @@ where
                     info.try_into()?
                 }
                 Err(error) => {
-                    SERVER_REQUEST_ERROR
-                        .with_label_values(&["handle_block_proposal"])
-                        .inc();
+                    #[cfg(with_metrics)] {
+                        SERVER_REQUEST_ERROR
+                            .with_label_values(&["handle_block_proposal"])
+                            .inc();
+                    }
                     warn!(nickname = self.state.nickname(), %error, "Failed to handle block proposal");
                     NodeError::from(error).try_into()?
                 }
@@ -502,9 +530,11 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                SERVER_REQUEST_ERROR
-                    .with_label_values(&["handle_lite_certificate"])
-                    .inc();
+                #[cfg(with_metrics)] {
+                    SERVER_REQUEST_ERROR
+                        .with_label_values(&["handle_lite_certificate"])
+                        .inc();
+                }
                 if let WorkerError::MissingCertificateValue = &error {
                     debug!(nickname = self.state.nickname(), %error, "Failed to handle lite certificate");
                 } else {
@@ -545,9 +575,11 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                SERVER_REQUEST_ERROR
-                    .with_label_values(&["handle_certificate"])
-                    .inc();
+                #[cfg(with_metrics)] {
+                    SERVER_REQUEST_ERROR
+                        .with_label_values(&["handle_certificate"])
+                        .inc();
+                }
                 error!(nickname = self.state.nickname(), %error, "Failed to handle certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -569,9 +601,11 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                SERVER_REQUEST_ERROR
-                    .with_label_values(&["handle_chain_info_query"])
-                    .inc();
+                #[cfg(with_metrics)] {
+                    SERVER_REQUEST_ERROR
+                        .with_label_values(&["handle_chain_info_query"])
+                        .inc();
+                }
                 error!(nickname = self.state.nickname(), %error, "Failed to handle chain info query");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -592,9 +626,11 @@ where
                 self.handle_network_actions(actions)
             }
             Err(error) => {
-                SERVER_REQUEST_ERROR
-                    .with_label_values(&["handle_cross_chain_request"])
-                    .inc();
+                #[cfg(with_metrics)] {
+                    SERVER_REQUEST_ERROR
+                        .with_label_values(&["handle_cross_chain_request"])
+                        .inc();
+                }
                 error!(nickname = self.state.nickname(), %error, "Failed to handle cross-chain request");
             }
         }
@@ -620,7 +656,10 @@ impl GrpcClient {
             .connect_timeout(options.send_timeout)
             .timeout(options.recv_timeout)
             .connect_lazy();
-        let client = ValidatorNodeClient::new(channel);
+        let client = ValidatorNodeClient::new(channel)
+            .max_encoding_message_size(MAX_MESSAGE_SIZE)
+            .max_decoding_message_size(MAX_MESSAGE_SIZE);
+
         Ok(Self {
             address,
             client,

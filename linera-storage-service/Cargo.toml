@@ -35,14 +35,14 @@ tonic = { workspace = true, features = ["transport"] }
 
 [dev-dependencies]
 linera-storage-service = { path = ".", features = ["test"] }
-proptest.workspace = true
+proptest = { workspace = true, features = ["alloc"] }
 serde-reflection.workspace = true
 serde_yaml.workspace = true
 similar-asserts.workspace = true
 test-strategy.workspace = true
 
 [build-dependencies]
-tonic-build.workspace = true
+tonic-build = { workspace = true, features = ["prost", "transport"] }
 
 [package.metadata.cargo-machete]
 ignored = ["proptest", "prost"]
