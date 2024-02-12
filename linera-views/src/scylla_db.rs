@@ -141,14 +141,22 @@ impl ScyllaDbClient {
         // Read the value of a key
         let values = (key,);
         let query = &self.read_value;
-        let result = session.query(query.clone(), values).await?;
-        if let Some(rows) = result.rows {
-            if let Some(row) = rows.into_typed::<(Vec<u8>,)>().next() {
-                let value = row?;
-                return Ok(Some(value.0));
+        let mut paging_state = None;
+        loop {
+            let result = session
+                .query_paged(query.clone(), &values, paging_state)
+                .await?;
+            if let Some(rows) = result.rows {
+                if let Some(row) = rows.into_typed::<(Vec<u8>,)>().next() {
+                    let value = row?;
+                    return Ok(Some(value.0));
+                }
             }
+            if result.paging_state.is_none() {
+                return Ok(None);
+            }
+            paging_state = result.paging_state;
         }
-        Ok(None)
     }
 
     async fn contains_key_internal(&self, key: Vec<u8>) -> Result<bool, ScyllaDbContextError> {
@@ -157,13 +165,21 @@ impl ScyllaDbClient {
         // Read the value of a key
         let values = (key,);
         let query = &self.contains_key;
-        let result = session.query(query.clone(), values).await?;
-        if let Some(rows) = result.rows {
-            if let Some(_row) = rows.into_typed::<(Vec<u8>,)>().next() {
-                return Ok(true);
+        let mut paging_state = None;
+        loop {
+            let result = session
+                .query_paged(query.clone(), &values, paging_state)
+                .await?;
+            if let Some(rows) = result.rows {
+                if let Some(_row) = rows.into_typed::<(Vec<u8>,)>().next() {
+                    return Ok(true);
+                }
             }
+            if result.paging_state.is_none() {
+                return Ok(false);
+            }
+            paging_state = result.paging_state;
         }
-        Ok(false)
     }
 
     async fn write_batch_internal(
@@ -646,17 +662,46 @@ impl ScyllaDbStoreInternal {
             .known_node(store_config.uri.as_str())
             .build()
             .await?;
-        let result = session.query("DESCRIBE KEYSPACE kv", &[]).await?;
-        let mut tables = Vec::new();
-        if let Some(rows) = result.rows {
-            for row in rows.into_typed::<(String, String, String, String)>() {
-                let value = row?;
-                if value.1 == "table" {
-                    tables.push(value.2);
+        let mesg_miss = "'kv' not found in keyspaces";
+        let mut paging_state = None;
+        let mut table_names = Vec::new();
+        loop {
+            let result = session
+                .query_paged("DESCRIBE KEYSPACE kv", &[], paging_state)
+                .await;
+            let result = match result {
+                Ok(result) => result,
+                Err(error) => {
+                    let test = match &error {
+                        QueryError::DbError(db_error, mesg) => {
+                            if *db_error != DbError::Invalid {
+                                false
+                            } else {
+                                mesg.as_str() == mesg_miss
+                            }
+                        }
+                        _ => false,
+                    };
+                    if test {
+                        return Ok(Vec::new());
+                    } else {
+                        return Err(ScyllaDbContextError::ScyllaDbQueryError(error));
+                    }
+                }
+            };
+            if let Some(rows) = result.rows {
+                for row in rows.into_typed::<(String, String, String, String)>() {
+                    let value = row?;
+                    if value.1 == "table" {
+                        table_names.push(value.2);
+                    }
                 }
             }
+            if result.paging_state.is_none() {
+                return Ok(table_names);
+            }
+            paging_state = result.paging_state;
         }
-        Ok(tables)
     }
 
     async fn delete_all(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
