@@ -35,3 +35,13 @@ spec:
   selector:
     matchLabels:
       app: proxy
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gce-pd-balanced
+provisioner: kubernetes.io/gce-pd
+parameters:
+  type: pd-balanced
+reclaimPolicy: Retain
+allowVolumeExpansion: true
