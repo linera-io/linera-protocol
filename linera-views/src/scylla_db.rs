@@ -19,7 +19,7 @@
 use crate::metering::{MeteredStore, LRU_CACHING_METRICS, SCYLLA_DB_METRICS};
 
 #[cfg(any(test, feature = "test"))]
-use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::get_namespace};
+use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace};
 
 use crate::{
     batch::{Batch, DeletePrefixExpander, UnorderedBatch},
@@ -837,7 +837,7 @@ pub async fn create_scylla_db_test_config() -> ScyllaDbStoreConfig {
 #[cfg(any(test, feature = "test"))]
 pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
     let config = create_scylla_db_test_config().await;
-    let namespace = get_namespace();
+    let namespace = generate_test_namespace();
     ScyllaDbStore::new_from_scratch(&config, &namespace)
         .await
         .expect("store")

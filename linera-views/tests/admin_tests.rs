@@ -7,7 +7,7 @@
 // to the list of tables created so that this test can be run in parallel to
 // other tests.
 
-use linera_views::{common::AdminKeyValueStore, test_utils::get_namespace};
+use linera_views::{common::AdminKeyValueStore, test_utils::generate_test_namespace};
 use rand::{Rng, SeedableRng};
 use std::{collections::BTreeSet, fmt::Debug};
 
@@ -34,7 +34,7 @@ async fn get_table_matching_prefix<E: Debug, S: AdminKeyValueStore<E>>(
 
 #[cfg(test)]
 async fn admin_test<E: Debug, S: AdminKeyValueStore<E>>(config: &S::Config) {
-    let prefix = get_namespace();
+    let prefix = generate_test_namespace();
     let namespaces = get_table_matching_prefix::<E, S>(config, &prefix).await;
     assert_eq!(namespaces.len(), 0);
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);

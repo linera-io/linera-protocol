@@ -11,7 +11,7 @@ use {
     linera_views::scylla_db::{
         create_scylla_db_test_config, ScyllaDbContextError, ScyllaDbStoreConfig,
     },
-    linera_views::test_utils::get_namespace,
+    linera_views::test_utils::generate_test_namespace,
 };
 
 #[cfg(test)]
@@ -24,7 +24,7 @@ pub type ScyllaDbStorage<C> = DbStorage<ScyllaDbStore, C>;
 impl ScyllaDbStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let store_config = create_scylla_db_test_config().await;
-        let namespace = get_namespace();
+        let namespace = generate_test_namespace();
         ScyllaDbStorage::new_for_testing(store_config, &namespace, wasm_runtime, TestClock::new())
             .await
             .expect("storage")

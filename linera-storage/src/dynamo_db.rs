@@ -10,7 +10,7 @@ use {
     linera_execution::WasmRuntime,
     linera_views::{
         dynamo_db::{create_dynamo_db_test_config, DynamoDbContextError, DynamoDbStoreConfig},
-        test_utils::get_namespace,
+        test_utils::generate_test_namespace,
     },
 };
 
@@ -24,7 +24,7 @@ pub type DynamoDbStorage<C> = DbStorage<DynamoDbStore, C>;
 impl DynamoDbStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let store_config = create_dynamo_db_test_config().await;
-        let namespace = get_namespace();
+        let namespace = generate_test_namespace();
         DynamoDbStorage::new_for_testing(store_config, &namespace, wasm_runtime, TestClock::new())
             .await
             .expect("storage")

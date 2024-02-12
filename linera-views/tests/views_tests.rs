@@ -47,7 +47,7 @@ use linera_views::{
         create_dynamo_db_common_config, DynamoDbContext, DynamoDbStore, DynamoDbStoreConfig,
         LocalStackTestContext,
     },
-    test_utils::get_namespace,
+    test_utils::generate_test_namespace,
 };
 
 #[cfg(feature = "scylladb")]
@@ -277,7 +277,7 @@ impl StateStore for DynamoDbTestStore {
 
     async fn new() -> Self {
         let localstack = LocalStackTestContext::new().await.expect("localstack");
-        let namespace = get_namespace();
+        let namespace = generate_test_namespace();
         let is_created = false;
         let common_config = create_dynamo_db_common_config();
         let accessed_chains = BTreeSet::new();

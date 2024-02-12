@@ -16,7 +16,7 @@ use std::{collections::VecDeque, marker::PhantomData};
 use test_case::test_case;
 
 #[cfg(any(feature = "rocksdb", feature = "scylladb", feature = "aws"))]
-use crate::{common::AdminKeyValueStore, test_utils::get_namespace};
+use crate::{common::AdminKeyValueStore, test_utils::generate_test_namespace};
 
 #[cfg(feature = "rocksdb")]
 use {
@@ -224,7 +224,7 @@ impl TestContextFactory for RocksDbContextFactory {
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let (store_config, directory) = create_rocks_db_test_config().await;
-        let namespace = get_namespace();
+        let namespace = generate_test_namespace();
         let store = RocksDbStore::new_from_scratch(&store_config, &namespace)
             .await
             .expect("store");
@@ -254,7 +254,7 @@ impl TestContextFactory for DynamoDbContextFactory {
         }
         let config = self.localstack.as_ref().unwrap().dynamo_db_config();
 
-        let namespace = get_namespace();
+        let namespace = generate_test_namespace();
         let common_config = create_dynamo_db_common_config();
         let store_config = DynamoDbStoreConfig {
             config,
@@ -277,7 +277,7 @@ impl TestContextFactory for ScyllaDbContextFactory {
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let config = create_scylla_db_test_config().await;
-        let namespace = get_namespace();
+        let namespace = generate_test_namespace();
         let store = ScyllaDbStore::new_from_scratch(&config, &namespace).await?;
         let dummy_key_prefix = vec![0];
         let context = ScyllaDbContext::new(store, dummy_key_prefix, ());

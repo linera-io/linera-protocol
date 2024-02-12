@@ -11,7 +11,7 @@ use {
     linera_views::rocks_db::{
         create_rocks_db_test_config, RocksDbContextError, RocksDbStoreConfig,
     },
-    linera_views::test_utils::get_namespace,
+    linera_views::test_utils::generate_test_namespace,
     tempfile::TempDir,
 };
 
@@ -25,7 +25,7 @@ pub type RocksDbStorage<C> = DbStorage<RocksDbStore, C>;
 impl RocksDbStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> (Self, TempDir) {
         let (store_config, dir) = create_rocks_db_test_config().await;
-        let namespace = get_namespace();
+        let namespace = generate_test_namespace();
         let storage = RocksDbStorage::new_for_testing(
             store_config,
             &namespace,

@@ -48,7 +48,7 @@ use crate::metering::{
 #[cfg(any(test, feature = "test"))]
 use {
     crate::lru_caching::TEST_CACHE_SIZE,
-    crate::test_utils::get_namespace,
+    crate::test_utils::generate_test_namespace,
     anyhow::Error,
     tokio::sync::{Mutex, MutexGuard},
 };
@@ -1225,7 +1225,7 @@ pub async fn create_dynamo_db_test_config() -> DynamoDbStoreConfig {
 #[cfg(any(test, feature = "test"))]
 pub async fn create_dynamo_db_test_store() -> DynamoDbStore {
     let store_config = create_dynamo_db_test_config().await;
-    let namespace = get_namespace();
+    let namespace = generate_test_namespace();
     DynamoDbStore::new_from_scratch(&store_config, &namespace)
         .await
         .expect("key_value_store")

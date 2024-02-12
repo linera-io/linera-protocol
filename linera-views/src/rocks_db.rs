@@ -27,7 +27,7 @@ use crate::metering::{
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::{lru_caching::TEST_CACHE_SIZE, test_utils::get_namespace},
+    crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace},
     tempfile::TempDir,
 };
 
@@ -376,7 +376,7 @@ pub async fn create_rocks_db_test_config() -> (RocksDbStoreConfig, TempDir) {
 #[cfg(any(test, feature = "test"))]
 pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
     let (store_config, dir) = create_rocks_db_test_config().await;
-    let namespace = get_namespace();
+    let namespace = generate_test_namespace();
     let store = RocksDbStore::new_from_scratch(&store_config, &namespace)
         .await
         .expect("client");

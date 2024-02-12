@@ -30,7 +30,7 @@ pub fn generate_random_alphanumeric_string(length: usize) -> String {
 }
 
 /// Returns a unique namespace for testing.
-pub fn get_namespace() -> String {
+pub fn generate_test_namespace() -> String {
     let entry = generate_random_alphanumeric_string(20);
     let namespace = format!("table_{}", entry);
     warn!("Generating namespace={}", namespace);

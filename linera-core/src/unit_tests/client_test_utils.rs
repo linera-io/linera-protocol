@@ -53,7 +53,7 @@ use {
 };
 
 #[cfg(any(feature = "aws", feature = "scylladb", feature = "rocksdb"))]
-use linera_views::test_utils::get_namespace;
+use linera_views::test_utils::generate_test_namespace;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum FaultType {
@@ -706,7 +706,7 @@ impl StorageBuilder for MakeRocksDbStorage {
             path_buf,
             common_config,
         };
-        let namespace = get_namespace();
+        let namespace = generate_test_namespace();
         let storage = RocksDbStorage::new_for_testing(
             store_config,
             &namespace,
@@ -754,7 +754,7 @@ impl StorageBuilder for MakeDynamoDbStorage {
             self.localstack = Some(LocalStackTestContext::new().await?);
         }
         let config = self.localstack.as_ref().unwrap().dynamo_db_config();
-        let namespace = get_namespace();
+        let namespace = generate_test_namespace();
         let namespace = format!("{}_{}", namespace, self.instance_counter);
         let common_config = create_dynamo_db_common_config();
         let store_config = DynamoDbStoreConfig {
@@ -821,7 +821,7 @@ impl StorageBuilder for MakeScyllaDbStorage {
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
         self.instance_counter += 1;
-        let namespace = get_namespace();
+        let namespace = generate_test_namespace();
         let namespace = format!("{}_{}", namespace, self.instance_counter);
         let common_config = create_scylla_db_common_config();
         let store_config = ScyllaDbStoreConfig {
