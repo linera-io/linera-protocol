@@ -1409,9 +1409,7 @@ pub async fn list_tables_from_client(
             .send()
             .await?;
         if let Some(table_names_blk) = response.table_names {
-            for table_name in table_names_blk {
-                table_names.push(table_name);
-            }
+            table_names.extend(table_names_blk);
         }
         if response.last_evaluated_table_name.is_none() {
             break;
