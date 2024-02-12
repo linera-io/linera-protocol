@@ -378,8 +378,10 @@ pub enum SystemExecutionError {
     IncorrectTransferAmount,
     #[error("Transfer from owned account must be authenticated by the right signer")]
     UnauthenticatedTransferOwner,
-    #[error("The transferred amount must not exceed the current chain balance: {current_balance}")]
-    InsufficientFunding { current_balance: Amount },
+    #[error("The transferred amount must not exceed the current chain balance: {balance}")]
+    InsufficientFunding { balance: Amount },
+    #[error("Required execution fees exceeded the total funding available: {balance}")]
+    InsufficientFundingForFees { balance: Amount },
     #[error("Claim must have positive amount")]
     IncorrectClaimAmount,
     #[error("Claim must be authenticated by the right signer")]
@@ -479,11 +481,9 @@ where
                     }
                 );
                 let balance = self.balance.get_mut();
-                balance.try_sub_assign(new_balance).map_err(|_| {
-                    SystemExecutionError::InsufficientFunding {
-                        current_balance: *balance,
-                    }
-                })?;
+                balance
+                    .try_sub_assign(new_balance)
+                    .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
                 let e1 = RawOutgoingMessage {
                     destination: Destination::Recipient(child_id),
                     authenticated: false,
@@ -574,9 +574,7 @@ where
                 };
                 ensure!(
                     *balance >= amount,
-                    SystemExecutionError::InsufficientFunding {
-                        current_balance: *balance
-                    }
+                    SystemExecutionError::InsufficientFunding { balance: *balance }
                 );
                 balance.try_sub_assign(amount)?;
                 if let Recipient::Account(account) = recipient {

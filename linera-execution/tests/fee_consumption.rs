@@ -9,8 +9,9 @@ mod utils;
 
 use self::utils::{register_mock_applications, ExpectedCall};
 use linera_base::{
+    crypto::PublicKey,
     data_types::{Amount, BlockHeight},
-    identifiers::{ChainDescription, ChainId},
+    identifiers::{ChainDescription, ChainId, Owner},
 };
 use linera_execution::{
     policy::ResourceControlPolicy, ContractRuntime, ExecutionError, ExecutionOutcome,
@@ -22,16 +23,35 @@ use std::{sync::Arc, vec};
 use test_case::test_case;
 
 /// Tests if the chain balance is updated based on the fees spent for consuming resources.
-#[test_case(vec![]; "without any costs")]
-#[test_case(vec![FeeSpend::Fuel(100)]; "with only execution costs")]
-#[test_case(vec![FeeSpend::Read(vec![0, 1], None)]; "with only an empty read")]
+// Chain account only.
+#[test_case(vec![], Amount::ZERO, None; "without any costs")]
+#[test_case(vec![FeeSpend::Fuel(100)], Amount::from_tokens(1_000), None; "with only execution costs")]
+#[test_case(vec![FeeSpend::Read(vec![0, 1], None)], Amount::from_tokens(1_000), None; "with only an empty read")]
 #[test_case(vec![
     FeeSpend::Read(vec![0, 1], None),
     FeeSpend::Fuel(207),
-]; "with execution and an empty read")]
+], Amount::from_tokens(1_000), None; "with execution and an empty read")]
+// Chain account and small owner account.
+#[test_case(vec![FeeSpend::Fuel(100)], Amount::from_tokens(1_000), Some(Amount::from_tokens(1)); "with only execution costs and with owner account")]
+#[test_case(vec![FeeSpend::Read(vec![0, 1], None)], Amount::from_tokens(1_000), Some(Amount::from_tokens(1)); "with only an empty read and with owner account")]
+#[test_case(vec![
+    FeeSpend::Read(vec![0, 1], None),
+    FeeSpend::Fuel(207),
+], Amount::from_tokens(1_000), Some(Amount::from_tokens(1)); "with execution and an empty read and with owner account")]
+// Small chain account and larger owner account.
+#[test_case(vec![FeeSpend::Fuel(100)], Amount::from_tokens(1), Some(Amount::from_tokens(1_000)); "with only execution costs and with larger owner account")]
+#[test_case(vec![FeeSpend::Read(vec![0, 1], None)], Amount::from_tokens(1), Some(Amount::from_tokens(1_000)); "with only an empty read and with larger owner account")]
+#[test_case(vec![
+    FeeSpend::Read(vec![0, 1], None),
+    FeeSpend::Fuel(207),
+], Amount::from_tokens(1), Some(Amount::from_tokens(1_000)); "with execution and an empty read and with larger owner account")]
 // TODO(#1601): Add more test cases
 #[tokio::test]
-async fn test_fee_consumption(spends: Vec<FeeSpend>) -> anyhow::Result<()> {
+async fn test_fee_consumption(
+    spends: Vec<FeeSpend>,
+    chain_balance: Amount,
+    owner_balance: Option<Amount>,
+) {
     let state = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
         ..SystemExecutionState::default()
@@ -43,10 +63,13 @@ async fn test_fee_consumption(spends: Vec<FeeSpend>) -> anyhow::Result<()> {
         )
         .await;
 
-    let initial_balance: Amount = Amount::from_tokens(1_000);
-    view.system.balance.set(initial_balance);
+    let owner = Owner::from(PublicKey::debug(0));
+    view.system.balance.set(chain_balance);
+    if let Some(owner_balance) = owner_balance {
+        view.system.balances.insert(&owner, owner_balance).unwrap();
+    }
 
-    let mut applications = register_mock_applications(&mut view, 1).await?;
+    let mut applications = register_mock_applications(&mut view, 1).await.unwrap();
     let (application_id, application) = applications
         .next()
         .expect("Caller mock application should be registered");
@@ -74,15 +97,21 @@ async fn test_fee_consumption(spends: Vec<FeeSpend>) -> anyhow::Result<()> {
             sum.saturating_add(spent_fees)
         });
 
+    let authenticated_signer = if owner_balance.is_some() {
+        Some(owner)
+    } else {
+        None
+    };
     let mut controller = ResourceController {
         policy: Arc::new(prices),
+        account: authenticated_signer,
         ..ResourceController::default()
     };
 
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             for spend in spends {
-                spend.execute(runtime)?;
+                spend.execute(runtime).unwrap();
             }
             Ok(RawExecutionOutcome::default())
         },
@@ -92,7 +121,7 @@ async fn test_fee_consumption(spends: Vec<FeeSpend>) -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
         index: 0,
-        authenticated_signer: None,
+        authenticated_signer,
         next_message_index: 0,
     };
     let outcomes = view
@@ -104,19 +133,36 @@ async fn test_fee_consumption(spends: Vec<FeeSpend>) -> anyhow::Result<()> {
             },
             &mut controller,
         )
-        .await?;
+        .await
+        .unwrap();
 
-    let expected_final_balance = initial_balance.saturating_sub(consumed_fees);
-
-    assert_eq!(*view.system.balance.get(), expected_final_balance);
+    let (expected_chain_balance, expected_owner_balance) = if chain_balance >= consumed_fees {
+        (chain_balance.saturating_sub(consumed_fees), owner_balance)
+    } else {
+        let Some(owner_balance) = owner_balance else {
+            panic!("execution should have failed earlier");
+        };
+        (
+            Amount::ZERO,
+            Some(
+                owner_balance
+                    .saturating_add(chain_balance)
+                    .saturating_sub(consumed_fees),
+            ),
+        )
+    };
+    assert_eq!(*view.system.balance.get(), expected_chain_balance);
+    assert_eq!(
+        view.system.balances.get(&owner).await.unwrap(),
+        expected_owner_balance
+    );
     assert_eq!(
         outcomes,
         vec![ExecutionOutcome::User(
             application_id,
-            RawExecutionOutcome::default()
-        ),]
+            RawExecutionOutcome::default().with_authenticated_signer(authenticated_signer),
+        )]
     );
-    Ok(())
 }
 
 /// A runtime operation that costs some amount of fees.
