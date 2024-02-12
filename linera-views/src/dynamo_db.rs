@@ -1400,12 +1400,26 @@ pub async fn create_dynamo_db_test_store() -> DynamoDbStore {
 pub async fn list_tables_from_client(
     client: &aws_sdk_dynamodb::Client,
 ) -> Result<Vec<String>, DynamoDbContextError> {
-    Ok(client
-        .list_tables()
-        .send()
-        .await?
-        .table_names
-        .expect("List of tables was not returned"))
+    let mut table_names = Vec::new();
+    let mut start_table = None;
+    loop {
+        let response = client
+            .list_tables()
+            .set_exclusive_start_table_name(start_table)
+            .send()
+            .await?;
+        if let Some(table_names_blk) = response.table_names {
+            for table_name in table_names_blk {
+                table_names.push(table_name);
+            }
+        }
+        if response.last_evaluated_table_name.is_none() {
+            break;
+        } else {
+            start_table = response.last_evaluated_table_name;
+        }
+    }
+    Ok(table_names)
 }
 
 /// Helper function to clear all the tables from the database
