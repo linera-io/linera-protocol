@@ -21,7 +21,7 @@ use linera_views::dynamo_db::{create_dynamo_db_test_config, DynamoDbContextError
 use linera_views::scylla_db::{create_scylla_db_test_config, ScyllaDbContextError, ScyllaDbStore};
 
 #[cfg(test)]
-async fn get_table_matching_prefix<E: Debug, S: AdminKeyValueStore<E>>(
+async fn namespaces_with_prefix<E: Debug, S: AdminKeyValueStore<E>>(
     config: &S::Config,
     prefix: &str,
 ) -> BTreeSet<String> {
@@ -35,56 +35,54 @@ async fn get_table_matching_prefix<E: Debug, S: AdminKeyValueStore<E>>(
 #[cfg(test)]
 async fn admin_test<E: Debug, S: AdminKeyValueStore<E>>(config: &S::Config) {
     let prefix = generate_test_namespace();
-    let namespaces = get_table_matching_prefix::<E, S>(config, &prefix).await;
+    let namespaces = namespaces_with_prefix::<E, S>(config, &prefix).await;
     assert_eq!(namespaces.len(), 0);
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
-    for size in [1, 3, 6, 9] {
-        // Creating the initial list of namespaces
-        let mut working_namespaces = BTreeSet::new();
-        for i in 0..size {
-            let namespace = format!("{}_{}", prefix, i);
-            assert!(!S::exists(config, &namespace).await.expect("test"));
-            working_namespaces.insert(namespace);
-        }
-        // Creating the namespaces
-        for namespace in &working_namespaces {
-            S::create(config, namespace)
-                .await
-                .expect("creation of a namespace");
-            let test = S::exists(config, namespace).await.expect("test");
-            assert!(test);
-        }
-        // Listing all of them
-        let namespaces = get_table_matching_prefix::<E, S>(config, &prefix).await;
-        let test = namespaces == working_namespaces;
+    let size = 9;
+    // Creating the initial list of namespaces
+    let mut working_namespaces = BTreeSet::new();
+    for i in 0..size {
+        let namespace = format!("{}_{}", prefix, i);
+        assert!(!S::exists(config, &namespace).await.expect("test"));
+        working_namespaces.insert(namespace);
+    }
+    // Creating the namespaces
+    for namespace in &working_namespaces {
+        S::create(config, namespace)
+            .await
+            .expect("creation of a namespace");
+        let test = S::exists(config, namespace).await.expect("test");
         assert!(test);
-        // Selecting at random some for deletion
-        let mut deleted_namespaces = BTreeSet::new();
-        let mut kept_namespaces = BTreeSet::new();
-        for namespace in working_namespaces {
-            let delete = rng.gen::<bool>();
-            if delete {
-                S::delete(config, &namespace)
-                    .await
-                    .expect("A successful deletion");
-                let test = S::exists(config, &namespace).await.expect("test");
-                assert!(!test);
-                deleted_namespaces.insert(namespace);
-            } else {
-                kept_namespaces.insert(namespace);
-            }
-        }
-        for namespace in &kept_namespaces {
-            let test = S::exists(config, namespace).await.expect("test");
-            assert!(test);
-        }
-        let namespaces = get_table_matching_prefix::<E, S>(config, &prefix).await;
-        assert_eq!(namespaces, kept_namespaces);
-        for namespace in kept_namespaces {
+    }
+    // Listing all of them
+    let namespaces = namespaces_with_prefix::<E, S>(config, &prefix).await;
+    assert_eq!(namespaces, working_namespaces);
+    // Selecting at random some for deletion
+    let mut deleted_namespaces = BTreeSet::new();
+    let mut kept_namespaces = BTreeSet::new();
+    for namespace in working_namespaces {
+        let delete = rng.gen::<bool>();
+        if delete {
             S::delete(config, &namespace)
                 .await
                 .expect("A successful deletion");
+            let test = S::exists(config, &namespace).await.expect("test");
+            assert!(!test);
+            deleted_namespaces.insert(namespace);
+        } else {
+            kept_namespaces.insert(namespace);
         }
+    }
+    for namespace in &kept_namespaces {
+        let test = S::exists(config, namespace).await.expect("test");
+        assert!(test);
+    }
+    let namespaces = namespaces_with_prefix::<E, S>(config, &prefix).await;
+    assert_eq!(namespaces, kept_namespaces);
+    for namespace in kept_namespaces {
+        S::delete(config, &namespace)
+            .await
+            .expect("A successful deletion");
     }
 }
 

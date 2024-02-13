@@ -144,7 +144,6 @@ impl WritableKeyValueStore<MemoryContextError> for MemoryStore {
     }
 }
 
-// For the memory container the namespace container
 #[async_trait]
 impl AdminKeyValueStore<MemoryContextError> for MemoryStore {
     type Config = MemoryStoreConfig;
