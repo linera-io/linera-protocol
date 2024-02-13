@@ -36,6 +36,8 @@ use {
     tracing::debug,
 };
 
+const DEFAULT_NAMESPACE: &'static str = "table_linera";
+
 /// The configuration of the key value store in use.
 #[allow(clippy::large_enum_variant)]
 pub enum StoreConfig {
@@ -58,7 +60,7 @@ pub enum StoreConfig {
 pub enum StorageConfig {
     /// The memory description
     Memory {
-        /// The namespace used
+        /// The namespace
         namespace: String,
     },
     /// The RocksDb description
@@ -66,16 +68,16 @@ pub enum StorageConfig {
     RocksDb {
         /// The path used
         path: PathBuf,
-        /// The namespace used
+        /// The namespace
         namespace: String,
     },
     /// The DynamoDB description
     #[cfg(feature = "aws")]
     DynamoDb {
-        /// The namespace used
-        namespace: String,
         /// Whether to use the localstack system
         use_localstack: bool,
+        /// The namespace
+        namespace: String,
     },
     /// The ScyllaDb description
     #[cfg(feature = "scylladb")]
@@ -87,7 +89,7 @@ pub enum StorageConfig {
     },
 }
 
-const MEMORY: &str = "memory";
+const MEMORY: &str = "memory:";
 #[cfg(feature = "rocksdb")]
 const ROCKS_DB: &str = "rocksdb:";
 #[cfg(feature = "aws")]
@@ -113,7 +115,7 @@ impl FromStr for StorageConfig {
             let parts = s.split(':').collect::<Vec<_>>();
             if parts.len() == 1 {
                 let path = parts[0].to_string().into();
-                let namespace = "linera".to_string();
+                let namespace = DEFAULT_NAMESPACE.to_string();
                 return Ok(Self::RocksDb { path, namespace });
             }
             if parts.len() == 2 {
@@ -141,8 +143,8 @@ impl FromStr for StorageConfig {
                 }
             };
             return Ok(Self::DynamoDb {
-                namespace,
                 use_localstack,
+                namespace,
             });
         }
         #[cfg(feature = "scylladb")]
@@ -186,7 +188,7 @@ impl FromStr for StorageConfig {
                 }
             }
             let uri = uri.unwrap_or("localhost:9042".to_string());
-            let namespace = namespace.unwrap_or("table_namespace_storage".to_string());
+            let namespace = namespace.unwrap_or(DEFAULT_NAMESPACE.to_string());
             let db = Self::ScyllaDb { uri, namespace };
             debug!("ScyllaDB connection info: {:?}", db);
             return Ok(db);
@@ -456,15 +458,15 @@ pub async fn full_initialize_storage(
 #[test]
 fn test_memory_storage_config_from_str() {
     assert_eq!(
-        StorageConfig::from_str("memory").unwrap(),
+        StorageConfig::from_str("memory:").unwrap(),
         StorageConfig::Memory {
             namespace: "".into()
         }
     );
     assert_eq!(
-        StorageConfig::from_str("memorylinera").unwrap(),
+        StorageConfig::from_str("memory:table_linera").unwrap(),
         StorageConfig::Memory {
-            namespace: "linera".into()
+            namespace: DEFAULT_NAMESPACE.into()
         }
     );
 }
@@ -484,7 +486,7 @@ fn test_rocks_db_storage_config_from_str() {
         StorageConfig::from_str("rocksdb:foo.db").unwrap(),
         StorageConfig::RocksDb {
             path: "foo.db".into(),
-            namespace: "linera".into(),
+            namespace: DEFAULT_NAMESPACE.to_string(),
         }
     );
 }
@@ -526,7 +528,7 @@ fn test_scylla_db_storage_config_from_str() {
         StorageConfig::from_str("scylladb:").unwrap(),
         StorageConfig::ScyllaDb {
             uri: "localhost:9042".to_string(),
-            namespace: "table_namespace_storage".to_string(),
+            namespace: DEFAULT_NAMESPACE.to_string(),
         }
     );
     assert_eq!(
@@ -540,7 +542,7 @@ fn test_scylla_db_storage_config_from_str() {
         StorageConfig::from_str("scylladb:tcp:db_hostname:230").unwrap(),
         StorageConfig::ScyllaDb {
             uri: "db_hostname:230".to_string(),
-            namespace: "table_namespace_storage".to_string(),
+            namespace: DEFAULT_NAMESPACE.to_string(),
         }
     );
     assert!(StorageConfig::from_str("scylladb:-10").is_err());
