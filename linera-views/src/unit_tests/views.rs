@@ -268,7 +268,7 @@ impl TestContextFactory for DynamoDbContextFactory {
 
 #[cfg(feature = "scylladb")]
 #[derive(Default)]
-struct ScyllaDbContextFactory {}
+struct ScyllaDbContextFactory;
 
 #[cfg(feature = "scylladb")]
 #[async_trait]
