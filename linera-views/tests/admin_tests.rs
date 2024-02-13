@@ -43,8 +43,7 @@ async fn admin_test<E: Debug, S: AdminKeyValueStore<E>>(config: &S::Config) {
         let mut working_namespaces = BTreeSet::new();
         for i in 0..size {
             let namespace = format!("{}_{}", prefix, i);
-            let test = S::exists(config, &namespace).await.expect("test");
-            assert!(!test);
+            assert!(!S::exists(config, &namespace).await.expect("test"));
             working_namespaces.insert(namespace);
         }
         // Creating the namespaces
