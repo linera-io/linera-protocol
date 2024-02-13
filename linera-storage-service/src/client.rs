@@ -8,23 +8,21 @@ use crate::{
     common::{SharedContextError, SharedStoreConfig},
     key_value_store::{
         statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
-        ReplyContainsKey, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyReadMultiValues,
-        ReplyReadValue, RequestClearJournal, RequestContainsKey, RequestFindKeyValuesByPrefix,
-        RequestFindKeysByPrefix, RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
-        Statement,
-        RequestCreateNamespace,
-        RequestExistNamespace, ReplyExistNamespace,
-        RequestDeleteNamespace,
-        RequestListAll, ReplyListAll,
-        RequestDeleteAll,
+        ReplyContainsKey, ReplyExistNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
+        ReplyListAll, ReplyReadMultiValues, ReplyReadValue, RequestClearJournal,
+        RequestContainsKey, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
+        RequestExistNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
+        RequestListAll, RequestReadMultiValues, RequestReadValue, RequestWriteBatch, Statement,
     },
 };
-use linera_views::common::AdminKeyValueStore;
 use async_lock::{RwLock, Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use linera_views::{
     batch::Batch,
-    common::{CommonStoreConfig, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
+    common::{
+        AdminKeyValueStore, CommonStoreConfig, KeyValueStore, ReadableKeyValueStore,
+        WritableKeyValueStore,
+    },
 };
 use std::sync::Arc;
 use tonic::transport::{Channel, Endpoint};
@@ -53,6 +51,7 @@ const TEST_SHARED_STORE_MAX_STREAM_QUERIES: usize = 10;
 /// * An additional key with empty value is stored at
 ///   [1] + [namespace]
 /// is stored to indicate the existence of a namespace.
+#[derive(Clone)]
 pub struct SharedStoreClient {
     client: Arc<RwLock<StoreProcessorClient<Channel>>>,
     semaphore: Option<Arc<Semaphore>>,
@@ -172,17 +171,20 @@ impl WritableKeyValueStore<SharedContextError> for SharedStoreClient {
                     let mut full_key = self.namespace.clone();
                     full_key.extend(key);
                     Operation::Delete(full_key)
-                },
+                }
                 WriteOperation::Put { key, value } => {
                     let mut full_key = self.namespace.clone();
                     full_key.extend(key);
-                    Operation::Put(KeyValue { key: full_key, value })
-                },
+                    Operation::Put(KeyValue {
+                        key: full_key,
+                        value,
+                    })
+                }
                 WriteOperation::DeletePrefix { key_prefix } => {
                     let mut full_key_prefix = self.namespace.clone();
                     full_key_prefix.extend(key_prefix);
                     Operation::DeletePrefix(full_key_prefix)
-                },
+                }
             };
             let statement = Statement {
                 operation: Some(operation),
@@ -232,7 +234,6 @@ impl SharedStoreClient {
         bcs::serialize_into(&mut key, namespace)?;
         Ok(key)
     }
-
 }
 
 #[async_trait]
@@ -243,7 +244,8 @@ impl AdminKeyValueStore<SharedContextError> for SharedStoreClient {
         let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
         let client = StoreProcessorClient::connect(endpoint).await?;
         let client = Arc::new(RwLock::new(client));
-        let semaphore = config.common_config
+        let semaphore = config
+            .common_config
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = config.common_config.max_stream_queries;
@@ -257,7 +259,7 @@ impl AdminKeyValueStore<SharedContextError> for SharedStoreClient {
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, SharedContextError> {
-        let query = RequestListAll { };
+        let query = RequestListAll {};
         let request = tonic::Request::new(query);
         let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
@@ -272,7 +274,7 @@ impl AdminKeyValueStore<SharedContextError> for SharedStoreClient {
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), SharedContextError> {
-        let query = RequestDeleteAll { };
+        let query = RequestDeleteAll {};
         let request = tonic::Request::new(query);
         let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
@@ -312,7 +314,6 @@ impl AdminKeyValueStore<SharedContextError> for SharedStoreClient {
         Ok(())
     }
 }
-
 
 #[cfg(any(test, feature = "test"))]
 pub fn create_shared_store_common_config() -> CommonStoreConfig {

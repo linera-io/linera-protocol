@@ -12,6 +12,7 @@ mod memory;
 mod rocks_db;
 #[cfg(with_scylladb)]
 mod scylla_db;
+mod service;
 
 #[cfg(any(test, feature = "test"))]
 pub use crate::db_storage::TestClock;
@@ -24,6 +25,7 @@ pub use crate::scylla_db::ScyllaDbStorage;
 pub use crate::{
     db_storage::{Clock, DbStorage, WallClock},
     memory::MemoryStorage,
+    service::ServiceStorage,
 };
 
 #[cfg(with_metrics)]

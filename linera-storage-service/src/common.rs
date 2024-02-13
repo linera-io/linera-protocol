@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_views::common::CommonStoreConfig;
+use linera_views::{common::CommonStoreConfig, value_splitting::DatabaseConsistencyError};
 use thiserror::Error;
 use tonic::Status;
 
@@ -32,6 +32,19 @@ pub enum SharedContextError {
     /// An error occurred while doing BCS serialization.
     #[error("failed to serialize value to calculate its hash")]
     Serialization(#[from] bcs::Error),
+
+    /// The database is not consistent
+    #[error(transparent)]
+    DatabaseConsistencyError(#[from] DatabaseConsistencyError),
+}
+
+impl From<SharedContextError> for linera_views::views::ViewError {
+    fn from(error: SharedContextError) -> Self {
+        Self::ContextError {
+            backend: "service".to_string(),
+            error: error.to_string(),
+        }
+    }
 }
 
 #[cfg(any(test, feature = "test"))]

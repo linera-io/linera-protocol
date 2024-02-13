@@ -4,22 +4,19 @@
 use crate::key_value_store::{
     statement::Operation,
     store_processor_server::{StoreProcessor, StoreProcessorServer},
-    KeyValue, OptValue, ReplyClearJournal, ReplyContainsKey, ReplyFindKeyValuesByPrefix,
-    ReplyFindKeysByPrefix, ReplyReadMultiValues, ReplyReadValue, ReplyWriteBatch,
-    RequestClearJournal, RequestContainsKey, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
+    KeyValue, OptValue, ReplyClearJournal, ReplyContainsKey, ReplyCreateNamespace, ReplyDeleteAll,
+    ReplyDeleteNamespace, ReplyExistNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
+    ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplyWriteBatch, RequestClearJournal,
+    RequestContainsKey, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
+    RequestExistNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListAll,
     RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
-    RequestCreateNamespace, ReplyCreateNamespace,
-    RequestExistNamespace, ReplyExistNamespace,
-    RequestDeleteNamespace, ReplyDeleteNamespace,
-    RequestListAll, ReplyListAll,
-    RequestDeleteAll, ReplyDeleteAll,
 };
 use linera_views::{
+    batch::Batch,
     common::{AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
     memory::{create_memory_store_stream_queries, MemoryStore},
     rocks_db::{RocksDbStore, RocksDbStoreConfig},
 };
-use linera_views::batch::Batch;
 use tonic::{transport::Server, Request, Response, Status};
 
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -112,11 +109,7 @@ impl SharedStoreServer {
         }
     }
 
-    pub async fn write_batch(
-        &self,
-        batch: Batch,
-        base_key: &[u8],
-    ) -> Result<(), Status> {
+    pub async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Status> {
         match self {
             SharedStoreServer::Memory(store) => store
                 .write_batch(batch, base_key)
@@ -340,7 +333,7 @@ impl StoreProcessor for SharedStoreServer {
         let request = request.into_inner();
         let RequestDeleteNamespace { namespace } = request;
         self.delete_namespace(&namespace).await?;
-        let response = ReplyDeleteNamespace { };
+        let response = ReplyDeleteNamespace {};
         Ok(Response::new(response))
     }
 
@@ -358,7 +351,7 @@ impl StoreProcessor for SharedStoreServer {
         _request: Request<RequestDeleteAll>,
     ) -> Result<Response<ReplyDeleteAll>, Status> {
         self.delete_all().await?;
-        let response = ReplyDeleteAll { };
+        let response = ReplyDeleteAll {};
         Ok(Response::new(response))
     }
 }

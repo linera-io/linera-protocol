@@ -44,6 +44,7 @@ futures.workspace = true
 linera-base.workspace = true
 linera-chain.workspace = true
 linera-execution.workspace = true
+linera-storage-service.workspace = true
 linera-views.workspace = true
 prometheus.workspace = true
 serde.workspace = true

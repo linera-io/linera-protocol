@@ -3346,6 +3346,7 @@ dependencies = [
  "linera-rpc",
  "linera-service",
  "linera-storage",
+ "linera-storage-service",
  "linera-version",
  "linera-views",
  "matching-engine",
@@ -3414,6 +3415,7 @@ dependencies = [
  "linera-chain",
  "linera-execution",
  "linera-storage",
+ "linera-storage-service",
  "linera-views",
  "prometheus",
  "serde",
@@ -3424,7 +3426,7 @@ dependencies = [
 
 [[package]]
 name = "linera-storage-service"
-version = "0.6.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "async-lock",
