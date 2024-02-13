@@ -69,7 +69,7 @@ pub enum StorageConfig {
         /// The namespace used
         namespace: String,
     },
-    /// The DynamoDb description
+    /// The DynamoDB description
     #[cfg(feature = "aws")]
     DynamoDb {
         /// The namespace used
