@@ -499,7 +499,7 @@ pub enum RocksDbContextError {
     RocksDb(#[from] rocksdb::Error),
 
     /// The database contains a file which is not a directory
-    #[error("Namespaces should be directory")]
+    #[error("Namespaces should be directories")]
     NonDirectoryNamespace,
 
     /// OString error
