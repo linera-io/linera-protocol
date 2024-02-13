@@ -535,9 +535,9 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
                 // * The third column is the name
                 // * The fourth column is the command that built it.
                 for row in rows.into_typed::<(String, String, String, String)>() {
-                    let value = row?;
-                    if value.1 == "table" {
-                        namespaces.push(value.2);
+                    let (_, object_kind, name, _) = row?;
+                    if object_kind == "table" {
+                        namespaces.push(name);
                     }
                 }
             }
@@ -581,7 +581,7 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
             // If ok, then the table exists
             return Ok(true);
         };
-        let test = match &error {
+        let missing_table = match &error {
             QueryError::DbError(db_error, msg) => {
                 if *db_error != DbError::Invalid {
                     false
@@ -593,7 +593,7 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
             }
             _ => false,
         };
-        if test {
+        if missing_table {
             Ok(false)
         } else {
             Err(ScyllaDbContextError::ScyllaDbQueryError(error))
