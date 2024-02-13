@@ -825,7 +825,7 @@ pub fn create_scylla_db_common_config() -> CommonStoreConfig {
     }
 }
 
-/// Creates a ScyllaDb test store config
+/// Creates a ScyllaDB test store config
 #[cfg(any(test, feature = "test"))]
 pub async fn create_scylla_db_test_config() -> ScyllaDbStoreConfig {
     let uri = "localhost:9042".to_string();
