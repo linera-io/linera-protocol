@@ -103,6 +103,14 @@ impl Specializations {
         }
     }
 
+    /// Specializes the types in the `target_type`, either itself or its type parameters.
+    #[cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
+    pub fn apply_to_type(&self, target_type: &mut Type) {
+        for specialization in &self.0 {
+            specialization.change_types_in_type(target_type);
+        }
+    }
+
     /// Retrieves the information related to generics from the provided [`Generics`] after
     /// applying the specializations from this instance.
     ///
