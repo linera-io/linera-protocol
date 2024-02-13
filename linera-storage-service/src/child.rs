@@ -4,10 +4,7 @@
 use anyhow::Result;
 use linera_service::util::CommandExt;
 use std::time::Duration;
-use tokio::{
-    process::{Child, Command},
-    sync::{Semaphore, SemaphorePermit},
-};
+use tokio::process::{Child, Command};
 
 /// Configuration for a storage service running as a child process
 pub struct StorageServiceChild {
@@ -15,27 +12,19 @@ pub struct StorageServiceChild {
     binary: String,
 }
 
-/// The stores created by `create_shared_test_store`
-/// are all pointing to the same storage.
-/// This is in contrast to other storage that are not
-/// persistent (e.g. memory) or uses a random table name
-/// (e.g. RocksDB, DynamoDB, ScyllaDB)
-/// This requires two changes:
-/// * Only one test being run at a time with a semaphore.
-/// * After the test, the storage is cleaned
-static SHARED_STORE_SEMAPHORE: Semaphore = Semaphore::const_new(1);
-
+/// The tests being done have to run in parallel.
+/// For that we spanned a storage-service per test.
+/// In order to avoid collision, we use a different port per test.
+///
 /// A storage service running as a child process.
 ///
-/// The guard serves two purposes:
-/// * It protects the child from destruction and ends it on drop
-/// * It makes sure that only one server is ever created.
-pub struct ChildGuard<'a> {
+/// The guard preserves the child from destruction and destroys it when
+/// it drops out of scope.
+pub struct ChildGuard {
     _child: Child,
-    _lock: SemaphorePermit<'a>,
 }
 
-impl<'a> StorageServiceChild {
+impl StorageServiceChild {
     /// Creates a new `StorageServiceChild`
     pub fn new(endpoint: String, binary: String) -> Self {
         Self { endpoint, binary }
@@ -48,12 +37,11 @@ impl<'a> StorageServiceChild {
         Ok(command)
     }
 
-    pub async fn run_service(&self) -> Result<ChildGuard<'a>> {
-        let _lock: SemaphorePermit<'a> = SHARED_STORE_SEMAPHORE.acquire().await?;
+    pub async fn run_service(&self) -> Result<ChildGuard> {
         let mut command = self.command().await?;
         let _child = command.spawn_into()?;
-        let guard = ChildGuard { _child, _lock };
-        tokio::time::sleep(Duration::from_secs(10)).await;
+        let guard = ChildGuard { _child };
+        tokio::time::sleep(Duration::from_secs(5)).await;
         Ok(guard)
     }
 }
