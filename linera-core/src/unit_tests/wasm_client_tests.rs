@@ -270,8 +270,9 @@ where
         .unwrap()
         .unwrap();
 
+    let operation = meta_counter::Operation::increment(receiver_id, 5);
     let cert = creator
-        .execute_operation(Operation::user(application_id2, &(receiver_id, 5))?)
+        .execute_operation(Operation::user(application_id2, &operation)?)
         .await
         .unwrap()
         .unwrap();
@@ -291,8 +292,9 @@ where
     assert_eq!(expected, response);
 
     // Try again with a value that will make the (untracked) message fail.
+    let operation = meta_counter::Operation::fail(receiver_id);
     let cert = creator
-        .execute_operation(Operation::user(application_id2, &(receiver_id, 10000))?)
+        .execute_operation(Operation::user(application_id2, &operation)?)
         .await
         .unwrap()
         .unwrap();
@@ -309,8 +311,10 @@ where
     assert_eq!(messages.len(), 0);
 
     // Try again with a value that will make the (tracked) message fail.
+    let mut operation = meta_counter::Operation::fail(receiver_id);
+    operation.is_tracked = true;
     let cert = creator
-        .execute_operation(Operation::user(application_id2, &(receiver_id, 20000))?)
+        .execute_operation(Operation::user(application_id2, &operation)?)
         .await
         .unwrap()
         .unwrap();
