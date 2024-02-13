@@ -945,9 +945,17 @@ impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStore {
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, DynamoDbContextError> {
         let cache_size = config.common_config.cache_size;
-        let store = DynamoDbStoreInternal::connect(config, namespace).await?;
-        let store = Self::get_complete_store(store, cache_size);
-        Ok(store)
+        let simple_store = DynamoDbStoreInternal::connect(config, namespace).await?;
+        let store = JournalingKeyValueStore::new(simple_store);
+        #[cfg(feature = "metrics")]
+        let store = MeteredStore::new(&DYNAMO_DB_METRICS, store);
+        let store = ValueSplittingStore::new(store);
+        #[cfg(feature = "metrics")]
+        let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
+        let store = LruCachingStore::new(store, cache_size);
+        #[cfg(feature = "metrics")]
+        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
+        Ok(Self { store })
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbContextError> {
@@ -974,27 +982,6 @@ impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStore {
 #[async_trait]
 impl KeyValueStore for DynamoDbStore {
     type Error = DynamoDbContextError;
-}
-
-impl DynamoDbStore {
-    #[cfg(not(feature = "metrics"))]
-    fn get_complete_store(simple_store: DynamoDbStoreInternal, cache_size: usize) -> Self {
-        let store = JournalingKeyValueStore::new(simple_store);
-        let store = ValueSplittingStore::new(store);
-        let store = LruCachingStore::new(store, cache_size);
-        Self { store }
-    }
-
-    #[cfg(feature = "metrics")]
-    fn get_complete_store(simple_store: DynamoDbStoreInternal, cache_size: usize) -> Self {
-        let store = JournalingKeyValueStore::new(simple_store);
-        let store = MeteredStore::new(&DYNAMO_DB_METRICS, store);
-        let store = ValueSplittingStore::new(store);
-        let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
-        let store = LruCachingStore::new(store, cache_size);
-        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
-        Self { store }
-    }
 }
 
 /// An implementation of [`Context`][trait1] based on [`DynamoDbStore`].

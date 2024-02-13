@@ -752,8 +752,13 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ScyllaDbContextError> {
         let cache_size = config.common_config.cache_size;
         let simple_store = ScyllaDbStoreInternal::connect(config, namespace).await?;
-        let store = Self::get_complete_store(simple_store, cache_size);
-        Ok(store)
+        let store = JournalingKeyValueStore::new(simple_store);
+        #[cfg(feature = "metrics")]
+        let store = MeteredStore::new(&SCYLLA_DB_METRICS, store);
+        let store = LruCachingStore::new(store, cache_size);
+        #[cfg(feature = "metrics")]
+        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
+        Ok(Self { store })
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbContextError> {
@@ -792,22 +797,6 @@ impl ScyllaDbStore {
     #[cfg(feature = "metrics")]
     pub async fn get_namespace(&self) -> String {
         self.store.store.store.store.store.get_namespace().await
-    }
-
-    #[cfg(not(feature = "metrics"))]
-    fn get_complete_store(simple_store: ScyllaDbStoreInternal, cache_size: usize) -> Self {
-        let store = JournalingKeyValueStore::new(simple_store);
-        let store = LruCachingStore::new(store, cache_size);
-        Self { store }
-    }
-
-    #[cfg(feature = "metrics")]
-    fn get_complete_store(simple_store: ScyllaDbStoreInternal, cache_size: usize) -> Self {
-        let store = JournalingKeyValueStore::new(simple_store);
-        let store = MeteredStore::new(&SCYLLA_DB_METRICS, store);
-        let store = LruCachingStore::new(store, cache_size);
-        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
-        Self { store }
     }
 }
 
