@@ -603,7 +603,10 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
             .build()
             .await?;
         // Create a keyspace if it doesn't exist
-        let query = "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }";
+        let query = "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = { \
+            'class' : 'SimpleStrategy', \
+            'replication_factor' : 1 \
+        }";
         session.query(query, &[]).await?;
 
         // Create a table if it doesn't exist
