@@ -631,6 +631,17 @@ where
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
 
+        if *self.execution_state.system.closed.get() {
+            ensure!(
+                block.operations.is_empty()
+                    && block
+                        .incoming_messages
+                        .iter()
+                        .all(|message| message.action == MessageAction::Reject),
+                ChainError::ClosedChain
+            );
+        }
+
         // The first incoming message of any child chain must be `OpenChain`. A root chain must
         // already be initialized
         if block.height == BlockHeight::ZERO

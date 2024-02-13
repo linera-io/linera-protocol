@@ -269,7 +269,10 @@ pub enum ClientCommand {
         timeout_increment: Duration,
     },
 
-    /// Close (i.e. deactivate) an existing chain.
+    /// Close an existing chain.
+    ///
+    /// A closed chain cannot execute operations or accept messages anymore.
+    /// It can still reject incoming messages, so they bounce back to the sender.
     CloseChain {
         /// Chain id (must be one of our chains)
         #[arg(long = "from")]

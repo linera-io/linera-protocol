@@ -63,6 +63,7 @@ where
             balances,
             timestamp,
             registry,
+            closed,
         } = state;
         let extra = TestExecutionRuntimeContext::new(
             description.expect("Chain description should be set").into(),
@@ -95,6 +96,7 @@ where
             .registry
             .import(registry)
             .expect("serialization of registry components should not fail");
+        view.system.closed.set(closed);
         view
     }
 

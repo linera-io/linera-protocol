@@ -56,7 +56,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `subscribe` — Subscribes to a system channel
 * `unsubscribe` — Unsubscribes from a system channel
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
-* `close-chain` — Close (i.e. deactivate) an existing chain
+* `close-chain` — Close an existing chain
 * `local-balance` — Read the current native-token balance of the given account directly from the local state
 * `query-balance` — Simulate the execution of one block made of pending messages from the local inbox, then read the native-token balance of the account from the local state
 * `sync-balance` — (DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the local balance
@@ -216,7 +216,9 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 
 ## `linera close-chain`
 
-Close (i.e. deactivate) an existing chain
+Close an existing chain.
+
+A closed chain cannot execute operations or accept messages anymore. It can still reject incoming messages, so they bounce back to the sender.
 
 **Usage:** `linera close-chain --from <CHAIN_ID>`
 
