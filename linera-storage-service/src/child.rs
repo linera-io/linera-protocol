@@ -9,7 +9,7 @@ use tokio::{
     sync::{Semaphore, SemaphorePermit},
 };
 
-/// The storage service spanner
+/// Configuration for a storage service running as a child process
 pub struct StorageServiceChild {
     endpoint: String,
     binary: String,
