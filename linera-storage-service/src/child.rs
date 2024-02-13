@@ -29,7 +29,7 @@ static SHARED_STORE_SEMAPHORE: Semaphore = Semaphore::const_new(1);
 ///
 /// The guard serves two purposes:
 /// * It protects the child from destruction and ends it on drop
-/// * It make sure that only one server is ever created.
+/// * It makes sure that only one server is ever created.
 pub struct ChildGuard<'a> {
     _child: Child,
     _lock: SemaphorePermit<'a>,
