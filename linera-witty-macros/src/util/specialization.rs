@@ -258,17 +258,37 @@ impl Specialization {
         if let Some(WhereClause { predicates, .. }) = maybe_where_clause {
             let original_predicates = mem::take(predicates);
 
-            predicates.extend(original_predicates.into_iter().filter(
-                |predicate| match predicate {
-                    WherePredicate::Type(PredicateType { bounded_ty, .. }) => !matches!(
-                        bounded_ty,
-                        Type::Path(TypePath { qself: None, path })
-                            if path.is_ident(&self.type_parameter),
-                    ),
-                    _ => true,
-                },
-            ));
+            predicates.extend(
+                original_predicates
+                    .into_iter()
+                    .filter(|predicate| !self.affects_predicate(predicate)),
+            );
         }
+    }
+
+    /// Returns [`true`] if this [`Specialization`] affects the `predicate`.
+    fn affects_predicate(&self, predicate: &WherePredicate) -> bool {
+        let WherePredicate::Type(PredicateType {
+            bounded_ty: Type::Path(type_path),
+            ..
+        }) = predicate
+        else {
+            return false;
+        };
+        let mut type_path = type_path;
+
+        while let Some(inner_type) = &type_path.qself {
+            type_path = match &*inner_type.ty {
+                Type::Path(path) => &path,
+                _ => return false,
+            };
+        }
+
+        let Some(segment) = type_path.path.segments.first() else {
+            return false;
+        };
+
+        segment.ident == self.type_parameter && matches!(segment.arguments, PathArguments::None)
     }
 
     /// Replaces the [`Self::type_parameter`] with the [`Self::specialized_type`] inside the
