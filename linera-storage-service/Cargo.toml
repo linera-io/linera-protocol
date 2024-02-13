@@ -22,27 +22,27 @@ name = "storage_service_server"
 path = "src/server.rs"
 
 [dependencies]
-anyhow = { workspace = true }
-async-lock = { workspace = true }
-async-trait = { workspace = true }
-clap = { workspace = true }
-linera-service = { workspace = true }
-linera-views = { workspace = true }
-prost = { workspace = true }
-thiserror = { workspace = true }
+anyhow.workspace = true
+async-lock.workspace = true
+async-trait.workspace = true
+clap.workspace = true
+linera-service.workspace = true
+linera-views.workspace = true
+prost.workspace = true
+thiserror.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread"] }
-tonic = { workspace = true }
+tonic.workspace = true
 
 [dev-dependencies]
 linera-storage-service = { path = ".", features = ["test"] }
-proptest = { workspace = true }
-serde-reflection = { workspace = true }
-serde_yaml = { workspace = true }
-similar-asserts = { workspace = true }
-test-strategy = { workspace = true }
+proptest.workspace = true
+serde-reflection.workspace = true
+serde_yaml.workspace = true
+similar-asserts.workspace = true
+test-strategy.workspace = true
 
 [build-dependencies]
-tonic-build = { workspace = true }
+tonic-build.workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["proptest", "prost"]
