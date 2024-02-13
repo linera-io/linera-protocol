@@ -3,7 +3,10 @@
 
 //! Representation of a shared generic type parameter for the caller.
 
+use crate::util::{Specialization, Specializations};
+use proc_macro2::TokenStream;
 use proc_macro_error::abort;
+use quote::ToTokens;
 use std::collections::HashMap;
 use syn::{
     punctuated::Punctuated, AngleBracketedGenericArguments, AssocType, GenericArgument, Generics,
@@ -235,5 +238,40 @@ impl<'input> CallerTypeParameter<'input> {
             CallerTypeParameter::WithoutUserData(_) => None,
             CallerTypeParameter::WithUserData { user_data, .. } => Some(user_data),
         }
+    }
+
+    /// Specializes the [`Generics`] to replace the [`CallerTypeParameter`] with the concrete
+    /// `caller_type`, and splits it into the parts used in implementation blocks.
+    pub fn specialize_and_split_generics(
+        &self,
+        mut generics: Generics,
+        caller_type: Type,
+    ) -> (TokenStream, TokenStream, TokenStream) {
+        let specializations = self.build_specializations(caller_type);
+
+        specializations.apply_to_generics(&mut generics);
+
+        let (impl_generics, type_generics, where_clause) =
+            specializations.split_generics_from(&generics);
+
+        (
+            impl_generics,
+            type_generics.into_token_stream(),
+            where_clause.into_token_stream(),
+        )
+    }
+
+    /// Builds the [`Specializatons`] instance to replace the [`CallerTypeParameter`] (if there is
+    /// one) with the concrete `caller_type`.
+    fn build_specializations(&self, caller_type: Type) -> Specializations {
+        let specialization = match self {
+            CallerTypeParameter::NotPresent => None,
+            CallerTypeParameter::WithoutUserData(caller)
+            | CallerTypeParameter::WithUserData { caller, .. } => {
+                Some(Specialization::new((*caller).clone(), caller_type))
+            }
+        };
+
+        Specializations::from_iter(specialization)
     }
 }
