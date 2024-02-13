@@ -348,7 +348,7 @@ impl StoreConfig {
         }
     }
 
-    /// List all the namespaces of the storage
+    /// Lists all the namespaces of the storage
     pub async fn list_all(self) -> Result<Vec<String>, ViewError> {
         match self {
             StoreConfig::Memory(_, _) => Err(ViewError::ContextError {
