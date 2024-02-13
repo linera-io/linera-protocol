@@ -21,9 +21,7 @@ use tracing::{debug, error};
 /// This is meant for binaries of the Linera repository. We use the current running binary
 /// to locate the parent directory where to look for the given name.
 pub async fn resolve_binary(name: &'static str, package: &'static str) -> Result<PathBuf> {
-    println!("resolve_binary name={} package={}", name, package);
     let current_binary = std::env::current_exe()?;
-    println!("current_binary={}", current_binary.display());
     resolve_binary_in_same_directory_as(&current_binary, name, package).await
 }
 
@@ -61,7 +59,6 @@ pub async fn resolve_binary_in_same_directory_as<P: AsRef<Path>>(
     package: &'static str,
 ) -> Result<PathBuf> {
     let current_binary = current_binary.as_ref();
-    println!("current_binary={}", current_binary.display());
     debug!(
         "Resolving binary {name} based on the current binary path: {}",
         current_binary.display()
@@ -69,14 +66,10 @@ pub async fn resolve_binary_in_same_directory_as<P: AsRef<Path>>(
 
     let current_binary_parent =
         binary_parent(current_binary).expect("Fetching binary directory should not fail");
-    println!("current_binary_parent={}", current_binary_parent.display());
 
     let binary = current_binary_parent.join(name);
-    println!("binary={}", binary.display());
     let version = format!("v{}", env!("CARGO_PKG_VERSION"));
-    println!("version={}", version);
     if !binary.exists() {
-        println!("Not existing case");
         error!(
             "Cannot find a binary {name} in the directory {}. \
              Consider using `cargo install {package}` or `cargo build -p {package}`",
@@ -84,7 +77,6 @@ pub async fn resolve_binary_in_same_directory_as<P: AsRef<Path>>(
         );
         bail!("Failed to resolve binary {name}");
     }
-    println!("The binary exists");
 
     // Quick version check.
     debug!("Checking the version of {}", binary.display());
@@ -100,9 +92,7 @@ pub async fn resolve_binary_in_same_directory_as<P: AsRef<Path>>(
         })?
         .stdout;
     let version_message = String::from_utf8_lossy(&version_message);
-    println!("version_message={}", version_message);
     let found_version = parse_version_message(&version_message);
-    println!("version={} found_version={}", version, found_version);
     if version != found_version {
         error!("The binary {name} in directory {} should have version {version} (found {found_version}). \
                 Consider using `cargo install {package} --version '{version}'` or `cargo build -p {package}`",
