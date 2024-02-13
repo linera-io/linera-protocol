@@ -392,7 +392,7 @@ pub trait AdminKeyValueStore<E>: Sized {
         Self::connect(config, namespace).await
     }
 
-    /// Creates a new storage and erase the preceding if existing
+    /// Creates a new storage. Overwrites it if this namespace already exists.
     async fn recreate_and_connect(config: &Self::Config, namespace: &str) -> Result<Self, E> {
         if Self::exists(config, namespace).await? {
             Self::delete(config, namespace).await?;
