@@ -306,7 +306,7 @@ impl StoreConfig {
         match self {
             StoreConfig::Memory(_, _) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
-                error: "existence not make sense for memory storage".to_string(),
+                error: "test_existence does not make sense for memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config, namespace) => {
