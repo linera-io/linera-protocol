@@ -235,6 +235,52 @@ fn enum_type() {
 }
 
 /// Check the generated code for the body of the implementation of `WitStore` for a named struct
+/// with a single ignored fields.
+#[test]
+fn named_struct_with_one_skipped_field() {
+    let input: ItemStruct = parse_quote! {
+        struct Type {
+            first: u8,
+            #[witty(skip)]
+            ignored: i128,
+            second: CustomType,
+        }
+    };
+    let output = derive_for_struct(&input.fields);
+
+    let expected = quote! {
+        fn store<Instance>(
+            &self,
+            memory: &mut linera_witty::Memory<'_, Instance>,
+            mut location: linera_witty::GuestPointer,
+        ) -> Result<(), linera_witty::RuntimeError>
+        where
+            Instance: linera_witty::InstanceWithMemory,
+            <Instance::Runtime as linera_witty::Runtime>::Memory:
+                linera_witty::RuntimeMemory<Instance>,
+        {
+            let Self { first, second, .. } = self;
+            linera_witty::hlist![first, second].store(memory, location)
+        }
+
+        fn lower<Instance>(
+            &self,
+            memory: &mut linera_witty::Memory<'_, Instance>,
+        ) -> Result<<Self::Layout as linera_witty::Layout>::Flat, linera_witty::RuntimeError>
+        where
+            Instance: linera_witty::InstanceWithMemory,
+            <Instance::Runtime as linera_witty::Runtime>::Memory:
+                linera_witty::RuntimeMemory<Instance>,
+        {
+            let Self { first, second, .. } = self;
+            linera_witty::hlist![first, second].lower(memory)
+        }
+    };
+
+    assert_eq!(output.to_string(), expected.to_string());
+}
+
+/// Check the generated code for the body of the implementation of `WitStore` for a named struct
 /// with some ignored fields.
 #[test]
 fn named_struct_with_skipped_fields() {
