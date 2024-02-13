@@ -11,6 +11,7 @@ use tokio::{
 /// The storage service spanner
 pub struct StorageServiceChild {
     endpoint: String,
+    binary: String,
 }
 
 /// The stores created by the `create_shared_test_store`
@@ -33,13 +34,13 @@ pub struct ChildGuard<'a> {
 
 impl<'a> StorageServiceChild {
     /// The constructor of the storage service child
-    pub fn new(endpoint: String) -> Self {
-        Self { endpoint }
+    pub fn new(endpoint: String, binary: String) -> Self {
+        Self { endpoint, binary }
     }
 
     async fn command(&self) -> Result<Command> {
         println!("Child : command endpoint = {}", self.endpoint);
-        let mut command = Command::new("storage_service_server");
+        let mut command = Command::new(&self.binary);
         command.args(["memory", "--endpoint", &self.endpoint]);
         Ok(command)
     }

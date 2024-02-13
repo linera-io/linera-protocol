@@ -12,7 +12,14 @@ use linera_views::test_utils::{
 use linera_storage_service::client::create_shared_test_store;
 
 /// The endpoint used for the storage service tests.
-const STORAGE_SERVICE_ENDPOINT: &str = "127.0.0.1:8942";
+#[cfg(test)]
+fn get_storage_service_guard() -> StorageServiceChild {
+    let storage_service_endpoint = "127.0.0.1:8942";
+    let endpoint = storage_service_endpoint.to_string();
+    let binary = env!("CARGO_BIN_EXE_storage_service_server").to_string();
+    StorageServiceChild::new(endpoint, binary)
+}
+
 
 #[cfg(test)]
 async fn clean_storage() {
@@ -24,9 +31,7 @@ async fn clean_storage() {
 
 #[tokio::test]
 async fn test_reads_shared_store() {
-    let _guard = StorageServiceChild::new(STORAGE_SERVICE_ENDPOINT.to_string())
-        .run_service()
-        .await;
+    let _guard = get_storage_service_guard().run_service().await;
     for scenario in get_random_test_scenarios() {
         let key_value_store = create_shared_test_store().await;
         run_reads(key_value_store, scenario).await;
@@ -36,9 +41,7 @@ async fn test_reads_shared_store() {
 
 #[tokio::test]
 async fn test_shared_store_writes_from_blank() {
-    let _guard = StorageServiceChild::new(STORAGE_SERVICE_ENDPOINT.to_string())
-        .run_service()
-        .await;
+    let _guard = get_storage_service_guard().run_service().await;
     let key_value_store = create_shared_test_store().await;
     run_writes_from_blank(&key_value_store).await;
     clean_storage().await;
@@ -46,9 +49,7 @@ async fn test_shared_store_writes_from_blank() {
 
 #[tokio::test]
 async fn test_shared_store_writes_from_state() {
-    let _guard = StorageServiceChild::new(STORAGE_SERVICE_ENDPOINT.to_string())
-        .run_service()
-        .await;
+    let _guard = get_storage_service_guard().run_service().await;
     let key_value_store = create_shared_test_store().await;
     run_writes_from_state(&key_value_store).await;
     clean_storage().await;
