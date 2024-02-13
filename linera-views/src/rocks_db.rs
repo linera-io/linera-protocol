@@ -62,6 +62,18 @@ pub struct RocksDbStoreConfig {
     pub common_config: CommonStoreConfig,
 }
 
+impl RocksDbStoreInternal {
+    fn check_namespace(namespace: &str) -> Result<(), RocksDbContextError> {
+        if !namespace
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '_')
+        {
+            return Err(RocksDbContextError::InvalidTableName);
+        }
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl ReadableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
@@ -238,6 +250,7 @@ impl AdminKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
     type Config = RocksDbStoreConfig;
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, RocksDbContextError> {
+        Self::check_namespace(namespace)?;
         let options = rocksdb::Options::default();
         let mut path_buf = config.path_buf.clone();
         path_buf.push(namespace);
@@ -279,6 +292,7 @@ impl AdminKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, RocksDbContextError> {
+        Self::check_namespace(namespace)?;
         let options = rocksdb::Options::default();
         let mut path_buf = config.path_buf.clone();
         path_buf.push(namespace);
@@ -296,6 +310,7 @@ impl AdminKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), RocksDbContextError> {
+        Self::check_namespace(namespace)?;
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
         let mut path_buf = config.path_buf.clone();
@@ -305,6 +320,7 @@ impl AdminKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
     }
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), RocksDbContextError> {
+        Self::check_namespace(namespace)?;
         let mut path_buf = config.path_buf.clone();
         path_buf.push(namespace);
         let path = path_buf.as_path();
@@ -513,6 +529,10 @@ pub enum RocksDbContextError {
     /// Missing database
     #[error("Missing database")]
     MissingDatabase(String),
+
+    /// Invalid table name
+    #[error("Invalid table name")]
+    InvalidTableName,
 
     /// Already existing database
     #[error("Already existing database")]

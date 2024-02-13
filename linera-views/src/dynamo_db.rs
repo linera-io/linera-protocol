@@ -329,8 +329,8 @@ impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
     type Config = DynamoDbStoreConfig;
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, DynamoDbContextError> {
-        let client = Client::from_conf(config.config.clone());
         Self::check_namespace(namespace)?;
+        let client = Client::from_conf(config.config.clone());
         let semaphore = config
             .common_config
             .max_concurrent_queries
@@ -377,6 +377,7 @@ impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, DynamoDbContextError> {
+        Self::check_namespace(namespace)?;
         let client = Client::from_conf(config.config.clone());
         let key_db = build_key(DB_KEY.to_vec());
         let response = client
@@ -406,6 +407,7 @@ impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbContextError> {
+        Self::check_namespace(namespace)?;
         let client = Client::from_conf(config.config.clone());
         let _result = client
             .create_table()
@@ -446,6 +448,7 @@ impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
     }
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbContextError> {
+        Self::check_namespace(namespace)?;
         let client = Client::from_conf(config.config.clone());
         client.delete_table().table_name(namespace).send().await?;
         Ok(())
@@ -456,14 +459,14 @@ impl DynamoDbStoreInternal {
     /// Namespaces are named table names in DynamoDb [naming
     /// rules](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.NamingRules),
     /// so we need to check correctness of the namespace
-    fn check_namespace(string: &str) -> Result<(), InvalidTableName> {
-        if string.len() < 3 {
+    fn check_namespace(namespace: &str) -> Result<(), InvalidTableName> {
+        if namespace.len() < 3 {
             return Err(InvalidTableName::TooShort);
         }
-        if string.len() > 255 {
+        if namespace.len() > 255 {
             return Err(InvalidTableName::TooLong);
         }
-        if !string.chars().all(|character| {
+        if !namespace.chars().all(|character| {
             character.is_ascii_alphanumeric()
                 || character == '.'
                 || character == '-'

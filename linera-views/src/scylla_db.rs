@@ -479,9 +479,7 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     type Config = ScyllaDbStoreConfig;
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ScyllaDbContextError> {
-        if !Self::is_allowed_name(namespace) {
-            return Err(ScyllaDbContextError::InvalidTableName);
-        }
+        Self::check_namespace(namespace)?;
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
@@ -559,9 +557,7 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ScyllaDbContextError> {
-        if !Self::is_allowed_name(namespace) {
-            return Err(ScyllaDbContextError::InvalidTableName);
-        }
+        Self::check_namespace(namespace)?;
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
@@ -601,9 +597,7 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbContextError> {
-        if !Self::is_allowed_name(namespace) {
-            return Err(ScyllaDbContextError::InvalidTableName);
-        }
+        Self::check_namespace(namespace)?;
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
@@ -624,9 +618,7 @@ impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
     }
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbContextError> {
-        if !Self::is_allowed_name(namespace) {
-            return Err(ScyllaDbContextError::InvalidTableName);
-        }
+        Self::check_namespace(namespace)?;
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
@@ -665,12 +657,16 @@ impl ScyllaDbStoreInternal {
         store.namespace.clone()
     }
 
-    fn is_allowed_name(namespace: &str) -> bool {
-        !namespace.is_empty()
+    fn check_namespace(namespace: &str) -> Result<(), ScyllaDbContextError> {
+        if !namespace.is_empty()
             && namespace.len() <= 48
             && namespace
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            return Ok(());
+        }
+        Err(ScyllaDbContextError::InvalidTableName)
     }
 }
 
