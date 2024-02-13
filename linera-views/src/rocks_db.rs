@@ -502,7 +502,7 @@ pub enum RocksDbContextError {
     #[error("Namespaces should be directories")]
     NonDirectoryNamespace,
 
-    /// OString error
+    /// Error converting `OsString` to `String`
     #[error("error in the conversion from OsString")]
     IntoStringError(OsString),
 
