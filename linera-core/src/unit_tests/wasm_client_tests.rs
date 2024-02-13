@@ -9,6 +9,7 @@
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
 use crate::client::client_tests::{MakeMemoryStorage, StorageBuilder, TestBuilder};
+use assert_matches::assert_matches;
 use async_graphql::Request;
 use linera_base::{
     data_types::Amount,
@@ -442,13 +443,14 @@ where
             message,
             ..
         } = &messages[0];
-        assert!(matches!(
+        assert_matches!(
             message, Message::System(SystemMessage::RegisterApplications { applications })
             if applications.len() == 1 && matches!(
                 applications[0], UserApplicationDescription{ bytecode_id: b_id, .. }
                 if b_id == bytecode_id.forget_abi()
-            )
-        ));
+            ),
+            "Unexpected message"
+        );
         assert_eq!(*destination, Destination::Recipient(receiver.chain_id()));
     }
     receiver.synchronize_from_validators().await.unwrap();

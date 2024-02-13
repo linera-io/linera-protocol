@@ -168,6 +168,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71938f30533e4d95a6d17aa530939da3842c2ab6f4f84b9dae68447e4129f74a"
 
 [[package]]
+name = "assert_matches"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
+
+[[package]]
 name = "async-graphql"
 version = "5.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -651,6 +657,7 @@ dependencies = [
 name = "counter"
 version = "0.1.0"
 dependencies = [
+ "assert_matches",
  "async-graphql",
  "async-trait",
  "bcs",

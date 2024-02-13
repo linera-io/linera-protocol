@@ -13,6 +13,7 @@ use crate::{
         ValidatorWorker, WorkerError, WorkerState,
     },
 };
+use assert_matches::assert_matches;
 use linera_base::{
     crypto::{BcsSignable, CryptoHash, *},
     data_types::*,
@@ -425,12 +426,12 @@ where
     let mut bad_signature_block_proposal = block_proposal.clone();
     bad_signature_block_proposal.signature =
         Signature::new(&block_proposal.content, &unknown_key_pair);
-    assert!(matches!(
+    assert_matches!(
         worker
             .handle_block_proposal(bad_signature_block_proposal)
             .await,
             Err(WorkerError::CryptoError(error)) if matches!(error, CryptoError::InvalidSignature {..})
-    ));
+    );
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
@@ -492,7 +493,7 @@ where
     let zero_amount_block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(ChainId::root(2), Amount::ZERO)
         .into_fast_proposal(&sender_key_pair);
-    assert!(matches!(
+    assert_matches!(
     worker
         .handle_block_proposal(zero_amount_block_proposal)
         .await,
@@ -505,7 +506,7 @@ where
                 ChainExecutionContext::Operation(_)
             )
         )
-    ));
+    );
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
@@ -564,10 +565,10 @@ where
             .with_timestamp(Timestamp::from(TEST_GRACE_PERIOD_MICROS + 1_000_000))
             .into_fast_proposal(&key_pair);
         // Timestamp too far in the future
-        assert!(matches!(
+        assert_matches!(
             worker.handle_block_proposal(block_proposal).await,
             Err(WorkerError::InvalidTimestamp)
-        ));
+        );
     }
 
     let block_0_time = Timestamp::from(TEST_GRACE_PERIOD_MICROS);
@@ -601,10 +602,10 @@ where
             .with_timestamp(block_0_time.saturating_sub_micros(1))
             .into_fast_proposal(&key_pair);
         // Timestamp older than previous one
-        assert!(matches!(
+        assert_matches!(
             worker.handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InvalidBlockTimestamp {..})
-        ));
+        );
     }
 }
 
@@ -661,12 +662,12 @@ where
 
     let unknown_sender_block_proposal =
         BlockProposal::new(block_proposal.content, &unknown_key, vec![], None);
-    assert!(matches!(
+    assert_matches!(
         worker
             .handle_block_proposal(unknown_sender_block_proposal)
             .await,
         Err(WorkerError::InvalidOwner)
-    ));
+    );
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
@@ -740,10 +741,10 @@ where
         .with_simple_transfer(ChainId::root(2), Amount::from_tokens(2))
         .into_fast_proposal(&sender_key_pair);
 
-    assert!(matches!(
+    assert_matches!(
         worker.handle_block_proposal(block_proposal1.clone()).await,
         Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight {..})
-    ));
+    );
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
@@ -781,10 +782,10 @@ where
         .get()
         .pending()
         .is_some());
-    assert!(matches!(
+    assert_matches!(
         worker.handle_block_proposal(block_proposal0.clone()).await,
         Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight {..})
-    ));
+    );
 }
 
 #[test(tokio::test)]
@@ -882,12 +883,12 @@ where
         }),
     );
     // Missing earlier blocks
-    assert!(matches!(
+    assert_matches!(
         worker
             .handle_certificate(certificate1.clone(), vec![], None)
             .await,
         Err(WorkerError::MissingEarlierBlocks { .. })
-    ));
+    );
 
     // Run transfers
     let mut notifications = Vec::new();
@@ -945,7 +946,7 @@ where
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(6))
             .into_fast_proposal(&recipient_key_pair);
         // Insufficient funding
-        assert!(matches!(
+        assert_matches!(
                 worker.handle_block_proposal(block_proposal).await,
                 Err(
                     WorkerError::ChainError(error)
@@ -956,7 +957,7 @@ where
                         ChainExecutionContext::Operation(_)
                     )
                 )
-        ));
+        );
     }
     {
         let block_proposal = make_first_block(ChainId::root(2))
@@ -1002,11 +1003,11 @@ where
             })
             .into_fast_proposal(&recipient_key_pair);
         // Inconsistent received messages.
-        assert!(matches!(
+        assert_matches!(
             worker.handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::UnexpectedMessage { .. })
-        ));
+        );
     }
     {
         let block_proposal = make_first_block(ChainId::root(2))
@@ -1026,11 +1027,11 @@ where
             })
             .into_fast_proposal(&recipient_key_pair);
         // Skipped message.
-        assert!(matches!(
+        assert_matches!(
             worker.handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::CannotSkipMessage { .. })
-        ));
+        );
     }
     {
         let block_proposal = make_first_block(ChainId::root(2))
@@ -1076,11 +1077,11 @@ where
             })
             .into_fast_proposal(&recipient_key_pair);
         // Inconsistent order in received messages (heights).
-        assert!(matches!(
+        assert_matches!(
             worker.handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::CannotSkipMessage { .. })
-        ));
+        );
     }
     {
         let block_proposal = make_first_block(ChainId::root(2))
@@ -1210,7 +1211,7 @@ where
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(ChainId::root(2), Amount::from_tokens(1000))
         .into_fast_proposal(&sender_key_pair);
-    assert!(matches!(
+    assert_matches!(
         worker.handle_block_proposal(block_proposal).await,
         Err(
             WorkerError::ChainError(error)
@@ -1221,7 +1222,7 @@ where
                 ChainExecutionContext::Operation(_)
             )
         )
-    ));
+    );
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
@@ -1418,10 +1419,12 @@ where
         None,
     )
     .await;
-    assert!(matches!(worker
-        .fully_handle_certificate(certificate, vec![])
-        .await,
-        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InactiveChain {..})));
+    assert_matches!(
+        worker
+            .fully_handle_certificate(certificate, vec![])
+            .await,
+        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InactiveChain {..})
+    );
 }
 
 #[test(tokio::test)]
@@ -1576,10 +1579,10 @@ where
     .await;
     // This fails because `make_simple_transfer_certificate` uses `sender_key_pair.public()` to
     // compute the hash of the execution state.
-    assert!(matches!(
+    assert_matches!(
         worker.fully_handle_certificate(certificate, vec![]).await,
         Err(WorkerError::IncorrectStateHash)
-    ));
+    );
 }
 
 #[test(tokio::test)]
@@ -1746,7 +1749,7 @@ where
         inbox.next_block_height_to_receive().unwrap()
     );
     assert_eq!(inbox.added_events.count(), 0);
-    assert!(matches!(
+    assert_matches!(
         inbox
             .removed_events
             .front()
@@ -1765,7 +1768,8 @@ where
             && height == BlockHeight::ZERO
             && timestamp == Timestamp::from(0)
             && amount == Amount::from_tokens(995),
-    ));
+        "Unexpected event",
+    );
     assert_eq!(chain.confirmed_log.count(), 1);
     assert_eq!(Some(certificate.hash()), chain.tip_state.get().block_hash);
     worker
@@ -1936,7 +1940,7 @@ where
         BlockHeight::from(1),
         inbox.next_block_height_to_receive().unwrap()
     );
-    assert!(matches!(
+    assert_matches!(
         inbox
             .added_events
             .front()
@@ -1955,7 +1959,8 @@ where
             && height == BlockHeight::ZERO
             && timestamp == Timestamp::from(0)
             && amount == Amount::ONE,
-    ));
+        "Unexpected event",
+    );
     assert_eq!(
         BlockHeight::from(1),
         chain.tip_state.get().next_block_height
@@ -2035,7 +2040,7 @@ where
         BlockHeight::from(1),
         inbox.next_block_height_to_receive().unwrap()
     );
-    assert!(matches!(
+    assert_matches!(
         inbox
             .added_events
             .front()
@@ -2054,7 +2059,8 @@ where
             && height == BlockHeight::ZERO
             && timestamp == Timestamp::from(0)
             && amount == Amount::from_tokens(10),
-    ));
+        "Unexpected event",
+    );
     assert_eq!(chain.confirmed_log.count(), 0);
     assert_eq!(None, chain.tip_state.get().block_hash);
     assert_eq!(chain.received_log.count(), 1);
@@ -2170,10 +2176,10 @@ where
         .handle_cross_chain_request(update_recipient_direct(ChainId::root(2), &certificate))
         .await
         .unwrap();
-    assert!(matches!(
+    assert_matches!(
         actions.cross_chain_requests.as_slice(),
         &[CrossChainRequest::ConfirmUpdatedRecipient { .. }]
-    ));
+    );
     assert_eq!(
         actions.notifications,
         vec![Notification {
@@ -3481,10 +3487,10 @@ where
     {
         // The admin chain has an anticipated message.
         let admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
-        assert!(matches!(
+        assert_matches!(
             admin_chain.validate_incoming_messages().await,
             Err(ChainError::MissingCrossChainUpdate { .. })
-        ));
+        );
     }
 
     // Try again to execute the transfer from the user chain to the admin chain.
@@ -3633,7 +3639,7 @@ async fn test_cross_chain_helper() {
         vec![]
     );
     // Order of certificates is checked.
-    assert!(matches!(
+    assert_matches!(
         helper.select_message_bundles(
             &Origin::chain(id0),
             id1,
@@ -3642,7 +3648,7 @@ async fn test_cross_chain_helper() {
             vec![bundle1.clone(), bundle0.clone()]
         ),
         Err(WorkerError::InvalidCrossChainRequest)
-    ));
+    );
 
     let helper = CrossChainUpdateHelper {
         nickname: "test",
@@ -3780,13 +3786,13 @@ where
     let proposal =
         make_child_block(&value0).into_proposal_with_round(&key_pairs[0], Round::SingleLeader(0));
     let result = worker.handle_block_proposal(proposal).await;
-    assert!(matches!(result, Err(WorkerError::InvalidOwner)));
+    assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal =
         make_child_block(&value0).into_proposal_with_round(&key_pairs[0], Round::SingleLeader(1));
     let result = worker.handle_block_proposal(proposal).await;
-    assert!(matches!(result, Err(WorkerError::ChainError(ref error))
+    assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::SingleLeader(0)))
-    ));
+    );
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
     let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
@@ -3822,7 +3828,7 @@ where
         .clone()
         .into_proposal_with_round(&key_pairs[1], Round::SingleLeader(1));
     let result = worker.handle_block_proposal(proposal1_wrong_owner).await;
-    assert!(matches!(result, Err(WorkerError::InvalidOwner)));
+    assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal1 = block1
         .clone()
         .into_proposal_with_round(&key_pairs[0], Round::SingleLeader(1));
@@ -3883,9 +3889,9 @@ where
         .clone()
         .into_proposal_with_round(&key_pairs[1], Round::SingleLeader(5));
     let result = worker.handle_block_proposal(proposal.clone()).await;
-    assert!(matches!(result, Err(WorkerError::ChainError(error))
+    assert_matches!(result, Err(WorkerError::ChainError(error))
          if matches!(*error, ChainError::HasLockedBlock(_, _))
-    ));
+    );
 
     // But with the validated block certificate for block2, it is allowed.
     let mut proposal = block2.into_proposal_with_round(&key_pairs[1], Round::SingleLeader(5));
@@ -3923,9 +3929,9 @@ where
     // Since the validator now voted for block2, it can't vote for block1 anymore.
     let proposal = block1.into_proposal_with_round(&key_pairs[0], Round::SingleLeader(6));
     let result = worker.handle_block_proposal(proposal.clone()).await;
-    assert!(matches!(result, Err(WorkerError::ChainError(error))
+    assert_matches!(result, Err(WorkerError::ChainError(error))
          if matches!(*error, ChainError::HasLockedBlock(_, _))
-    ));
+    );
 
     // Let rounds 6 and 7 time out.
     let certificate_timeout =
@@ -4019,13 +4025,13 @@ where
     // So owner 1 cannot propose a block in this round. And the next round hasn't started yet.
     let proposal = make_child_block(&value0).into_proposal_with_round(&key_pairs[1], Round::Fast);
     let result = worker.handle_block_proposal(proposal).await;
-    assert!(matches!(result, Err(WorkerError::InvalidOwner)));
+    assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal =
         make_child_block(&value0).into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
     let result = worker.handle_block_proposal(proposal).await;
-    assert!(matches!(result, Err(WorkerError::ChainError(ref error))
+    assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::Fast))
-    ));
+    );
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
     let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
@@ -4161,9 +4167,9 @@ where
         .clone()
         .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
     let result = worker.handle_block_proposal(proposal2).await;
-    assert!(matches!(result, Err(WorkerError::ChainError(err))
+    assert_matches!(result, Err(WorkerError::ChainError(err))
         if matches!(*err, ChainError::HasLockedBlock(_, Round::Fast))
-    ));
+    );
     let proposal3 = block1
         .clone()
         .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));

@@ -51,6 +51,7 @@ tower.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+assert_matches.workspace = true
 linera-rpc = { path = ".", features = ["test"] }
 proptest.workspace = true
 serde-reflection.workspace = true

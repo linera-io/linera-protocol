@@ -29,6 +29,7 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+assert_matches.workspace = true
 linera-chain = { path = ".", features = ["test"] }
 
 [package.metadata.cargo-machete]
