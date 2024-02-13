@@ -95,6 +95,14 @@ impl Specializations {
         specializations.into_iter().flatten()
     }
 
+    /// Specializes the types in the [`Generics`] representation.
+    #[cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
+    pub fn apply_to_generics(&self, generics: &mut Generics) {
+        for specialization in &self.0 {
+            specialization.apply_to_generics(generics);
+        }
+    }
+
     /// Retrieves the information related to generics from the provided [`Generics`] after
     /// applying the specializations from this instance.
     ///
@@ -226,9 +234,14 @@ impl Specialization {
     /// types generic parameters needs to be changed separately (see
     /// [`Specializatons::specialize_type_generics`].
     pub fn apply_to_derive_input(&self, input: &mut DeriveInput) {
-        self.remove_from_where_clause(input.generics.where_clause.as_mut());
-        self.change_types_in_where_clause(input.generics.where_clause.as_mut());
+        self.apply_to_generics(&mut input.generics);
         self.change_types_in_fields(&mut input.data);
+    }
+
+    /// Replaces a type parameter in the [`Generics`] representation with a specialized type.
+    pub fn apply_to_generics(&self, generics: &mut Generics) {
+        self.remove_from_where_clause(generics.where_clause.as_mut());
+        self.change_types_in_where_clause(generics.where_clause.as_mut());
     }
 
     /// Removes from a [`WhereClause`] all predicates for the [`Self::type_parameter`] that this
