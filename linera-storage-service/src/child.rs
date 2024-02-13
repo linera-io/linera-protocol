@@ -25,7 +25,9 @@ pub struct StorageServiceChild {
 /// * After the test, the storage is cleaned
 static SHARED_STORE_SEMAPHORE: Semaphore = Semaphore::const_new(1);
 
-/// The guard implements two things:
+/// A storage service running as a child process.
+///
+/// The guard serves two purposes:
 /// * It protects the child from destruction and ends it on drop
 /// * It make sure that only one server is ever created.
 pub struct ChildGuard<'a> {
