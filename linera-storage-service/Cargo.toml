@@ -22,9 +22,9 @@ name = "storage_service_server"
 path = "src/server.rs"
 
 [dependencies]
+anyhow = { workspace = true }
 async-lock = { workspace = true }
 async-trait = { workspace = true }
-anyhow = { workspace = true }
 clap = { workspace = true }
 linera-service = { workspace = true }
 linera-views = { workspace = true }
