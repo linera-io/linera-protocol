@@ -18,8 +18,8 @@ pub struct StorageServiceChild {
 /// The stores created by the `create_shared_test_store`
 /// are all pointing to the same storage.
 /// This is in contrast to other storage that are not
-/// persistent (e.g. memory) or uses a random table_name
-/// (e.g. RocksDb, DynamoDb, ScyllaDb)
+/// persistent (e.g. memory) or uses a random table name
+/// (e.g. RocksDB, DynamoDB, ScyllaDB)
 /// This requires two changes:
 /// * Only one test being run at a time with a semaphore.
 /// * After the test, the storage is cleaned
