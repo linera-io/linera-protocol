@@ -372,7 +372,7 @@ pub trait AdminKeyValueStore<E>: Sized {
     /// Obtains the list of existing namespaces.
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, E>;
 
-    /// Delete all the existing namespaces.
+    /// Deletes all the existing namespaces.
     async fn delete_all(config: &Self::Config) -> Result<(), E>;
 
     /// Tests if a given namespace exists.
