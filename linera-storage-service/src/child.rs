@@ -36,7 +36,7 @@ pub struct ChildGuard<'a> {
 }
 
 impl<'a> StorageServiceChild {
-    /// The constructor of the storage service child
+    /// Creates a new `StorageServiceChild`
     pub fn new(endpoint: String, binary: String) -> Self {
         Self { endpoint, binary }
     }
