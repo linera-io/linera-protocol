@@ -15,7 +15,7 @@ pub struct StorageServiceChild {
     binary: String,
 }
 
-/// The stores created by the `create_shared_test_store`
+/// The stores created by `create_shared_test_store`
 /// are all pointing to the same storage.
 /// This is in contrast to other storage that are not
 /// persistent (e.g. memory) or uses a random table name
