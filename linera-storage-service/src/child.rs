@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use linera_service::util::CommandExt;
+use std::time::Duration;
 use tokio::{
     process::{Child, Command},
     sync::{Semaphore, SemaphorePermit},
@@ -39,21 +40,18 @@ impl<'a> StorageServiceChild {
     }
 
     async fn command(&self) -> Result<Command> {
-        println!("Child : command endpoint = {}", self.endpoint);
         let mut command = Command::new(&self.binary);
         command.args(["memory", "--endpoint", &self.endpoint]);
+        command.kill_on_drop(true);
         Ok(command)
     }
 
     pub async fn run_service(&self) -> Result<ChildGuard<'a>> {
-        println!("Child : run_service, begin");
         let _lock: SemaphorePermit<'a> = SHARED_STORE_SEMAPHORE.acquire().await?;
         let mut command = self.command().await?;
-        println!("Child : run_service, we have command");
-        println!("command={:?}", command);
         let _child = command.spawn_into()?;
-        println!("Child : run_service, we have child");
         let guard = ChildGuard { _child, _lock };
+        tokio::time::sleep(Duration::from_secs(10)).await;
         Ok(guard)
     }
 }

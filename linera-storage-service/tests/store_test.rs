@@ -20,7 +20,6 @@ fn get_storage_service_guard() -> StorageServiceChild {
     StorageServiceChild::new(endpoint, binary)
 }
 
-
 #[cfg(test)]
 async fn clean_storage() {
     let key_value_store = create_shared_test_store().await;
