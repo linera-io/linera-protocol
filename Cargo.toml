@@ -29,6 +29,7 @@ resolver = "2"
 [workspace.dependencies]
 heck = "0.4.1"
 anyhow = "1.0.75"
+assert_matches = "1.5.0"
 async-graphql = "5.0.10"
 async-graphql-axum = "5.0.10"
 async-lock = "2.8.0"

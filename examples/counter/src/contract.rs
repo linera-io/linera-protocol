@@ -106,6 +106,7 @@ pub enum Error {
 #[cfg(test)]
 mod tests {
     use super::{Counter, Error};
+    use assert_matches::assert_matches;
     use futures::FutureExt;
     use linera_sdk::{
         base::{BlockHeight, ChainId, MessageId},
@@ -142,7 +143,7 @@ mod tests {
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
-        assert!(matches!(result, Err(Error::MessagesNotSupported)));
+        assert_matches!(result, Err(Error::MessagesNotSupported));
         assert_eq!(counter.value, initial_value);
     }
 
@@ -180,7 +181,7 @@ mod tests {
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
-        assert!(matches!(result, Err(Error::SessionsNotSupported)));
+        assert_matches!(result, Err(Error::SessionsNotSupported));
         assert_eq!(counter.value, initial_value);
     }
 

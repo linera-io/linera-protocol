@@ -8,6 +8,7 @@ mod utils;
 use self::utils::{
     create_dummy_user_application_registrations, register_mock_applications, ExpectedCall,
 };
+use assert_matches::assert_matches;
 use linera_base::{
     crypto::PublicKey,
     data_types::BlockHeight,
@@ -56,10 +57,10 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         )
         .await;
 
-    assert!(matches!(
+    assert_matches!(
         result,
         Err(ExecutionError::ApplicationBytecodeNotFound(desc)) if &*desc == app_desc
-    ));
+    );
     Ok(())
 }
 
@@ -263,10 +264,7 @@ async fn test_leaking_session() -> anyhow::Result<()> {
         )
         .await;
 
-    assert!(matches!(
-        result,
-        Err(ExecutionError::SessionWasNotClosed(_))
-    ));
+    assert_matches!(result, Err(ExecutionError::SessionWasNotClosed(_)));
     Ok(())
 }
 
@@ -400,7 +398,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
         next_message_index: 0,
     };
     let mut controller = ResourceController::default();
-    assert!(matches!(
+    assert_matches!(
         view.execute_operation(
             context,
             Operation::User {
@@ -411,7 +409,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
         )
         .await,
         Err(ExecutionError::UserError(message)) if message == error_message
-    ));
+    );
 
     Ok(())
 }

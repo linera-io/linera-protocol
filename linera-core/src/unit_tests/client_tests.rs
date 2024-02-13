@@ -18,6 +18,7 @@ use crate::{
     updater::CommunicationError,
     worker::{Notification, Reason, WorkerError},
 };
+use assert_matches::assert_matches;
 use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::*,
@@ -120,13 +121,13 @@ where
             certificate.value
         );
     }
-    assert!(matches!(
+    assert_matches!(
         notifications.next().await,
         Some(Notification {
             reason: Reason::NewBlock { height, .. },
             chain_id,
         }) if chain_id == ChainId::root(1) && height == BlockHeight::ZERO
-    ));
+    );
     Ok(())
 }
 
@@ -386,10 +387,10 @@ where
         .unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
-    assert!(matches!(
-        sender.key_pair().await,
+    assert_matches!(
+        sender.key_pair().await.map(KeyPair::public), // KeyPair isn't Debug; using PublicKey.
         Err(ChainClientError::CannotFindKeyForChain(_))
-    ));
+    );
     assert_eq!(
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
@@ -404,7 +405,7 @@ where
     );
     sender.synchronize_from_validators().await.unwrap();
     // Cannot use the chain any more.
-    assert!(matches!(
+    assert_matches!(
         sender
             .transfer_to_account(
                 None,
@@ -414,7 +415,7 @@ where
             )
             .await,
         Err(ChainClientError::CannotFindKeyForChain(_))
-    ));
+    );
     Ok(())
 }
 
@@ -495,10 +496,10 @@ where
         .await?;
     // Local balance fails because the client has block height 2 but we haven't downloaded
     // the blocks yet.
-    assert!(matches!(
+    assert_matches!(
         client.local_balance().await,
         Err(ChainClientError::WalletSynchronizationError)
-    ));
+    );
     client.synchronize_from_validators().await.unwrap();
     assert_eq!(
         client.local_balance().await.unwrap(),
@@ -515,19 +516,15 @@ where
             UserData::default(),
         )
         .await;
-    assert!(
-        matches!(
-            result,
-            Err(ChainClientError::CommunicationError(
-                CommunicationError::Trusted(ClientIoError { .. }),
-            ))
-        ),
-        "Unexpected result: {:?}",
-        result
+    assert_matches!(
+        result,
+        Err(ChainClientError::CommunicationError(
+            CommunicationError::Trusted(ClientIoError { .. }),
+        ))
     );
     builder.set_fault_type(..2, FaultType::Honest).await;
     builder.set_fault_type(2.., FaultType::Offline).await;
-    assert!(matches!(
+    assert_matches!(
         sender
             .transfer_to_account(
                 None,
@@ -539,7 +536,7 @@ where
         Err(ChainClientError::CommunicationError(
             CommunicationError::Trusted(ClientIoError { .. })
         ))
-    ));
+    );
 
     // Half the validators voted for one block, half for the other. We need to make a proposal in
     // the next round to succeed.
@@ -719,13 +716,14 @@ where
             .value,
         certificate.value
     );
-    assert!(matches!(
-        &certificate.value(),
+    assert_matches!(
+        certificate.value(),
         CertificateValue::ConfirmedBlock { executed_block, .. } if matches!(
             executed_block.block.operations[open_chain_message_id.index as usize],
             Operation::System(SystemOperation::OpenChain { .. }),
         ),
-    ));
+        "Unexpected certificate value",
+    );
     // Make a client to try the new chain.
     let mut client = builder
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
@@ -832,13 +830,14 @@ where
             .value,
         certificate.value
     );
-    assert!(matches!(
+    assert_matches!(
         &certificate.value(),
         CertificateValue::ConfirmedBlock { executed_block: ExecutedBlock { block, .. }, .. } if matches!(
             block.operations[open_chain_message_id.index as usize],
             Operation::System(SystemOperation::OpenChain { .. }),
         ),
-    ));
+        "Unexpected certificate value",
+    );
     // Make a client to try the new chain.
     let mut client = builder
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
@@ -852,14 +851,14 @@ where
             UserData::default(),
         )
         .await;
-    assert!(matches!(
+    assert_matches!(
         result,
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
         )) if matches!(*error, ChainError::CannotSkipMessage {
             event: Event { message: Message::System(SystemMessage::Credit { .. }), .. }, ..
         })
-    ));
+    );
     Ok(())
 }
 
@@ -991,20 +990,21 @@ where
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
     let certificate = sender.close_chain().await.unwrap().unwrap();
-    assert!(matches!(
-        &certificate.value(),
+    assert_matches!(
+        certificate.value(),
         CertificateValue::ConfirmedBlock { executed_block: ExecutedBlock { block, .. }, .. } if matches!(
             &block.operations[..], &[Operation::System(SystemOperation::CloseChain)]
         ),
-    ));
+        "Unexpected certificate value",
+    );
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
-    assert!(matches!(
-        sender.key_pair().await,
+    assert_matches!(
+        sender.key_pair().await.map(KeyPair::public), // KeyPair isn't Debug; using PublicKey.
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::InactiveChain(_)
         ))
-    ));
+    );
     assert_eq!(
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
@@ -1014,7 +1014,7 @@ where
         certificate.value
     );
     // Cannot use the chain any more.
-    assert!(matches!(
+    assert_matches!(
         sender
             .transfer_to_account(
                 None,
@@ -1026,7 +1026,7 @@ where
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::InactiveChain(_)
         ))
-    ));
+    );
     Ok(())
 }
 
@@ -1372,7 +1372,7 @@ where
     // Client2 does not know about the money yet.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Sending money from client2 fails, as a consequence.
-    assert!(matches!(client2
+    assert_matches!(client2
         .transfer_to_account_unsafe_unconfirmed(
             None,
             Amount::from_tokens(2),
@@ -1381,7 +1381,7 @@ where
         )
         .await,
         Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }), ChainExecutionContext::Operation(_)))
-    ));
+    );
     // There is no pending block, since the proposal wasn't valid at the time.
     assert!(client2
         .process_pending_block()
@@ -1489,10 +1489,10 @@ where
 
     // User is still at the initial epoch, but we can receive transfers from future
     // epochs AFTER synchronizing the client with the admin chain.
-    assert!(matches!(
+    assert_matches!(
         user.receive_certificate(cert).await,
         Err(ChainClientError::CommitteeSynchronizationError)
-    ));
+    );
     assert_eq!(user.epoch().await.unwrap(), Epoch::ZERO);
     user.synchronize_from_validators().await.unwrap();
 
@@ -1519,10 +1519,10 @@ where
         .await
         .unwrap()
         .unwrap();
-    assert!(matches!(
+    assert_matches!(
         admin.receive_certificate(cert).await,
         Err(ChainClientError::CommitteeDeprecationError)
-    ));
+    );
     // Transfer is blocked because the epoch #0 has been retired by admin.
     admin.synchronize_from_validators().await.unwrap();
     admin.process_inbox().await.unwrap();
@@ -1575,9 +1575,14 @@ where
             UserData(Some(*b"I'm giving away all of my money!")),
         )
         .await;
-    assert!(matches!(obtained_error,
-                     Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }), ChainExecutionContext::Operation(0)))
-    ));
+    assert_matches!(obtained_error,
+        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
+            WorkerError::ChainError(error)
+        ))) if matches!(*error, ChainError::ExecutionError(
+            ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }),
+            ChainExecutionContext::Operation(0)
+        ))
+    );
     let obtained_error = sender
         .transfer_to_account(
             None,
@@ -1586,9 +1591,15 @@ where
             UserData(Some(*b"I'm giving away all of my money!")),
         )
         .await;
-    assert!(matches!(obtained_error,
-                     Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFundingForFees { .. }), ChainExecutionContext::Block))
-    ));
+    assert_matches!(obtained_error,
+        Err(ChainClientError::LocalNodeError(
+            LocalNodeError::WorkerError(WorkerError::ChainError(error))
+        )) if matches!(*error,
+            ChainError::ExecutionError(ExecutionError::SystemError(
+                SystemExecutionError::InsufficientFundingForFees { .. }
+            ), ChainExecutionContext::Block)
+        )
+    );
     Ok(())
 }
 

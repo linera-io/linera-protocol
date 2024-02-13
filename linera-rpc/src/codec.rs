@@ -118,6 +118,7 @@ impl From<Error> for NodeError {
 #[cfg(test)]
 mod tests {
     use super::{Codec, RpcMessage, PREFIX_SIZE};
+    use assert_matches::assert_matches;
     use bytes::{BufMut, BytesMut};
     use linera_core::data_types::ChainInfoQuery;
     use test_strategy::proptest;
@@ -186,7 +187,7 @@ mod tests {
 
         let result = Codec.encode(message, &mut buffer);
 
-        assert!(matches!(result, Ok(())));
+        assert_matches!(result, Ok(()));
         assert_eq!(&buffer[..frame_start], &leading_bytes);
 
         let prefix = u32::from_le_bytes(

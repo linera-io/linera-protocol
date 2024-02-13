@@ -60,6 +60,7 @@ tonic.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+assert_matches.workspace = true
 counter.workspace = true
 criterion = { workspace = true, features = ["async_tokio"] }
 fungible.workspace = true
