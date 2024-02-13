@@ -42,7 +42,7 @@ use {
 
 #[cfg(feature = "aws")]
 use linera_views::{
-    common::CommonStoreConfig,
+    common::{AdminKeyValueStore, CommonStoreConfig},
     dynamo_db::{
         create_dynamo_db_common_config, DynamoDbContext, DynamoDbStore, DynamoDbStoreConfig,
         LocalStackTestContext,
@@ -53,8 +53,6 @@ use linera_views::{
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbContext, ScyllaDbStore};
 
-#[cfg(feature = "aws")]
-use linera_views::common::AdminKeyValueStore;
 #[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 use std::collections::BTreeSet;
 

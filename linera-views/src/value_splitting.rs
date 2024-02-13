@@ -404,7 +404,7 @@ impl KeyValueStore for TestMemoryStoreInternal {
 }
 
 impl TestMemoryStoreInternal {
-    /// Creates a `TestMemoryStore` from the guard
+    /// Creates a `TestMemoryStoreInternal`
     pub fn new() -> Self {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: None,
