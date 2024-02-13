@@ -261,6 +261,13 @@ impl<'input> CallerTypeParameter<'input> {
         )
     }
 
+    /// Specializes the the [`CallerTypeParameter`] in the `target_type` with the concrete
+    /// `caller_type`.
+    pub fn specialize_type(&self, target_type: &mut Type, caller_type: Type) {
+        self.build_specializations(caller_type)
+            .apply_to_type(target_type);
+    }
+
     /// Builds the [`Specializatons`] instance to replace the [`CallerTypeParameter`] (if there is
     /// one) with the concrete `caller_type`.
     fn build_specializations(&self, caller_type: Type) -> Specializations {
