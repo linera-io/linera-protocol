@@ -53,7 +53,7 @@ async fn test_queue_operations_with_dynamo_db_context() -> Result<(), anyhow::Er
 #[cfg(feature = "scylladb")]
 #[tokio::test]
 async fn test_queue_operations_with_scylla_db_context() -> Result<(), anyhow::Error> {
-    run_test_queue_operations_test_cases(ScyllaDbContextFactory::default()).await
+    run_test_queue_operations_test_cases(ScyllaDbContextFactory).await
 }
 
 #[derive(Clone, Copy, Debug)]
