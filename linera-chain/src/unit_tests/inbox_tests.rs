@@ -301,7 +301,7 @@ async fn test_inbox_add_then_remove_mixed() {
     // Fail to skip unskippable event.
     assert_matches!(
         view.remove_event(&make_event(hash, 1, 0, [2])).await,
-        Err(InboxError::UnskippableEvent {event })
+        Err(InboxError::UnskippableEvent { event })
         if event == make_unskippable_event(hash, 0, 1, [1])
     );
     view.remove_event(&make_unskippable_event(hash, 0, 1, [1]))
