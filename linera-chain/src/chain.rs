@@ -538,37 +538,36 @@ where
         timestamp: Timestamp,
         local_time: Timestamp,
     ) -> Result<bool, ChainError> {
-        if let Message::System(SystemMessage::OpenChain {
+        let Message::System(SystemMessage::OpenChain {
             ownership,
             epoch,
             committees,
             admin_id,
             balance,
         }) = message
-        {
-            // Initialize ourself.
-            self.execution_state.system.open_chain(
-                message_id,
-                ownership.clone(),
-                *epoch,
-                committees.clone(),
-                *admin_id,
-                timestamp,
-                *balance,
-            );
-            // Recompute the state hash.
-            let hash = self.execution_state.crypto_hash().await?;
-            self.execution_state_hash.set(Some(hash));
-            // Last, reset the consensus state based on the current ownership.
-            self.manager.get_mut().reset(
-                self.execution_state.system.ownership.get(),
-                BlockHeight(0),
-                local_time,
-            )?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        else {
+            return Ok(false);
+        };
+        // Initialize ourself.
+        self.execution_state.system.open_chain(
+            message_id,
+            ownership.clone(),
+            *epoch,
+            committees.clone(),
+            *admin_id,
+            timestamp,
+            *balance,
+        );
+        // Recompute the state hash.
+        let hash = self.execution_state.crypto_hash().await?;
+        self.execution_state_hash.set(Some(hash));
+        // Last, reset the consensus state based on the current ownership.
+        self.manager.get_mut().reset(
+            self.execution_state.system.ownership.get(),
+            BlockHeight(0),
+            local_time,
+        )?;
+        Ok(true)
     }
 
     /// Removes the incoming messages in the block from the inboxes.
@@ -683,11 +682,7 @@ where
                         .execute_message(
                             context,
                             message.event.message.clone(),
-                            if grant > Amount::ZERO {
-                                Some(&mut grant)
-                            } else {
-                                None
-                            },
+                            (grant > Amount::ZERO).then_some(&mut grant),
                             &mut resource_controller,
                         )
                         .await
@@ -735,17 +730,21 @@ where
                         // Nothing to do except maybe refund the grant.
                         let mut outcomes = Vec::new();
                         if message.event.grant > Amount::ZERO {
-                            if let Some(refund_grant_to) = message.event.refund_grant_to {
-                                // Refund grant.
-                                let outcome = self
-                                    .execution_state
-                                    .send_refund(context, message.event.grant, refund_grant_to)
-                                    .await
-                                    .map_err(|err| {
-                                        ChainError::ExecutionError(err, chain_execution_context)
-                                    })?;
-                                outcomes.push(outcome);
-                            }
+                            let Some(refund_grant_to) = message.event.refund_grant_to else {
+                                // See OperationContext::refund_grant_to()
+                                return Err(ChainError::InternalError(
+                                    "Messages with grants should have a non-empty `refund_grant_to`".into()
+                                ));
+                            };
+                            // Refund grant.
+                            let outcome = self
+                                .execution_state
+                                .send_refund(context, message.event.grant, refund_grant_to)
+                                .await
+                                .map_err(|err| {
+                                    ChainError::ExecutionError(err, chain_execution_context)
+                                })?;
+                            outcomes.push(outcome);
                         }
                         outcomes
                     }

@@ -341,17 +341,14 @@ where
     // First message is the grant refund for the successful message sent before.
     assert_eq!(incoming_messages[0].action, MessageAction::Accept);
     assert_eq!(incoming_messages[0].event.kind, MessageKind::Tracked);
-    assert!(matches!(
+    assert_matches!(
         incoming_messages[0].event.message,
         Message::System(SystemMessage::Credit { .. })
-    ));
+    );
     // Second message is the bounced message.
     assert_eq!(incoming_messages[1].action, MessageAction::Accept);
     assert_eq!(incoming_messages[1].event.kind, MessageKind::Bouncing);
-    assert!(matches!(
-        incoming_messages[1].event.message,
-        Message::User { .. }
-    ));
+    assert_matches!(incoming_messages[1].event.message, Message::User { .. });
 
     Ok(())
 }
