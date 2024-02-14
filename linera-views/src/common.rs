@@ -360,7 +360,7 @@ pub trait WritableKeyValueStore<E> {
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), E>;
 }
 
-/// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
+/// Low-level trait for the administration of stores and their namespaces.
 #[async_trait]
 pub trait AdminKeyValueStore<E: Send>: Sized {
     /// The configuration needed to interact with a new store.
