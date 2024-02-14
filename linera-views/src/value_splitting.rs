@@ -244,6 +244,7 @@ where
 impl<K, E> AdminKeyValueStore<E> for ValueSplittingStore<K>
 where
     K: AdminKeyValueStore<E> + Send + Sync,
+    E: Send,
 {
     type Config = K::Config;
 

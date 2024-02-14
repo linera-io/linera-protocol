@@ -165,10 +165,6 @@ impl AdminKeyValueStore<MemoryContextError> for MemoryStore {
         Ok(Vec::new())
     }
 
-    async fn delete_all(_config: &Self::Config) -> Result<(), MemoryContextError> {
-        Ok(())
-    }
-
     async fn exists(_config: &Self::Config, _namespace: &str) -> Result<bool, MemoryContextError> {
         Ok(false)
     }

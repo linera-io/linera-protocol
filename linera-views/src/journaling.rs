@@ -163,6 +163,7 @@ where
 impl<K, E> AdminKeyValueStore<E> for JournalingKeyValueStore<K>
 where
     K: AdminKeyValueStore<E> + Send + Sync,
+    E: Send,
 {
     type Config = K::Config;
 
