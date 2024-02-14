@@ -85,18 +85,8 @@ impl<'input> FieldsInformation<'input> {
             FieldsKind::Unit => quote! {},
             FieldsKind::Named => {
                 let bindings = self.non_skipped_fields().map(FieldInformation::name);
-
-                let skipped_field_count = self
-                    .fields
-                    .iter()
-                    .filter(|field| field.is_skipped())
-                    .count();
-
-                let ignored_fields = match skipped_field_count {
-                    0 => quote! {},
-                    1 => quote! { _ },
-                    _ => quote! { .. },
-                };
+                let has_skipped_fields = self.fields.iter().any(|field| field.is_skipped());
+                let ignored_fields = has_skipped_fields.then(|| quote! { .. });
 
                 quote! { { #( #bindings, )* #ignored_fields } }
             }
