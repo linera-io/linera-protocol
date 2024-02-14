@@ -32,7 +32,7 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{Recipient, SystemOperation, UserData},
-    ChainOwnership, ExecutionError, Message, Operation, ResourceControlPolicy,
+    ChainOwnership, ExecutionError, Message, MessageKind, Operation, ResourceControlPolicy,
     SystemExecutionError, SystemMessage, SystemQuery, SystemResponse, TimeoutConfig,
 };
 use linera_storage::Storage;
@@ -1042,17 +1042,38 @@ where
         .await
         .unwrap()
         .unwrap();
+    client2
+        .subscribe_to_published_bytecodes(ChainId::root(1))
+        .await
+        .unwrap()
+        .unwrap();
     client1.synchronize_from_validators().await.unwrap();
     let (certificates, _) = client1.process_inbox().await.unwrap();
     let block = certificates[0].value().block().unwrap();
     assert!(block.operations.is_empty());
-    assert_eq!(block.incoming_messages.len(), 1);
+    assert_eq!(block.incoming_messages.len(), 2);
     assert_matches!(
         block.incoming_messages[0],
         IncomingMessage {
             origin: Origin { sender, medium: Medium::Direct },
             action: MessageAction::Reject,
-            ..
+            event: Event {
+                kind: MessageKind::Tracked,
+                message: Message::System(SystemMessage::Credit { .. }),
+                ..
+            },
+        } if sender == ChainId::root(2)
+    );
+    assert_matches!(
+        block.incoming_messages[1],
+        IncomingMessage {
+            origin: Origin { sender, medium: Medium::Direct },
+            action: MessageAction::Reject,
+            event: Event {
+                kind: MessageKind::Protected,
+                message: Message::System(SystemMessage::Subscribe { .. }),
+                ..
+            },
         } if sender == ChainId::root(2)
     );
 
