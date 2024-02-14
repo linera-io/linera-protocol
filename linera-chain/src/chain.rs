@@ -638,7 +638,7 @@ where
 
         if self.is_closed() {
             ensure!(
-                !block.incoming_messages.is_empty() && block.only_rejected_messages(),
+                !block.incoming_messages.is_empty() && block.has_only_rejected_messages(),
                 ChainError::ClosedChain
             );
         }

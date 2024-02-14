@@ -76,7 +76,7 @@ impl Block {
 
     /// Returns whether the block contains only rejected incoming messages, which
     /// makes it admissible even on closed chains.
-    pub fn only_rejected_messages(&self) -> bool {
+    pub fn has_only_rejected_messages(&self) -> bool {
         self.operations.is_empty()
             && self
                 .incoming_messages
