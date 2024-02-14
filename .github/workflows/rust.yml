@@ -62,9 +62,6 @@ jobs:
     - name: Compile the workspace with the default features (build)
       run: |
         cargo build --locked
-    - name: Run the storage service used for the linera-storage-service tests
-      run: |
-        target/debug/storage_service_server memory --endpoint 127.0.0.1:8942 &
     - name: Run all tests using the default features
       run: |
         cargo test --locked

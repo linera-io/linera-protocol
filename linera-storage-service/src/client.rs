@@ -215,12 +215,14 @@ pub fn create_shared_store_common_config() -> CommonStoreConfig {
 }
 
 #[cfg(any(test, feature = "test"))]
-pub async fn create_shared_test_store() -> SharedStoreClient {
+pub async fn create_shared_test_store(
+    endpoint: String,
+) -> Result<SharedStoreClient, SharedContextError> {
     let common_config = create_shared_store_common_config();
-    let endpoint = "http://127.0.0.1:8942".to_string();
+    let endpoint = format!("http://{}", endpoint);
     let store_config = SharedStoreConfig {
         endpoint,
         common_config,
     };
-    SharedStoreClient::new(store_config).await.unwrap()
+    SharedStoreClient::new(store_config).await
 }
