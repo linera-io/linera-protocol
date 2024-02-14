@@ -50,7 +50,7 @@ async fn test_reads_rocks_db() {
 
 #[cfg(feature = "aws")]
 #[tokio::test]
-async fn test_reads_dynamodb() {
+async fn test_reads_dynamo_db() {
     for scenario in get_random_test_scenarios() {
         let key_value_store = create_dynamo_db_test_store().await;
         run_reads(key_value_store, scenario).await;

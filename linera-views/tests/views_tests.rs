@@ -42,9 +42,12 @@ use {
 
 #[cfg(feature = "aws")]
 use linera_views::{
-    common::CommonStoreConfig, dynamo_db::create_dynamo_db_common_config,
-    dynamo_db::DynamoDbContext, dynamo_db::DynamoDbStoreConfig, dynamo_db::LocalStackTestContext,
-    dynamo_db::TableName, test_utils::get_table_name,
+    common::{AdminKeyValueStore, CommonStoreConfig},
+    dynamo_db::{
+        create_dynamo_db_common_config, DynamoDbContext, DynamoDbStore, DynamoDbStoreConfig,
+        LocalStackTestContext,
+    },
+    test_utils::generate_test_namespace,
 };
 
 #[cfg(feature = "scylladb")]
@@ -259,7 +262,7 @@ impl StateStore for ScyllaDbTestStore {
 #[cfg(feature = "aws")]
 pub struct DynamoDbTestStore {
     localstack: LocalStackTestContext,
-    table_name: TableName,
+    namespace: String,
     is_created: bool,
     common_config: CommonStoreConfig,
     accessed_chains: BTreeSet<usize>,
@@ -272,14 +275,13 @@ impl StateStore for DynamoDbTestStore {
 
     async fn new() -> Self {
         let localstack = LocalStackTestContext::new().await.expect("localstack");
-        let table = get_table_name();
-        let table_name = table.parse().expect("Invalid table name");
+        let namespace = generate_test_namespace();
         let is_created = false;
         let common_config = create_dynamo_db_common_config();
         let accessed_chains = BTreeSet::new();
         DynamoDbTestStore {
             localstack,
-            table_name,
+            namespace,
             is_created,
             common_config,
             accessed_chains,
@@ -293,15 +295,20 @@ impl StateStore for DynamoDbTestStore {
         let base_key = bcs::to_bytes(&id)?;
         let store_config = DynamoDbStoreConfig {
             config: self.localstack.dynamo_db_config(),
-            table_name: self.table_name.clone(),
             common_config: self.common_config.clone(),
         };
-        let (context, _) = if self.is_created {
-            DynamoDbContext::new(store_config, base_key, id).await
+        let namespace = &self.namespace;
+
+        let store = if self.is_created {
+            DynamoDbStore::connect(&store_config, namespace)
+                .await
+                .expect("failed to connect")
         } else {
-            DynamoDbContext::new_for_testing(store_config, base_key, id).await
-        }
-        .expect("Failed to create DynamoDB context");
+            DynamoDbStore::recreate_and_connect(&store_config, namespace)
+                .await
+                .expect("failed to create from scratch")
+        };
+        let context = DynamoDbContext::new(store, base_key, id);
         self.is_created = true;
         StateView::load(context).await
     }

@@ -183,6 +183,7 @@ impl ClientContext {
             #[cfg(feature = "rocksdb")]
             None => Ok(StorageConfig::RocksDb {
                 path: Self::create_default_config_path()?.join("wallet.db"),
+                namespace: "default".to_string(),
             }),
             #[cfg(not(feature = "rocksdb"))]
             None => anyhow::bail!("A storage option must be provided"),

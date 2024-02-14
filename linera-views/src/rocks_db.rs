@@ -4,8 +4,8 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_upper_bound, CommonStoreConfig, ContextFromStore, KeyValueStore, ReadableKeyValueStore,
-        TableStatus, WritableKeyValueStore,
+        get_upper_bound, AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyValueStore,
+        ReadableKeyValueStore, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
@@ -13,7 +13,7 @@ use crate::{
 use async_trait::async_trait;
 use linera_base::ensure;
 use std::{
-    fs,
+    ffi::OsString,
     ops::{Bound, Bound::Excluded},
     path::PathBuf,
     sync::Arc,
@@ -26,7 +26,10 @@ use crate::metering::{
 };
 
 #[cfg(any(test, feature = "test"))]
-use {crate::lru_caching::TEST_CACHE_SIZE, tempfile::TempDir};
+use {
+    crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace},
+    tempfile::TempDir,
+};
 
 /// The number of streams for the test
 #[cfg(any(test, feature = "test"))]
@@ -57,6 +60,18 @@ pub struct RocksDbStoreConfig {
     pub path_buf: PathBuf,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
+}
+
+impl RocksDbStoreInternal {
+    fn check_namespace(namespace: &str) -> Result<(), RocksDbContextError> {
+        if !namespace
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '_')
+        {
+            return Err(RocksDbContextError::InvalidTableName);
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -230,6 +245,90 @@ impl WritableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
     }
 }
 
+#[async_trait]
+impl AdminKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
+    type Config = RocksDbStoreConfig;
+
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, RocksDbContextError> {
+        Self::check_namespace(namespace)?;
+        let options = rocksdb::Options::default();
+        let mut path_buf = config.path_buf.clone();
+        path_buf.push(namespace);
+        let db = DB::open(&options, path_buf)?;
+        let max_stream_queries = config.common_config.max_stream_queries;
+        Ok(RocksDbStoreInternal {
+            db: Arc::new(db),
+            max_stream_queries,
+        })
+    }
+
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, RocksDbContextError> {
+        let entries = std::fs::read_dir(config.path_buf.clone())?;
+        let mut namespaces = Vec::new();
+        for entry in entries {
+            let entry = entry?;
+            if !entry.file_type()?.is_dir() {
+                return Err(RocksDbContextError::NonDirectoryNamespace);
+            }
+            let namespace = match entry.file_name().into_string() {
+                Err(error) => {
+                    return Err(RocksDbContextError::IntoStringError(error));
+                }
+                Ok(namespace) => namespace,
+            };
+            namespaces.push(namespace);
+        }
+        Ok(namespaces)
+    }
+
+    async fn delete_all(config: &Self::Config) -> Result<(), RocksDbContextError> {
+        let namespaces = RocksDbStoreInternal::list_all(config).await?;
+        for namespace in namespaces {
+            let mut path_buf = config.path_buf.clone();
+            path_buf.push(&namespace);
+            std::fs::remove_dir_all(path_buf.as_path())?;
+        }
+        Ok(())
+    }
+
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, RocksDbContextError> {
+        Self::check_namespace(namespace)?;
+        let options = rocksdb::Options::default();
+        let mut path_buf = config.path_buf.clone();
+        path_buf.push(namespace);
+        let result = DB::open(&options, path_buf.clone());
+        match result {
+            Ok(_) => Ok(true),
+            Err(error) => match error.kind() {
+                rocksdb::ErrorKind::InvalidArgument => {
+                    std::fs::remove_dir_all(path_buf)?;
+                    Ok(false)
+                }
+                _ => Err(RocksDbContextError::RocksDb(error)),
+            },
+        }
+    }
+
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), RocksDbContextError> {
+        Self::check_namespace(namespace)?;
+        let mut options = rocksdb::Options::default();
+        options.create_if_missing(true);
+        let mut path_buf = config.path_buf.clone();
+        path_buf.push(namespace);
+        let _db = DB::open(&options, path_buf)?;
+        Ok(())
+    }
+
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), RocksDbContextError> {
+        Self::check_namespace(namespace)?;
+        let mut path_buf = config.path_buf.clone();
+        path_buf.push(namespace);
+        let path = path_buf.as_path();
+        std::fs::remove_dir_all(path)?;
+        Ok(())
+    }
+}
+
 impl KeyValueStore for RocksDbStoreInternal {
     type Error = RocksDbContextError;
 }
@@ -245,122 +344,6 @@ pub struct RocksDbStore {
     store: LruCachingStore<ValueSplittingStore<RocksDbStoreInternal>>,
 }
 
-impl RocksDbStore {
-    /// Returns whether a table already exists.
-    pub async fn test_existence(
-        store_config: RocksDbStoreConfig,
-    ) -> Result<bool, RocksDbContextError> {
-        let options = rocksdb::Options::default();
-        let result = DB::open(&options, store_config.path_buf.clone());
-        match result {
-            Ok(_) => Ok(true),
-            Err(error) => match error.kind() {
-                rocksdb::ErrorKind::InvalidArgument => Ok(false),
-                _ => Err(RocksDbContextError::RocksDb(error)),
-            },
-        }
-    }
-
-    /// Creates a RocksDB database for unit tests from a specified path.
-    #[cfg(any(test, feature = "test"))]
-    pub async fn new_for_testing(
-        store_config: RocksDbStoreConfig,
-    ) -> Result<(Self, TableStatus), RocksDbContextError> {
-        let path = store_config.path_buf.as_path();
-        fs::remove_dir_all(path)?;
-        let create_if_missing = true;
-        Self::new_internal(store_config, create_if_missing).await
-    }
-
-    /// Creates all RocksDB databases
-    pub async fn delete_all(store_config: RocksDbStoreConfig) -> Result<(), RocksDbContextError> {
-        let path = store_config.path_buf.as_path();
-        fs::remove_dir_all(path)?;
-        Ok(())
-    }
-
-    /// Creates all RocksDB databases
-    pub async fn delete_single(
-        store_config: RocksDbStoreConfig,
-    ) -> Result<(), RocksDbContextError> {
-        let path = store_config.path_buf.as_path();
-        fs::remove_dir_all(path)?;
-        Ok(())
-    }
-
-    /// Creates a RocksDB database from a specified path.
-    pub async fn new(
-        store_config: RocksDbStoreConfig,
-    ) -> Result<(Self, TableStatus), RocksDbContextError> {
-        let create_if_missing = false;
-        Self::new_internal(store_config, create_if_missing).await
-    }
-
-    /// Initializes a RocksDB database from a specified path.
-    pub async fn initialize(store_config: RocksDbStoreConfig) -> Result<Self, RocksDbContextError> {
-        let create_if_missing = true;
-        let (client, table_status) = Self::new_internal(store_config, create_if_missing).await?;
-        if table_status == TableStatus::Existing {
-            return Err(RocksDbContextError::AlreadyExistingDatabase);
-        }
-        Ok(client)
-    }
-
-    #[cfg(not(feature = "metrics"))]
-    fn get_complete_store(store: RocksDbStoreInternal, cache_size: usize) -> Self {
-        let store = ValueSplittingStore::new(store);
-        let store = LruCachingStore::new(store, cache_size);
-        Self { store }
-    }
-
-    #[cfg(feature = "metrics")]
-    fn get_complete_store(store: RocksDbStoreInternal, cache_size: usize) -> Self {
-        let store = MeteredStore::new(&ROCKS_DB_METRICS, store);
-        let store = ValueSplittingStore::new(store);
-        let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
-        let store = LruCachingStore::new(store, cache_size);
-        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
-        Self { store }
-    }
-
-    /// Creates a RocksDB database from a specified path.
-    async fn new_internal(
-        store_config: RocksDbStoreConfig,
-        create_if_missing: bool,
-    ) -> Result<(Self, TableStatus), RocksDbContextError> {
-        let kv_name = format!(
-            "store_config={:?} create_if_missing={:?}",
-            store_config, create_if_missing
-        );
-        let path = store_config.path_buf.as_path();
-        let cache_size = store_config.common_config.cache_size;
-        let max_stream_queries = store_config.common_config.max_stream_queries;
-        let mut options = rocksdb::Options::default();
-        let test = Self::test_existence(store_config.clone()).await?;
-        let table_status = if test {
-            TableStatus::Existing
-        } else {
-            TableStatus::New
-        };
-        let db = if create_if_missing {
-            options.create_if_missing(true);
-            DB::open(&options, path)?
-        } else {
-            if !test {
-                tracing::info!("RocksDb: Missing database for kv_name={}", kv_name);
-                return Err(RocksDbContextError::MissingDatabase(kv_name));
-            }
-            DB::open(&options, path)?
-        };
-        let store = RocksDbStoreInternal {
-            db: Arc::new(db),
-            max_stream_queries,
-        };
-        let store = Self::get_complete_store(store, cache_size);
-        Ok((store, table_status))
-    }
-}
-
 /// Creates the common initialization for RocksDB
 #[cfg(any(test, feature = "test"))]
 pub fn create_rocks_db_common_config() -> CommonStoreConfig {
@@ -371,11 +354,9 @@ pub fn create_rocks_db_common_config() -> CommonStoreConfig {
     }
 }
 
-/// Creates a RocksDB database client to be used for tests.
-/// The temporary directory has to be carried because if it goes
-/// out of scope then the RocksDB client can become unstable.
+/// Returns the test config and a guard for the temporary directory
 #[cfg(any(test, feature = "test"))]
-pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
+pub async fn create_rocks_db_test_config() -> (RocksDbStoreConfig, TempDir) {
     let dir = TempDir::new().unwrap();
     let path_buf = dir.path().to_path_buf();
     let common_config = create_rocks_db_common_config();
@@ -383,7 +364,17 @@ pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
         path_buf,
         common_config,
     };
-    let (store, _) = RocksDbStore::new_for_testing(store_config)
+    (store_config, dir)
+}
+
+/// Creates a RocksDB database client to be used for tests.
+/// The temporary directory has to be carried because if it goes
+/// out of scope then the RocksDB client can become unstable.
+#[cfg(any(test, feature = "test"))]
+pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
+    let (store_config, dir) = create_rocks_db_test_config().await;
+    let namespace = generate_test_namespace();
+    let store = RocksDbStore::recreate_and_connect(&store_config, &namespace)
         .await
         .expect("client");
     (store, dir)
@@ -446,6 +437,45 @@ impl WritableKeyValueStore<RocksDbContextError> for RocksDbStore {
 }
 
 #[async_trait]
+impl AdminKeyValueStore<RocksDbContextError> for RocksDbStore {
+    type Config = RocksDbStoreConfig;
+
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, RocksDbContextError> {
+        let store = RocksDbStoreInternal::connect(config, namespace).await?;
+        let cache_size = config.common_config.cache_size;
+        #[cfg(feature = "metrics")]
+        let store = MeteredStore::new(&ROCKS_DB_METRICS, store);
+        let store = ValueSplittingStore::new(store);
+        #[cfg(feature = "metrics")]
+        let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
+        let store = LruCachingStore::new(store, cache_size);
+        #[cfg(feature = "metrics")]
+        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
+        Ok(Self { store })
+    }
+
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, RocksDbContextError> {
+        RocksDbStoreInternal::list_all(config).await
+    }
+
+    async fn delete_all(config: &Self::Config) -> Result<(), RocksDbContextError> {
+        RocksDbStoreInternal::delete_all(config).await
+    }
+
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, RocksDbContextError> {
+        RocksDbStoreInternal::exists(config, namespace).await
+    }
+
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), RocksDbContextError> {
+        RocksDbStoreInternal::create(config, namespace).await
+    }
+
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), RocksDbContextError> {
+        RocksDbStoreInternal::delete(config, namespace).await
+    }
+}
+
+#[async_trait]
 impl KeyValueStore for RocksDbStore {
     type Error = RocksDbContextError;
 }
@@ -472,6 +502,14 @@ pub enum RocksDbContextError {
     #[error("RocksDb error: {0}")]
     RocksDb(#[from] rocksdb::Error),
 
+    /// The database contains a file which is not a directory
+    #[error("Namespaces should be directories")]
+    NonDirectoryNamespace,
+
+    /// Error converting `OsString` to `String`
+    #[error("error in the conversion from OsString")]
+    IntoStringError(OsString),
+
     /// The key must have at most 8M
     #[error("The key must have at most 8M")]
     KeyTooLong,
@@ -479,6 +517,10 @@ pub enum RocksDbContextError {
     /// Missing database
     #[error("Missing database")]
     MissingDatabase(String),
+
+    /// Invalid table name
+    #[error("Invalid table name")]
+    InvalidTableName,
 
     /// Already existing database
     #[error("Already existing database")]

@@ -15,24 +15,23 @@ use async_trait::async_trait;
 use std::{collections::VecDeque, marker::PhantomData};
 use test_case::test_case;
 
+#[cfg(any(feature = "rocksdb", feature = "scylladb", feature = "aws"))]
+use crate::{common::AdminKeyValueStore, test_utils::generate_test_namespace};
+
 #[cfg(feature = "rocksdb")]
 use {
-    crate::rocks_db::create_rocks_db_common_config,
-    crate::rocks_db::RocksDbStoreConfig,
-    crate::rocks_db::{RocksDbContext, RocksDbStore},
+    crate::rocks_db::{create_rocks_db_test_config, RocksDbContext, RocksDbStore},
     tempfile::TempDir,
 };
 
 #[cfg(feature = "aws")]
-use crate::{
-    dynamo_db::DynamoDbStoreConfig,
-    dynamo_db::LocalStackTestContext,
-    dynamo_db::{create_dynamo_db_common_config, DynamoDbContext},
-    test_utils::get_table_name,
+use crate::dynamo_db::{
+    create_dynamo_db_common_config, DynamoDbContext, DynamoDbStore, DynamoDbStoreConfig,
+    LocalStackTestContext,
 };
 
 #[cfg(feature = "scylladb")]
-use crate::{scylla_db::create_scylla_db_test_store, scylla_db::ScyllaDbContext};
+use crate::scylla_db::{create_scylla_db_test_config, ScyllaDbContext, ScyllaDbStore};
 
 #[tokio::test]
 async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error> {
@@ -54,7 +53,7 @@ async fn test_queue_operations_with_dynamo_db_context() -> Result<(), anyhow::Er
 #[cfg(feature = "scylladb")]
 #[tokio::test]
 async fn test_queue_operations_with_scylla_db_context() -> Result<(), anyhow::Error> {
-    run_test_queue_operations_test_cases(ScyllaDbContextFactory::default()).await
+    run_test_queue_operations_test_cases(ScyllaDbContextFactory).await
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -224,17 +223,13 @@ impl TestContextFactory for RocksDbContextFactory {
     type Context = RocksDbContext<()>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let directory = TempDir::new()?;
-        let common_config = create_rocks_db_common_config();
-        let path_buf = directory.path().to_path_buf();
-        let store_config = RocksDbStoreConfig {
-            path_buf,
-            common_config,
-        };
-        let (store, _) = RocksDbStore::new_for_testing(store_config)
+        let (store_config, directory) = create_rocks_db_test_config().await;
+        let namespace = generate_test_namespace();
+        let store = RocksDbStore::recreate_and_connect(&store_config, &namespace)
             .await
             .expect("store");
-        let context = RocksDbContext::new(store, vec![], ());
+        let dummy_key_prefix = vec![0];
+        let context = RocksDbContext::new(store, dummy_key_prefix, ());
 
         self.temporary_directories.push(directory);
 
@@ -246,7 +241,6 @@ impl TestContextFactory for RocksDbContextFactory {
 #[derive(Default)]
 struct DynamoDbContextFactory {
     localstack: Option<LocalStackTestContext>,
-    table_counter: usize,
 }
 
 #[cfg(feature = "aws")]
@@ -260,29 +254,21 @@ impl TestContextFactory for DynamoDbContextFactory {
         }
         let config = self.localstack.as_ref().unwrap().dynamo_db_config();
 
-        let table = get_table_name();
-        let table = format!("{}_{}", table, self.table_counter);
-        let table_name = table.parse()?;
-        self.table_counter += 1;
+        let namespace = generate_test_namespace();
         let common_config = create_dynamo_db_common_config();
-        let dummy_key_prefix = vec![0];
         let store_config = DynamoDbStoreConfig {
             config,
-            table_name,
             common_config,
         };
-        let (context, _) =
-            DynamoDbContext::new_for_testing(store_config, dummy_key_prefix, ()).await?;
-
-        Ok(context)
+        let store = DynamoDbStore::recreate_and_connect(&store_config, &namespace).await?;
+        let dummy_key_prefix = vec![0];
+        Ok(DynamoDbContext::new(store, dummy_key_prefix, ()))
     }
 }
 
 #[cfg(feature = "scylladb")]
 #[derive(Default)]
-struct ScyllaDbContextFactory {
-    table_names: Vec<String>,
-}
+struct ScyllaDbContextFactory;
 
 #[cfg(feature = "scylladb")]
 #[async_trait]
@@ -290,12 +276,11 @@ impl TestContextFactory for ScyllaDbContextFactory {
     type Context = ScyllaDbContext<()>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let store = create_scylla_db_test_store().await;
-        let table_name = store.get_table_name().await;
-        let context = ScyllaDbContext::new(store, vec![], ());
-
-        self.table_names.push(table_name);
-
+        let config = create_scylla_db_test_config().await;
+        let namespace = generate_test_namespace();
+        let store = ScyllaDbStore::recreate_and_connect(&config, &namespace).await?;
+        let dummy_key_prefix = vec![0];
+        let context = ScyllaDbContext::new(store, dummy_key_prefix, ());
         Ok(context)
     }
 }

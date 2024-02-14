@@ -24,7 +24,7 @@ use {
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::common::{CommonStoreConfig, ContextFromStore},
+    crate::common::{AdminKeyValueStore, CommonStoreConfig, ContextFromStore},
     crate::memory::{MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
     crate::views::ViewError,
 };
@@ -296,7 +296,10 @@ impl<E> LruCachingMemoryContext<E> {
             cache_size: 1000,
         };
         let config = MemoryStoreConfig { common_config };
-        let store = MemoryStore::new(config);
+        let namespace = "linera";
+        let store = MemoryStore::connect(&config, namespace)
+            .await
+            .expect("store");
         let store = LruCachingStore::new(store, n);
         Ok(Self {
             store,

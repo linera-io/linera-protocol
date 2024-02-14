@@ -4,8 +4,8 @@
 use crate::{
     batch::{Batch, SimpleUnorderedBatch},
     common::{
-        CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore,
-        ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
+        AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
+        KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
     journaling::{
         DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
@@ -37,7 +37,7 @@ use aws_sdk_dynamodb::{
 use aws_smithy_types::error::operation::BuildError;
 use futures::future::join_all;
 use linera_base::ensure;
-use std::{collections::HashMap, env, str::FromStr, sync::Arc};
+use std::{collections::HashMap, env, sync::Arc};
 use thiserror::Error;
 
 #[cfg(feature = "metrics")]
@@ -48,7 +48,7 @@ use crate::metering::{
 #[cfg(any(test, feature = "test"))]
 use {
     crate::lru_caching::TEST_CACHE_SIZE,
-    crate::test_utils::get_table_name,
+    crate::test_utils::generate_test_namespace,
     anyhow::Error,
     tokio::sync::{Mutex, MutexGuard},
 };
@@ -123,10 +123,6 @@ impl LocalStackTestContext {
         self.config.clone()
     }
 }
-
-#[cfg(test)]
-#[path = "unit_tests/dynamo_db_context_tests.rs"]
-mod dynamo_db_context_tests;
 
 /// The attribute name of the partition key.
 const PARTITION_ATTRIBUTE: &str = "item_partition";
@@ -314,7 +310,7 @@ impl TransactionBuilder {
 #[derive(Debug, Clone)]
 pub struct DynamoDbStoreInternal {
     client: Client,
-    table: TableName,
+    namespace: String,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
 }
@@ -324,61 +320,69 @@ pub struct DynamoDbStoreInternal {
 pub struct DynamoDbStoreConfig {
     /// The AWS configuration
     pub config: Config,
-    /// The table_name used
-    pub table_name: TableName,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
 }
 
-impl DynamoDbStoreInternal {
-    fn build_delete_transact(
-        &self,
-        key: Vec<u8>,
-    ) -> Result<TransactWriteItem, DynamoDbContextError> {
-        ensure!(!key.is_empty(), DynamoDbContextError::ZeroLengthKey);
-        ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbContextError::KeyTooLong);
-        let request = Delete::builder()
-            .table_name(&self.table.0)
-            .set_key(Some(build_key(key)))
-            .build()?;
-        Ok(TransactWriteItem::builder().delete(request).build())
+#[async_trait]
+impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
+    type Config = DynamoDbStoreConfig;
+
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, DynamoDbContextError> {
+        Self::check_namespace(namespace)?;
+        let client = Client::from_conf(config.config.clone());
+        let semaphore = config
+            .common_config
+            .max_concurrent_queries
+            .map(|n| Arc::new(Semaphore::new(n)));
+        let max_stream_queries = config.common_config.max_stream_queries;
+        let namespace = namespace.to_string();
+        Ok(Self {
+            client,
+            namespace,
+            semaphore,
+            max_stream_queries,
+        })
     }
 
-    fn build_put_transact(
-        &self,
-        key: Vec<u8>,
-        value: Vec<u8>,
-    ) -> Result<TransactWriteItem, DynamoDbContextError> {
-        ensure!(!key.is_empty(), DynamoDbContextError::ZeroLengthKey);
-        ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbContextError::KeyTooLong);
-        ensure!(
-            value.len() <= RAW_MAX_VALUE_SIZE,
-            DynamoDbContextError::ValueLengthTooLarge
-        );
-        let request = Put::builder()
-            .table_name(&self.table.0)
-            .set_item(Some(build_key_value(key, value)))
-            .build()?;
-        Ok(TransactWriteItem::builder().put(request).build())
-    }
-
-    /// Obtains the semaphore lock on the database if needed.
-    async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
-        match &self.semaphore {
-            None => None,
-            Some(count) => Some(count.acquire().await),
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbContextError> {
+        let client = Client::from_conf(config.config.clone());
+        let mut namespaces = Vec::new();
+        let mut start_table = None;
+        loop {
+            let response = client
+                .list_tables()
+                .set_exclusive_start_table_name(start_table)
+                .send()
+                .await?;
+            if let Some(namespaces_blk) = response.table_names {
+                namespaces.extend(namespaces_blk);
+            }
+            if response.last_evaluated_table_name.is_none() {
+                break;
+            } else {
+                start_table = response.last_evaluated_table_name;
+            }
         }
+        Ok(namespaces)
     }
 
-    /// Testing the existence of a table
-    pub async fn test_table_existence(
-        client: &Client,
-        table: &TableName,
-    ) -> Result<bool, DynamoDbContextError> {
+    async fn delete_all(config: &Self::Config) -> Result<(), DynamoDbContextError> {
+        let client = Client::from_conf(config.config.clone());
+        let tables = Self::list_all(config).await?;
+        for table in tables {
+            client.delete_table().table_name(&table).send().await?;
+        }
+        Ok(())
+    }
+
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, DynamoDbContextError> {
+        Self::check_namespace(namespace)?;
+        let client = Client::from_conf(config.config.clone());
         let key_db = build_key(DB_KEY.to_vec());
         let response = client
             .get_item()
-            .table_name(table.as_ref())
+            .table_name(namespace)
             .set_key(Some(key_db))
             .send()
             .await;
@@ -402,212 +406,12 @@ impl DynamoDbStoreInternal {
         }
     }
 
-    /// Creates a new [`DynamoDbStoreInternal`] instance from scratch using the provided `config` parameters.
-    #[cfg(any(test, feature = "test"))]
-    pub async fn new_for_testing(
-        store_config: DynamoDbStoreConfig,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let client = Client::from_conf(store_config.config);
-        if Self::test_table_existence(&client, &store_config.table_name).await? {
-            client
-                .delete_table()
-                .table_name(&store_config.table_name.0)
-                .send()
-                .await?;
-        }
-        let stop_if_table_exists = true;
-        let create_if_missing = true;
-        Self::new_internal(
-            client,
-            store_config.table_name,
-            store_config.common_config,
-            stop_if_table_exists,
-            create_if_missing,
-        )
-        .await
-    }
-
-    /// Testing the existence of a table
-    pub async fn test_existence(
-        store_config: DynamoDbStoreConfig,
-    ) -> Result<bool, DynamoDbContextError> {
-        let client = Client::from_conf(store_config.config);
-        Self::test_table_existence(&client, &store_config.table_name).await
-    }
-
-    async fn delete_all(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
-        let client = Client::from_conf(store_config.config);
-        clear_tables(&client).await?;
-        Ok(())
-    }
-
-    async fn list_tables(
-        store_config: DynamoDbStoreConfig,
-    ) -> Result<Vec<String>, DynamoDbContextError> {
-        let client = Client::from_conf(store_config.config);
-        list_tables_from_client(&client).await
-    }
-
-    async fn delete_single(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
-        let client = Client::from_conf(store_config.config);
-        client
-            .delete_table()
-            .table_name(&store_config.table_name.0)
-            .send()
-            .await?;
-        Ok(())
-    }
-
-    /// Creates a new [`DynamoDbStoreInternal`] instance using the provided `config` parameters.
-    pub async fn new(
-        store_config: DynamoDbStoreConfig,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let client = Client::from_conf(store_config.config);
-        let stop_if_table_exists = false;
-        let create_if_missing = false;
-        Self::new_internal(
-            client,
-            store_config.table_name,
-            store_config.common_config,
-            stop_if_table_exists,
-            create_if_missing,
-        )
-        .await
-    }
-
-    /// Initializes a RocksDB database from a specified path.
-    pub async fn initialize(
-        store_config: DynamoDbStoreConfig,
-    ) -> Result<Self, DynamoDbContextError> {
-        let client = Client::from_conf(store_config.config);
-        let stop_if_table_exists = false;
-        let create_if_missing = true;
-        let (client, table_status) = Self::new_internal(
-            client,
-            store_config.table_name,
-            store_config.common_config,
-            stop_if_table_exists,
-            create_if_missing,
-        )
-        .await?;
-        if table_status == TableStatus::Existing {
-            return Err(DynamoDbContextError::AlreadyExistingDatabase);
-        }
-        Ok(client)
-    }
-
-    /// Creates a new [`DynamoDbStoreInternal`] instance using the provided `config` parameters.
-    async fn new_internal(
-        client: Client,
-        table: TableName,
-        common_config: CommonStoreConfig,
-        stop_if_table_exists: bool,
-        create_if_missing: bool,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let kv_name = format!("table={:?} common_config={:?}", table, common_config);
-        let mut existing_table = Self::test_table_existence(&client, &table).await?;
-        let semaphore = common_config
-            .max_concurrent_queries
-            .map(|n| Arc::new(Semaphore::new(n)));
-        let max_stream_queries = common_config.max_stream_queries;
-        let store = Self {
-            client,
-            table,
-            semaphore,
-            max_stream_queries,
-        };
-        if !existing_table {
-            if create_if_missing {
-                existing_table = store.create_table(stop_if_table_exists).await?;
-            } else {
-                tracing::info!("DynamoDb: Missing database for kv_name={}", kv_name);
-                return Err(DynamoDbContextError::MissingDatabase(kv_name));
-            }
-        }
-        let table_status = if existing_table {
-            TableStatus::Existing
-        } else {
-            TableStatus::New
-        };
-        Ok((store, table_status))
-    }
-
-    async fn get_query_output(
-        &self,
-        attribute_str: &str,
-        key_prefix: &[u8],
-        start_key_map: Option<HashMap<String, AttributeValue>>,
-    ) -> Result<QueryOutput, DynamoDbContextError> {
-        let _guard = self.acquire().await;
-        let response = self
-            .client
-            .query()
-            .table_name(self.table.as_ref())
-            .projection_expression(attribute_str)
-            .key_condition_expression(format!(
-                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
-            ))
-            .expression_attribute_values(
-                ":partition",
-                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
-            )
-            .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
-            .set_exclusive_start_key(start_key_map)
-            .send()
-            .await?;
-        Ok(response)
-    }
-
-    async fn read_value_bytes_general(
-        &self,
-        key_db: HashMap<String, AttributeValue>,
-    ) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
-        let _guard = self.acquire().await;
-        let response = self
-            .client
-            .get_item()
-            .table_name(self.table.as_ref())
-            .set_key(Some(key_db))
-            .send()
-            .await?;
-
-        match response.item {
-            Some(mut item) => {
-                let value = extract_value_owned(&mut item)?;
-                Ok(Some(value))
-            }
-            None => Ok(None),
-        }
-    }
-
-    async fn contains_key_general(
-        &self,
-        key_db: HashMap<String, AttributeValue>,
-    ) -> Result<bool, DynamoDbContextError> {
-        let _guard = self.acquire().await;
-        let response = self
-            .client
-            .get_item()
-            .table_name(self.table.as_ref())
-            .set_key(Some(key_db))
-            .projection_expression(PARTITION_ATTRIBUTE)
-            .send()
-            .await?;
-
-        Ok(response.item.is_some())
-    }
-
-    /// Creates the table. Returns whether there was already a table.
-    /// If `stop_if_exists` is true then an already present table raises an error.
-    ///
-    /// We need that because the `test_table_existence` might return `false`
-    /// from several processes but only one creates it.
-    async fn create_table(&self, stop_if_table_exists: bool) -> Result<bool, DynamoDbContextError> {
-        let _guard = self.acquire().await;
-        let result = self
-            .client
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbContextError> {
+        Self::check_namespace(namespace)?;
+        let client = Client::from_conf(config.config.clone());
+        let _result = client
             .create_table()
-            .table_name(self.table.as_ref())
+            .table_name(namespace)
             .attribute_definitions(
                 AttributeDefinition::builder()
                     .attribute_name(PARTITION_ATTRIBUTE)
@@ -639,24 +443,142 @@ impl DynamoDbStoreInternal {
                     .build()?,
             )
             .send()
-            .await;
-        let Err(error) = result else {
-            return Ok(false);
-        };
-        if stop_if_table_exists {
-            return Err(error.into());
+            .await?;
+        Ok(())
+    }
+
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbContextError> {
+        Self::check_namespace(namespace)?;
+        let client = Client::from_conf(config.config.clone());
+        client.delete_table().table_name(namespace).send().await?;
+        Ok(())
+    }
+}
+
+impl DynamoDbStoreInternal {
+    /// Namespaces are named table names in DynamoDb [naming
+    /// rules](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.NamingRules),
+    /// so we need to check correctness of the namespace
+    fn check_namespace(namespace: &str) -> Result<(), InvalidTableName> {
+        if namespace.len() < 3 {
+            return Err(InvalidTableName::TooShort);
         }
-        let test = match &error {
-            SdkError::ServiceError(error) => {
-                matches!(error.err(), CreateTableError::ResourceInUseException(_))
+        if namespace.len() > 255 {
+            return Err(InvalidTableName::TooLong);
+        }
+        if !namespace.chars().all(|character| {
+            character.is_ascii_alphanumeric()
+                || character == '.'
+                || character == '-'
+                || character == '_'
+        }) {
+            return Err(InvalidTableName::InvalidCharacter);
+        }
+        Ok(())
+    }
+
+    fn build_delete_transact(
+        &self,
+        key: Vec<u8>,
+    ) -> Result<TransactWriteItem, DynamoDbContextError> {
+        ensure!(!key.is_empty(), DynamoDbContextError::ZeroLengthKey);
+        ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbContextError::KeyTooLong);
+        let request = Delete::builder()
+            .table_name(&self.namespace)
+            .set_key(Some(build_key(key)))
+            .build()?;
+        Ok(TransactWriteItem::builder().delete(request).build())
+    }
+
+    fn build_put_transact(
+        &self,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> Result<TransactWriteItem, DynamoDbContextError> {
+        ensure!(!key.is_empty(), DynamoDbContextError::ZeroLengthKey);
+        ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbContextError::KeyTooLong);
+        ensure!(
+            value.len() <= RAW_MAX_VALUE_SIZE,
+            DynamoDbContextError::ValueLengthTooLarge
+        );
+        let request = Put::builder()
+            .table_name(&self.namespace)
+            .set_item(Some(build_key_value(key, value)))
+            .build()?;
+        Ok(TransactWriteItem::builder().put(request).build())
+    }
+
+    /// Obtains the semaphore lock on the database if needed.
+    async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
+        match &self.semaphore {
+            None => None,
+            Some(count) => Some(count.acquire().await),
+        }
+    }
+
+    async fn get_query_output(
+        &self,
+        attribute_str: &str,
+        key_prefix: &[u8],
+        start_key_map: Option<HashMap<String, AttributeValue>>,
+    ) -> Result<QueryOutput, DynamoDbContextError> {
+        let _guard = self.acquire().await;
+        let response = self
+            .client
+            .query()
+            .table_name(&self.namespace)
+            .projection_expression(attribute_str)
+            .key_condition_expression(format!(
+                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
+            ))
+            .expression_attribute_values(
+                ":partition",
+                AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
+            )
+            .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
+            .set_exclusive_start_key(start_key_map)
+            .send()
+            .await?;
+        Ok(response)
+    }
+
+    async fn read_value_bytes_general(
+        &self,
+        key_db: HashMap<String, AttributeValue>,
+    ) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
+        let _guard = self.acquire().await;
+        let response = self
+            .client
+            .get_item()
+            .table_name(&self.namespace)
+            .set_key(Some(key_db))
+            .send()
+            .await?;
+
+        match response.item {
+            Some(mut item) => {
+                let value = extract_value_owned(&mut item)?;
+                Ok(Some(value))
             }
-            _ => false,
-        };
-        if test {
-            Ok(true)
-        } else {
-            Err(error.into())
+            None => Ok(None),
         }
+    }
+
+    async fn contains_key_general(
+        &self,
+        key_db: HashMap<String, AttributeValue>,
+    ) -> Result<bool, DynamoDbContextError> {
+        let _guard = self.acquire().await;
+        let response = self
+            .client
+            .get_item()
+            .table_name(&self.namespace)
+            .set_key(Some(key_db))
+            .projection_expression(PARTITION_ATTRIBUTE)
+            .send()
+            .await?;
+
+        Ok(response.item.is_some())
     }
 
     async fn get_list_responses(
@@ -1018,94 +940,48 @@ impl WritableKeyValueStore<DynamoDbContextError> for DynamoDbStore {
 }
 
 #[async_trait]
-impl KeyValueStore for DynamoDbStore {
-    type Error = DynamoDbContextError;
-}
+impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStore {
+    type Config = DynamoDbStoreConfig;
 
-impl DynamoDbStore {
-    #[cfg(not(feature = "metrics"))]
-    fn get_complete_store(
-        store: JournalingKeyValueStore<DynamoDbStoreInternal>,
-        cache_size: usize,
-    ) -> Self {
-        let store = ValueSplittingStore::new(store);
-        let store = LruCachingStore::new(store, cache_size);
-        Self { store }
-    }
-
-    #[cfg(feature = "metrics")]
-    fn get_complete_store(
-        store: JournalingKeyValueStore<DynamoDbStoreInternal>,
-        cache_size: usize,
-    ) -> Self {
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, DynamoDbContextError> {
+        let cache_size = config.common_config.cache_size;
+        let simple_store = DynamoDbStoreInternal::connect(config, namespace).await?;
+        let store = JournalingKeyValueStore::new(simple_store);
+        #[cfg(feature = "metrics")]
         let store = MeteredStore::new(&DYNAMO_DB_METRICS, store);
         let store = ValueSplittingStore::new(store);
+        #[cfg(feature = "metrics")]
         let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
         let store = LruCachingStore::new(store, cache_size);
+        #[cfg(feature = "metrics")]
         let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
-        Self { store }
+        Ok(Self { store })
     }
 
-    /// Creates a `DynamoDbStore` from scratch with an LRU cache
-    #[cfg(any(test, feature = "test"))]
-    pub async fn new_for_testing(
-        store_config: DynamoDbStoreConfig,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let cache_size = store_config.common_config.cache_size;
-        let (simple_store, table_status) =
-            DynamoDbStoreInternal::new_for_testing(store_config).await?;
-        let store = JournalingKeyValueStore::new(simple_store);
-        let store = Self::get_complete_store(store, cache_size);
-        Ok((store, table_status))
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbContextError> {
+        DynamoDbStoreInternal::list_all(config).await
     }
 
-    /// Initializes a `DynamoDbStore`.
-    pub async fn initialize(
-        store_config: DynamoDbStoreConfig,
-    ) -> Result<Self, DynamoDbContextError> {
-        let cache_size = store_config.common_config.cache_size;
-        let simple_store = DynamoDbStoreInternal::initialize(store_config).await?;
-        let store = JournalingKeyValueStore::new(simple_store);
-        let store = Self::get_complete_store(store, cache_size);
-        Ok(store)
+    async fn delete_all(config: &Self::Config) -> Result<(), DynamoDbContextError> {
+        DynamoDbStoreInternal::delete_all(config).await
     }
 
-    /// Deletes all the tables from the database
-    pub async fn test_existence(
-        store_config: DynamoDbStoreConfig,
-    ) -> Result<bool, DynamoDbContextError> {
-        DynamoDbStoreInternal::test_existence(store_config).await
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, DynamoDbContextError> {
+        DynamoDbStoreInternal::exists(config, namespace).await
     }
 
-    /// List all the tables of the database
-    pub async fn list_tables(
-        store_config: DynamoDbStoreConfig,
-    ) -> Result<Vec<String>, DynamoDbContextError> {
-        DynamoDbStoreInternal::list_tables(store_config).await
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbContextError> {
+        DynamoDbStoreInternal::create(config, namespace).await
     }
 
-    /// Deletes all the tables from the database
-    pub async fn delete_all(store_config: DynamoDbStoreConfig) -> Result<(), DynamoDbContextError> {
-        DynamoDbStoreInternal::delete_all(store_config).await
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbContextError> {
+        DynamoDbStoreInternal::delete(config, namespace).await
     }
+}
 
-    /// Deletes a single table from the database
-    pub async fn delete_single(
-        store_config: DynamoDbStoreConfig,
-    ) -> Result<(), DynamoDbContextError> {
-        DynamoDbStoreInternal::delete_single(store_config).await
-    }
-
-    /// Creates a `DynamoDbStore` with an LRU cache
-    pub async fn new(
-        store_config: DynamoDbStoreConfig,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let cache_size = store_config.common_config.cache_size;
-        let (simple_store, table_name) = DynamoDbStoreInternal::new(store_config).await?;
-        let store = JournalingKeyValueStore::new(simple_store);
-        let store = Self::get_complete_store(store, cache_size);
-        Ok((store, table_name))
-    }
+#[async_trait]
+impl KeyValueStore for DynamoDbStore {
+    type Error = DynamoDbContextError;
 }
 
 /// An implementation of [`Context`][trait1] based on [`DynamoDbStore`].
@@ -1117,71 +993,13 @@ impl<E> DynamoDbContext<E>
 where
     E: Clone + Sync + Send,
 {
-    /// Creates a new [`DynamoDbContext`] instance from scratch from the given AWS configuration.
-    #[cfg(any(test, feature = "test"))]
-    pub async fn new_for_testing(
-        store_config: DynamoDbStoreConfig,
-        base_key: Vec<u8>,
-        extra: E,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (store, table_status) = DynamoDbStore::new_for_testing(store_config).await?;
-        let storage = DynamoDbContext {
-            store,
-            base_key,
-            extra,
-        };
-        Ok((storage, table_status))
-    }
-
     /// Creates a new [`DynamoDbContext`] instance from the given AWS configuration.
-    pub async fn new(
-        store_config: DynamoDbStoreConfig,
-        base_key: Vec<u8>,
-        extra: E,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (store, table_status) = DynamoDbStore::new(store_config).await?;
-        let storage = DynamoDbContext {
+    pub fn new(store: DynamoDbStore, base_key: Vec<u8>, extra: E) -> Self {
+        DynamoDbContext {
             store,
             base_key,
             extra,
-        };
-        Ok((storage, table_status))
-    }
-}
-
-/// A DynamoDB table name.
-///
-/// Table names must follow some [naming
-/// rules](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.NamingRules),
-/// so this type ensures that they are properly validated.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TableName(String);
-
-impl FromStr for TableName {
-    type Err = InvalidTableName;
-
-    fn from_str(string: &str) -> Result<Self, Self::Err> {
-        if string.len() < 3 {
-            return Err(InvalidTableName::TooShort);
         }
-        if string.len() > 255 {
-            return Err(InvalidTableName::TooLong);
-        }
-        if !string.chars().all(|character| {
-            character.is_ascii_alphanumeric()
-                || character == '.'
-                || character == '-'
-                || character == '_'
-        }) {
-            return Err(InvalidTableName::InvalidCharacter);
-        }
-        Ok(TableName(string.to_owned()))
-    }
-}
-
-impl AsRef<String> for TableName {
-    fn as_ref(&self) -> &String {
-        &self.0
     }
 }
 
@@ -1292,6 +1110,10 @@ pub enum DynamoDbContextError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
+    /// A wrong table name error occurred
+    #[error(transparent)]
+    InvalidTableName(#[from] InvalidTableName),
+
     /// An error occurred while creating the table.
     #[error(transparent)]
     CreateTable(#[from] SdkError<CreateTableError>),
@@ -1377,56 +1199,26 @@ pub fn create_dynamo_db_common_config() -> CommonStoreConfig {
     }
 }
 
+/// Creates a configuration for tests
+#[cfg(any(test, feature = "test"))]
+pub async fn create_dynamo_db_test_config() -> DynamoDbStoreConfig {
+    let common_config = create_dynamo_db_common_config();
+    let use_localstack = true;
+    let config = get_config(use_localstack).await.expect("config");
+    DynamoDbStoreConfig {
+        config,
+        common_config,
+    }
+}
+
 /// Creates a basic client that can be used for tests.
 #[cfg(any(test, feature = "test"))]
 pub async fn create_dynamo_db_test_store() -> DynamoDbStore {
-    let common_config = create_dynamo_db_common_config();
-    let table = get_table_name();
-    let table_name = table.parse().expect("Invalid table name");
-    let use_localstack = true;
-    let config = get_config(use_localstack).await.expect("config");
-    let store_config = DynamoDbStoreConfig {
-        config,
-        table_name,
-        common_config,
-    };
-    let (key_value_store, _) = DynamoDbStore::new_for_testing(store_config)
+    let store_config = create_dynamo_db_test_config().await;
+    let namespace = generate_test_namespace();
+    DynamoDbStore::recreate_and_connect(&store_config, &namespace)
         .await
-        .expect("key_value_store");
-    key_value_store
-}
-
-/// Helper function to list the names of tables registered on DynamoDB.
-pub async fn list_tables_from_client(
-    client: &aws_sdk_dynamodb::Client,
-) -> Result<Vec<String>, DynamoDbContextError> {
-    let mut table_names = Vec::new();
-    let mut start_table = None;
-    loop {
-        let response = client
-            .list_tables()
-            .set_exclusive_start_table_name(start_table)
-            .send()
-            .await?;
-        if let Some(table_names_blk) = response.table_names {
-            table_names.extend(table_names_blk);
-        }
-        if response.last_evaluated_table_name.is_none() {
-            break;
-        } else {
-            start_table = response.last_evaluated_table_name;
-        }
-    }
-    Ok(table_names)
-}
-
-/// Helper function to clear all the tables from the database
-pub async fn clear_tables(client: &aws_sdk_dynamodb::Client) -> Result<(), DynamoDbContextError> {
-    let tables = list_tables_from_client(client).await?;
-    for table in tables {
-        client.delete_table().table_name(&table).send().await?;
-    }
-    Ok(())
+        .expect("key_value_store")
 }
 
 #[cfg(test)]

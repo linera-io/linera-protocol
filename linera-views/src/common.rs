@@ -39,15 +39,6 @@ pub(crate) enum Update<T> {
     Set(T),
 }
 
-/// Status of a table at the creation time of a [`KeyValueStore`] instance.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TableStatus {
-    /// Table was created during the construction of the [`KeyValueStore`] instance.
-    New,
-    /// Table already existed when the [`KeyValueStore`] instance was created.
-    Existing,
-}
-
 /// The common initialization parameters for the `KeyValueStore`
 #[derive(Debug, Clone)]
 pub struct CommonStoreConfig {
@@ -367,6 +358,53 @@ pub trait WritableKeyValueStore<E> {
     /// Clears any journal entry that may remain.
     /// The journal is located at the `base_key`.
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), E>;
+}
+
+/// Low-level trait for the administration of stores and their namespaces.
+#[async_trait]
+pub trait AdminKeyValueStore<E: Send>: Sized {
+    /// The configuration needed to interact with a new store.
+    type Config: Send + Sync;
+
+    /// Connects to an existing namespace using the given configuration.
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, E>;
+
+    /// Obtains the list of existing namespaces.
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, E>;
+
+    /// Deletes all the existing namespaces.
+    async fn delete_all(config: &Self::Config) -> Result<(), E> {
+        for namespace in Self::list_all(config).await? {
+            Self::delete(config, &namespace).await?;
+        }
+        Ok(())
+    }
+
+    /// Tests if a given namespace exists.
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, E>;
+
+    /// Creates a namespace. Returns an error if the namespace exists.
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), E>;
+
+    /// Deletes the given namespace.
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), E>;
+
+    /// Initializes a storage if missing and provides it.
+    async fn maybe_create_and_connect(config: &Self::Config, namespace: &str) -> Result<Self, E> {
+        if !Self::exists(config, namespace).await? {
+            Self::create(config, namespace).await?;
+        }
+        Self::connect(config, namespace).await
+    }
+
+    /// Creates a new storage. Overwrites it if this namespace already exists.
+    async fn recreate_and_connect(config: &Self::Config, namespace: &str) -> Result<Self, E> {
+        if Self::exists(config, namespace).await? {
+            Self::delete(config, namespace).await?;
+        }
+        Self::create(config, namespace).await?;
+        Self::connect(config, namespace).await
+    }
 }
 
 /// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.

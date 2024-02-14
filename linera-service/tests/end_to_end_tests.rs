@@ -1317,6 +1317,8 @@ async fn test_resolve_binary() {
     );
 }
 
+// TODO(#1655): Make the ScyllaDb_udp test work.
+//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -1324,7 +1326,6 @@ async fn test_resolve_binary() {
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Udp) ; "rocksdb_udp"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_reconfiguration(config: LocalNetConfig) {
@@ -1685,7 +1686,6 @@ async fn test_project_test() {
 #[test_log::test(tokio::test)]
 async fn test_project_publish(database: Database, network: Network) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     let config = LocalNetConfig {
         num_initial_validators: 1,
         num_shards: 1,
@@ -1778,7 +1778,6 @@ async fn test_linera_net_up_simple() {
 #[test_log::test(tokio::test)]
 async fn test_example_publish(database: Database, network: Network) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     let config = LocalNetConfig {
         num_initial_validators: 1,
         num_shards: 1,

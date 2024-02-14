@@ -13,7 +13,8 @@ use rand::{Rng, RngCore, SeedableRng};
 use std::collections::{BTreeMap, HashSet};
 use tracing::warn;
 
-fn generate_random_alphanumeric_string(length: usize) -> String {
+/// Get a random alphanumeric string that can be used for all tests.
+pub fn generate_random_alphanumeric_string(length: usize) -> String {
     // Define the characters that are allowed in the alphanumeric string
     let charset: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 
@@ -28,12 +29,12 @@ fn generate_random_alphanumeric_string(length: usize) -> String {
     alphanumeric_string
 }
 
-/// Returns a unique table name for testing.
-pub fn get_table_name() -> String {
+/// Returns a unique namespace for testing.
+pub fn generate_test_namespace() -> String {
     let entry = generate_random_alphanumeric_string(20);
-    let table_name = format!("table_{}", entry);
-    warn!("Generating table_name={}", table_name);
-    table_name
+    let namespace = format!("table_{}", entry);
+    warn!("Generating namespace={}", namespace);
+    namespace
 }
 
 /// Returns a random key_prefix used for tests

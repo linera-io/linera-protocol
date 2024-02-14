@@ -5,7 +5,7 @@
 //! The code is functional but some aspects are missing.
 //!
 //! The current connection is done via a Session and a corresponding
-//! primary key that we name `table_name`. The maximum number of
+//! primary key that we name `namespace`. The maximum number of
 //! concurrent queries is controlled by max_concurrent_queries.
 //!
 //! We thus implement the
@@ -19,13 +19,13 @@
 use crate::metering::{MeteredStore, LRU_CACHING_METRICS, SCYLLA_DB_METRICS};
 
 #[cfg(any(test, feature = "test"))]
-use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::get_table_name};
+use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace};
 
 use crate::{
     batch::{Batch, DeletePrefixExpander, UnorderedBatch},
     common::{
-        get_upper_bound_option, CommonStoreConfig, ContextFromStore, KeyValueStore,
-        ReadableKeyValueStore, TableStatus, WritableKeyValueStore,
+        get_upper_bound_option, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
+        KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
     journaling::{
         DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
@@ -49,11 +49,11 @@ use thiserror::Error;
 
 /// The client for ScyllaDb.
 /// * The session allows to pass queries
-/// * The table_name that is being assigned to the database
+/// * The namespace that is being assigned to the database
 /// * The prepared queries used for implementing the features of `KeyValueStore`.
 struct ScyllaDbClient {
     session: Session,
-    table_name: String,
+    namespace: String,
     read_value: Query,
     contains_key: Query,
     write_batch_delete_prefix_unbounded: Query,
@@ -67,58 +67,58 @@ struct ScyllaDbClient {
 }
 
 impl ScyllaDbClient {
-    fn new(session: Session, table_name: String) -> Self {
+    fn new(session: Session, namespace: String) -> Self {
         let query = format!(
             "SELECT v FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
-            table_name
+            namespace
         );
         let read_value = Query::new(query);
         let query = format!(
             "SELECT dummy FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
-            table_name
+            namespace
         );
         let contains_key = Query::new(query);
 
-        let query = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k >= ?", table_name);
+        let query = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k >= ?", namespace);
         let write_batch_delete_prefix_unbounded = Query::new(query);
         let query = format!(
             "DELETE FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ?",
-            table_name
+            namespace
         );
         let write_batch_delete_prefix_bounded = Query::new(query);
-        let query = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k = ?", table_name);
+        let query = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k = ?", namespace);
         let write_batch_deletion = Query::new(query);
         let query = format!(
             "INSERT INTO kv.{} (dummy, k, v) VALUES (0, ?, ?)",
-            table_name
+            namespace
         );
         let write_batch_insertion = Query::new(query);
 
         let query = format!(
             "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
-            table_name
+            namespace
         );
         let find_keys_by_prefix_unbounded = Query::new(query);
         let query = format!(
             "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
-            table_name
+            namespace
         );
         let find_keys_by_prefix_bounded = Query::new(query);
 
         let query = format!(
             "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
-            table_name
+            namespace
         );
         let find_key_values_by_prefix_unbounded = Query::new(query);
         let query = format!(
             "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
-            table_name
+            namespace
         );
         let find_key_values_by_prefix_bounded = Query::new(query);
 
         Self {
             session,
-            table_name,
+            namespace,
             read_value,
             contains_key,
             write_batch_delete_prefix_unbounded,
@@ -474,197 +474,38 @@ impl DirectWritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal
     }
 }
 
-impl DirectKeyValueStore for ScyllaDbStoreInternal {
-    type Error = ScyllaDbContextError;
-}
-
 #[async_trait]
-impl DeletePrefixExpander for ScyllaDbClient {
-    type Error = ScyllaDbContextError;
+impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
+    type Config = ScyllaDbStoreConfig;
 
-    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        self.find_keys_by_prefix_internal(key_prefix.to_vec()).await
-    }
-}
-
-impl ScyllaDbStoreInternal {
-    /// Obtains the semaphore lock on the database if needed.
-    async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
-        match &self.semaphore {
-            None => None,
-            Some(count) => Some(count.acquire().await),
-        }
-    }
-
-    /// Retrieves the table_name from the store
-    pub async fn get_table_name(&self) -> String {
-        let store = self.store.deref();
-        store.table_name.clone()
-    }
-
-    /// Tests if a table is present in the database or not
-    pub async fn test_existence(
-        store_config: ScyllaDbStoreConfig,
-    ) -> Result<bool, ScyllaDbContextError> {
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ScyllaDbContextError> {
+        Self::check_namespace(namespace)?;
         let session = SessionBuilder::new()
-            .known_node(store_config.uri.as_str())
+            .known_node(config.uri.as_str())
             .build()
             .await?;
-        Self::test_table_existence(&session, &store_config.table_name).await
+        let store = ScyllaDbClient::new(session, namespace.to_string());
+        let store = Arc::new(store);
+        let semaphore = config
+            .common_config
+            .max_concurrent_queries
+            .map(|n| Arc::new(Semaphore::new(n)));
+        let max_stream_queries = config.common_config.max_stream_queries;
+        Ok(Self {
+            store,
+            semaphore,
+            max_stream_queries,
+        })
     }
 
-    /// Tests if a table is present in the database or not
-    pub async fn test_table_existence(
-        session: &Session,
-        table_name: &String,
-    ) -> Result<bool, ScyllaDbContextError> {
-        // We check the way the test can fail. It can fail in different ways.
-        let query = format!("SELECT dummy FROM kv.{} ALLOW FILTERING", table_name);
-
-        // Execute the query
-        let result = session.query(query, &[]).await;
-
-        // The missing table translates into a very specific error that we matched
-        let miss_msg1 = format!("unconfigured table {}", table_name);
-        let miss_msg1 = miss_msg1.as_str();
-        let miss_msg2 = "Undefined name dummy in selection clause";
-        let miss_msg3 = "Keyspace kv does not exist";
-        let Err(error) = result else {
-            // If ok, then the table exists
-            return Ok(true);
-        };
-        let test = match &error {
-            QueryError::DbError(db_error, msg) => {
-                if *db_error != DbError::Invalid {
-                    false
-                } else {
-                    msg.as_str() == miss_msg1
-                        || msg.as_str() == miss_msg2
-                        || msg.as_str() == miss_msg3
-                }
-            }
-            _ => false,
-        };
-        if test {
-            Ok(false)
-        } else {
-            Err(ScyllaDbContextError::ScyllaDbQueryError(error))
-        }
-    }
-
-    fn is_allowed_name(table_name: &str) -> bool {
-        !table_name.is_empty()
-            && table_name.len() <= 48
-            && table_name
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_')
-    }
-
-    /// Creates a table, the keyspace might or might not be existing.
-    ///
-    /// For the table itself, we return true if the table already exists
-    /// and false otherwise.
-    /// If `stop_if_table_exists` is true then the existence of a table
-    /// triggers an error.
-    ///
-    /// This is done since if `new` is called two times, `test_table_existence`
-    /// might be called two times which would lead to `create_table` called
-    /// two times.
-    async fn create_table(
-        session: &Session,
-        table_name: &String,
-        stop_if_table_exists: bool,
-    ) -> Result<bool, ScyllaDbContextError> {
-        if !Self::is_allowed_name(table_name) {
-            return Err(ScyllaDbContextError::InvalidTableName);
-        }
-        // Create a keyspace if it doesn't exist
-        let query = "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }";
-        session.query(query, &[]).await?;
-
-        // Create a table if it doesn't exist
-        // The schema appears too complicated for non-trivial reasons.
-        // See TODO(#1069).
-        let query = format!(
-            "CREATE TABLE kv.{} (dummy int, k blob, v blob, primary key (dummy, k))",
-            table_name
-        );
-        let result = session.query(query, &[]).await;
-
-        let Err(error) = result else {
-            return Ok(false);
-        };
-        if stop_if_table_exists {
-            return Err(error.into());
-        }
-        let test = match &error {
-            QueryError::DbError(DbError::AlreadyExists { keyspace, table }, mesg) => {
-                keyspace == "kv"
-                    && *table == format!("table_{}", table_name)
-                    && mesg.starts_with("Cannot add already existing table")
-            }
-            _ => false,
-        };
-        if test {
-            Ok(true)
-        } else {
-            Err(error.into())
-        }
-    }
-
-    #[cfg(any(test, feature = "test"))]
-    async fn new_for_testing(
-        store_config: ScyllaDbStoreConfig,
-    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbContextError> {
         let session = SessionBuilder::new()
-            .known_node(store_config.uri.as_str())
-            .build()
-            .await?;
-        if Self::test_table_existence(&session, &store_config.table_name).await? {
-            let query = format!("DROP TABLE kv.{};", store_config.table_name);
-            session.query(query, &[]).await?;
-        }
-        let stop_if_table_exists = true;
-        let create_if_missing = true;
-        Self::new_internal(
-            session,
-            store_config,
-            stop_if_table_exists,
-            create_if_missing,
-        )
-        .await
-    }
-
-    async fn initialize(store_config: ScyllaDbStoreConfig) -> Result<Self, ScyllaDbContextError> {
-        let session = SessionBuilder::new()
-            .known_node(store_config.uri.as_str())
-            .build()
-            .await?;
-        let stop_if_table_exists = false;
-        let create_if_missing = true;
-        let (store, table_status) = Self::new_internal(
-            session,
-            store_config,
-            stop_if_table_exists,
-            create_if_missing,
-        )
-        .await?;
-        if table_status == TableStatus::Existing {
-            return Err(ScyllaDbContextError::AlreadyExistingDatabase);
-        }
-        Ok(store)
-    }
-
-    async fn list_tables(
-        store_config: ScyllaDbStoreConfig,
-    ) -> Result<Vec<String>, ScyllaDbContextError> {
-        let session = SessionBuilder::new()
-            .known_node(store_config.uri.as_str())
+            .known_node(config.uri.as_str())
             .build()
             .await?;
         let miss_msg = "'kv' not found in keyspaces";
         let mut paging_state = None;
-        let mut table_names = Vec::new();
+        let mut namespaces = Vec::new();
         loop {
             let result = session
                 .query_paged("DESCRIBE KEYSPACE kv", &[], paging_state)
@@ -692,20 +533,20 @@ impl ScyllaDbStoreInternal {
                 // * The third column is the name
                 // * The fourth column is the command that built it.
                 for row in rows.into_typed::<(String, String, String, String)>() {
-                    let value = row?;
-                    if value.1 == "table" {
-                        table_names.push(value.2);
+                    let (_, object_kind, name, _) = row?;
+                    if object_kind == "table" {
+                        namespaces.push(name);
                     }
                 }
             }
             if result.paging_state.is_none() {
-                return Ok(table_names);
+                return Ok(namespaces);
             }
             paging_state = result.paging_state;
         }
     }
 
-    async fn delete_all(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
+    async fn delete_all(store_config: &Self::Config) -> Result<(), ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
@@ -715,72 +556,120 @@ impl ScyllaDbStoreInternal {
         Ok(())
     }
 
-    async fn delete_single(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ScyllaDbContextError> {
+        Self::check_namespace(namespace)?;
         let session = SessionBuilder::new()
-            .known_node(store_config.uri.as_str())
+            .known_node(config.uri.as_str())
             .build()
             .await?;
-        let query = format!("DROP TABLE IF EXISTS kv.{};", store_config.table_name);
+        // We check the way the test can fail. It can fail in different ways.
+        let query = format!("SELECT dummy FROM kv.{} ALLOW FILTERING", namespace);
+
+        // Execute the query
+        let result = session.query(query, &[]).await;
+
+        // The missing table translates into a very specific error that we matched
+        let miss_msg1 = format!("unconfigured table {}", namespace);
+        let miss_msg1 = miss_msg1.as_str();
+        let miss_msg2 = "Undefined name dummy in selection clause";
+        let miss_msg3 = "Keyspace kv does not exist";
+        let Err(error) = result else {
+            // If ok, then the table exists
+            return Ok(true);
+        };
+        let missing_table = match &error {
+            QueryError::DbError(db_error, msg) => {
+                if *db_error != DbError::Invalid {
+                    false
+                } else {
+                    msg.as_str() == miss_msg1
+                        || msg.as_str() == miss_msg2
+                        || msg.as_str() == miss_msg3
+                }
+            }
+            _ => false,
+        };
+        if missing_table {
+            Ok(false)
+        } else {
+            Err(ScyllaDbContextError::ScyllaDbQueryError(error))
+        }
+    }
+
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbContextError> {
+        Self::check_namespace(namespace)?;
+        let session = SessionBuilder::new()
+            .known_node(config.uri.as_str())
+            .build()
+            .await?;
+        // Create a keyspace if it doesn't exist
+        let query = "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = { \
+            'class' : 'SimpleStrategy', \
+            'replication_factor' : 1 \
+        }";
         session.query(query, &[]).await?;
+
+        // Create a table if it doesn't exist
+        // The schema appears too complicated for non-trivial reasons.
+        // See TODO(#1069).
+        let query = format!(
+            "CREATE TABLE kv.{} (dummy int, k blob, v blob, primary key (dummy, k))",
+            namespace
+        );
+        let _query = session.query(query, &[]).await?;
         Ok(())
     }
 
-    async fn new(
-        store_config: ScyllaDbStoreConfig,
-    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbContextError> {
+        Self::check_namespace(namespace)?;
         let session = SessionBuilder::new()
-            .known_node(store_config.uri.as_str())
+            .known_node(config.uri.as_str())
             .build()
             .await?;
-        let stop_if_table_exists = false;
-        let create_if_missing = false;
-        Self::new_internal(
-            session,
-            store_config,
-            stop_if_table_exists,
-            create_if_missing,
-        )
-        .await
+        let query = format!("DROP TABLE IF EXISTS kv.{};", namespace);
+        session.query(query, &[]).await?;
+        Ok(())
+    }
+}
+
+impl DirectKeyValueStore for ScyllaDbStoreInternal {
+    type Error = ScyllaDbContextError;
+}
+
+#[async_trait]
+impl DeletePrefixExpander for ScyllaDbClient {
+    type Error = ScyllaDbContextError;
+
+    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
+        self.find_keys_by_prefix_internal(key_prefix.to_vec()).await
+    }
+}
+
+impl ScyllaDbStoreInternal {
+    /// Obtains the semaphore lock on the database if needed.
+    async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
+        match &self.semaphore {
+            None => None,
+            Some(count) => Some(count.acquire().await),
+        }
     }
 
-    async fn new_internal(
-        session: Session,
-        store_config: ScyllaDbStoreConfig,
-        stop_if_table_exists: bool,
-        create_if_missing: bool,
-    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
-        // Create a session builder and specify the ScyllaDB contact points
-        let kv_name = format!("{:?}", store_config);
-        let mut existing_table =
-            Self::test_table_existence(&session, &store_config.table_name).await?;
-        if !existing_table {
-            if create_if_missing {
-                existing_table =
-                    Self::create_table(&session, &store_config.table_name, stop_if_table_exists)
-                        .await?;
-            } else {
-                tracing::info!("ScyllaDb: Missing database for kv_name={}", kv_name);
-                return Err(ScyllaDbContextError::MissingDatabase(kv_name));
-            }
+    /// Retrieves the table_name from the store
+    pub async fn get_namespace(&self) -> String {
+        let store = self.store.deref();
+        store.namespace.clone()
+    }
+
+    fn check_namespace(namespace: &str) -> Result<(), ScyllaDbContextError> {
+        if !namespace.is_empty()
+            && namespace.len() <= 48
+            && namespace
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            return Ok(());
         }
-        let table_status = if existing_table {
-            TableStatus::Existing
-        } else {
-            TableStatus::New
-        };
-        let store = ScyllaDbClient::new(session, store_config.table_name);
-        let store = Arc::new(store);
-        let semaphore = store_config
-            .common_config
-            .max_concurrent_queries
-            .map(|n| Arc::new(Semaphore::new(n)));
-        let max_stream_queries = store_config.common_config.max_stream_queries;
-        let store = Self {
-            store,
-            semaphore,
-            max_stream_queries,
-        };
-        Ok((store, table_status))
+        Err(ScyllaDbContextError::InvalidTableName)
     }
 }
 
@@ -799,8 +688,6 @@ pub struct ScyllaDbStore {
 pub struct ScyllaDbStoreConfig {
     /// The url to which the requests have to be sent
     pub uri: String,
-    /// The name of the table that we create
-    pub table_name: String,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
 }
@@ -861,6 +748,43 @@ impl WritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
     }
 }
 
+#[async_trait]
+impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
+    type Config = ScyllaDbStoreConfig;
+
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ScyllaDbContextError> {
+        let cache_size = config.common_config.cache_size;
+        let simple_store = ScyllaDbStoreInternal::connect(config, namespace).await?;
+        let store = JournalingKeyValueStore::new(simple_store);
+        #[cfg(feature = "metrics")]
+        let store = MeteredStore::new(&SCYLLA_DB_METRICS, store);
+        let store = LruCachingStore::new(store, cache_size);
+        #[cfg(feature = "metrics")]
+        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
+        Ok(Self { store })
+    }
+
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbContextError> {
+        ScyllaDbStoreInternal::list_all(config).await
+    }
+
+    async fn delete_all(config: &Self::Config) -> Result<(), ScyllaDbContextError> {
+        ScyllaDbStoreInternal::delete_all(config).await
+    }
+
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ScyllaDbContextError> {
+        ScyllaDbStoreInternal::exists(config, namespace).await
+    }
+
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbContextError> {
+        ScyllaDbStoreInternal::create(config, namespace).await
+    }
+
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbContextError> {
+        ScyllaDbStoreInternal::delete(config, namespace).await
+    }
+}
+
 impl KeyValueStore for ScyllaDbStore {
     type Error = ScyllaDbContextError;
 }
@@ -868,95 +792,14 @@ impl KeyValueStore for ScyllaDbStore {
 impl ScyllaDbStore {
     /// Gets the table name of the ScyllaDB store.
     #[cfg(not(feature = "metrics"))]
-    pub async fn get_table_name(&self) -> String {
-        self.store.store.store.get_table_name().await
+    pub async fn get_namespace(&self) -> String {
+        self.store.store.store.get_namespace().await
     }
 
     /// Gets the table name of the ScyllaDB store.
     #[cfg(feature = "metrics")]
-    pub async fn get_table_name(&self) -> String {
-        self.store.store.store.store.store.get_table_name().await
-    }
-
-    #[cfg(not(feature = "metrics"))]
-    fn get_complete_store(
-        store: JournalingKeyValueStore<ScyllaDbStoreInternal>,
-        cache_size: usize,
-    ) -> Self {
-        let store = LruCachingStore::new(store, cache_size);
-        Self { store }
-    }
-
-    #[cfg(feature = "metrics")]
-    fn get_complete_store(
-        store: JournalingKeyValueStore<ScyllaDbStoreInternal>,
-        cache_size: usize,
-    ) -> Self {
-        let store = MeteredStore::new(&SCYLLA_DB_METRICS, store);
-        let store = LruCachingStore::new(store, cache_size);
-        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
-        Self { store }
-    }
-
-    /// Creates a [`ScyllaDbStore`] from the input parameters.
-    #[cfg(any(test, feature = "test"))]
-    pub async fn new_for_testing(
-        store_config: ScyllaDbStoreConfig,
-    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
-        let cache_size = store_config.common_config.cache_size;
-        let (simple_store, table_status) =
-            ScyllaDbStoreInternal::new_for_testing(store_config).await?;
-        let store = JournalingKeyValueStore::new(simple_store);
-        let store = Self::get_complete_store(store, cache_size);
-        Ok((store, table_status))
-    }
-
-    /// Creates a [`ScyllaDbStore`] from the input parameters.
-    pub async fn initialize(
-        store_config: ScyllaDbStoreConfig,
-    ) -> Result<Self, ScyllaDbContextError> {
-        let cache_size = store_config.common_config.cache_size;
-        let simple_store = ScyllaDbStoreInternal::initialize(store_config).await?;
-        let store = JournalingKeyValueStore::new(simple_store);
-        let store = Self::get_complete_store(store, cache_size);
-        Ok(store)
-    }
-
-    /// Delete all the tables of a database
-    pub async fn test_existence(
-        store_config: ScyllaDbStoreConfig,
-    ) -> Result<bool, ScyllaDbContextError> {
-        ScyllaDbStoreInternal::test_existence(store_config).await
-    }
-
-    /// Delete all the tables of a database
-    pub async fn delete_all(store_config: ScyllaDbStoreConfig) -> Result<(), ScyllaDbContextError> {
-        ScyllaDbStoreInternal::delete_all(store_config).await
-    }
-
-    /// Delete all the tables of a database
-    pub async fn list_tables(
-        store_config: ScyllaDbStoreConfig,
-    ) -> Result<Vec<String>, ScyllaDbContextError> {
-        ScyllaDbStoreInternal::list_tables(store_config).await
-    }
-
-    /// Deletes a single table from the database
-    pub async fn delete_single(
-        store_config: ScyllaDbStoreConfig,
-    ) -> Result<(), ScyllaDbContextError> {
-        ScyllaDbStoreInternal::delete_single(store_config).await
-    }
-
-    /// Creates a [`ScyllaDbStore`] from the input parameters.
-    pub async fn new(
-        store_config: ScyllaDbStoreConfig,
-    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
-        let cache_size = store_config.common_config.cache_size;
-        let (simple_store, table_status) = ScyllaDbStoreInternal::new(store_config).await?;
-        let store = JournalingKeyValueStore::new(simple_store);
-        let store = Self::get_complete_store(store, cache_size);
-        Ok((store, table_status))
+    pub async fn get_namespace(&self) -> String {
+        self.store.store.store.store.store.get_namespace().await
     }
 }
 
@@ -970,21 +813,22 @@ pub fn create_scylla_db_common_config() -> CommonStoreConfig {
     }
 }
 
+/// Creates a ScyllaDB test store config
+#[cfg(any(test, feature = "test"))]
+pub async fn create_scylla_db_test_config() -> ScyllaDbStoreConfig {
+    let uri = "localhost:9042".to_string();
+    let common_config = create_scylla_db_common_config();
+    ScyllaDbStoreConfig { uri, common_config }
+}
+
 /// Creates a ScyllaDB test store.
 #[cfg(any(test, feature = "test"))]
 pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
-    let uri = "localhost:9042".to_string();
-    let table_name = get_table_name();
-    let common_config = create_scylla_db_common_config();
-    let store_config = ScyllaDbStoreConfig {
-        uri,
-        table_name,
-        common_config,
-    };
-    let (store, _) = ScyllaDbStore::new_for_testing(store_config)
+    let config = create_scylla_db_test_config().await;
+    let namespace = generate_test_namespace();
+    ScyllaDbStore::recreate_and_connect(&config, &namespace)
         .await
-        .expect("store");
-    store
+        .expect("store")
 }
 
 /// An implementation of [`crate::common::Context`] based on ScyllaDB
@@ -999,12 +843,4 @@ impl<E: Clone + Send + Sync> ScyllaDbContext<E> {
             extra,
         }
     }
-}
-
-/// Creates a [`crate::common::Context`] for testing purposes.
-#[cfg(any(test, feature = "test"))]
-pub async fn create_scylla_db_test_context() -> ScyllaDbContext<()> {
-    let base_key = vec![];
-    let db = create_scylla_db_test_store().await;
-    ScyllaDbContext::new(db, base_key, ())
 }

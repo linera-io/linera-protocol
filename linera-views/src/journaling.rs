@@ -20,7 +20,8 @@
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     common::{
-        KeyIterable, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore, MIN_VIEW_TAG,
+        AdminKeyValueStore, KeyIterable, KeyValueStore, ReadableKeyValueStore,
+        WritableKeyValueStore, MIN_VIEW_TAG,
     },
 };
 use async_trait::async_trait;
@@ -155,6 +156,40 @@ where
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, K::Error> {
         self.store.find_key_values_by_prefix(key_prefix).await
+    }
+}
+
+#[async_trait]
+impl<K, E> AdminKeyValueStore<E> for JournalingKeyValueStore<K>
+where
+    K: AdminKeyValueStore<E> + Send + Sync,
+    E: Send,
+{
+    type Config = K::Config;
+
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, E> {
+        let store = K::connect(config, namespace).await?;
+        Ok(Self { store })
+    }
+
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, E> {
+        K::list_all(config).await
+    }
+
+    async fn delete_all(config: &Self::Config) -> Result<(), E> {
+        K::delete_all(config).await
+    }
+
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, E> {
+        K::exists(config, namespace).await
+    }
+
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), E> {
+        K::create(config, namespace).await
+    }
+
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), E> {
+        K::delete(config, namespace).await
     }
 }
 

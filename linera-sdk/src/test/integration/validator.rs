@@ -9,6 +9,7 @@
 use super::ActiveChain;
 use crate::ContractAbi;
 use dashmap::DashMap;
+use futures::FutureExt;
 use linera_base::{
     crypto::KeyPair,
     data_types::Timestamp,
@@ -20,7 +21,7 @@ use linera_execution::{
     WasmRuntime,
 };
 use linera_storage::{MemoryStorage, Storage, WallClock};
-use linera_views::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
+use linera_views::memory::{MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES};
 use std::sync::{
     atomic::{AtomicU32, Ordering},
     Arc,
@@ -49,11 +50,13 @@ impl Default for TestValidator {
     fn default() -> Self {
         let key_pair = KeyPair::generate();
         let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
-        let storage = MemoryStorage::new(
-            Some(WasmRuntime::default()),
-            TEST_MEMORY_MAX_STREAM_QUERIES,
-            WallClock,
-        );
+        let store_config = MemoryStoreConfig::new(TEST_MEMORY_MAX_STREAM_QUERIES);
+        let namespace = "validator";
+        let wasm_runtime = Some(WasmRuntime::default());
+        let storage = MemoryStorage::new(store_config, namespace, wasm_runtime)
+            .now_or_never()
+            .expect("execution of MemoryStorage::new should not await anything")
+            .expect("storage");
 
         let worker = WorkerState::new(
             "Single validator node".to_string(),

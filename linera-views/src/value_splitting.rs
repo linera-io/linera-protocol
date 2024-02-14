@@ -4,12 +4,13 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable, KeyValueStore,
-        ReadableKeyValueStore, WritableKeyValueStore,
+        AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
+        KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
     memory::{MemoryContextError, MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
 };
 use async_trait::async_trait;
+use futures::FutureExt;
 use linera_base::ensure;
 use std::fmt::Debug;
 use thiserror::Error;
@@ -239,6 +240,40 @@ where
     }
 }
 
+#[async_trait]
+impl<K, E> AdminKeyValueStore<E> for ValueSplittingStore<K>
+where
+    K: AdminKeyValueStore<E> + Send + Sync,
+    E: Send,
+{
+    type Config = K::Config;
+
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, E> {
+        let store = K::connect(config, namespace).await?;
+        Ok(Self { store })
+    }
+
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, E> {
+        K::list_all(config).await
+    }
+
+    async fn delete_all(config: &Self::Config) -> Result<(), E> {
+        K::delete_all(config).await
+    }
+
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, E> {
+        K::exists(config, namespace).await
+    }
+
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), E> {
+        K::create(config, namespace).await
+    }
+
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), E> {
+        K::delete(config, namespace).await
+    }
+}
+
 impl<K> KeyValueStore for ValueSplittingStore<K>
 where
     K: KeyValueStore + Send + Sync,
@@ -370,7 +405,7 @@ impl KeyValueStore for TestMemoryStoreInternal {
 }
 
 impl TestMemoryStoreInternal {
-    /// Creates a `TestMemoryStore` from the guard
+    /// Creates a `TestMemoryStoreInternal`
     pub fn new() -> Self {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: None,
@@ -378,7 +413,11 @@ impl TestMemoryStoreInternal {
             cache_size: 1000,
         };
         let config = MemoryStoreConfig { common_config };
-        let store = MemoryStore::new(config);
+        let namespace = "linera";
+        let store = MemoryStore::connect(&config, namespace)
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         TestMemoryStoreInternal { store }
     }
 }

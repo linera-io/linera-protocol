@@ -52,8 +52,8 @@ use {
     linera_views::scylla_db::ScyllaDbStoreConfig,
 };
 
-#[cfg(any(feature = "aws", feature = "scylladb"))]
-use linera_views::test_utils::get_table_name;
+#[cfg(any(feature = "aws", feature = "scylladb", feature = "rocksdb"))]
+use linera_views::test_utils::generate_test_namespace;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum FaultType {
@@ -646,11 +646,12 @@ impl StorageBuilder for MakeMemoryStorage {
     type Storage = MemoryStorage<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        Ok(MemoryStorage::new(
+        Ok(MemoryStorage::new_for_testing(
             self.wasm_runtime,
             TEST_MEMORY_MAX_STREAM_QUERIES,
             self.clock.clone(),
-        ))
+        )
+        .await?)
     }
 
     fn clock(&self) -> &TestClock {
@@ -705,9 +706,14 @@ impl StorageBuilder for MakeRocksDbStorage {
             path_buf,
             common_config,
         };
-        let (storage, _) =
-            RocksDbStorage::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
-                .await?;
+        let namespace = generate_test_namespace();
+        let storage = RocksDbStorage::new_for_testing(
+            store_config,
+            &namespace,
+            self.wasm_runtime,
+            self.clock.clone(),
+        )
+        .await?;
         Ok(storage)
     }
 
@@ -748,19 +754,21 @@ impl StorageBuilder for MakeDynamoDbStorage {
             self.localstack = Some(LocalStackTestContext::new().await?);
         }
         let config = self.localstack.as_ref().unwrap().dynamo_db_config();
-        let table = get_table_name();
-        let table = format!("{}_{}", table, self.instance_counter);
-        let table_name = table.parse()?;
+        let namespace = generate_test_namespace();
+        let namespace = format!("{}_{}", namespace, self.instance_counter);
         let common_config = create_dynamo_db_common_config();
         let store_config = DynamoDbStoreConfig {
             config,
-            table_name,
             common_config,
         };
         self.instance_counter += 1;
-        let (storage, _) =
-            DynamoDbStorage::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
-                .await?;
+        let storage = DynamoDbStorage::new_for_testing(
+            store_config,
+            &namespace,
+            self.wasm_runtime,
+            self.clock.clone(),
+        )
+        .await?;
         Ok(storage)
     }
 
@@ -813,17 +821,20 @@ impl StorageBuilder for MakeScyllaDbStorage {
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
         self.instance_counter += 1;
-        let table_name = get_table_name();
-        let table_name = format!("{}_{}", table_name, self.instance_counter);
+        let namespace = generate_test_namespace();
+        let namespace = format!("{}_{}", namespace, self.instance_counter);
         let common_config = create_scylla_db_common_config();
         let store_config = ScyllaDbStoreConfig {
             uri: self.uri.clone(),
-            table_name,
             common_config,
         };
-        let (storage, _) =
-            ScyllaDbStorage::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
-                .await?;
+        let storage = ScyllaDbStorage::new_for_testing(
+            store_config,
+            &namespace,
+            self.wasm_runtime,
+            self.clock.clone(),
+        )
+        .await?;
         Ok(storage)
     }
 

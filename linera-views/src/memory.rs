@@ -4,14 +4,15 @@
 use crate::{
     batch::{Batch, DeletePrefixExpander, WriteOperation},
     common::{
-        get_interval, CommonStoreConfig, Context, ContextFromStore, KeyIterable, KeyValueStore,
-        ReadableKeyValueStore, WritableKeyValueStore,
+        get_interval, AdminKeyValueStore, CommonStoreConfig, Context, ContextFromStore,
+        KeyIterable, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
 };
 use async_lock::{Mutex, MutexGuardArc, RwLock};
 use async_trait::async_trait;
+use futures::FutureExt;
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use thiserror::Error;
 
@@ -20,6 +21,18 @@ use thiserror::Error;
 pub struct MemoryStoreConfig {
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
+}
+
+impl MemoryStoreConfig {
+    /// Creates a `MemoryStoreConfig`. `max_concurrent_queries` and `cache_size` are not used.
+    pub fn new(max_stream_queries: usize) -> Self {
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries: None,
+            max_stream_queries,
+            cache_size: 1000,
+        };
+        Self { common_config }
+    }
 }
 
 /// The number of streams for the test
@@ -131,24 +144,42 @@ impl WritableKeyValueStore<MemoryContextError> for MemoryStore {
     }
 }
 
-impl KeyValueStore for MemoryStore {
-    type Error = MemoryContextError;
-}
+#[async_trait]
+impl AdminKeyValueStore<MemoryContextError> for MemoryStore {
+    type Config = MemoryStoreConfig;
 
-impl MemoryStore {
-    /// Creates a `MemoryStore` from a `MemoryStoreConfig`.
-    pub fn new(memory_store_config: MemoryStoreConfig) -> Self {
+    async fn connect(config: &Self::Config, _namespace: &str) -> Result<Self, MemoryContextError> {
         let state = Arc::new(Mutex::new(BTreeMap::new()));
         let guard = state
             .try_lock_arc()
             .expect("We should acquire the lock just after creating the object");
-        let max_stream_queries = memory_store_config.common_config.max_stream_queries;
+        let max_stream_queries = config.common_config.max_stream_queries;
         let map = Arc::new(RwLock::new(guard));
-        MemoryStore {
+        Ok(MemoryStore {
             map,
             max_stream_queries,
-        }
+        })
     }
+
+    async fn list_all(_config: &Self::Config) -> Result<Vec<String>, MemoryContextError> {
+        Ok(Vec::new())
+    }
+
+    async fn exists(_config: &Self::Config, _namespace: &str) -> Result<bool, MemoryContextError> {
+        Ok(false)
+    }
+
+    async fn create(_config: &Self::Config, _namespace: &str) -> Result<(), MemoryContextError> {
+        Ok(())
+    }
+
+    async fn delete(_config: &Self::Config, _namespace: &str) -> Result<(), MemoryContextError> {
+        Ok(())
+    }
+}
+
+impl KeyValueStore for MemoryStore {
+    type Error = MemoryContextError;
 }
 
 /// An implementation of [`crate::common::Context`] that stores all values in memory.
@@ -163,7 +194,11 @@ impl<E> MemoryContext<E> {
             cache_size: 1000,
         };
         let config = MemoryStoreConfig { common_config };
-        let store = MemoryStore::new(config);
+        let namespace = "linera";
+        let store = MemoryStore::connect(&config, namespace)
+            .now_or_never()
+            .unwrap()
+            .unwrap();
         let base_key = Vec::new();
         Self {
             store,
@@ -188,7 +223,11 @@ pub fn create_memory_store_stream_queries(max_stream_queries: usize) -> MemorySt
         cache_size: 1000,
     };
     let config = MemoryStoreConfig { common_config };
-    MemoryStore::new(config)
+    let namespace = "linera";
+    MemoryStore::connect(&config, namespace)
+        .now_or_never()
+        .unwrap()
+        .unwrap()
 }
 
 /// Creates a test memory store for working.

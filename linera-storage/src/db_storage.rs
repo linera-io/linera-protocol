@@ -20,7 +20,7 @@ use linera_execution::{
 };
 use linera_views::{
     batch::Batch,
-    common::{ContextFromStore, KeyValueStore},
+    common::{AdminKeyValueStore, ContextFromStore, KeyValueStore},
     value_splitting::DatabaseConsistencyError,
     views::{View, ViewError},
 };
@@ -115,7 +115,18 @@ pub struct DbStorageInner<Client> {
     wasm_runtime: Option<WasmRuntime>,
 }
 
-impl<Client> DbStorageInner<Client> {
+impl<Client> DbStorageInner<Client>
+where
+    Client: KeyValueStore
+        + AdminKeyValueStore<<Client as KeyValueStore>::Error>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    ViewError: From<<Client as KeyValueStore>::Error>,
+    <Client as KeyValueStore>::Error:
+        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+{
     pub(crate) fn new(client: Client, wasm_runtime: Option<WasmRuntime>) -> Self {
         Self {
             client,
@@ -124,6 +135,37 @@ impl<Client> DbStorageInner<Client> {
             user_services: Arc::new(DashMap::new()),
             wasm_runtime,
         }
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    pub async fn new_for_testing(
+        store_config: Client::Config,
+        namespace: &str,
+        wasm_runtime: Option<WasmRuntime>,
+    ) -> Result<Self, <Client as KeyValueStore>::Error> {
+        let client = Client::recreate_and_connect(&store_config, namespace).await?;
+        let storage = Self::new(client, wasm_runtime);
+        Ok(storage)
+    }
+
+    pub async fn initialize(
+        store_config: Client::Config,
+        namespace: &str,
+        wasm_runtime: Option<WasmRuntime>,
+    ) -> Result<Self, <Client as KeyValueStore>::Error> {
+        let store = Client::maybe_create_and_connect(&store_config, namespace).await?;
+        let storage = Self::new(store, wasm_runtime);
+        Ok(storage)
+    }
+
+    pub async fn make(
+        store_config: Client::Config,
+        namespace: &str,
+        wasm_runtime: Option<WasmRuntime>,
+    ) -> Result<Self, <Client as KeyValueStore>::Error> {
+        let client = Client::connect(&store_config, namespace).await?;
+        let storage = Self::new(client, wasm_runtime);
+        Ok(storage)
     }
 }
 
@@ -363,5 +405,45 @@ where
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
         self.client.client.write_batch(batch, &[]).await?;
         Ok(())
+    }
+
+    pub fn create(storage: DbStorageInner<Client>, clock: C) -> Self {
+        Self {
+            client: Arc::new(storage),
+            clock,
+            execution_runtime_config: ExecutionRuntimeConfig::default(),
+        }
+    }
+}
+
+impl<Client> DbStorage<Client, WallClock>
+where
+    Client: KeyValueStore
+        + AdminKeyValueStore<<Client as KeyValueStore>::Error>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    ViewError: From<<Client as KeyValueStore>::Error>,
+    <Client as KeyValueStore>::Error:
+        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+{
+    pub async fn initialize(
+        store_config: Client::Config,
+        namespace: &str,
+        wasm_runtime: Option<WasmRuntime>,
+    ) -> Result<Self, <Client as KeyValueStore>::Error> {
+        let storage =
+            DbStorageInner::<Client>::initialize(store_config, namespace, wasm_runtime).await?;
+        Ok(Self::create(storage, WallClock))
+    }
+
+    pub async fn new(
+        store_config: Client::Config,
+        namespace: &str,
+        wasm_runtime: Option<WasmRuntime>,
+    ) -> Result<Self, <Client as KeyValueStore>::Error> {
+        let storage = DbStorageInner::<Client>::make(store_config, namespace, wasm_runtime).await?;
+        Ok(Self::create(storage, WallClock))
     }
 }
