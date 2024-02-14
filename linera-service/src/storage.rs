@@ -89,7 +89,8 @@ pub enum StorageConfig {
     },
 }
 
-const MEMORY: &str = "memory:";
+const MEMORY: &str = "memory";
+const MEMORY_EXT: &str = "memory:";
 #[cfg(feature = "rocksdb")]
 const ROCKS_DB: &str = "rocksdb:";
 #[cfg(feature = "aws")]
@@ -101,7 +102,11 @@ impl FromStr for StorageConfig {
     type Err = anyhow::Error;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        if let Some(s) = input.strip_prefix(MEMORY) {
+        if input == MEMORY {
+            let namespace = DEFAULT_NAMESPACE.to_string();
+            return Ok(Self::Memory { namespace });
+        }
+        if let Some(s) = input.strip_prefix(MEMORY_EXT) {
             let namespace = s.to_string();
             return Ok(Self::Memory { namespace });
         }
@@ -461,6 +466,12 @@ fn test_memory_storage_config_from_str() {
         StorageConfig::from_str("memory:").unwrap(),
         StorageConfig::Memory {
             namespace: "".into()
+        }
+    );
+    assert_eq!(
+        StorageConfig::from_str("memory").unwrap(),
+        StorageConfig::Memory {
+            namespace: DEFAULT_NAMESPACE.into()
         }
     );
     assert_eq!(

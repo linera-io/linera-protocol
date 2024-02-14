@@ -51,8 +51,7 @@ async fn admin_test<E: Debug + Send, S: AdminKeyValueStore<E>>(config: &S::Confi
         S::create(config, namespace)
             .await
             .expect("creation of a namespace");
-        let test = S::exists(config, namespace).await.expect("test");
-        assert!(test);
+        assert!(S::exists(config, namespace).await.expect("test"));
     }
     // Listing all of them
     let namespaces = namespaces_with_prefix::<E, S>(config, &prefix).await;
@@ -66,16 +65,14 @@ async fn admin_test<E: Debug + Send, S: AdminKeyValueStore<E>>(config: &S::Confi
             S::delete(config, &namespace)
                 .await
                 .expect("A successful deletion");
-            let test = S::exists(config, &namespace).await.expect("test");
-            assert!(!test);
+            assert!(!S::exists(config, &namespace).await.expect("test"));
             deleted_namespaces.insert(namespace);
         } else {
             kept_namespaces.insert(namespace);
         }
     }
     for namespace in &kept_namespaces {
-        let test = S::exists(config, namespace).await.expect("test");
-        assert!(test);
+        assert!(S::exists(config, namespace).await.expect("test"));
     }
     let namespaces = namespaces_with_prefix::<E, S>(config, &prefix).await;
     assert_eq!(namespaces, kept_namespaces);
