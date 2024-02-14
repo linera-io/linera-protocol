@@ -575,11 +575,9 @@ where
                     Some(owner) => self.balances.get_mut_or_default(owner).await?,
                     None => self.balance.get_mut(),
                 };
-                ensure!(
-                    *balance >= amount,
-                    SystemExecutionError::InsufficientFunding { balance: *balance }
-                );
-                balance.try_sub_assign(amount)?;
+                balance
+                    .try_sub_assign(amount)
+                    .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
                 if let Recipient::Account(account) = recipient {
                     let message = RawOutgoingMessage {
                         destination: Destination::Recipient(account.chain_id),
@@ -820,7 +818,9 @@ where
                 );
 
                 let balance = self.balances.get_mut_or_default(&owner).await?;
-                balance.try_sub_assign(amount)?;
+                balance
+                    .try_sub_assign(amount)
+                    .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
                 match recipient {
                     Recipient::Account(account) => {
                         let message = RawOutgoingMessage {
