@@ -4,7 +4,7 @@
 use anyhow::Context;
 use async_trait::async_trait;
 use colored::Colorize;
-use futures::{future, lock::Mutex, Future};
+use futures::Future;
 use linera_base::{
     crypto::{CryptoRng, KeyPair},
     data_types::{BlockHeight, Timestamp},
@@ -26,8 +26,8 @@ use linera_service::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use std::{path::PathBuf, sync::Arc, time::Duration};
-use tracing::{debug, info, warn};
+use std::{path::PathBuf, time::Duration};
+use tracing::{debug, info};
 
 use crate::ClientOptions;
 
@@ -56,6 +56,7 @@ use {
     std::{
         collections::{HashMap, HashSet},
         iter,
+        sync::Arc,
         time::Instant,
     },
     tracing::{error, trace},
@@ -283,62 +284,6 @@ impl ClientContext {
                 pending_block: None,
             });
         }
-    }
-
-    pub async fn ensure_admin_subscription<S>(
-        this: Arc<Mutex<Self>>,
-        storage: &S,
-    ) -> Vec<Certificate>
-    where
-        S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
-        let chain_ids = {
-            let guard = this.lock().await;
-            guard.wallet_state.chain_ids()
-        };
-        let futures = chain_ids.into_iter().map(|chain_id| {
-            let this = this.clone();
-            async move {
-                loop {
-                    let mut chain_client = this
-                        .lock()
-                        .await
-                        .make_chain_client(storage.clone(), chain_id);
-                    let stream = match chain_client.subscribe().await {
-                        Ok(stream) => stream,
-                        Err(error) => {
-                            warn!(%chain_id, %error, "Failed to subscribe to notifications.");
-                            return None;
-                        }
-                    };
-                    match chain_client.subscribe_to_new_committees().await {
-                        Ok(ClientOutcome::Committed(cert)) => {
-                            let mut guard = this.lock().await;
-                            debug!(
-                                "Subscribed {:?} to the admin chain {:?}",
-                                chain_id,
-                                guard.wallet_state.genesis_admin_chain(),
-                            );
-                            guard.update_wallet_from_client(&mut chain_client).await;
-                            return Some(cert);
-                        }
-                        Ok(ClientOutcome::WaitForTimeout(timeout)) => {
-                            wait_for_next_round(stream, timeout).await;
-                        }
-                        Err(error) => {
-                            warn!(%chain_id, %error, "Failed to subscribe to new committees.");
-                            return None;
-                        }
-                    }
-                }
-            }
-        });
-        future::join_all(futures)
-            .await
-            .into_iter()
-            .flatten()
-            .collect()
     }
 
     pub async fn push_to_all_chains<S>(&mut self, storage: &S, certificate: &Certificate)

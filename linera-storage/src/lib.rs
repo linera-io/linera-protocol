@@ -39,13 +39,15 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId},
 };
 use linera_chain::{
-    data_types::{Certificate, HashedValue},
+    data_types::{Certificate, ChannelFullName, HashedValue},
     ChainError, ChainStateView,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    ChainOwnership, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode, WasmRuntime,
+    system::SystemChannel,
+    ChainOwnership, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
+    ExecutionRuntimeContext, GenericApplicationId, UserApplicationDescription, UserApplicationId,
+    UserContractCode, UserServiceCode, WasmRuntime,
 };
 use linera_views::{
     common::Context,
@@ -179,6 +181,25 @@ pub trait Storage: Sized {
             .set(ChainOwnership::single(public_key));
         system_state.balance.set(balance);
         system_state.timestamp.set(timestamp);
+
+        if id != admin_id {
+            // Add the new subscriber to the admin chain.
+            system_state.subscriptions.insert(&ChannelSubscription {
+                chain_id: admin_id,
+                name: SystemChannel::Admin.name(),
+            })?;
+            let mut admin_chain = self.load_chain(admin_id).await?;
+            let full_name = ChannelFullName {
+                application_id: GenericApplicationId::System,
+                name: SystemChannel::Admin.name(),
+            };
+            {
+                let mut channel = admin_chain.channels.try_load_entry_mut(&full_name).await?;
+                channel.subscribers.insert(&id)?;
+            } // Make channel go out of scope, so we can call save.
+            admin_chain.save().await?;
+        }
+
         let state_hash = chain.execution_state.crypto_hash().await?;
         chain.execution_state_hash.set(Some(state_hash));
         chain.manager.get_mut().reset(
