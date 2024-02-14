@@ -7,24 +7,20 @@ use std::time::Duration;
 use tokio::process::{Child, Command};
 
 /// Configuration for a storage service running as a child process
-pub struct StorageServiceChild {
+pub struct StorageServiceSpanner {
     endpoint: String,
     binary: String,
 }
 
-/// The tests being done have to run in parallel.
-/// For that we spanned a storage-service per test.
-/// In order to avoid collision, we use a different port per test.
-///
 /// A storage service running as a child process.
 ///
 /// The guard preserves the child from destruction and destroys it when
 /// it drops out of scope.
-pub struct ChildGuard {
+pub struct StorageServiceGuard {
     _child: Child,
 }
 
-impl StorageServiceChild {
+impl StorageServiceSpanner {
     /// Creates a new `StorageServiceChild`
     pub fn new(endpoint: String, binary: String) -> Self {
         Self { endpoint, binary }
@@ -37,10 +33,10 @@ impl StorageServiceChild {
         Ok(command)
     }
 
-    pub async fn run_service(&self) -> Result<ChildGuard> {
+    pub async fn run_service(&self) -> Result<StorageServiceGuard> {
         let mut command = self.command().await?;
         let _child = command.spawn_into()?;
-        let guard = ChildGuard { _child };
+        let guard = StorageServiceGuard { _child };
         tokio::time::sleep(Duration::from_secs(5)).await;
         Ok(guard)
     }
