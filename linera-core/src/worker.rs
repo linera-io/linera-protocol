@@ -197,8 +197,12 @@ pub enum WorkerError {
     },
     #[error("Cannot confirm a block before its predecessors: {current_block_height:?}")]
     MissingEarlierBlocks { current_block_height: BlockHeight },
-    #[error("{epoch:?} is not recognized by chain {chain_id:}")]
-    InvalidEpoch { chain_id: ChainId, epoch: Epoch },
+    #[error("Unexpected epoch {epoch:}; chain {chain_id:} is at {chain_epoch:}")]
+    InvalidEpoch {
+        chain_id: ChainId,
+        chain_epoch: Epoch,
+        epoch: Epoch,
+    },
 
     // Other server-side errors
     #[error("Invalid cross-chain request")]
@@ -613,13 +617,7 @@ where
             .system
             .current_committee()
             .expect("chain is active");
-        ensure!(
-            block.epoch == epoch,
-            WorkerError::InvalidEpoch {
-                chain_id: block.chain_id,
-                epoch: block.epoch,
-            }
-        );
+        Self::check_block_epoch(epoch, block)?;
         certificate.check(committee)?;
         // This should always be true for valid certificates.
         ensure!(
@@ -756,13 +754,7 @@ where
             .system
             .current_committee()
             .expect("chain is active");
-        ensure!(
-            block.epoch == epoch,
-            WorkerError::InvalidEpoch {
-                chain_id: block.chain_id,
-                epoch: block.epoch,
-            }
-        );
+        Self::check_block_epoch(epoch, block)?;
         certificate.check(committee)?;
         let mut actions = NetworkActions::default();
         if chain
@@ -817,14 +809,18 @@ where
         // Check that the chain is active and ready for this confirmation.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         let mut chain = self.storage.load_active_chain(chain_id).await?;
-        let (current_epoch, committee) = chain
+        let (chain_epoch, committee) = chain
             .execution_state
             .system
             .current_committee()
             .expect("chain is active");
         ensure!(
-            epoch == current_epoch,
-            WorkerError::InvalidEpoch { chain_id, epoch }
+            epoch == chain_epoch,
+            WorkerError::InvalidEpoch {
+                chain_id,
+                chain_epoch,
+                epoch
+            }
         );
         certificate.check(committee)?;
         let mut actions = NetworkActions::default();
@@ -1009,6 +1005,19 @@ where
             action: MessageAction::Accept,
         }))
     }
+
+    /// Returns an error if the block is not at the expected epoch.
+    fn check_block_epoch(chain_epoch: Epoch, block: &Block) -> Result<(), WorkerError> {
+        ensure!(
+            block.epoch == chain_epoch,
+            WorkerError::InvalidEpoch {
+                chain_id: block.chain_id,
+                epoch: block.epoch,
+                chain_epoch
+            }
+        );
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -1042,13 +1051,7 @@ where
             .system
             .current_committee()
             .expect("chain is active");
-        ensure!(
-            block.epoch == epoch,
-            WorkerError::InvalidEpoch {
-                chain_id: block.chain_id,
-                epoch: block.epoch
-            }
-        );
+        Self::check_block_epoch(epoch, block)?;
         if let Some(validated) = validated {
             validated.check(committee)?;
         }
