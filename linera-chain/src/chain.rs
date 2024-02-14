@@ -388,6 +388,11 @@ where
         self.execution_state.system.is_active()
     }
 
+    /// Returns whether this chain has been closed.
+    pub fn is_closed(&self) -> bool {
+        *self.execution_state.system.closed.get()
+    }
+
     /// Invariant for the states of active chains.
     pub fn ensure_is_active(&self) -> Result<(), ChainError> {
         if self.is_active() {
@@ -633,7 +638,8 @@ where
 
         if *self.execution_state.system.closed.get() {
             ensure!(
-                block.operations.is_empty()
+                !block.incoming_messages.is_empty()
+                    && block.operations.is_empty()
                     && block
                         .incoming_messages
                         .iter()
@@ -816,12 +822,15 @@ where
                 .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
         }
 
-        // Finally, charge for the block fee.
-        resource_controller
-            .with_state(&mut self.execution_state)
-            .await?
-            .track_block()
-            .map_err(|err| ChainError::ExecutionError(err, ChainExecutionContext::Block))?;
+        // Finally, charge for the block fee, except if the chain is closed. Closed chains should
+        // always be able to reject incoming messages.
+        if !self.is_closed() {
+            resource_controller
+                .with_state(&mut self.execution_state)
+                .await?
+                .track_block()
+                .map_err(|err| ChainError::ExecutionError(err, ChainExecutionContext::Block))?;
+        }
 
         // Recompute the state hash.
         let state_hash = {

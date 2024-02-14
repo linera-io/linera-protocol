@@ -1055,6 +1055,14 @@ where
             ..
         } if sender == ChainId::root(2)
     );
+
+    // Since blocks are free of charge on closed chains, empty blocks are not allowed.
+    assert_matches!(
+        client1.execute_operations(vec![]).await,
+        Err(ChainClientError::LocalNodeError(
+            LocalNodeError::WorkerError(WorkerError::ChainError(error))
+        )) if matches!(*error, ChainError::ClosedChain)
+    );
     Ok(())
 }
 
