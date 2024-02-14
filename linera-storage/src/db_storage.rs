@@ -118,7 +118,7 @@ pub struct DbStorageInner<Client> {
 impl<Client> DbStorageInner<Client>
 where
     Client: KeyValueStore
-        + AdminKeyValueStore<<Client as KeyValueStore>::Error>
+        + AdminKeyValueStore<Error = <Client as KeyValueStore>::Error>
         + Clone
         + Send
         + Sync
@@ -419,7 +419,7 @@ where
 impl<Client> DbStorage<Client, WallClock>
 where
     Client: KeyValueStore
-        + AdminKeyValueStore<<Client as KeyValueStore>::Error>
+        + AdminKeyValueStore<Error = <Client as KeyValueStore>::Error>
         + Clone
         + Send
         + Sync

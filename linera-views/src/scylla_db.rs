@@ -475,7 +475,8 @@ impl DirectWritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal
 }
 
 #[async_trait]
-impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
+impl AdminKeyValueStore for ScyllaDbStoreInternal {
+    type Error = ScyllaDbContextError;
     type Config = ScyllaDbStoreConfig;
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ScyllaDbContextError> {
@@ -749,7 +750,8 @@ impl WritableKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
 }
 
 #[async_trait]
-impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStore {
+impl AdminKeyValueStore for ScyllaDbStore {
+    type Error = ScyllaDbContextError;
     type Config = ScyllaDbStoreConfig;
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ScyllaDbContextError> {

@@ -160,35 +160,35 @@ where
 }
 
 #[async_trait]
-impl<K, E> AdminKeyValueStore<E> for JournalingKeyValueStore<K>
+impl<K> AdminKeyValueStore for JournalingKeyValueStore<K>
 where
-    K: AdminKeyValueStore<E> + Send + Sync,
-    E: Send,
+    K: AdminKeyValueStore + Send + Sync,
 {
+    type Error = K::Error;
     type Config = K::Config;
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, E> {
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error> {
         let store = K::connect(config, namespace).await?;
         Ok(Self { store })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, E> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
         K::list_all(config).await
     }
 
-    async fn delete_all(config: &Self::Config) -> Result<(), E> {
+    async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
         K::delete_all(config).await
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, E> {
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
         K::exists(config, namespace).await
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), E> {
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
         K::create(config, namespace).await
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), E> {
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
         K::delete(config, namespace).await
     }
 }

@@ -145,7 +145,8 @@ impl WritableKeyValueStore<MemoryContextError> for MemoryStore {
 }
 
 #[async_trait]
-impl AdminKeyValueStore<MemoryContextError> for MemoryStore {
+impl AdminKeyValueStore for MemoryStore {
+    type Error = MemoryContextError;
     type Config = MemoryStoreConfig;
 
     async fn connect(config: &Self::Config, _namespace: &str) -> Result<Self, MemoryContextError> {
