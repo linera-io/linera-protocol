@@ -53,8 +53,8 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 
 * `transfer` — Transfer funds
 * `open-chain` — Open (i.e. activate) a new chain deriving the UID from an existing one
-* `subscribe` — Subscribes to a system channel
-* `unsubscribe` — Unsubscribes from a system channel
+* `subscribe` — Subscribe to a system channel
+* `unsubscribe` — Unsubscribe from a system channel
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
 * `close-chain` — Close an existing chain
 * `local-balance` — Read the current native-token balance of the given account directly from the local state
@@ -149,7 +149,7 @@ Open (i.e. activate) a new chain deriving the UID from an existing one
 
 ## `linera subscribe`
 
-Subscribes to a system channel
+Subscribe to a system channel
 
 **Usage:** `linera subscribe [OPTIONS] --channel <CHANNEL>`
 
@@ -170,7 +170,7 @@ Subscribes to a system channel
 
 ## `linera unsubscribe`
 
-Unsubscribes from a system channel
+Unsubscribe from a system channel
 
 **Usage:** `linera unsubscribe [OPTIONS] --channel <CHANNEL>`
 

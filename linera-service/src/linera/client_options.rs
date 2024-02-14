@@ -193,7 +193,7 @@ pub enum ClientCommand {
         balance: Amount,
     },
 
-    /// Subscribes to a system channel.
+    /// Subscribe to a system channel.
     Subscribe {
         /// Chain id (must be one of our chains).
         #[arg(long)]
@@ -208,7 +208,7 @@ pub enum ClientCommand {
         channel: SystemChannel,
     },
 
-    /// Unsubscribes from a system channel.
+    /// Unsubscribe from a system channel.
     Unsubscribe {
         /// Chain id (must be one of our chains).
         #[arg(long)]
