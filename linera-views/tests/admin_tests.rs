@@ -21,7 +21,7 @@ use linera_views::dynamo_db::{create_dynamo_db_test_config, DynamoDbContextError
 use linera_views::scylla_db::{create_scylla_db_test_config, ScyllaDbContextError, ScyllaDbStore};
 
 #[cfg(test)]
-async fn namespaces_with_prefix<E: Debug, S: AdminKeyValueStore<E>>(
+async fn namespaces_with_prefix<E: Debug + Send, S: AdminKeyValueStore<E>>(
     config: &S::Config,
     prefix: &str,
 ) -> BTreeSet<String> {
@@ -33,7 +33,7 @@ async fn namespaces_with_prefix<E: Debug, S: AdminKeyValueStore<E>>(
 }
 
 #[cfg(test)]
-async fn admin_test<E: Debug, S: AdminKeyValueStore<E>>(config: &S::Config) {
+async fn admin_test<E: Debug + Send, S: AdminKeyValueStore<E>>(config: &S::Config) {
     let prefix = generate_test_namespace();
     let namespaces = namespaces_with_prefix::<E, S>(config, &prefix).await;
     assert_eq!(namespaces.len(), 0);

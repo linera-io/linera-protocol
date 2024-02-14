@@ -36,7 +36,7 @@ use {
     tracing::debug,
 };
 
-const DEFAULT_NAMESPACE: &'static str = "table_linera";
+const DEFAULT_NAMESPACE: &str = "table_linera";
 
 /// The configuration of the key value store in use.
 #[allow(clippy::large_enum_variant)]
