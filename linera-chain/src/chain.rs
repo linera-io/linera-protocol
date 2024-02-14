@@ -919,16 +919,8 @@ where
                     channel_broadcasts.insert(name.clone());
                 }
             }
-            let authenticated_signer = if authenticated {
-                raw_outcome.authenticated_signer
-            } else {
-                None
-            };
-            let refund_grant_to = if grant > Amount::ZERO {
-                raw_outcome.refund_grant_to
-            } else {
-                None
-            };
+            let authenticated_signer = raw_outcome.authenticated_signer.filter(|_| authenticated);
+            let refund_grant_to = raw_outcome.refund_grant_to.filter(|_| grant > Amount::ZERO);
             messages.push(OutgoingMessage {
                 destination,
                 authenticated_signer,
