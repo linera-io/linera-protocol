@@ -11,8 +11,8 @@ use self::utils::{
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::PublicKey,
-    data_types::BlockHeight,
-    identifiers::{ChainDescription, ChainId, Destination, Owner},
+    data_types::{Amount, BlockHeight, Resources},
+    identifiers::{Account, ChainDescription, ChainId, Destination, Owner},
 };
 use linera_execution::{
     system::SystemMessage, ApplicationCallOutcome, BaseRuntime, ContractRuntime, ExecutionError,
@@ -171,17 +171,28 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         )
         .await
         .unwrap();
+    let account = Account {
+        chain_id: ChainId::root(0),
+        owner: Some(owner),
+    };
     assert_eq!(
         outcomes,
         vec![
             ExecutionOutcome::User(
                 target_id,
-                RawExecutionOutcome::default().with_authenticated_signer(Some(owner))
+                RawExecutionOutcome::default()
+                    .with_authenticated_signer(Some(owner))
+                    .with_refund_grant_to(Some(account)),
             ),
-            ExecutionOutcome::User(target_id, RawExecutionOutcome::default()),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
             ExecutionOutcome::User(
                 caller_id,
-                RawExecutionOutcome::default().with_authenticated_signer(Some(owner))
+                RawExecutionOutcome::default()
+                    .with_authenticated_signer(Some(owner))
+                    .with_refund_grant_to(Some(account))
             )
         ]
     );
@@ -335,13 +346,25 @@ async fn test_simple_session() -> anyhow::Result<()> {
             &mut controller,
         )
         .await?;
-
+    let account = Account {
+        chain_id: ChainId::root(0),
+        owner: None,
+    };
     assert_eq!(
         outcomes,
         vec![
-            ExecutionOutcome::User(target_id, RawExecutionOutcome::default()),
-            ExecutionOutcome::User(target_id, RawExecutionOutcome::default()),
-            ExecutionOutcome::User(caller_id, RawExecutionOutcome::default()),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                caller_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
         ]
     );
     Ok(())
@@ -436,6 +459,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
     let dummy_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
+        grant: Resources::default(),
         kind: MessageKind::Simple,
         message: b"msg".to_vec(),
     };
@@ -474,10 +498,16 @@ async fn test_simple_message() -> anyhow::Result<()> {
     let registration_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
+        grant: Amount::ZERO,
         kind: MessageKind::Simple,
         message: SystemMessage::RegisterApplications {
             applications: vec![application_description],
         },
+    };
+    let dummy_message = dummy_message.into_priced(&Default::default())?;
+    let account = Account {
+        chain_id: ChainId::root(0),
+        owner: None,
     };
 
     assert_eq!(
@@ -488,7 +518,9 @@ async fn test_simple_message() -> anyhow::Result<()> {
             ),
             ExecutionOutcome::User(
                 application_id,
-                RawExecutionOutcome::default().with_message(dummy_message)
+                RawExecutionOutcome::default()
+                    .with_message(dummy_message)
+                    .with_refund_grant_to(Some(account))
             )
         ]
     );
@@ -533,6 +565,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     let dummy_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
+        grant: Resources::default(),
         kind: MessageKind::Simple,
         message: b"msg".to_vec(),
     };
@@ -571,10 +604,16 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     let registration_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
+        grant: Amount::ZERO,
         kind: MessageKind::Simple,
         message: SystemMessage::RegisterApplications {
             applications: vec![target_description],
         },
+    };
+    let dummy_message = dummy_message.into_priced(&Default::default())?;
+    let account = Account {
+        chain_id: ChainId::root(0),
+        owner: None,
     };
 
     assert_eq!(
@@ -585,9 +624,14 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
             ),
             ExecutionOutcome::User(
                 target_id,
-                RawExecutionOutcome::default().with_message(dummy_message)
+                RawExecutionOutcome::default()
+                    .with_message(dummy_message)
+                    .with_refund_grant_to(Some(account))
             ),
-            ExecutionOutcome::User(caller_id, RawExecutionOutcome::default()),
+            ExecutionOutcome::User(
+                caller_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
         ]
     );
 
@@ -654,6 +698,7 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
     let dummy_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
+        grant: Resources::default(),
         kind: MessageKind::Simple,
         message: b"msg".to_vec(),
     };
@@ -701,25 +746,41 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
     let registration_message = RawOutgoingMessage {
         destination: Destination::from(destination_chain),
         authenticated: false,
+        grant: Amount::ZERO,
         kind: MessageKind::Simple,
         message: SystemMessage::RegisterApplications {
             applications: vec![target_description],
         },
     };
-
+    let dummy_message = dummy_message.into_priced(&Default::default())?;
+    let account = Account {
+        chain_id: ChainId::root(0),
+        owner: None,
+    };
     assert_eq!(
         outcomes,
         &[
             ExecutionOutcome::System(
                 RawExecutionOutcome::default().with_message(registration_message)
             ),
-            ExecutionOutcome::User(target_id, RawExecutionOutcome::default()),
             ExecutionOutcome::User(
                 target_id,
-                RawExecutionOutcome::default().with_message(dummy_message)
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
             ),
-            ExecutionOutcome::User(middle_id, RawExecutionOutcome::default()),
-            ExecutionOutcome::User(caller_id, RawExecutionOutcome::default()),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default()
+                    .with_message(dummy_message)
+                    .with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                middle_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                caller_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
         ]
     );
 
@@ -765,6 +826,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     let first_message = RawOutgoingMessage {
         destination: Destination::from(first_destination_chain),
         authenticated: false,
+        grant: Resources::default(),
         kind: MessageKind::Simple,
         message: b"first".to_vec(),
     };
@@ -799,6 +861,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     let second_message = RawOutgoingMessage {
         destination: Destination::from(second_destination_chain),
         authenticated: false,
+        grant: Resources::default(),
         kind: MessageKind::Simple,
         message: b"second".to_vec(),
     };
@@ -851,6 +914,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     let first_registration_message = RawOutgoingMessage {
         destination: Destination::from(first_destination_chain),
         authenticated: false,
+        grant: Amount::ZERO,
         kind: MessageKind::Simple,
         message: SystemMessage::RegisterApplications {
             applications: vec![sending_target_description.clone(), caller_description],
@@ -860,6 +924,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     let second_registration_message = RawOutgoingMessage {
         destination: Destination::from(second_destination_chain),
         authenticated: false,
+        grant: Amount::ZERO,
         kind: MessageKind::Simple,
         message: SystemMessage::RegisterApplications {
             applications: vec![sending_target_description],
@@ -885,21 +950,33 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     assert!(system_outcome
         .messages
         .contains(&second_registration_message));
+    let account = Account {
+        chain_id: ChainId::root(0),
+        owner: None,
+    };
 
+    let first_message = first_message.into_priced(&Default::default())?;
+    let second_message = second_message.into_priced(&Default::default())?;
     // Return to checking the user application outcomes
     assert_eq!(
         outcomes,
         &[
-            ExecutionOutcome::User(silent_target_id, RawExecutionOutcome::default(),),
+            ExecutionOutcome::User(
+                silent_target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account)),
+            ),
             ExecutionOutcome::User(
                 sending_target_id,
                 RawExecutionOutcome::default()
                     .with_message(first_message.clone())
                     .with_message(second_message)
+                    .with_refund_grant_to(Some(account))
             ),
             ExecutionOutcome::User(
                 caller_id,
-                RawExecutionOutcome::default().with_message(first_message)
+                RawExecutionOutcome::default()
+                    .with_message(first_message)
+                    .with_refund_grant_to(Some(account))
             ),
         ]
     );

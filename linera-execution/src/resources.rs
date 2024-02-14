@@ -4,11 +4,10 @@
 //! This module tracks the resources used during the execution of a transaction.
 
 use crate::{
-    policy::ResourceControlPolicy, system::SystemExecutionError, ExecutionError,
-    ExecutionStateView, Message, Operation,
+    system::SystemExecutionError, ExecutionError, ExecutionStateView, Message, Operation,
+    ResourceControlPolicy,
 };
 use custom_debug_derive::Debug;
-use futures::FutureExt;
 use linera_base::{
     data_types::{Amount, ArithmeticError},
     identifiers::Owner,
@@ -51,11 +50,13 @@ pub struct ResourceTracker {
     pub messages: u32,
     /// The total size of the arguments of outgoing user messages.
     pub message_bytes: u64,
+    /// The amount allocated to message grants.
+    pub grants: Amount,
 }
 
 /// How to access the balance of an account.
 pub trait BalanceHolder {
-    fn as_amount(&self) -> Amount;
+    fn balance(&self) -> Result<Amount, ArithmeticError>;
 
     fn try_add_assign(&mut self, other: Amount) -> Result<(), ArithmeticError>;
 
@@ -68,9 +69,10 @@ where
     Account: BalanceHolder,
     Tracker: AsMut<ResourceTracker>,
 {
-    /// Obtains the balance of the account.
-    pub fn balance(&self) -> Amount {
-        self.account.as_amount()
+    /// Obtains the balance of the account. The only possible error is an arithmetic
+    /// overflow, which should not happen in practice due to final token supply.
+    pub fn balance(&self) -> Result<Amount, ArithmeticError> {
+        self.account.balance()
     }
 
     /// Operates a 3-way merge by transferring the difference between `initial`
@@ -80,7 +82,7 @@ where
             self.account
                 .try_sub_assign(initial.try_sub(other).expect("other <= initial"))
                 .map_err(|_| SystemExecutionError::InsufficientFundingForFees {
-                    balance: self.balance(),
+                    balance: self.balance().unwrap_or(Amount::MAX),
                 })?;
         } else {
             self.account
@@ -93,7 +95,7 @@ where
     fn update_balance(&mut self, fees: Amount) -> Result<(), ExecutionError> {
         self.account.try_sub_assign(fees).map_err(|_| {
             SystemExecutionError::InsufficientFundingForFees {
-                balance: self.balance(),
+                balance: self.balance().unwrap_or(Amount::MAX),
             }
         })?;
         Ok(())
@@ -101,7 +103,14 @@ where
 
     /// Obtains the amount of fuel that could be spent by consuming the entire balance.
     pub(crate) fn remaining_fuel(&self) -> u64 {
-        self.policy.remaining_fuel(self.balance())
+        self.policy
+            .remaining_fuel(self.balance().unwrap_or(Amount::MAX))
+    }
+
+    /// Tracks the allocation of a grant.
+    pub fn track_grant(&mut self, grant: Amount) -> Result<(), ExecutionError> {
+        self.tracker.as_mut().grants.try_add_assign(grant)?;
+        self.update_balance(grant)
     }
 
     /// Tracks the creation of a block.
@@ -134,7 +143,7 @@ where
                     .operation_bytes
                     .checked_add(size as u64)
                     .ok_or(ArithmeticError::Overflow)?;
-                self.update_balance(self.policy.operation_byte_price(size as u64)?)?;
+                self.update_balance(self.policy.operation_bytes_price(size as u64)?)?;
                 Ok(())
             }
         }
@@ -159,7 +168,7 @@ where
                     .message_bytes
                     .checked_add(size as u64)
                     .ok_or(ArithmeticError::Overflow)?;
-                self.update_balance(self.policy.message_byte_price(size as u64)?)?;
+                self.update_balance(self.policy.message_bytes_price(size as u64)?)?;
                 Ok(())
             }
         }
@@ -244,8 +253,8 @@ where
 
 // The simplest `BalanceHolder` is an `Amount`.
 impl BalanceHolder for Amount {
-    fn as_amount(&self) -> Amount {
-        *self
+    fn balance(&self) -> Result<Amount, ArithmeticError> {
+        Ok(*self)
     }
 
     fn try_add_assign(&mut self, other: Amount) -> Result<(), ArithmeticError> {
@@ -265,102 +274,39 @@ impl AsMut<ResourceTracker> for ResourceTracker {
     }
 }
 
-/// A temporary object made of an optional [`Owner`] together with a mutable reference
-/// on an execution state view [`ExecutionStateView`].
-///
-/// This type is meant to implement [`BalanceHolder`] and make the accounting functions of
-/// [`ResourceController`] available to temporary objects of type
-/// `ResourceController<OwnedView<'a, C>, &'a mut ResourceTracker>`.
-///
-/// Such temporary objects can be obtained from values of type
-/// `ResourceController<Option<Owner>>` using the method `with` to provide the missing
-/// reference on [`ExecutionStateView`].
-pub struct OwnedView<'a, C> {
-    owner: Option<Owner>,
-    view: &'a mut ExecutionStateView<C>,
+/// A temporary object holding a number of references to funding sources.
+pub struct Sources<'a> {
+    sources: Vec<&'a mut Amount>,
 }
 
-impl<'a, C> OwnedView<'a, C>
-where
-    C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
-{
-    fn get_owner_balance(&self, owner: &Owner) -> Amount {
-        self.view
-            .system
-            .balances
-            .get(owner)
-            .now_or_never()
-            .expect("The map entry was previously loaded by ResourceController::with")
-            .expect("Account was created there as well")
-            .expect("No I/O can fail here")
-    }
-
-    fn get_owner_balance_mut(&mut self, owner: &Owner) -> &mut Amount {
-        self.view
-            .system
-            .balances
-            .get_mut(owner)
-            .now_or_never()
-            .expect("The map entry was previously loaded by ResourceController::with")
-            .expect("Account was created there as well")
-            .expect("No I/O can fail here")
-    }
-}
-
-impl<C> BalanceHolder for OwnedView<'_, C>
-where
-    C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
-{
-    fn as_amount(&self) -> Amount {
-        match &self.owner {
-            None => *self.view.system.balance.get(),
-            Some(owner) => self
-                .view
-                .system
-                .balance
-                .get()
-                .try_add(self.get_owner_balance(owner))
-                .expect("Overflow was tested in `ResourceController::with` and `add_assign`"),
+impl BalanceHolder for Sources<'_> {
+    fn balance(&self) -> Result<Amount, ArithmeticError> {
+        let mut amount = Amount::ZERO;
+        for source in self.sources.iter() {
+            amount.try_add_assign(**source)?;
         }
+        Ok(amount)
     }
 
     fn try_add_assign(&mut self, other: Amount) -> Result<(), ArithmeticError> {
-        match self.owner {
-            None => self.view.system.balance.get_mut().try_add_assign(other),
-            Some(owner) => {
-                // Try to credit the owner account first.
-                // TODO(#1648): This may need some additional design work.
-                let balance = self.get_owner_balance_mut(&owner);
-                balance.try_add_assign(other)?;
-                // Safety check. (See discussion below in `ResourceController::with`).
-                balance.try_add(*self.view.system.balance.get())?;
-                Ok(())
-            }
-        }
+        // Try to credit the owner account first.
+        // TODO(#1648): This may need some additional design work.
+        let source = self.sources.last_mut().expect("at least one source");
+        source.try_add_assign(other)
     }
 
-    fn try_sub_assign(&mut self, other: Amount) -> Result<(), ArithmeticError> {
-        match self.owner {
-            None => self.view.system.balance.get_mut().try_sub_assign(other),
-            Some(owner) => {
-                // Charge the chain account first then the owner's account.
-                if self
-                    .view
-                    .system
-                    .balance
-                    .get_mut()
-                    .try_sub_assign(other)
-                    .is_err()
-                {
-                    let balance = *self.view.system.balance.get();
-                    *self.view.system.balance.get_mut() = Amount::ZERO;
-                    let delta = other.try_sub(balance).expect("balance < other");
-                    self.get_owner_balance_mut(&owner).try_sub_assign(delta)?;
-                }
-                Ok(())
+    fn try_sub_assign(&mut self, mut other: Amount) -> Result<(), ArithmeticError> {
+        for source in self.sources.iter_mut() {
+            if source.try_sub_assign(other).is_ok() {
+                return Ok(());
             }
+            other.try_sub_assign(**source).expect("*source < other");
+            **source = Amount::ZERO;
+        }
+        if other > Amount::ZERO {
+            Err(ArithmeticError::Underflow)
+        } else {
+            Ok(())
         }
     }
 }
@@ -368,32 +314,49 @@ where
 impl ResourceController<Option<Owner>, ResourceTracker> {
     /// Provides a reference to the current execution state and obtains a temporary object
     /// where the accounting functions of [`ResourceController`] are available.
-    pub async fn with<'a, C>(
+    pub async fn with_state<'a, C>(
         &mut self,
         view: &'a mut ExecutionStateView<C>,
-    ) -> Result<ResourceController<OwnedView<'a, C>, &mut ResourceTracker>, ViewError>
+    ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
     where
         C: Context + Clone + Send + Sync + 'static,
         ViewError: From<C::Error>,
     {
+        self.with_state_and_grant(view, None).await
+    }
+
+    /// Provides a reference to the current execution state as well as an optional grant,
+    /// and obtains a temporary object where the accounting functions of
+    /// [`ResourceController`] are available.
+    pub async fn with_state_and_grant<'a, C>(
+        &mut self,
+        view: &'a mut ExecutionStateView<C>,
+        grant: Option<&'a mut Amount>,
+    ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
+    where
+        C: Context + Clone + Send + Sync + 'static,
+        ViewError: From<C::Error>,
+    {
+        let mut sources = Vec::new();
+        // First, use the grant (e.g. for messages) and otherwise use the chain account
+        // (e.g. for blocks and operations).
+        if let Some(grant) = grant {
+            sources.push(grant);
+        } else {
+            sources.push(view.system.balance.get_mut());
+        }
+        // Then the local account, if any. Currently, any negative fee (e.g. storage
+        // refund) goes preferably to this account.
         if let Some(owner) = &self.account {
-            // Make sure `owner` has an account and that the account is loaded in memory.
-            let balance = view.system.balances.get_mut(owner).await?;
-            if let Some(balance) = balance {
-                // Making sure the sum doesn't overflow. In practice, though, the total
-                // supply of tokens is known so this should never happen.
-                view.system.balance.get().try_add(*balance)?;
-            } else {
-                view.system.balances.insert(owner, Amount::ZERO)?;
+            if let Some(balance) = view.system.balances.get_mut(owner).await? {
+                sources.push(balance);
             }
         }
+
         Ok(ResourceController {
             policy: self.policy.clone(),
             tracker: &mut self.tracker,
-            account: OwnedView {
-                owner: self.account,
-                view,
-            },
+            account: Sources { sources },
         })
     }
 }

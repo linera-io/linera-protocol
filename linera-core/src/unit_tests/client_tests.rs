@@ -31,10 +31,9 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    policy::ResourceControlPolicy,
     system::{Recipient, SystemOperation, UserData},
-    ChainOwnership, ExecutionError, Message, Operation, SystemExecutionError, SystemMessage,
-    SystemQuery, SystemResponse, TimeoutConfig,
+    ChainOwnership, ExecutionError, Message, Operation, ResourceControlPolicy,
+    SystemExecutionError, SystemMessage, SystemQuery, SystemResponse, TimeoutConfig,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -1102,15 +1101,12 @@ where
             UserData(Some(*b"hello...........hello...........")),
         )
         .await;
-    assert!(
-        matches!(
-            result,
-            Err(ChainClientError::CommunicationError(
-                CommunicationError::Trusted(crate::node::NodeError::ArithmeticError { .. })
-            ))
-        ),
-        "Unexpected result {:?}",
-        result
+    assert_matches!(
+        result,
+        Err(ChainClientError::CommunicationError(
+            CommunicationError::Trusted(crate::node::NodeError::ArithmeticError { .. })
+        )),
+        "unexpected result"
     );
     assert_eq!(sender.next_block_height, BlockHeight::ZERO);
     assert!(sender.pending_block.is_some());
@@ -1401,6 +1397,7 @@ where
     // Client2 does not know about the money yet.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Sending money from client2 fails, as a consequence.
+    // TODO(#1649): Make this code nicer.
     assert_matches!(client2
         .transfer_to_account_unsafe_unconfirmed(
             None,
@@ -1604,6 +1601,8 @@ where
             UserData(Some(*b"I'm giving away all of my money!")),
         )
         .await;
+
+    // TODO(#1649): Make this code nicer.
     assert_matches!(obtained_error,
         Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
             WorkerError::ChainError(error)
@@ -1620,6 +1619,7 @@ where
             UserData(Some(*b"I'm giving away all of my money!")),
         )
         .await;
+    // TODO(#1649): Make this code nicer.
     assert_matches!(obtained_error,
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
@@ -1683,15 +1683,12 @@ where
 
     // The round has not timed out yet, so validators will not sign a timeout certificate.
     let result = client.request_leader_timeout().await;
-    assert!(
-        matches!(
-            result,
-            Err(ChainClientError::CommunicationError(
-                CommunicationError::Trusted(NodeError::MissingVoteInValidatorResponse)
-            ))
-        ),
-        "unexpected leader timeout result: {:?}",
-        result
+    assert_matches!(
+        result,
+        Err(ChainClientError::CommunicationError(
+            CommunicationError::Trusted(NodeError::MissingVoteInValidatorResponse)
+        )),
+        "unexpected leader timeout result",
     );
 
     clock.set(manager.round_timeout.unwrap());

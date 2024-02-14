@@ -451,7 +451,7 @@ where
         operation: SystemOperation,
     ) -> Result<
         (
-            RawExecutionOutcome<SystemMessage>,
+            RawExecutionOutcome<SystemMessage, Amount>,
             Option<(UserApplicationId, Vec<u8>)>,
         ),
         SystemExecutionError,
@@ -490,6 +490,7 @@ where
                 let e1 = RawOutgoingMessage {
                     destination: Destination::Recipient(child_id),
                     authenticated: false,
+                    grant: Amount::ZERO,
                     kind: MessageKind::Protected,
                     message: SystemMessage::OpenChain {
                         ownership: ownership.clone(),
@@ -506,6 +507,7 @@ where
                 let e2 = RawOutgoingMessage {
                     destination: Destination::Recipient(admin_id),
                     authenticated: false,
+                    grant: Amount::ZERO,
                     kind: MessageKind::Protected,
                     message: SystemMessage::Subscribe {
                         id: child_id,
@@ -542,6 +544,7 @@ where
                         let message = RawOutgoingMessage {
                             destination: Destination::Recipient(subscription.chain_id),
                             authenticated: false,
+                            grant: Amount::ZERO,
                             kind: MessageKind::Protected,
                             message: SystemMessage::Unsubscribe {
                                 id: context.chain_id,
@@ -575,15 +578,14 @@ where
                     Some(owner) => self.balances.get_mut_or_default(owner).await?,
                     None => self.balance.get_mut(),
                 };
-                ensure!(
-                    *balance >= amount,
-                    SystemExecutionError::InsufficientFunding { balance: *balance }
-                );
-                balance.try_sub_assign(amount)?;
+                balance
+                    .try_sub_assign(amount)
+                    .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
                 if let Recipient::Account(account) = recipient {
                     let message = RawOutgoingMessage {
                         destination: Destination::Recipient(account.chain_id),
                         authenticated: false,
+                        grant: Amount::ZERO,
                         kind: MessageKind::Tracked,
                         message: SystemMessage::Credit {
                             amount,
@@ -612,6 +614,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(target_id),
                     authenticated: true,
+                    grant: Amount::ZERO,
                     kind: MessageKind::Simple,
                     message: SystemMessage::Withdraw {
                         amount,
@@ -638,6 +641,7 @@ where
                         let message = RawOutgoingMessage {
                             destination: Destination::Subscribers(SystemChannel::Admin.name()),
                             authenticated: false,
+                            grant: Amount::ZERO,
                             kind: MessageKind::Protected,
                             message: SystemMessage::SetCommittees {
                                 epoch,
@@ -654,6 +658,7 @@ where
                         let message = RawOutgoingMessage {
                             destination: Destination::Subscribers(SystemChannel::Admin.name()),
                             authenticated: false,
+                            grant: Amount::ZERO,
                             kind: MessageKind::Protected,
                             message: SystemMessage::SetCommittees {
                                 epoch: self.epoch.get().expect("chain is active"),
@@ -687,6 +692,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(chain_id),
                     authenticated: false,
+                    grant: Amount::ZERO,
                     kind: MessageKind::Protected,
                     message: SystemMessage::Subscribe {
                         id: context.chain_id,
@@ -708,6 +714,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(chain_id),
                     authenticated: false,
+                    grant: Amount::ZERO,
                     kind: MessageKind::Protected,
                     message: SystemMessage::Unsubscribe {
                         id: context.chain_id,
@@ -722,6 +729,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(context.chain_id),
                     authenticated: false,
+                    grant: Amount::ZERO,
                     kind: MessageKind::Protected,
                     message: SystemMessage::BytecodePublished {
                         operation_index: context.index,
@@ -750,6 +758,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(context.chain_id),
                     authenticated: false,
+                    grant: Amount::ZERO,
                     kind: MessageKind::Protected,
                     message: SystemMessage::ApplicationCreated,
                 };
@@ -763,6 +772,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(chain_id),
                     authenticated: false,
+                    grant: Amount::ZERO,
                     kind: MessageKind::Simple,
                     message: SystemMessage::RequestApplication(application_id),
                 };
@@ -778,7 +788,7 @@ where
         &mut self,
         context: MessageContext,
         message: SystemMessage,
-    ) -> Result<RawExecutionOutcome<SystemMessage>, SystemExecutionError> {
+    ) -> Result<RawExecutionOutcome<SystemMessage, Amount>, SystemExecutionError> {
         let mut outcome = RawExecutionOutcome::default();
         use SystemMessage::*;
         match message {
@@ -811,12 +821,15 @@ where
                 );
 
                 let balance = self.balances.get_mut_or_default(&owner).await?;
-                balance.try_sub_assign(amount)?;
+                balance
+                    .try_sub_assign(amount)
+                    .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
                 match recipient {
                     Recipient::Account(account) => {
                         let message = RawOutgoingMessage {
                             destination: Destination::Recipient(account.chain_id),
                             authenticated: false,
+                            grant: Amount::ZERO,
                             kind: MessageKind::Tracked,
                             message: SystemMessage::Credit {
                                 amount,
@@ -847,6 +860,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(id),
                     authenticated: false,
+                    grant: Amount::ZERO,
                     kind: MessageKind::Protected,
                     message: SystemMessage::Notify { id },
                 };
@@ -861,6 +875,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(id),
                     authenticated: false,
+                    grant: Amount::ZERO,
                     kind: MessageKind::Protected,
                     message: SystemMessage::Notify { id },
                 };
@@ -879,6 +894,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Subscribers(SystemChannel::PublishedBytecodes.name()),
                     authenticated: false,
+                    grant: Amount::ZERO,
                     kind: MessageKind::Simple,
                     message: SystemMessage::BytecodeLocations { locations },
                 };
@@ -907,6 +923,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(context.message_id.chain_id),
                     authenticated: false,
+                    grant: Amount::ZERO,
                     kind: MessageKind::Simple,
                     message: SystemMessage::RegisterApplications { applications },
                 };

@@ -8,10 +8,11 @@ mod state;
 use self::state::MetaCounter;
 use async_trait::async_trait;
 use linera_sdk::{
-    base::{ApplicationId, ChainId, SessionId, WithContractAbi},
+    base::{ApplicationId, SessionId, WithContractAbi},
     ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
-    OperationContext, SessionCallOutcome, SimpleStateStorage,
+    OperationContext, OutgoingMessage, Resources, SessionCallOutcome, SimpleStateStorage,
 };
+use meta_counter::{Message, Operation};
 use thiserror::Error;
 
 linera_sdk::contract!(MetaCounter);
@@ -42,38 +43,57 @@ impl Contract for MetaCounter {
         Self::counter_id()?;
         // Send a no-op message to ourselves. This is only for testing contracts that send messages
         // on initialization. Since the value is 0 it does not change the counter value.
-        Ok(ExecutionOutcome::default().with_message(context.chain_id, 0))
+        Ok(ExecutionOutcome::default().with_message(context.chain_id, Message::Increment(0)))
     }
 
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,
-        (recipient_id, value): (ChainId, u64),
+        operation: Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        log::trace!("message: {:?}", value);
-        if value >= 20000 {
-            Ok(ExecutionOutcome::default().with_tracked_message(recipient_id, value))
-        } else {
-            Ok(ExecutionOutcome::default().with_message(recipient_id, value))
-        }
+        log::trace!("operation: {:?}", operation);
+        let Operation {
+            recipient_id,
+            authenticated,
+            is_tracked,
+            fuel_grant,
+            message,
+        } = operation;
+        let message = OutgoingMessage {
+            destination: recipient_id.into(),
+            authenticated,
+            is_tracked,
+            resources: Resources {
+                fuel: fuel_grant,
+                ..Default::default()
+            },
+            message,
+        };
+        let mut outcome = ExecutionOutcome::default();
+        outcome.messages.push(message);
+        Ok(outcome)
     }
 
     async fn execute_message(
         &mut self,
         context: &MessageContext,
-        value: u64,
+        message: Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         if context.is_bouncing {
-            log::trace!("receiving a bouncing message {value}");
+            log::trace!("receiving a bouncing message {message:?}");
             return Ok(ExecutionOutcome::default());
         }
-        if value >= 10000 {
-            log::trace!("failing message {value} on purpose");
-            return Err(Error::ValueIsTooHigh);
+        match message {
+            Message::Fail => {
+                log::trace!("failing message {message:?} on purpose");
+                Err(Error::MessageFailed)
+            }
+            Message::Increment(value) => {
+                log::trace!("executing {} via {:?}", value, Self::counter_id()?);
+                self.call_application(true, Self::counter_id()?, &value, vec![])?;
+                Ok(ExecutionOutcome::default())
+            }
         }
-        log::trace!("executing {} via {:?}", value, Self::counter_id()?);
-        self.call_application(true, Self::counter_id()?, &value, vec![])?;
-        Ok(ExecutionOutcome::default())
     }
 
     async fn handle_application_call(
@@ -112,8 +132,8 @@ pub enum Error {
     #[error("MetaCounter application doesn't support any cross-application sessions")]
     SessionsNotSupported,
 
-    #[error("Message failed")]
-    ValueIsTooHigh,
+    #[error("Message failed intentionally")]
+    MessageFailed,
 
     /// Failed to deserialize BCS bytes
     #[error("Failed to deserialize BCS bytes")]

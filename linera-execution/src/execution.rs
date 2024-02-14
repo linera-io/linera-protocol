@@ -9,7 +9,10 @@ use crate::{
     UserApplicationDescription, UserApplicationId,
 };
 use futures::{stream::FuturesUnordered, StreamExt, TryStreamExt};
-use linera_base::identifiers::{ChainId, Destination, Owner};
+use linera_base::{
+    data_types::Amount,
+    identifiers::{Account, ChainId, Destination, Owner},
+};
 use linera_views::{
     common::Context,
     key_value_store_view::KeyValueStoreView,
@@ -22,7 +25,7 @@ use std::collections::{BTreeSet, HashMap};
 #[cfg(any(test, feature = "test"))]
 use {
     crate::{
-        policy::ResourceControlPolicy, system::SystemExecutionState, ResourceTracker,
+        system::SystemExecutionState, ResourceControlPolicy, ResourceTracker,
         TestExecutionRuntimeContext, UserContractCode,
     },
     linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
@@ -137,8 +140,15 @@ where
             tracker,
             account: None,
         };
-        self.run_user_action(application_id, chain_id, action, &mut resource_controller)
-            .await?;
+        self.run_user_action(
+            application_id,
+            chain_id,
+            action,
+            context.refund_grant_to(),
+            None,
+            &mut resource_controller,
+        )
+        .await?;
 
         Ok(())
     }
@@ -172,6 +182,8 @@ where
         application_id: UserApplicationId,
         chain_id: ChainId,
         action: UserAction,
+        refund_grant_to: Option<Account>,
+        grant: Option<&mut Amount>,
         resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
         let execution_outcomes = match self.context().extra().execution_runtime_config() {
@@ -180,6 +192,8 @@ where
                     application_id,
                     chain_id,
                     action,
+                    refund_grant_to,
+                    grant,
                     resource_controller,
                 )
                 .await?
@@ -194,9 +208,15 @@ where
         application_id: UserApplicationId,
         chain_id: ChainId,
         action: UserAction,
+        refund_grant_to: Option<Account>,
+        grant: Option<&mut Amount>,
         resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
-        let initial_balance = resource_controller.with(self).await?.balance();
+        let mut cloned_grant = grant.as_ref().map(|x| **x);
+        let initial_balance = resource_controller
+            .with_state_and_grant(self, cloned_grant.as_mut())
+            .await?
+            .balance()?;
         let controller = ResourceController {
             policy: resource_controller.policy.clone(),
             tracker: resource_controller.tracker,
@@ -209,6 +229,7 @@ where
                 execution_state_sender,
                 application_id,
                 chain_id,
+                refund_grant_to,
                 controller,
                 action,
             )
@@ -218,9 +239,9 @@ where
         }
         let (execution_outcomes, controller) = execution_outcomes_future.await??;
         resource_controller
-            .with(self)
+            .with_state_and_grant(self, grant)
             .await?
-            .merge_balance(initial_balance, controller.balance())?;
+            .merge_balance(initial_balance, controller.balance()?)?;
         resource_controller.tracker = controller.tracker;
         Ok(execution_outcomes)
     }
@@ -268,6 +289,7 @@ where
                 Ok::<_, ExecutionError>(RawOutgoingMessage {
                     destination: destination.clone(),
                     authenticated: false,
+                    grant: Amount::ZERO,
                     kind: MessageKind::Simple,
                     message: SystemMessage::RegisterApplications { applications },
                 })
@@ -298,6 +320,7 @@ where
                 let (mut result, new_application) =
                     self.system.execute_operation(context, op).await?;
                 result.authenticated_signer = context.authenticated_signer;
+                result.refund_grant_to = context.refund_grant_to();
                 let mut outcomes = vec![ExecutionOutcome::System(result)];
                 if let Some((application_id, argument)) = new_application {
                     let user_action = UserAction::Initialize(context, argument);
@@ -306,6 +329,8 @@ where
                             application_id,
                             context.chain_id,
                             user_action,
+                            context.refund_grant_to(),
+                            None,
                             resource_controller,
                         )
                         .await?,
@@ -321,6 +346,8 @@ where
                     application_id,
                     context.chain_id,
                     UserAction::Operation(context, bytes),
+                    context.refund_grant_to(),
+                    None,
                     resource_controller,
                 )
                 .await
@@ -332,6 +359,7 @@ where
         &mut self,
         context: MessageContext,
         message: Message,
+        grant: Option<&mut Amount>,
         resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
@@ -348,6 +376,8 @@ where
                     application_id,
                     context.chain_id,
                     UserAction::Message(context, bytes),
+                    context.refund_grant_to,
+                    grant,
                     resource_controller,
                 )
                 .await
@@ -358,6 +388,8 @@ where
     pub async fn bounce_message(
         &self,
         context: MessageContext,
+        grant: Amount,
+        refund_grant_to: Option<Account>,
         message: Message,
     ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
@@ -365,11 +397,13 @@ where
             Message::System(message) => {
                 let mut outcome = RawExecutionOutcome {
                     authenticated_signer: context.authenticated_signer,
+                    refund_grant_to,
                     ..Default::default()
                 };
                 outcome.messages.push(RawOutgoingMessage {
                     destination: Destination::Recipient(context.message_id.chain_id),
                     authenticated: true,
+                    grant,
                     kind: MessageKind::Bouncing,
                     message,
                 });
@@ -381,17 +415,42 @@ where
             } => {
                 let mut outcome = RawExecutionOutcome {
                     authenticated_signer: context.authenticated_signer,
+                    refund_grant_to,
                     ..Default::default()
                 };
                 outcome.messages.push(RawOutgoingMessage {
                     destination: Destination::Recipient(context.message_id.chain_id),
                     authenticated: true,
+                    grant,
                     kind: MessageKind::Bouncing,
                     message: bytes,
                 });
                 Ok(vec![ExecutionOutcome::User(application_id, outcome)])
             }
         }
+    }
+
+    pub async fn send_refund(
+        &self,
+        context: MessageContext,
+        amount: Amount,
+        account: Account,
+    ) -> Result<ExecutionOutcome, ExecutionError> {
+        assert_eq!(context.chain_id, self.context().extra().chain_id());
+        let mut outcome = RawExecutionOutcome::default();
+        let message = RawOutgoingMessage {
+            destination: Destination::Recipient(account.chain_id),
+            authenticated: false,
+            grant: Amount::ZERO,
+            kind: MessageKind::Tracked,
+            message: SystemMessage::Credit {
+                amount,
+                source: context.authenticated_signer,
+                target: account.owner,
+            },
+        };
+        outcome.messages.push(message);
+        Ok(ExecutionOutcome::System(outcome))
     }
 
     pub async fn query_application(

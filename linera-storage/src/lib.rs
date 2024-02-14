@@ -206,7 +206,7 @@ pub trait Storage: Sized {
         let SystemOperation::PublishBytecode { contract, .. } =
             read_publish_bytecode_operation(self, application_description).await?
         else {
-            unreachable!();
+            unreachable!("unexpected bytecode operation");
         };
         Ok(Arc::new(
             WasmContractModule::new(contract, wasm_runtime).await?,
@@ -239,7 +239,7 @@ pub trait Storage: Sized {
         let SystemOperation::PublishBytecode { service, .. } =
             read_publish_bytecode_operation(self, application_description).await?
         else {
-            unreachable!();
+            unreachable!("unexpected bytecode operation");
         };
         Ok(Arc::new(
             WasmServiceModule::new(service, wasm_runtime).await?,

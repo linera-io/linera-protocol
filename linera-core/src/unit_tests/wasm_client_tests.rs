@@ -17,7 +17,7 @@ use linera_base::{
 };
 use linera_chain::data_types::{CertificateValue, MessageAction, OutgoingMessage};
 use linera_execution::{
-    policy::ResourceControlPolicy, Bytecode, Message, MessageKind, Operation, SystemMessage,
+    Bytecode, Message, MessageKind, Operation, ResourceControlPolicy, SystemMessage,
     UserApplicationDescription, WasmRuntime,
 };
 use linera_storage::Storage;
@@ -270,8 +270,10 @@ where
         .unwrap()
         .unwrap();
 
+    let mut operation = meta_counter::Operation::increment(receiver_id, 5);
+    operation.fuel_grant = 1000000;
     let cert = creator
-        .execute_operation(Operation::user(application_id2, &(receiver_id, 5))?)
+        .execute_operation(Operation::user(application_id2, &operation)?)
         .await
         .unwrap()
         .unwrap();
@@ -291,8 +293,9 @@ where
     assert_eq!(expected, response);
 
     // Try again with a value that will make the (untracked) message fail.
+    let operation = meta_counter::Operation::fail(receiver_id);
     let cert = creator
-        .execute_operation(Operation::user(application_id2, &(receiver_id, 10000))?)
+        .execute_operation(Operation::user(application_id2, &operation)?)
         .await
         .unwrap()
         .unwrap();
@@ -309,8 +312,10 @@ where
     assert_eq!(messages.len(), 0);
 
     // Try again with a value that will make the (tracked) message fail.
+    let mut operation = meta_counter::Operation::fail(receiver_id);
+    operation.is_tracked = true;
     let cert = creator
-        .execute_operation(Operation::user(application_id2, &(receiver_id, 20000))?)
+        .execute_operation(Operation::user(application_id2, &operation)?)
         .await
         .unwrap()
         .unwrap();
@@ -332,9 +337,18 @@ where
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
     let incoming_messages = &cert.value().block().unwrap().incoming_messages;
-    assert_eq!(incoming_messages.len(), 1);
+    assert_eq!(incoming_messages.len(), 2);
+    // First message is the grant refund for the successful message sent before.
     assert_eq!(incoming_messages[0].action, MessageAction::Accept);
-    assert_eq!(incoming_messages[0].event.kind, MessageKind::Bouncing);
+    assert_eq!(incoming_messages[0].event.kind, MessageKind::Tracked);
+    assert_matches!(
+        incoming_messages[0].event.message,
+        Message::System(SystemMessage::Credit { .. })
+    );
+    // Second message is the bounced message.
+    assert_eq!(incoming_messages[1].action, MessageAction::Accept);
+    assert_eq!(incoming_messages[1].event.kind, MessageKind::Bouncing);
+    assert_matches!(incoming_messages[1].event.message, Message::User { .. });
 
     Ok(())
 }

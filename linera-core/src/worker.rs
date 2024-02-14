@@ -593,14 +593,17 @@ where
         if tip.is_first_block() && !chain.is_active() {
             let local_time = self.storage.current_time();
             for message in &block.incoming_messages {
-                chain
-                    .execute_immediate_message(
+                if chain
+                    .execute_init_message(
                         message.id(),
                         &message.event.message,
                         message.event.timestamp,
                         local_time,
                     )
-                    .await?;
+                    .await?
+                {
+                    break;
+                }
             }
         }
         chain.ensure_is_active()?;
@@ -877,7 +880,9 @@ where
         let local_time = self.storage.current_time();
         for bundle in bundles {
             // Update the staged chain state with the received block.
-            chain.receive_block(origin, bundle, local_time).await?
+            chain
+                .receive_message_bundle(origin, bundle, local_time)
+                .await?
         }
         if !self.allow_inactive_chains && !chain.is_active() {
             // Refuse to create a chain state if the chain is still inactive by

@@ -352,6 +352,11 @@ Event:
     - authenticated_signer:
         OPTION:
           TYPENAME: Owner
+    - grant:
+        TYPENAME: Amount
+    - refund_grant_to:
+        OPTION:
+          TYPENAME: Account
     - kind:
         TYPENAME: MessageKind
     - timestamp:
@@ -586,6 +591,11 @@ OutgoingMessage:
     - authenticated_signer:
         OPTION:
           TYPENAME: Owner
+    - grant:
+        TYPENAME: Amount
+    - refund_grant_to:
+        OPTION:
+          TYPENAME: Account
     - kind:
         TYPENAME: MessageKind
     - message:

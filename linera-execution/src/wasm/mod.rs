@@ -223,10 +223,12 @@ pub enum WasmExecutionError {
     #[error("Failed to create and configure Wasmtime runtime")]
     CreateWasmtimeEngine(#[source] anyhow::Error),
     #[cfg(with_wasmer)]
-    #[error("Failed to execute Wasm module (Wasmer)")]
+    #[error(
+        "Failed to execute Wasm module in Wasmer. This may be caused by panics or insufficient fuel."
+    )]
     ExecuteModuleInWasmer(#[from] ::wasmer::RuntimeError),
     #[cfg(with_wasmtime)]
-    #[error("Failed to execute Wasm module (Wasmtime)")]
+    #[error("Failed to execute Wasm module in Wasmtime: {0}")]
     ExecuteModuleInWasmtime(#[from] ::wasmtime::Trap),
 }
 

@@ -14,7 +14,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{Amount, ArithmeticError, Timestamp},
     ensure,
-    identifiers::{ChainId, Owner},
+    identifiers::{Account, ChainId, Owner},
 };
 use linera_views::batch::Batch;
 use oneshot::Receiver;
@@ -58,6 +58,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     /// Track application states (view case).
     view_user_states: BTreeMap<UserApplicationId, ViewUserState>,
 
+    /// Where to send a refund for the unused part of the grant after execution, if any.
+    refund_grant_to: Option<Account>,
     /// Controller to track fuel and storage consumption.
     resource_controller: ResourceController,
 }
@@ -230,6 +232,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     fn new(
         chain_id: ChainId,
         execution_state_sender: ExecutionStateSender,
+        refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
     ) -> Self {
         Self {
@@ -242,6 +245,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             session_manager: SessionManager::default(),
             simple_user_states: BTreeMap::default(),
             view_user_states: BTreeMap::default(),
+            refund_grant_to,
             resource_controller,
         }
     }
@@ -379,13 +383,17 @@ impl SyncRuntimeInternal<UserContractInstance> {
             ..
         } = self.pop_application();
 
-        // Interpret the results of the call.
-        self.execution_outcomes.push(ExecutionOutcome::User(
-            callee_id,
-            raw_outcome
-                .execution_outcome
-                .with_authenticated_signer(signer),
-        ));
+        // Interpret the results of the call and charge for the message grants.
+        let outcome = raw_outcome
+            .execution_outcome
+            .with_refund_grant_to(self.refund_grant_to)
+            .with_authenticated_signer(signer)
+            .into_priced(&self.resource_controller.policy)?;
+        for message in &outcome.messages {
+            self.resource_controller.track_grant(message.grant)?;
+        }
+        self.execution_outcomes
+            .push(ExecutionOutcome::User(callee_id, outcome));
         let caller_id = self.application_id()?;
         let sessions = self.make_sessions(raw_outcome.create_sessions, callee_id, caller_id);
         let outcome = CallOutcome {
@@ -870,11 +878,16 @@ impl ContractSyncRuntime {
         execution_state_sender: ExecutionStateSender,
         application_id: UserApplicationId,
         chain_id: ChainId,
+        refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         action: UserAction,
     ) -> Result<(Vec<ExecutionOutcome>, ResourceController), ExecutionError> {
-        let mut runtime =
-            SyncRuntimeInternal::new(chain_id, execution_state_sender, resource_controller);
+        let mut runtime = SyncRuntimeInternal::new(
+            chain_id,
+            execution_state_sender,
+            refund_grant_to,
+            resource_controller,
+        );
         let (code, description) = runtime.load_contract(application_id)?;
         let signer = action.signer();
         runtime.push_application(ApplicationStatus {
@@ -908,11 +921,18 @@ impl ContractSyncRuntime {
         if let Some(session_id) = runtime.session_manager.states.keys().next() {
             return Err(ExecutionError::SessionWasNotClosed(*session_id));
         }
-        // Adds the results of the last call to the execution results.
-        runtime.execution_outcomes.push(ExecutionOutcome::User(
-            application_id,
-            execution_outcome.with_authenticated_signer(signer),
-        ));
+        // Charge for the message grants and add the results of the last call to the
+        // execution results.
+        let outcome = execution_outcome
+            .with_authenticated_signer(signer)
+            .with_refund_grant_to(refund_grant_to)
+            .into_priced(&runtime.resource_controller.policy)?;
+        for message in &outcome.messages {
+            runtime.resource_controller.track_grant(message.grant)?;
+        }
+        runtime
+            .execution_outcomes
+            .push(ExecutionOutcome::User(application_id, outcome));
         Ok((runtime.execution_outcomes, runtime.resource_controller))
     }
 }
@@ -1008,6 +1028,7 @@ impl ServiceSyncRuntime {
         let runtime_internal = SyncRuntimeInternal::new(
             context.chain_id,
             execution_state_sender,
+            None,
             ResourceController::default(),
         );
         let mut runtime = ServiceSyncRuntime::new(runtime_internal);

@@ -788,6 +788,7 @@ doc_scalar!(
     "The destination of a message, relative to a particular application."
 );
 doc_scalar!(AccountOwner, "An owner of an account.");
+doc_scalar!(Account, "An account");
 
 #[cfg(test)]
 mod tests {

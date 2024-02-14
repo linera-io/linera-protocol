@@ -10,9 +10,8 @@ use linera_base::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorState},
-    policy::ResourceControlPolicy,
     system::Recipient,
-    Operation, SystemOperation,
+    Operation, ResourceControlPolicy, SystemOperation,
 };
 
 use crate::data_types::{

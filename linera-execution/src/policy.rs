@@ -4,7 +4,7 @@
 //! This module contains types related to fees and pricing.
 
 use async_graphql::InputObject;
-use linera_base::data_types::{Amount, ArithmeticError};
+use linera_base::data_types::{Amount, ArithmeticError, Resources};
 use serde::{Deserialize, Serialize};
 
 /// A collection of prices and limits associated with block execution.
@@ -67,11 +67,24 @@ impl ResourceControlPolicy {
         self.block
     }
 
-    pub(crate) fn operation_byte_price(&self, size: u64) -> Result<Amount, ArithmeticError> {
+    pub fn total_price(&self, resources: &Resources) -> Result<Amount, ArithmeticError> {
+        let mut amount = Amount::ZERO;
+        amount.try_add_assign(self.fuel_price(resources.fuel)?)?;
+        amount.try_add_assign(self.read_operations_price(resources.read_operations)?)?;
+        amount.try_add_assign(self.write_operations_price(resources.write_operations)?)?;
+        amount.try_add_assign(self.bytes_read_price(resources.bytes_to_read as u64)?)?;
+        amount.try_add_assign(self.bytes_written_price(resources.bytes_to_write as u64)?)?;
+        amount.try_add_assign(self.message.try_mul(resources.messages as u128)?)?;
+        amount.try_add_assign(self.message_bytes_price(resources.message_size as u64)?)?;
+        amount.try_add_assign(self.bytes_stored_price(resources.storage_size_delta as u64)?)?;
+        Ok(amount)
+    }
+
+    pub(crate) fn operation_bytes_price(&self, size: u64) -> Result<Amount, ArithmeticError> {
         self.operation_byte.try_mul(size as u128)
     }
 
-    pub(crate) fn message_byte_price(&self, size: u64) -> Result<Amount, ArithmeticError> {
+    pub(crate) fn message_bytes_price(&self, size: u64) -> Result<Amount, ArithmeticError> {
         self.message_byte.try_mul(size as u128)
     }
 

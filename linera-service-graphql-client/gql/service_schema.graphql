@@ -1,4 +1,9 @@
 """
+An account
+"""
+scalar Account
+
+"""
 A non-negative amount of tokens.
 """
 scalar Amount
@@ -51,8 +56,10 @@ type Block {
 	"""
 	timestamp: Timestamp!
 	"""
-	The user signing for the operations in the block. (Currently, this must be the `owner`
-	in the block proposal, or no one.)
+	The user signing for the operations in the block and paying for their execution
+	fees. If set, this must be the `owner` in the block proposal. `None` means that
+	the default account of the chain is used. This value is also used as recipient of
+	potential refunds for the message grants created by the operations.
 	"""
 	authenticatedSigner: Owner
 	"""
@@ -584,6 +591,14 @@ type OutgoingMessage {
 	The user authentication carried by the message, if any.
 	"""
 	authenticatedSigner: Owner
+	"""
+	A grant to pay for the message execution.
+	"""
+	grant: Amount!
+	"""
+	Where to send a refund for the unused part of the grant after execution, if any.
+	"""
+	refundGrantTo: Account
 	"""
 	The kind of event being sent.
 	"""

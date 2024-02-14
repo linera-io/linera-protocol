@@ -40,6 +40,7 @@ test('Block mounting', () => {
               destination: { Subscribers: [1] },
               authenticatedSigner: null,
               kind: "Protected",
+              grant: 0,
               message: {
                 System: {
                   BytecodeLocations: {

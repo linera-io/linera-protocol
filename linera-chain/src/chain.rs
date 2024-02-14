@@ -14,7 +14,7 @@ use async_graphql::SimpleObject;
 use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{ArithmeticError, BlockHeight, Timestamp},
+    data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     ensure,
     identifiers::{ChainId, Destination, MessageId},
     prometheus_util::{self, MeasureLatency},
@@ -440,10 +440,11 @@ where
         }
     }
 
-    /// Schedules operations to be executed as a recipient, unless this block was already
-    /// processed. Returns true if the call changed the chain state. Operations must be
-    /// received by order of heights and indices.
-    pub async fn receive_block(
+    /// Attempts to process a new `bundle` of messages from the given `origin`. Returns an
+    /// internal error if the bundle doesn't appear to be new, based on the sender's
+    /// height. The value `local_time` is specific to each validator and only used for
+    /// round timeouts.
+    pub async fn receive_message_bundle(
         &mut self,
         origin: &Origin,
         bundle: MessageBundle,
@@ -452,7 +453,7 @@ where
         let chain_id = self.chain_id();
         ensure!(
             bundle.height >= self.next_block_height_to_receive(origin).await?,
-            ChainError::InternalError("Trying to receive blocks in the wrong order".to_string())
+            ChainError::InternalError("Trying to receive messages in the wrong order".to_string())
         );
         tracing::trace!(
             "Processing new messages to {:?} from {:?} at height {}",
@@ -473,25 +474,21 @@ where
             let OutgoingMessage {
                 destination: _,
                 authenticated_signer,
+                grant,
+                refund_grant_to,
                 kind,
                 message,
             } = outgoing_message;
-            if let Message::System(_) = message {
-                if self.execution_state.system.description.get().is_none() {
-                    // Handle special messages to be executed immediately.
-                    let message_id = MessageId {
-                        chain_id: origin.sender,
-                        height: bundle.height,
-                        index,
-                    };
-                    self.execute_immediate_message(
-                        message_id,
-                        &message,
-                        bundle.timestamp,
-                        local_time,
-                    )
+            // See if the chain needs initialization.
+            if self.execution_state.system.description.get().is_none() {
+                // Handle any special initialization message to be executed immediately.
+                let message_id = MessageId {
+                    chain_id: origin.sender,
+                    height: bundle.height,
+                    index,
+                };
+                self.execute_init_message(message_id, &message, bundle.timestamp, local_time)
                     .await?;
-                }
             }
             // Record the inbox event to process it below.
             events.push(Event {
@@ -499,6 +496,8 @@ where
                 height: bundle.height,
                 index,
                 authenticated_signer,
+                grant,
+                refund_grant_to,
                 kind,
                 timestamp: bundle.timestamp,
                 message,
@@ -532,42 +531,43 @@ where
         Ok(())
     }
 
-    pub async fn execute_immediate_message(
+    pub async fn execute_init_message(
         &mut self,
         message_id: MessageId,
         message: &Message,
         timestamp: Timestamp,
         local_time: Timestamp,
-    ) -> Result<(), ChainError> {
-        if let Message::System(SystemMessage::OpenChain {
+    ) -> Result<bool, ChainError> {
+        let Message::System(SystemMessage::OpenChain {
             ownership,
             epoch,
             committees,
             admin_id,
             balance,
         }) = message
-        {
-            // Initialize ourself.
-            self.execution_state.system.open_chain(
-                message_id,
-                ownership.clone(),
-                *epoch,
-                committees.clone(),
-                *admin_id,
-                timestamp,
-                *balance,
-            );
-            // Recompute the state hash.
-            let hash = self.execution_state.crypto_hash().await?;
-            self.execution_state_hash.set(Some(hash));
-            // Last, reset the consensus state based on the current ownership.
-            self.manager.get_mut().reset(
-                self.execution_state.system.ownership.get(),
-                BlockHeight(0),
-                local_time,
-            )?;
-        }
-        Ok(())
+        else {
+            return Ok(false);
+        };
+        // Initialize ourself.
+        self.execution_state.system.open_chain(
+            message_id,
+            ownership.clone(),
+            *epoch,
+            committees.clone(),
+            *admin_id,
+            timestamp,
+            *balance,
+        );
+        // Recompute the state hash.
+        let hash = self.execution_state.crypto_hash().await?;
+        self.execution_state_hash.set(Some(hash));
+        // Last, reset the consensus state based on the current ownership.
+        self.manager.get_mut().reset(
+            self.execution_state.system.ownership.get(),
+            BlockHeight(0),
+            local_time,
+        )?;
+        Ok(true)
     }
 
     /// Removes the incoming messages in the block from the inboxes.
@@ -683,18 +683,39 @@ where
                     index: message.event.index,
                 },
                 authenticated_signer: message.event.authenticated_signer,
+                refund_grant_to: message.event.refund_grant_to,
             };
             let outcomes = match message.action {
-                MessageAction::Accept => self
-                    .execution_state
-                    .execute_message(
-                        context,
-                        message.event.message.clone(),
-                        &mut resource_controller,
-                    )
-                    .await
-                    .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?,
+                MessageAction::Accept => {
+                    let mut grant = message.event.grant;
+                    let mut outcomes = self
+                        .execution_state
+                        .execute_message(
+                            context,
+                            message.event.message.clone(),
+                            (grant > Amount::ZERO).then_some(&mut grant),
+                            &mut resource_controller,
+                        )
+                        .await
+                        .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
+                    if grant > Amount::ZERO {
+                        if let Some(refund_grant_to) = message.event.refund_grant_to {
+                            let outcome = self
+                                .execution_state
+                                .send_refund(context, grant, refund_grant_to)
+                                .await
+                                .map_err(|err| {
+                                    ChainError::ExecutionError(err, chain_execution_context)
+                                })?;
+                            outcomes.push(outcome);
+                        }
+                    }
+                    outcomes
+                }
                 MessageAction::Reject => {
+                    // If rejecting a message fails, the entire block proposal should be
+                    // scrapped.
+                    let chain_execution_context = ChainExecutionContext::Block;
                     ensure!(
                         !message.event.is_protected(),
                         ChainError::CannotRejectMessage {
@@ -706,14 +727,37 @@ where
                     if message.event.is_tracked() {
                         // Bounce the message.
                         self.execution_state
-                            .bounce_message(context, message.event.message.clone())
+                            .bounce_message(
+                                context,
+                                message.event.grant,
+                                message.event.refund_grant_to,
+                                message.event.message.clone(),
+                            )
                             .await
                             .map_err(|err| {
                                 ChainError::ExecutionError(err, chain_execution_context)
                             })?
                     } else {
-                        // Nothing to do.
-                        Vec::new()
+                        // Nothing to do except maybe refund the grant.
+                        let mut outcomes = Vec::new();
+                        if message.event.grant > Amount::ZERO {
+                            let Some(refund_grant_to) = message.event.refund_grant_to else {
+                                // See OperationContext::refund_grant_to()
+                                return Err(ChainError::InternalError(
+                                    "Messages with grants should have a non-empty `refund_grant_to`".into()
+                                ));
+                            };
+                            // Refund grant.
+                            let outcome = self
+                                .execution_state
+                                .send_refund(context, message.event.grant, refund_grant_to)
+                                .await
+                                .map_err(|err| {
+                                    ChainError::ExecutionError(err, chain_execution_context)
+                                })?;
+                            outcomes.push(outcome);
+                        }
+                        outcomes
                     }
                 }
             };
@@ -723,7 +767,7 @@ where
             if let MessageAction::Accept = message.action {
                 for message_out in &messages_out {
                     resource_controller
-                        .with(&mut self.execution_state)
+                        .with_state(&mut self.execution_state)
                         .await?
                         .track_message(&message_out.message)
                         .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
@@ -756,13 +800,13 @@ where
                 .process_execution_outcomes(context.height, outcomes)
                 .await?;
             resource_controller
-                .with(&mut self.execution_state)
+                .with_state(&mut self.execution_state)
                 .await?
                 .track_operation(operation)
                 .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
             for message_out in &messages_out {
                 resource_controller
-                    .with(&mut self.execution_state)
+                    .with_state(&mut self.execution_state)
                     .await?
                     .track_message(&message_out.message)
                     .map_err(|err| ChainError::ExecutionError(err, chain_execution_context))?;
@@ -774,7 +818,7 @@ where
 
         // Finally, charge for the block fee.
         resource_controller
-            .with(&mut self.execution_state)
+            .with_state(&mut self.execution_state)
             .await?
             .track_block()
             .map_err(|err| ChainError::ExecutionError(err, ChainExecutionContext::Block))?;
@@ -860,7 +904,7 @@ where
         lift: F,
         messages: &mut Vec<OutgoingMessage>,
         height: BlockHeight,
-        raw_outcome: RawExecutionOutcome<E>,
+        raw_outcome: RawExecutionOutcome<E, Amount>,
     ) -> Result<(), ChainError>
     where
         F: Fn(E) -> Message,
@@ -873,6 +917,7 @@ where
         for RawOutgoingMessage {
             destination,
             authenticated,
+            grant,
             kind,
             message,
         } in raw_outcome.messages
@@ -885,14 +930,13 @@ where
                     channel_broadcasts.insert(name.clone());
                 }
             }
-            let authenticated_signer = if authenticated {
-                raw_outcome.authenticated_signer
-            } else {
-                None
-            };
+            let authenticated_signer = raw_outcome.authenticated_signer.filter(|_| authenticated);
+            let refund_grant_to = raw_outcome.refund_grant_to.filter(|_| grant > Amount::ZERO);
             messages.push(OutgoingMessage {
                 destination,
                 authenticated_signer,
+                grant,
+                refund_grant_to,
                 kind,
                 message: lift(message),
             });

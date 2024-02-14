@@ -6,9 +6,9 @@ use crate::ChainError;
 use async_graphql::{Object, SimpleObject};
 use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
-    data_types::{BlockHeight, Round, Timestamp},
+    data_types::{Amount, BlockHeight, Round, Timestamp},
     doc_scalar, ensure,
-    identifiers::{ChainId, ChannelName, Destination, MessageId, Owner},
+    identifiers::{Account, ChainId, ChannelName, Destination, MessageId, Owner},
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
@@ -47,8 +47,10 @@ pub struct Block {
     /// The timestamp when this block was created. This must be later than all messages received
     /// in this block, but no later than the current time.
     pub timestamp: Timestamp,
-    /// The user signing for the operations in the block. (Currently, this must be the `owner`
-    /// in the block proposal, or no one.)
+    /// The user signing for the operations in the block and paying for their execution
+    /// fees. If set, this must be the `owner` in the block proposal. `None` means that
+    /// the default account of the chain is used. This value is also used as recipient of
+    /// potential refunds for the message grants created by the operations.
     pub authenticated_signer: Option<Owner>,
     /// Certified hash (see `Certificate` below) of the previous block in the
     /// chain, if any.
@@ -131,6 +133,10 @@ pub struct Event {
     pub index: u32,
     /// The authenticated signer for the operation that created the event, if any.
     pub authenticated_signer: Option<Owner>,
+    /// A grant to pay for the message execution.
+    pub grant: Amount,
+    /// Where to send a refund for the unused part of the grant after execution, if any.
+    pub refund_grant_to: Option<Account>,
     /// The kind of event being delivered.
     pub kind: MessageKind,
     /// The timestamp of the block that caused the message.
@@ -211,6 +217,10 @@ pub struct OutgoingMessage {
     pub destination: Destination,
     /// The user authentication carried by the message, if any.
     pub authenticated_signer: Option<Owner>,
+    /// A grant to pay for the message execution.
+    pub grant: Amount,
+    /// Where to send a refund for the unused part of the grant after execution, if any.
+    pub refund_grant_to: Option<Account>,
     /// The kind of event being sent.
     pub kind: MessageKind,
     /// The message itself.
@@ -633,7 +643,7 @@ impl Event {
         use MessageKind::*;
         match self.kind {
             Protected | Tracked => false,
-            Simple | Bouncing => true,
+            Simple | Bouncing => self.grant == Amount::ZERO,
         }
     }
 

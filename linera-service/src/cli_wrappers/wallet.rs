@@ -17,7 +17,7 @@ use linera_base::{
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_execution::{
-    committee::ValidatorName, policy::ResourceControlPolicy, system::SystemChannel, Bytecode,
+    committee::ValidatorName, system::SystemChannel, Bytecode, ResourceControlPolicy,
 };
 use linera_version::VersionInfo;
 use serde::{de::DeserializeOwned, ser::Serialize};

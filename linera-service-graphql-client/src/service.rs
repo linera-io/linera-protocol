@@ -5,7 +5,7 @@ use graphql_client::GraphQLQuery;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{ChainDescription, ChainId, ChannelName, Destination, Owner},
+    identifiers::{Account, ChainDescription, ChainId, ChannelName, Destination, Owner},
 };
 
 pub type JSONObject = serde_json::Value;
@@ -180,12 +180,16 @@ mod from {
             let block::BlockBlockValueExecutedBlockMessages {
                 destination,
                 authenticated_signer,
+                grant,
+                refund_grant_to,
                 kind,
                 message,
             } = val;
             OutgoingMessage {
                 destination,
                 authenticated_signer,
+                grant,
+                refund_grant_to,
                 kind,
                 message,
             }

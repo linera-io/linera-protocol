@@ -18,8 +18,7 @@ use linera_base::{
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_execution::{
     committee::{Committee, ValidatorName},
-    policy::ResourceControlPolicy,
-    WasmRuntime,
+    ResourceControlPolicy, WasmRuntime,
 };
 use linera_storage::{MemoryStorage, Storage, TestClock};
 use linera_version::VersionInfo;

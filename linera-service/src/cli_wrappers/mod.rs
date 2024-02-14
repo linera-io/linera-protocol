@@ -31,7 +31,7 @@ mod util;
 /// How to run a linera wallet and its GraphQL service.
 mod wallet;
 
-use linera_execution::policy::ResourceControlPolicy;
+use linera_execution::ResourceControlPolicy;
 pub use wallet::{ApplicationWrapper, ClientWrapper, Faucet, FaucetOption, NodeService};
 
 use anyhow::Result;
