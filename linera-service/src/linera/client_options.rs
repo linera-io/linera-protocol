@@ -193,7 +193,7 @@ pub enum ClientCommand {
         balance: Amount,
     },
 
-    /// Subscribes to a system channel.
+    /// Subscribe to a system channel.
     Subscribe {
         /// Chain id (must be one of our chains).
         #[arg(long)]
@@ -208,7 +208,7 @@ pub enum ClientCommand {
         channel: SystemChannel,
     },
 
-    /// Unsubscribes from a system channel.
+    /// Unsubscribe from a system channel.
     Unsubscribe {
         /// Chain id (must be one of our chains).
         #[arg(long)]
@@ -269,7 +269,10 @@ pub enum ClientCommand {
         timeout_increment: Duration,
     },
 
-    /// Close (i.e. deactivate) an existing chain.
+    /// Close an existing chain.
+    ///
+    /// A closed chain cannot execute operations or accept messages anymore.
+    /// It can still reject incoming messages, so they bounce back to the sender.
     CloseChain {
         /// Chain id (must be one of our chains)
         #[arg(long = "from")]

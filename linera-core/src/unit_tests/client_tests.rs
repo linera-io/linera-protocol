@@ -26,7 +26,7 @@ use linera_base::{
     identifiers::{Account, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_chain::{
-    data_types::{CertificateValue, Event, ExecutedBlock},
+    data_types::{CertificateValue, Event, ExecutedBlock, IncomingMessage, Medium, Origin},
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
@@ -986,10 +986,14 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
-    let mut sender = builder
+    let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
-    let certificate = sender.close_chain().await.unwrap().unwrap();
+    let mut client2 = builder
+        .add_initial_chain(ChainDescription::Root(2), Amount::from_tokens(4))
+        .await?;
+
+    let certificate = client1.close_chain().await.unwrap().unwrap();
     assert_matches!(
         certificate.value(),
         CertificateValue::ConfirmedBlock { executed_block: ExecutedBlock { block, .. }, .. } if matches!(
@@ -997,35 +1001,60 @@ where
         ),
         "Unexpected certificate value",
     );
-    assert_eq!(sender.next_block_height, BlockHeight::from(1));
-    assert!(sender.pending_block.is_none());
-    assert_matches!(
-        sender.key_pair().await.map(KeyPair::public), // KeyPair isn't Debug; using PublicKey.
-        Err(ChainClientError::LocalNodeError(
-            LocalNodeError::InactiveChain(_)
-        ))
-    );
+    assert_eq!(client1.next_block_height, BlockHeight::from(1));
+    assert!(client1.pending_block.is_none());
+    assert!(client1.key_pair().await.is_ok());
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
             .await
             .unwrap()
             .value,
         certificate.value
     );
-    // Cannot use the chain any more.
+    // Cannot use the chain for operations any more.
+    let result = client1
+        .transfer_to_account(
+            None,
+            Amount::from_tokens(3),
+            Account::chain(ChainId::root(2)),
+            UserData::default(),
+        )
+        .await;
+    assert!(
+        matches!(
+            &result,
+            Err(ChainClientError::LocalNodeError(
+                LocalNodeError::WorkerError(WorkerError::ChainError(err))
+            )) if matches!(**err, ChainError::ClosedChain)
+        ),
+        "Unexpected result: {:?}",
+        result,
+    );
+
+    // Incoming messages now get rejected.
+    client2
+        .transfer_to_account(
+            None,
+            Amount::from_tokens(3),
+            Account::chain(ChainId::root(1)),
+            UserData::default(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    client1.synchronize_from_validators().await.unwrap();
+    let (certificates, _) = client1.process_inbox().await.unwrap();
+    let block = certificates[0].value().block().unwrap();
+    assert!(block.operations.is_empty());
+    assert_eq!(block.incoming_messages.len(), 1);
     assert_matches!(
-        sender
-            .transfer_to_account(
-                None,
-                Amount::from_tokens(3),
-                Account::chain(ChainId::root(2)),
-                UserData::default()
-            )
-            .await,
-        Err(ChainClientError::LocalNodeError(
-            LocalNodeError::InactiveChain(_)
-        ))
+        block.incoming_messages[0],
+        IncomingMessage {
+            origin: Origin { sender, medium: Medium::Direct },
+            action: MessageAction::Reject,
+            ..
+        } if sender == ChainId::root(2)
     );
     Ok(())
 }

@@ -87,6 +87,8 @@ pub struct SystemExecutionStateView<C> {
     pub timestamp: RegisterView<C, Timestamp>,
     /// Track the locations of known bytecodes as well as the descriptions of known applications.
     pub registry: ApplicationRegistryView<C>,
+    /// Whether this chain has been closed.
+    pub closed: RegisterView<C, bool>,
 }
 
 /// For testing only.
@@ -103,6 +105,7 @@ pub struct SystemExecutionState {
     pub balances: BTreeMap<Owner, Amount>,
     pub timestamp: Timestamp,
     pub registry: ApplicationRegistry,
+    pub closed: bool,
 }
 
 /// A system operation.
@@ -533,7 +536,6 @@ where
                 });
             }
             CloseChain => {
-                self.ownership.set(ChainOwnership::default());
                 // Unsubscribe to all channels.
                 self.subscriptions
                     .for_each_index(|subscription| {
@@ -551,6 +553,7 @@ where
                     })
                     .await?;
                 self.subscriptions.clear();
+                self.closed.set(true);
             }
             Transfer {
                 owner,

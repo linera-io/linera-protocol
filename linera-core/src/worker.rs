@@ -1226,12 +1226,17 @@ where
             let mut messages = Vec::new();
             let origins = chain.inboxes.indices().await?;
             let inboxes = chain.inboxes.try_load_entries(&origins).await?;
+            let action = if *chain.execution_state.system.closed.get() {
+                MessageAction::Reject
+            } else {
+                MessageAction::Accept
+            };
             for (origin, inbox) in origins.into_iter().zip(inboxes) {
                 for event in inbox.added_events.elements().await? {
                     messages.push(IncomingMessage {
                         origin: origin.clone(),
                         event: event.clone(),
-                        action: MessageAction::Accept,
+                        action,
                     });
                 }
             }
