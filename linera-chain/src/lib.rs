@@ -132,7 +132,7 @@ pub enum ChainError {
     InsufficientBalance,
     #[error("Invalid owner weights: {0}")]
     OwnerWeightError(#[from] WeightedError),
-    #[error("Closed chains cannot have operations or accepted messages")]
+    #[error("Closed chains cannot have operations, accepted messages or empty blocks")]
     ClosedChain,
 }
 
