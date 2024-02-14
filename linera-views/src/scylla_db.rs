@@ -509,16 +509,6 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         Ok(())
     }
 
-    async fn delete_all(store_config: &Self::Config) -> Result<(), ScyllaDbContextError> {
-        let session = SessionBuilder::new()
-            .known_node(store_config.uri.as_str())
-            .build()
-            .await?;
-        let query = "DROP KEYSPACE IF EXISTS kv;".to_string();
-        session.query(query, &[]).await?;
-        Ok(())
-    }
-
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ScyllaDbContextError> {
         Self::check_namespace(namespace)?;
         let session = SessionBuilder::new()
@@ -600,8 +590,8 @@ impl DirectKeyValueStore for ScyllaDbStoreInternal {
 }
 
 #[async_trait]
-impl AdminKeyValueStore<ScyllaDbContextError> for ScyllaDbStoreInternal {
-    type Config = ScyllaDbStoreConfig;
+impl DeletePrefixExpander for ScyllaDbClient {
+    type Error = ScyllaDbContextError;
 
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         self.find_keys_by_prefix_internal(key_prefix.to_vec()).await

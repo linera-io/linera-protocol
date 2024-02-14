@@ -417,48 +417,6 @@ pub trait AdminKeyValueStore: Sized {
 }
 
 /// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
-#[async_trait]
-pub trait AdminKeyValueStore<E>: Sized {
-    /// The configuration needed to interact with a new store.
-    type Config: Send + Sync;
-
-    /// Connects to an existing namespace using the given configuration.
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, E>;
-
-    /// Obtains the list of existing namespaces.
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, E>;
-
-    /// Delete all the existing namespaces.
-    async fn delete_all(config: &Self::Config) -> Result<(), E>;
-
-    /// Tests if a given namespace exists.
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, E>;
-
-    /// Creates a namespace. Returns an error if the namespace exists.
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), E>;
-
-    /// Deletes the given namespace.
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), E>;
-
-    /// Initialize a storage if missing and provides it.
-    async fn initialize(config: &Self::Config, namespace: &str) -> Result<Self, E> {
-        if !Self::exists(config, namespace).await? {
-            Self::create(config, namespace).await?;
-        }
-        Self::connect(config, namespace).await
-    }
-
-    /// Create a new storage and erase the preceding if existing
-    async fn new_from_scratch(config: &Self::Config, namespace: &str) -> Result<Self, E> {
-        if Self::exists(config, namespace).await? {
-            Self::delete(config, namespace).await?;
-        }
-        Self::create(config, namespace).await?;
-        Self::connect(config, namespace).await
-    }
-}
-
-/// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
 pub trait KeyValueStore:
     ReadableKeyValueStore<Self::Error> + WritableKeyValueStore<Self::Error>
 {

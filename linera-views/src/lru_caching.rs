@@ -7,7 +7,7 @@ pub const TEST_CACHE_SIZE: usize = 1000;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_interval, AdminKeyValueStore, KeyValueStore, ReadableKeyValueStore,
+        get_interval, KeyValueStore, ReadableKeyValueStore,
         WritableKeyValueStore,
     },
 };

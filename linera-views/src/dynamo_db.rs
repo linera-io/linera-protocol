@@ -941,6 +941,11 @@ impl WritableKeyValueStore<DynamoDbContextError> for DynamoDbStore {
 }
 
 #[async_trait]
+impl KeyValueStore for DynamoDbStore {
+    type Error = DynamoDbContextError;
+}
+
+#[async_trait]
 impl AdminKeyValueStore for DynamoDbStore {
     type Error = DynamoDbContextError;
     type Config = DynamoDbStoreConfig;
