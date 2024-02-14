@@ -73,6 +73,16 @@ impl Block {
         }
         locations
     }
+
+    /// Returns whether the block contains only rejected incoming messages, which
+    /// makes it admissible even on closed chains.
+    pub fn only_rejected_messages(&self) -> bool {
+        self.operations.is_empty()
+            && self
+                .incoming_messages
+                .iter()
+                .all(|message| message.action == MessageAction::Reject)
+    }
 }
 
 /// A chain ID with a block height.

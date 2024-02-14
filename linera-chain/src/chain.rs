@@ -636,14 +636,9 @@ where
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
 
-        if *self.execution_state.system.closed.get() {
+        if self.is_closed() {
             ensure!(
-                !block.incoming_messages.is_empty()
-                    && block.operations.is_empty()
-                    && block
-                        .incoming_messages
-                        .iter()
-                        .all(|message| message.action == MessageAction::Reject),
+                !block.incoming_messages.is_empty() && block.only_rejected_messages(),
                 ChainError::ClosedChain
             );
         }
@@ -723,7 +718,7 @@ where
                     // scrapped.
                     let chain_execution_context = ChainExecutionContext::Block;
                     ensure!(
-                        !message.event.is_protected(),
+                        !message.event.is_protected() || self.is_closed(),
                         ChainError::CannotRejectMessage {
                             chain_id,
                             origin: Box::new(message.origin.clone()),
