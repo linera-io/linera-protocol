@@ -1236,7 +1236,7 @@ where
                     messages.push(IncomingMessage {
                         origin: origin.clone(),
                         event: event.clone(),
-                        action: action.clone(),
+                        action,
                     });
                 }
             }

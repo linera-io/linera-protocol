@@ -100,7 +100,7 @@ pub struct IncomingMessage {
 }
 
 /// What to do with a message picked from the inbox.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum MessageAction {
     /// Execute the incoming message.
     Accept,
