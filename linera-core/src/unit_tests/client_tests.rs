@@ -1072,15 +1072,12 @@ where
             UserData(Some(*b"hello...........hello...........")),
         )
         .await;
-    assert!(
-        matches!(
-            result,
-            Err(ChainClientError::CommunicationError(
-                CommunicationError::Trusted(crate::node::NodeError::ArithmeticError { .. })
-            ))
-        ),
-        "Unexpected result {:?}",
-        result
+    assert_matches!(
+        result,
+        Err(ChainClientError::CommunicationError(
+            CommunicationError::Trusted(crate::node::NodeError::ArithmeticError { .. })
+        )),
+        "unexpected result"
     );
     assert_eq!(sender.next_block_height, BlockHeight::ZERO);
     assert!(sender.pending_block.is_some());
@@ -1657,15 +1654,12 @@ where
 
     // The round has not timed out yet, so validators will not sign a timeout certificate.
     let result = client.request_leader_timeout().await;
-    assert!(
-        matches!(
-            result,
-            Err(ChainClientError::CommunicationError(
-                CommunicationError::Trusted(NodeError::MissingVoteInValidatorResponse)
-            ))
-        ),
-        "unexpected leader timeout result: {:?}",
-        result
+    assert_matches!(
+        result,
+        Err(ChainClientError::CommunicationError(
+            CommunicationError::Trusted(NodeError::MissingVoteInValidatorResponse)
+        )),
+        "unexpected leader timeout result",
     );
 
     clock.set(manager.round_timeout.unwrap());

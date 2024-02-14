@@ -304,7 +304,6 @@ impl BalanceHolder for Sources<'_> {
             **source = Amount::ZERO;
         }
         if other > Amount::ZERO {
-            // TODO: Provide a better error.
             Err(ArithmeticError::Underflow)
         } else {
             Ok(())
