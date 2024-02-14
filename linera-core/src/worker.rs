@@ -1044,7 +1044,10 @@ where
             .expect("chain is active");
         ensure!(
             block.epoch == epoch,
-            WorkerError::InvalidEpoch { chain_id, epoch }
+            WorkerError::InvalidEpoch {
+                chain_id: block.chain_id,
+                epoch: block.epoch
+            }
         );
         if let Some(validated) = validated {
             validated.check(committee)?;
