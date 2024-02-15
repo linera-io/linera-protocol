@@ -28,28 +28,15 @@ pub fn extract_namespace(
     attribute_parameters: proc_macro::TokenStream,
     type_name: &Ident,
 ) -> LitStr {
-    let span = Span::call_site();
     let parameters = syn::parse::<AttributeParameters>(attribute_parameters).unwrap_or_else(|_| {
         abort!(
-            span,
+            Span::call_site(),
             r#"Failed to parse attribute parameters, expected either `root = true` \
                 or `package = "namespace:package""#
         )
     });
 
-    let package_name = parameters.parameter("package").unwrap_or_else(|| {
-        abort!(
-            span,
-            r#"Missing package name specifier in attribute parameters \
-                (package = "namespace:package")"#
-        )
-    });
-
-    let interface_name = parameters
-        .parameter("interface")
-        .unwrap_or_else(|| type_name.to_string().to_kebab_case());
-
-    LitStr::new(&format!("{package_name}/{interface_name}"), span)
+    parameters.namespace(type_name)
 }
 
 /// Changes the [`DeriveInput`] by replacing some generic type parameters with specialized types.
@@ -72,7 +59,7 @@ impl Parse for AttributeParameters {
 
 impl AttributeParameters {
     /// Returns the string value of a parameter named `name`, if it exists.
-    pub fn parameter(&self, name: &str) -> Option<String> {
+    pub fn parameter(&self, name: &str) -> Option<&'_ LitStr> {
         self.metadata
             .iter()
             .find(|pair| pair.path.is_ident(name))
@@ -85,8 +72,42 @@ impl AttributeParameters {
                     abort!(&pair.value, "Expected a string literal");
                 };
 
-                lit_str.value()
+                lit_str
             })
+    }
+
+    /// Returns the package name specified through the `package` attribute.
+    pub fn package_name(&self) -> &'_ LitStr {
+        self.parameter("package").unwrap_or_else(|| {
+            abort!(
+                Span::call_site(),
+                r#"Missing package name specifier in attribute parameters \
+                (package = "namespace:package")"#
+            )
+        })
+    }
+
+    /// Returns the interface name specified through the `interface` attribute, or inferred from
+    /// the `type_name`
+    pub fn interface_name(&self, type_name: &Ident) -> LitStr {
+        self.parameter("interface").cloned().unwrap_or_else(|| {
+            LitStr::new(&type_name.to_string().to_kebab_case(), type_name.span())
+        })
+    }
+
+    /// Returns the namespace to use to prefix function names.
+    ///
+    /// This is based on the package name and the interface name. The former must be specified
+    /// using the `package` attribute parameter, while the latter can be specified using the
+    /// `interface` attribute parameter or inferred from the `type_name`.
+    pub fn namespace(&self, type_name: &Ident) -> LitStr {
+        let package = self.package_name();
+        let interface = self.interface_name(type_name);
+
+        LitStr::new(
+            &format!("{}/{}", package.value(), interface.value()),
+            interface.span(),
+        )
     }
 }
 
