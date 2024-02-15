@@ -226,3 +226,12 @@ pub async fn create_shared_test_store(
     };
     SharedStoreClient::new(store_config).await
 }
+
+#[cfg(any(test, feature = "test"))]
+pub(crate) async fn storage_service_check_endpoint(
+    endpoint: String,
+) -> Result<(), SharedContextError> {
+    let store = create_shared_test_store(endpoint).await?;
+    let _value = store.read_value_bytes(&[0]).await?;
+    Ok(())
+}
