@@ -114,6 +114,8 @@ pub enum ChainError {
     InvalidBlockProposal,
     #[error("Round number should be at least {0:?}")]
     InsufficientRound(Round),
+    #[error("Round number should greater than {0:?}")]
+    InsufficientRoundStrict(Round),
     #[error("Round number should be {0:?}")]
     WrongRound(Round),
     #[error("A different block for height {0:?} was already locked at round number {1:?}")]
