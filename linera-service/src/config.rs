@@ -485,12 +485,14 @@ impl GenesisConfig {
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
+        let committee = self.create_committee();
         for (chain_number, (public_key, balance)) in (0..).zip(&self.chains) {
+            let description = ChainDescription::Root(chain_number);
             storage
                 .create_chain(
-                    self.create_committee(),
+                    committee.clone(),
                     self.admin_id,
-                    ChainDescription::Root(chain_number),
+                    description,
                     *public_key,
                     *balance,
                     self.timestamp,

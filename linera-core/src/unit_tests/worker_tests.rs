@@ -77,10 +77,21 @@ fn make_state(
     description: ChainDescription,
     admin_id: impl Into<ChainId>,
 ) -> SystemExecutionState {
+    let admin_id = admin_id.into();
+    let subscriptions = if ChainId::from(description) == admin_id {
+        BTreeSet::new()
+    } else {
+        iter::once(ChannelSubscription {
+            chain_id: admin_id,
+            name: SystemChannel::Admin.name(),
+        })
+        .collect()
+    };
     SystemExecutionState {
         epoch: Some(epoch),
         description: Some(description),
-        admin_id: Some(admin_id.into()),
+        admin_id: Some(admin_id),
+        subscriptions,
         ..SystemExecutionState::default()
     }
 }
@@ -2933,13 +2944,10 @@ where
             ],
             message_counts: vec![1, 2],
             state_hash: make_state_hash(SystemExecutionState {
-                epoch: Some(Epoch::from(1)),
-                description: Some(ChainDescription::Root(0)),
-                admin_id: Some(admin_id),
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public()),
-                ..SystemExecutionState::default()
+                ..make_state(Epoch::from(1), ChainDescription::Root(0), admin_id)
             })
             .await,
         }),

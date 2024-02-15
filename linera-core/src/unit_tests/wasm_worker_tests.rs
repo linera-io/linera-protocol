@@ -246,12 +246,12 @@ where
         .with_operation(subscribe_operation);
     let subscribe_block_height = subscribe_block.height;
     let mut creator_system_state = SystemExecutionState {
-        subscriptions: [publisher_channel].into_iter().collect(),
         committees: [(Epoch::ZERO, committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(creator_key_pair.public()),
         timestamp: Timestamp::from(2),
         ..make_state(Epoch::ZERO, creator_chain, admin_id)
     };
+    creator_system_state.subscriptions.insert(publisher_channel);
     let creator_state = ExecutionStateView::from_system_state(
         creator_system_state.clone(),
         ExecutionRuntimeConfig::default(),

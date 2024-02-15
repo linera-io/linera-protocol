@@ -450,16 +450,11 @@ impl Runnable for Job {
 
                 // Make sure genesis chains are subscribed to the admin chain.
                 let context = Arc::new(Mutex::new(context));
-                let certificates =
-                    ClientContext::ensure_admin_subscription(context.clone(), &storage).await;
                 let mut context = context.lock().await;
                 let mut chain_client = context.make_chain_client(
                     storage.clone(),
                     context.wallet_state().genesis_admin_chain(),
                 );
-                for cert in certificates {
-                    chain_client.receive_certificate(cert).await.unwrap();
-                }
                 let n = context
                     .process_inbox(&mut chain_client)
                     .await
