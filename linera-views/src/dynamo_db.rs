@@ -325,7 +325,8 @@ pub struct DynamoDbStoreConfig {
 }
 
 #[async_trait]
-impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStoreInternal {
+impl AdminKeyValueStore for DynamoDbStoreInternal {
+    type Error = DynamoDbContextError;
     type Config = DynamoDbStoreConfig;
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, DynamoDbContextError> {
@@ -940,7 +941,8 @@ impl WritableKeyValueStore<DynamoDbContextError> for DynamoDbStore {
 }
 
 #[async_trait]
-impl AdminKeyValueStore<DynamoDbContextError> for DynamoDbStore {
+impl AdminKeyValueStore for DynamoDbStore {
+    type Error = DynamoDbContextError;
     type Config = DynamoDbStoreConfig;
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, DynamoDbContextError> {

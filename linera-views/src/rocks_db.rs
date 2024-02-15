@@ -246,7 +246,8 @@ impl WritableKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
 }
 
 #[async_trait]
-impl AdminKeyValueStore<RocksDbContextError> for RocksDbStoreInternal {
+impl AdminKeyValueStore for RocksDbStoreInternal {
+    type Error = RocksDbContextError;
     type Config = RocksDbStoreConfig;
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, RocksDbContextError> {
@@ -437,7 +438,8 @@ impl WritableKeyValueStore<RocksDbContextError> for RocksDbStore {
 }
 
 #[async_trait]
-impl AdminKeyValueStore<RocksDbContextError> for RocksDbStore {
+impl AdminKeyValueStore for RocksDbStore {
+    type Error = RocksDbContextError;
     type Config = RocksDbStoreConfig;
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, RocksDbContextError> {

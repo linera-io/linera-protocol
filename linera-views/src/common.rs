@@ -362,18 +362,21 @@ pub trait WritableKeyValueStore<E> {
 
 /// Low-level trait for the administration of stores and their namespaces.
 #[async_trait]
-pub trait AdminKeyValueStore<E: Send>: Sized {
+pub trait AdminKeyValueStore: Sized {
+    /// The error type returned by the store's methods.
+    type Error: Send;
+
     /// The configuration needed to interact with a new store.
     type Config: Send + Sync;
 
     /// Connects to an existing namespace using the given configuration.
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, E>;
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error>;
 
     /// Obtains the list of existing namespaces.
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, E>;
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error>;
 
     /// Deletes all the existing namespaces.
-    async fn delete_all(config: &Self::Config) -> Result<(), E> {
+    async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
         for namespace in Self::list_all(config).await? {
             Self::delete(config, &namespace).await?;
         }
@@ -381,16 +384,19 @@ pub trait AdminKeyValueStore<E: Send>: Sized {
     }
 
     /// Tests if a given namespace exists.
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, E>;
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error>;
 
     /// Creates a namespace. Returns an error if the namespace exists.
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), E>;
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error>;
 
     /// Deletes the given namespace.
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), E>;
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error>;
 
     /// Initializes a storage if missing and provides it.
-    async fn maybe_create_and_connect(config: &Self::Config, namespace: &str) -> Result<Self, E> {
+    async fn maybe_create_and_connect(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Self, Self::Error> {
         if !Self::exists(config, namespace).await? {
             Self::create(config, namespace).await?;
         }
@@ -398,7 +404,10 @@ pub trait AdminKeyValueStore<E: Send>: Sized {
     }
 
     /// Creates a new storage. Overwrites it if this namespace already exists.
-    async fn recreate_and_connect(config: &Self::Config, namespace: &str) -> Result<Self, E> {
+    async fn recreate_and_connect(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<Self, Self::Error> {
         if Self::exists(config, namespace).await? {
             Self::delete(config, namespace).await?;
         }
