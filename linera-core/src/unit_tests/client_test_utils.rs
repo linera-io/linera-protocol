@@ -1,6 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use linera_storage_service::child::StorageServiceGuard;
+use linera_storage_service::client::create_service_test_config;
+use linera_storage::ServiceStorage;
 use crate::{
     client::{ChainClient, ChainClientBuilder, ValidatorNodeProvider},
     data_types::*,
@@ -714,6 +717,65 @@ impl StorageBuilder for MakeRocksDbStorage {
         )
         .await?;
         Ok(storage)
+    }
+
+    fn clock(&self) -> &TestClock {
+        &self.clock
+    }
+}
+
+pub struct MakeServiceStorage {
+    _guard: Option<StorageServiceGuard>,
+    endpoint: String,
+    instance_counter: usize,
+    wasm_runtime: Option<WasmRuntime>,
+    clock: TestClock,
+}
+
+impl Default for MakeServiceStorage {
+    fn default() -> MakeServiceStorage {
+        let _guard = None;
+        let clock = TestClock::default();
+        let endpoint = "127.0.0.1:8742".to_string();
+        Self { _guard, endpoint, instance_counter: 0, wasm_runtime: None, clock }
+    }
+}
+
+impl MakeServiceStorage {
+    /// Creates a `ServiceStorage` from just an endpoint
+    pub fn new(endpoint: String) -> Self {
+        let _guard = None;
+        let clock = TestClock::default();
+        Self { _guard, endpoint, instance_counter: 0, wasm_runtime: None, clock }
+    }
+
+    /// Creates a `ServiceStorage` from an endpoint and the wasm runtime.
+    pub fn with_wasm_runtime(endpoint: String, wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
+        let _guard = None;
+        let clock = TestClock::default();
+        Self { _guard, endpoint, instance_counter: 0, wasm_runtime: wasm_runtime.into(), clock }
+    }
+}
+
+#[async_trait]
+impl StorageBuilder for MakeServiceStorage {
+    type Storage = ServiceStorage<TestClock>;
+
+    async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
+        if self._guard.is_none() {
+//            self._guard = Some(get_storage_service_guard(self.endpoint.clone()).run_service().await);
+        }
+        let namespace = generate_test_namespace();
+        let store_config = create_service_test_config(self.endpoint.clone()).await?;
+        let namespace = format!("{}_{}", namespace, self.instance_counter);
+        self.instance_counter += 1;
+        Ok(ServiceStorage::new_for_testing(
+            store_config,
+            &namespace,
+            self.wasm_runtime,
+            self.clock.clone(),
+        )
+        .await?)
     }
 
     fn clock(&self) -> &TestClock {
