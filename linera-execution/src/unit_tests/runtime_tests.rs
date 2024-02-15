@@ -51,9 +51,9 @@ async fn test_write_batch() {
             batch,
             callback,
         } = request
-            else {
-                panic!("Expected a `Request::WriteBatch` but got {request:?} instead");
-            };
+        else {
+            panic!("Expected a `Request::WriteBatch` but got {request:?} instead");
+        };
 
         assert_eq!(id, expected_application_id);
         assert_eq!(batch, expected_batch);

@@ -205,7 +205,8 @@ where
         let future = self.service.call(request);
         async move {
             let response = future.await?;
-            #[cfg(with_metrics)] {
+            #[cfg(with_metrics)]
+            {
                 SERVER_REQUEST_LATENCY
                     .with_label_values(&[])
                     .observe(start.elapsed().as_secs_f64() * 1000.0);
@@ -456,7 +457,8 @@ where
 
     fn log_request_success_and_latency(start: Instant, method_name: &str) {
         #![allow(unused_variables)]
-        #[cfg(with_metrics)] {
+        #[cfg(with_metrics)]
+        {
             SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE
                 .with_label_values(&[method_name])
                 .observe(start.elapsed().as_secs_f64() * 1000.0);
@@ -489,7 +491,8 @@ where
                     info.try_into()?
                 }
                 Err(error) => {
-                    #[cfg(with_metrics)] {
+                    #[cfg(with_metrics)]
+                    {
                         SERVER_REQUEST_ERROR
                             .with_label_values(&["handle_block_proposal"])
                             .inc();
@@ -530,7 +533,8 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                #[cfg(with_metrics)] {
+                #[cfg(with_metrics)]
+                {
                     SERVER_REQUEST_ERROR
                         .with_label_values(&["handle_lite_certificate"])
                         .inc();
@@ -575,7 +579,8 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                #[cfg(with_metrics)] {
+                #[cfg(with_metrics)]
+                {
                     SERVER_REQUEST_ERROR
                         .with_label_values(&["handle_certificate"])
                         .inc();
@@ -601,7 +606,8 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                #[cfg(with_metrics)] {
+                #[cfg(with_metrics)]
+                {
                     SERVER_REQUEST_ERROR
                         .with_label_values(&["handle_chain_info_query"])
                         .inc();
@@ -626,7 +632,8 @@ where
                 self.handle_network_actions(actions)
             }
             Err(error) => {
-                #[cfg(with_metrics)] {
+                #[cfg(with_metrics)]
+                {
                     SERVER_REQUEST_ERROR
                         .with_label_values(&["handle_cross_chain_request"])
                         .inc();

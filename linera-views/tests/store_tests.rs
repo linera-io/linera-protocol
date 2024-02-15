@@ -7,8 +7,7 @@ use linera_views::{
     key_value_store_view::ViewContainer,
     memory::{create_memory_context, create_memory_store},
     test_utils::{
-        self,
-        get_random_test_scenarios, run_big_write_read, run_reads, run_writes_from_blank,
+        self, get_random_test_scenarios, run_big_write_read, run_reads, run_writes_from_blank,
         run_writes_from_state,
     },
     value_splitting::create_test_memory_store,

@@ -24,7 +24,7 @@ test = [
     "tempfile",
     "test-log",
     "test-strategy",
-    "tokio/parking_lot"
+    "tokio/parking_lot",
 ]
 rocksdb = ["linera-views/rocksdb", "linera-storage/rocksdb"]
 aws = ["linera-views/dynamodb", "linera-storage/dynamodb"]

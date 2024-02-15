@@ -181,11 +181,7 @@ pub fn get_random_key_values<R: Rng>(rng: &mut R, n: usize) -> Vec<(Vec<u8>, Vec
 type VectorPutDelete = (Vec<(Vec<u8>, Vec<u8>)>, usize);
 
 /// A bunch of puts and some deletes.
-pub fn get_random_key_value_operations<R: Rng>(
-    rng: &mut R,
-    n: usize,
-    k: usize,
-) -> VectorPutDelete {
+pub fn get_random_key_value_operations<R: Rng>(rng: &mut R, n: usize, k: usize) -> VectorPutDelete {
     let key_value_vector = get_random_key_values_prefix(rng, Vec::new(), 8, 8, n);
     (key_value_vector, k)
 }

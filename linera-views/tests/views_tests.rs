@@ -23,8 +23,7 @@ use linera_views::{
     register_view::RegisterView,
     set_view::SetView,
     test_utils::{
-        self,
-        get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
+        self, get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
         random_shuffle, span_random_reordering_put_delete,
     },
     views::{CryptoHashRootView, HashableView, Hasher, RootView, View, ViewError},

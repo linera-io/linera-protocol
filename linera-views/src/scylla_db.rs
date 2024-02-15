@@ -30,7 +30,6 @@ use crate::{
     journaling::{
         DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
         JournalingKeyValueStore,
-
     },
     lru_caching::LruCachingStore,
     value_splitting::DatabaseConsistencyError,
@@ -795,10 +794,12 @@ impl KeyValueStore for ScyllaDbStore {
 impl ScyllaDbStore {
     /// Gets the table name of the ScyllaDB store.
     pub async fn get_namespace(&self) -> String {
-        #[cfg(with_metrics)] {
+        #[cfg(with_metrics)]
+        {
             self.store.store.store.store.store.get_namespace().await
         }
-        #[cfg(not(with_metrics))] {
+        #[cfg(not(with_metrics))]
+        {
             self.store.store.store.get_namespace().await
         }
     }

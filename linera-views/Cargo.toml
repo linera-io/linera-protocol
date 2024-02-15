@@ -22,13 +22,7 @@ metrics = ["dep:hex", "linera-base/metrics", "linera-views-derive/metrics"]
 test = ["tokio/macros", "rand"]
 web = ["linera-base/web"]
 
-dynamodb = [
-    "aws-config",
-    "aws-sdk-dynamodb",
-    "aws-smithy-http",
-    "aws-smithy-types",
-    "aws-types"
-]
+dynamodb = ["aws-config", "aws-sdk-dynamodb", "aws-smithy-types"]
 scylladb = ["scylla"]
 
 [dependencies]
@@ -61,9 +55,9 @@ tracing.workspace = true
 
 [dev-dependencies]
 linera-views = { path = ".", features = ["test"] }
+rand.workspace = true
 test-case.workspace = true
 tokio-test.workspace = true
-rand.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
