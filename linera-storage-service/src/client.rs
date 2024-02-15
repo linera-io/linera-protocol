@@ -316,7 +316,7 @@ impl AdminKeyValueStore<SharedContextError> for SharedStoreClient {
 }
 
 #[cfg(any(test, feature = "test"))]
-pub fn create_shared_store_common_config() -> CommonStoreConfig {
+pub fn create_service_store_common_config() -> CommonStoreConfig {
     CommonStoreConfig {
         max_concurrent_queries: Some(TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES),
         max_stream_queries: TEST_SHARED_STORE_MAX_STREAM_QUERIES,
@@ -325,16 +325,23 @@ pub fn create_shared_store_common_config() -> CommonStoreConfig {
 }
 
 #[cfg(any(test, feature = "test"))]
-pub async fn create_shared_test_store(
+pub async fn create_service_test_config(
     endpoint: String,
-) -> Result<SharedStoreClient, SharedContextError> {
-    let common_config = create_shared_store_common_config();
-    let namespace = generate_test_namespace();
+) -> Result<SharedStoreConfig, SharedContextError> {
+    let common_config = create_service_store_common_config();
     let endpoint = format!("http://{}", endpoint);
-    let config = SharedStoreConfig {
+    Ok(SharedStoreConfig {
         endpoint,
         common_config,
-    };
+    })
+}
+
+#[cfg(any(test, feature = "test"))]
+pub async fn create_service_test_store(
+    endpoint: String,
+) -> Result<SharedStoreClient, SharedContextError> {
+    let config = create_service_test_config(endpoint).await.unwrap();
+    let namespace = generate_test_namespace();
     SharedStoreClient::connect(&config, &namespace).await
 }
 
@@ -342,7 +349,7 @@ pub async fn create_shared_test_store(
 pub(crate) async fn storage_service_check_endpoint(
     endpoint: String,
 ) -> Result<(), SharedContextError> {
-    let store = create_shared_test_store(endpoint).await?;
+    let store = create_service_test_store(endpoint).await?;
     let _value = store.read_value_bytes(&[0]).await?;
     Ok(())
 }

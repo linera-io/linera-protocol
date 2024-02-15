@@ -4,4 +4,41 @@
 use crate::db_storage::DbStorage;
 use linera_storage_service::client::SharedStoreClient;
 
+#[cfg(any(test, feature = "test"))]
+use {
+    crate::db_storage::{DbStorageInner, TestClock},
+    linera_execution::WasmRuntime,
+    linera_views::test_utils::generate_test_namespace,
+    linera_storage_service::{common::{SharedContextError, SharedStoreConfig}, client::create_service_test_config},
+};
+
 pub type ServiceStorage<C> = DbStorage<SharedStoreClient, C>;
+
+#[cfg(any(test, feature = "test"))]
+impl ServiceStorage<TestClock> {
+    pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
+        let endpoint = "127.0.0.1:8942".to_string();
+        let store_config = create_service_test_config(endpoint).await.expect("store_config");
+        let namespace = generate_test_namespace();
+        ServiceStorage::new_for_testing(
+            store_config,
+            &namespace,
+            wasm_runtime,
+            TestClock::new(),
+        )
+        .await
+        .expect("storage")
+    }
+
+    pub async fn new_for_testing(
+        store_config: SharedStoreConfig,
+        namespace: &str,
+        wasm_runtime: Option<WasmRuntime>,
+        clock: TestClock,
+    ) -> Result<Self, SharedContextError> {
+        let storage =
+            DbStorageInner::<SharedStoreClient>::new_for_testing(store_config, namespace, wasm_runtime)
+                .await?;
+        Ok(Self::create(storage, clock))
+    }
+}
