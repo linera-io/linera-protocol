@@ -20,12 +20,15 @@ use async_trait::async_trait;
 use linera_views::{
     batch::Batch,
     common::{
-        AdminKeyValueStore, CommonStoreConfig, KeyValueStore, ReadableKeyValueStore,
+        AdminKeyValueStore, KeyValueStore, ReadableKeyValueStore,
         WritableKeyValueStore,
     },
 };
 use std::sync::Arc;
 use tonic::transport::{Channel, Endpoint};
+
+#[cfg(any(test, feature = "test"))]
+use linera_views::common::CommonStoreConfig;
 
 /// The number of concurrent queries of a test shared store
 #[cfg(any(test, feature = "test"))]

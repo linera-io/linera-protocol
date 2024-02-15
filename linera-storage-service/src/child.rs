@@ -3,7 +3,7 @@
 
 use crate::client::storage_service_check_endpoint;
 use anyhow::{bail, Result};
-use linera_service::util::CommandExt;
+use linera_base::command::CommandExt;
 use std::time::Duration;
 use tokio::process::{Child, Command};
 
