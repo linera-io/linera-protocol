@@ -8,6 +8,7 @@ use crate::{
     WitLoad, WitStore, WitType,
 };
 use frunk::{hlist, hlist_pat, HList};
+use std::borrow::Cow;
 
 /// Implement [`WitType`], [`WitLoad`] and [`WitStore`].
 ///
@@ -48,6 +49,18 @@ macro_rules! impl_wit_traits_with_borrow_store_clause {
             const SIZE: u32 = <HList![$( $types ),*] as WitType>::SIZE;
 
             type Layout = <HList![$( $types ),*] as WitType>::Layout;
+
+            fn wit_type_name() -> Cow<'static, str> {
+                let elements: &[Cow<'static, str>] = &[
+                    $( $types::wit_type_name(), )*
+                ];
+
+                if elements.is_empty() {
+                    "unit".into()
+                } else {
+                    format!("tuple<{}>", elements.join(", ")).into()
+                }
+            }
         }
 
         impl<$( $types ),*> WitLoad for ($( $types, )*)

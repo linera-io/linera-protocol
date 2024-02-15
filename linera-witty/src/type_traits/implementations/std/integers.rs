@@ -8,13 +8,18 @@ use crate::{
     WitLoad, WitStore, WitType,
 };
 use frunk::{hlist, hlist_pat, HList};
+use std::borrow::Cow;
 
 macro_rules! impl_wit_traits {
-    ($integer:ty, 1) => {
+    ($integer:ty, $wit_name:literal, 1) => {
         impl WitType for $integer {
             const SIZE: u32 = 1;
 
             type Layout = HList![$integer];
+
+            fn wit_type_name() -> Cow<'static, str> {
+                $wit_name.into()
+            }
         }
 
         impl WitLoad for $integer {
@@ -68,9 +73,10 @@ macro_rules! impl_wit_traits {
         }
     };
 
-    ($integer:ty, $size:expr, $flat_type:ty) => {
+    ($integer:ty, $wit_name:literal, $size:expr, $flat_type:ty) => {
         impl_wit_traits!(
             $integer,
+            $wit_name,
             $size,
             ($integer),
             ($flat_type),
@@ -81,6 +87,7 @@ macro_rules! impl_wit_traits {
 
     (
         $integer:ty,
+        $wit_name:literal,
         $size:expr,
         ($( $simple_types:ty ),*),
         ($( $flat_types:ty ),*),
@@ -91,6 +98,10 @@ macro_rules! impl_wit_traits {
             const SIZE: u32 = $size;
 
             type Layout = HList![$( $simple_types ),*];
+
+            fn wit_type_name() -> Cow<'static, str> {
+                $wit_name.into()
+            }
         }
 
         impl WitLoad for $integer {
@@ -147,14 +158,14 @@ macro_rules! impl_wit_traits {
     };
 }
 
-impl_wit_traits!(u8, 1);
-impl_wit_traits!(i8, 1);
-impl_wit_traits!(u16, 2, i32);
-impl_wit_traits!(i16, 2, i32);
-impl_wit_traits!(u32, 4, i32);
-impl_wit_traits!(i32, 4, i32);
-impl_wit_traits!(u64, 8, i64);
-impl_wit_traits!(i64, 8, i64);
+impl_wit_traits!(u8, "u8", 1);
+impl_wit_traits!(i8, "s8", 1);
+impl_wit_traits!(u16, "u16", 2, i32);
+impl_wit_traits!(i16, "s16", 2, i32);
+impl_wit_traits!(u32, "u32", 4, i32);
+impl_wit_traits!(i32, "s32", 4, i32);
+impl_wit_traits!(u64, "u64", 8, i64);
+impl_wit_traits!(i64, "s64", 8, i64);
 
 macro_rules! x128_lower {
     ($this:ident) => {
@@ -167,6 +178,7 @@ macro_rules! x128_lower {
 
 impl_wit_traits!(
     u128,
+    "u128",
     16,
     (u64, u64),
     (i64, i64),
@@ -179,6 +191,7 @@ impl_wit_traits!(
 
 impl_wit_traits!(
     i128,
+    "s128",
     16,
     (i64, i64),
     (i64, i64),

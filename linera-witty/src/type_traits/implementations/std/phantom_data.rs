@@ -8,12 +8,16 @@ use crate::{
     WitLoad, WitStore, WitType,
 };
 use frunk::{hlist, HList};
-use std::marker::PhantomData;
+use std::{borrow::Cow, marker::PhantomData};
 
 impl<T> WitType for PhantomData<T> {
     const SIZE: u32 = 0;
 
     type Layout = HList![];
+
+    fn wit_type_name() -> Cow<'static, str> {
+        "unit".into()
+    }
 }
 
 impl<T> WitLoad for PhantomData<T> {

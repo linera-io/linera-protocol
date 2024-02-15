@@ -8,11 +8,16 @@ use crate::{
     WitLoad, WitStore, WitType,
 };
 use frunk::{hlist, hlist_pat, HList};
+use std::borrow::Cow;
 
 impl WitType for GuestPointer {
     const SIZE: u32 = u32::SIZE;
 
     type Layout = HList![i32];
+
+    fn wit_type_name() -> Cow<'static, str> {
+        "guest-pointer".into()
+    }
 }
 
 impl WitLoad for GuestPointer {

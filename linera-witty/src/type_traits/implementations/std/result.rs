@@ -8,6 +8,7 @@ use crate::{
     RuntimeError, RuntimeMemory, WitLoad, WitStore, WitType,
 };
 use frunk::{hlist, hlist_pat, HCons};
+use std::borrow::Cow;
 
 impl<T, E> WitType for Result<T, E>
 where
@@ -34,6 +35,10 @@ where
     };
 
     type Layout = HCons<i8, <T::Layout as Merge<E::Layout>>::Output>;
+
+    fn wit_type_name() -> Cow<'static, str> {
+        format!("result<{}, {}>", T::wit_type_name(), E::wit_type_name()).into()
+    }
 }
 
 impl<T, E> WitLoad for Result<T, E>

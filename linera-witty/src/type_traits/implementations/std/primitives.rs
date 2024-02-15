@@ -8,11 +8,16 @@ use crate::{
     WitLoad, WitStore, WitType,
 };
 use frunk::{hlist, hlist_pat, HList};
+use std::borrow::Cow;
 
 impl WitType for bool {
     const SIZE: u32 = 1;
 
     type Layout = HList![i8];
+
+    fn wit_type_name() -> Cow<'static, str> {
+        "bool".into()
+    }
 }
 
 impl WitLoad for bool {
@@ -72,6 +77,10 @@ where
     const SIZE: u32 = T::SIZE;
 
     type Layout = T::Layout;
+
+    fn wit_type_name() -> Cow<'static, str> {
+        panic!("Borrowed values can't be used in WIT files generated with Witty");
+    }
 }
 
 impl<'t, T> WitStore for &'t T

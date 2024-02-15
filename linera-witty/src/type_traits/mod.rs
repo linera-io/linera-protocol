@@ -8,6 +8,7 @@ mod implementations;
 use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
 };
+use std::borrow::Cow;
 
 /// A type that is representable by fundamental WIT types.
 pub trait WitType: Sized {
@@ -16,6 +17,9 @@ pub trait WitType: Sized {
 
     /// The layout of the type as fundamental types.
     type Layout: Layout;
+
+    /// Generates the WIT type name for this type.
+    fn wit_type_name() -> Cow<'static, str>;
 }
 
 /// A type that can be loaded from a guest Wasm module.

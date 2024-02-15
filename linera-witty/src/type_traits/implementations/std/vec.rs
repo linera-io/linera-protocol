@@ -8,6 +8,7 @@ use crate::{
     WitLoad, WitStore, WitType,
 };
 use frunk::{hlist, hlist_pat, HList};
+use std::borrow::Cow;
 
 impl<T> WitType for Vec<T>
 where
@@ -16,6 +17,10 @@ where
     const SIZE: u32 = 8;
 
     type Layout = HList![i32, i32];
+
+    fn wit_type_name() -> Cow<'static, str> {
+        format!("list<{}>", T::wit_type_name()).into()
+    }
 }
 
 impl<T> WitLoad for Vec<T>

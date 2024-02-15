@@ -8,13 +8,18 @@ use crate::{
     WitLoad, WitStore, WitType,
 };
 use frunk::{hlist, hlist_pat, HList};
+use std::borrow::Cow;
 
 macro_rules! impl_wit_traits {
-    ($float:ty, $size:expr) => {
+    ($float:ty, $wit_name:literal, $size:expr) => {
         impl WitType for $float {
             const SIZE: u32 = $size;
 
             type Layout = HList![$float];
+
+            fn wit_type_name() -> Cow<'static, str> {
+                $wit_name.into()
+            }
         }
 
         impl WitLoad for $float {
@@ -71,5 +76,5 @@ macro_rules! impl_wit_traits {
     };
 }
 
-impl_wit_traits!(f32, 4);
-impl_wit_traits!(f64, 8);
+impl_wit_traits!(f32, "float32", 4);
+impl_wit_traits!(f64, "float64", 8);
