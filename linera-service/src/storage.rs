@@ -6,7 +6,7 @@ use anyhow::{bail, format_err};
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
 use linera_storage::{MemoryStorage, ServiceStorage, Storage};
-use linera_storage_service::{client::SharedStoreClient, common::SharedStoreConfig};
+use linera_storage_service::{client::ServiceStoreClient, common::ServiceStoreConfig};
 use linera_views::{
     common::{AdminKeyValueStore, CommonStoreConfig},
     memory::MemoryStoreConfig,
@@ -43,7 +43,7 @@ const DEFAULT_NAMESPACE: &str = "table_linera";
 #[allow(clippy::large_enum_variant)]
 pub enum StoreConfig {
     /// The storage service  key value store
-    Service(SharedStoreConfig, String),
+    Service(ServiceStoreConfig, String),
     /// The memory key value store
     Memory(MemoryStoreConfig, String),
     /// The RocksDb key value store
@@ -257,7 +257,7 @@ impl StorageConfig {
                 namespace,
             } => {
                 let endpoint = endpoint.clone();
-                let config = SharedStoreConfig {
+                let config = ServiceStoreConfig {
                     endpoint,
                     common_config,
                 };
@@ -314,7 +314,7 @@ impl StoreConfig {
                 error: "delete_all does not make sense for memory storage".to_string(),
             }),
             StoreConfig::Service(config, _namespace) => {
-                SharedStoreClient::delete_all(&config).await?;
+                ServiceStoreClient::delete_all(&config).await?;
                 Ok(())
             }
             #[cfg(feature = "rocksdb")]
@@ -343,7 +343,7 @@ impl StoreConfig {
                 error: "delete_namespace does not make sense for memory storage".to_string(),
             }),
             StoreConfig::Service(config, namespace) => {
-                SharedStoreClient::delete(&config, &namespace).await?;
+                ServiceStoreClient::delete(&config, &namespace).await?;
                 Ok(())
             }
             #[cfg(feature = "rocksdb")]
@@ -372,7 +372,7 @@ impl StoreConfig {
                 error: "test_existence does not make sense for memory storage".to_string(),
             }),
             StoreConfig::Service(config, namespace) => {
-                Ok(SharedStoreClient::exists(&config, &namespace).await?)
+                Ok(ServiceStoreClient::exists(&config, &namespace).await?)
             }
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config, namespace) => {
@@ -397,7 +397,7 @@ impl StoreConfig {
                 error: "initialize does not make sense for memory storage".to_string(),
             }),
             StoreConfig::Service(config, namespace) => {
-                SharedStoreClient::maybe_create_and_connect(&config, &namespace).await?;
+                ServiceStoreClient::maybe_create_and_connect(&config, &namespace).await?;
                 Ok(())
             }
             #[cfg(feature = "rocksdb")]
@@ -426,7 +426,7 @@ impl StoreConfig {
                 error: "list_all is not supported for the memory storage".to_string(),
             }),
             StoreConfig::Service(config, _namespace) => {
-                let tables = SharedStoreClient::list_all(&config).await?;
+                let tables = ServiceStoreClient::list_all(&config).await?;
                 Ok(tables)
             }
             #[cfg(feature = "rocksdb")]

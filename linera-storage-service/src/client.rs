@@ -5,7 +5,7 @@
 use linera_views::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace};
 
 use crate::{
-    common::{ServiceContextError, SharedStoreConfig},
+    common::{ServiceContextError, ServiceStoreConfig},
     key_value_store::{
         statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
         ReplyContainsKey, ReplyExistNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
@@ -52,7 +52,7 @@ const TEST_SHARED_STORE_MAX_STREAM_QUERIES: usize = 10;
 ///   [1] + [namespace]
 /// is stored to indicate the existence of a namespace.
 #[derive(Clone)]
-pub struct SharedStoreClient {
+pub struct ServiceStoreClient {
     client: Arc<RwLock<StoreProcessorClient<Channel>>>,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
@@ -60,7 +60,7 @@ pub struct SharedStoreClient {
 }
 
 #[async_trait]
-impl ReadableKeyValueStore<ServiceContextError> for SharedStoreClient {
+impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -158,7 +158,7 @@ impl ReadableKeyValueStore<ServiceContextError> for SharedStoreClient {
 }
 
 #[async_trait]
-impl WritableKeyValueStore<ServiceContextError> for SharedStoreClient {
+impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), ServiceContextError> {
@@ -216,11 +216,11 @@ impl WritableKeyValueStore<ServiceContextError> for SharedStoreClient {
     }
 }
 
-impl KeyValueStore for SharedStoreClient {
+impl KeyValueStore for ServiceStoreClient {
     type Error = ServiceContextError;
 }
 
-impl SharedStoreClient {
+impl ServiceStoreClient {
     /// Obtains the semaphore lock on the database if needed.
     async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
         match &self.semaphore {
@@ -237,8 +237,8 @@ impl SharedStoreClient {
 }
 
 #[async_trait]
-impl AdminKeyValueStore<ServiceContextError> for SharedStoreClient {
-    type Config = SharedStoreConfig;
+impl AdminKeyValueStore<ServiceContextError> for ServiceStoreClient {
+    type Config = ServiceStoreConfig;
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ServiceContextError> {
         let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
@@ -250,7 +250,7 @@ impl AdminKeyValueStore<ServiceContextError> for SharedStoreClient {
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = config.common_config.max_stream_queries;
         let namespace = Self::namespace_as_vec(namespace)?;
-        Ok(SharedStoreClient {
+        Ok(ServiceStoreClient {
             client,
             semaphore,
             max_stream_queries,
@@ -327,10 +327,10 @@ pub fn create_service_store_common_config() -> CommonStoreConfig {
 #[cfg(any(test, feature = "test"))]
 pub async fn create_service_test_config(
     endpoint: String,
-) -> Result<SharedStoreConfig, ServiceContextError> {
+) -> Result<ServiceStoreConfig, ServiceContextError> {
     let common_config = create_service_store_common_config();
     let endpoint = format!("http://{}", endpoint);
-    Ok(SharedStoreConfig {
+    Ok(ServiceStoreConfig {
         endpoint,
         common_config,
     })
@@ -339,10 +339,10 @@ pub async fn create_service_test_config(
 #[cfg(any(test, feature = "test"))]
 pub async fn create_service_test_store(
     endpoint: String,
-) -> Result<SharedStoreClient, ServiceContextError> {
+) -> Result<ServiceStoreClient, ServiceContextError> {
     let config = create_service_test_config(endpoint).await.unwrap();
     let namespace = generate_test_namespace();
-    SharedStoreClient::connect(&config, &namespace).await
+    ServiceStoreClient::connect(&config, &namespace).await
 }
 
 #[cfg(any(test, feature = "test"))]

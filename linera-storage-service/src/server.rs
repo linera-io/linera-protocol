@@ -25,22 +25,22 @@ pub mod key_value_store {
     tonic::include_proto!("key_value_store.v1");
 }
 
-pub enum SharedStoreServer {
+pub enum ServiceStoreServer {
     Memory(MemoryStore),
     /// The RocksDb key value store
     #[cfg(feature = "rocksdb")]
     RocksDb(RocksDbStore),
 }
 
-impl SharedStoreServer {
+impl ServiceStoreServer {
     pub async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Status> {
         match self {
-            SharedStoreServer::Memory(store) => store
+            ServiceStoreServer::Memory(store) => store
                 .read_value_bytes(key)
                 .await
                 .map_err(|_e| Status::not_found("read_value_bytes")),
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => store
+            ServiceStoreServer::RocksDb(store) => store
                 .read_value_bytes(key)
                 .await
                 .map_err(|_e| Status::not_found("read_value_bytes")),
@@ -49,12 +49,12 @@ impl SharedStoreServer {
 
     pub async fn contains_key(&self, key: &[u8]) -> Result<bool, Status> {
         match self {
-            SharedStoreServer::Memory(store) => store
+            ServiceStoreServer::Memory(store) => store
                 .contains_key(key)
                 .await
                 .map_err(|_e| Status::not_found("contains_key")),
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => store
+            ServiceStoreServer::RocksDb(store) => store
                 .contains_key(key)
                 .await
                 .map_err(|_e| Status::not_found("contains_key")),
@@ -66,12 +66,12 @@ impl SharedStoreServer {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Status> {
         match self {
-            SharedStoreServer::Memory(store) => store
+            ServiceStoreServer::Memory(store) => store
                 .read_multi_values_bytes(keys)
                 .await
                 .map_err(|_e| Status::not_found("read_multi_values_bytes")),
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => store
+            ServiceStoreServer::RocksDb(store) => store
                 .read_multi_values_bytes(keys)
                 .await
                 .map_err(|_e| Status::not_found("read_multi_values_bytes")),
@@ -80,12 +80,12 @@ impl SharedStoreServer {
 
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Status> {
         match self {
-            SharedStoreServer::Memory(store) => store
+            ServiceStoreServer::Memory(store) => store
                 .find_keys_by_prefix(key_prefix)
                 .await
                 .map_err(|_e| Status::not_found("find_keys_by_prefix")),
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => store
+            ServiceStoreServer::RocksDb(store) => store
                 .find_keys_by_prefix(key_prefix)
                 .await
                 .map_err(|_e| Status::not_found("find_keys_by_prefix")),
@@ -97,12 +97,12 @@ impl SharedStoreServer {
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Status> {
         match self {
-            SharedStoreServer::Memory(store) => store
+            ServiceStoreServer::Memory(store) => store
                 .find_key_values_by_prefix(key_prefix)
                 .await
                 .map_err(|_e| Status::not_found("find_key_values_by_prefix")),
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => store
+            ServiceStoreServer::RocksDb(store) => store
                 .find_key_values_by_prefix(key_prefix)
                 .await
                 .map_err(|_e| Status::not_found("find_key_values_by_prefix")),
@@ -111,12 +111,12 @@ impl SharedStoreServer {
 
     pub async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Status> {
         match self {
-            SharedStoreServer::Memory(store) => store
+            ServiceStoreServer::Memory(store) => store
                 .write_batch(batch, base_key)
                 .await
                 .map_err(|_e| Status::not_found("write_batch")),
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => store
+            ServiceStoreServer::RocksDb(store) => store
                 .write_batch(batch, base_key)
                 .await
                 .map_err(|_e| Status::not_found("write_batch")),
@@ -125,12 +125,12 @@ impl SharedStoreServer {
 
     pub async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Status> {
         match self {
-            SharedStoreServer::Memory(store) => store
+            ServiceStoreServer::Memory(store) => store
                 .clear_journal(base_key)
                 .await
                 .map_err(|_e| Status::not_found("clear_journal")),
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => store
+            ServiceStoreServer::RocksDb(store) => store
                 .clear_journal(base_key)
                 .await
                 .map_err(|_e| Status::not_found("clear_journal")),
@@ -181,7 +181,7 @@ impl SharedStoreServer {
 }
 
 #[derive(clap::Parser)]
-enum SharedStoreServerOptions {
+enum ServiceStoreServerOptions {
     #[command(name = "memory")]
     Memory {
         #[arg(long = "endpoint")]
@@ -198,7 +198,7 @@ enum SharedStoreServerOptions {
 }
 
 #[tonic::async_trait]
-impl StoreProcessor for SharedStoreServer {
+impl StoreProcessor for ServiceStoreServer {
     async fn process_read_value(
         &self,
         request: Request<RequestReadValue>,
@@ -358,14 +358,14 @@ impl StoreProcessor for SharedStoreServer {
 
 #[tokio::main]
 async fn main() {
-    let options = <SharedStoreServerOptions as clap::Parser>::parse();
+    let options = <ServiceStoreServerOptions as clap::Parser>::parse();
     let common_config = CommonStoreConfig::default();
     let (shared_store, endpoint) = match options {
-        SharedStoreServerOptions::Memory { endpoint } => {
+        ServiceStoreServerOptions::Memory { endpoint } => {
             let store = create_memory_store_stream_queries(common_config.max_stream_queries);
-            (SharedStoreServer::Memory(store), endpoint)
+            (ServiceStoreServer::Memory(store), endpoint)
         }
-        SharedStoreServerOptions::RocksDb { path, endpoint } => {
+        ServiceStoreServerOptions::RocksDb { path, endpoint } => {
             let path_buf = path.into();
             let config = RocksDbStoreConfig {
                 path_buf,
@@ -375,7 +375,7 @@ async fn main() {
             let store = RocksDbStore::maybe_create_and_connect(&config, namespace)
                 .await
                 .expect("store");
-            (SharedStoreServer::RocksDb(store), endpoint)
+            (ServiceStoreServer::RocksDb(store), endpoint)
         }
     };
     let endpoint = endpoint.parse().unwrap();

@@ -57,7 +57,7 @@ pub fn create_shared_store_common_config() -> CommonStoreConfig {
 }
 
 #[derive(Debug)]
-pub struct SharedStoreConfig {
+pub struct ServiceStoreConfig {
     /// The endpoint used by the shared store
     pub endpoint: String,
     /// The common configuration of the key value store

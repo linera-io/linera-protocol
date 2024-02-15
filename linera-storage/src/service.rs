@@ -2,17 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::db_storage::DbStorage;
-use linera_storage_service::client::SharedStoreClient;
+use linera_storage_service::client::ServiceStoreClient;
 
 #[cfg(any(test, feature = "test"))]
 use {
     crate::db_storage::{DbStorageInner, TestClock},
     linera_execution::WasmRuntime,
     linera_views::test_utils::generate_test_namespace,
-    linera_storage_service::{common::{ServiceContextError, SharedStoreConfig}, client::create_service_test_config},
+    linera_storage_service::{common::{ServiceContextError, ServiceStoreConfig}, client::create_service_test_config},
 };
 
-pub type ServiceStorage<C> = DbStorage<SharedStoreClient, C>;
+pub type ServiceStorage<C> = DbStorage<ServiceStoreClient, C>;
 
 #[cfg(any(test, feature = "test"))]
 impl ServiceStorage<TestClock> {
@@ -31,13 +31,13 @@ impl ServiceStorage<TestClock> {
     }
 
     pub async fn new_for_testing(
-        store_config: SharedStoreConfig,
+        store_config: ServiceStoreConfig,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
     ) -> Result<Self, ServiceContextError> {
         let storage =
-            DbStorageInner::<SharedStoreClient>::new_for_testing(store_config, namespace, wasm_runtime)
+            DbStorageInner::<ServiceStoreClient>::new_for_testing(store_config, namespace, wasm_runtime)
                 .await?;
         Ok(Self::create(storage, clock))
     }
