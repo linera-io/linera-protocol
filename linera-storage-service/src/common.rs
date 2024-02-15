@@ -16,7 +16,7 @@ const TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES: usize = 10;
 const TEST_SHARED_STORE_MAX_STREAM_QUERIES: usize = 10;
 
 #[derive(Debug, Error)]
-pub enum SharedContextError {
+pub enum ServiceContextError {
     /// Not matching entry
     #[error("Not matching entry")]
     NotMatchingEntry,
@@ -38,8 +38,8 @@ pub enum SharedContextError {
     DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 }
 
-impl From<SharedContextError> for linera_views::views::ViewError {
-    fn from(error: SharedContextError) -> Self {
+impl From<ServiceContextError> for linera_views::views::ViewError {
+    fn from(error: ServiceContextError) -> Self {
         Self::ContextError {
             backend: "service".to_string(),
             error: error.to_string(),

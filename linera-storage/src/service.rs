@@ -9,7 +9,7 @@ use {
     crate::db_storage::{DbStorageInner, TestClock},
     linera_execution::WasmRuntime,
     linera_views::test_utils::generate_test_namespace,
-    linera_storage_service::{common::{SharedContextError, SharedStoreConfig}, client::create_service_test_config},
+    linera_storage_service::{common::{ServiceContextError, SharedStoreConfig}, client::create_service_test_config},
 };
 
 pub type ServiceStorage<C> = DbStorage<SharedStoreClient, C>;
@@ -35,7 +35,7 @@ impl ServiceStorage<TestClock> {
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
-    ) -> Result<Self, SharedContextError> {
+    ) -> Result<Self, ServiceContextError> {
         let storage =
             DbStorageInner::<SharedStoreClient>::new_for_testing(store_config, namespace, wasm_runtime)
                 .await?;

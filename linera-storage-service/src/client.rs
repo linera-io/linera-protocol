@@ -5,7 +5,7 @@
 use linera_views::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace};
 
 use crate::{
-    common::{SharedContextError, SharedStoreConfig},
+    common::{ServiceContextError, SharedStoreConfig},
     key_value_store::{
         statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
         ReplyContainsKey, ReplyExistNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
@@ -60,7 +60,7 @@ pub struct SharedStoreClient {
 }
 
 #[async_trait]
-impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
+impl ReadableKeyValueStore<ServiceContextError> for SharedStoreClient {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -69,7 +69,7 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         self.max_stream_queries
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, SharedContextError> {
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ServiceContextError> {
         let mut full_key = self.namespace.clone();
         full_key.extend(key);
         let query = RequestReadValue { key: full_key };
@@ -82,7 +82,7 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
         Ok(value.clone())
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, SharedContextError> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, ServiceContextError> {
         let mut full_key = self.namespace.clone();
         full_key.extend(key);
         let query = RequestContainsKey { key: full_key };
@@ -98,7 +98,7 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, SharedContextError> {
+    ) -> Result<Vec<Option<Vec<u8>>>, ServiceContextError> {
         let mut full_keys = Vec::new();
         for key in keys {
             let mut full_key = self.namespace.clone();
@@ -119,7 +119,7 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, SharedContextError> {
+    ) -> Result<Vec<Vec<u8>>, ServiceContextError> {
         let mut full_key_prefix = self.namespace.clone();
         full_key_prefix.extend(key_prefix);
         let query = RequestFindKeysByPrefix {
@@ -137,7 +137,7 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, SharedContextError> {
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ServiceContextError> {
         let mut full_key_prefix = self.namespace.clone();
         full_key_prefix.extend(key_prefix);
         let query = RequestFindKeyValuesByPrefix {
@@ -158,10 +158,10 @@ impl ReadableKeyValueStore<SharedContextError> for SharedStoreClient {
 }
 
 #[async_trait]
-impl WritableKeyValueStore<SharedContextError> for SharedStoreClient {
+impl WritableKeyValueStore<ServiceContextError> for SharedStoreClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), SharedContextError> {
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), ServiceContextError> {
         use crate::client::Operation;
         use linera_views::batch::WriteOperation;
         let mut statements = Vec::new();
@@ -202,7 +202,7 @@ impl WritableKeyValueStore<SharedContextError> for SharedStoreClient {
         Ok(())
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), SharedContextError> {
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), ServiceContextError> {
         let mut full_base_key = self.namespace.clone();
         full_base_key.extend(base_key);
         let query = RequestClearJournal {
@@ -217,7 +217,7 @@ impl WritableKeyValueStore<SharedContextError> for SharedStoreClient {
 }
 
 impl KeyValueStore for SharedStoreClient {
-    type Error = SharedContextError;
+    type Error = ServiceContextError;
 }
 
 impl SharedStoreClient {
@@ -229,7 +229,7 @@ impl SharedStoreClient {
         }
     }
 
-    fn namespace_as_vec(namespace: &str) -> Result<Vec<u8>, SharedContextError> {
+    fn namespace_as_vec(namespace: &str) -> Result<Vec<u8>, ServiceContextError> {
         let mut key = vec![0];
         bcs::serialize_into(&mut key, namespace)?;
         Ok(key)
@@ -237,10 +237,10 @@ impl SharedStoreClient {
 }
 
 #[async_trait]
-impl AdminKeyValueStore<SharedContextError> for SharedStoreClient {
+impl AdminKeyValueStore<ServiceContextError> for SharedStoreClient {
     type Config = SharedStoreConfig;
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, SharedContextError> {
+    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ServiceContextError> {
         let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
         let client = StoreProcessorClient::connect(endpoint).await?;
         let client = Arc::new(RwLock::new(client));
@@ -258,7 +258,7 @@ impl AdminKeyValueStore<SharedContextError> for SharedStoreClient {
         })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, SharedContextError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, ServiceContextError> {
         let query = RequestListAll {};
         let request = tonic::Request::new(query);
         let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
@@ -273,7 +273,7 @@ impl AdminKeyValueStore<SharedContextError> for SharedStoreClient {
         Ok(namespaces)
     }
 
-    async fn delete_all(config: &Self::Config) -> Result<(), SharedContextError> {
+    async fn delete_all(config: &Self::Config) -> Result<(), ServiceContextError> {
         let query = RequestDeleteAll {};
         let request = tonic::Request::new(query);
         let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
@@ -282,7 +282,7 @@ impl AdminKeyValueStore<SharedContextError> for SharedStoreClient {
         Ok(())
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, SharedContextError> {
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ServiceContextError> {
         let namespace = Self::namespace_as_vec(namespace)?;
         let query = RequestExistNamespace { namespace };
         let request = tonic::Request::new(query);
@@ -294,7 +294,7 @@ impl AdminKeyValueStore<SharedContextError> for SharedStoreClient {
         Ok(test)
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), SharedContextError> {
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), ServiceContextError> {
         let namespace = Self::namespace_as_vec(namespace)?;
         let query = RequestCreateNamespace { namespace };
         let request = tonic::Request::new(query);
@@ -304,7 +304,7 @@ impl AdminKeyValueStore<SharedContextError> for SharedStoreClient {
         Ok(())
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), SharedContextError> {
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), ServiceContextError> {
         let namespace = Self::namespace_as_vec(namespace)?;
         let query = RequestDeleteNamespace { namespace };
         let request = tonic::Request::new(query);
@@ -327,7 +327,7 @@ pub fn create_service_store_common_config() -> CommonStoreConfig {
 #[cfg(any(test, feature = "test"))]
 pub async fn create_service_test_config(
     endpoint: String,
-) -> Result<SharedStoreConfig, SharedContextError> {
+) -> Result<SharedStoreConfig, ServiceContextError> {
     let common_config = create_service_store_common_config();
     let endpoint = format!("http://{}", endpoint);
     Ok(SharedStoreConfig {
@@ -339,7 +339,7 @@ pub async fn create_service_test_config(
 #[cfg(any(test, feature = "test"))]
 pub async fn create_service_test_store(
     endpoint: String,
-) -> Result<SharedStoreClient, SharedContextError> {
+) -> Result<SharedStoreClient, ServiceContextError> {
     let config = create_service_test_config(endpoint).await.unwrap();
     let namespace = generate_test_namespace();
     SharedStoreClient::connect(&config, &namespace).await
@@ -348,7 +348,7 @@ pub async fn create_service_test_store(
 #[cfg(any(test, feature = "test"))]
 pub(crate) async fn storage_service_check_endpoint(
     endpoint: String,
-) -> Result<(), SharedContextError> {
+) -> Result<(), ServiceContextError> {
     let store = create_service_test_store(endpoint).await?;
     let _value = store.read_value_bytes(&[0]).await?;
     Ok(())
