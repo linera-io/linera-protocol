@@ -19,6 +19,7 @@ test = [
     "linera-chain/test",
     "linera-execution/test",
     "linera-storage/test",
+    "linera-storage-service/test",
     "linera-views/test",
     "proptest",
     "tempfile",
@@ -56,6 +57,7 @@ linera-base.workspace = true
 linera-chain.workspace = true
 linera-execution.workspace = true
 linera-storage.workspace = true
+linera-storage-service.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true
 lru.workspace = true

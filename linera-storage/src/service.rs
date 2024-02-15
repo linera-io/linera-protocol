@@ -8,8 +8,11 @@ use linera_storage_service::client::ServiceStoreClient;
 use {
     crate::db_storage::{DbStorageInner, TestClock},
     linera_execution::WasmRuntime,
+    linera_storage_service::{
+        client::create_service_test_config,
+        common::{ServiceContextError, ServiceStoreConfig},
+    },
     linera_views::test_utils::generate_test_namespace,
-    linera_storage_service::{common::{ServiceContextError, ServiceStoreConfig}, client::create_service_test_config},
 };
 
 pub type ServiceStorage<C> = DbStorage<ServiceStoreClient, C>;
@@ -18,16 +21,13 @@ pub type ServiceStorage<C> = DbStorage<ServiceStoreClient, C>;
 impl ServiceStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let endpoint = "127.0.0.1:8942".to_string();
-        let store_config = create_service_test_config(endpoint).await.expect("store_config");
+        let store_config = create_service_test_config(endpoint)
+            .await
+            .expect("store_config");
         let namespace = generate_test_namespace();
-        ServiceStorage::new_for_testing(
-            store_config,
-            &namespace,
-            wasm_runtime,
-            TestClock::new(),
-        )
-        .await
-        .expect("storage")
+        ServiceStorage::new_for_testing(store_config, &namespace, wasm_runtime, TestClock::new())
+            .await
+            .expect("storage")
     }
 
     pub async fn new_for_testing(
@@ -36,9 +36,12 @@ impl ServiceStorage<TestClock> {
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
     ) -> Result<Self, ServiceContextError> {
-        let storage =
-            DbStorageInner::<ServiceStoreClient>::new_for_testing(store_config, namespace, wasm_runtime)
-                .await?;
+        let storage = DbStorageInner::<ServiceStoreClient>::new_for_testing(
+            store_config,
+            namespace,
+            wasm_runtime,
+        )
+        .await?;
         Ok(Self::create(storage, clock))
     }
 }

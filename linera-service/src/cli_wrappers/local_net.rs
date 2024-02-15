@@ -369,7 +369,10 @@ impl LocalNet {
     async fn run_server(&mut self, i: usize, j: usize) -> Result<Child> {
         let (storage, key) = match self.database {
             Database::Service => (
-                format!("service:{}_server_{}_db", self.table_name, i),
+                format!(
+                    "service:http://127.0.0.1:8742:{}_server_{}_db",
+                    self.table_name, i
+                ),
                 (i, 0),
             ),
             Database::RocksDb => (format!("rocksdb:server_{}_{}.db", i, j), (i, j)),

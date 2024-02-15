@@ -11,6 +11,7 @@
 pub use async_trait::async_trait;
 
 pub mod abi;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod command;
 pub mod crypto;
 pub mod data_types;

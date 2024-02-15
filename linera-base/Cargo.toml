@@ -34,11 +34,13 @@ serde_bytes.workspace = true
 sha3.workspace = true
 test-strategy = { workspace = true, optional = true }
 thiserror.workspace = true
-tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
-tracing.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+chrono.workspace = true
 rand = { workspace = true, features = ["getrandom", "std", "std_rng"] }
+tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
+tracing.workspace = true
+prometheus.workspace = true
 
 [dev-dependencies]
 custom_debug_derive.workspace = true

@@ -237,7 +237,8 @@ impl ServiceStoreClient {
 }
 
 #[async_trait]
-impl AdminKeyValueStore<ServiceContextError> for ServiceStoreClient {
+impl AdminKeyValueStore for ServiceStoreClient {
+    type Error = ServiceContextError;
     type Config = ServiceStoreConfig;
 
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ServiceContextError> {

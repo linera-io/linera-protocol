@@ -995,6 +995,8 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     net.terminate().await.unwrap();
 }
 
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
+#[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "service_tcp"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
