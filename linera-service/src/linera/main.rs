@@ -783,9 +783,15 @@ impl Runnable for Job {
                     })
                     .unwrap_or_else(Timestamp::now);
                 let genesis_config = Arc::new(context.wallet_state().genesis_config().clone());
-                let faucet =
-                    FaucetService::new(port, chain_client, amount, end_timestamp, genesis_config)
-                        .await?;
+                let faucet = FaucetService::new(
+                    port,
+                    chain_client,
+                    context,
+                    amount,
+                    end_timestamp,
+                    genesis_config,
+                )
+                .await?;
                 faucet.run().await?;
             }
 

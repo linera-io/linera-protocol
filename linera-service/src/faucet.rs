@@ -25,7 +25,7 @@ use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info};
 
-use crate::{config::GenesisConfig, util};
+use crate::{chain_listener::ClientContext, config::GenesisConfig, util};
 
 #[cfg(test)]
 #[path = "unit_tests/faucet.rs"]
@@ -38,8 +38,9 @@ pub struct QueryRoot<P, S> {
 }
 
 /// The root GraphQL mutation type.
-pub struct MutationRoot<P, S> {
+pub struct MutationRoot<P, S, C> {
     client: Arc<Mutex<ChainClient<P, S>>>,
+    context: Arc<Mutex<C>>,
     amount: Amount,
     end_timestamp: Timestamp,
     start_timestamp: Timestamp,
@@ -108,10 +109,11 @@ where
 }
 
 #[Object]
-impl<P, S> MutationRoot<P, S>
+impl<P, S, C> MutationRoot<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
+    C: ClientContext<P> + Send + 'static,
     ViewError: From<S::ContextError>,
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
@@ -120,10 +122,11 @@ where
     }
 }
 
-impl<P, S> MutationRoot<P, S>
+impl<P, S, C> MutationRoot<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
+    C: ClientContext<P> + Send + 'static,
     ViewError: From<S::ContextError>,
 {
     async fn do_claim(&self, public_key: PublicKey) -> Result<ClaimOutcome, Error> {
@@ -153,7 +156,9 @@ where
         }
 
         let ownership = ChainOwnership::single(public_key);
-        let (message_id, certificate) = match client.open_chain(ownership, self.amount).await? {
+        let result = client.open_chain(ownership, self.amount).await;
+        self.context.lock().await.update_wallet(&mut *client).await;
+        let (message_id, certificate) = match result? {
             ClientOutcome::Committed(result) => result,
             ClientOutcome::WaitForTimeout(timeout) => {
                 return Err(Error::new(format!(
@@ -172,7 +177,7 @@ where
     }
 }
 
-impl<P, S> MutationRoot<P, S> {
+impl<P, S, C> MutationRoot<P, S, C> {
     /// Multiplies a `u128` with a `u64` and returns the result as a 192-bit number.
     fn multiply(a: u128, b: u64) -> [u64; 3] {
         let lower = u128::from(u64::MAX);
@@ -185,9 +190,9 @@ impl<P, S> MutationRoot<P, S> {
 }
 
 /// A GraphQL interface to request a new chain with tokens.
-#[derive(Clone)]
-pub struct FaucetService<P, S> {
+pub struct FaucetService<P, S, C> {
     client: Arc<Mutex<ChainClient<P, S>>>,
+    context: Arc<Mutex<C>>,
     genesis_config: Arc<GenesisConfig>,
     port: NonZeroU16,
     amount: Amount,
@@ -196,16 +201,33 @@ pub struct FaucetService<P, S> {
     start_balance: Amount,
 }
 
-impl<P, S> FaucetService<P, S>
+impl<P, S: Clone, C> Clone for FaucetService<P, S, C> {
+    fn clone(&self) -> Self {
+        Self {
+            client: self.client.clone(),
+            context: self.context.clone(),
+            genesis_config: self.genesis_config.clone(),
+            port: self.port,
+            amount: self.amount,
+            end_timestamp: self.end_timestamp,
+            start_timestamp: self.start_timestamp,
+            start_balance: self.start_balance,
+        }
+    }
+}
+
+impl<P, S, C> FaucetService<P, S, C>
 where
     P: ValidatorNodeProvider + Send + Sync + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
+    C: ClientContext<P> + Send + 'static,
     ViewError: From<S::ContextError>,
 {
     /// Creates a new instance of the faucet service.
     pub async fn new(
         port: NonZeroU16,
         mut client: ChainClient<P, S>,
+        context: C,
         amount: Amount,
         end_timestamp: Timestamp,
         genesis_config: Arc<GenesisConfig>,
@@ -215,6 +237,7 @@ where
         let start_balance = client.local_balance().await?;
         Ok(Self {
             client: Arc::new(Mutex::new(client)),
+            context: Arc::new(Mutex::new(context)),
             genesis_config,
             port,
             amount,
@@ -224,9 +247,10 @@ where
         })
     }
 
-    pub fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S>, EmptySubscription> {
+    pub fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S, C>, EmptySubscription> {
         let mutation_root = MutationRoot {
             client: self.client.clone(),
+            context: self.context.clone(),
             amount: self.amount,
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
