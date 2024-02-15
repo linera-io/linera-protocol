@@ -3,10 +3,9 @@
 
 //! Command functionality used for spanning child processes.
 
-use anyhow::Context;
+use anyhow::{ensure, Context};
 use async_trait::async_trait;
 use std::process::Stdio;
-use anyhow::ensure;
 use tracing::debug;
 
 /// Extension trait for [`tokio::process::Command`].

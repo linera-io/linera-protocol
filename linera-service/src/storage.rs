@@ -184,7 +184,6 @@ impl FromStr for StorageConfig {
                 }
             };
             return Ok(Self::DynamoDb {
-                namespace,
                 use_localstack,
                 namespace,
             });
@@ -398,7 +397,7 @@ impl StoreConfig {
                 error: "initialize does not make sense for memory storage".to_string(),
             }),
             StoreConfig::Service(config, namespace) => {
-                SharedStoreClient::initialize(&config, &namespace).await?;
+                SharedStoreClient::maybe_create_and_connect(&config, &namespace).await?;
                 Ok(())
             }
             #[cfg(feature = "rocksdb")]

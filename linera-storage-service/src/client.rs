@@ -19,10 +19,7 @@ use async_lock::{RwLock, Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use linera_views::{
     batch::Batch,
-    common::{
-        AdminKeyValueStore, KeyValueStore, ReadableKeyValueStore,
-        WritableKeyValueStore,
-    },
+    common::{AdminKeyValueStore, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
 };
 use std::sync::Arc;
 use tonic::transport::{Channel, Endpoint};

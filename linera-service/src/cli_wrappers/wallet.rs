@@ -6,12 +6,13 @@ use crate::{
     config::{GenesisConfig, WalletState},
     faucet::ClaimOutcome,
     util,
-    util::{ChildExt, CommandExt},
+    util::ChildExt,
 };
 use anyhow::{bail, Context, Result};
 use async_graphql::InputType;
 use linera_base::{
     abi::ContractAbi,
+    command::CommandExt,
     crypto::{CryptoHash, PublicKey},
     data_types::Amount,
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},

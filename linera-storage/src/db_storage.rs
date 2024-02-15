@@ -462,35 +462,3 @@ where
         Ok(Self::create(storage, WallClock))
     }
 }
-
-impl<Client> DbStorage<Client, WallClock>
-where
-    Client: KeyValueStore
-        + AdminKeyValueStore<<Client as KeyValueStore>::Error>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
-    ViewError: From<<Client as KeyValueStore>::Error>,
-    <Client as KeyValueStore>::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
-{
-    pub async fn initialize(
-        store_config: Client::Config,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let storage =
-            DbStorageInner::<Client>::initialize(store_config, namespace, wasm_runtime).await?;
-        Ok(Self::create(storage, WallClock))
-    }
-
-    pub async fn new(
-        store_config: Client::Config,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let storage = DbStorageInner::<Client>::make(store_config, namespace, wasm_runtime).await?;
-        Ok(Self::create(storage, WallClock))
-    }
-}

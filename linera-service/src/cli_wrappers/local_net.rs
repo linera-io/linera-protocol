@@ -4,11 +4,11 @@
 use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
     util,
-    util::{ChildExt, CommandExt},
+    util::ChildExt,
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use async_trait::async_trait;
-use linera_base::data_types::Amount;
+use linera_base::{command::CommandExt, data_types::Amount};
 use linera_execution::ResourceControlPolicy;
 use std::{
     collections::{BTreeMap, HashSet},

@@ -1,15 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, ensure, Context as _, Result};
+use anyhow::{bail, Context as _, Result};
 use async_graphql::http::GraphiQLSource;
-use async_trait::async_trait;
 use axum::response::{self, IntoResponse};
 use http::Uri;
 use std::{
     num::ParseIntError,
     path::{Path, PathBuf},
-    process::Stdio,
     time::Duration,
 };
 use tokio::process::Command;
