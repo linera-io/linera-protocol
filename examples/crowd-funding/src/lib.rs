@@ -72,9 +72,9 @@ predictable.
 
 ```bash
 CHAIN_0=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
-OWNER_0=e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316
+OWNER_0=7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f
 CHAIN_1=1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03
-OWNER_1=5d1b22ce0fe6a8bd45aa7d10e753a29bf569a2e39f22a63c462300f7dd41f7da
+OWNER_1=b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd
 ```
 
 Alternatively, the command below can be used to list the chains created for the test as
@@ -92,7 +92,7 @@ A table will be shown with the chains registered in the wallet and their meta-da
 │ Chain Id                                                         ┆ Latest Block                                                                         │
 ╞══════════════════════════════════════════════════════════════════╪══════════════════════════════════════════════════════════════════════════════════════╡
 │ 1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03 ┆ Public Key:         84eddaaafce7fb923c3b2494b3d25e54e910490a726ad9b3a2228d3fb18f9874 │
-│                                                                  ┆ Owner:              5d1b22ce0fe6a8bd45aa7d10e753a29bf569a2e39f22a63c462300f7dd41f7da │
+│                                                                  ┆ Owner:              b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd │
 │                                                                  ┆ Block Hash:         -                                                                │
 │                                                                  ┆ Timestamp:          2023-06-28 09:53:51.167301                                       │
 │                                                                  ┆ Next Block Height:  0                                                                │
@@ -203,7 +203,7 @@ CAMPAIGN=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1
 
 ```gql,uri=$CAMPAIGN
 mutation { pledgeWithTransfer(
-    owner:"User:e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316",
+    owner:"User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
     amount:"30."
 ) }
 ```
@@ -226,12 +226,12 @@ TOKEN1=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0
 ```gql,uri=$TOKEN1
 mutation { claim(
   sourceAccount: {
-    owner: "User:5d1b22ce0fe6a8bd45aa7d10e753a29bf569a2e39f22a63c462300f7dd41f7da",
+    owner: "User:b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd",
     chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
   },
   amount: "200.",
   targetAccount: {
-    owner: "User:5d1b22ce0fe6a8bd45aa7d10e753a29bf569a2e39f22a63c462300f7dd41f7da",
+    owner: "User:b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd",
     chainId: "1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03"
   }
 ) }
@@ -241,7 +241,7 @@ You can check that the 200 tokens have arrived:
 
 ```gql,uri=$TOKEN1
 query {
-    accounts { entry(key: "User:5d1b22ce0fe6a8bd45aa7d10e753a29bf569a2e39f22a63c462300f7dd41f7da") { value } }
+    accounts { entry(key: "User:b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd") { value } }
 }
 ```
 
@@ -255,7 +255,7 @@ PLEDGE1=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1
 
 ```gql,uri=$PLEDGE1
 mutation { pledgeWithTransfer(
-  owner:"User:5d1b22ce0fe6a8bd45aa7d10e753a29bf569a2e39f22a63c462300f7dd41f7da",
+  owner:"User:b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd",
   amount:"80."
 ) }
 ```
@@ -276,7 +276,7 @@ check that we have received 110 tokens, in addition to the
 query {
     accounts {
         entry(
-            key: "User:e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316"
+            key: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f"
         ) {
             value
         }

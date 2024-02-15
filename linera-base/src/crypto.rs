@@ -23,7 +23,7 @@ use {
 };
 
 /// A signature key-pair.
-pub struct KeyPair(dalek::Keypair);
+pub struct KeyPair(dalek::SigningKey);
 
 /// A signature public key.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash)]
@@ -74,21 +74,21 @@ impl PublicKey {
     }
 }
 
-/// Wrapper around [`rand07::CryptoRng`] and [`rand07::RngCore`].
+/// Wrapper around [`rand::CryptoRng`] and [`rand::RngCore`].
 #[cfg(not(target_arch = "wasm32"))]
-pub trait CryptoRng: rand07::CryptoRng + rand07::RngCore + Send + Sync {}
+pub trait CryptoRng: rand::CryptoRng + rand::RngCore + Send + Sync {}
 
 #[cfg(not(target_arch = "wasm32"))]
-impl<T: rand07::CryptoRng + rand07::RngCore + Send + Sync> CryptoRng for T {}
+impl<T: rand::CryptoRng + rand::RngCore + Send + Sync> CryptoRng for T {}
 
 #[cfg(not(target_arch = "wasm32"))]
 impl From<Option<u64>> for Box<dyn CryptoRng> {
     fn from(seed: Option<u64>) -> Self {
-        use rand07::SeedableRng;
+        use rand::SeedableRng;
 
         match seed {
-            Some(seed) => Box::new(rand07::rngs::StdRng::seed_from_u64(seed)),
-            None => Box::new(rand07::rngs::OsRng),
+            Some(seed) => Box::new(rand::rngs::StdRng::seed_from_u64(seed)),
+            None => Box::new(rand::rngs::OsRng),
         }
     }
 }
@@ -97,20 +97,20 @@ impl KeyPair {
     /// Generates a new key-pair.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn generate() -> Self {
-        let mut rng = rand07::rngs::OsRng;
+        let mut rng = rand::rngs::OsRng;
         Self::generate_from(&mut rng)
     }
 
     /// Generates a new key-pair from the given RNG. Use with care.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn generate_from<R: CryptoRng>(rng: &mut R) -> Self {
-        let keypair = dalek::Keypair::generate(rng);
+        let keypair = dalek::SigningKey::generate(rng);
         KeyPair(keypair)
     }
 
     /// Obtains the public key of a key-pair.
     pub fn public(&self) -> PublicKey {
-        PublicKey(self.0.public.to_bytes())
+        PublicKey(self.0.verifying_key().to_bytes())
     }
 
     /// Copies the key-pair, **including the secret key**.
@@ -118,10 +118,7 @@ impl KeyPair {
     /// The `Clone` and `Copy` traits are deliberately not implemented for `KeyPair` to prevent
     /// accidental copies of secret keys.
     pub fn copy(&self) -> KeyPair {
-        KeyPair(dalek::Keypair {
-            secret: dalek::SecretKey::from_bytes(self.0.secret.as_bytes()).unwrap(),
-            public: self.0.public,
-        })
+        KeyPair(self.0.clone())
     }
 }
 
@@ -211,7 +208,8 @@ impl<'de> Deserialize<'de> for KeyPair {
         assert!(deserializer.is_human_readable());
         let s = String::deserialize(deserializer)?;
         let value = hex::decode(s).map_err(serde::de::Error::custom)?;
-        let key = dalek::Keypair::from_bytes(&value).map_err(serde::de::Error::custom)?;
+        let key =
+            dalek::SigningKey::from_bytes(value[..].try_into().map_err(serde::de::Error::custom)?);
         Ok(KeyPair(key))
     }
 }
@@ -452,7 +450,7 @@ impl Signature {
     {
         let mut message = Vec::new();
         value.write(&mut message);
-        let public_key = dalek::PublicKey::from_bytes(&author.0)?;
+        let public_key = dalek::VerifyingKey::from_bytes(&author.0)?;
         public_key.verify(&message, &self.0)
     }
 
@@ -498,7 +496,7 @@ impl Signature {
         for (addr, sig) in votes.into_iter() {
             messages.push(msg.as_slice());
             signatures.push(sig.0);
-            public_keys.push(dalek::PublicKey::from_bytes(&addr.0)?);
+            public_keys.push(dalek::VerifyingKey::from_bytes(&addr.0)?);
         }
         dalek::verify_batch(&messages[..], &signatures[..], &public_keys[..])
     }

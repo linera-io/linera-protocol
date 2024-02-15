@@ -3,6 +3,8 @@
 
 //! Types useful for sending synchronous responses from a [`RuntimeActor`]
 
+// TODO(#1416)
+#[allow(dead_code)]
 /// Creates a channel that wraps a [`oneshot`] channel with the [`Sender`] type not
 /// implementing [`std::future::Future`].
 ///
@@ -23,12 +25,16 @@ impl<T> SyncSender<T> {
     }
 }
 
+// TODO(#1416)
+#[allow(dead_code)]
 /// A wrapper around [`oneshot::Receiver`] that is connected to a synchronous [`SyncSender`].
 ///
 /// This type does not implement [`std::future::Future`], so it can't be used to receive
 /// messages asynchronously.
 pub struct SyncReceiver<T>(oneshot::Receiver<T>);
 
+// TODO(#1416)
+#[allow(dead_code)]
 impl<T> SyncReceiver<T> {
     /// Blocks until a message from the [`SyncSender`] endpoint is received.
     pub fn recv(self) -> Result<T, oneshot::RecvError> {

@@ -22,6 +22,8 @@ pub trait UnboundedSenderExt<Request> {
     where
         Response: Send;
 
+    // TODO(#1416)
+    #[allow(dead_code)]
     /// Sends a synchronous request built by `builder`, blocking until the `Response` is received.
     fn send_sync_request<Response>(
         &self,
@@ -56,6 +58,8 @@ where
         Ok(response_receiver)
     }
 
+    // TODO(#1416)
+    #[allow(dead_code)]
     fn send_sync_request<Response>(
         &self,
         builder: impl FnOnce(SyncSender<Response>) -> Request,

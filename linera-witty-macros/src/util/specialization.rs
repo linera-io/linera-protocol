@@ -279,7 +279,7 @@ impl Specialization {
 
         while let Some(inner_type) = &type_path.qself {
             type_path = match &*inner_type.ty {
-                Type::Path(path) => &path,
+                Type::Path(path) => path,
                 _ => return false,
             };
         }

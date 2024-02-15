@@ -4,7 +4,7 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 mod state;
-use crate::state::{KeyBook, OrderEntry, Transfer};
+use crate::state::{KeyBook, OrderEntry};
 use matching_engine::{
     product_price_amount, ApplicationCall, Message, Operation, Order, OrderId, OrderNature, Price,
 };
@@ -33,6 +33,17 @@ impl WithContractAbi for MatchingEngine {
 enum ModifyAmount {
     All,
     Partial(Amount),
+}
+
+/// Transfer operation back to the owners
+#[derive(Clone)]
+pub struct Transfer {
+    /// Beneficiary of the transfer
+    pub owner: AccountOwner,
+    /// Amount being transferred
+    pub amount: Amount,
+    /// Index of the token being transferred (0 or 1)
+    pub token_idx: u32,
 }
 
 #[async_trait]

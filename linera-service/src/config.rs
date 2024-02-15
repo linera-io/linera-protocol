@@ -23,7 +23,7 @@ use linera_execution::{
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use rand07::Rng;
+use rand::Rng as _;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
