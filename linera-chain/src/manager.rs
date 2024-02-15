@@ -242,10 +242,11 @@ impl ChainManager {
             if old_proposal.content == proposal.content {
                 return Ok(Outcome::Skip); // We already voted for this proposal; nothing to do.
             }
-            if new_round <= old_proposal.content.round {
+            ensure!(
+                new_round > old_proposal.content.round,
                 // We already accepted a proposal in this round or in a higher round.
-                return Err(ChainError::InsufficientRound(old_proposal.content.round));
-            }
+                ChainError::InsufficientRoundStrict(old_proposal.content.round)
+            );
             // Any proposal in the fast round is considered locked, because validators vote to
             // confirm it immediately.
             if old_proposal.content.round.is_fast() && validated.is_none() {
@@ -335,7 +336,7 @@ impl ChainManager {
             }
             ensure!(
                 new_round > locked.round,
-                ChainError::InsufficientRound(locked.round)
+                ChainError::InsufficientRoundStrict(locked.round)
             );
         }
         Ok(Outcome::Accept)
