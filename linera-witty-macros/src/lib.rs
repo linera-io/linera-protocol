@@ -14,7 +14,7 @@ mod wit_load;
 mod wit_store;
 mod wit_type;
 
-use self::util::{apply_specialization_attribute, extract_namespace, Specializations};
+use self::util::{apply_specialization_attribute, AttributeParameters, Specializations};
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use proc_macro_error::{abort, proc_macro_error};
@@ -132,9 +132,9 @@ fn derive_trait(
 #[proc_macro_attribute]
 pub fn wit_import(attribute: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemTrait);
-    let namespace = extract_namespace(attribute, &input.ident);
+    let parameters = AttributeParameters::new(attribute);
 
-    wit_import::generate(input, &namespace).into()
+    wit_import::generate(input, parameters).into()
 }
 
 /// Registers an `impl` block's functions as callable host functions exported to guest Wasm
@@ -147,7 +147,7 @@ pub fn wit_import(attribute: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn wit_export(attribute: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemImpl);
-    let namespace = extract_namespace(attribute, wit_export::type_name(&input));
+    let parameters = AttributeParameters::new(attribute);
 
-    wit_export::generate(&input, &namespace).into()
+    wit_export::generate(&input, parameters).into()
 }

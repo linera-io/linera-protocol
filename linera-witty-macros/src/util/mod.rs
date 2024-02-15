@@ -45,7 +45,7 @@ pub fn apply_specialization_attribute(input: &mut DeriveInput) -> Specialization
 }
 
 /// A type representing the parameters for an attribute procedural macro.
-struct AttributeParameters {
+pub struct AttributeParameters {
     metadata: Punctuated<MetaNameValue, Token![,]>,
 }
 
@@ -58,6 +58,17 @@ impl Parse for AttributeParameters {
 }
 
 impl AttributeParameters {
+    /// Parses the attribute parameters to the attribute procedural macro.
+    pub fn new(attribute_parameters: proc_macro::TokenStream) -> Self {
+        syn::parse(attribute_parameters.clone()).unwrap_or_else(|_| {
+            abort!(
+                TokenStream::from(attribute_parameters),
+                r#"Failed to parse attribute parameters, expected either `root = true` \
+                or `package = "namespace:package""#
+            )
+        })
+    }
+
     /// Returns the string value of a parameter named `name`, if it exists.
     pub fn parameter(&self, name: &str) -> Option<&'_ LitStr> {
         self.metadata
