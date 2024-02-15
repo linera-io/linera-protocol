@@ -216,7 +216,7 @@ impl<'input> FunctionInformation<'input> {
     }
 
     /// Generates the code to export a host function using a mock Wasm instance for testing.
-    #[cfg(feature = "mock-instance")]
+    #[cfg(feature = "test")]
     pub fn generate_for_mock_instance(
         &self,
         namespace: &LitStr,

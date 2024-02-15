@@ -3,7 +3,7 @@
 
 //! Generation of code to export host functions to a Wasm guest instance.
 
-#![cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
+#![cfg(any(feature = "test", feature = "wasmer", feature = "wasmtime"))]
 
 mod caller_type_parameter;
 mod function_information;
@@ -124,7 +124,7 @@ impl<'input> WitExportGenerator<'input> {
 
     /// Generates the code to export functions to a mock instance for testing.
     fn generate_for_mock_instance(&mut self) -> Option<TokenStream> {
-        #[cfg(feature = "mock-instance")]
+        #[cfg(feature = "test")]
         {
             let user_data_type = self.user_data_type();
             let export_target = quote! { linera_witty::MockInstance<#user_data_type> };
@@ -140,7 +140,7 @@ impl<'input> WitExportGenerator<'input> {
 
             Some(self.generate_for(export_target, &target_caller_type, exported_functions))
         }
-        #[cfg(not(feature = "mock-instance"))]
+        #[cfg(not(feature = "test"))]
         {
             None
         }

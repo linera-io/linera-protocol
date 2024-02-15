@@ -6,7 +6,7 @@
 mod fields;
 mod specialization;
 
-#[cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
+#[cfg(any(feature = "test", feature = "wasmer", feature = "wasmtime"))]
 pub use self::specialization::Specialization;
 pub use self::{fields::FieldsInformation, specialization::Specializations};
 use heck::ToKebabCase;

@@ -14,7 +14,7 @@ edition = "2021"
 proc-macro = true
 
 [features]
-mock-instance = ["syn/extra-traits"]
+test = ["syn/extra-traits"]
 wasmer = ["syn/extra-traits"]
 wasmtime = ["syn/extra-traits"]
 
