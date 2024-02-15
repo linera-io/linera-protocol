@@ -58,6 +58,7 @@ const SERVER_ENV: &str = "LINERA_SERVER_PARAMS";
 /// Description of the database engine to use inside a local Linera network.
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum Database {
+    Service,
     RocksDb,
     DynamoDb,
     ScyllaDb,
@@ -118,6 +119,7 @@ impl Validator {
 impl LocalNetConfig {
     pub fn new_test(database: Database, network: Network) -> Self {
         let num_shards = match database {
+            Database::Service => 4,
             Database::RocksDb => 1,
             Database::DynamoDb => 4,
             Database::ScyllaDb => 4,
@@ -366,6 +368,10 @@ impl LocalNet {
 
     async fn run_server(&mut self, i: usize, j: usize) -> Result<Child> {
         let (storage, key) = match self.database {
+            Database::Service => (
+                format!("service:{}_server_{}_db", self.table_name, i),
+                (i, 0),
+            ),
             Database::RocksDb => (format!("rocksdb:server_{}_{}.db", i, j), (i, j)),
             Database::DynamoDb => (
                 format!("dynamodb:{}_server_{}.db:localstack", self.table_name, i),
