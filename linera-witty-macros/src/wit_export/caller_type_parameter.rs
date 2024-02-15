@@ -16,25 +16,20 @@ use syn::{
 
 /// Information on the  generic type parameter to use for the caller parameter, if present.
 #[derive(Clone, Copy, Debug)]
-pub enum CallerTypeParameter<'input> {
-    NotPresent,
-    WithoutUserData(&'input Ident),
-    WithUserData {
-        caller: &'input Ident,
-        user_data: &'input Type,
-    },
+pub struct CallerTypeParameter<'input> {
+    caller: &'input Ident,
+    user_data: Option<&'input Type>,
 }
 
 impl<'input> CallerTypeParameter<'input> {
     /// Parses a type's [`Generics`] to determine if a caller type parameter should be used.
-    pub fn new(generics: &'input Generics) -> Self {
+    pub fn extract_from(generics: &'input Generics) -> Option<Self> {
         let where_bounds = Self::parse_bounds_from_where_clause(generics.where_clause.as_ref());
 
         generics
             .type_params()
             .filter_map(|parameter| Self::try_from_parameter(parameter, &where_bounds))
             .next()
-            .unwrap_or(CallerTypeParameter::NotPresent)
     }
 
     /// Parses the bounds present in an optional `where_clause`.
@@ -106,14 +101,11 @@ impl<'input> CallerTypeParameter<'input> {
             .filter_map(Self::extract_instance_bound_path_segment)
             .next()?;
 
-        let maybe_user_data =
+        let user_data =
             Self::extract_instance_bound_arguments(&instance_bound_path_segment.arguments)
                 .and_then(Self::extract_instance_bound_user_data);
 
-        match maybe_user_data {
-            Some(user_data) => Some(CallerTypeParameter::WithUserData { caller, user_data }),
-            None => Some(CallerTypeParameter::WithoutUserData(caller)),
-        }
+        Some(CallerTypeParameter { caller, user_data })
     }
 
     /// Extracts the path from a trait `bound`.
@@ -223,21 +215,13 @@ impl<'input> CallerTypeParameter<'input> {
     }
 
     /// Returns the [`Ident`]ifier of the generic type parameter used for the caller.
-    pub fn caller(&self) -> Option<&'input Ident> {
-        match self {
-            CallerTypeParameter::NotPresent => None,
-            CallerTypeParameter::WithoutUserData(caller) => Some(caller),
-            CallerTypeParameter::WithUserData { caller, .. } => Some(caller),
-        }
+    pub fn caller(&self) -> &'input Ident {
+        self.caller
     }
 
     /// Returns the type used for custom user data, if there is a caller type parameter.
     pub fn user_data(&self) -> Option<&'input Type> {
-        match self {
-            CallerTypeParameter::NotPresent => None,
-            CallerTypeParameter::WithoutUserData(_) => None,
-            CallerTypeParameter::WithUserData { user_data, .. } => Some(user_data),
-        }
+        self.user_data
     }
 
     /// Specializes the [`Generics`] to replace the [`CallerTypeParameter`] with the concrete
@@ -268,17 +252,9 @@ impl<'input> CallerTypeParameter<'input> {
             .apply_to_type(target_type);
     }
 
-    /// Builds the [`Specializatons`] instance to replace the [`CallerTypeParameter`] (if there is
-    /// one) with the concrete `caller_type`.
+    /// Builds the [`Specializatons`] instance to replace the [`CallerTypeParameter`] with the
+    /// concrete `caller_type`.
     fn build_specializations(&self, caller_type: Type) -> Specializations {
-        let specialization = match self {
-            CallerTypeParameter::NotPresent => None,
-            CallerTypeParameter::WithoutUserData(caller)
-            | CallerTypeParameter::WithUserData { caller, .. } => {
-                Some(Specialization::new((*caller).clone(), caller_type))
-            }
-        };
-
-        Specializations::from_iter(specialization)
+        Specializations::from_iter(Some(Specialization::new(self.caller.clone(), caller_type)))
     }
 }

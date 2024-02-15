@@ -11,7 +11,7 @@ mod function_information;
 use self::{caller_type_parameter::CallerTypeParameter, function_information::FunctionInformation};
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::{
     parse_quote, punctuated::Punctuated, token::Paren, Generics, Ident, ItemImpl, LitStr, Type,
     TypePath, TypeTuple,
@@ -32,7 +32,7 @@ pub fn generate(implementation: &ItemImpl, namespace: &LitStr) -> TokenStream {
 /// this type. Then, they are used to generate the final code.
 pub struct WitExportGenerator<'input> {
     type_name: &'input Ident,
-    caller_type_parameter: CallerTypeParameter<'input>,
+    caller_type_parameter: Option<CallerTypeParameter<'input>>,
     generics: &'input Generics,
     implementation: &'input ItemImpl,
     functions: Vec<FunctionInformation<'input>>,
@@ -43,11 +43,14 @@ impl<'input> WitExportGenerator<'input> {
     /// Collects the pieces necessary for code generation from the inputs.
     pub fn new(implementation: &'input ItemImpl, namespace: &'input LitStr) -> Self {
         let type_name = type_name(implementation);
-        let caller_type_parameter = CallerTypeParameter::new(&implementation.generics);
+        let caller_type_parameter = CallerTypeParameter::extract_from(&implementation.generics);
+        let caller = caller_type_parameter
+            .as_ref()
+            .map(CallerTypeParameter::caller);
         let functions = implementation
             .items
             .iter()
-            .map(|item| FunctionInformation::from_item(item, caller_type_parameter.caller()))
+            .map(|item| FunctionInformation::from_item(item, caller))
             .collect();
 
         WitExportGenerator {
@@ -151,13 +154,7 @@ impl<'input> WitExportGenerator<'input> {
         target_caller_type: &Type,
         exported_functions: impl Iterator<Item = TokenStream>,
     ) -> TokenStream {
-        let (impl_generics, _type_generics, where_clause) = self
-            .caller_type_parameter
-            .specialize_and_split_generics(self.generics.clone(), target_caller_type.clone());
-        let mut self_type = self.implementation.self_ty.clone();
-
-        self.caller_type_parameter
-            .specialize_type(&mut self_type, target_caller_type.clone());
+        let (impl_generics, self_type, where_clause) = self.prepare_generics(target_caller_type);
 
         quote! {
             impl #impl_generics linera_witty::ExportTo<#export_target> for #self_type
@@ -173,10 +170,34 @@ impl<'input> WitExportGenerator<'input> {
         }
     }
 
+    /// Specializes the [`CallerTypeParameter`] (if present) with the `target_caller_type`, and
+    /// returns the split generics part used in the implementation blocks.
+    fn prepare_generics(&self, target_caller_type: &Type) -> (TokenStream, Type, TokenStream) {
+        let mut self_type = (*self.implementation.self_ty).clone();
+
+        if let Some(caller_type_parameter) = self.caller_type_parameter {
+            caller_type_parameter.specialize_type(&mut self_type, target_caller_type.clone());
+
+            let (impl_generics, _type_generics, where_clause) = caller_type_parameter
+                .specialize_and_split_generics(self.generics.clone(), target_caller_type.clone());
+
+            (impl_generics, self_type, where_clause)
+        } else {
+            let (impl_generics, _type_generics, where_clause) = self.generics.split_for_impl();
+
+            (
+                impl_generics.to_token_stream(),
+                self_type,
+                where_clause.to_token_stream(),
+            )
+        }
+    }
+
     /// Returns the type to use for the custom user data.
     fn user_data_type(&self) -> Type {
         self.caller_type_parameter
-            .user_data()
+            .as_ref()
+            .and_then(CallerTypeParameter::user_data)
             .cloned()
             .unwrap_or_else(|| {
                 // Unit type
