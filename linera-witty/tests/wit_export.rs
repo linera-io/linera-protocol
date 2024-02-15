@@ -6,9 +6,9 @@
 #[path = "common/test_instance.rs"]
 mod test_instance;
 
-#[cfg(feature = "wasmer")]
+#[cfg(with_wasmer)]
 use self::test_instance::WasmerInstanceFactory;
-#[cfg(feature = "wasmtime")]
+#[cfg(with_wasmtime)]
 use self::test_instance::WasmtimeInstanceFactory;
 use self::test_instance::{MockInstanceFactory, TestInstanceFactory};
 use linera_witty::{wit_export, wit_import, ExportTo, Instance, Runtime, RuntimeMemory};
@@ -32,8 +32,8 @@ impl SimpleFunction {
 
 /// Test exporting a simple function without parameters or return values.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
-#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
+#[cfg_attr(with_wasmer, test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
+#[cfg_attr(with_wasmtime, test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
 fn test_simple_function<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -105,8 +105,8 @@ impl Getters {
 
 /// Test exporting functions with return values.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
-#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
+#[cfg_attr(with_wasmer, test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
+#[cfg_attr(with_wasmtime, test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
 fn test_getters<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -175,8 +175,8 @@ impl Setters {
 
 /// Test exporting functions with parameters.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
-#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
+#[cfg_attr(with_wasmer, test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
+#[cfg_attr(with_wasmtime, test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
 fn test_setters<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -244,8 +244,8 @@ impl Operations {
 
 /// Test exporting functions with multiple parameters and return values.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
-#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
+#[cfg_attr(with_wasmer, test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
+#[cfg_attr(with_wasmtime, test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
 fn test_operations<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,

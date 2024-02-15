@@ -31,3 +31,6 @@ wasmtime = { workspace = true, optional = true }
 linera-witty = { workspace = true, features = ["macros", "test"] }
 test-case.workspace = true
 tracing.workspace = true
+
+[build-dependencies]
+cfg_aliases.workspace = true

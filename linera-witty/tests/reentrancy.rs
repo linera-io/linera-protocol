@@ -6,9 +6,9 @@
 #[path = "common/test_instance.rs"]
 mod test_instance;
 
-#[cfg(feature = "wasmer")]
+#[cfg(with_wasmer)]
 use self::test_instance::WasmerInstanceFactory;
-#[cfg(feature = "wasmtime")]
+#[cfg(with_wasmtime)]
 use self::test_instance::WasmtimeInstanceFactory;
 use self::test_instance::{MockInstanceFactory, TestInstanceFactory};
 use linera_witty::{
@@ -57,8 +57,8 @@ impl ExportedSimpleFunction {
 /// The host function is called from the guest, and calls the guest back through a function with
 /// the same name.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
-#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
+#[cfg_attr(with_wasmer, test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
+#[cfg_attr(with_wasmtime, test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
 fn test_simple_function<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -155,8 +155,8 @@ where
 /// The host functions are called from the guest, and they return values obtained by calling back
 /// the guest through functions with the same names.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
-#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
+#[cfg_attr(with_wasmer, test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
+#[cfg_attr(with_wasmtime, test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
 fn test_getters<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -247,8 +247,8 @@ where
 /// The host functions are called from the guest, and they forward the arguments back to the guest
 /// by calling guest functions with the same names.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
-#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
+#[cfg_attr(with_wasmer, test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
+#[cfg_attr(with_wasmtime, test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
 fn test_setters<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -339,8 +339,8 @@ where
 /// The host functions are called from the guest, and they call the guest back through functions
 /// with the same names, forwarding the arguments and retrieving the final results.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
-#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
+#[cfg_attr(with_wasmer, test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
+#[cfg_attr(with_wasmtime, test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
 fn test_operations<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -386,8 +386,8 @@ impl ExportedGlobalState {
 ///
 /// The final value returned from the guest must match the initial value the host sent in.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
-#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
+#[cfg_attr(with_wasmer, test_case(WasmerInstanceFactory::<()>::default(); "with Wasmer"))]
+#[cfg_attr(with_wasmtime, test_case(WasmtimeInstanceFactory::<()>::default(); "with Wasmtime"))]
 fn test_global_state<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -433,8 +433,8 @@ where
 ///
 /// The final value returned from the guest must match the initial value the host sent in.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
-#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory::default(); "with Wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory::default(); "with Wasmtime"))]
+#[cfg_attr(with_wasmer, test_case(WasmerInstanceFactory::default(); "with Wasmer"))]
+#[cfg_attr(with_wasmtime, test_case(WasmtimeInstanceFactory::default(); "with Wasmtime"))]
 #[allow(clippy::bool_assert_comparison)]
 fn test_user_data<InstanceFactory>(mut factory: InstanceFactory)
 where

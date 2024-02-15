@@ -3813,6 +3813,7 @@ name = "linera-witty"
 version = "0.8.0"
 dependencies = [
  "anyhow",
+ "cfg_aliases",
  "either",
  "frunk",
  "linera-witty",

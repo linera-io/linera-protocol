@@ -50,22 +50,22 @@ pub enum RuntimeError {
     InvalidVariant,
 
     /// Wasmer runtime error.
-    #[cfg(feature = "wasmer")]
+    #[cfg(with_wasmer)]
     #[error(transparent)]
     Wasmer(#[from] wasmer::RuntimeError),
 
     /// Attempt to access an invalid memory address using Wasmer.
-    #[cfg(feature = "wasmer")]
+    #[cfg(with_wasmer)]
     #[error(transparent)]
     WasmerMemory(#[from] wasmer::MemoryAccessError),
 
     /// Wasmtime error.
-    #[cfg(feature = "wasmtime")]
+    #[cfg(with_wasmtime)]
     #[error(transparent)]
     Wasmtime(#[from] anyhow::Error),
 
     /// Wasmtime trap during execution.
-    #[cfg(feature = "wasmtime")]
+    #[cfg(with_wasmtime)]
     #[error(transparent)]
     WasmtimeTrap(#[from] wasmtime::Trap),
 }

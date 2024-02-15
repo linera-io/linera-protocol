@@ -4,9 +4,9 @@
 //! Helper code for testing using different runtimes.
 
 use frunk::{hlist, hlist_pat, HList};
-#[cfg(feature = "wasmer")]
+#[cfg(with_wasmer)]
 use linera_witty::wasmer;
-#[cfg(feature = "wasmtime")]
+#[cfg(with_wasmtime)]
 use linera_witty::wasmtime;
 use linera_witty::{
     ExportTo, InstanceWithMemory, Layout, MockExportedFunction, MockInstance, RuntimeError,
@@ -46,11 +46,11 @@ pub trait TestInstanceFactory {
 }
 
 /// A factory of [`wasmtime::Entrypoint`] instances.
-#[cfg(feature = "wasmtime")]
+#[cfg(with_wasmtime)]
 #[derive(Default)]
 pub struct WasmtimeInstanceFactory<UserData>(PhantomData<UserData>);
 
-#[cfg(feature = "wasmtime")]
+#[cfg(with_wasmtime)]
 impl<UserData> TestInstanceFactory for WasmtimeInstanceFactory<UserData>
 where
     UserData: Default + 'static,
@@ -85,11 +85,11 @@ where
 }
 
 /// A factory of [`wasmer::EntrypointInstance`]s.
-#[cfg(feature = "wasmer")]
+#[cfg(with_wasmer)]
 #[derive(Default)]
 pub struct WasmerInstanceFactory<UserData>(PhantomData<UserData>);
 
-#[cfg(feature = "wasmer")]
+#[cfg(with_wasmer)]
 impl<UserData> TestInstanceFactory for WasmerInstanceFactory<UserData>
 where
     UserData: Default + Send + 'static,
