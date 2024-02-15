@@ -2,14 +2,59 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::MutationRoot;
+use crate::{chain_listener, config::WalletState};
+use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
     crypto::KeyPair,
     data_types::{Amount, Timestamp},
-    identifiers::ChainDescription,
+    identifiers::{ChainDescription, ChainId},
 };
-use linera_core::client::client_test_utils::{MakeMemoryStorage, StorageBuilder as _, TestBuilder};
+use linera_core::client::{
+    client_test_utils::{
+        FaultType, MakeMemoryStorage, NodeProvider, StorageBuilder as _, TestBuilder,
+    },
+    ChainClient,
+};
+use linera_storage::{DbStorage, Storage, TestClock};
+use linera_views::{memory::MemoryStore, views::ViewError};
 use std::sync::Arc;
+
+#[derive(Default)]
+struct ClientContext {
+    update_calls: usize,
+}
+
+#[async_trait]
+impl chain_listener::ClientContext<NodeProvider<DbStorage<MemoryStore, TestClock>>>
+    for ClientContext
+{
+    fn wallet_state(&self) -> &WalletState {
+        unimplemented!()
+    }
+
+    fn make_chain_client<S>(
+        &self,
+        _: S,
+        _: ChainId,
+    ) -> ChainClient<NodeProvider<DbStorage<MemoryStore, TestClock>>, S> {
+        unimplemented!()
+    }
+
+    fn update_wallet_for_new_chain(&mut self, _: ChainId, _: Option<KeyPair>, _: Timestamp) {
+        self.update_calls += 1;
+    }
+
+    async fn update_wallet<'a, S>(
+        &'a mut self,
+        _: &'a mut ChainClient<NodeProvider<DbStorage<MemoryStore, TestClock>>, S>,
+    ) where
+        S: Storage + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        self.update_calls += 1;
+    }
+}
 
 #[tokio::test]
 async fn test_faucet_rate_limiting() {
@@ -22,8 +67,10 @@ async fn test_faucet_rate_limiting() {
         .await
         .unwrap();
     let client = Arc::new(Mutex::new(client));
+    let context = Arc::new(Mutex::new(ClientContext::default()));
     let root = MutationRoot {
         client,
+        context: context.clone(),
         amount: Amount::from_tokens(1),
         end_timestamp: Timestamp::from(6000),
         start_timestamp: Timestamp::from(0),
@@ -40,11 +87,16 @@ async fn test_faucet_rate_limiting() {
     assert!(root.do_claim(KeyPair::generate().public()).await.is_ok());
     assert!(root.do_claim(KeyPair::generate().public()).await.is_ok());
     assert!(root.do_claim(KeyPair::generate().public()).await.is_err());
+    // If a validator is offline, it will create a pending block and then fail.
+    clock.set(Timestamp::from(6000));
+    builder.set_fault_type(0..2, FaultType::Offline).await;
+    assert!(root.do_claim(KeyPair::generate().public()).await.is_err());
+    assert_eq!(context.lock().await.update_calls, 4); // Also called in the last error case.
 }
 
 #[test]
 fn test_multiply() {
-    let mul = MutationRoot::<(), ()>::multiply;
+    let mul = MutationRoot::<(), (), ()>::multiply;
     assert_eq!(mul((1 << 127) + (1 << 63), 1 << 63), [1 << 62, 1 << 62, 0]);
     assert_eq!(mul(u128::MAX, u64::MAX), [u64::MAX - 1, u64::MAX, 1]);
 }
