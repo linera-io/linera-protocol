@@ -1,9 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain_listener, config::WalletState};
-
 use super::MutationRoot;
+use crate::{chain_listener, config::WalletState};
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use linera_base::{
