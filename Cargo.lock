@@ -3829,6 +3829,7 @@ dependencies = [
 name = "linera-witty-macros"
 version = "0.8.0"
 dependencies = [
+ "cfg_aliases",
  "heck 0.4.1",
  "proc-macro-error",
  "proc-macro2",

@@ -3,7 +3,7 @@
 
 //! Generation of code to export host functions to a Wasm guest instance.
 
-#![cfg(any(feature = "test", feature = "wasmer", feature = "wasmtime"))]
+#![cfg(with_wit_export)]
 
 mod caller_type_parameter;
 mod function_information;
@@ -80,7 +80,7 @@ impl<'input> WitExportGenerator<'input> {
 
     /// Generates the code to export functions using the Wasmer runtime.
     fn generate_for_wasmer(&mut self) -> Option<TokenStream> {
-        #[cfg(feature = "wasmer")]
+        #[cfg(with_wasmer)]
         {
             let user_data_type = self.user_data_type();
             let export_target = quote! { linera_witty::wasmer::InstanceBuilder<#user_data_type> };
@@ -96,7 +96,7 @@ impl<'input> WitExportGenerator<'input> {
 
             Some(self.generate_for(export_target, &target_caller_type, exported_functions))
         }
-        #[cfg(not(feature = "wasmer"))]
+        #[cfg(not(with_wasmer))]
         {
             None
         }
@@ -104,7 +104,7 @@ impl<'input> WitExportGenerator<'input> {
 
     /// Generates the code to export functions using the Wasmtime runtime.
     fn generate_for_wasmtime(&mut self) -> Option<TokenStream> {
-        #[cfg(feature = "wasmtime")]
+        #[cfg(with_wasmtime)]
         {
             let user_data_type = self.user_data_type();
             let export_target = quote! { linera_witty::wasmtime::Linker<#user_data_type> };
@@ -116,7 +116,7 @@ impl<'input> WitExportGenerator<'input> {
 
             Some(self.generate_for(export_target, &target_caller_type, exported_functions))
         }
-        #[cfg(not(feature = "wasmtime"))]
+        #[cfg(not(with_wasmtime))]
         {
             None
         }
@@ -124,7 +124,7 @@ impl<'input> WitExportGenerator<'input> {
 
     /// Generates the code to export functions to a mock instance for testing.
     fn generate_for_mock_instance(&mut self) -> Option<TokenStream> {
-        #[cfg(feature = "test")]
+        #[cfg(with_testing)]
         {
             let user_data_type = self.user_data_type();
             let export_target = quote! { linera_witty::MockInstance<#user_data_type> };
@@ -140,7 +140,7 @@ impl<'input> WitExportGenerator<'input> {
 
             Some(self.generate_for(export_target, &target_caller_type, exported_functions))
         }
-        #[cfg(not(feature = "test"))]
+        #[cfg(not(with_testing))]
         {
             None
         }
