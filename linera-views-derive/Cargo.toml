@@ -8,6 +8,9 @@ homepage = "https://linera.dev"
 license = "Apache-2.0"
 edition = "2021"
 
+[features]
+metrics = []
+
 [lib]
 proc-macro = true
 
@@ -19,3 +22,6 @@ syn = { workspace = true, features = ["full", "extra-traits"] }
 [dev-dependencies]
 insta.workspace = true
 prettyplease.workspace = true
+
+[build-dependencies]
+cfg_aliases.workspace = true

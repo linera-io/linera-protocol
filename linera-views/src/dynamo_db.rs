@@ -40,7 +40,7 @@ use linera_base::ensure;
 use std::{collections::HashMap, env, sync::Arc};
 use thiserror::Error;
 
-#[cfg(feature = "metrics")]
+#[cfg(with_metrics)]
 use crate::metering::{
     MeteredStore, DYNAMO_DB_METRICS, LRU_CACHING_METRICS, VALUE_SPLITTING_METRICS,
 };
@@ -875,7 +875,7 @@ impl DirectKeyValueStore for DynamoDbStoreInternal {
 #[derive(Clone)]
 #[allow(clippy::type_complexity)]
 pub struct DynamoDbStore {
-    #[cfg(feature = "metrics")]
+    #[cfg(with_metrics)]
     store: MeteredStore<
         LruCachingStore<
             MeteredStore<
@@ -883,7 +883,7 @@ pub struct DynamoDbStore {
             >,
         >,
     >,
-    #[cfg(not(feature = "metrics"))]
+    #[cfg(not(with_metrics))]
     store: LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
 }
 
@@ -949,13 +949,13 @@ impl AdminKeyValueStore for DynamoDbStore {
         let cache_size = config.common_config.cache_size;
         let simple_store = DynamoDbStoreInternal::connect(config, namespace).await?;
         let store = JournalingKeyValueStore::new(simple_store);
-        #[cfg(feature = "metrics")]
+        #[cfg(with_metrics)]
         let store = MeteredStore::new(&DYNAMO_DB_METRICS, store);
         let store = ValueSplittingStore::new(store);
-        #[cfg(feature = "metrics")]
+        #[cfg(with_metrics)]
         let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
         let store = LruCachingStore::new(store, cache_size);
-        #[cfg(feature = "metrics")]
+        #[cfg(with_metrics)]
         let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
         Ok(Self { store })
     }

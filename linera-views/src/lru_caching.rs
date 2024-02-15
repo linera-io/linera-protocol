@@ -16,7 +16,7 @@ use std::{
     sync::Arc,
 };
 
-#[cfg(feature = "metrics")]
+#[cfg(with_metrics)]
 use {
     linera_base::sync::Lazy,
     prometheus::{register_int_counter_vec, IntCounterVec},
@@ -29,14 +29,14 @@ use {
     crate::views::ViewError,
 };
 
-#[cfg(feature = "metrics")]
+#[cfg(with_metrics)]
 /// The total number of cache faults
 static NUM_CACHE_FAULT: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!("num_cache_fault", "Number of cache faults", &[])
         .expect("Counter creation should not fail")
 });
 
-#[cfg(feature = "metrics")]
+#[cfg(with_metrics)]
 /// The total number of cache successes
 static NUM_CACHE_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!("num_cache_success", "Number of cache success", &[])
@@ -134,12 +134,12 @@ where
                 // First inquiring in the read_value_bytes LRU
                 let lru_read_values_container = lru_read_values.lock().await;
                 if let Some(value) = lru_read_values_container.query(key) {
-                    #[cfg(feature = "metrics")]
+                    #[cfg(with_metrics)]
                     NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
                     return Ok(value.clone());
                 }
                 drop(lru_read_values_container);
-                #[cfg(feature = "metrics")]
+                #[cfg(with_metrics)]
                 NUM_CACHE_FAULT.with_label_values(&[]).inc();
                 let value = self.store.read_value_bytes(key).await?;
                 let mut lru_read_values = lru_read_values.lock().await;
@@ -174,11 +174,11 @@ where
                 let lru_read_values_container = lru_read_values.lock().await;
                 for (i, key) in keys.into_iter().enumerate() {
                     if let Some(value) = lru_read_values_container.query(&key) {
-                        #[cfg(feature = "metrics")]
+                        #[cfg(with_metrics)]
                         NUM_CACHE_SUCCESS.with_label_values(&[]).inc();
                         result.push(value.clone());
                     } else {
-                        #[cfg(feature = "metrics")]
+                        #[cfg(with_metrics)]
                         NUM_CACHE_FAULT.with_label_values(&[]).inc();
                         result.push(None);
                         cache_miss_indices.push(i);

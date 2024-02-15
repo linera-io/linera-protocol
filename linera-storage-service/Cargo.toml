@@ -13,7 +13,7 @@ edition = "2021"
 [features]
 default = ["rocksdb"]
 rocksdb = ["linera-views/rocksdb"]
-aws = ["linera-views/aws"]
+aws = ["linera-views/dynamodb"]
 scylladb = ["linera-views/scylladb"]
 test = ["linera-views/test"]
 

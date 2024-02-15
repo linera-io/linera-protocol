@@ -15,10 +15,10 @@
 //! [trait1]: common::KeyValueStore
 //! [trait2]: common::Context
 
-#[cfg(feature = "metrics")]
+#[cfg(with_metrics)]
 use crate::metering::{MeteredStore, LRU_CACHING_METRICS, SCYLLA_DB_METRICS};
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace};
 
 use crate::{
@@ -30,6 +30,7 @@ use crate::{
     journaling::{
         DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
         JournalingKeyValueStore,
+
     },
     lru_caching::LruCachingStore,
     value_splitting::DatabaseConsistencyError,
@@ -677,10 +678,10 @@ impl ScyllaDbStoreInternal {
 /// A shared DB store for ScyllaDB implementing LruCaching
 #[derive(Clone)]
 pub struct ScyllaDbStore {
-    #[cfg(feature = "metrics")]
+    #[cfg(with_metrics)]
     store:
         MeteredStore<LruCachingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>>,
-    #[cfg(not(feature = "metrics"))]
+    #[cfg(not(with_metrics))]
     store: LruCachingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>,
 }
 
@@ -793,15 +794,13 @@ impl KeyValueStore for ScyllaDbStore {
 
 impl ScyllaDbStore {
     /// Gets the table name of the ScyllaDB store.
-    #[cfg(not(feature = "metrics"))]
     pub async fn get_namespace(&self) -> String {
-        self.store.store.store.get_namespace().await
-    }
-
-    /// Gets the table name of the ScyllaDB store.
-    #[cfg(feature = "metrics")]
-    pub async fn get_namespace(&self) -> String {
-        self.store.store.store.store.store.get_namespace().await
+        #[cfg(with_metrics)] {
+            self.store.store.store.store.store.get_namespace().await
+        }
+        #[cfg(not(with_metrics))] {
+            self.store.store.store.get_namespace().await
+        }
     }
 }
 
@@ -824,7 +823,7 @@ pub async fn create_scylla_db_test_config() -> ScyllaDbStoreConfig {
 }
 
 /// Creates a ScyllaDB test store.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
     let config = create_scylla_db_test_config().await;
     let namespace = generate_test_namespace();

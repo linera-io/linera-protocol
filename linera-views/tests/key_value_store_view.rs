@@ -4,9 +4,10 @@
 use linera_views::{
     key_value_store_view::{KeyValueStoreView, SizeData},
     memory::create_memory_context,
+    test_utils,
     views::{CryptoHashRootView, RootView, View},
 };
-use rand::{distributions::Uniform, Rng, SeedableRng};
+use rand::{distributions::Uniform, Rng};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
@@ -37,7 +38,7 @@ fn total_size(vec: &Vec<(Vec<u8>, Vec<u8>)>) -> SizeData {
 #[tokio::test]
 async fn key_value_store_view_mutability() {
     let context = create_memory_context();
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    let mut rng = test_utils::make_deterministic_rng();
     let mut state_map = BTreeMap::new();
     let n = 200;
     let mut all_keys = BTreeSet::new();

@@ -10,29 +10,35 @@ documentation = "https://docs.rs/linera-views/latest/linera_views/"
 license = "Apache-2.0"
 edition = "2021"
 
+# Not used, but here to provide the `js` feature to `rand`
+metadata.cargo-machete.ignored = ["getrandom"]
+
 [package.metadata.docs.rs]
-features = ["scylladb", "rocksdb", "aws", "test"]
+features = ["scylladb", "rocksdb", "dynamodb", "test"]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [features]
-test = ["anyhow", "tokio/macros", "tokio/parking_lot"]
-aws = [
+metrics = ["dep:hex", "linera-base/metrics", "linera-views-derive/metrics"]
+test = ["tokio/macros", "rand"]
+web = ["linera-base/web"]
+
+dynamodb = [
     "aws-config",
     "aws-sdk-dynamodb",
-    "aws-sdk-s3",
     "aws-smithy-http",
     "aws-smithy-types",
     "aws-types"
 ]
 scylladb = ["scylla"]
-db_timings = []
-metrics = ["dep:hex"]
 
 [dependencies]
 anyhow.workspace = true
 async-graphql.workspace = true
 async-lock.workspace = true
 async-trait.workspace = true
+aws-config = { workspace = true, optional = true }
+aws-sdk-dynamodb = { workspace = true, optional = true }
+aws-smithy-types = { workspace = true, optional = true }
 bcs.workspace = true
 convert_case.workspace = true
 futures.workspace = true
@@ -42,28 +48,22 @@ linera-base.workspace = true
 linera-views-derive.workspace = true
 linked-hash-map.workspace = true
 prometheus.workspace = true
+rand = { workspace = true, optional = true, features = ["small_rng"] }
+rocksdb = { workspace = true, optional = true }
+scylla = { workspace = true, optional = true }
 serde.workspace = true
 sha3.workspace = true
 static_assertions.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync"] }
-anyhow = { workspace = true, optional = true }
 tracing.workspace = true
-http.workspace = true
-rand.workspace = true
-scylla = { workspace = true, optional = true }
-rocksdb = { workspace = true, optional = true }
-aws-config = { workspace = true, optional = true }
-aws-sdk-dynamodb = { workspace = true, optional = true }
-aws-sdk-s3 = { workspace = true, optional = true }
-aws-smithy-http = { workspace = true, optional = true }
-aws-smithy-types = { workspace = true, optional = true }
-aws-types = { workspace = true, optional = true }
-tokio-test.workspace = true
 
 [dev-dependencies]
 linera-views = { path = ".", features = ["test"] }
 test-case.workspace = true
+tokio-test.workspace = true
+rand.workspace = true
+
+[build-dependencies]
+cfg_aliases.workspace = true

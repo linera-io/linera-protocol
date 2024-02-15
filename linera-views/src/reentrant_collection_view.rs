@@ -19,14 +19,14 @@ use std::{
     sync::Arc,
 };
 
-#[cfg(feature = "metrics")]
+#[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{self, MeasureLatency},
     linera_base::sync::Lazy,
     prometheus::HistogramVec,
 };
 
-#[cfg(feature = "metrics")]
+#[cfg(with_metrics)]
 /// The runtime of hash computation
 static REENTRANT_COLLECTION_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
@@ -500,7 +500,6 @@ where
     ///   assert_eq!(*value2, String::default());
     /// # })
     /// ```
-    #[cfg(not(target_arch = "wasm32"))]
     pub async fn try_load_entries_mut(
         &mut self,
         short_keys: Vec<Vec<u8>>,
@@ -580,7 +579,6 @@ where
     ///   assert_eq!(*value2, String::default());
     /// # })
     /// ```
-    #[cfg(not(target_arch = "wasm32"))]
     pub async fn try_load_entries(
         &self,
         short_keys: Vec<Vec<u8>>,
@@ -777,7 +775,7 @@ where
     W: HashableView<C> + Send + Sync + 'static,
 {
     async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
-        #[cfg(feature = "metrics")]
+        #[cfg(with_metrics)]
         let _hash_latency = REENTRANT_COLLECTION_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
         let keys = self.keys().await?;
@@ -1100,7 +1098,6 @@ where
     ///   assert_eq!(*value2, String::default());
     /// # })
     /// ```
-    #[cfg(not(target_arch = "wasm32"))]
     pub async fn try_load_entries_mut<'a, Q>(
         &'a mut self,
         indices: impl IntoIterator<Item = &'a Q>,
@@ -1134,7 +1131,6 @@ where
     ///   assert_eq!(*value2, String::default());
     /// # })
     /// ```
-    #[cfg(not(target_arch = "wasm32"))]
     pub async fn try_load_entries<'a, Q>(
         &'a self,
         indices: impl IntoIterator<Item = &'a Q>,
@@ -1529,7 +1525,6 @@ where
     ///   assert_eq!(*value2, String::default());
     /// # })
     /// ```
-    #[cfg(not(target_arch = "wasm32"))]
     pub async fn try_load_entries_mut<Q>(
         &mut self,
         indices: impl IntoIterator<Item = Q>,
@@ -1563,7 +1558,6 @@ where
     ///   assert_eq!(*value2, String::default());
     /// # })
     /// ```
-    #[cfg(not(target_arch = "wasm32"))]
     pub async fn try_load_entries<Q>(
         &self,
         indices: impl IntoIterator<Item = Q>,

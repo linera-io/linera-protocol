@@ -812,9 +812,7 @@ where
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 use crate::hashable_wrapper::WrappedHashableContainerView;
-#[cfg(not(target_arch = "wasm32"))]
 #[async_trait::async_trait]
 impl<C, W, O> async_graphql::OutputType for WrappedHashableContainerView<C, W, O>
 where

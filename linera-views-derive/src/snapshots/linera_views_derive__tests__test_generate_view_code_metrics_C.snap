@@ -14,6 +14,12 @@ where
     }
     async fn load(context: C) -> Result<Self, linera_views::views::ViewError> {
         use linera_views::{futures::join, common::Context};
+        #[cfg(not(target_arch = "wasm32"))]
+        linera_views::increment_counter(
+            &linera_views::LOAD_VIEW_COUNTER,
+            stringify!(TestView),
+            &context.base_key(),
+        );
         let index = 0;
         let base_key = context
             .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;

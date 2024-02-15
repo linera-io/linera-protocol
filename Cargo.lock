@@ -3640,11 +3640,11 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bcs",
+ "cfg_aliases",
  "convert_case 0.6.0",
  "futures",
  "generic-array",
  "hex",
- "http 0.2.11",
  "linera-base",
  "linera-views",
  "linera-views-derive",
@@ -3668,6 +3668,7 @@ dependencies = [
 name = "linera-views-derive"
 version = "0.9.0"
 dependencies = [
+ "cfg_aliases",
  "insta",
  "prettyplease 0.2.15",
  "proc-macro2",

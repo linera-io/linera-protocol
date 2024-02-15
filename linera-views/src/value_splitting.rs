@@ -563,7 +563,7 @@ mod tests {
             create_test_memory_store_internal, TestMemoryStoreInternal, ValueSplittingStore,
         },
     };
-    use rand::{Rng, SeedableRng};
+    use rand::Rng;
 
     // The key splitting means that when a key is overwritten
     // some previous segments may still be present.
@@ -603,7 +603,7 @@ mod tests {
         // Writing a big value
         let mut batch = Batch::new();
         let mut value = Vec::new();
-        let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+        let mut rng = crate::test_utils::make_deterministic_rng();
         for _ in 0..2 * MAX_LEN - 4 {
             value.push(rng.gen::<u8>());
         }
@@ -640,7 +640,7 @@ mod tests {
         // writing a big key
         let mut batch = Batch::new();
         let mut value = Vec::new();
-        let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+        let mut rng = crate::test_utils::make_deterministic_rng();
         for _ in 0..3 * MAX_LEN - 4 {
             value.push(rng.gen::<u8>());
         }

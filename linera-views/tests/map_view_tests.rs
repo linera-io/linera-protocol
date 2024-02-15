@@ -4,9 +4,10 @@
 use linera_views::{
     map_view::ByteMapView,
     memory::create_memory_context,
+    test_utils,
     views::{CryptoHashRootView, CryptoHashView, RootView, View},
 };
-use rand::{distributions::Uniform, Rng, RngCore, SeedableRng};
+use rand::{distributions::Uniform, Rng, RngCore};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(CryptoHashRootView)]
@@ -148,7 +149,7 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
 
 #[tokio::test]
 async fn map_view_mutability() {
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    let mut rng = test_utils::make_deterministic_rng();
     for _ in 0..10 {
         run_map_view_mutability(&mut rng).await;
     }
