@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client::create_shared_test_store;
+use crate::client::storage_service_check_endpoint;
 use anyhow::Result;
 use linera_service::util::CommandExt;
 use std::time::Duration;
@@ -33,7 +33,6 @@ impl StorageServiceSpanner {
         command.kill_on_drop(true);
         Ok(command)
     }
-
     pub async fn run_service(&self) -> Result<StorageServiceGuard> {
         let mut command = self.command().await?;
         let _child = command.spawn_into()?;
@@ -42,9 +41,8 @@ impl StorageServiceSpanner {
         // We add an additional waiting period to avoid problems.
         let mut wait_period = 1;
         loop {
-            let result = create_shared_test_store(self.endpoint.clone()).await;
+            let result = storage_service_check_endpoint(self.endpoint.clone()).await;
             if result.is_ok() {
-                tokio::time::sleep(Duration::from_secs(1)).await;
                 return Ok(guard);
             }
             tokio::time::sleep(Duration::from_secs(wait_period)).await;
