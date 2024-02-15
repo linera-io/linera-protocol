@@ -27,6 +27,7 @@ pub fn generate(trait_definition: ItemTrait, parameters: AttributeParameters) ->
 /// Code generating is done in two phases. First the necessary pieces are collected and stored in
 /// this type. Then, they are used to generate the final code.
 pub struct WitImportGenerator<'input> {
+    parameters: AttributeParameters,
     trait_name: &'input Ident,
     namespace: LitStr,
     functions: Vec<FunctionInformation<'input>>,
@@ -55,6 +56,7 @@ impl<'input> WitImportGenerator<'input> {
 
         WitImportGenerator {
             trait_name,
+            parameters,
             namespace,
             functions,
         }

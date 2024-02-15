@@ -35,6 +35,7 @@ pub fn generate(implementation: &ItemImpl, parameters: AttributeParameters) -> T
 /// Code generating is done in two phases. First the necessary pieces are collected and stored in
 /// this type. Then, they are used to generate the final code.
 pub struct WitExportGenerator<'input> {
+    parameters: AttributeParameters,
     namespace: LitStr,
     type_name: &'input Ident,
     caller_type_parameter: Option<CallerTypeParameter<'input>>,
@@ -59,6 +60,7 @@ impl<'input> WitExportGenerator<'input> {
             .collect();
 
         WitExportGenerator {
+            parameters,
             namespace,
             type_name,
             caller_type_parameter,
