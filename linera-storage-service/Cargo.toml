@@ -27,8 +27,8 @@ async-lock.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 clap.workspace = true
-linera-service.workspace = true
 linera-views.workspace = true
+linera-base.workspace = true
 prost.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread"] }

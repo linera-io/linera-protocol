@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(any(test, feature = "test"))]
-use linera_views::{lru_caching::TEST_CACHE_SIZE, test_utils::get_namespace};
+use linera_views::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace};
 
 use crate::{
     common::{SharedContextError, SharedStoreConfig},
@@ -329,12 +329,13 @@ pub async fn create_shared_test_store(
     endpoint: String,
 ) -> Result<SharedStoreClient, SharedContextError> {
     let common_config = create_shared_store_common_config();
+    let namespace = generate_test_namespace();
     let endpoint = format!("http://{}", endpoint);
-    let store_config = SharedStoreConfig {
+    let config = SharedStoreConfig {
         endpoint,
         common_config,
     };
-    SharedStoreClient::new(store_config).await
+    SharedStoreClient::connect(&config, &namespace).await
 }
 
 #[cfg(any(test, feature = "test"))]

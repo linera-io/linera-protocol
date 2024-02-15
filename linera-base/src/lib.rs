@@ -7,6 +7,9 @@
 //! between the Linera protocol (compiled from Rust to native code) and Linera
 //! applications (compiled from Rust to Wasm).
 
+#[doc(hidden)]
+pub use async_trait::async_trait;
+
 pub mod abi;
 pub mod crypto;
 pub mod data_types;
@@ -16,6 +19,7 @@ pub mod ownership;
 #[cfg(with_metrics)]
 pub mod prometheus_util;
 pub mod sync;
+pub mod command;
 
 pub use graphql::BcsHexParseError;
 #[doc(hidden)]
