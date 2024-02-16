@@ -1869,6 +1869,7 @@ dependencies = [
  "bcs",
  "clap",
  "linera-base",
+ "linera-version",
  "linera-views",
  "prost",
  "thiserror",
