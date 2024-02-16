@@ -4,7 +4,7 @@
 # - Then executes the bash command recorded from stdout
 # - Returns without killing the process
 function linera_spawn_and_read_wallet_variables() {
-    LINERA_TMP_DIR=$(mktemp -d "${TMPDIR:-.}tmp-XXXXX") || exit 1
+    LINERA_TMP_DIR=$(mktemp -d "${TMPDIR-/tmp/}tmp-XXXXX") || exit 1
 
     # When the shell exits, we will clean up the top-level jobs (if any), the temporary
     # directory, and the main process. Handling future top-level jobs here is useful
