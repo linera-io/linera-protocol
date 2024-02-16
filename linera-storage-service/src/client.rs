@@ -1,9 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(any(test, feature = "test"))]
-use linera_views::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace};
-
 use crate::{
     common::{ServiceContextError, ServiceStoreConfig},
     key_value_store::{
@@ -19,13 +16,18 @@ use async_lock::{RwLock, Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use linera_views::{
     batch::Batch,
-    common::{AdminKeyValueStore, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore},
+    common::{
+        AdminKeyValueStore, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
+        MIN_VIEW_TAG,
+    },
 };
 use std::sync::Arc;
 use tonic::transport::{Channel, Endpoint};
 
 #[cfg(any(test, feature = "test"))]
-use linera_views::common::CommonStoreConfig;
+use linera_views::{
+    common::CommonStoreConfig, lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace,
+};
 
 /// The number of concurrent queries of a test shared store
 #[cfg(any(test, feature = "test"))]
@@ -34,6 +36,13 @@ const TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES: usize = 10;
 /// The number of concurrent stream queries
 #[cfg(any(test, feature = "test"))]
 const TEST_SHARED_STORE_MAX_STREAM_QUERIES: usize = 10;
+
+/// Key tags to create the sub keys used for storing data on storage.
+#[repr(u8)]
+pub(crate) enum KeyTag {
+    /// Prefix for the storage of the keys of the map
+    Key = MIN_VIEW_TAG,
+}
 
 // The shared store client.
 // * Interior mutability is required for client because
@@ -47,9 +56,9 @@ const TEST_SHARED_STORE_MAX_STREAM_QUERIES: usize = 10;
 // of strings is prefix free.
 // The data is stored in the following way.
 // * A `key` in a `namespace` is stored as
-//   [0] + [namespace] + [key]
+//   [KeyTag::Key] + [namespace] + [key]
 // * An additional key with empty value is stored at
-//   [1] + [namespace]
+//   [KeyTag::Namespace] + [namespace]
 // is stored to indicate the existence of a namespace.
 #[derive(Clone)]
 pub struct ServiceStoreClient {
@@ -230,7 +239,7 @@ impl ServiceStoreClient {
     }
 
     fn namespace_as_vec(namespace: &str) -> Result<Vec<u8>, ServiceContextError> {
-        let mut key = vec![0];
+        let mut key = vec![KeyTag::Key as u8];
         bcs::serialize_into(&mut key, namespace)?;
         Ok(key)
     }
@@ -316,6 +325,7 @@ impl AdminKeyValueStore for ServiceStoreClient {
     }
 }
 
+#[cfg(any(test, feature = "test"))]
 pub fn create_service_store_common_config() -> CommonStoreConfig {
     CommonStoreConfig {
         max_concurrent_queries: Some(TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES),
@@ -324,6 +334,7 @@ pub fn create_service_store_common_config() -> CommonStoreConfig {
     }
 }
 
+#[cfg(any(test, feature = "test"))]
 pub async fn service_config_from_endpoint(
     endpoint: &str,
 ) -> Result<ServiceStoreConfig, ServiceContextError> {

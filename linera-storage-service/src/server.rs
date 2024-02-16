@@ -13,7 +13,10 @@ use crate::key_value_store::{
 };
 use linera_views::{
     batch::Batch,
-    common::{AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
+    common::{
+        AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore,
+        MIN_VIEW_TAG,
+    },
     memory::{create_memory_store_stream_queries, MemoryStore},
     rocks_db::{RocksDbStore, RocksDbStoreConfig},
 };
@@ -23,6 +26,15 @@ use tonic::{transport::Server, Request, Response, Status};
 // https://github.com/hyperium/tonic/issues/1056
 pub mod key_value_store {
     tonic::include_proto!("key_value_store.v1");
+}
+
+/// Key tags to create the sub keys used for storing data on storage.
+#[repr(u8)]
+pub(crate) enum KeyTag {
+    /// Prefix for the storage of the keys of the map
+    Key = MIN_VIEW_TAG,
+    /// Prefix for the storage of existence or not of the namespaces.
+    Namespace,
 }
 
 pub enum ServiceStoreServer {
@@ -143,21 +155,21 @@ impl ServiceStoreServer {
 
     pub async fn delete_all(&self) -> Result<(), Status> {
         let mut batch = Batch::new();
-        batch.delete_key_prefix(vec![0]);
-        batch.delete_key_prefix(vec![1]);
+        batch.delete_key_prefix(vec![KeyTag::Key as u8]);
+        batch.delete_key_prefix(vec![KeyTag::Namespace as u8]);
         let base_key = vec![];
         self.write_batch(batch, &base_key).await?;
         self.clear_journal(&base_key).await
     }
 
     pub async fn exist_namespace(&self, namespace: &[u8]) -> Result<bool, Status> {
-        let mut full_key = vec![1];
+        let mut full_key = vec![KeyTag::Namespace as u8];
         full_key.extend(namespace);
         self.contains_key(&full_key).await
     }
 
     pub async fn create_namespace(&self, namespace: &[u8]) -> Result<(), Status> {
-        let mut full_key = vec![1];
+        let mut full_key = vec![KeyTag::Namespace as u8];
         full_key.extend(namespace);
         let mut batch = Batch::new();
         batch.put_key_value_bytes(full_key, vec![]);
@@ -168,10 +180,10 @@ impl ServiceStoreServer {
 
     pub async fn delete_namespace(&self, namespace: &[u8]) -> Result<(), Status> {
         let mut batch = Batch::new();
-        let mut full_key = vec![1];
+        let mut full_key = vec![KeyTag::Namespace as u8];
         full_key.extend(namespace);
         batch.delete_key(full_key);
-        let mut key_prefix = vec![0];
+        let mut key_prefix = vec![KeyTag::Key as u8];
         key_prefix.extend(namespace);
         batch.delete_key_prefix(key_prefix);
         let base_key = vec![];
