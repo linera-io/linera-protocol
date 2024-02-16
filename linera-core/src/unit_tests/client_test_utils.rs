@@ -729,6 +729,8 @@ impl StorageBuilder for MakeRocksDbStorage {
 pub struct MakeServiceStorage {
     _guard: Option<StorageServiceGuard>,
     endpoint: String,
+    namespace: String,
+    use_child: bool,
     instance_counter: usize,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
@@ -739,7 +741,9 @@ impl Default for MakeServiceStorage {
         let _guard = None;
         let clock = TestClock::default();
         let endpoint = "127.0.0.1:8742".to_string();
-        Self { _guard, endpoint, instance_counter: 0, wasm_runtime: None, clock }
+        let namespace = generate_test_namespace();
+        let use_child = true;
+        Self { _guard, endpoint, namespace, use_child, instance_counter: 0, wasm_runtime: None, clock }
     }
 }
 
@@ -748,14 +752,18 @@ impl MakeServiceStorage {
     pub fn new(endpoint: String) -> Self {
         let _guard = None;
         let clock = TestClock::default();
-        Self { _guard, endpoint, instance_counter: 0, wasm_runtime: None, clock }
+        let namespace = generate_test_namespace();
+        let use_child = true;
+        Self { _guard, endpoint, namespace, use_child, instance_counter: 0, wasm_runtime: None, clock }
     }
 
     /// Creates a `ServiceStorage` from an endpoint and the wasm runtime.
     pub fn with_wasm_runtime(endpoint: String, wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
         let _guard = None;
         let clock = TestClock::default();
-        Self { _guard, endpoint, instance_counter: 0, wasm_runtime: wasm_runtime.into(), clock }
+        let namespace = generate_test_namespace();
+        let use_child = true;
+        Self { _guard, endpoint, namespace, use_child, instance_counter: 0, wasm_runtime: wasm_runtime.into(), clock }
     }
 }
 
@@ -764,14 +772,13 @@ impl StorageBuilder for MakeServiceStorage {
     type Storage = ServiceStorage<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        if self._guard.is_none() {
+        if self._guard.is_none() && self.use_child {
             let binary = get_service_storage_binary().await?.display().to_string();
             let spanner = StorageServiceSpanner::new(self.endpoint.clone(), binary);
             self._guard = Some(spanner.run_service().await.expect("child"));
         }
-        let namespace = generate_test_namespace();
         let store_config = service_config_from_endpoint(self.endpoint.clone()).await?;
-        let namespace = format!("{}_{}", namespace, self.instance_counter);
+        let namespace = format!("{}_{}", self.namespace, self.instance_counter);
         self.instance_counter += 1;
         Ok(ServiceStorage::new_for_testing(
             store_config,

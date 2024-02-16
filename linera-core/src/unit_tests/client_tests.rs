@@ -5,7 +5,7 @@
 #[path = "./wasm_client_tests.rs"]
 mod wasm;
 
-//use linera_core::client::client_test_utils::MakeServiceStorage;
+use crate::client::client_test_utils::MakeServiceStorage;
 use crate::{
     client::{
         client_test_utils::{FaultType, MakeMemoryStorage, StorageBuilder, TestBuilder},
@@ -57,13 +57,11 @@ pub async fn test_memory_initiating_valid_transfer_with_notifications() -> Resul
     run_test_initiating_valid_transfer_with_notifications(MakeMemoryStorage::default()).await
 }
 
-/*
 #[test(tokio::test)]
 pub async fn test_service_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
 {
     run_test_initiating_valid_transfer_with_notifications(MakeServiceStorage::default()).await
 }
-*/
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
