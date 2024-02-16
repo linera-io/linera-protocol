@@ -3,6 +3,7 @@
 
 //! Generation of code to export host functions to a Wasm guest instance.
 
+// TODO(#1683): Remove feature flags by generating runtime agnostic code
 #![cfg(with_wit_export)]
 
 mod caller_type_parameter;
