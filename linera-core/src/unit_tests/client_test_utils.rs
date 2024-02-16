@@ -749,8 +749,9 @@ impl Default for MakeServiceStorage {
 
 impl MakeServiceStorage {
     /// Creates a `ServiceStorage` from just an endpoint
-    pub fn new(endpoint: String) -> Self {
+    pub fn new(endpoint: &str) -> Self {
         let _guard = None;
+        let endpoint = endpoint.to_string();
         let clock = TestClock::default();
         let namespace = generate_test_namespace();
         let use_child = true;
@@ -758,8 +759,9 @@ impl MakeServiceStorage {
     }
 
     /// Creates a `ServiceStorage` from an endpoint and the wasm runtime.
-    pub fn with_wasm_runtime(endpoint: String, wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
+    pub fn with_wasm_runtime(endpoint: &str, wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
         let _guard = None;
+        let endpoint = endpoint.to_string();
         let clock = TestClock::default();
         let namespace = generate_test_namespace();
         let use_child = true;
@@ -774,10 +776,10 @@ impl StorageBuilder for MakeServiceStorage {
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
         if self._guard.is_none() && self.use_child {
             let binary = get_service_storage_binary().await?.display().to_string();
-            let spanner = StorageServiceSpanner::new(self.endpoint.clone(), binary);
+            let spanner = StorageServiceSpanner::new(&self.endpoint, binary);
             self._guard = Some(spanner.run_service().await.expect("child"));
         }
-        let store_config = service_config_from_endpoint(self.endpoint.clone()).await?;
+        let store_config = service_config_from_endpoint(&self.endpoint).await?;
         let namespace = format!("{}_{}", self.namespace, self.instance_counter);
         self.instance_counter += 1;
         Ok(ServiceStorage::new_for_testing(

@@ -326,7 +326,7 @@ pub fn create_service_store_common_config() -> CommonStoreConfig {
 }
 
 pub async fn service_config_from_endpoint(
-    endpoint: String,
+    endpoint: &str,
 ) -> Result<ServiceStoreConfig, ServiceContextError> {
     let common_config = create_service_store_common_config();
     let endpoint = format!("http://{}", endpoint);
@@ -338,7 +338,7 @@ pub async fn service_config_from_endpoint(
 
 #[cfg(any(test, feature = "test"))]
 pub async fn create_service_test_store(
-    endpoint: String,
+    endpoint: &str,
 ) -> Result<ServiceStoreClient, ServiceContextError> {
     let config = service_config_from_endpoint(endpoint).await.unwrap();
     let namespace = generate_test_namespace();
@@ -347,7 +347,7 @@ pub async fn create_service_test_store(
 
 #[cfg(any(test, feature = "test"))]
 pub(crate) async fn storage_service_check_endpoint(
-    endpoint: String,
+    endpoint: &str,
 ) -> Result<(), ServiceContextError> {
     let store = create_service_test_store(endpoint).await?;
     let _value = store.read_value_bytes(&[0]).await?;

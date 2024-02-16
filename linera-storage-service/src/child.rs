@@ -23,8 +23,8 @@ pub struct StorageServiceGuard {
 
 impl StorageServiceSpanner {
     /// Creates a new `StorageServiceChild`
-    pub fn new(endpoint: String, binary: String) -> Self {
-        Self { endpoint, binary }
+    pub fn new(endpoint: &str, binary: String) -> Self {
+        Self { endpoint: endpoint.to_string(), binary }
     }
 
     async fn command(&self) -> Command {
@@ -40,7 +40,7 @@ impl StorageServiceSpanner {
         // We iterate until the child is spanned and can be accessed.
         // We add an additional waiting period to avoid problems.
         for i in 1..10 {
-            let result = storage_service_check_endpoint(self.endpoint.clone()).await;
+            let result = storage_service_check_endpoint(&self.endpoint).await;
             if result.is_ok() {
                 return Ok(guard);
             }

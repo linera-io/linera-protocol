@@ -20,7 +20,7 @@ pub type ServiceStorage<C> = DbStorage<ServiceStoreClient, C>;
 #[cfg(any(test, feature = "test"))]
 impl ServiceStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
-        let endpoint = "127.0.0.1:8942".to_string();
+        let endpoint = "127.0.0.1:8942";
         let store_config = service_config_from_endpoint(endpoint)
             .await
             .expect("store_config");

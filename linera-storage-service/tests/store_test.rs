@@ -9,27 +9,27 @@ use linera_storage_service::client::create_service_test_store;
 
 /// The endpoint used for the storage service tests.
 #[cfg(test)]
-fn get_storage_service_guard(endpoint: String) -> StorageServiceSpanner {
+fn get_storage_service_guard(endpoint: &str) -> StorageServiceSpanner {
     let binary = env!("CARGO_BIN_EXE_storage_service_server").to_string();
     StorageServiceSpanner::new(endpoint, binary)
 }
 
 #[tokio::test]
 async fn test_reads_service_store() {
-    let endpoint = "127.0.0.1:8942".to_string();
+    let endpoint = "127.0.0.1:8942";
     for scenario in get_random_test_scenarios() {
-        let _guard = get_storage_service_guard(endpoint.clone())
+        let _guard = get_storage_service_guard(endpoint)
             .run_service()
             .await;
-        let key_value_store = create_service_test_store(endpoint.clone()).await.unwrap();
+        let key_value_store = create_service_test_store(endpoint).await.unwrap();
         run_reads(key_value_store, scenario).await;
     }
 }
 
 #[tokio::test]
 async fn test_service_store_writes_from_blank() {
-    let endpoint = "127.0.0.1:8943".to_string();
-    let _guard = get_storage_service_guard(endpoint.clone())
+    let endpoint = "127.0.0.1:8943";
+    let _guard = get_storage_service_guard(endpoint)
         .run_service()
         .await;
     let key_value_store = create_service_test_store(endpoint).await.unwrap();
@@ -38,8 +38,8 @@ async fn test_service_store_writes_from_blank() {
 
 #[tokio::test]
 async fn test_service_store_writes_from_state() {
-    let endpoint = "127.0.0.1:8944".to_string();
-    let _guard = get_storage_service_guard(endpoint.clone())
+    let endpoint = "127.0.0.1:8944";
+    let _guard = get_storage_service_guard(endpoint)
         .run_service()
         .await;
     let key_value_store = create_service_test_store(endpoint).await.unwrap();
