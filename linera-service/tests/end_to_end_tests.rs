@@ -5,7 +5,7 @@
 #![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 
 mod common;
-
+use linera_base::command::resolve_binary;
 use async_graphql::InputType;
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::{
@@ -18,7 +18,6 @@ use linera_service::{
         local_net::{Database, LocalNet, LocalNetConfig},
         ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
-    util,
 };
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
@@ -1329,14 +1328,14 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) {
 
 #[test_log::test(tokio::test)]
 async fn test_resolve_binary() {
-    util::resolve_binary("linera", env!("CARGO_PKG_NAME"))
+    resolve_binary("linera", env!("CARGO_PKG_NAME"))
         .await
         .unwrap();
-    util::resolve_binary("linera-proxy", env!("CARGO_PKG_NAME"))
+    resolve_binary("linera-proxy", env!("CARGO_PKG_NAME"))
         .await
         .unwrap();
     assert!(
-        util::resolve_binary("linera-spaceship", env!("CARGO_PKG_NAME"))
+        resolve_binary("linera-spaceship", env!("CARGO_PKG_NAME"))
             .await
             .is_err()
     );

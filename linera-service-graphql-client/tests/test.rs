@@ -4,13 +4,12 @@
 #![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 
 use fungible::{FungibleTokenAbi, InitialState};
-use linera_base::{data_types::Amount, identifiers::ChainId, sync::Lazy};
+use linera_base::{command::resolve_binary, data_types::Amount, identifiers::ChainId, sync::Lazy};
 use linera_service::{
     cli_wrappers::{
         local_net::{Database, LocalNetConfig},
         LineraNet, LineraNetConfig, Network,
     },
-    util::resolve_binary,
 };
 use linera_service_graphql_client::{
     applications, block, blocks, chains, request, transfer, Applications, Block, Blocks, Chains,

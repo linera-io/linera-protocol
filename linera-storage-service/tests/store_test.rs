@@ -12,8 +12,20 @@ use linera_storage_service::client::create_service_test_store;
 #[cfg(test)]
 fn get_storage_service_guard(endpoint: String) -> StorageServiceSpanner {
     let binary = env!("CARGO_BIN_EXE_storage_service_server").to_string();
+    println!("binary={}", binary);
     StorageServiceSpanner::new(endpoint, binary)
 }
+
+#[tokio::test]
+async fn print_binary_names() {
+    let binary = env!("CARGO_BIN_EXE_storage_service_server").to_string();
+    println!("binary={}", binary);
+//    let path = util::resolve_binary("storage_service_server", env!("CARGO_PKG_NAME")).await.expec("path");
+//    println!("path={}", path);
+}
+
+
+
 
 #[tokio::test]
 async fn test_reads_service_store() {

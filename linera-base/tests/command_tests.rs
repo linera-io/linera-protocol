@@ -4,7 +4,7 @@
 
 #![cfg(feature = "rocksdb")]
 
-use linera_service::util;
+use linera_base::util;
 use std::path::Path;
 
 #[test_log::test(tokio::test)]

@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use linera_base::command::resolve_binary;
 use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
-    util,
     util::ChildExt,
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};
@@ -234,7 +234,7 @@ impl LocalNet {
     }
 
     async fn command_for_binary(&self, name: &'static str) -> Result<Command> {
-        let path = util::resolve_binary(name, env!("CARGO_PKG_NAME")).await?;
+        let path = resolve_binary(name, env!("CARGO_PKG_NAME")).await?;
         let mut command = Command::new(path);
         command.current_dir(self.tmp_dir.path());
         Ok(command)

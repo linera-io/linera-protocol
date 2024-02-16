@@ -1,11 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use linera_base::command::resolve_binary;
 use crate::{
     cli_wrappers::Network,
     config::{GenesisConfig, WalletState},
     faucet::ClaimOutcome,
-    util,
     util::ChildExt,
 };
 use anyhow::{bail, Context, Result};
@@ -132,7 +132,7 @@ impl ClientWrapper {
     }
 
     async fn command(&self) -> Result<Command> {
-        let path = util::resolve_binary("linera", env!("CARGO_PKG_NAME")).await?;
+        let path = resolve_binary("linera", env!("CARGO_PKG_NAME")).await?;
         let mut command = Command::new(path);
         command
             .current_dir(self.tmp_dir.path())

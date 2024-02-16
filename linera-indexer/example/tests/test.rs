@@ -13,8 +13,8 @@ use linera_service::{
         local_net::{Database, LocalNetConfig},
         LineraNet, LineraNetConfig, Network,
     },
-    util::resolve_binary,
 };
+use linera_base::command::resolve_binary;
 use linera_service_graphql_client::{block, request, transfer, Block, Transfer};
 use std::{str::FromStr, sync::Arc, time::Duration};
 use tempfile::TempDir;

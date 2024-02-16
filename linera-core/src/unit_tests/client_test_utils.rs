@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_storage_service::child::StorageServiceGuard;
-use linera_storage_service::client::create_service_test_config;
+use linera_storage_service::client::service_config_from_endpoint;
 use linera_storage::ServiceStorage;
 use crate::{
     client::{ChainClient, ChainClientBuilder, ValidatorNodeProvider},
@@ -766,7 +766,7 @@ impl StorageBuilder for MakeServiceStorage {
 //            self._guard = Some(get_storage_service_guard(self.endpoint.clone()).run_service().await);
         }
         let namespace = generate_test_namespace();
-        let store_config = create_service_test_config(self.endpoint.clone()).await?;
+        let store_config = service_config_from_endpoint(self.endpoint.clone()).await?;
         let namespace = format!("{}_{}", namespace, self.instance_counter);
         self.instance_counter += 1;
         Ok(ServiceStorage::new_for_testing(

@@ -9,7 +9,7 @@ use {
     crate::db_storage::{DbStorageInner, TestClock},
     linera_execution::WasmRuntime,
     linera_storage_service::{
-        client::create_service_test_config,
+        client::service_config_from_endpoint,
         common::{ServiceContextError, ServiceStoreConfig},
     },
     linera_views::test_utils::generate_test_namespace,
@@ -21,7 +21,7 @@ pub type ServiceStorage<C> = DbStorage<ServiceStoreClient, C>;
 impl ServiceStorage<TestClock> {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let endpoint = "127.0.0.1:8942".to_string();
-        let store_config = create_service_test_config(endpoint)
+        let store_config = service_config_from_endpoint(endpoint)
             .await
             .expect("store_config");
         let namespace = generate_test_namespace();

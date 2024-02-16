@@ -325,8 +325,7 @@ pub fn create_service_store_common_config() -> CommonStoreConfig {
     }
 }
 
-#[cfg(any(test, feature = "test"))]
-pub async fn create_service_test_config(
+pub async fn service_config_from_endpoint(
     endpoint: String,
 ) -> Result<ServiceStoreConfig, ServiceContextError> {
     let common_config = create_service_store_common_config();
@@ -341,7 +340,7 @@ pub async fn create_service_test_config(
 pub async fn create_service_test_store(
     endpoint: String,
 ) -> Result<ServiceStoreClient, ServiceContextError> {
-    let config = create_service_test_config(endpoint).await.unwrap();
+    let config = service_config_from_endpoint(endpoint).await.unwrap();
     let namespace = generate_test_namespace();
     ServiceStoreClient::connect(&config, &namespace).await
 }
