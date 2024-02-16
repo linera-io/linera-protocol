@@ -316,7 +316,6 @@ impl AdminKeyValueStore for ServiceStoreClient {
     }
 }
 
-#[cfg(any(test, feature = "test"))]
 pub fn create_service_store_common_config() -> CommonStoreConfig {
     CommonStoreConfig {
         max_concurrent_queries: Some(TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES),

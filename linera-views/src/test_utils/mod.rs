@@ -691,7 +691,6 @@ where
     let namespaces = namespaces_with_prefix::<S>(config, &prefix).await;
     assert_eq!(namespaces, working_namespaces);
     // Selecting at random some for deletion
-    let mut deleted_namespaces = BTreeSet::new();
     let mut kept_namespaces = BTreeSet::new();
     for namespace in working_namespaces {
         let delete = rng.gen::<bool>();
@@ -700,7 +699,6 @@ where
                 .await
                 .expect("A successful deletion");
             assert!(!S::exists(config, &namespace).await.expect("test"));
-            deleted_namespaces.insert(namespace);
         } else {
             kept_namespaces.insert(namespace);
         }
