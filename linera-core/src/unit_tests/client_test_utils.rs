@@ -27,7 +27,8 @@ use linera_storage_service::{
     common::get_service_storage_binary,
 };
 use linera_version::VersionInfo;
-use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
+use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, test_utils::generate_test_namespace, views::ViewError};
+
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     slice::SliceIndex,
@@ -55,9 +56,6 @@ use {
     linera_storage::ScyllaDbStorage, linera_views::scylla_db::create_scylla_db_common_config,
     linera_views::scylla_db::ScyllaDbStoreConfig,
 };
-
-#[cfg(any(feature = "aws", feature = "scylladb", feature = "rocksdb"))]
-use linera_views::test_utils::generate_test_namespace;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum FaultType {
