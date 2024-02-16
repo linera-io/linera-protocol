@@ -1,9 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
 use linera_views::{common::CommonStoreConfig, value_splitting::DatabaseConsistencyError};
 use thiserror::Error;
 use tonic::Status;
+use linera_base::command::resolve_binary;
 
 /// The shared store is potentially handling an infinite number of connections.
 /// However, for testing or some other purpose we really need to decrease the number of
@@ -20,6 +22,10 @@ pub enum ServiceContextError {
     /// Not matching entry
     #[error("Not matching entry")]
     NotMatchingEntry,
+
+    /// Failed to find the storage_service_server binary
+    #[error("Failed to find the storage_service_server binary")]
+    FailedToFindStorageServiceServerBinary,
 
     /// gRPC error
     #[error(transparent)]
@@ -62,4 +68,19 @@ pub struct ServiceStoreConfig {
     pub endpoint: String,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
+}
+
+/// Obtains the binary of the executable.
+/// The path depends whether the test are run in the directory "linera-storage-service"
+/// or in the main directory
+pub async fn get_service_storage_binary() -> Result<PathBuf, ServiceContextError> {
+    let binary = resolve_binary("storage_service_server", "linera-storage-service").await;
+    if let Ok(binary) = binary {
+        return Ok(binary);
+    }
+    let binary = resolve_binary("../storage_service_server", "linera-storage-service").await;
+    if let Ok(binary) = binary {
+        return Ok(binary);
+    }
+    Err(ServiceContextError::FailedToFindStorageServiceServerBinary)
 }

@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_storage_service::child::StorageServiceSpanner;
+use linera_storage_service::common::get_service_storage_binary;
 use linera_views::test_utils::{
     get_random_test_scenarios, run_reads, run_writes_from_blank, run_writes_from_state,
 };
-
 use linera_storage_service::client::create_service_test_store;
 
 /// The endpoint used for the storage service tests.
@@ -20,8 +20,8 @@ fn get_storage_service_guard(endpoint: String) -> StorageServiceSpanner {
 async fn print_binary_names() {
     let binary = env!("CARGO_BIN_EXE_storage_service_server").to_string();
     println!("binary={}", binary);
-//    let path = util::resolve_binary("storage_service_server", env!("CARGO_PKG_NAME")).await.expec("path");
-//    println!("path={}", path);
+    let path = get_service_storage_binary().await.expect("path");
+    println!("path={}", path.display());
 }
 
 

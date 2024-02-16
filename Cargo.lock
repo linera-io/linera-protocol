@@ -3439,6 +3439,7 @@ dependencies = [
  "clap 4.4.11",
  "linera-base",
  "linera-storage-service",
+ "linera-version",
  "linera-views",
  "proptest",
  "prost",
