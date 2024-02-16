@@ -181,6 +181,11 @@ impl ServiceStoreServer {
 }
 
 #[derive(clap::Parser)]
+#[command(
+    name = "storage_service_server",
+    version = linera_version::VersionInfo::default_clap_str(),
+    about = "A server providing storage service",
+)]
 enum ServiceStoreServerOptions {
     #[command(name = "memory")]
     Memory {
