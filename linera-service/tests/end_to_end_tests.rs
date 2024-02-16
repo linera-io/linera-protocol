@@ -153,6 +153,7 @@ impl AmmApp {
     }
 }
 
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -204,6 +205,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) {
     net.terminate().await.unwrap();
 }
 
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -253,6 +255,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
     net.terminate().await.unwrap();
 }
 
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -348,6 +351,8 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     net.terminate().await.unwrap();
 }
 
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "fungible" ; "service_grpc"))]
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "native-fungible" ; "native_service_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc), "fungible" ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc), "native-fungible" ; "native_rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
@@ -481,6 +486,8 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig, example_nam
     net.terminate().await.unwrap();
 }
 
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "service_grpc"))]
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_service_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc), "fungible" ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc), "native-fungible" ; "native_rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
@@ -584,6 +591,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     net.terminate().await.unwrap();
 }
 
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -721,6 +729,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
 // #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 // #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 // #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
@@ -994,8 +1003,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     net.terminate().await.unwrap();
 }
 
-#[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
-#[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "service_tcp"))]
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -1343,6 +1351,8 @@ async fn test_resolve_binary() {
 
 // TODO(#1655): Make the ScyllaDb_udp test work.
 //#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "service_tcp"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -1569,6 +1579,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) {
     panic!("Failed to receive new block");
 }
 
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -1632,6 +1643,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) {
     net.terminate().await.unwrap();
 }
 
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -1831,6 +1843,7 @@ async fn test_example_publish(database: Database, network: Network) {
     net.terminate().await.unwrap();
 }
 
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -1904,6 +1917,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
     net.terminate().await.unwrap();
 }
 
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -1952,6 +1966,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
     net.terminate().await.unwrap();
 }
 
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -2034,6 +2049,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
 }
 
 #[cfg(feature = "benchmark")]
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -2078,6 +2094,7 @@ async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) {
     net.terminate().await.unwrap();
 }
 
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -2116,6 +2133,7 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) {
 }
 
 #[cfg(feature = "benchmark")]
+#[cfg_attr(feature = "", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc"))]
 #[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Grpc) ; "rocksdb_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
