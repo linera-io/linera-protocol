@@ -27,7 +27,9 @@ use linera_storage_service::{
     common::get_service_storage_binary,
 };
 use linera_version::VersionInfo;
-use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, test_utils::generate_test_namespace, views::ViewError};
+use linera_views::{
+    memory::TEST_MEMORY_MAX_STREAM_QUERIES, test_utils::generate_test_namespace, views::ViewError,
+};
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
