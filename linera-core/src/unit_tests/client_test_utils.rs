@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use linera_storage_service::common::get_service_storage_binary;
+use linera_storage_service::child::StorageServiceSpanner;
 use linera_storage_service::child::StorageServiceGuard;
 use linera_storage_service::client::service_config_from_endpoint;
 use linera_storage::ServiceStorage;
@@ -763,7 +765,9 @@ impl StorageBuilder for MakeServiceStorage {
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
         if self._guard.is_none() {
-//            self._guard = Some(get_storage_service_guard(self.endpoint.clone()).run_service().await);
+            let binary = get_service_storage_binary().await?.display().to_string();
+            let spanner = StorageServiceSpanner::new(self.endpoint.clone(), binary);
+            self._guard = Some(spanner.run_service().await.expect("child"));
         }
         let namespace = generate_test_namespace();
         let store_config = service_config_from_endpoint(self.endpoint.clone()).await?;

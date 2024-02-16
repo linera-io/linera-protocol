@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_storage_service::child::StorageServiceSpanner;
-use linera_storage_service::common::get_service_storage_binary;
 use linera_views::test_utils::{
     get_random_test_scenarios, run_reads, run_writes_from_blank, run_writes_from_state,
 };
@@ -12,20 +11,8 @@ use linera_storage_service::client::create_service_test_store;
 #[cfg(test)]
 fn get_storage_service_guard(endpoint: String) -> StorageServiceSpanner {
     let binary = env!("CARGO_BIN_EXE_storage_service_server").to_string();
-    println!("binary={}", binary);
     StorageServiceSpanner::new(endpoint, binary)
 }
-
-#[tokio::test]
-async fn print_binary_names() {
-    let binary = env!("CARGO_BIN_EXE_storage_service_server").to_string();
-    println!("binary={}", binary);
-    let path = get_service_storage_binary().await.expect("path");
-    println!("path={}", path.display());
-}
-
-
-
 
 #[tokio::test]
 async fn test_reads_service_store() {
