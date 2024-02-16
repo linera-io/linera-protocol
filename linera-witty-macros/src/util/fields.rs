@@ -7,7 +7,7 @@ use heck::ToKebabCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::{borrow::Cow, ops::Deref};
-use syn::{spanned::Spanned, Field, Fields, Ident, LitStr, Meta, MetaList};
+use syn::{spanned::Spanned, Field, Fields, Ident, LitStr, Meta, MetaList, Type};
 
 /// A helper type with information about a list of [`Fields`].
 pub struct FieldsInformation<'input> {
@@ -28,6 +28,11 @@ impl<'input> FieldsInformation<'input> {
         self.fields.iter().map(FieldInformation::name)
     }
 
+    /// Returns an iterator over the types of the non-skipped fields.
+    pub fn types(&self) -> impl Iterator<Item = &Type> + Clone + '_ {
+        self.non_skipped_fields().map(FieldInformation::field_type)
+    }
+
     /// Returns an iterator over the WIT compatible names of the non-skipped fields.
     pub fn wit_names(&self) -> impl Iterator<Item = &LitStr> + '_ {
         self.non_skipped_fields().map(FieldInformation::wit_name)
@@ -42,7 +47,7 @@ impl<'input> FieldsInformation<'input> {
     /// Returns the code with a pattern to match a heterogenous list using the `field_names` as
     /// bindings.
     pub fn hlist_type(&self) -> TokenStream {
-        let field_types = self.non_skipped_fields().map(|field| &field.ty);
+        let field_types = self.types();
         quote! { linera_witty::HList![#( #field_types ),*] }
     }
 
@@ -142,6 +147,11 @@ impl FieldInformation<'_> {
     /// Returns the name to use for this field.
     pub fn name(&self) -> &Ident {
         &self.name
+    }
+
+    /// Returns the type of this field.
+    pub fn field_type(&self) -> &Type {
+        &self.field.ty
     }
 
     /// Returns the string literal with the WIT compatible name.
