@@ -4,23 +4,32 @@
 //! Derivation of the `WitType` trait.
 
 use crate::util::FieldsInformation;
+use heck::ToKebabCase;
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
 use quote::quote;
-use syn::{Ident, Variant};
+use syn::{Ident, LitStr, Variant};
 
 #[path = "unit_tests/wit_type.rs"]
 mod tests;
 
 /// Returns the body of the `WitType` implementation for the Rust `struct` with the specified
 /// `fields`.
-pub fn derive_for_struct<'input>(fields: impl Into<FieldsInformation<'input>>) -> TokenStream {
+pub fn derive_for_struct<'input>(
+    name: &Ident,
+    fields: impl Into<FieldsInformation<'input>>,
+) -> TokenStream {
+    let wit_name = LitStr::new(&name.to_string().to_kebab_case(), name.span());
     let fields_hlist = fields.into().hlist_type();
 
     quote! {
         const SIZE: u32 = <#fields_hlist as linera_witty::WitType>::SIZE;
 
         type Layout = <#fields_hlist as linera_witty::WitType>::Layout;
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            #wit_name.into()
+        }
     }
 }
 
@@ -30,6 +39,8 @@ pub fn derive_for_enum<'variants>(
     name: &Ident,
     variants: impl DoubleEndedIterator<Item = &'variants Variant> + Clone,
 ) -> TokenStream {
+    let wit_name = LitStr::new(&name.to_string().to_kebab_case(), name.span());
+
     let variant_count = variants.clone().count();
     let variant_hlists =
         variants.map(|variant| FieldsInformation::from(&variant.fields).hlist_type());
@@ -80,5 +91,9 @@ pub fn derive_for_enum<'variants>(
         };
 
         type Layout = linera_witty::HCons<#discriminant_type, #variant_layouts>;
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            #wit_name.into()
+        }
     }
 }

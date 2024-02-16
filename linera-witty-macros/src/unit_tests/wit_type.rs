@@ -6,19 +6,23 @@
 #![cfg(test)]
 
 use super::{derive_for_enum, derive_for_struct};
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{parse_quote, Fields, ItemEnum, ItemStruct};
 
 /// Check the generated code for the body of the implementation of `WitType` for a unit struct.
 #[test]
 fn zero_sized_type() {
     let input = Fields::Unit;
-    let output = derive_for_struct(&input);
+    let output = derive_for_struct(&format_ident!("ZeroSizedType"), &input);
 
     let expected = quote! {
         const SIZE: u32 = <linera_witty::HList![] as linera_witty::WitType>::SIZE;
 
         type Layout = <linera_witty::HList![] as linera_witty::WitType>::Layout;
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            "zero-sized-type".into()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
@@ -33,12 +37,16 @@ fn named_struct() {
             second: CustomType,
         }
     };
-    let output = derive_for_struct(&input.fields);
+    let output = derive_for_struct(&input.ident, &input.fields);
 
     let expected = quote! {
         const SIZE: u32 = <linera_witty::HList![u8, CustomType] as linera_witty::WitType>::SIZE;
 
         type Layout = <linera_witty::HList![u8, CustomType] as linera_witty::WitType>::Layout;
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            "type".into()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
@@ -50,7 +58,7 @@ fn tuple_struct() {
     let input: ItemStruct = parse_quote! {
         struct Type(String, Vec<CustomType>, i64);
     };
-    let output = derive_for_struct(&input.fields);
+    let output = derive_for_struct(&input.ident, &input.fields);
 
     let expected = quote! {
         const SIZE: u32 =
@@ -58,6 +66,10 @@ fn tuple_struct() {
 
         type Layout =
             <linera_witty::HList![String, Vec<CustomType>, i64] as linera_witty::WitType>::Layout;
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            "type".into()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
@@ -127,6 +139,10 @@ fn enum_type() {
                     <linera_witty::HList![(), String] as linera_witty::WitType>::Layout
                 >>::Output
             >>::Output>;
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            "enum".into()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
@@ -150,12 +166,16 @@ fn named_struct_with_skipped_fields() {
             ignored4: Vec<()>,
         }
     };
-    let output = derive_for_struct(&input.fields);
+    let output = derive_for_struct(&input.ident, &input.fields);
 
     let expected = quote! {
         const SIZE: u32 = <linera_witty::HList![u8, CustomType] as linera_witty::WitType>::SIZE;
 
         type Layout = <linera_witty::HList![u8, CustomType] as linera_witty::WitType>::Layout;
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            "type".into()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
@@ -176,7 +196,7 @@ fn tuple_struct_with_skipped_fields() {
             i64,
         );
     };
-    let output = derive_for_struct(&input.fields);
+    let output = derive_for_struct(&input.ident, &input.fields);
 
     let expected = quote! {
         const SIZE: u32 =
@@ -184,6 +204,10 @@ fn tuple_struct_with_skipped_fields() {
 
         type Layout =
             <linera_witty::HList![String, Vec<CustomType>, i64] as linera_witty::WitType>::Layout;
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            "type".into()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
@@ -260,6 +284,10 @@ fn enum_type_with_skipped_fields() {
                     <linera_witty::HList![(), String] as linera_witty::WitType>::Layout
                 >>::Output
             >>::Output>;
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            "enum".into()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
