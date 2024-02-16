@@ -1,15 +1,21 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::command::resolve_binary;
 use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
     util::ChildExt,
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use async_trait::async_trait;
-use linera_base::{command::CommandExt, data_types::Amount};
+use linera_base::{
+    command::{resolve_binary, CommandExt},
+    data_types::Amount,
+};
 use linera_execution::ResourceControlPolicy;
+use linera_storage_service::{
+    child::{StorageServiceGuard, StorageServiceSpanner},
+    common::get_service_storage_binary,
+};
 use std::{
     collections::{BTreeMap, HashSet},
     env,
@@ -22,6 +28,9 @@ use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
 use tracing::{info, warn};
+
+/// The endpoint used for all the tests
+const END_TO_END_STORAGE_SERVICE_ENDPOINT: &str = "127.0.0.1:8742";
 
 /// The information needed to start a [`LocalNet`].
 pub struct LocalNetConfig {
@@ -49,6 +58,7 @@ pub struct LocalNet {
     table_name: String,
     set_init: HashSet<(usize, usize)>,
     tmp_dir: Arc<TempDir>,
+    _guard: Option<StorageServiceGuard>,
 }
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -147,6 +157,15 @@ impl LineraNetConfig for LocalNetConfig {
             self.num_shards == 1 || self.database != Database::RocksDb,
             "Multiple shards not supported with RocksDB"
         );
+        let guard = match self.database {
+            Database::Service => {
+                let binary = get_service_storage_binary().await?.display().to_string();
+                let spanner =
+                    StorageServiceSpanner::new(END_TO_END_STORAGE_SERVICE_ENDPOINT, binary);
+                Some(spanner.run_service().await.expect("child"))
+            }
+            _ => None,
+        };
         let mut net = LocalNet::new(
             self.database,
             self.network,
@@ -154,6 +173,7 @@ impl LineraNetConfig for LocalNetConfig {
             self.table_name,
             self.num_initial_validators,
             self.num_shards,
+            guard,
         )?;
         let client = net.make_client().await;
         ensure!(
@@ -217,6 +237,7 @@ impl LocalNet {
         table_name: String,
         num_initial_validators: usize,
         num_shards: usize,
+        guard: Option<StorageServiceGuard>,
     ) -> Result<Self> {
         Ok(Self {
             database,
@@ -230,6 +251,7 @@ impl LocalNet {
             table_name,
             set_init: HashSet::new(),
             tmp_dir: Arc::new(tempdir()?),
+            _guard: guard,
         })
     }
 
@@ -370,8 +392,8 @@ impl LocalNet {
         let (storage, key) = match self.database {
             Database::Service => (
                 format!(
-                    "service:http://127.0.0.1:8742:{}_server_{}_db",
-                    self.table_name, i
+                    "service:http://{}:{}_server_{}_db",
+                    END_TO_END_STORAGE_SERVICE_ENDPOINT, self.table_name, i
                 ),
                 (i, 0),
             ),

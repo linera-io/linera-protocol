@@ -5,9 +5,10 @@
 
 use anyhow::{bail, ensure, Context, Result};
 use async_trait::async_trait;
-use std::process::Stdio;
-use std::path::PathBuf;
-use std::path::Path;
+use std::{
+    path::{Path, PathBuf},
+    process::Stdio,
+};
 use tokio::process::Command;
 use tracing::{debug, error};
 

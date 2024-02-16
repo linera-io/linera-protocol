@@ -1,11 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_storage_service::common::get_service_storage_binary;
-use linera_storage_service::child::StorageServiceSpanner;
-use linera_storage_service::child::StorageServiceGuard;
-use linera_storage_service::client::service_config_from_endpoint;
-use linera_storage::ServiceStorage;
 use crate::{
     client::{ChainClient, ChainClientBuilder, ValidatorNodeProvider},
     data_types::*,
@@ -25,7 +20,12 @@ use linera_execution::{
     committee::{Committee, ValidatorName},
     ResourceControlPolicy, WasmRuntime,
 };
-use linera_storage::{MemoryStorage, Storage, TestClock};
+use linera_storage::{MemoryStorage, ServiceStorage, Storage, TestClock};
+use linera_storage_service::{
+    child::{StorageServiceGuard, StorageServiceSpanner},
+    client::service_config_from_endpoint,
+    common::get_service_storage_binary,
+};
 use linera_version::VersionInfo;
 use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
 use std::{
@@ -743,7 +743,15 @@ impl Default for MakeServiceStorage {
         let endpoint = "127.0.0.1:8742".to_string();
         let namespace = generate_test_namespace();
         let use_child = true;
-        Self { _guard, endpoint, namespace, use_child, instance_counter: 0, wasm_runtime: None, clock }
+        Self {
+            _guard,
+            endpoint,
+            namespace,
+            use_child,
+            instance_counter: 0,
+            wasm_runtime: None,
+            clock,
+        }
     }
 }
 
@@ -755,7 +763,15 @@ impl MakeServiceStorage {
         let clock = TestClock::default();
         let namespace = generate_test_namespace();
         let use_child = true;
-        Self { _guard, endpoint, namespace, use_child, instance_counter: 0, wasm_runtime: None, clock }
+        Self {
+            _guard,
+            endpoint,
+            namespace,
+            use_child,
+            instance_counter: 0,
+            wasm_runtime: None,
+            clock,
+        }
     }
 
     /// Creates a `ServiceStorage` from an endpoint and the wasm runtime.
@@ -765,7 +781,15 @@ impl MakeServiceStorage {
         let clock = TestClock::default();
         let namespace = generate_test_namespace();
         let use_child = true;
-        Self { _guard, endpoint, namespace, use_child, instance_counter: 0, wasm_runtime: wasm_runtime.into(), clock }
+        Self {
+            _guard,
+            endpoint,
+            namespace,
+            use_child,
+            instance_counter: 0,
+            wasm_runtime: wasm_runtime.into(),
+            clock,
+        }
     }
 }
 

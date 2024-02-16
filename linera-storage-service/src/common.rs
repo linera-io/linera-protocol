@@ -1,11 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
+use linera_base::command::resolve_binary;
 use linera_views::{common::CommonStoreConfig, value_splitting::DatabaseConsistencyError};
+use std::path::PathBuf;
 use thiserror::Error;
 use tonic::Status;
-use linera_base::command::resolve_binary;
 
 /// The shared store is potentially handling an infinite number of connections.
 /// However, for testing or some other purpose we really need to decrease the number of

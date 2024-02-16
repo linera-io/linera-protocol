@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::command::resolve_binary;
 use crate::{
     cli_wrappers::Network,
     config::{GenesisConfig, WalletState},
@@ -12,7 +11,7 @@ use anyhow::{bail, Context, Result};
 use async_graphql::InputType;
 use linera_base::{
     abi::ContractAbi,
-    command::CommandExt,
+    command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, PublicKey},
     data_types::Amount,
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},

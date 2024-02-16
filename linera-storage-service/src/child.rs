@@ -24,7 +24,10 @@ pub struct StorageServiceGuard {
 impl StorageServiceSpanner {
     /// Creates a new `StorageServiceChild`
     pub fn new(endpoint: &str, binary: String) -> Self {
-        Self { endpoint: endpoint.to_string(), binary }
+        Self {
+            endpoint: endpoint.to_string(),
+            binary,
+        }
     }
 
     async fn command(&self) -> Command {

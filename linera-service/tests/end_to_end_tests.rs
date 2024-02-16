@@ -5,19 +5,17 @@
 #![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 
 mod common;
-use linera_base::command::resolve_binary;
 use async_graphql::InputType;
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::{
+    command::resolve_binary,
     crypto::KeyPair,
     data_types::{Amount, Timestamp},
     identifiers::{Account, AccountOwner, ChainId, Owner},
 };
-use linera_service::{
-    cli_wrappers::{
-        local_net::{Database, LocalNet, LocalNetConfig},
-        ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
-    },
+use linera_service::cli_wrappers::{
+    local_net::{Database, LocalNet, LocalNetConfig},
+    ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
 };
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
@@ -1342,11 +1340,9 @@ async fn test_resolve_binary() {
     resolve_binary("linera-proxy", env!("CARGO_PKG_NAME"))
         .await
         .unwrap();
-    assert!(
-        resolve_binary("linera-spaceship", env!("CARGO_PKG_NAME"))
-            .await
-            .is_err()
-    );
+    assert!(resolve_binary("linera-spaceship", env!("CARGO_PKG_NAME"))
+        .await
+        .is_err());
 }
 
 // TODO(#1655): Make the ScyllaDb_udp test work.
@@ -2057,7 +2053,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) {
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) {
-    use linera_service::util::CommandExt as _;
+    use linera_base::command::CommandExt;
     use tokio::process::Command;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -2070,7 +2066,7 @@ async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) {
     let mut faucet_service = client1.run_faucet(None, chain1, Amount::ONE).await.unwrap();
     let faucet = faucet_service.instance();
 
-    let path = util::resolve_binary("linera-benchmark", env!("CARGO_PKG_NAME"))
+    let path = resolve_binary("linera-benchmark", env!("CARGO_PKG_NAME"))
         .await
         .unwrap();
     // The benchmark looks for examples/fungible, so it needs to run in the project root.

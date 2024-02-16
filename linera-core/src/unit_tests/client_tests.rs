@@ -5,10 +5,9 @@
 #[path = "./wasm_client_tests.rs"]
 mod wasm;
 
-use crate::client::client_test_utils::MakeServiceStorage;
 use crate::{
     client::{
-        client_test_utils::{FaultType, MakeMemoryStorage, StorageBuilder, TestBuilder},
+        client_test_utils::{FaultType, MakeMemoryStorage, MakeServiceStorage, StorageBuilder, TestBuilder},
         ChainClient, ChainClientError, ClientOutcome, MessageAction,
     },
     local_node::LocalNodeError,
@@ -60,7 +59,8 @@ pub async fn test_memory_initiating_valid_transfer_with_notifications() -> Resul
 #[test(tokio::test)]
 pub async fn test_service_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
 {
-    run_test_initiating_valid_transfer_with_notifications(MakeServiceStorage::new("127.0.0.1:9001")).await
+    run_test_initiating_valid_transfer_with_notifications(MakeServiceStorage::new("127.0.0.1:9001"))
+        .await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -1147,7 +1147,8 @@ async fn test_memory_initiating_valid_transfer_too_many_faults() -> Result<(), a
 
 #[test(tokio::test)]
 async fn test_service_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer_too_many_faults(MakeServiceStorage::new("127.0.0.1:9011")).await
+    run_test_initiating_valid_transfer_too_many_faults(MakeServiceStorage::new("127.0.0.1:9011"))
+        .await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -1414,7 +1415,10 @@ async fn test_memory_receiving_unconfirmed_transfer_with_lagging_sender_balances
 #[test(tokio::test)]
 async fn test_service_receiving_unconfirmed_transfer_with_lagging_sender_balances(
 ) -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(MakeServiceStorage::new("127.0.0.1:9014")).await
+    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(MakeServiceStorage::new(
+        "127.0.0.1:9014",
+    ))
+    .await
 }
 
 #[cfg(feature = "rocksdb")]

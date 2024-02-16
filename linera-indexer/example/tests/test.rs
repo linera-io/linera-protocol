@@ -3,18 +3,15 @@
 
 #![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 
-use linera_base::{data_types::Amount, identifiers::ChainId, sync::Lazy};
+use linera_base::{command::resolve_binary, data_types::Amount, identifiers::ChainId, sync::Lazy};
 use linera_indexer_graphql_client::{
     indexer::{plugins, state, Plugins, State},
     operations::{get_operation, GetOperation, OperationKey},
 };
-use linera_service::{
-    cli_wrappers::{
-        local_net::{Database, LocalNetConfig},
-        LineraNet, LineraNetConfig, Network,
-    },
+use linera_service::cli_wrappers::{
+    local_net::{Database, LocalNetConfig},
+    LineraNet, LineraNetConfig, Network,
 };
-use linera_base::command::resolve_binary;
 use linera_service_graphql_client::{block, request, transfer, Block, Transfer};
 use std::{str::FromStr, sync::Arc, time::Duration};
 use tempfile::TempDir;

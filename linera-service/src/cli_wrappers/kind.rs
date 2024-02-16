@@ -5,7 +5,7 @@ use anyhow::Result;
 use rand::Rng;
 use tokio::process::Command;
 
-use crate::util::CommandExt;
+use linera_base::command::CommandExt;
 
 #[derive(Clone)]
 pub struct KindCluster {

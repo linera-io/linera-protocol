@@ -5,17 +5,12 @@ use anyhow::{bail, Context as _, Result};
 use async_graphql::http::GraphiQLSource;
 use axum::response::{self, IntoResponse};
 use http::Uri;
-use std::{
-    num::ParseIntError,
-    time::Duration,
-};
-use tracing::debug;
-#[cfg(any(test, feature = "test"))]
-use {
-    std::path::{Path, PathBuf},
-};
 #[cfg(test)]
 use linera_base::command::parse_version_message;
+#[cfg(any(test, feature = "test"))]
+use std::path::{Path, PathBuf};
+use std::{num::ParseIntError, time::Duration};
+use tracing::debug;
 
 /// Extension trait for [`tokio::process::Child`].
 pub trait ChildExt: std::fmt::Debug {
