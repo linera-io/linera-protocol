@@ -169,7 +169,7 @@ impl<'input> FunctionInformation<'input> {
         &self,
         namespace: &LitStr,
         type_name: &Ident,
-        caller: &TokenStream,
+        caller: &Type,
     ) -> TokenStream {
         let input_to_guest_parameters = quote! {
             linera_witty::wasmer::WasmerParameters::from_wasmer(input)
@@ -195,7 +195,7 @@ impl<'input> FunctionInformation<'input> {
         &self,
         namespace: &LitStr,
         type_name: &Ident,
-        caller: &TokenStream,
+        caller: &Type,
     ) -> TokenStream {
         let input_to_guest_parameters = quote! {
             linera_witty::wasmtime::WasmtimeParameters::from_wasmtime(input)
@@ -221,7 +221,7 @@ impl<'input> FunctionInformation<'input> {
         &self,
         namespace: &LitStr,
         type_name: &Ident,
-        caller: &TokenStream,
+        caller: &Type,
     ) -> TokenStream {
         let input_to_guest_parameters = quote! { input };
         let guest_results_to_output = quote! { guest_results };
@@ -242,7 +242,7 @@ impl<'input> FunctionInformation<'input> {
         &self,
         namespace: &LitStr,
         type_name: &Ident,
-        caller: &TokenStream,
+        caller: &Type,
         input_to_guest_parameters: TokenStream,
         guest_results_to_output: TokenStream,
         output_results_trait: TokenStream,

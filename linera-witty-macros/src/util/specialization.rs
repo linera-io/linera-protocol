@@ -30,19 +30,30 @@ use syn::{
 #[derive(Debug)]
 pub struct Specializations(Vec<Specialization>);
 
+impl FromIterator<Specialization> for Specializations {
+    fn from_iter<I>(specializations: I) -> Self
+    where
+        I: IntoIterator<Item = Specialization>,
+    {
+        Specializations(specializations.into_iter().collect())
+    }
+}
+
 impl Specializations {
-    /// Creates a new [`Specializations`] instance by parsing the `witty_specialize_with`
-    /// attributes from the [`DeriveInput`].
+    /// Changes the [`DeriveInput`] based on the specializations requested through the
+    /// `witty_specialize_with` attributes.
     ///
     /// The [`DeriveInput`] is changed so that its `where` clause and field types are specialized.
-    pub fn new(input: &mut DeriveInput) -> Self {
-        let specializations: Vec<_> = Self::parse_specialization_attributes(&input.attrs).collect();
+    /// Returns the[`Specializations`] instance created from parsing the `witty_specialize_with`
+    /// attributes from the [`DeriveInput`].
+    pub fn prepare_derive_input(input: &mut DeriveInput) -> Self {
+        let this: Self = Self::parse_specialization_attributes(&input.attrs).collect();
 
-        for specialization in &specializations {
-            specialization.apply_to(input);
+        for specialization in &this.0 {
+            specialization.apply_to_derive_input(input);
         }
 
-        Specializations(specializations)
+        this
     }
 
     /// Creates a list of [`Specialization`]s based on the `witty_specialize_with` attributes found
@@ -82,6 +93,22 @@ impl Specializations {
         }
 
         specializations.into_iter().flatten()
+    }
+
+    /// Specializes the types in the [`Generics`] representation.
+    #[cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
+    pub fn apply_to_generics(&self, generics: &mut Generics) {
+        for specialization in &self.0 {
+            specialization.apply_to_generics(generics);
+        }
+    }
+
+    /// Specializes the types in the `target_type`, either itself or its type parameters.
+    #[cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
+    pub fn apply_to_type(&self, target_type: &mut Type) {
+        for specialization in &self.0 {
+            specialization.change_types_in_type(target_type);
+        }
     }
 
     /// Retrieves the information related to generics from the provided [`Generics`] after
@@ -178,7 +205,7 @@ impl Specializations {
 }
 
 /// A single specialization of a generic type parameter.
-struct Specialization {
+pub struct Specialization {
     /// The type parameter to be specialized.
     type_parameter: Ident,
     /// The type to use as the specialized argument.
@@ -199,15 +226,30 @@ impl Parse for Specialization {
 }
 
 impl Specialization {
+    /// Creates a new specialization for the `type_parameter`, to specialize it into the
+    /// `specialized_type`.
+    #[cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
+    pub fn new(type_parameter: Ident, specialized_type: Type) -> Self {
+        Specialization {
+            type_parameter,
+            specialized_type,
+        }
+    }
+
     /// Replaces a type parameter in the [`DeriveInput`] with a specialized type.
     ///
     /// Note that the specialization is only done to the `where` clause and the type's fields. The
     /// types generic parameters needs to be changed separately (see
     /// [`Specializatons::specialize_type_generics`].
-    pub fn apply_to(&self, input: &mut DeriveInput) {
-        self.remove_from_where_clause(input.generics.where_clause.as_mut());
-        self.change_types_in_where_clause(input.generics.where_clause.as_mut());
+    pub fn apply_to_derive_input(&self, input: &mut DeriveInput) {
+        self.apply_to_generics(&mut input.generics);
         self.change_types_in_fields(&mut input.data);
+    }
+
+    /// Replaces a type parameter in the [`Generics`] representation with a specialized type.
+    pub fn apply_to_generics(&self, generics: &mut Generics) {
+        self.remove_from_where_clause(generics.where_clause.as_mut());
+        self.change_types_in_where_clause(generics.where_clause.as_mut());
     }
 
     /// Removes from a [`WhereClause`] all predicates for the [`Self::type_parameter`] that this
@@ -216,17 +258,37 @@ impl Specialization {
         if let Some(WhereClause { predicates, .. }) = maybe_where_clause {
             let original_predicates = mem::take(predicates);
 
-            predicates.extend(original_predicates.into_iter().filter(
-                |predicate| match predicate {
-                    WherePredicate::Type(PredicateType { bounded_ty, .. }) => !matches!(
-                        bounded_ty,
-                        Type::Path(TypePath { qself: None, path })
-                            if path.is_ident(&self.type_parameter),
-                    ),
-                    _ => true,
-                },
-            ));
+            predicates.extend(
+                original_predicates
+                    .into_iter()
+                    .filter(|predicate| !self.affects_predicate(predicate)),
+            );
         }
+    }
+
+    /// Returns [`true`] if this [`Specialization`] affects the `predicate`.
+    fn affects_predicate(&self, predicate: &WherePredicate) -> bool {
+        let WherePredicate::Type(PredicateType {
+            bounded_ty: Type::Path(type_path),
+            ..
+        }) = predicate
+        else {
+            return false;
+        };
+        let mut type_path = type_path;
+
+        while let Some(inner_type) = &type_path.qself {
+            type_path = match &*inner_type.ty {
+                Type::Path(path) => &path,
+                _ => return false,
+            };
+        }
+
+        let Some(segment) = type_path.path.segments.first() else {
+            return false;
+        };
+
+        segment.ident == self.type_parameter && matches!(segment.arguments, PathArguments::None)
     }
 
     /// Replaces the [`Self::type_parameter`] with the [`Self::specialized_type`] inside the
