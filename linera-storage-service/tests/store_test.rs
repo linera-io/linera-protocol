@@ -42,7 +42,6 @@ async fn test_service_store_writes_from_state() {
     run_writes_from_state(&key_value_store).await;
 }
 
-#[ignore]
 #[tokio::test]
 async fn test_service_admin() {
     let endpoint = "127.0.0.1:8945";

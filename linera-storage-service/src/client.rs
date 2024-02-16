@@ -35,22 +35,22 @@ const TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES: usize = 10;
 #[cfg(any(test, feature = "test"))]
 const TEST_SHARED_STORE_MAX_STREAM_QUERIES: usize = 10;
 
-/// The shared store client.
-/// * Interior mutability is required for client because
-/// accessing requires mutability while the KeyValueStore
-/// does not allow it.
-/// * The semaphore and max_stream_queries work as other
-/// stores.
-///
-/// The encoding of namespaces is done by taking their
-/// serialization. This works because the set of serialization
-/// of strings is prefix free.
-/// The data is stored in the following way.
-/// * A `key` in a `namespace` is stored as
-///   [0] + [namespace] + [key]
-/// * An additional key with empty value is stored at
-///   [1] + [namespace]
-/// is stored to indicate the existence of a namespace.
+// The shared store client.
+// * Interior mutability is required for client because
+// accessing requires mutability while the KeyValueStore
+// does not allow it.
+// * The semaphore and max_stream_queries work as other
+// stores.
+//
+// The encoding of namespaces is done by taking their
+// serialization. This works because the set of serialization
+// of strings is prefix free.
+// The data is stored in the following way.
+// * A `key` in a `namespace` is stored as
+//   [0] + [namespace] + [key]
+// * An additional key with empty value is stored at
+//   [1] + [namespace]
+// is stored to indicate the existence of a namespace.
 #[derive(Clone)]
 pub struct ServiceStoreClient {
     client: Arc<RwLock<StoreProcessorClient<Channel>>>,
@@ -284,7 +284,7 @@ impl AdminKeyValueStore for ServiceStoreClient {
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ServiceContextError> {
-        let namespace = Self::namespace_as_vec(namespace)?;
+        let namespace = bcs::to_bytes(namespace)?;
         let query = RequestExistNamespace { namespace };
         let request = tonic::Request::new(query);
         let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
@@ -296,7 +296,7 @@ impl AdminKeyValueStore for ServiceStoreClient {
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), ServiceContextError> {
-        let namespace = Self::namespace_as_vec(namespace)?;
+        let namespace = bcs::to_bytes(namespace)?;
         let query = RequestCreateNamespace { namespace };
         let request = tonic::Request::new(query);
         let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
@@ -306,7 +306,7 @@ impl AdminKeyValueStore for ServiceStoreClient {
     }
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), ServiceContextError> {
-        let namespace = Self::namespace_as_vec(namespace)?;
+        let namespace = bcs::to_bytes(namespace)?;
         let query = RequestDeleteNamespace { namespace };
         let request = tonic::Request::new(query);
         let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
