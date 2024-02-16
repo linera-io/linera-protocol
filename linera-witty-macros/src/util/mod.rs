@@ -6,7 +6,7 @@
 mod fields;
 mod specialization;
 
-#[cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
+#[cfg(with_wit_export)]
 pub use self::specialization::Specialization;
 pub use self::{fields::FieldsInformation, specialization::Specializations};
 use heck::ToKebabCase;

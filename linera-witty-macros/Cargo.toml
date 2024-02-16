@@ -14,7 +14,7 @@ edition = "2021"
 proc-macro = true
 
 [features]
-mock-instance = ["syn/extra-traits"]
+test = ["syn/extra-traits"]
 wasmer = ["syn/extra-traits"]
 wasmtime = ["syn/extra-traits"]
 
@@ -24,3 +24,6 @@ proc-macro-error.workspace = true
 proc-macro2.workspace = true
 quote.workspace = true
 syn = { workspace = true, features = ["full"] }
+
+[build-dependencies]
+cfg_aliases.workspace = true

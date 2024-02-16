@@ -6,15 +6,15 @@
 mod borrowed_instance;
 mod error;
 mod memory;
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 mod test;
 mod traits;
-#[cfg(feature = "wasmer")]
+#[cfg(with_wasmer)]
 pub mod wasmer;
-#[cfg(feature = "wasmtime")]
+#[cfg(with_wasmtime)]
 pub mod wasmtime;
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub use self::test::{MockExportedFunction, MockInstance, MockResults, MockRuntime};
 pub use self::{
     error::RuntimeError,

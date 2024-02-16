@@ -13,12 +13,12 @@ edition = "2021"
 [features]
 default = ["macros"]
 macros = ["linera-witty-macros"]
-test = ["linera-witty-macros?/mock-instance"]
+test = ["linera-witty-macros?/test"]
 wasmer = ["dep:wasmer", "linera-witty-macros?/wasmer", "wasmer-vm"]
-wasmtime = ["dep:wasmtime", "anyhow", "linera-witty-macros?/wasmtime"]
+wasmtime = ["dep:wasmtime", "linera-witty-macros?/wasmtime"]
 
 [dependencies]
-anyhow = { workspace = true, optional = true }
+anyhow.workspace = true
 either.workspace = true
 frunk.workspace = true
 linera-witty-macros = { workspace = true, optional = true }
@@ -31,3 +31,6 @@ wasmtime = { workspace = true, optional = true }
 linera-witty = { workspace = true, features = ["macros", "test"] }
 test-case.workspace = true
 tracing.workspace = true
+
+[build-dependencies]
+cfg_aliases.workspace = true

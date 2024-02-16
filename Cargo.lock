@@ -3813,6 +3813,7 @@ name = "linera-witty"
 version = "0.8.0"
 dependencies = [
  "anyhow",
+ "cfg_aliases",
  "either",
  "frunk",
  "linera-witty",
@@ -3829,6 +3830,7 @@ dependencies = [
 name = "linera-witty-macros"
 version = "0.8.0"
 dependencies = [
+ "cfg_aliases",
  "heck 0.4.1",
  "proc-macro-error",
  "proc-macro2",

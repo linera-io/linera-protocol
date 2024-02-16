@@ -164,7 +164,7 @@ impl<'input> FunctionInformation<'input> {
     }
 
     /// Generates the code to export a host function using the Wasmer runtime.
-    #[cfg(feature = "wasmer")]
+    #[cfg(with_wasmer)]
     pub fn generate_for_wasmer(
         &self,
         namespace: &LitStr,
@@ -190,7 +190,7 @@ impl<'input> FunctionInformation<'input> {
     }
 
     /// Generates the code to export a host function using the Wasmtime runtime.
-    #[cfg(feature = "wasmtime")]
+    #[cfg(with_wasmtime)]
     pub fn generate_for_wasmtime(
         &self,
         namespace: &LitStr,
@@ -216,7 +216,7 @@ impl<'input> FunctionInformation<'input> {
     }
 
     /// Generates the code to export a host function using a mock Wasm instance for testing.
-    #[cfg(feature = "mock-instance")]
+    #[cfg(with_testing)]
     pub fn generate_for_mock_instance(
         &self,
         namespace: &LitStr,

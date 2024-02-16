@@ -96,7 +96,7 @@ impl Specializations {
     }
 
     /// Specializes the types in the [`Generics`] representation.
-    #[cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
+    #[cfg(with_wit_export)]
     pub fn apply_to_generics(&self, generics: &mut Generics) {
         for specialization in &self.0 {
             specialization.apply_to_generics(generics);
@@ -104,7 +104,7 @@ impl Specializations {
     }
 
     /// Specializes the types in the `target_type`, either itself or its type parameters.
-    #[cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
+    #[cfg(with_wit_export)]
     pub fn apply_to_type(&self, target_type: &mut Type) {
         for specialization in &self.0 {
             specialization.change_types_in_type(target_type);
@@ -228,7 +228,7 @@ impl Parse for Specialization {
 impl Specialization {
     /// Creates a new specialization for the `type_parameter`, to specialize it into the
     /// `specialized_type`.
-    #[cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
+    #[cfg(with_wit_export)]
     pub fn new(type_parameter: Ident, specialized_type: Type) -> Self {
         Specialization {
             type_parameter,
