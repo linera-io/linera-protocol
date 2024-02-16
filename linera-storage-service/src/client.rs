@@ -17,25 +17,15 @@ use async_trait::async_trait;
 use linera_views::{
     batch::Batch,
     common::{
-        AdminKeyValueStore, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
-        MIN_VIEW_TAG,
+        AdminKeyValueStore, CommonStoreConfig, KeyValueStore, ReadableKeyValueStore,
+        WritableKeyValueStore, MIN_VIEW_TAG,
     },
 };
 use std::sync::Arc;
 use tonic::transport::{Channel, Endpoint};
 
 #[cfg(any(test, feature = "test"))]
-use linera_views::{
-    common::CommonStoreConfig, lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace,
-};
-
-/// The number of concurrent queries of a test shared store
-#[cfg(any(test, feature = "test"))]
-const TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES: usize = 10;
-
-/// The number of concurrent stream queries
-#[cfg(any(test, feature = "test"))]
-const TEST_SHARED_STORE_MAX_STREAM_QUERIES: usize = 10;
+use linera_views::test_utils::generate_test_namespace;
 
 /// Key tags to create the sub keys used for storing data on storage.
 #[repr(u8)]
@@ -325,16 +315,16 @@ impl AdminKeyValueStore for ServiceStoreClient {
     }
 }
 
-#[cfg(any(test, feature = "test"))]
 pub fn create_service_store_common_config() -> CommonStoreConfig {
+    let max_stream_queries = 100;
+    let cache_size = 10; // unused
     CommonStoreConfig {
-        max_concurrent_queries: Some(TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES),
-        max_stream_queries: TEST_SHARED_STORE_MAX_STREAM_QUERIES,
-        cache_size: TEST_CACHE_SIZE,
+        max_concurrent_queries: None,
+        max_stream_queries,
+        cache_size,
     }
 }
 
-#[cfg(any(test, feature = "test"))]
 pub async fn service_config_from_endpoint(
     endpoint: &str,
 ) -> Result<ServiceStoreConfig, ServiceContextError> {
