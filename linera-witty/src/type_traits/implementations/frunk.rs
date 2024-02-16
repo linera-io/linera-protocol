@@ -18,6 +18,10 @@ impl WitType for HNil {
     fn wit_type_name() -> Cow<'static, str> {
         "hnil".into()
     }
+
+    fn wit_type_declaration() -> Cow<'static, str> {
+        "type hnil = unit".into()
+    }
 }
 
 impl WitLoad for HNil {
@@ -85,6 +89,13 @@ where
 
     fn wit_type_name() -> Cow<'static, str> {
         format!("hcons-{}-{}", Head::wit_type_name(), Tail::wit_type_name()).into()
+    }
+
+    fn wit_type_declaration() -> Cow<'static, str> {
+        let head = Head::wit_type_name();
+        let tail = Tail::wit_type_name();
+
+        format!("type hcons-{head}-{tail} = tuple<{head}, {tail}>").into()
     }
 }
 

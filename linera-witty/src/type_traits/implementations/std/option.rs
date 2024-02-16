@@ -27,6 +27,11 @@ where
     fn wit_type_name() -> Cow<'static, str> {
         format!("option<{}>", T::wit_type_name()).into()
     }
+
+    fn wit_type_declaration() -> Cow<'static, str> {
+        // The native `option` type doesn't need to be declared
+        "".into()
+    }
 }
 
 impl<T> WitLoad for Option<T>

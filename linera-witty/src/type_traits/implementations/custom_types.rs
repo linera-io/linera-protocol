@@ -18,6 +18,10 @@ impl WitType for GuestPointer {
     fn wit_type_name() -> Cow<'static, str> {
         "guest-pointer".into()
     }
+
+    fn wit_type_declaration() -> Cow<'static, str> {
+        "type guest-pointer = i32".into()
+    }
 }
 
 impl WitLoad for GuestPointer {

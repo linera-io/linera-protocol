@@ -20,6 +20,11 @@ macro_rules! impl_wit_traits {
             fn wit_type_name() -> Cow<'static, str> {
                 $wit_name.into()
             }
+
+            fn wit_type_declaration() -> Cow<'static, str> {
+                // Primitive types don't need to be declared
+                "".into()
+            }
         }
 
         impl WitLoad for $float {

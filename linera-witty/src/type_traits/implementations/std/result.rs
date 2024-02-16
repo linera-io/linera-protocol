@@ -39,6 +39,11 @@ where
     fn wit_type_name() -> Cow<'static, str> {
         format!("result<{}, {}>", T::wit_type_name(), E::wit_type_name()).into()
     }
+
+    fn wit_type_declaration() -> Cow<'static, str> {
+        // The native `result` type doesn't need to be declared
+        "".into()
+    }
 }
 
 impl<T, E> WitLoad for Result<T, E>

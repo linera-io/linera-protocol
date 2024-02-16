@@ -20,6 +20,9 @@ pub trait WitType: Sized {
 
     /// Generates the WIT type name for this type.
     fn wit_type_name() -> Cow<'static, str>;
+
+    /// Generates the WIT type declaration for this type.
+    fn wit_type_declaration() -> Cow<'static, str>;
 }
 
 /// A type that can be loaded from a guest Wasm module.

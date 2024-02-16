@@ -61,6 +61,11 @@ macro_rules! impl_wit_traits_with_borrow_store_clause {
                     format!("tuple<{}>", elements.join(", ")).into()
                 }
             }
+
+            fn wit_type_declaration() -> Cow<'static, str> {
+                // The native `tuple` type doesn't need to be declared
+                "".into()
+            }
         }
 
         impl<$( $types ),*> WitLoad for ($( $types, )*)

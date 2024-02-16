@@ -18,6 +18,11 @@ impl<T> WitType for PhantomData<T> {
     fn wit_type_name() -> Cow<'static, str> {
         "unit".into()
     }
+
+    fn wit_type_declaration() -> Cow<'static, str> {
+        // The `unit` type used doesn't need to be declared
+        "".into()
+    }
 }
 
 impl<T> WitLoad for PhantomData<T> {

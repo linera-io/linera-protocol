@@ -20,6 +20,10 @@ macro_rules! impl_wit_traits {
             fn wit_type_name() -> Cow<'static, str> {
                 $wit_name.into()
             }
+
+            fn wit_type_declaration() -> Cow<'static, str> {
+                "".into()
+            }
         }
 
         impl WitLoad for $integer {
@@ -77,6 +81,7 @@ macro_rules! impl_wit_traits {
         impl_wit_traits!(
             $integer,
             $wit_name,
+            "",
             $size,
             ($integer),
             ($flat_type),
@@ -88,6 +93,7 @@ macro_rules! impl_wit_traits {
     (
         $integer:ty,
         $wit_name:literal,
+        $wit_declaration:literal,
         $size:expr,
         ($( $simple_types:ty ),*),
         ($( $flat_types:ty ),*),
@@ -101,6 +107,10 @@ macro_rules! impl_wit_traits {
 
             fn wit_type_name() -> Cow<'static, str> {
                 $wit_name.into()
+            }
+
+            fn wit_type_declaration() -> Cow<'static, str> {
+                $wit_declaration.into()
             }
         }
 
@@ -179,6 +189,7 @@ macro_rules! x128_lower {
 impl_wit_traits!(
     u128,
     "u128",
+    "    type u128 = tuple<u64, u64>;\n",
     16,
     (u64, u64),
     (i64, i64),
@@ -192,6 +203,7 @@ impl_wit_traits!(
 impl_wit_traits!(
     i128,
     "s128",
+    "    type s128 = tuple<s64, s64>;\n",
     16,
     (i64, i64),
     (i64, i64),
