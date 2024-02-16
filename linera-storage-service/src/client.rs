@@ -315,6 +315,7 @@ impl AdminKeyValueStore for ServiceStoreClient {
     }
 }
 
+/// Create the `CommonStoreConfig` for the `ServiceStoreClient`.
 pub fn create_service_store_common_config() -> CommonStoreConfig {
     let max_stream_queries = 100;
     let cache_size = 10; // unused
@@ -325,6 +326,7 @@ pub fn create_service_store_common_config() -> CommonStoreConfig {
     }
 }
 
+/// Creates a `ServiceStoreConfig` from an endpoint.
 pub async fn service_config_from_endpoint(
     endpoint: &str,
 ) -> Result<ServiceStoreConfig, ServiceContextError> {
@@ -336,6 +338,14 @@ pub async fn service_config_from_endpoint(
     })
 }
 
+/// Checking is an endpoint is valid or not
+pub async fn storage_service_check_endpoint(endpoint: &str) -> Result<(), ServiceContextError> {
+    let store = create_service_test_store(endpoint).await?;
+    let _value = store.read_value_bytes(&[0]).await?;
+    Ok(())
+}
+
+/// Creates a test store with an endpoint. The namespace is random.
 #[cfg(any(test, feature = "test"))]
 pub async fn create_service_test_store(
     endpoint: &str,
@@ -343,13 +353,4 @@ pub async fn create_service_test_store(
     let config = service_config_from_endpoint(endpoint).await.unwrap();
     let namespace = generate_test_namespace();
     ServiceStoreClient::connect(&config, &namespace).await
-}
-
-#[cfg(any(test, feature = "test"))]
-pub(crate) async fn storage_service_check_endpoint(
-    endpoint: &str,
-) -> Result<(), ServiceContextError> {
-    let store = create_service_test_store(endpoint).await?;
-    let _value = store.read_value_bytes(&[0]).await?;
-    Ok(())
 }
