@@ -23,6 +23,13 @@ fn zero_sized_type() {
         fn wit_type_name() -> std::borrow::Cow<'static, str> {
             "zero-sized-type".into()
         }
+
+        fn wit_type_declaration() -> std::borrow::Cow<'static, str> {
+            let mut wit_declaration =
+                String::from(concat!("    record " , "zero-sized-type" , " {\n"));
+            wit_declaration.push_str("    }\n");
+            wit_declaration.into ()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
@@ -47,6 +54,25 @@ fn named_struct() {
         fn wit_type_name() -> std::borrow::Cow<'static, str> {
             "type".into()
         }
+
+        fn wit_type_declaration() -> std::borrow::Cow<'static, str> {
+            let mut wit_declaration = String::from(concat!("    record " , "type" , " {\n"));
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("first");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<u8 as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("second");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<CustomType as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("    }\n");
+            wit_declaration.into ()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
@@ -69,6 +95,31 @@ fn tuple_struct() {
 
         fn wit_type_name() -> std::borrow::Cow<'static, str> {
             "type".into()
+        }
+
+        fn wit_type_declaration() -> std::borrow::Cow<'static, str> {
+            let mut wit_declaration = String::from(concat!("    record " , "type" , " {\n"));
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("inner0");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<String as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("inner1");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<Vec<CustomType> as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("inner2");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<i64 as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("    }\n");
+            wit_declaration.into ()
         }
     };
 
@@ -143,6 +194,45 @@ fn enum_type() {
         fn wit_type_name() -> std::borrow::Cow<'static, str> {
             "enum".into()
         }
+
+        fn wit_type_declaration() -> std::borrow::Cow<'static, str> {
+            let mut wit_declaration = String::from(
+                concat!("    ", "variant", " ", "enum" , " {\n"),
+            );
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("empty");
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("tuple");
+            wit_declaration.push_str("(tuple<");
+            wit_declaration.push_str(
+                &<i8 as linera_witty::WitType>::wit_type_name(),
+            );
+            wit_declaration.push_str(", ");
+            wit_declaration.push_str(
+                &<CustomType as linera_witty::WitType>::wit_type_name(),
+            );
+            wit_declaration.push_str(">)");
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("struct");
+            wit_declaration.push_str("(tuple<");
+            wit_declaration.push_str(
+                &<() as linera_witty::WitType>::wit_type_name(),
+            );
+            wit_declaration.push_str(", ");
+            wit_declaration.push_str(
+                &<String as linera_witty::WitType>::wit_type_name(),
+            );
+            wit_declaration.push_str(">)");
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("    }\n");
+            wit_declaration.into ()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
@@ -176,6 +266,25 @@ fn named_struct_with_skipped_fields() {
         fn wit_type_name() -> std::borrow::Cow<'static, str> {
             "type".into()
         }
+
+        fn wit_type_declaration() -> std::borrow::Cow<'static, str> {
+            let mut wit_declaration = String::from(concat!("    record " , "type" , " {\n"));
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("first");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<u8 as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("second");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<CustomType as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("    }\n");
+            wit_declaration.into ()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
@@ -207,6 +316,31 @@ fn tuple_struct_with_skipped_fields() {
 
         fn wit_type_name() -> std::borrow::Cow<'static, str> {
             "type".into()
+        }
+
+        fn wit_type_declaration() -> std::borrow::Cow<'static, str> {
+            let mut wit_declaration = String::from(concat!("    record " , "type" , " {\n"));
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("inner1");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<String as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("inner2");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<Vec<CustomType> as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("inner4");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<i64 as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("    }\n");
+            wit_declaration.into ()
         }
     };
 
@@ -287,6 +421,45 @@ fn enum_type_with_skipped_fields() {
 
         fn wit_type_name() -> std::borrow::Cow<'static, str> {
             "enum".into()
+        }
+
+        fn wit_type_declaration() -> std::borrow::Cow<'static, str> {
+            let mut wit_declaration = String::from(
+                concat!("    ", "variant", " ", "enum" , " {\n"),
+            );
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("empty");
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("tuple");
+            wit_declaration.push_str("(tuple<");
+            wit_declaration.push_str(
+                &<i8 as linera_witty::WitType>::wit_type_name(),
+            );
+            wit_declaration.push_str(", ");
+            wit_declaration.push_str(
+                &<CustomType as linera_witty::WitType>::wit_type_name(),
+            );
+            wit_declaration.push_str(">)");
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("struct");
+            wit_declaration.push_str("(tuple<");
+            wit_declaration.push_str(
+                &<() as linera_witty::WitType>::wit_type_name(),
+            );
+            wit_declaration.push_str(", ");
+            wit_declaration.push_str(
+                &<String as linera_witty::WitType>::wit_type_name(),
+            );
+            wit_declaration.push_str(">)");
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("    }\n");
+            wit_declaration.into ()
         }
     };
 
