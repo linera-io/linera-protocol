@@ -29,6 +29,7 @@ pub fn derive_for_struct<'input>(
         const SIZE: u32 = <#fields_hlist as linera_witty::WitType>::SIZE;
 
         type Layout = <#fields_hlist as linera_witty::WitType>::Layout;
+        type Dependencies = #fields_hlist;
 
         fn wit_type_name() -> std::borrow::Cow<'static, str> {
             #wit_name.into()
@@ -164,6 +165,7 @@ pub fn derive_for_enum<'variants>(
         };
 
         type Layout = linera_witty::HCons<#discriminant_type, #variant_layouts>;
+        type Dependencies = linera_witty::HList![#( #dependencies ),*];
 
         fn wit_type_name() -> std::borrow::Cow<'static, str> {
             #wit_name.into()

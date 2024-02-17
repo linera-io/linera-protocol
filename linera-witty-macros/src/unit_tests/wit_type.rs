@@ -19,6 +19,7 @@ fn zero_sized_type() {
         const SIZE: u32 = <linera_witty::HList![] as linera_witty::WitType>::SIZE;
 
         type Layout = <linera_witty::HList![] as linera_witty::WitType>::Layout;
+        type Dependencies = linera_witty::HList![];
 
         fn wit_type_name() -> std::borrow::Cow<'static, str> {
             "zero-sized-type".into()
@@ -50,6 +51,7 @@ fn named_struct() {
         const SIZE: u32 = <linera_witty::HList![u8, CustomType] as linera_witty::WitType>::SIZE;
 
         type Layout = <linera_witty::HList![u8, CustomType] as linera_witty::WitType>::Layout;
+        type Dependencies = linera_witty::HList![u8, CustomType];
 
         fn wit_type_name() -> std::borrow::Cow<'static, str> {
             "type".into()
@@ -92,6 +94,8 @@ fn tuple_struct() {
 
         type Layout =
             <linera_witty::HList![String, Vec<CustomType>, i64] as linera_witty::WitType>::Layout;
+
+        type Dependencies = linera_witty::HList![String, Vec<CustomType>, i64];
 
         fn wit_type_name() -> std::borrow::Cow<'static, str> {
             "type".into()
@@ -191,6 +195,8 @@ fn enum_type() {
                 >>::Output
             >>::Output>;
 
+        type Dependencies = linera_witty::HList![i8, CustomType, (), String];
+
         fn wit_type_name() -> std::borrow::Cow<'static, str> {
             "enum".into()
         }
@@ -262,6 +268,7 @@ fn named_struct_with_skipped_fields() {
         const SIZE: u32 = <linera_witty::HList![u8, CustomType] as linera_witty::WitType>::SIZE;
 
         type Layout = <linera_witty::HList![u8, CustomType] as linera_witty::WitType>::Layout;
+        type Dependencies = linera_witty::HList![u8, CustomType];
 
         fn wit_type_name() -> std::borrow::Cow<'static, str> {
             "type".into()
@@ -313,6 +320,8 @@ fn tuple_struct_with_skipped_fields() {
 
         type Layout =
             <linera_witty::HList![String, Vec<CustomType>, i64] as linera_witty::WitType>::Layout;
+
+        type Dependencies = linera_witty::HList![String, Vec<CustomType>, i64];
 
         fn wit_type_name() -> std::borrow::Cow<'static, str> {
             "type".into()
@@ -418,6 +427,8 @@ fn enum_type_with_skipped_fields() {
                     <linera_witty::HList![(), String] as linera_witty::WitType>::Layout
                 >>::Output
             >>::Output>;
+
+        type Dependencies = linera_witty::HList![i8, CustomType, (), String];
 
         fn wit_type_name() -> std::borrow::Cow<'static, str> {
             "enum".into()
