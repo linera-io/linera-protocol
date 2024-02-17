@@ -41,6 +41,8 @@ where
                 head_name.into_owned(),
                 Head::wit_type_declaration().into_owned(),
             );
+
+            Head::Dependencies::register_wit_types(wit_types);
         }
 
         Tail::register_wit_types(wit_types);
