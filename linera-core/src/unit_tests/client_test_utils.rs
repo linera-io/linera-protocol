@@ -485,6 +485,10 @@ where
         description: ChainDescription,
         balance: Amount,
     ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {
+        // If this is the first chain, make it the admin chain.
+        if self.genesis_storage_builder.accounts.is_empty() {
+            self.admin_id = ChainId::from(description);
+        }
         let key_pair = KeyPair::generate();
         let public_key = key_pair.public();
         // Remember what's in the genesis store for future clients to join.

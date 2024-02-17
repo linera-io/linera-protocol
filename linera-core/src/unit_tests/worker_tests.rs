@@ -116,19 +116,27 @@ where
 }
 
 /// Same as `init_worker` but also instantiates some initial chains.
+///
+/// Root chain 0 is initialized as the admin chain even if it's not in `balances`.
 async fn init_worker_with_chains<S, I>(storage: S, balances: I) -> (Committee, WorkerState<S>)
 where
     I: IntoIterator<Item = (ChainDescription, PublicKey, Amount)>,
     S: Storage + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    let admin_description = ChainDescription::Root(0);
+    let mut balances: Vec<_> = balances.into_iter().collect();
+    if !matches!(balances.first(), Some((description, _, _)) if *description == admin_description) {
+        let admin_key = KeyPair::generate().public();
+        balances.insert(0, (admin_description, admin_key, Amount::ZERO));
+    }
     let (committee, worker) = init_worker(storage, /* is_client */ false);
     for (description, pubk, balance) in balances {
         worker
             .storage
             .create_chain(
                 committee.clone(),
-                ChainId::root(0),
+                ChainId::from(admin_description),
                 description,
                 pubk,
                 balance,
