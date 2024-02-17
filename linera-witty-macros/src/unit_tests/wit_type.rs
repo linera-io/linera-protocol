@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for the `WitLoad` derive macro.
+//! Unit tests for the `WitType` derive macro.
 
 #![cfg(test)]
 
@@ -9,7 +9,7 @@ use super::{derive_for_enum, derive_for_struct};
 use quote::quote;
 use syn::{parse_quote, Fields, ItemEnum, ItemStruct};
 
-/// Check the generated code for the body of the implementation of `WitLoad` for a unit struct.
+/// Check the generated code for the body of the implementation of `WitType` for a unit struct.
 #[test]
 fn zero_sized_type() {
     let input = Fields::Unit;
@@ -24,7 +24,7 @@ fn zero_sized_type() {
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitLoad` for a named struct.
+/// Check the generated code for the body of the implementation of `WitType` for a named struct.
 #[test]
 fn named_struct() {
     let input: ItemStruct = parse_quote! {
@@ -44,7 +44,7 @@ fn named_struct() {
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitLoad` for a tuple struct.
+/// Check the generated code for the body of the implementation of `WitType` for a tuple struct.
 #[test]
 fn tuple_struct() {
     let input: ItemStruct = parse_quote! {
@@ -132,7 +132,7 @@ fn enum_type() {
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitLoad` for a named struct
+/// Check the generated code for the body of the implementation of `WitType` for a named struct
 /// with some ignored fields.
 #[test]
 fn named_struct_with_skipped_fields() {
@@ -161,7 +161,7 @@ fn named_struct_with_skipped_fields() {
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitLoad` for a tuple struct
+/// Check the generated code for the body of the implementation of `WitType` for a tuple struct
 /// with some ignored fields.
 #[test]
 fn tuple_struct_with_skipped_fields() {
