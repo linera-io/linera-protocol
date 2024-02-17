@@ -14,6 +14,7 @@ impl WitType for String {
     const SIZE: u32 = 8;
 
     type Layout = HList![i32, i32];
+    type Dependencies = HList![];
 
     fn wit_type_name() -> Cow<'static, str> {
         "string".into()

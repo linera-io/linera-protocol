@@ -14,6 +14,7 @@ impl<T> WitType for PhantomData<T> {
     const SIZE: u32 = 0;
 
     type Layout = HList![];
+    type Dependencies = HList![];
 
     fn wit_type_name() -> Cow<'static, str> {
         "unit".into()

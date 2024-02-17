@@ -17,6 +17,7 @@ where
     const SIZE: u32 = 8;
 
     type Layout = HList![i32, i32];
+    type Dependencies = HList![T];
 
     fn wit_type_name() -> Cow<'static, str> {
         format!("list<{}>", T::wit_type_name()).into()

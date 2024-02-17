@@ -14,6 +14,7 @@ impl WitType for GuestPointer {
     const SIZE: u32 = u32::SIZE;
 
     type Layout = HList![i32];
+    type Dependencies = HList![];
 
     fn wit_type_name() -> Cow<'static, str> {
         "guest-pointer".into()

@@ -6,6 +6,8 @@
 mod implementations;
 mod register_wit_types;
 
+pub use self::register_wit_types::RegisterWitTypes;
+
 use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
 };
@@ -18,6 +20,9 @@ pub trait WitType: Sized {
 
     /// The layout of the type as fundamental types.
     type Layout: Layout;
+
+    /// Other [`WitType`]s that this type depends on.
+    type Dependencies: RegisterWitTypes;
 
     /// Generates the WIT type name for this type.
     fn wit_type_name() -> Cow<'static, str>;

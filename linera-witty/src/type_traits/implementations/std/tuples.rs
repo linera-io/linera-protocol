@@ -49,6 +49,7 @@ macro_rules! impl_wit_traits_with_borrow_store_clause {
             const SIZE: u32 = <HList![$( $types ),*] as WitType>::SIZE;
 
             type Layout = <HList![$( $types ),*] as WitType>::Layout;
+            type Dependencies = HList![$( $types ),*];
 
             fn wit_type_name() -> Cow<'static, str> {
                 let elements: &[Cow<'static, str>] = &[

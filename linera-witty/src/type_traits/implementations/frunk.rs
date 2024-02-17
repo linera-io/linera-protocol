@@ -7,13 +7,14 @@ use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory, Split,
     WitLoad, WitStore, WitType,
 };
-use frunk::{HCons, HNil};
+use frunk::{HCons, HList, HNil};
 use std::{borrow::Cow, ops::Add};
 
 impl WitType for HNil {
     const SIZE: u32 = 0;
 
     type Layout = HNil;
+    type Dependencies = HNil;
 
     fn wit_type_name() -> Cow<'static, str> {
         "hnil".into()
@@ -86,6 +87,7 @@ where
     };
 
     type Layout = <Head::Layout as Add<Tail::Layout>>::Output;
+    type Dependencies = HList![Head, Tail];
 
     fn wit_type_name() -> Cow<'static, str> {
         format!("hcons-{}-{}", Head::wit_type_name(), Tail::wit_type_name()).into()

@@ -14,6 +14,7 @@ impl WitType for bool {
     const SIZE: u32 = 1;
 
     type Layout = HList![i8];
+    type Dependencies = HList![];
 
     fn wit_type_name() -> Cow<'static, str> {
         "bool".into()
@@ -82,6 +83,7 @@ where
     const SIZE: u32 = T::SIZE;
 
     type Layout = T::Layout;
+    type Dependencies = HList![];
 
     fn wit_type_name() -> Cow<'static, str> {
         panic!("Borrowed values can't be used in WIT files generated with Witty");

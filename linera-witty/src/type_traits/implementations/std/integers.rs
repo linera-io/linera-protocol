@@ -16,6 +16,7 @@ macro_rules! impl_wit_traits {
             const SIZE: u32 = 1;
 
             type Layout = HList![$integer];
+            type Dependencies = HList![];
 
             fn wit_type_name() -> Cow<'static, str> {
                 $wit_name.into()
@@ -104,6 +105,7 @@ macro_rules! impl_wit_traits {
             const SIZE: u32 = $size;
 
             type Layout = HList![$( $simple_types ),*];
+            type Dependencies = HList![];
 
             fn wit_type_name() -> Cow<'static, str> {
                 $wit_name.into()
