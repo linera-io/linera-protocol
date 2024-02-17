@@ -95,6 +95,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let mut rollback_quotes = Vec::new();
     let mut flush_quotes = Vec::new();
     let mut clear_quotes = Vec::new();
+    let mut share_unchecked_quotes = Vec::new();
     for (idx, e) in input.fields.into_iter().enumerate() {
         let name = e.clone().ident.unwrap();
         let fut = format_ident!("{}_fut", name.to_string());
@@ -115,6 +116,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         rollback_quotes.push(quote! { self.#name.rollback(); });
         flush_quotes.push(quote! { self.#name.flush(batch)?; });
         clear_quotes.push(quote! { self.#name.clear(); });
+        share_unchecked_quotes.push(quote! { #name: self.#name.share_unchecked()?, });
     }
     let first_name_quote = name_quotes
         .first()
@@ -165,6 +167,12 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
 
             fn clear(&mut self) {
                 #(#clear_quotes)*
+            }
+
+            fn share_unchecked(&mut self) -> Result<Self, linera_views::views::ViewError> {
+                Ok(Self {
+                    #(#share_unchecked_quotes)*
+                })
             }
         }
     }

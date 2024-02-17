@@ -81,7 +81,7 @@ impl<C, V> View<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    V: Send + Sync + Serialize,
+    V: Clone + Send + Sync + Serialize,
 {
     fn context(&self) -> &C {
         &self.context
@@ -148,6 +148,17 @@ where
         self.updates.clear();
         self.deleted_prefixes.clear();
         *self.hash.get_mut() = None;
+    }
+
+    fn share_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(ByteMapView {
+            context: self.context.clone(),
+            delete_storage_first: self.delete_storage_first,
+            updates: self.updates.clone(),
+            deleted_prefixes: self.deleted_prefixes.clone(),
+            stored_hash: self.stored_hash,
+            hash: Mutex::new(*self.hash.get_mut()),
+        })
     }
 }
 
@@ -846,7 +857,7 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Send + Sync + Serialize,
-    V: Send + Sync + Serialize,
+    V: Clone + Send + Sync + Serialize,
 {
     fn context(&self) -> &C {
         self.map.context()
@@ -870,6 +881,13 @@ where
 
     fn clear(&mut self) {
         self.map.clear()
+    }
+
+    fn share_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(MapView {
+            map: self.map.share_unchecked()?,
+            _phantom: PhantomData,
+        })
     }
 }
 
@@ -1284,6 +1302,13 @@ where
 
     fn clear(&mut self) {
         self.map.clear()
+    }
+
+    fn share_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(CustomMapView {
+            map: self.map.share_unchecked()?,
+            _phantom: PhantomData,
+        })
     }
 }
 

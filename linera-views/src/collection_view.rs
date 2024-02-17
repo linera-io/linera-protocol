@@ -157,6 +157,29 @@ where
         self.updates.get_mut().clear();
         *self.hash.get_mut() = None;
     }
+
+    fn share_unchecked(&mut self) -> Result<Self, ViewError> {
+        let cloned_updates = self
+            .updates
+            .get_mut()
+            .iter_mut()
+            .map(|(key, value)| {
+                let cloned_value = match value {
+                    Update::Removed => Update::Removed,
+                    Update::Set(view) => Update::Set(view.share_unchecked()?),
+                };
+                Ok((key.clone(), cloned_value))
+            })
+            .collect::<Result<_, ViewError>>()?;
+
+        Ok(ByteCollectionView {
+            context: self.context.clone(),
+            delete_storage_first: self.delete_storage_first,
+            updates: RwLock::new(cloned_updates),
+            stored_hash: self.stored_hash,
+            hash: Mutex::new(*self.hash.get_mut()),
+        })
+    }
 }
 
 impl<C, W> ClonableView<C> for ByteCollectionView<C, W>
@@ -674,6 +697,13 @@ where
     fn clear(&mut self) {
         self.collection.clear()
     }
+
+    fn share_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(CollectionView {
+            collection: self.collection.share_unchecked()?,
+            _phantom: PhantomData,
+        })
+    }
 }
 
 impl<C, I, W> ClonableView<C> for CollectionView<C, I, W>
@@ -1008,6 +1038,13 @@ where
 
     fn clear(&mut self) {
         self.collection.clear()
+    }
+
+    fn share_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(CustomCollectionView {
+            collection: self.collection.share_unchecked()?,
+            _phantom: PhantomData,
+        })
     }
 }
 

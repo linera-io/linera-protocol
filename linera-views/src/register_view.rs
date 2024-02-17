@@ -57,7 +57,7 @@ impl<C, T> View<C> for RegisterView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Default + Send + Sync + Serialize + DeserializeOwned,
+    T: Clone + Default + Send + Sync + Serialize + DeserializeOwned,
 {
     fn context(&self) -> &C {
         &self.context
@@ -113,6 +113,17 @@ where
         self.delete_storage_first = true;
         self.update = Some(Box::default());
         *self.hash.get_mut() = None;
+    }
+
+    fn share_unchecked(&mut self) -> Result<Self, ViewError> {
+        Ok(RegisterView {
+            delete_storage_first: self.delete_storage_first,
+            context: self.context.clone(),
+            stored_value: self.stored_value.clone(),
+            update: self.update.clone(),
+            stored_hash: self.stored_hash,
+            hash: Mutex::new(*self.hash.get_mut()),
+        })
     }
 }
 
