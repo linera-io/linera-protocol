@@ -36,7 +36,7 @@ pub use self::{
         GuestPointer, Instance, InstanceWithFunction, InstanceWithMemory, Memory, Runtime,
         RuntimeError, RuntimeMemory,
     },
-    type_traits::{WitLoad, WitStore, WitType},
+    type_traits::{RegisterWitTypes, WitLoad, WitStore, WitType},
     util::{Merge, Split},
 };
 pub use frunk::{hlist, hlist::HList, hlist_pat, HCons, HList, HNil};

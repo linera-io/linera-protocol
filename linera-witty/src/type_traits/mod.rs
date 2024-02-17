@@ -4,6 +4,7 @@
 //! Traits used to allow complex types to be sent and received between hosts and guests using WIT.
 
 mod implementations;
+mod register_wit_types;
 
 use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
