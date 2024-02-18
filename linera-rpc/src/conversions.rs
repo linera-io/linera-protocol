@@ -5,7 +5,6 @@ use crate::{
     grpc_network::{grpc, grpc::ChainInfoResult},
     HandleCertificateRequest, HandleLiteCertificateRequest,
 };
-use ed25519::signature::Signature as edSignature;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey, Signature},
     data_types::BlockHeight,
@@ -36,6 +35,8 @@ pub enum ProtoConversionError {
     CryptoError(#[from] CryptoError),
     #[error("Inconsistent outer/inner chain ids")]
     InconsistentChainId,
+    #[error("Bad key length: {0}, expected 64")]
+    BadKeyLength(usize),
 }
 
 /// Extracts an optional field from a Proto type and tries to map it.
@@ -444,7 +445,7 @@ impl TryFrom<grpc::PublicKey> for ValidatorName {
 impl From<Signature> for grpc::Signature {
     fn from(signature: Signature) -> Self {
         Self {
-            bytes: signature.0.as_bytes().to_vec(),
+            bytes: signature.0.to_vec(),
         }
     }
 }
@@ -454,8 +455,10 @@ impl TryFrom<grpc::Signature> for Signature {
 
     fn try_from(signature: grpc::Signature) -> Result<Self, Self::Error> {
         Ok(Self(ed25519_dalek::Signature::from_bytes(
-            &signature.bytes,
-        )?))
+            signature.bytes[..]
+                .try_into()
+                .map_err(|_| ProtoConversionError::BadKeyLength(signature.bytes.len()))?,
+        )))
     }
 }
 

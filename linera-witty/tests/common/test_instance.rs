@@ -677,6 +677,7 @@ where
 }
 
 /// Marker type to indicate no extra functions should be exported to the Wasm instance.
+#[allow(dead_code)]
 pub struct WithoutExports;
 
 impl<T> ExportTo<T> for WithoutExports {

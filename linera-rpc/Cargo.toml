@@ -26,7 +26,6 @@ bincode.workspace = true
 bytes.workspace = true
 clap.workspace = true
 dashmap.workspace = true
-ed25519.workspace = true
 ed25519-dalek.workspace = true
 futures.workspace = true
 http.workspace = true

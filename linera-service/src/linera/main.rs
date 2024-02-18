@@ -43,7 +43,7 @@ use linera_service::{
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use rand07::Rng;
+use rand::Rng as _;
 use serde_json::Value;
 use std::{
     collections::HashMap,

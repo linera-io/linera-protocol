@@ -67,17 +67,6 @@ pub struct OrderEntry {
     pub order_id: OrderId,
 }
 
-/// Transfer operation back to the owners
-#[derive(Clone)]
-pub struct Transfer {
-    /// Beneficiary of the transfer
-    pub owner: AccountOwner,
-    /// Amount being transferred
-    pub amount: Amount,
-    /// Index of the token being transferred (0 or 1)
-    pub token_idx: u32,
-}
-
 /// This is the entry present in the state so that we can access
 /// information from the order_id.
 #[derive(Clone, Debug, Serialize, Deserialize, SimpleObject)]

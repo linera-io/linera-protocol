@@ -66,7 +66,6 @@ pathdiff = { workspace = true, optional = true }
 port-selector = { workspace = true, optional = true }
 prometheus.workspace = true
 rand.workspace = true
-rand07.workspace = true
 rcgen.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
