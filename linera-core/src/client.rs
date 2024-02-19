@@ -719,7 +719,7 @@ where
             .clone();
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate,
-            delivery: CrossChainMessageDelivery::NonBlocking,
+            delivery: self.cross_chain_message_delivery,
         };
         let certificate = self
             .communicate_chain_updates(committee, block.chain_id, finalize_action)
