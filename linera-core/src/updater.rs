@@ -70,9 +70,9 @@ pub enum CommunicationError<E: fmt::Debug> {
     #[error("Failed to communicate with a quorum of validators: {0}")]
     Trusted(E),
     /// No single error reached the validity threshold so we're returning a sample of
-    /// errors for debugging purposes.
+    /// errors for debugging purposes, together with their weight.
     #[error("Failed to communicate with a quorum of validators:\n{:#?}", .0)]
-    Sample(Vec<E>),
+    Sample(Vec<(E, u64)>),
 }
 
 /// Executes a sequence of actions in parallel for all validators.
@@ -161,7 +161,7 @@ where
     // No specific error is available to report reliably.
     let mut sample = error_scores.into_iter().collect::<Vec<_>>();
     sample.sort_by_key(|(_, score)| std::cmp::Reverse(*score));
-    let sample = sample.into_iter().map(|(error, _)| error).take(4).collect();
+    sample.truncate(4);
     Err(CommunicationError::Sample(sample))
 }
 
@@ -288,7 +288,8 @@ where
             }
             Err(error) => {
                 error!(
-                    name = ?self.name, ?chain_id, %error, "Failed to query validator about missing blocks"
+                    name = ?self.name, ?chain_id, %error,
+                    "Failed to query validator about missing blocks"
                 );
                 return Err(error);
             }
@@ -329,20 +330,20 @@ where
         &mut self,
         chain_id: ChainId,
     ) -> Result<(), NodeError> {
-        let mut info = BTreeMap::new();
+        let mut sender_heights = BTreeMap::new();
         {
             let chain = self.storage.load_chain(chain_id).await?;
             let origins = chain.inboxes.indices().await?;
             let inboxes = chain.inboxes.try_load_entries(&origins).await?;
             for (origin, inbox) in origins.into_iter().zip(inboxes) {
-                let next_height = info.entry(origin.sender).or_default();
+                let next_height = sender_heights.entry(origin.sender).or_default();
                 let inbox_next_height = inbox.next_block_height_to_receive()?;
                 if inbox_next_height > *next_height {
                     *next_height = inbox_next_height;
                 }
             }
         }
-        for (sender, next_height) in info {
+        for (sender, next_height) in sender_heights {
             self.send_chain_information(sender, next_height, CrossChainMessageDelivery::Blocking)
                 .await?;
         }
@@ -372,7 +373,7 @@ where
         // Update the validator with missing information, if needed.
         self.send_chain_information(chain_id, target_block_height, first_delivery)
             .await?;
-        // Send the block proposal (if any) and return a vote.
+        // Send the block proposal, certificate or timeout request and return a vote.
         match action {
             CommunicateAction::SubmitBlock { proposal, .. } => {
                 let info = self.send_block_proposal(proposal.clone()).await?;
