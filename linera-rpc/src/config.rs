@@ -1,9 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::transport::TransportProtocol;
 use linera_base::identifiers::ChainId;
 use serde::{Deserialize, Serialize};
+
+#[cfg(with_simple_network)]
+use crate::simple;
 
 #[derive(Clone, Debug, clap::Parser)]
 pub struct CrossChainConfig {
@@ -67,7 +69,8 @@ impl ShardConfig {
 /// The network protocol.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum NetworkProtocol {
-    Simple(TransportProtocol),
+    #[cfg(with_simple_network)]
+    Simple(simple::TransportProtocol),
     Grpc(TlsConfig),
 }
 
@@ -211,7 +214,7 @@ impl std::str::FromStr for NetworkProtocol {
         let protocol = match s {
             "grpc" => Self::Grpc(TlsConfig::ClearText),
             "grpcs" => Self::Grpc(TlsConfig::Tls),
-            _ => Self::Simple(TransportProtocol::from_str(s)?),
+            _ => Self::Simple(simple::TransportProtocol::from_str(s)?),
         };
         Ok(protocol)
     }

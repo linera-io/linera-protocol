@@ -18,6 +18,7 @@ test = [
     "linera-execution/test",
     "linera-storage/test",
 ]
+
 metrics = [
     "prometheus",
     "linera-base/metrics",
@@ -28,6 +29,10 @@ metrics = [
     "linera-views/metrics",
 ]
 
+tcp = ["tonic/transport"]
+udp = ["tokio-util/net"]
+simple_network = []
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
@@ -35,6 +40,7 @@ bincode.workspace = true
 bytes.workspace = true
 clap.workspace = true
 dashmap.workspace = true
+ed25519.workspace = true
 ed25519-dalek.workspace = true
 futures.workspace = true
 http.workspace = true
@@ -51,10 +57,13 @@ prost.workspace = true
 rand.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+tokio-util = { workspace = true, features = ["codec"] }
+tonic-health.workspace = true
+tower.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-assert_matches.workspace = true
 linera-rpc = { path = ".", features = ["test"] }
 proptest.workspace = true
 serde-reflection.workspace = true
@@ -71,7 +80,7 @@ tower.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
-tonic-build = { workspace = true, features = ["prost"] }
+tonic-build.workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["getrandom", "proptest", "prost"]

@@ -5,16 +5,30 @@
 //! calls (RPCs) in the Linera protocol.
 
 pub mod config;
-pub mod grpc_network;
-pub mod grpc_pool;
 pub mod mass;
 pub mod node_provider;
-pub mod simple_network;
-pub mod transport;
 
-mod client;
-mod codec;
-mod conversions;
-mod rpc;
+pub mod client;
 
-pub use rpc::{HandleCertificateRequest, HandleLiteCertificateRequest, RpcMessage};
+mod message;
+#[cfg(with_simple_network)]
+pub mod simple;
+
+pub mod grpc;
+
+pub use message::RpcMessage;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct HandleLiteCertificateRequest<'a> {
+    pub certificate: linera_chain::data_types::LiteCertificate<'a>,
+    pub wait_for_outgoing_messages: bool,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct HandleCertificateRequest {
+    pub certificate: linera_chain::data_types::Certificate,
+    pub wait_for_outgoing_messages: bool,
+    pub blobs: Vec<linera_chain::data_types::HashedValue>,
+}
