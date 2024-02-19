@@ -288,7 +288,8 @@ where
             }
             Err(error) => {
                 error!(
-                    name = ?self.name, ?chain_id, %error, "Failed to query validator about missing blocks"
+                    name = ?self.name, ?chain_id, %error,
+                    "Failed to query validator about missing blocks"
                 );
                 return Err(error);
             }
@@ -329,20 +330,20 @@ where
         &mut self,
         chain_id: ChainId,
     ) -> Result<(), NodeError> {
-        let mut info = BTreeMap::new();
+        let mut sender_heights = BTreeMap::new();
         {
             let chain = self.storage.load_chain(chain_id).await?;
             let origins = chain.inboxes.indices().await?;
             let inboxes = chain.inboxes.try_load_entries(&origins).await?;
             for (origin, inbox) in origins.into_iter().zip(inboxes) {
-                let next_height = info.entry(origin.sender).or_default();
+                let next_height = sender_heights.entry(origin.sender).or_default();
                 let inbox_next_height = inbox.next_block_height_to_receive()?;
                 if inbox_next_height > *next_height {
                     *next_height = inbox_next_height;
                 }
             }
         }
-        for (sender, next_height) in info {
+        for (sender, next_height) in sender_heights {
             self.send_chain_information(sender, next_height, CrossChainMessageDelivery::Blocking)
                 .await?;
         }
@@ -372,7 +373,7 @@ where
         // Update the validator with missing information, if needed.
         self.send_chain_information(chain_id, target_block_height, first_delivery)
             .await?;
-        // Send the block proposal (if any) and return a vote.
+        // Send the block proposal, certificate or timeout request and return a vote.
         match action {
             CommunicateAction::SubmitBlock { proposal, .. } => {
                 let info = self.send_block_proposal(proposal.clone()).await?;
