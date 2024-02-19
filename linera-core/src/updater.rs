@@ -11,10 +11,8 @@ use linera_base::{
     data_types::{BlockHeight, Round},
     identifiers::ChainId,
 };
-use linera_chain::data_types::{
-    BlockProposal, Certificate, CertificateValue, HashedValue, LiteVote,
-};
-use linera_execution::committee::{Committee, Epoch, ValidatorName};
+use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, LiteVote};
+use linera_execution::committee::{Committee, ValidatorName};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use std::{
@@ -39,7 +37,6 @@ const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 pub enum CommunicateAction {
     SubmitBlock {
         proposal: BlockProposal,
-        hashed_value: HashedValue,
     },
     FinalizeBlock {
         certificate: Certificate,
@@ -52,7 +49,6 @@ pub enum CommunicateAction {
     RequestLeaderTimeout {
         height: BlockHeight,
         round: Round,
-        epoch: Epoch,
     },
 }
 
@@ -358,7 +354,7 @@ where
         let (target_block_height, first_delivery) = {
             use CrossChainMessageDelivery::NonBlocking;
             match &action {
-                CommunicateAction::SubmitBlock { proposal, .. } => {
+                CommunicateAction::SubmitBlock { proposal } => {
                     (proposal.content.block.height, NonBlocking)
                 }
                 CommunicateAction::FinalizeBlock { certificate, .. } => {
@@ -375,7 +371,7 @@ where
             .await?;
         // Send the block proposal, certificate or timeout request and return a vote.
         match action {
-            CommunicateAction::SubmitBlock { proposal, .. } => {
+            CommunicateAction::SubmitBlock { proposal } => {
                 let info = self.send_block_proposal(proposal.clone()).await?;
                 match info.manager.pending {
                     Some(vote) if vote.validator == self.name => {

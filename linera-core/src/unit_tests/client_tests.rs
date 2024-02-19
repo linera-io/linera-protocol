@@ -1420,6 +1420,7 @@ where
                 height: client1.next_block_height,
                 delivery: CrossChainMessageDelivery::NonBlocking,
             },
+            None,
         )
         .await
         .unwrap();

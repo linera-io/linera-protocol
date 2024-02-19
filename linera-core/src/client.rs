@@ -717,22 +717,17 @@ where
                 )
             })?
             .clone();
+        let value = certificate.value.clone().into_confirmed();
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate,
             delivery: CrossChainMessageDelivery::NonBlocking,
         };
         let certificate = self
-            .communicate_chain_updates(committee, block.chain_id, finalize_action)
+            .communicate_chain_updates(committee, block.chain_id, finalize_action, value)
             .await?
             .ok_or_else(|| {
                 ChainClientError::InternalError("Missing confirmed block certificate")
             })?;
-        ensure!(
-            certificate.value().is_confirmed() && certificate.value().block() == Some(&block),
-            ChainClientError::BlockProposalError(
-                "A different operation was executed in parallel (consider retrying the operation)"
-            )
-        );
         self.receive_certificate_internal(
             certificate.clone(),
             ReceiveCertificateMode::AlreadyChecked,
@@ -747,55 +742,46 @@ where
         &mut self,
         committee: &Committee,
         proposal: BlockProposal,
-        hashed_value: HashedValue,
+        value: HashedValue,
     ) -> Result<Certificate, ChainClientError> {
         let content = proposal.content.clone();
-        let submit_action = CommunicateAction::SubmitBlock {
-            proposal,
-            hashed_value,
-        };
         let certificate = self
-            .communicate_chain_updates(committee, content.block.chain_id, submit_action)
+            .communicate_chain_updates(
+                committee,
+                content.block.chain_id,
+                CommunicateAction::SubmitBlock { proposal },
+                Some(value),
+            )
             .await?
             .ok_or_else(|| ChainClientError::InternalError("Missing certificate"))?;
-        ensure!(
-            certificate.value().block() == Some(&content.block),
-            ChainClientError::BlockProposalError(
-                "A different operation was executed in parallel (consider retrying the operation)"
-            )
-        );
         if content.round.is_fast() {
-            ensure!(
-                certificate.value().is_confirmed(),
-                ChainClientError::InternalError("Certificate is not for a confirmed block")
-            );
             self.process_certificate(certificate.clone(), vec![])
                 .await?;
             Ok(certificate)
         } else {
-            ensure!(
-                certificate.value().is_validated(),
-                ChainClientError::InternalError("Certificate is not for a validated block")
-            );
             self.finalize_block(committee, certificate).await
         }
     }
 
-    /// Broadcasts certified blocks and optionally one more block proposal.
-    /// The corresponding block heights should be consecutive and increasing.
+    /// Broadcasts certified blocks and optionally a block proposal, certificate or
+    /// leader timeout request.
+    ///
+    /// In that case, it verifies that the validator votes are for the provided value,
+    /// and returns a certificate.
     async fn communicate_chain_updates(
         &mut self,
         committee: &Committee,
         chain_id: ChainId,
         action: CommunicateAction,
+        value: Option<HashedValue>,
     ) -> Result<Option<Certificate>, ChainClientError> {
         let storage_client = self.storage_client().await;
         let nodes: Vec<_> = self.validator_node_provider.make_nodes(committee)?;
         let (maybe_hash_round, votes) = communicate_with_quorum(
             &nodes,
             committee,
-            |value: &Option<LiteVote>| -> Option<_> {
-                value
+            |maybe_vote: &Option<LiteVote>| -> Option<_> {
+                maybe_vote
                     .as_ref()
                     .map(|vote| (vote.value.value_hash, vote.round))
             },
@@ -810,39 +796,16 @@ where
             },
         )
         .await?;
-        let (value, round) = match action {
-            CommunicateAction::SubmitBlock {
-                proposal,
-                hashed_value,
-            } => {
-                let round = proposal.content.round;
-                (hashed_value, round)
-            }
-            CommunicateAction::FinalizeBlock { certificate, .. } => {
-                let round = certificate.round;
-                let Some(value) = certificate.value.into_confirmed() else {
-                    return Err(ChainClientError::ProtocolError(
-                        "Unexpected certificate value for finalized block",
-                    ));
-                };
-                (value, round)
-            }
-            CommunicateAction::RequestLeaderTimeout {
-                height,
-                round,
-                epoch,
-            } => {
-                let value = HashedValue::from(CertificateValue::LeaderTimeout {
-                    chain_id,
-                    height,
-                    epoch,
-                });
-                (value, round)
-            }
+        let round = match action {
+            CommunicateAction::SubmitBlock { proposal } => proposal.content.round,
+            CommunicateAction::FinalizeBlock { certificate, .. } => certificate.round,
+            CommunicateAction::RequestLeaderTimeout { round, .. } => round,
             CommunicateAction::AdvanceToNextBlockHeight { .. } => {
                 return Ok(None);
             }
         };
+        let value =
+            value.ok_or_else(|| ChainClientError::InternalError("Action requires a value"))?;
         ensure!(
             maybe_hash_round == Some((value.hash(), round)),
             ChainClientError::ProtocolError("Unexpected response from validators")
@@ -922,6 +885,7 @@ where
                 height: block.height.try_add_one()?,
                 delivery: CrossChainMessageDelivery::Blocking,
             },
+            None,
         )
         .await?;
         Ok(())
@@ -1213,23 +1177,12 @@ where
             .ok_or(LocalNodeError::InactiveChain(chain_id))?;
         let height = info.next_block_height;
         let round = info.manager.current_round;
-        let action = CommunicateAction::RequestLeaderTimeout {
-            height,
-            round,
-            epoch,
-        };
+        let action = CommunicateAction::RequestLeaderTimeout { height, round };
+        let value = HashedValue::new_leader_timeout(chain_id, height, epoch);
         let certificate = self
-            .communicate_chain_updates(&committee, chain_id, action)
+            .communicate_chain_updates(&committee, chain_id, action, Some(value))
             .await?
             .expect("a certificate");
-        let expected_value = CertificateValue::LeaderTimeout {
-            height,
-            chain_id,
-            epoch,
-        };
-        if *certificate.value() != expected_value || certificate.round != round {
-            return Err(ChainClientError::UnexpectedLeaderTimeout);
-        }
         self.process_certificate(certificate.clone(), vec![])
             .await?;
         // The block height didn't increase, but this will communicate the timeout as well.
@@ -1240,6 +1193,7 @@ where
                 height,
                 delivery: CrossChainMessageDelivery::NonBlocking,
             },
+            None,
         )
         .await?;
         Ok(certificate)
@@ -1376,6 +1330,7 @@ where
                 height: self.next_block_height,
                 delivery: self.cross_chain_message_delivery,
             },
+            None,
         )
         .await?;
         if let Ok(new_committee) = self.local_committee().await {
@@ -1389,6 +1344,7 @@ where
                         height: self.next_block_height,
                         delivery: self.cross_chain_message_delivery,
                     },
+                    None,
                 )
                 .await?;
             }
@@ -1683,6 +1639,7 @@ where
                 height: self.next_block_height,
                 delivery: CrossChainMessageDelivery::NonBlocking,
             },
+            None,
         )
         .await?;
         Ok(())
