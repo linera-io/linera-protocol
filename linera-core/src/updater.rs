@@ -11,10 +11,8 @@ use linera_base::{
     data_types::{BlockHeight, Round},
     identifiers::ChainId,
 };
-use linera_chain::data_types::{
-    BlockProposal, Certificate, CertificateValue, HashedValue, LiteVote,
-};
-use linera_execution::committee::{Committee, Epoch, ValidatorName};
+use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, LiteVote};
+use linera_execution::committee::{Committee, ValidatorName};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use std::{
@@ -33,26 +31,21 @@ const GRACE_PERIOD: f64 = 0.2;
 /// The maximum timeout for `communicate_with_quorum` if no quorum is reached.
 const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 
-/// Used for `communicate_chain_updates`
+/// Used for `communicate_chain_action`
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 pub enum CommunicateAction {
     SubmitBlock {
         proposal: BlockProposal,
-        hashed_value: HashedValue,
     },
     FinalizeBlock {
         certificate: Certificate,
         delivery: CrossChainMessageDelivery,
     },
-    AdvanceToNextBlockHeight {
-        height: BlockHeight,
-        delivery: CrossChainMessageDelivery,
-    },
     RequestLeaderTimeout {
+        chain_id: ChainId,
         height: BlockHeight,
         round: Round,
-        epoch: Epoch,
     },
 }
 
@@ -273,7 +266,7 @@ where
         Ok(response.info)
     }
 
-    async fn send_chain_information(
+    pub async fn send_chain_information(
         &mut self,
         chain_id: ChainId,
         target_block_height: BlockHeight,
@@ -352,71 +345,50 @@ where
 
     pub async fn send_chain_update(
         &mut self,
-        chain_id: ChainId,
         action: CommunicateAction,
-    ) -> Result<Option<LiteVote>, NodeError> {
-        let (target_block_height, first_delivery) = {
-            use CrossChainMessageDelivery::NonBlocking;
-            match &action {
-                CommunicateAction::SubmitBlock { proposal, .. } => {
-                    (proposal.content.block.height, NonBlocking)
-                }
-                CommunicateAction::FinalizeBlock { certificate, .. } => {
-                    (certificate.value().height(), NonBlocking)
-                }
-                CommunicateAction::AdvanceToNextBlockHeight { height, delivery } => {
-                    (*height, *delivery)
-                }
-                CommunicateAction::RequestLeaderTimeout { height, .. } => (*height, NonBlocking),
+    ) -> Result<LiteVote, NodeError> {
+        let (target_block_height, chain_id) = match &action {
+            CommunicateAction::SubmitBlock { proposal } => {
+                let block = &proposal.content.block;
+                (block.height, block.chain_id)
             }
+            CommunicateAction::FinalizeBlock { certificate, .. } => {
+                let value = certificate.value();
+                (value.height(), value.chain_id())
+            }
+            CommunicateAction::RequestLeaderTimeout {
+                height, chain_id, ..
+            } => (*height, *chain_id),
         };
         // Update the validator with missing information, if needed.
-        self.send_chain_information(chain_id, target_block_height, first_delivery)
+        let delivery = CrossChainMessageDelivery::NonBlocking;
+        self.send_chain_information(chain_id, target_block_height, delivery)
             .await?;
         // Send the block proposal, certificate or timeout request and return a vote.
-        match action {
-            CommunicateAction::SubmitBlock { proposal, .. } => {
+        let vote = match action {
+            CommunicateAction::SubmitBlock { proposal } => {
                 let info = self.send_block_proposal(proposal.clone()).await?;
-                match info.manager.pending {
-                    Some(vote) if vote.validator == self.name => {
-                        vote.check()?;
-                        return Ok(Some(vote.clone()));
-                    }
-                    Some(_) | None => {
-                        return Err(NodeError::MissingVoteInValidatorResponse);
-                    }
-                }
+                info.manager.pending
             }
             CommunicateAction::FinalizeBlock {
                 certificate,
                 delivery,
             } => {
                 let info = self.send_certificate(certificate, delivery).await?;
-                match info.manager.pending {
-                    Some(vote) if vote.validator == self.name => {
-                        vote.check()?;
-                        return Ok(Some(vote.clone()));
-                    }
-                    Some(_) | None => {
-                        return Err(NodeError::MissingVoteInValidatorResponse);
-                    }
-                }
+                info.manager.pending
             }
             CommunicateAction::RequestLeaderTimeout { .. } => {
                 let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
                 let info = self.node.handle_chain_info_query(query).await?.info;
-                match info.manager.timeout_vote {
-                    Some(vote) if vote.validator == self.name => {
-                        vote.check()?;
-                        return Ok(Some(vote.clone()));
-                    }
-                    Some(_) | None => {
-                        return Err(NodeError::MissingVoteInValidatorResponse);
-                    }
-                }
+                info.manager.timeout_vote
             }
-            CommunicateAction::AdvanceToNextBlockHeight { .. } => (),
+        };
+        match vote {
+            Some(vote) if vote.validator == self.name => {
+                vote.check()?;
+                Ok(vote)
+            }
+            Some(_) | None => Err(NodeError::MissingVoteInValidatorResponse),
         }
-        Ok(None)
     }
 }
