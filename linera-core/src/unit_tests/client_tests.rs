@@ -8,7 +8,7 @@ mod wasm;
 use crate::{
     client::{
         client_test_utils::{FaultType, MakeMemoryStorage, StorageBuilder, TestBuilder},
-        ChainClient, ChainClientError, ClientOutcome, CommunicateAction, MessageAction,
+        ChainClient, ChainClientError, ClientOutcome, MessageAction,
     },
     local_node::LocalNodeError,
     node::{
@@ -1416,11 +1416,8 @@ where
         .communicate_chain_updates(
             &builder.initial_committee,
             client1.chain_id,
-            CommunicateAction::AdvanceToNextBlockHeight {
-                height: client1.next_block_height,
-                delivery: CrossChainMessageDelivery::NonBlocking,
-            },
-            None,
+            client1.next_block_height,
+            CrossChainMessageDelivery::NonBlocking,
         )
         .await
         .unwrap();
