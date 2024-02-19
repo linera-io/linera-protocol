@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client::storage_service_check_endpoint;
+use crate::client::{storage_service_check_deadness, storage_service_check_endpoint};
 use anyhow::{bail, Result};
 use linera_base::command::CommandExt;
 use std::time::Duration;
@@ -36,7 +36,20 @@ impl StorageServiceSpanner {
         command.kill_on_drop(true);
         command
     }
+
+    async fn wait_deadness(&self) -> Result<()> {
+        for i in 1..10 {
+            let test = storage_service_check_deadness(&self.endpoint).await?;
+            if test {
+                return Ok(());
+            }
+            tokio::time::sleep(Duration::from_secs(i)).await;
+        }
+        bail!("Failed to start child server");
+    }
+
     pub async fn run_service(&self) -> Result<StorageServiceGuard> {
+        self.wait_deadness().await?;
         let mut command = self.command().await;
         let _child = command.spawn_into()?;
         let guard = StorageServiceGuard { _child };

@@ -150,7 +150,7 @@ impl ServiceStoreServer {
     }
 
     pub async fn list_all(&self) -> Result<Vec<Vec<u8>>, Status> {
-        self.find_keys_by_prefix(&[1]).await
+        self.find_keys_by_prefix(&[KeyTag::Namespace as u8]).await
     }
 
     pub async fn delete_all(&self) -> Result<(), Status> {
