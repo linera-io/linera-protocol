@@ -70,9 +70,9 @@ pub enum CommunicationError<E: fmt::Debug> {
     #[error("Failed to communicate with a quorum of validators: {0}")]
     Trusted(E),
     /// No single error reached the validity threshold so we're returning a sample of
-    /// errors for debugging purposes.
+    /// errors for debugging purposes, together with their weight.
     #[error("Failed to communicate with a quorum of validators:\n{:#?}", .0)]
-    Sample(Vec<E>),
+    Sample(Vec<(E, u64)>),
 }
 
 /// Executes a sequence of actions in parallel for all validators.
@@ -161,7 +161,7 @@ where
     // No specific error is available to report reliably.
     let mut sample = error_scores.into_iter().collect::<Vec<_>>();
     sample.sort_by_key(|(_, score)| std::cmp::Reverse(*score));
-    let sample = sample.into_iter().map(|(error, _)| error).take(4).collect();
+    sample.truncate(4);
     Err(CommunicationError::Sample(sample))
 }
 
