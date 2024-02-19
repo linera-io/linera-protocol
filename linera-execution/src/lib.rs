@@ -719,7 +719,7 @@ pub struct TestExecutionRuntimeContext {
 
 #[cfg(any(test, feature = "test"))]
 impl TestExecutionRuntimeContext {
-    fn new(chain_id: ChainId, execution_runtime_config: ExecutionRuntimeConfig) -> Self {
+    pub fn new(chain_id: ChainId, execution_runtime_config: ExecutionRuntimeConfig) -> Self {
         Self {
             chain_id,
             execution_runtime_config,

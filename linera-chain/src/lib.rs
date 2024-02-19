@@ -18,7 +18,7 @@ use data_types::{Event, Origin};
 use linera_base::{
     crypto::CryptoError,
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
-    identifiers::ChainId,
+    identifiers::{ApplicationId, ChainId},
 };
 use linera_execution::ExecutionError;
 use linera_views::views::ViewError;
@@ -136,6 +136,8 @@ pub enum ChainError {
     OwnerWeightError(#[from] WeightedError),
     #[error("Closed chains cannot have operations, accepted messages or empty blocks")]
     ClosedChain,
+    #[error("All operations on this chain must be from application {0}")]
+    ChainApplication(ApplicationId),
 }
 
 #[derive(Copy, Clone, Debug)]

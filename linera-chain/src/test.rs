@@ -4,19 +4,19 @@
 //! Test utilities
 
 use linera_base::{
-    crypto::KeyPair,
+    crypto::{CryptoHash, KeyPair},
     data_types::{Amount, BlockHeight, Round, Timestamp},
     identifiers::{ChainId, Owner},
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorState},
     system::Recipient,
-    Operation, ResourceControlPolicy, SystemOperation,
+    Message, MessageKind, Operation, ResourceControlPolicy, SystemOperation,
 };
 
 use crate::data_types::{
-    Block, BlockAndRound, BlockProposal, Certificate, HashedValue, IncomingMessage,
-    SignatureAggregator, Vote,
+    Block, BlockAndRound, BlockProposal, Certificate, Event, HashedValue, IncomingMessage,
+    MessageAction, Origin, SignatureAggregator, Vote,
 };
 
 /// Creates a new child of the given block, with the same timestamp.
@@ -137,5 +137,30 @@ impl VoteTestExt for Vote {
             .append(self.validator, self.signature)
             .unwrap()
             .unwrap()
+    }
+}
+
+/// Helper trait to simplify constructing messages for tests.
+pub trait MessageTestExt: Sized {
+    fn to_simple_incoming(self, sender: ChainId, height: BlockHeight) -> IncomingMessage;
+}
+
+impl<T: Into<Message>> MessageTestExt for T {
+    fn to_simple_incoming(self, sender: ChainId, height: BlockHeight) -> IncomingMessage {
+        IncomingMessage {
+            origin: Origin::chain(sender),
+            event: Event {
+                certificate_hash: CryptoHash::test_hash("certificate"),
+                height,
+                index: 0,
+                authenticated_signer: None,
+                grant: Amount::ZERO,
+                refund_grant_to: None,
+                kind: MessageKind::Protected,
+                timestamp: Timestamp::from(0),
+                message: self.into(),
+            },
+            action: MessageAction::Accept,
+        }
     }
 }
