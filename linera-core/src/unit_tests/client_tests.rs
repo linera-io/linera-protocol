@@ -7,7 +7,9 @@ mod wasm;
 
 use crate::{
     client::{
-        client_test_utils::{FaultType, MakeMemoryStorage, MakeServiceStorage, StorageBuilder, TestBuilder},
+        client_test_utils::{
+            FaultType, MakeMemoryStorage, MakeServiceStorage, StorageBuilder, TestBuilder,
+        },
         ChainClient, ChainClientError, ClientOutcome, MessageAction,
     },
     local_node::LocalNodeError,
