@@ -4184,7 +4184,7 @@ where
     let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
         super_owners: vec![pub_key0],
         owners: vec![(pub_key0, 100), (pub_key1, 100)],
-        multi_leader_rounds: 2,
+        multi_leader_rounds: 3,
         timeout_config: TimeoutConfig {
             fast_round_duration: Some(Duration::from_millis(5)),
             ..TimeoutConfig::default()
@@ -4245,10 +4245,12 @@ where
     // A validated block certificate from a later round can override the locked fast block.
     let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await.unwrap();
     let value2 = HashedValue::new_validated(executed_block2.clone());
-    let mut proposal = block2.into_proposal_with_round(&key_pairs[1], Round::MultiLeader(1));
+    let mut proposal = block2
+        .clone()
+        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(1));
     let lite_value2 = value2.lite();
     let certificate2 =
-        make_certificate_with_round(&committee, &worker, value2, Round::MultiLeader(0));
+        make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(0));
     proposal.validated = Some(certificate2.clone());
     let (_, _) = worker.handle_block_proposal(proposal).await.unwrap();
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
@@ -4260,4 +4262,23 @@ where
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
     assert_eq!(vote.round, Round::MultiLeader(1));
+
+    // Re-proposing the locked block also works.
+    let proposal = block2.into_proposal_with_round(&key_pairs[1], Round::MultiLeader(2));
+    let (_, _) = worker.handle_block_proposal(proposal).await.unwrap();
+    let certificate3 =
+        make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(2));
+    worker
+        .handle_certificate(certificate3.clone(), vec![], None)
+        .await
+        .unwrap();
+    let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
+    let (response, _) = worker.handle_chain_info_query(query_values).await.unwrap();
+    assert_eq!(
+        response.info.manager.requested_locked,
+        Some(Box::new(certificate3))
+    );
+    let vote = response.info.manager.pending.as_ref().unwrap();
+    assert_eq!(vote.value, value2.into_confirmed().unwrap().lite());
+    assert_eq!(vote.round, Round::MultiLeader(2));
 }
