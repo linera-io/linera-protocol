@@ -15,7 +15,7 @@ use crate::{
 };
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::{BcsSignable, CryptoHash, *},
+    crypto::{CryptoHash, *},
     data_types::*,
     identifiers::{Account, ChainDescription, ChainId, ChannelName, Destination, MessageId, Owner},
 };
@@ -42,7 +42,6 @@ use linera_views::{
     value_splitting::DatabaseConsistencyError,
     views::{CryptoHashView, ViewError},
 };
-use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
@@ -58,11 +57,6 @@ use linera_storage::DynamoDbStorage;
 
 #[cfg(feature = "scylladb")]
 use linera_storage::ScyllaDbStorage;
-
-#[derive(Serialize, Deserialize)]
-struct Dummy;
-
-impl BcsSignable for Dummy {}
 
 async fn make_state_hash(state: SystemExecutionState) -> CryptoHash {
     ExecutionStateView::from_system_state(state, ExecutionRuntimeConfig::default())
@@ -1528,7 +1522,7 @@ where
     let open_chain_message = IncomingMessage {
         origin: Origin::chain(ChainId::root(3)),
         event: Event {
-            certificate_hash: CryptoHash::new(&Dummy),
+            certificate_hash: CryptoHash::debug("certificate"),
             height: BlockHeight::ZERO,
             index: 0,
             authenticated_signer: None,
@@ -1748,7 +1742,7 @@ where
         vec![IncomingMessage {
             origin: Origin::chain(ChainId::root(3)),
             event: Event {
-                certificate_hash: CryptoHash::new(&Dummy),
+                certificate_hash: CryptoHash::debug("certificate"),
                 height: BlockHeight::ZERO,
                 index: 0,
                 authenticated_signer: None,
@@ -1807,7 +1801,7 @@ where
             kind: MessageKind::Tracked,
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. }),
-        } if certificate_hash == CryptoHash::new(&Dummy)
+        } if certificate_hash == CryptoHash::debug("certificate")
             && height == BlockHeight::ZERO
             && timestamp == Timestamp::from(0)
             && amount == Amount::from_tokens(995),

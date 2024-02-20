@@ -6,11 +6,10 @@ use super::{
     UserApplicationId,
 };
 use linera_base::{
-    crypto::{BcsSignable, CryptoHash},
+    crypto::CryptoHash,
     data_types::BlockHeight,
     identifiers::{BytecodeId, ChainId, MessageId},
 };
-use serde::{Deserialize, Serialize};
 
 fn message_id(index: u32) -> MessageId {
     MessageId {
@@ -42,13 +41,8 @@ fn app_description(index: u32, deps: Vec<u32>) -> UserApplicationDescription {
 }
 
 fn location(operation_index: u32) -> BytecodeLocation {
-    #[derive(Serialize, Deserialize)]
-    struct Dummy;
-
-    impl BcsSignable for Dummy {}
-
     BytecodeLocation {
-        certificate_hash: CryptoHash::new(&Dummy),
+        certificate_hash: CryptoHash::debug("certificate"),
         operation_index,
     }
 }

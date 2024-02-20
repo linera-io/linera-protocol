@@ -520,7 +520,7 @@ impl TryFrom<grpc::Owner> for Owner {
 pub mod tests {
     use super::*;
     use linera_base::{
-        crypto::{BcsSignable, CryptoHash, KeyPair},
+        crypto::{CryptoHash, KeyPair, TestSignable},
         data_types::{Amount, Round, Timestamp},
     };
     use linera_chain::{
@@ -528,13 +528,7 @@ pub mod tests {
         test::make_first_block,
     };
     use linera_core::data_types::ChainInfo;
-    use serde::{Deserialize, Serialize};
     use std::{borrow::Cow, fmt::Debug};
-
-    #[derive(Debug, Serialize, Deserialize)]
-    struct Foo(String);
-
-    impl BcsSignable for Foo {}
 
     fn get_block() -> Block {
         make_first_block(ChainId::root(0))
@@ -562,7 +556,7 @@ pub mod tests {
     #[test]
     pub fn test_signature() {
         let key_pair = KeyPair::generate();
-        let signature = Signature::new(&Foo("test".into()), &key_pair);
+        let signature = Signature::new(&TestSignable::new("test"), &key_pair);
         round_trip_check::<_, grpc::Signature>(signature);
     }
 
@@ -624,7 +618,10 @@ pub mod tests {
         let chain_info_response_some = ChainInfoResponse {
             // `info` is bincode so no need to test conversions extensively
             info: chain_info,
-            signature: Some(Signature::new(&Foo("test".into()), &KeyPair::generate())),
+            signature: Some(Signature::new(
+                &TestSignable::new("test"),
+                &KeyPair::generate(),
+            )),
         };
         round_trip_check::<_, grpc::ChainInfoResponse>(chain_info_response_some);
     }
@@ -657,13 +654,13 @@ pub mod tests {
         let key_pair = KeyPair::generate();
         let certificate = LiteCertificate {
             value: LiteValue {
-                value_hash: CryptoHash::new(&Foo("value".into())),
+                value_hash: CryptoHash::debug("value"),
                 chain_id: ChainId::root(0),
             },
             round: Round::MultiLeader(2),
             signatures: Cow::Owned(vec![(
                 ValidatorName::from(key_pair.public()),
-                Signature::new(&Foo("test".into()), &key_pair),
+                Signature::new(&TestSignable::new("test"), &key_pair),
             )]),
         };
         let request = HandleLiteCertificateRequest {
@@ -682,19 +679,19 @@ pub mod tests {
                 block: get_block(),
                 messages: vec![],
                 message_counts: vec![],
-                state_hash: CryptoHash::new(&Foo("test".into())),
+                state_hash: CryptoHash::debug("test"),
             }),
             Round::MultiLeader(3),
             vec![(
                 ValidatorName::from(key_pair.public()),
-                Signature::new(&Foo("test".into()), &key_pair),
+                Signature::new(&TestSignable::new("test"), &key_pair),
             )],
         );
         let blobs = vec![HashedValue::new_validated(ExecutedBlock {
             block: get_block(),
             messages: vec![],
             message_counts: vec![],
-            state_hash: CryptoHash::new(&Foo("also test".into())),
+            state_hash: CryptoHash::debug("also test"),
         })];
         let request = HandleCertificateRequest {
             certificate,
@@ -737,24 +734,24 @@ pub mod tests {
                 round: Round::SingleLeader(4),
             },
             owner: Owner::from(KeyPair::generate().public()),
-            signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
+            signature: Signature::new(&TestSignable::new("test"), &KeyPair::generate()),
             blobs: vec![HashedValue::new_confirmed(ExecutedBlock {
                 block: get_block(),
                 messages: vec![],
                 message_counts: vec![],
-                state_hash: CryptoHash::new(&Foo("execution state".into())),
+                state_hash: CryptoHash::debug("execution state"),
             })],
             validated: Some(Certificate::new(
                 HashedValue::new_validated(ExecutedBlock {
                     block: get_block(),
                     messages: vec![],
                     message_counts: vec![],
-                    state_hash: CryptoHash::new(&Foo("validated".into())),
+                    state_hash: CryptoHash::debug("validated"),
                 }),
                 Round::SingleLeader(2),
                 vec![(
                     ValidatorName::from(key_pair.public()),
-                    Signature::new(&Foo("signed".into()), &key_pair),
+                    Signature::new(&TestSignable::new("signed"), &key_pair),
                 )],
             )),
         };
@@ -768,7 +765,7 @@ pub mod tests {
             chain_id: ChainId::root(0),
             reason: linera_core::worker::Reason::NewBlock {
                 height: BlockHeight(0),
-                hash: CryptoHash::new(&Foo("".into())),
+                hash: CryptoHash::debug(""),
             },
         };
         round_trip_check::<_, grpc::Notification>(notification);

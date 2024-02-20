@@ -5,19 +5,10 @@
 use super::*;
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::{BcsSignable, CryptoHash},
+    crypto::CryptoHash,
     data_types::{Amount, Timestamp},
 };
 use linera_execution::{Message, MessageKind, UserApplicationId};
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize)]
-struct Dummy;
-#[derive(Serialize, Deserialize)]
-struct Dummy2;
-
-impl BcsSignable for Dummy {}
-impl BcsSignable for Dummy2 {}
 
 fn make_event(
     certificate_hash: CryptoHash,
@@ -54,7 +45,7 @@ fn make_unskippable_event(
 
 #[tokio::test]
 async fn test_inbox_add_then_remove_skippable() {
-    let hash = CryptoHash::new(&Dummy);
+    let hash = CryptoHash::debug("1");
     let mut view = InboxStateView::new().await;
     // Add one event.
     view.add_event(make_event(hash, 0, 0, [0])).await.unwrap();
@@ -82,7 +73,7 @@ async fn test_inbox_add_then_remove_skippable() {
     );
     // Fail to remove non-matching even (hash).
     assert_matches!(
-        view.remove_event(&make_event(CryptoHash::new(&Dummy2), 0, 1, [1]))
+        view.remove_event(&make_event(CryptoHash::debug("2"), 0, 1, [1]))
             .await,
         Err(InboxError::UnexpectedEvent { .. })
     );
@@ -97,7 +88,7 @@ async fn test_inbox_add_then_remove_skippable() {
 
 #[tokio::test]
 async fn test_inbox_remove_then_add_skippable() {
-    let hash = CryptoHash::new(&Dummy);
+    let hash = CryptoHash::debug("1");
     let mut view = InboxStateView::new().await;
     // Remove one event by anticipation.
     view.remove_event(&make_event(hash, 0, 0, [0]))
@@ -129,7 +120,7 @@ async fn test_inbox_remove_then_add_skippable() {
     );
     // Fail to add non-matching event (hash).
     assert_matches!(
-        view.add_event(make_event(CryptoHash::new(&Dummy2), 0, 1, [1]))
+        view.add_event(make_event(CryptoHash::debug("2"), 0, 1, [1]))
             .await,
         Err(InboxError::UnexpectedEvent { .. })
     );
@@ -155,7 +146,7 @@ async fn test_inbox_remove_then_add_skippable() {
 
 #[tokio::test]
 async fn test_inbox_add_then_remove_unskippable() {
-    let hash = CryptoHash::new(&Dummy);
+    let hash = CryptoHash::debug("1");
     let mut view = InboxStateView::new().await;
     // Add one event.
     view.add_event(make_unskippable_event(hash, 0, 0, [0]))
@@ -192,7 +183,7 @@ async fn test_inbox_add_then_remove_unskippable() {
     );
     // Fail to remove non-matching event (hash).
     assert_matches!(
-        view.remove_event(&make_unskippable_event(CryptoHash::new(&Dummy2), 0, 1, [1]))
+        view.remove_event(&make_unskippable_event(CryptoHash::debug("2"), 0, 1, [1]))
             .await,
         Err(InboxError::UnexpectedEvent { .. })
     );
@@ -215,7 +206,7 @@ async fn test_inbox_add_then_remove_unskippable() {
 
 #[tokio::test]
 async fn test_inbox_remove_then_add_unskippable() {
-    let hash = CryptoHash::new(&Dummy);
+    let hash = CryptoHash::debug("1");
     let mut view = InboxStateView::new().await;
     // Remove one event by anticipation.
     view.remove_event(&make_unskippable_event(hash, 0, 0, [0]))
@@ -252,7 +243,7 @@ async fn test_inbox_remove_then_add_unskippable() {
     );
     // Fail to add non-matching event (hash).
     assert_matches!(
-        view.add_event(make_unskippable_event(CryptoHash::new(&Dummy2), 0, 1, [1]))
+        view.add_event(make_unskippable_event(CryptoHash::debug("2"), 0, 1, [1]))
             .await,
         Err(InboxError::UnexpectedEvent { .. })
     );
@@ -282,7 +273,7 @@ async fn test_inbox_remove_then_add_unskippable() {
 
 #[tokio::test]
 async fn test_inbox_add_then_remove_mixed() {
-    let hash = CryptoHash::new(&Dummy);
+    let hash = CryptoHash::debug("1");
     let mut view = InboxStateView::new().await;
     // Add two events.
     view.add_event(make_unskippable_event(hash, 0, 1, [1]))
@@ -296,7 +287,7 @@ async fn test_inbox_add_then_remove_mixed() {
     );
     // Fail to remove non-matching event (hash).
     assert_matches!(
-        view.remove_event(&make_unskippable_event(CryptoHash::new(&Dummy2), 0, 1, [1]))
+        view.remove_event(&make_unskippable_event(CryptoHash::debug("2"), 0, 1, [1]))
             .await,
         Err(InboxError::UnexpectedEvent { .. })
     );
