@@ -426,7 +426,11 @@ where
                 sender_key_pair.public(),
                 Amount::from_tokens(5),
             ),
-            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
+            (
+                ChainDescription::Root(2),
+                PublicKey::for_testing(2),
+                Amount::ZERO,
+            ),
         ],
     )
     .await;
@@ -496,7 +500,11 @@ where
                 sender_key_pair.public(),
                 Amount::from_tokens(5),
             ),
-            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
+            (
+                ChainDescription::Root(2),
+                PublicKey::for_testing(2),
+                Amount::ZERO,
+            ),
         ],
     )
     .await;
@@ -662,7 +670,11 @@ where
                 sender_key_pair.public(),
                 Amount::from_tokens(5),
             ),
-            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
+            (
+                ChainDescription::Root(2),
+                PublicKey::for_testing(2),
+                Amount::ZERO,
+            ),
         ],
     )
     .await;
@@ -1235,7 +1247,11 @@ where
                 sender_key_pair.public(),
                 Amount::from_tokens(5),
             ),
-            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
+            (
+                ChainDescription::Root(2),
+                PublicKey::for_testing(2),
+                Amount::ZERO,
+            ),
         ],
     )
     .await;
@@ -1375,7 +1391,11 @@ where
                 sender_key_pair.public(),
                 Amount::from_tokens(5),
             ),
-            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
+            (
+                ChainDescription::Root(2),
+                PublicKey::for_testing(2),
+                Amount::ZERO,
+            ),
         ],
     )
     .await;
@@ -1435,7 +1455,11 @@ where
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
         storage,
-        vec![(ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO)],
+        vec![(
+            ChainDescription::Root(2),
+            PublicKey::for_testing(2),
+            Amount::ZERO,
+        )],
     )
     .await;
     let certificate = make_simple_transfer_certificate(
@@ -1494,7 +1518,11 @@ where
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
         storage,
-        vec![(ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO)],
+        vec![(
+            ChainDescription::Root(2),
+            PublicKey::for_testing(2),
+            Amount::ZERO,
+        )],
     )
     .await;
     let admin_id = ChainId::root(0);
@@ -1522,7 +1550,7 @@ where
     let open_chain_message = IncomingMessage {
         origin: Origin::chain(ChainId::root(3)),
         event: Event {
-            certificate_hash: CryptoHash::debug("certificate"),
+            certificate_hash: CryptoHash::for_testing("certificate"),
             height: BlockHeight::ZERO,
             index: 0,
             authenticated_signer: None,
@@ -1593,7 +1621,7 @@ where
         storage,
         vec![(
             ChainDescription::Root(2),
-            PublicKey::debug(2),
+            PublicKey::for_testing(2),
             Amount::from_tokens(5),
         )],
     )
@@ -1660,7 +1688,11 @@ where
                 sender_key_pair.public(),
                 Amount::from_tokens(5),
             ),
-            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
+            (
+                ChainDescription::Root(2),
+                PublicKey::for_testing(2),
+                Amount::ZERO,
+            ),
         ],
     )
     .await;
@@ -1729,7 +1761,11 @@ where
                 key_pair.public(),
                 Amount::from_tokens(5),
             ),
-            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
+            (
+                ChainDescription::Root(2),
+                PublicKey::for_testing(2),
+                Amount::ZERO,
+            ),
         ],
     )
     .await;
@@ -1742,7 +1778,7 @@ where
         vec![IncomingMessage {
             origin: Origin::chain(ChainId::root(3)),
             event: Event {
-                certificate_hash: CryptoHash::debug("certificate"),
+                certificate_hash: CryptoHash::for_testing("certificate"),
                 height: BlockHeight::ZERO,
                 index: 0,
                 authenticated_signer: None,
@@ -1801,7 +1837,7 @@ where
             kind: MessageKind::Tracked,
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. }),
-        } if certificate_hash == CryptoHash::debug("certificate")
+        } if certificate_hash == CryptoHash::for_testing("certificate")
             && height == BlockHeight::ZERO
             && timestamp == Timestamp::from(0)
             && amount == Amount::from_tokens(995),
@@ -1858,7 +1894,11 @@ where
                 sender_key_pair.public(),
                 Amount::ONE,
             ),
-            (ChainDescription::Root(2), PublicKey::debug(2), Amount::MAX),
+            (
+                ChainDescription::Root(2),
+                PublicKey::for_testing(2),
+                Amount::MAX,
+            ),
         ],
     )
     .await;
@@ -2044,7 +2084,11 @@ where
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
         storage,
-        vec![(ChainDescription::Root(2), PublicKey::debug(2), Amount::ONE)],
+        vec![(
+            ChainDescription::Root(2),
+            PublicKey::for_testing(2),
+            Amount::ONE,
+        )],
     )
     .await;
     let certificate = make_simple_transfer_certificate(

@@ -68,7 +68,7 @@ pub enum CryptoError {
 impl PublicKey {
     /// A fake public key used for testing.
     #[cfg(any(test, feature = "test"))]
-    pub fn debug(name: u8) -> PublicKey {
+    pub fn for_testing(name: u8) -> PublicKey {
         let addr = [name; dalek::PUBLIC_KEY_LENGTH];
         PublicKey(addr)
     }
@@ -433,7 +433,7 @@ impl CryptoHash {
 
     /// Returns the hash of `TestSignable(s)`, for testing purposes.
     #[cfg(any(test, feature = "test"))]
-    pub fn debug(s: impl Into<String>) -> Self {
+    pub fn for_testing(s: impl Into<String>) -> Self {
         CryptoHash::new(&TestSignable::new(s))
     }
 }

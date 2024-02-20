@@ -84,7 +84,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         .next()
         .expect("Target mock application should be registered");
 
-    let owner = Owner::from(PublicKey::debug(0));
+    let owner = Owner::from(PublicKey::for_testing(0));
     let state_key = vec![];
     let dummy_operation = vec![1];
 

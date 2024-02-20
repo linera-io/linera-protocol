@@ -654,7 +654,7 @@ pub mod tests {
         let key_pair = KeyPair::generate();
         let certificate = LiteCertificate {
             value: LiteValue {
-                value_hash: CryptoHash::debug("value"),
+                value_hash: CryptoHash::for_testing("value"),
                 chain_id: ChainId::root(0),
             },
             round: Round::MultiLeader(2),
@@ -679,7 +679,7 @@ pub mod tests {
                 block: get_block(),
                 messages: vec![],
                 message_counts: vec![],
-                state_hash: CryptoHash::debug("test"),
+                state_hash: CryptoHash::for_testing("test"),
             }),
             Round::MultiLeader(3),
             vec![(
@@ -691,7 +691,7 @@ pub mod tests {
             block: get_block(),
             messages: vec![],
             message_counts: vec![],
-            state_hash: CryptoHash::debug("also test"),
+            state_hash: CryptoHash::for_testing("also test"),
         })];
         let request = HandleCertificateRequest {
             certificate,
@@ -739,14 +739,14 @@ pub mod tests {
                 block: get_block(),
                 messages: vec![],
                 message_counts: vec![],
-                state_hash: CryptoHash::debug("execution state"),
+                state_hash: CryptoHash::for_testing("execution state"),
             })],
             validated: Some(Certificate::new(
                 HashedValue::new_validated(ExecutedBlock {
                     block: get_block(),
                     messages: vec![],
                     message_counts: vec![],
-                    state_hash: CryptoHash::debug("validated"),
+                    state_hash: CryptoHash::for_testing("validated"),
                 }),
                 Round::SingleLeader(2),
                 vec![(
@@ -765,7 +765,7 @@ pub mod tests {
             chain_id: ChainId::root(0),
             reason: linera_core::worker::Reason::NewBlock {
                 height: BlockHeight(0),
-                hash: CryptoHash::debug(""),
+                hash: CryptoHash::for_testing(""),
             },
         };
         round_trip_check::<_, grpc::Notification>(notification);
