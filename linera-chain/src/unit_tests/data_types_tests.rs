@@ -18,7 +18,7 @@ fn test_signed_values() {
         block,
         messages: Vec::new(),
         message_counts: vec![1],
-        state_hash: CryptoHash::new(&Dummy),
+        state_hash: CryptoHash::test_hash("state"),
     };
     let value = HashedValue::new_confirmed(executed_block);
 
@@ -46,7 +46,7 @@ fn test_certificates() {
         block,
         messages: Vec::new(),
         message_counts: vec![1],
-        state_hash: CryptoHash::new(&Dummy),
+        state_hash: CryptoHash::test_hash("state"),
     };
     let value = HashedValue::new_confirmed(executed_block);
 
@@ -71,8 +71,3 @@ fn test_certificates() {
         .is_none());
     assert!(builder.append(v3.validator, v3.signature).is_err());
 }
-
-#[derive(Serialize, Deserialize)]
-struct Dummy;
-
-impl BcsSignable for Dummy {}

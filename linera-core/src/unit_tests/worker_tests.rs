@@ -15,7 +15,7 @@ use crate::{
 };
 use assert_matches::assert_matches;
 use linera_base::{
-    crypto::{BcsSignable, CryptoHash, *},
+    crypto::{CryptoHash, *},
     data_types::*,
     identifiers::{Account, ChainDescription, ChainId, ChannelName, Destination, MessageId, Owner},
 };
@@ -42,7 +42,6 @@ use linera_views::{
     value_splitting::DatabaseConsistencyError,
     views::{CryptoHashView, ViewError},
 };
-use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
@@ -58,11 +57,6 @@ use linera_storage::DynamoDbStorage;
 
 #[cfg(feature = "scylladb")]
 use linera_storage::ScyllaDbStorage;
-
-#[derive(Serialize, Deserialize)]
-struct Dummy;
-
-impl BcsSignable for Dummy {}
 
 async fn make_state_hash(state: SystemExecutionState) -> CryptoHash {
     ExecutionStateView::from_system_state(state, ExecutionRuntimeConfig::default())
@@ -432,7 +426,11 @@ where
                 sender_key_pair.public(),
                 Amount::from_tokens(5),
             ),
-            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
+            (
+                ChainDescription::Root(2),
+                PublicKey::test_key(2),
+                Amount::ZERO,
+            ),
         ],
     )
     .await;
@@ -502,7 +500,11 @@ where
                 sender_key_pair.public(),
                 Amount::from_tokens(5),
             ),
-            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
+            (
+                ChainDescription::Root(2),
+                PublicKey::test_key(2),
+                Amount::ZERO,
+            ),
         ],
     )
     .await;
@@ -668,7 +670,11 @@ where
                 sender_key_pair.public(),
                 Amount::from_tokens(5),
             ),
-            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
+            (
+                ChainDescription::Root(2),
+                PublicKey::test_key(2),
+                Amount::ZERO,
+            ),
         ],
     )
     .await;
@@ -1241,7 +1247,11 @@ where
                 sender_key_pair.public(),
                 Amount::from_tokens(5),
             ),
-            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
+            (
+                ChainDescription::Root(2),
+                PublicKey::test_key(2),
+                Amount::ZERO,
+            ),
         ],
     )
     .await;
@@ -1381,7 +1391,11 @@ where
                 sender_key_pair.public(),
                 Amount::from_tokens(5),
             ),
-            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
+            (
+                ChainDescription::Root(2),
+                PublicKey::test_key(2),
+                Amount::ZERO,
+            ),
         ],
     )
     .await;
@@ -1441,7 +1455,11 @@ where
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
         storage,
-        vec![(ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO)],
+        vec![(
+            ChainDescription::Root(2),
+            PublicKey::test_key(2),
+            Amount::ZERO,
+        )],
     )
     .await;
     let certificate = make_simple_transfer_certificate(
@@ -1500,7 +1518,11 @@ where
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
         storage,
-        vec![(ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO)],
+        vec![(
+            ChainDescription::Root(2),
+            PublicKey::test_key(2),
+            Amount::ZERO,
+        )],
     )
     .await;
     let admin_id = ChainId::root(0);
@@ -1528,7 +1550,7 @@ where
     let open_chain_message = IncomingMessage {
         origin: Origin::chain(ChainId::root(3)),
         event: Event {
-            certificate_hash: CryptoHash::new(&Dummy),
+            certificate_hash: CryptoHash::test_hash("certificate"),
             height: BlockHeight::ZERO,
             index: 0,
             authenticated_signer: None,
@@ -1599,7 +1621,7 @@ where
         storage,
         vec![(
             ChainDescription::Root(2),
-            PublicKey::debug(2),
+            PublicKey::test_key(2),
             Amount::from_tokens(5),
         )],
     )
@@ -1666,7 +1688,11 @@ where
                 sender_key_pair.public(),
                 Amount::from_tokens(5),
             ),
-            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
+            (
+                ChainDescription::Root(2),
+                PublicKey::test_key(2),
+                Amount::ZERO,
+            ),
         ],
     )
     .await;
@@ -1735,7 +1761,11 @@ where
                 key_pair.public(),
                 Amount::from_tokens(5),
             ),
-            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
+            (
+                ChainDescription::Root(2),
+                PublicKey::test_key(2),
+                Amount::ZERO,
+            ),
         ],
     )
     .await;
@@ -1748,7 +1778,7 @@ where
         vec![IncomingMessage {
             origin: Origin::chain(ChainId::root(3)),
             event: Event {
-                certificate_hash: CryptoHash::new(&Dummy),
+                certificate_hash: CryptoHash::test_hash("certificate"),
                 height: BlockHeight::ZERO,
                 index: 0,
                 authenticated_signer: None,
@@ -1807,7 +1837,7 @@ where
             kind: MessageKind::Tracked,
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. }),
-        } if certificate_hash == CryptoHash::new(&Dummy)
+        } if certificate_hash == CryptoHash::test_hash("certificate")
             && height == BlockHeight::ZERO
             && timestamp == Timestamp::from(0)
             && amount == Amount::from_tokens(995),
@@ -1864,7 +1894,11 @@ where
                 sender_key_pair.public(),
                 Amount::ONE,
             ),
-            (ChainDescription::Root(2), PublicKey::debug(2), Amount::MAX),
+            (
+                ChainDescription::Root(2),
+                PublicKey::test_key(2),
+                Amount::MAX,
+            ),
         ],
     )
     .await;
@@ -2050,7 +2084,11 @@ where
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
         storage,
-        vec![(ChainDescription::Root(2), PublicKey::debug(2), Amount::ONE)],
+        vec![(
+            ChainDescription::Root(2),
+            PublicKey::test_key(2),
+            Amount::ONE,
+        )],
     )
     .await;
     let certificate = make_simple_transfer_certificate(

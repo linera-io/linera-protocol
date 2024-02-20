@@ -4,7 +4,7 @@
 #![allow(clippy::field_reassign_with_default)]
 
 use linera_base::{
-    crypto::{BcsSignable, CryptoHash},
+    crypto::CryptoHash,
     data_types::{Amount, BlockHeight},
     identifiers::{Account, ChainDescription, ChainId, MessageId},
 };
@@ -15,7 +15,6 @@ use linera_execution::{
     SystemMessage, SystemOperation, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
 };
 use linera_views::memory::MemoryContext;
-use serde::{Deserialize, Serialize};
 
 #[tokio::test]
 async fn test_simple_system_operation() -> anyhow::Result<()> {
@@ -60,11 +59,6 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[derive(Serialize, Deserialize)]
-struct Dummy;
-
-impl BcsSignable for Dummy {}
-
 #[tokio::test]
 async fn test_simple_system_message() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
@@ -84,7 +78,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
         is_bouncing: false,
         height: BlockHeight(0),
-        certificate_hash: CryptoHash::new(&Dummy),
+        certificate_hash: CryptoHash::test_hash("certificate"),
         message_id: MessageId {
             chain_id: ChainId::root(1),
             height: BlockHeight(0),

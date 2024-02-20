@@ -68,7 +68,7 @@ pub enum CryptoError {
 impl PublicKey {
     /// A fake public key used for testing.
     #[cfg(any(test, feature = "test"))]
-    pub fn debug(name: u8) -> PublicKey {
+    pub fn test_key(name: u8) -> PublicKey {
         let addr = [name; dalek::PUBLIC_KEY_LENGTH];
         PublicKey(addr)
     }
@@ -430,6 +430,12 @@ impl CryptoHash {
     pub fn as_bytes(&self) -> &HasherOutput {
         &self.0
     }
+
+    /// Returns the hash of `TestString(s)`, for testing purposes.
+    #[cfg(any(test, feature = "test"))]
+    pub fn test_hash(s: impl Into<String>) -> Self {
+        CryptoHash::new(&TestString::new(s))
+    }
 }
 
 impl Signature {
@@ -534,6 +540,22 @@ doc_scalar!(CryptoHash, "A Sha3-256 value");
 doc_scalar!(PublicKey, "A signature public key");
 doc_scalar!(Signature, "A signature value");
 
+/// A BCS-signable struct for testing.
+#[cfg(any(test, feature = "test"))]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TestString(pub String);
+
+#[cfg(any(test, feature = "test"))]
+impl TestString {
+    /// Creates a new `TestString` with the given string.
+    pub fn new(s: impl Into<String>) -> Self {
+        Self(s.into())
+    }
+}
+
+#[cfg(any(test, feature = "test"))]
+impl BcsSignable for TestString {}
+
 #[test]
 #[allow(clippy::disallowed_names)]
 fn test_signatures() {
@@ -542,23 +564,18 @@ fn test_signatures() {
 
     impl BcsSignable for Foo {}
 
-    #[derive(Debug, Serialize, Deserialize)]
-    struct Bar(String);
-
-    impl BcsSignable for Bar {}
-
     let key1 = KeyPair::generate();
     let addr1 = key1.public();
     let key2 = KeyPair::generate();
     let addr2 = key2.public();
 
+    let ts = TestString("hello".into());
+    let tsx = TestString("hellox".into());
     let foo = Foo("hello".into());
-    let foox = Foo("hellox".into());
-    let bar = Bar("hello".into());
 
-    let s = Signature::new(&foo, &key1);
-    assert!(s.check(&foo, addr1).is_ok());
-    assert!(s.check(&foo, addr2).is_err());
-    assert!(s.check(&foox, addr1).is_err());
-    assert!(s.check(&bar, addr1).is_err());
+    let s = Signature::new(&ts, &key1);
+    assert!(s.check(&ts, addr1).is_ok());
+    assert!(s.check(&ts, addr2).is_err());
+    assert!(s.check(&tsx, addr1).is_err());
+    assert!(s.check(&foo, addr1).is_err());
 }

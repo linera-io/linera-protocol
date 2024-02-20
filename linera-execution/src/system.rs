@@ -986,17 +986,8 @@ where
 mod tests {
     use super::*;
     use crate::{ExecutionRuntimeConfig, ExecutionStateView, TestExecutionRuntimeContext};
-    use linera_base::{
-        crypto::{BcsSignable, KeyPair},
-        data_types::BlockHeight,
-        identifiers::ApplicationId,
-    };
+    use linera_base::{crypto::KeyPair, data_types::BlockHeight, identifiers::ApplicationId};
     use linera_views::memory::MemoryContext;
-
-    #[derive(Deserialize, Serialize)]
-    pub struct Dummy;
-
-    impl BcsSignable for Dummy {}
 
     /// Returns an execution state view and a matching operation context, for epoch 1, with root
     /// chain 0 as the admin ID and one empty committee.
@@ -1053,7 +1044,7 @@ mod tests {
             index: 0,
         });
         let location = BytecodeLocation {
-            certificate_hash: CryptoHash::new(&Dummy),
+            certificate_hash: CryptoHash::test_hash("certificate"),
             operation_index: 1,
         };
         view.system
