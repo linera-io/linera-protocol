@@ -9,19 +9,74 @@ use crate::{
     },
     common::{KeyIterable, KeyValueIterable, KeyValueStore},
 };
-use rand::{Rng, RngCore, SeedableRng};
+use rand::{Rng, SeedableRng};
 use std::collections::{BTreeMap, HashSet};
 use tracing::warn;
+
+// The following seed is chosen to have equal numbers of 1s and 0s, as advised by
+// https://docs.rs/rand/latest/rand/rngs/struct.SmallRng.html
+// Specifically, it's "01" × 32 in binary
+const RNG_SEED: u64 = 6148914691236517205;
+
+/// A deterministic RNG.
+pub type DeterministicRng = rand::rngs::SmallRng;
+
+/// A RNG that is non-deterministic if the platform supports it.
+pub struct NonDeterministicRng(
+    #[cfg(target_arch = "wasm32")] std::sync::MutexGuard<'static, DeterministicRng>,
+    #[cfg(not(target_arch = "wasm32"))] rand::rngs::ThreadRng,
+);
+
+impl NonDeterministicRng {
+    /// Access the internal RNG.
+    pub fn rng_mut(&mut self) -> &mut impl Rng {
+        #[cfg(target_arch = "wasm32")]
+        {
+            &mut *self.0
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            &mut self.0
+        }
+    }
+}
+
+/// Returns a deterministic RNG for testing.
+pub fn make_deterministic_rng() -> DeterministicRng {
+    rand::rngs::SmallRng::seed_from_u64(RNG_SEED)
+}
+
+/// Returns a non-deterministic RNG where supported.
+pub fn make_nondeterministic_rng() -> NonDeterministicRng {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use rand::rngs::SmallRng;
+        use std::sync::{Mutex, OnceLock};
+
+        static RNG: OnceLock<Mutex<SmallRng>> = OnceLock::new();
+        NonDeterministicRng(
+            RNG.get_or_init(|| Mutex::new(make_deterministic_rng()))
+                .lock()
+                .expect("failed to lock RNG mutex"),
+        )
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        NonDeterministicRng(rand::thread_rng())
+    }
+}
 
 /// Get a random alphanumeric string that can be used for all tests.
 pub fn generate_random_alphanumeric_string(length: usize) -> String {
     // Define the characters that are allowed in the alphanumeric string
     let charset: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 
-    let mut rng = rand::thread_rng();
     let alphanumeric_string: String = (0..length)
         .map(|_| {
-            let random_index = rng.gen_range(0..charset.len());
+            let random_index = make_nondeterministic_rng()
+                .rng_mut()
+                .gen_range(0..charset.len());
             charset[random_index] as char
         })
         .collect();
@@ -40,14 +95,13 @@ pub fn generate_test_namespace() -> String {
 /// Returns a random key_prefix used for tests
 pub fn get_random_key_prefix() -> Vec<u8> {
     let mut key_prefix = vec![0];
-    let mut rng = rand::thread_rng();
-    let value: usize = rng.gen();
+    let value: usize = make_nondeterministic_rng().rng_mut().gen();
     bcs::serialize_into(&mut key_prefix, &value).unwrap();
     key_prefix
 }
 
 /// Shuffles the values entries randomly
-pub fn random_shuffle<R: RngCore, T: Clone>(rng: &mut R, values: &mut [T]) {
+pub fn random_shuffle<R: Rng, T: Clone>(rng: &mut R, values: &mut [T]) {
     let n = values.len();
     for _ in 0..4 * n {
         let index1: usize = rng.gen_range(0..n);
@@ -62,7 +116,7 @@ pub fn random_shuffle<R: RngCore, T: Clone>(rng: &mut R, values: &mut [T]) {
 }
 
 /// Takes a random number generator, a key_prefix and extends it by n random bytes.
-pub fn get_random_byte_vector<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
+pub fn get_random_byte_vector<R: Rng>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
     let mut v = key_prefix.to_vec();
     for _ in 0..n {
         let val = rng.gen_range(0..256) as u8;
@@ -72,7 +126,7 @@ pub fn get_random_byte_vector<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usi
 }
 
 /// Appends a small value to a key making collisions likely.
-pub fn get_small_key_space<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
+pub fn get_small_key_space<R: Rng>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
     let mut key = key_prefix.to_vec();
     for _ in 0..n {
         let byte = rng.gen_range(0..4) as u8;
@@ -82,7 +136,7 @@ pub fn get_small_key_space<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usize)
 }
 
 /// Builds a random k element subset of n
-pub fn get_random_kset<R: RngCore>(rng: &mut R, n: usize, k: usize) -> Vec<usize> {
+pub fn get_random_kset<R: Rng>(rng: &mut R, n: usize, k: usize) -> Vec<usize> {
     let mut values = Vec::new();
     for u in 0..n {
         values.push(u);
@@ -95,7 +149,7 @@ pub fn get_random_kset<R: RngCore>(rng: &mut R, n: usize, k: usize) -> Vec<usize
 /// pairs `(key, value)` with key obtained by appending 8 bytes at random to key_prefix
 /// and value obtained by appending 8 bytes to the trivial vector.
 /// We return n such `(key, value)` pairs which are all distinct
-pub fn get_random_key_values_prefix<R: RngCore>(
+pub fn get_random_key_values_prefix<R: Rng>(
     rng: &mut R,
     key_prefix: Vec<u8>,
     len_key: usize,
@@ -120,25 +174,21 @@ pub fn get_random_key_values_prefix<R: RngCore>(
 
 /// Takes a random number generator rng, a number n and returns n random `(key, value)`
 /// which are all distinct with key and value being of length 8.
-pub fn get_random_key_values<R: RngCore>(rng: &mut R, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+pub fn get_random_key_values<R: Rng>(rng: &mut R, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     get_random_key_values_prefix(rng, Vec::new(), 8, 8, n)
 }
 
 type VectorPutDelete = (Vec<(Vec<u8>, Vec<u8>)>, usize);
 
 /// A bunch of puts and some deletes.
-pub fn get_random_key_value_operations<R: RngCore>(
-    rng: &mut R,
-    n: usize,
-    k: usize,
-) -> VectorPutDelete {
+pub fn get_random_key_value_operations<R: Rng>(rng: &mut R, n: usize, k: usize) -> VectorPutDelete {
     let key_value_vector = get_random_key_values_prefix(rng, Vec::new(), 8, 8, n);
     (key_value_vector, k)
 }
 
 /// A random reordering of the puts and deletes.
 /// For something like MapView it should get us the same result whatever way we are calling.
-pub fn span_random_reordering_put_delete<R: RngCore>(
+pub fn span_random_reordering_put_delete<R: Rng>(
     rng: &mut R,
     info_op: VectorPutDelete,
 ) -> Vec<WriteOperation> {
@@ -226,7 +276,7 @@ pub async fn run_reads<S: KeyValueStore + Sync>(store: S, key_values: Vec<(Vec<u
         assert_eq!(set_key_value1, set_key_value2);
     }
     // Now checking the read_multi_values_bytes
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    let mut rng = make_deterministic_rng();
     for _ in 0..10 {
         let mut keys = Vec::new();
         let mut values = Vec::new();
@@ -263,12 +313,12 @@ pub async fn run_reads<S: KeyValueStore + Sync>(store: S, key_values: Vec<(Vec<u
 fn get_random_key_values1(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     let key_prefix = vec![0];
     let n = 1000;
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    let mut rng = make_deterministic_rng();
     get_random_key_values_prefix(&mut rng, key_prefix, 8, len_value, n)
 }
 
 fn get_random_key_values2(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    let mut rng = make_deterministic_rng();
     let key_prefix = vec![0];
     let n = 100;
     let mut key_values = Vec::new();
@@ -294,7 +344,7 @@ pub fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
     scenarios
 }
 
-fn generate_random_batch<R: RngCore>(rng: &mut R, key_prefix: &[u8], batch_size: usize) -> Batch {
+fn generate_random_batch<R: Rng>(rng: &mut R, key_prefix: &[u8], batch_size: usize) -> Batch {
     let mut batch = Batch::new();
     // Fully random batch
     for _ in 0..batch_size {
@@ -403,7 +453,7 @@ async fn run_test_batch_from_blank<C: KeyValueStore + Sync>(
 
 /// Run many operations on batches always starting from a blank state.
 pub async fn run_writes_from_blank<C: KeyValueStore + Sync>(key_value_store: &C) {
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    let mut rng = make_deterministic_rng();
     let n_oper = 1000;
     let batch_size = 500;
     // key space has size 4^4 = 256 so we necessarily encounter collisions
@@ -431,7 +481,7 @@ pub async fn run_writes_from_blank<C: KeyValueStore + Sync>(key_value_store: &C)
 /// selection, Scylla is forced to introduce around 100000 tombstones
 /// which triggers the crash with the default settings.
 pub async fn tombstone_triggering_test<C: KeyValueStore + Sync>(key_value_store: C) {
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    let mut rng = make_deterministic_rng();
     let value_size = 100;
     let n_entry = 200000;
     // Putting the keys
@@ -473,7 +523,7 @@ pub async fn run_big_write_read<C: KeyValueStore + Sync>(
     target_size: usize,
     value_sizes: Vec<usize>,
 ) {
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    let mut rng = make_deterministic_rng();
     for (pos, value_size) in value_sizes.into_iter().enumerate() {
         let n_entry: usize = target_size / value_size;
         let mut batch = Batch::new();

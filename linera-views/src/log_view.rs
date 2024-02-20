@@ -14,14 +14,14 @@ use std::{
     ops::{Bound, Range, RangeBounds},
 };
 
-#[cfg(feature = "metrics")]
+#[cfg(with_metrics)]
 use {
     linera_base::prometheus_util::{self, MeasureLatency},
     linera_base::sync::Lazy,
     prometheus::HistogramVec,
 };
 
-#[cfg(feature = "metrics")]
+#[cfg(with_metrics)]
 /// The runtime of hash computation
 static LOG_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
@@ -341,7 +341,7 @@ where
     }
 
     async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
-        #[cfg(feature = "metrics")]
+        #[cfg(with_metrics)]
         let _hash_latency = LOG_VIEW_HASH_RUNTIME.measure_latency();
         let elements = self.read(..).await?;
         let mut hasher = sha3::Sha3_256::default();

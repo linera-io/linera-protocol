@@ -6,9 +6,10 @@ use linera_views::{
     memory::create_memory_context,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
+    test_utils,
     views::{CryptoHashRootView, CryptoHashView, RootView, View, ViewError},
 };
-use rand::{Rng, SeedableRng};
+use rand::Rng;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(CryptoHashRootView)]
@@ -36,7 +37,7 @@ where
 #[tokio::test]
 async fn reentrant_collection_view_check() {
     let context = create_memory_context();
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    let mut rng = test_utils::make_deterministic_rng();
     let mut map = BTreeMap::<u8, u32>::new();
     let n = 20;
     let nmax: u8 = 25;

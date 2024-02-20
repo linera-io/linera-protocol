@@ -12,6 +12,8 @@ edition = "2021"
 
 [features]
 test = ["tokio/macros", "linera-base/test", "linera-execution/test"]
+metrics = ["prometheus", "linera-views/metrics", "linera-execution/metrics"]
+web = ["linera-base/web", "linera-views/web", "linera-execution/web"]
 
 [dependencies]
 async-graphql.workspace = true
@@ -19,10 +21,10 @@ async-trait.workspace = true
 futures.workspace = true
 linera-base.workspace = true
 linera-execution.workspace = true
-linera-views = { workspace = true, features = ["metrics"] }
-prometheus.workspace = true
+linera-views.workspace = true
+prometheus = { workspace = true, optional = true }
 rand_chacha.workspace = true
-rand_distr = { workspace = true, features = ["serde1"] }
+rand_distr = { workspace = true, features = ["alloc", "serde1"] }
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
@@ -31,6 +33,9 @@ tracing.workspace = true
 [dev-dependencies]
 assert_matches.workspace = true
 linera-chain = { path = ".", features = ["test"] }
+
+[build-dependencies]
+cfg_aliases.workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["async-trait"]

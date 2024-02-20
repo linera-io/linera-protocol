@@ -23,7 +23,7 @@ use linera_rpc::{
             BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, LiteCertificate,
             Notification, SubscriptionRequest, VersionInfo,
         },
-        Proxyable,
+        Proxyable, MAX_MESSAGE_SIZE,
     },
     grpc_pool::ConnectionPool,
 };
@@ -157,6 +157,8 @@ impl GrpcProxy {
 
     fn as_validator_node(&self) -> ValidatorNodeServer<Self> {
         ValidatorNodeServer::new(self.clone())
+            .max_encoding_message_size(MAX_MESSAGE_SIZE)
+            .max_decoding_message_size(MAX_MESSAGE_SIZE)
     }
 
     fn as_notifier_service(&self) -> NotifierServiceServer<Self> {
@@ -190,7 +192,10 @@ impl GrpcProxy {
     ) -> Result<ValidatorWorkerClient<Channel>> {
         let address = shard.http_address();
         let channel = self.0.worker_connection_pool.channel(address)?;
-        let client = ValidatorWorkerClient::new(channel);
+        let client = ValidatorWorkerClient::new(channel)
+            .max_encoding_message_size(MAX_MESSAGE_SIZE)
+            .max_decoding_message_size(MAX_MESSAGE_SIZE);
+
         Ok(client)
     }
 

@@ -157,10 +157,11 @@ impl ChainOwnership {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use linera_base::crypto::KeyPair;
 
     #[test]
     fn test_ownership_round_timeouts() {
+        use linera_base::crypto::KeyPair;
+
         let super_pub_key = KeyPair::generate().public();
         let super_owner = Owner::from(super_pub_key);
         let pub_key = KeyPair::generate().public();

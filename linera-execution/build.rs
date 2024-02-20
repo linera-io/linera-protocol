@@ -3,10 +3,15 @@
 
 fn main() {
     cfg_aliases::cfg_aliases! {
-        web: { all(target_arch = "wasm32", target_os = "unknown") },
+        with_fs: { all(not(target_arch = "wasm32"), feature = "fs") },
+        with_metrics: { all(not(target_arch = "wasm32"), feature = "metrics") },
         with_testing: { any(test, feature = "test") },
-        with_metrics: { all(not(web), feature = "metrics") },
-        with_wasmtime: { all(not(web), feature = "wasmtime") },
-        with_wasmer: { all(not(web), feature = "wasmer") },
+        with_tokio_multi_thread: { not(target_arch = "wasm32") },
+        with_wasmer: { all(not(target_arch = "wasm32"), feature = "wasmer") },
+        with_wasmtime: { all(not(target_arch = "wasm32"), feature = "wasmtime") },
+
+        // If you change this, don't forget to update `WasmRuntime` and
+        // `WasmRuntime::default_with_sanitizer`
+        with_wasm_runtime: { any(with_wasmer, with_wasmtime) },
     }
 }

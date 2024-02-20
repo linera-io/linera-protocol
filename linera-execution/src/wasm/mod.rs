@@ -8,17 +8,15 @@
 //! - `wasmer` enables the [Wasmer](https://wasmer.io/) runtime
 //! - `wasmtime` enables the [Wasmtime](https://wasmtime.dev/) runtime
 
-#![cfg(any(with_wasmer, with_wasmtime))]
+#![cfg(with_wasm_runtime)]
 
 mod module_cache;
 mod sanitizer;
 #[macro_use]
 mod system_api;
 #[cfg(with_wasmer)]
-#[path = "wasmer.rs"]
 mod wasmer;
 #[cfg(with_wasmtime)]
-#[path = "wasmtime.rs"]
 mod wasmtime;
 
 use self::sanitizer::sanitize;
@@ -35,7 +33,7 @@ use linera_base::{
 
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 use thiserror::Error;
 
 #[cfg(with_wasmer)]
@@ -107,8 +105,9 @@ impl WasmContractModule {
     }
 
     /// Creates a new [`WasmContractModule`] using the WebAssembly module in `bytecode_file`.
+    #[cfg(with_fs)]
     pub async fn from_file(
-        contract_bytecode_file: impl AsRef<Path>,
+        contract_bytecode_file: impl AsRef<std::path::Path>,
         runtime: WasmRuntime,
     ) -> Result<Self, WasmExecutionError> {
         Self::new(
@@ -173,8 +172,9 @@ impl WasmServiceModule {
     }
 
     /// Creates a new [`WasmServiceModule`] using the WebAssembly module in `bytecode_file`.
+    #[cfg(with_fs)]
     pub async fn from_file(
-        service_bytecode_file: impl AsRef<Path>,
+        service_bytecode_file: impl AsRef<std::path::Path>,
         runtime: WasmRuntime,
     ) -> Result<Self, WasmExecutionError> {
         Self::new(
@@ -235,6 +235,7 @@ pub enum WasmExecutionError {
 /// This assumes that the current directory is one of the crates.
 #[cfg(any(test, feature = "test"))]
 pub mod test {
+    #[cfg(with_fs)]
     use super::{WasmContractModule, WasmRuntime, WasmServiceModule};
     use once_cell::sync::OnceCell;
 
@@ -266,6 +267,7 @@ pub mod test {
         ))
     }
 
+    #[cfg(with_fs)]
     pub async fn build_example_application(
         name: &str,
         wasm_runtime: impl Into<Option<WasmRuntime>>,

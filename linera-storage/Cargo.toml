@@ -11,7 +11,6 @@ license = "Apache-2.0"
 edition = "2021"
 
 [features]
-default = ["wasmer", "rocksdb"]
 test = [
     "tokio/rt",
     "tokio/test-util",
@@ -21,9 +20,21 @@ test = [
 ]
 wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]
-aws = ["linera-views/aws"]
+dynamodb = ["linera-views/dynamodb"]
 rocksdb = ["linera-views/rocksdb"]
 scylladb = ["linera-views/scylladb"]
+metrics = [
+    "linera-base/metrics",
+    "linera-chain/metrics",
+    "linera-execution/metrics",
+    "linera-views/metrics",
+]
+web = [
+    "linera-base/web",
+    "linera-chain/web",
+    "linera-execution/web",
+    "linera-views/web",
+]
 
 [dependencies]
 async-trait.workspace = true
@@ -33,7 +44,7 @@ futures.workspace = true
 linera-base.workspace = true
 linera-chain.workspace = true
 linera-execution.workspace = true
-linera-views = { workspace = true, features = ["metrics"] }
+linera-views.workspace = true
 prometheus.workspace = true
 serde.workspace = true
 tempfile.workspace = true
@@ -43,3 +54,6 @@ tracing.workspace = true
 [dev-dependencies]
 anyhow.workspace = true
 linera-storage = { path = ".", features = ["test"] }
+
+[build-dependencies]
+cfg_aliases.workspace = true

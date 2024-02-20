@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(any(feature = "wasmer", with_wasmtime))]
+#![cfg(with_wasm_runtime)]
 
 use counter::CounterAbi;
 use linera_base::{

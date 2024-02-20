@@ -63,7 +63,6 @@ pub enum ViewError {
     TryLockError(Vec<u8>),
 
     /// Tokio errors can happen while joining.
-    #[cfg(not(target_arch = "wasm32"))]
     #[error("Panic in sub-task: {0}")]
     TokioJoinError(#[from] tokio::task::JoinError),
 

@@ -143,6 +143,7 @@ where
 impl<S> LocalNodeClient<S> {
     pub fn new(state: WorkerState<S>, notifier: Arc<Notifier<Notification>>) -> Self {
         let node = LocalNode { state, notifier };
+
         Self {
             node: Arc::new(Mutex::new(node)),
         }

@@ -92,7 +92,7 @@ pub struct SystemExecutionStateView<C> {
 }
 
 /// For testing only.
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct SystemExecutionState {
     pub description: Option<ChainDescription>,
@@ -986,7 +986,7 @@ where
 mod tests {
     use super::*;
     use crate::{ExecutionRuntimeConfig, ExecutionStateView, TestExecutionRuntimeContext};
-    use linera_base::{crypto::KeyPair, data_types::BlockHeight, identifiers::ApplicationId};
+    use linera_base::{data_types::BlockHeight, identifiers::ApplicationId};
     use linera_views::memory::MemoryContext;
 
     /// Returns an execution state view and a matching operation context, for epoch 1, with root
@@ -1085,7 +1085,7 @@ mod tests {
         let epoch = view.system.epoch.get().unwrap();
         let admin_id = view.system.admin_id.get().unwrap();
         let committees = view.system.committees.get().clone();
-        let ownership = ChainOwnership::single(KeyPair::generate().public());
+        let ownership = ChainOwnership::single(linera_base::crypto::KeyPair::generate().public());
         let operation = SystemOperation::OpenChain {
             ownership: ownership.clone(),
             committees: committees.clone(),

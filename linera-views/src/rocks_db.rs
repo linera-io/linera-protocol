@@ -20,7 +20,7 @@ use std::{
 };
 use thiserror::Error;
 
-#[cfg(feature = "metrics")]
+#[cfg(with_metrics)]
 use crate::metering::{
     MeteredStore, LRU_CACHING_METRICS, ROCKS_DB_METRICS, VALUE_SPLITTING_METRICS,
 };
@@ -337,11 +337,11 @@ impl KeyValueStore for RocksDbStoreInternal {
 /// A shared DB client for RocksDB implementing LruCaching
 #[derive(Clone)]
 pub struct RocksDbStore {
-    #[cfg(feature = "metrics")]
+    #[cfg(with_metrics)]
     store: MeteredStore<
         LruCachingStore<MeteredStore<ValueSplittingStore<MeteredStore<RocksDbStoreInternal>>>>,
     >,
-    #[cfg(not(feature = "metrics"))]
+    #[cfg(not(with_metrics))]
     store: LruCachingStore<ValueSplittingStore<RocksDbStoreInternal>>,
 }
 
@@ -445,13 +445,13 @@ impl AdminKeyValueStore for RocksDbStore {
     async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, RocksDbContextError> {
         let store = RocksDbStoreInternal::connect(config, namespace).await?;
         let cache_size = config.common_config.cache_size;
-        #[cfg(feature = "metrics")]
+        #[cfg(with_metrics)]
         let store = MeteredStore::new(&ROCKS_DB_METRICS, store);
         let store = ValueSplittingStore::new(store);
-        #[cfg(feature = "metrics")]
+        #[cfg(with_metrics)]
         let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
         let store = LruCachingStore::new(store, cache_size);
-        #[cfg(feature = "metrics")]
+        #[cfg(with_metrics)]
         let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
         Ok(Self { store })
     }

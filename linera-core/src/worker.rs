@@ -10,8 +10,6 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, Round},
     doc_scalar, ensure,
     identifiers::{ChainId, Owner},
-    prometheus_util,
-    sync::Lazy,
 };
 use linera_chain::{
     data_types::{
@@ -31,7 +29,6 @@ use linera_views::{
     views::{RootView, View, ViewError},
 };
 use lru::LruCache;
-use prometheus::{HistogramVec, IntCounterVec};
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
@@ -44,6 +41,12 @@ use thiserror::Error;
 use tokio::sync::{oneshot, Mutex};
 use tracing::{debug, error, instrument, trace, warn};
 
+#[cfg(with_metrics)]
+use {
+    linera_base::{prometheus_util, sync::Lazy},
+    prometheus::{HistogramVec, IntCounterVec},
+};
+
 #[cfg(any(test, feature = "test"))]
 use {
     linera_base::identifiers::{Destination, MessageId},
@@ -55,6 +58,7 @@ use {
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
 
+#[cfg(with_metrics)]
 static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "num_rounds_in_certificate",
@@ -67,6 +71,7 @@ static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static NUM_ROUNDS_IN_BLOCK_PROPOSAL: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "num_rounds_in_block_proposal",
@@ -79,6 +84,7 @@ static NUM_ROUNDS_IN_BLOCK_PROPOSAL: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static TRANSACTION_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec("transaction_count", "Transaction count", &[])
         .expect("Counter creation should not fail")
@@ -1102,6 +1108,7 @@ where
         chain.rollback();
         // Create the vote and store it in the chain state.
         let manager = chain.manager.get_mut();
+        #[cfg(with_metrics)]
         let round = proposal.content.round;
         manager.create_vote(proposal, outcome, self.key_pair(), local_time);
         // Cache the value we voted on, so the client doesn't have to send it again.
@@ -1112,6 +1119,7 @@ where
         chain.save().await?;
         // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
         let actions = self.create_network_actions(&chain).await?;
+        #[cfg(with_metrics)]
         NUM_ROUNDS_IN_BLOCK_PROPOSAL
             .with_label_values(&[round.type_name()])
             .observe(round.number() as f64);
@@ -1151,21 +1159,35 @@ where
             }
         );
 
-        let round = certificate.round;
-        let log_str = certificate.value().to_log_str();
-        let mut confirmed_transactions: u64 = 0;
-        let mut duplicated = false;
+        #[cfg(with_metrics)]
+        let (round, log_str, mut confirmed_transactions, mut duplicated) = (
+            certificate.round,
+            certificate_value.to_log_str(),
+            0u64,
+            false,
+        );
+
         let (info, actions) = match certificate.value() {
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                let (info, actions, d) = self.process_validated_block(certificate).await?;
-                duplicated = d;
+                let validation_outcomes = self.process_validated_block(certificate).await?;
+                #[cfg(with_metrics)]
+                {
+                    duplicated = validation_outcomes.2;
+                }
+                let (info, actions, _) = validation_outcomes;
                 (info, actions)
             }
-            CertificateValue::ConfirmedBlock { executed_block } => {
-                confirmed_transactions = (executed_block.block.incoming_messages.len()
-                    + executed_block.block.operations.len())
-                    as u64;
+            CertificateValue::ConfirmedBlock {
+                executed_block: _executed_block,
+            } => {
+                #[cfg(with_metrics)]
+                {
+                    #[allow(clippy::used_underscore_bindings)]
+                    confirmed_transactions = (_executed_block.block.incoming_messages.len()
+                        + _executed_block.block.operations.len())
+                        as u64;
+                }
                 // Execute the confirmed block.
                 self.process_confirmed_block(
                     certificate,
@@ -1180,6 +1202,7 @@ where
             }
         };
 
+        #[cfg(with_metrics)]
         if !duplicated {
             NUM_ROUNDS_IN_CERTIFICATE
                 .with_label_values(&[log_str, round.type_name()])

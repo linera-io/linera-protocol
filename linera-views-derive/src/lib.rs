@@ -120,7 +120,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         .first()
         .expect("list of names should be non-empty");
 
-    let increment_counter = if root {
+    let increment_counter = if root && cfg!(feature = "metrics") {
         quote! {
             #[cfg(not(target_arch = "wasm32"))]
             linera_views::increment_counter(
@@ -185,6 +185,19 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
         deletes.push(quote! { self.#name.delete(batch); });
     }
 
+    let increment_counter = if cfg!(feature = "metrics") {
+        quote! {
+            #[cfg(not(target_arch = "wasm32"))]
+            linera_views::increment_counter(
+                &linera_views::SAVE_VIEW_COUNTER,
+                stringify!(#struct_name),
+                &self.context().base_key(),
+            );
+        }
+    } else {
+        quote! {}
+    };
+
     quote! {
         #[async_trait::async_trait]
         impl #generics linera_views::views::RootView<#context> for #struct_name #generics
@@ -192,12 +205,7 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
         {
             async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
                 use linera_views::{common::Context, batch::Batch, views::View};
-                #[cfg(not(target_arch = "wasm32"))]
-                linera_views::increment_counter(
-                    &linera_views::SAVE_VIEW_COUNTER,
-                    stringify!(#struct_name),
-                    &self.context().base_key(),
-                );
+                #increment_counter
                 let mut batch = Batch::new();
                 #(#flushes)*
                 self.context().write_batch(batch).await?;
@@ -379,7 +387,18 @@ pub mod tests {
     fn test_generate_view_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
-            insta::assert_display_snapshot!(pretty(generate_view_code(input, true)));
+            insta::assert_display_snapshot!(
+                format!(
+                    "test_generate_view_code{}_{}",
+                    if cfg!(feature = "metrics") {
+                        "_metrics"
+                    } else {
+                        ""
+                    },
+                    context.name,
+                ),
+                pretty(generate_view_code(input, true))
+            );
         }
     }
 
@@ -387,7 +406,10 @@ pub mod tests {
     fn test_generate_hash_view_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
-            insta::assert_display_snapshot!(pretty(generate_hash_view_code(input)));
+            insta::assert_display_snapshot!(
+                format!("test_generate_hash_view_code_{}", context.name,),
+                pretty(generate_hash_view_code(input))
+            );
         }
     }
 
@@ -395,7 +417,18 @@ pub mod tests {
     fn test_generate_save_delete_view_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
-            insta::assert_display_snapshot!(pretty(generate_save_delete_view_code(input)));
+            insta::assert_display_snapshot!(
+                format!(
+                    "test_generate_save_delete_view_code{}_{}",
+                    if cfg!(feature = "metrics") {
+                        "_metrics"
+                    } else {
+                        ""
+                    },
+                    context.name,
+                ),
+                pretty(generate_save_delete_view_code(input))
+            );
         }
     }
 
@@ -416,6 +449,7 @@ pub mod tests {
     }
 
     pub struct SpecificContextInfo {
+        name: String,
         attribute: Option<TokenStream2>,
         context: Type,
         generics: TokenStream2,
@@ -424,6 +458,7 @@ pub mod tests {
     impl SpecificContextInfo {
         pub fn empty() -> Self {
             SpecificContextInfo {
+                name: "C".to_string(),
                 attribute: None,
                 context: syn::parse_str("C").unwrap(),
                 generics: quote! { <C> },
@@ -432,6 +467,7 @@ pub mod tests {
 
         pub fn new(context: &str) -> Self {
             SpecificContextInfo {
+                name: context.to_string(),
                 attribute: Some(quote! { #[view(context = #context)] }),
                 context: syn::parse_str(context).unwrap(),
                 generics: quote! {},

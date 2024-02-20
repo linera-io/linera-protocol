@@ -3,6 +3,8 @@
 
 //! Resource consumption unit tests.
 
+#![cfg(with_tokio_multi_thread)]
+
 use super::{ApplicationStatus, SyncRuntimeInternal};
 use crate::{
     execution_state_actor::Request, runtime::ResourceController, BaseRuntime, UserContractInstance,
@@ -13,14 +15,12 @@ use linera_base::{
     identifiers::{ApplicationId, BytecodeId, ChainDescription, MessageId},
 };
 use linera_views::batch::Batch;
-use std::thread;
-use tokio::runtime::Runtime;
 
 /// Test writing a batch of changes.
 ///
 /// Ensure that resource consumption counts are updated correctly.
-#[test]
-fn test_write_batch() {
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_write_batch() {
     let (mut runtime, mut execution_state_receiver) = create_contract_runtime();
     let mut batch = Batch::new();
 
@@ -40,31 +40,27 @@ fn test_write_batch() {
     let expected_application_id = runtime.current_application().id;
     let expected_batch = batch.clone();
 
-    thread::spawn(move || {
-        Runtime::new()
-            .expect("Failed to create Tokio runtime")
-            .block_on(async move {
-                let request = execution_state_receiver
-                    .next()
-                    .await
-                    .expect("Missing expected request to write a batch");
+    tokio::spawn(async move {
+        let request = execution_state_receiver
+            .next()
+            .await
+            .expect("Missing expected request to write a batch");
 
-                let Request::WriteBatch {
-                    id,
-                    batch,
-                    callback,
-                } = request
-                else {
-                    panic!("Expected a `Request::WriteBatch` but got {request:?} instead");
-                };
+        let Request::WriteBatch {
+            id,
+            batch,
+            callback,
+        } = request
+        else {
+            panic!("Expected a `Request::WriteBatch` but got {request:?} instead");
+        };
 
-                assert_eq!(id, expected_application_id);
-                assert_eq!(batch, expected_batch);
+        assert_eq!(id, expected_application_id);
+        assert_eq!(batch, expected_batch);
 
-                callback
-                    .send(())
-                    .expect("Failed to notify that writing the batch finished");
-            })
+        callback
+            .send(())
+            .expect("Failed to notify that writing the batch finished");
     });
 
     runtime

@@ -816,12 +816,12 @@ pub fn get_uleb128_size(len: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use linera_views::common::CustomSerialize;
-    use rand::{Rng, SeedableRng};
+    use rand::Rng;
     use std::collections::BTreeSet;
 
     #[test]
     fn test_ordering_serialization() {
-        let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+        let mut rng = crate::test_utils::make_deterministic_rng();
         let n = 1000;
         let mut set = BTreeSet::new();
         for _ in 0..n {

@@ -11,9 +11,9 @@ license = "Apache-2.0"
 edition = "2021"
 
 [features]
-default = ["wasmer", "metrics"]
 test = ["tokio/macros"]
-metrics = ["prometheus"]
+fs = ["tokio/fs"]
+metrics = ["prometheus", "linera-views/metrics"]
 wasmer = [
     "bytes",
     "dep:wasmer",
@@ -28,6 +28,7 @@ wasmtime = [
     "wasmparser",
     "wit-bindgen-host-wasmtime-rust",
 ]
+web = ["linera-base/web", "linera-views/web"]
 
 [dependencies]
 anyhow.workspace = true
@@ -35,13 +36,14 @@ async-graphql.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 bytes = { workspace = true, optional = true }
+cfg-if.workspace = true
 clap.workspace = true
 custom_debug_derive.workspace = true
 dashmap.workspace = true
 derive_more.workspace = true
 futures.workspace = true
 linera-base.workspace = true
-linera-views = { workspace = true, features = ["metrics"] }
+linera-views.workspace = true
 linera-views-derive.workspace = true
 lru.workspace = true
 once_cell.workspace = true
@@ -51,7 +53,6 @@ serde.workspace = true
 serde_bytes.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["fs", "rt-multi-thread"] }
 tracing.workspace = true
 wasm-encoder = { workspace = true, optional = true }
 wasmer = { workspace = true, optional = true }
@@ -60,6 +61,12 @@ wasmparser = { workspace = true, optional = true }
 wasmtime = { workspace = true, optional = true }
 wit-bindgen-host-wasmer-rust = { workspace = true, optional = true }
 wit-bindgen-host-wasmtime-rust = { workspace = true, optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { workspace = true, features = ["rt"] }
 
 [dev-dependencies]
 anyhow.workspace = true
@@ -70,7 +77,7 @@ linera-base = { workspace = true, features = ["test"] }
 linera-execution = { path = ".", features = ["test"] }
 test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }
-tokio = { workspace = true, features = ["full", "test-util"] }
+tokio = { workspace = true, features = ["rt", "test-util"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 
 [build-dependencies]

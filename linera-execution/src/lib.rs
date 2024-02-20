@@ -33,7 +33,7 @@ pub use system::{
 };
 #[cfg(all(any(test, feature = "test"), any(with_wasmer, with_wasmtime)))]
 pub use wasm::test as wasm_test;
-#[cfg(any(with_wasmer, with_wasmtime))]
+#[cfg(with_wasm_runtime)]
 pub use wasm::{WasmContractModule, WasmExecutionError, WasmServiceModule};
 #[cfg(any(test, feature = "test"))]
 pub use {applications::ApplicationRegistry, system::SystemExecutionState};
@@ -54,7 +54,7 @@ use linera_base::{
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
-use std::{fmt, io, path::Path, str::FromStr, sync::Arc};
+use std::{fmt, str::FromStr, sync::Arc};
 use thiserror::Error;
 
 /// An implementation of [`UserContractModule`].
@@ -891,14 +891,14 @@ pub struct Bytecode {
 
 impl Bytecode {
     /// Creates a new [`Bytecode`] instance using the provided `bytes`.
-    #[cfg(any(with_wasmer, with_wasmtime))]
+    #[cfg(any(test, with_wasm_runtime))]
     pub(crate) fn new(bytes: Vec<u8>) -> Self {
         Bytecode { bytes }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(with_fs)]
     /// Load bytecode from a Wasm module file.
-    pub async fn load_from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
+    pub async fn load_from_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
         let bytes = tokio::fs::read(path).await?;
         Ok(Bytecode { bytes })
     }
@@ -918,7 +918,7 @@ impl std::fmt::Debug for Bytecode {
 
 /// The runtime to use for running the application.
 #[derive(Clone, Copy, Display)]
-#[cfg_attr(any(with_wasmtime, with_wasmer), derive(Debug, Default))]
+#[cfg_attr(with_wasm_runtime, derive(Debug, Default))]
 pub enum WasmRuntime {
     #[cfg(with_wasmer)]
     #[default]
@@ -940,15 +940,16 @@ pub trait WithWasmDefault {
 }
 
 impl WasmRuntime {
-    #[cfg(any(with_wasmer, with_wasmtime))]
+    #[cfg(with_wasm_runtime)]
     pub fn default_with_sanitizer() -> Self {
-        #[cfg(with_wasmer)]
-        {
-            WasmRuntime::WasmerWithSanitizer
-        }
-        #[cfg(not(with_wasmer))]
-        {
-            WasmRuntime::WasmtimeWithSanitizer
+        cfg_if::cfg_if! {
+            if #[cfg(with_wasmer)] {
+                WasmRuntime::WasmerWithSanitizer
+            } else if #[cfg(with_wasmtime)] {
+                WasmRuntime::WasmtimeWithSanitizer
+            } else {
+                compile_error!("BUG: Wasm runtime unhandled in `WasmRuntime::default_with_sanitizer`")
+            }
         }
     }
 
@@ -958,21 +959,22 @@ impl WasmRuntime {
             WasmRuntime::WasmerWithSanitizer => true,
             #[cfg(with_wasmtime)]
             WasmRuntime::WasmtimeWithSanitizer => true,
-            #[cfg(any(with_wasmtime, with_wasmer))]
+            #[cfg(with_wasm_runtime)]
             _ => false,
         }
     }
 }
 
 impl WithWasmDefault for Option<WasmRuntime> {
-    #[cfg(any(with_wasmer, with_wasmtime))]
     fn with_wasm_default(self) -> Self {
-        Some(self.unwrap_or_default())
-    }
-
-    #[cfg(not(any(with_wasmer, with_wasmtime)))]
-    fn with_wasm_default(self) -> Self {
-        None
+        #[cfg(with_wasm_runtime)]
+        {
+            Some(self.unwrap_or_default())
+        }
+        #[cfg(not(with_wasm_runtime))]
+        {
+            None
+        }
     }
 }
 

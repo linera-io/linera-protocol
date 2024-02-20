@@ -17,8 +17,6 @@ use linera_base::{
     data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     ensure,
     identifiers::{ChainId, Destination, MessageId},
-    prometheus_util::{self, MeasureLatency},
-    sync::Lazy,
 };
 use linera_execution::{
     system::SystemMessage, ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView,
@@ -34,13 +32,22 @@ use linera_views::{
     set_view::SetView,
     views::{CryptoHashView, RootView, View, ViewError},
 };
-use prometheus::{HistogramVec, IntCounterVec};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashSet},
     sync::Arc,
 };
 
+#[cfg(with_metrics)]
+use {
+    linera_base::{
+        prometheus_util::{self, MeasureLatency},
+        sync::Lazy,
+    },
+    prometheus::{HistogramVec, IntCounterVec},
+};
+
+#[cfg(with_metrics)]
 static NUM_BLOCKS_EXECUTED: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "num_blocks_executed",
@@ -50,6 +57,7 @@ static NUM_BLOCKS_EXECUTED: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static BLOCK_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "block_execution_latency",
@@ -63,6 +71,7 @@ static BLOCK_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static MESSAGE_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "message_execution_latency",
@@ -76,6 +85,7 @@ static MESSAGE_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Histogram creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static OPERATION_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "operation_execution_latency",
@@ -89,6 +99,7 @@ static OPERATION_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Histogram creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static WASM_FUEL_USED_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "wasm_fuel_used_per_block",
@@ -102,6 +113,7 @@ static WASM_FUEL_USED_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static WASM_NUM_READS_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "wasm_num_reads_per_block",
@@ -112,6 +124,7 @@ static WASM_NUM_READS_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static WASM_BYTES_READ_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "wasm_bytes_read_per_block",
@@ -138,6 +151,7 @@ static WASM_BYTES_READ_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static WASM_BYTES_WRITTEN_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "wasm_bytes_written_per_block",
@@ -164,6 +178,7 @@ static WASM_BYTES_WRITTEN_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter creation should not fail")
 });
 
+#[cfg(with_metrics)]
 static STATE_HASH_COMPUTATION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
         "state_hash_computation_latency",
@@ -616,6 +631,7 @@ where
         block: &Block,
         local_time: Timestamp,
     ) -> Result<BlockExecutionOutcome, ChainError> {
+        #[cfg(with_metrics)]
         let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
 
         assert_eq!(block.chain_id, self.chain_id());
@@ -669,6 +685,7 @@ where
             );
         }
         for (index, message) in block.incoming_messages.iter().enumerate() {
+            #[cfg(with_metrics)]
             let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let chain_execution_context = ChainExecutionContext::IncomingMessage(index);
@@ -780,6 +797,7 @@ where
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
+            #[cfg(with_metrics)]
             let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let chain_execution_context = ChainExecutionContext::Operation(index);
@@ -829,6 +847,7 @@ where
 
         // Recompute the state hash.
         let state_hash = {
+            #[cfg(with_metrics)]
             let _hash_latency = STATE_HASH_COMPUTATION_LATENCY.measure_latency();
             self.execution_state.crypto_hash().await?
         };
@@ -840,20 +859,23 @@ where
             local_time,
         )?;
 
-        // Log Prometheus metrics
-        NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
-        WASM_FUEL_USED_PER_BLOCK
-            .with_label_values(&[])
-            .observe(resource_controller.tracker.fuel as f64);
-        WASM_NUM_READS_PER_BLOCK
-            .with_label_values(&[])
-            .observe(resource_controller.tracker.read_operations as f64);
-        WASM_BYTES_READ_PER_BLOCK
-            .with_label_values(&[])
-            .observe(resource_controller.tracker.bytes_read as f64);
-        WASM_BYTES_WRITTEN_PER_BLOCK
-            .with_label_values(&[])
-            .observe(resource_controller.tracker.bytes_written as f64);
+        #[cfg(with_metrics)]
+        {
+            // Log Prometheus metrics
+            NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
+            WASM_FUEL_USED_PER_BLOCK
+                .with_label_values(&[])
+                .observe(resource_controller.tracker.fuel as f64);
+            WASM_NUM_READS_PER_BLOCK
+                .with_label_values(&[])
+                .observe(resource_controller.tracker.read_operations as f64);
+            WASM_BYTES_READ_PER_BLOCK
+                .with_label_values(&[])
+                .observe(resource_controller.tracker.bytes_read as f64);
+            WASM_BYTES_WRITTEN_PER_BLOCK
+                .with_label_values(&[])
+                .observe(resource_controller.tracker.bytes_written as f64);
+        }
 
         assert_eq!(
             message_counts.len(),

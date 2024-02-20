@@ -4,13 +4,7 @@
 use crate::{chain_guards::ChainGuards, ChainRuntimeContext, Storage};
 use async_trait::async_trait;
 use dashmap::DashMap;
-use linera_base::{
-    crypto::CryptoHash,
-    data_types::Timestamp,
-    identifiers::ChainId,
-    prometheus_util::{self, MeasureLatency},
-    sync::Lazy,
-};
+use linera_base::{crypto::CryptoHash, data_types::Timestamp, identifiers::ChainId};
 use linera_chain::{
     data_types::{Certificate, CertificateValue, HashedValue, LiteCertificate},
     ChainStateView,
@@ -24,11 +18,19 @@ use linera_views::{
     value_splitting::DatabaseConsistencyError,
     views::{View, ViewError},
 };
-use prometheus::{HistogramVec, IntCounterVec};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc};
+#[cfg(with_metrics)]
+use {
+    linera_base::{
+        prometheus_util::{self, MeasureLatency},
+        sync::Lazy,
+    },
+    prometheus::{HistogramVec, IntCounterVec},
+};
 
 /// The metric counting how often a value is read from storage.
+#[cfg(with_metrics)]
 static CONTAINS_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "contains_value",
@@ -39,6 +41,7 @@ static CONTAINS_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 /// The metric counting how often a value is read from storage.
+#[cfg(with_metrics)]
 static CONTAINS_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
         "contains_certificate",
@@ -49,6 +52,7 @@ static CONTAINS_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 /// The metric counting how often a value is read from storage.
+#[cfg(with_metrics)]
 #[doc(hidden)]
 pub static READ_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
@@ -60,6 +64,7 @@ pub static READ_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 /// The metric counting how often a value is written to storage.
+#[cfg(with_metrics)]
 #[doc(hidden)]
 pub static WRITE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
@@ -71,6 +76,7 @@ pub static WRITE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 /// The metric counting how often a certificate is read from storage.
+#[cfg(with_metrics)]
 #[doc(hidden)]
 pub static READ_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
@@ -82,6 +88,7 @@ pub static READ_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 /// The metric counting how often a certificate is written to storage.
+#[cfg(with_metrics)]
 #[doc(hidden)]
 pub static WRITE_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
     prometheus_util::register_int_counter_vec(
@@ -93,6 +100,7 @@ pub static WRITE_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 /// The latency to load a chain state.
+#[cfg(with_metrics)]
 #[doc(hidden)]
 pub static LOAD_CHAIN_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     prometheus_util::register_histogram_vec(
@@ -252,6 +260,7 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<ChainStateView<Self::Context>, ViewError> {
+        #[cfg(with_metrics)]
         let _metric = LOAD_CHAIN_LATENCY.measure_latency();
         tracing::trace!("Acquiring lock on {:?}", chain_id);
         let guard = self.client.guards.guard(chain_id).await;
@@ -272,6 +281,7 @@ where
     async fn contains_value(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let test = self.client.client.contains_key(&value_key).await?;
+        #[cfg(with_metrics)]
         CONTAINS_VALUE_COUNTER.with_label_values(&[]).inc();
         Ok(test)
     }
@@ -283,6 +293,7 @@ where
             .client
             .read_value::<CertificateValue>(&value_key)
             .await?;
+        #[cfg(with_metrics)]
         READ_VALUE_COUNTER.with_label_values(&[]).inc();
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         Ok(value.with_hash_unchecked(hash))
@@ -330,6 +341,7 @@ where
             self.client.client.contains_key(&cert_key),
             self.client.client.contains_key(&value_key)
         );
+        #[cfg(with_metrics)]
         CONTAINS_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         Ok(cert_test? && value_test?)
     }
@@ -344,6 +356,7 @@ where
                 .read_value::<CertificateValue>(&value_key)
         );
         if value_result.is_ok() {
+            #[cfg(with_metrics)]
             READ_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         }
         let value: CertificateValue =
@@ -382,6 +395,7 @@ where
     <Client as KeyValueStore>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
     fn add_value_to_batch(&self, value: &HashedValue, batch: &mut Batch) -> Result<(), ViewError> {
+        #[cfg(with_metrics)]
         WRITE_VALUE_COUNTER.with_label_values(&[]).inc();
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         batch.put_key_value(value_key.to_vec(), value)?;
@@ -393,6 +407,7 @@ where
         certificate: &Certificate,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
+        #[cfg(with_metrics)]
         WRITE_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         let hash = certificate.hash();
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
