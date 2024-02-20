@@ -7,15 +7,15 @@
 
 mod mock_application;
 
-pub use self::mock_application::{ExpectedCall, MockApplication};
+pub use self::mock_application::{ExpectedCall, MockApplication, MockApplicationInstance};
+use crate::{
+    ApplicationRegistryView, BytecodeLocation, ExecutionRuntimeContext, ExecutionStateView,
+    TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
+};
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
     data_types::BlockHeight,
     identifiers::{BytecodeId, ChainId, MessageId},
-};
-use linera_execution::{
-    ApplicationRegistryView, BytecodeLocation, ExecutionRuntimeContext, ExecutionStateView,
-    TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     common::Context,

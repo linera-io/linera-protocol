@@ -13,6 +13,8 @@ mod policy;
 mod resources;
 mod runtime;
 pub mod system;
+#[cfg(any(test, feature = "test"))]
+pub mod test_utils;
 mod util;
 mod wasm;
 

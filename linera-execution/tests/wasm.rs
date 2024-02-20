@@ -3,18 +3,15 @@
 
 #![cfg(any(feature = "wasmer", with_wasmtime))]
 
-#[allow(dead_code)]
-mod utils;
-
-use self::utils::create_dummy_user_application_description;
 use counter::CounterAbi;
 use linera_base::{
     data_types::{Amount, BlockHeight},
     identifiers::{Account, ChainDescription, ChainId},
 };
 use linera_execution::{
-    ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, ExecutionStateView,
-    Operation, OperationContext, Query, QueryContext, RawExecutionOutcome, ResourceControlPolicy,
+    test_utils::create_dummy_user_application_description, ExecutionOutcome,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, ExecutionStateView, Operation,
+    OperationContext, Query, QueryContext, RawExecutionOutcome, ResourceControlPolicy,
     ResourceController, ResourceTracker, Response, SystemExecutionState,
     TestExecutionRuntimeContext, WasmContractModule, WasmRuntime, WasmServiceModule,
 };
