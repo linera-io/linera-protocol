@@ -78,7 +78,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
         is_bouncing: false,
         height: BlockHeight(0),
-        certificate_hash: CryptoHash::for_testing("certificate"),
+        certificate_hash: CryptoHash::test_hash("certificate"),
         message_id: MessageId {
             chain_id: ChainId::root(1),
             height: BlockHeight(0),

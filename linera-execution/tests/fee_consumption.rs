@@ -131,7 +131,7 @@ async fn test_fee_consumption(
         )
         .await;
 
-    let owner = Owner::from(PublicKey::for_testing(0));
+    let owner = Owner::from(PublicKey::test_key(0));
     view.system.balance.set(chain_balance);
     if let Some(owner_balance) = owner_balance {
         view.system.balances.insert(&owner, owner_balance).unwrap();

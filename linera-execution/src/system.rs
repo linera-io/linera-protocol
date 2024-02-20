@@ -1044,7 +1044,7 @@ mod tests {
             index: 0,
         });
         let location = BytecodeLocation {
-            certificate_hash: CryptoHash::for_testing("certificate"),
+            certificate_hash: CryptoHash::test_hash("certificate"),
             operation_index: 1,
         };
         view.system

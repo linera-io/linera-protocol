@@ -428,7 +428,7 @@ where
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::for_testing(2),
+                PublicKey::test_key(2),
                 Amount::ZERO,
             ),
         ],
@@ -502,7 +502,7 @@ where
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::for_testing(2),
+                PublicKey::test_key(2),
                 Amount::ZERO,
             ),
         ],
@@ -672,7 +672,7 @@ where
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::for_testing(2),
+                PublicKey::test_key(2),
                 Amount::ZERO,
             ),
         ],
@@ -1249,7 +1249,7 @@ where
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::for_testing(2),
+                PublicKey::test_key(2),
                 Amount::ZERO,
             ),
         ],
@@ -1393,7 +1393,7 @@ where
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::for_testing(2),
+                PublicKey::test_key(2),
                 Amount::ZERO,
             ),
         ],
@@ -1457,7 +1457,7 @@ where
         storage,
         vec![(
             ChainDescription::Root(2),
-            PublicKey::for_testing(2),
+            PublicKey::test_key(2),
             Amount::ZERO,
         )],
     )
@@ -1520,7 +1520,7 @@ where
         storage,
         vec![(
             ChainDescription::Root(2),
-            PublicKey::for_testing(2),
+            PublicKey::test_key(2),
             Amount::ZERO,
         )],
     )
@@ -1550,7 +1550,7 @@ where
     let open_chain_message = IncomingMessage {
         origin: Origin::chain(ChainId::root(3)),
         event: Event {
-            certificate_hash: CryptoHash::for_testing("certificate"),
+            certificate_hash: CryptoHash::test_hash("certificate"),
             height: BlockHeight::ZERO,
             index: 0,
             authenticated_signer: None,
@@ -1621,7 +1621,7 @@ where
         storage,
         vec![(
             ChainDescription::Root(2),
-            PublicKey::for_testing(2),
+            PublicKey::test_key(2),
             Amount::from_tokens(5),
         )],
     )
@@ -1690,7 +1690,7 @@ where
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::for_testing(2),
+                PublicKey::test_key(2),
                 Amount::ZERO,
             ),
         ],
@@ -1763,7 +1763,7 @@ where
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::for_testing(2),
+                PublicKey::test_key(2),
                 Amount::ZERO,
             ),
         ],
@@ -1778,7 +1778,7 @@ where
         vec![IncomingMessage {
             origin: Origin::chain(ChainId::root(3)),
             event: Event {
-                certificate_hash: CryptoHash::for_testing("certificate"),
+                certificate_hash: CryptoHash::test_hash("certificate"),
                 height: BlockHeight::ZERO,
                 index: 0,
                 authenticated_signer: None,
@@ -1837,7 +1837,7 @@ where
             kind: MessageKind::Tracked,
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. }),
-        } if certificate_hash == CryptoHash::for_testing("certificate")
+        } if certificate_hash == CryptoHash::test_hash("certificate")
             && height == BlockHeight::ZERO
             && timestamp == Timestamp::from(0)
             && amount == Amount::from_tokens(995),
@@ -1896,7 +1896,7 @@ where
             ),
             (
                 ChainDescription::Root(2),
-                PublicKey::for_testing(2),
+                PublicKey::test_key(2),
                 Amount::MAX,
             ),
         ],
@@ -2086,7 +2086,7 @@ where
         storage,
         vec![(
             ChainDescription::Root(2),
-            PublicKey::for_testing(2),
+            PublicKey::test_key(2),
             Amount::ONE,
         )],
     )
