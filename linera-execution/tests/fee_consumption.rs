@@ -5,15 +5,13 @@
 
 #![allow(clippy::items_after_test_module)]
 
-mod utils;
-
-use self::utils::{register_mock_applications, ExpectedCall};
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight},
     identifiers::{Account, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_execution::{
+    test_utils::{register_mock_applications, ExpectedCall},
     ContractRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionStateView,
     Message, MessageContext, RawExecutionOutcome, ResourceControlPolicy, ResourceController,
     SystemExecutionState, TestExecutionRuntimeContext,

@@ -5,12 +5,12 @@
 
 #![allow(dead_code)]
 
-use linera_base::identifiers::SessionId;
-use linera_execution::{
+use crate::{
     ApplicationCallOutcome, CalleeContext, ContractSyncRuntime, ExecutionError, MessageContext,
     OperationContext, QueryContext, RawExecutionOutcome, ServiceSyncRuntime, SessionCallOutcome,
     UserContract, UserContractModule, UserService, UserServiceModule,
 };
+use linera_base::identifiers::SessionId;
 use std::{
     collections::VecDeque,
     fmt::{self, Display, Formatter},

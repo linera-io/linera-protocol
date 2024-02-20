@@ -3,11 +3,6 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
-mod utils;
-
-use self::utils::{
-    create_dummy_user_application_registrations, register_mock_applications, ExpectedCall,
-};
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::PublicKey,
@@ -15,11 +10,14 @@ use linera_base::{
     identifiers::{Account, ChainDescription, ChainId, Destination, Owner},
 };
 use linera_execution::{
-    system::SystemMessage, ApplicationCallOutcome, BaseRuntime, ContractRuntime, ExecutionError,
-    ExecutionOutcome, ExecutionRuntimeConfig, ExecutionStateView, MessageKind, Operation,
-    OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
-    ResourceController, Response, SessionCallOutcome, SystemExecutionState,
-    TestExecutionRuntimeContext,
+    system::SystemMessage,
+    test_utils::{
+        create_dummy_user_application_registrations, register_mock_applications, ExpectedCall,
+    },
+    ApplicationCallOutcome, BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome,
+    ExecutionRuntimeConfig, ExecutionStateView, MessageKind, Operation, OperationContext, Query,
+    QueryContext, RawExecutionOutcome, RawOutgoingMessage, ResourceController, Response,
+    SessionCallOutcome, SystemExecutionState, TestExecutionRuntimeContext,
 };
 use linera_views::{batch::Batch, memory::MemoryContext};
 use std::vec;
