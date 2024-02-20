@@ -1,6 +1,6 @@
 [package]
 name = "linera-witty"
-version = "0.8.0"
+version = "0.9.0"
 description = "Generation of WIT compatible host code from Rust code"
 authors = ["Linera <contact@linera.io>"]
 readme = "README.md"
