@@ -25,8 +25,7 @@ env:
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   RUST_BACKTRACE: short
-  # We allow redundant explicit links because `cargo rdme` doesn't know how to resolve implicit intra-crate links.
-  RUSTDOCFLAGS: -A rustdoc::redundant_explicit_links -D warnings
+  RUSTDOCFLAGS: -D warnings
   RUSTFLAGS: -D warnings
   RUSTUP_MAX_RETRIES: 10
   RUST_LOG: warn
