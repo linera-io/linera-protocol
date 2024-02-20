@@ -566,6 +566,22 @@ NodeError:
       LocalNodeQuery:
         STRUCT:
           - error: STR
+OpenChainConfig:
+  STRUCT:
+    - ownership:
+        TYPENAME: ChainOwnership
+    - admin_id:
+        TYPENAME: ChainId
+    - epoch:
+        TYPENAME: Epoch
+    - committees:
+        MAP:
+          KEY:
+            TYPENAME: Epoch
+          VALUE:
+            TYPENAME: Committee
+    - balance:
+        TYPENAME: Amount
 Operation:
   ENUM:
     0:
@@ -729,21 +745,8 @@ SystemMessage:
               TYPENAME: UserData
     2:
       OpenChain:
-        STRUCT:
-          - ownership:
-              TYPENAME: ChainOwnership
-          - admin_id:
-              TYPENAME: ChainId
-          - epoch:
-              TYPENAME: Epoch
-          - committees:
-              MAP:
-                KEY:
-                  TYPENAME: Epoch
-                VALUE:
-                  TYPENAME: Committee
-          - balance:
-              TYPENAME: Amount
+        NEWTYPE:
+          TYPENAME: OpenChainConfig
     3:
       SetCommittees:
         STRUCT:
@@ -827,21 +830,8 @@ SystemOperation:
               TYPENAME: UserData
     2:
       OpenChain:
-        STRUCT:
-          - ownership:
-              TYPENAME: ChainOwnership
-          - admin_id:
-              TYPENAME: ChainId
-          - epoch:
-              TYPENAME: Epoch
-          - committees:
-              MAP:
-                KEY:
-                  TYPENAME: Epoch
-                VALUE:
-                  TYPENAME: Committee
-          - balance:
-              TYPENAME: Amount
+        NEWTYPE:
+          TYPENAME: OpenChainConfig
     3:
       CloseChain: UNIT
     4:

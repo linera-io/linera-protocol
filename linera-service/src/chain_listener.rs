@@ -161,20 +161,21 @@ where
                 for outgoing_message in &executed_block.messages {
                     if let OutgoingMessage {
                         destination: Destination::Recipient(new_id),
-                        message: Message::System(SystemMessage::OpenChain { ownership, .. }),
+                        message: Message::System(SystemMessage::OpenChain(open_chain_config)),
                         ..
                     } = outgoing_message
                     {
                         {
                             let mut context_guard = context.lock().await;
-                            let key_pair = ownership
+                            let owners = open_chain_config
+                                .ownership
                                 .owners
                                 .values()
-                                .map(|(public_key, _)| public_key)
-                                .chain(ownership.super_owners.values())
-                                .find_map(|public_key| {
-                                    context_guard.wallet_state().key_pair_for_pk(public_key)
-                                });
+                                .map(|(public_key, _)| public_key);
+                            let super_owners = open_chain_config.ownership.super_owners.values();
+                            let key_pair = owners.chain(super_owners).find_map(|public_key| {
+                                context_guard.wallet_state().key_pair_for_pk(public_key)
+                            });
                             context_guard.update_wallet_for_new_chain(*new_id, key_pair, timestamp);
                         }
                         Self::run_with_chain_id(

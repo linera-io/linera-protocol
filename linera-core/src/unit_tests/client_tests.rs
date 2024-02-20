@@ -719,7 +719,7 @@ where
         certificate.value(),
         CertificateValue::ConfirmedBlock { executed_block, .. } if matches!(
             executed_block.block.operations[open_chain_message_id.index as usize],
-            Operation::System(SystemOperation::OpenChain { .. }),
+            Operation::System(SystemOperation::OpenChain(_)),
         ),
         "Unexpected certificate value",
     );
@@ -833,7 +833,7 @@ where
         &certificate.value(),
         CertificateValue::ConfirmedBlock { executed_block: ExecutedBlock { block, .. }, .. } if matches!(
             block.operations[open_chain_message_id.index as usize],
-            Operation::System(SystemOperation::OpenChain { .. }),
+            Operation::System(SystemOperation::OpenChain(_)),
         ),
         "Unexpected certificate value",
     );

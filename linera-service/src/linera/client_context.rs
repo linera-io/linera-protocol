@@ -46,7 +46,7 @@ use {
     },
     linera_execution::{
         committee::Epoch,
-        system::{Recipient, SystemOperation, UserData, OPEN_CHAIN_MESSAGE_INDEX},
+        system::{OpenChainConfig, Recipient, SystemOperation, UserData, OPEN_CHAIN_MESSAGE_INDEX},
         ChainOwnership, Operation,
     },
     linera_rpc::{
@@ -464,15 +464,16 @@ impl ClientContext {
             let epoch = epoch.context("missing epoch on the default chain")?;
             // Put at most 1000 OpenChain operations in each block.
             let num_new_chains = (num_chains - key_pairs.len()).min(1000);
-            let operations = iter::repeat(Operation::System(SystemOperation::OpenChain {
+            let config = OpenChainConfig {
                 ownership: ChainOwnership::single(public_key),
                 committees,
                 admin_id: self.wallet_state.genesis_admin_chain(),
                 epoch,
                 balance,
-            }))
-            .take(num_new_chains)
-            .collect();
+            };
+            let operations = iter::repeat(Operation::System(SystemOperation::OpenChain(config)))
+                .take(num_new_chains)
+                .collect();
             let certificate = chain_client
                 .execute_with_messages(operations)
                 .await?

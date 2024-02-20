@@ -108,6 +108,16 @@ pub struct SystemExecutionState {
     pub closed: bool,
 }
 
+/// The configuration for a new chain.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct OpenChainConfig {
+    pub ownership: ChainOwnership,
+    pub admin_id: ChainId,
+    pub epoch: Epoch,
+    pub committees: BTreeMap<Epoch, Committee>,
+    pub balance: Amount,
+}
+
 /// A system operation.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum SystemOperation {
@@ -131,13 +141,7 @@ pub enum SystemOperation {
     },
     /// Creates (or activates) a new chain.
     /// This will automatically subscribe to the future committees created by `admin_id`.
-    OpenChain {
-        ownership: ChainOwnership,
-        admin_id: ChainId,
-        epoch: Epoch,
-        committees: BTreeMap<Epoch, Committee>,
-        balance: Amount,
-    },
+    OpenChain(OpenChainConfig),
     /// Closes the chain.
     CloseChain,
     /// Changes the ownership of the chain.
@@ -219,13 +223,7 @@ pub enum SystemMessage {
         user_data: UserData,
     },
     /// Creates (or activates) a new chain.
-    OpenChain {
-        ownership: ChainOwnership,
-        admin_id: ChainId,
-        epoch: Epoch,
-        committees: BTreeMap<Epoch, Committee>,
-        balance: Amount,
-    },
+    OpenChain(OpenChainConfig),
     /// Sets the current epoch and the recognized committees.
     SetCommittees {
         epoch: Epoch,
@@ -283,7 +281,7 @@ impl SystemMessage {
             }
             SystemMessage::Credit { .. }
             | SystemMessage::Withdraw { .. }
-            | SystemMessage::OpenChain { .. }
+            | SystemMessage::OpenChain(_)
             | SystemMessage::SetCommittees { .. }
             | SystemMessage::Subscribe { .. }
             | SystemMessage::Unsubscribe { .. }
@@ -460,45 +458,34 @@ where
         let mut outcome = RawExecutionOutcome::default();
         let mut new_application = None;
         match operation {
-            OpenChain {
-                ownership,
-                committees,
-                admin_id,
-                epoch,
-                balance: new_balance,
-            } => {
+            OpenChain(config) => {
                 let child_id = ChainId::child(context.next_message_id());
                 ensure!(
-                    self.admin_id.get().as_ref() == Some(&admin_id),
+                    self.admin_id.get().as_ref() == Some(&config.admin_id),
                     SystemExecutionError::InvalidNewChainAdminId(child_id)
                 );
+                let admin_id = config.admin_id;
                 ensure!(
-                    self.committees.get() == &committees,
+                    self.committees.get() == &config.committees,
                     SystemExecutionError::InvalidCommittees
                 );
                 ensure!(
-                    self.epoch.get().as_ref() == Some(&epoch),
+                    self.epoch.get().as_ref() == Some(&config.epoch),
                     SystemExecutionError::InvalidEpoch {
                         chain_id: child_id,
-                        epoch,
+                        epoch: config.epoch,
                     }
                 );
                 let balance = self.balance.get_mut();
                 balance
-                    .try_sub_assign(new_balance)
+                    .try_sub_assign(config.balance)
                     .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
                 let e1 = RawOutgoingMessage {
                     destination: Destination::Recipient(child_id),
                     authenticated: false,
                     grant: Amount::ZERO,
                     kind: MessageKind::Protected,
-                    message: SystemMessage::OpenChain {
-                        ownership: ownership.clone(),
-                        committees: committees.clone(),
-                        admin_id,
-                        epoch,
-                        balance: new_balance,
-                    },
+                    message: SystemMessage::OpenChain(config),
                 };
                 let subscription = ChannelSubscription {
                     chain_id: admin_id,
@@ -929,7 +916,7 @@ where
                 };
                 outcome.messages.push(message);
             }
-            OpenChain { .. } => {
+            OpenChain(_) => {
                 // This special message is executed immediately when cross-chain requests are received.
             }
             ApplicationCreated | Notify { .. } => (),
@@ -938,21 +925,23 @@ where
     }
 
     /// Initializes the system application state on a newly opened chain.
-    #[allow(clippy::too_many_arguments)]
     pub fn open_chain(
         &mut self,
         message_id: MessageId,
-        ownership: ChainOwnership,
-        epoch: Epoch,
-        committees: BTreeMap<Epoch, Committee>,
-        admin_id: ChainId,
         timestamp: Timestamp,
-        balance: Amount,
+        config: OpenChainConfig,
     ) {
         // Guaranteed under BFT assumptions.
         assert!(self.description.get().is_none());
         assert!(!self.ownership.get().is_active());
         assert!(self.committees.get().is_empty());
+        let OpenChainConfig {
+            ownership,
+            admin_id,
+            epoch,
+            committees,
+            balance,
+        } = config;
         let description = ChainDescription::Child(message_id);
         self.description.set(Some(description));
         self.epoch.set(Some(epoch));
@@ -1086,13 +1075,14 @@ mod tests {
         let admin_id = view.system.admin_id.get().unwrap();
         let committees = view.system.committees.get().clone();
         let ownership = ChainOwnership::single(linera_base::crypto::KeyPair::generate().public());
-        let operation = SystemOperation::OpenChain {
-            ownership: ownership.clone(),
-            committees: committees.clone(),
+        let config = OpenChainConfig {
+            ownership,
+            committees,
             epoch,
             admin_id,
             balance: Amount::ZERO,
         };
+        let operation = SystemOperation::OpenChain(config.clone());
         let (result, new_application) = view
             .system
             .execute_operation(context, operation)
@@ -1101,13 +1091,7 @@ mod tests {
         assert_eq!(new_application, None);
         assert_eq!(
             result.messages[OPEN_CHAIN_MESSAGE_INDEX as usize].message,
-            SystemMessage::OpenChain {
-                ownership,
-                committees,
-                admin_id,
-                epoch,
-                balance: Amount::ZERO,
-            }
+            SystemMessage::OpenChain(config)
         );
     }
 }

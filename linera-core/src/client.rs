@@ -39,7 +39,7 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::{
-        AdminOperation, Recipient, SystemChannel, SystemOperation, UserData,
+        AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation, UserData,
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX, PUBLISH_BYTECODE_MESSAGE_INDEX,
     },
     Bytecode, ChainOwnership, ExecutionError, Message, Operation, Query, Response,
@@ -337,7 +337,7 @@ where
             let Some(index) = requested_pending_messages.iter().position(|message| {
                 matches!(
                     message.event.message,
-                    Message::System(SystemMessage::OpenChain { .. })
+                    Message::System(SystemMessage::OpenChain(_))
                 )
             }) else {
                 return Err(LocalNodeError::InactiveChain(self.chain_id).into());
@@ -1876,19 +1876,15 @@ where
             let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
             let epoch = epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
             let messages = self.pending_messages().await?;
-            let certificate = match self
-                .execute_block(
-                    messages,
-                    vec![Operation::System(SystemOperation::OpenChain {
-                        ownership: ownership.clone(),
-                        committees,
-                        admin_id: self.admin_id,
-                        epoch,
-                        balance,
-                    })],
-                )
-                .await?
-            {
+            let config = OpenChainConfig {
+                ownership: ownership.clone(),
+                committees,
+                admin_id: self.admin_id,
+                epoch,
+                balance,
+            };
+            let operation = Operation::System(SystemOperation::OpenChain(config));
+            let certificate = match self.execute_block(messages, vec![operation]).await? {
                 ExecuteBlockOutcome::Executed(certificate) => certificate,
                 ExecuteBlockOutcome::Conflict(_) => continue,
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
