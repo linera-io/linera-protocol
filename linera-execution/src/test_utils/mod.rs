@@ -7,7 +7,7 @@
 
 mod mock_application;
 
-pub use self::mock_application::{ExpectedCall, MockApplication};
+pub use self::mock_application::{ExpectedCall, MockApplication, MockApplicationInstance};
 use crate::{
     ApplicationRegistryView, BytecodeLocation, ExecutionRuntimeContext, ExecutionStateView,
     TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
