@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client::{storage_service_check_deadness, storage_service_check_endpoint};
+use crate::client::{storage_service_check_absence, storage_service_check_validity};
 use anyhow::{bail, Result};
 use linera_base::command::CommandExt;
 use std::time::Duration;
@@ -37,9 +37,11 @@ impl StorageServiceSpanner {
         command
     }
 
-    async fn wait_deadness(&self) -> Result<()> {
+    /// Wait for the absence of the endpoint. If a child is eliminated
+    /// then it might takes time to wait for its absence.
+    async fn wait_absence(&self) -> Result<()> {
         for i in 1..10 {
-            let test = storage_service_check_deadness(&self.endpoint).await?;
+            let test = storage_service_check_absence(&self.endpoint).await?;
             if test {
                 return Ok(());
             }
@@ -49,14 +51,14 @@ impl StorageServiceSpanner {
     }
 
     pub async fn run_service(&self) -> Result<StorageServiceGuard> {
-        self.wait_deadness().await?;
+        self.wait_absence().await?;
         let mut command = self.command().await;
         let _child = command.spawn_into()?;
         let guard = StorageServiceGuard { _child };
         // We iterate until the child is spanned and can be accessed.
         // We add an additional waiting period to avoid problems.
         for i in 1..10 {
-            let result = storage_service_check_endpoint(&self.endpoint).await;
+            let result = storage_service_check_validity(&self.endpoint).await;
             if result.is_ok() {
                 return Ok(guard);
             }

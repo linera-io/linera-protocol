@@ -338,15 +338,15 @@ pub async fn service_config_from_endpoint(
     })
 }
 
-/// Check that endpoint is truly dead
-pub async fn storage_service_check_deadness(endpoint: &str) -> Result<bool, ServiceContextError> {
+/// Checks that endpoint is truly absent.
+pub async fn storage_service_check_absence(endpoint: &str) -> Result<bool, ServiceContextError> {
     let endpoint = Endpoint::from_shared(endpoint.to_string())?;
     let result = StoreProcessorClient::connect(endpoint).await;
     Ok(result.is_err())
 }
 
-/// Checking is an endpoint is valid or not
-pub async fn storage_service_check_endpoint(endpoint: &str) -> Result<(), ServiceContextError> {
+/// Checks whether an endpoint is valid or not.
+pub async fn storage_service_check_validity(endpoint: &str) -> Result<(), ServiceContextError> {
     let config = service_config_from_endpoint(endpoint).await.unwrap();
     let namespace = "namespace";
     let store = ServiceStoreClient::connect(&config, namespace).await?;
