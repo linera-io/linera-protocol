@@ -43,6 +43,7 @@ COPY linera-sdk-derive linera-sdk-derive
 COPY linera-service linera-service
 COPY linera-service-graphql-client linera-service-graphql-client
 COPY linera-storage linera-storage
+COPY linera-storage-service linera-storage-service
 COPY linera-version linera-version
 COPY linera-views linera-views
 COPY linera-views-derive linera-views-derive
