@@ -4,7 +4,7 @@
 use crate::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
     system::{Recipient, UserData},
-    Bytecode, ChainOwnership, ChannelSubscription, ExecutionStateView, GenericApplicationId,
+    Bytecode, ChannelSubscription, ExecutionStateView, GenericApplicationId,
     SystemExecutionStateView, UserApplicationDescription,
 };
 use async_graphql::{Error, Object};
@@ -12,6 +12,7 @@ use linera_base::{
     data_types::{Amount, Timestamp},
     doc_scalar,
     identifiers::{ChainDescription, ChainId, Owner},
+    ownership::ChainOwnership,
 };
 use linera_views::{common::Context, map_view::MapView, views::ViewError};
 use std::collections::BTreeMap;
@@ -21,7 +22,6 @@ doc_scalar!(
     "A unique identifier for a user application or for the system application"
 );
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
-doc_scalar!(ChainOwnership, "Represents the owner(s) of a chain");
 doc_scalar!(
     Epoch,
     "A number identifying the configuration of the chain (aka the committee)"

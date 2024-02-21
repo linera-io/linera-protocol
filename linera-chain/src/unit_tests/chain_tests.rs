@@ -11,12 +11,13 @@ use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
+    ownership::ChainOwnership,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
     system::OpenChainConfig,
     test_utils::{ExpectedCall, MockApplication},
-    BytecodeLocation, ChainOwnership, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation,
+    BytecodeLocation, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation,
     RawExecutionOutcome, SystemMessage, TestExecutionRuntimeContext, UserApplicationDescription,
 };
 use linera_views::{

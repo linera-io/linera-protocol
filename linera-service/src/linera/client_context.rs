@@ -38,6 +38,7 @@ use {
         crypto::PublicKey,
         data_types::Amount,
         identifiers::{AccountOwner, ApplicationId, Owner},
+        ownership::ChainOwnership,
     },
     linera_chain::data_types::{Block, BlockAndRound, BlockProposal, SignatureAggregator, Vote},
     linera_core::{
@@ -47,7 +48,7 @@ use {
     linera_execution::{
         committee::Epoch,
         system::{OpenChainConfig, Recipient, SystemOperation, UserData, OPEN_CHAIN_MESSAGE_INDEX},
-        ChainOwnership, Operation,
+        Operation,
     },
     linera_rpc::{
         config::NetworkProtocol, grpc_network::GrpcClient, mass::MassClient, simple_network,

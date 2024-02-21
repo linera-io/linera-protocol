@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{crypto::PublicKey, data_types::Round, identifiers::Owner};
+//! Structures defining the set of owners and super owners, as well as the consensus
+//! round types and timeouts for chains.
+
+use crate::{crypto::PublicKey, data_types::Round, doc_scalar, identifiers::Owner};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, iter, time::Duration};
 
@@ -40,6 +43,7 @@ pub struct ChainOwnership {
 }
 
 impl ChainOwnership {
+    /// Creates a `ChainOwnership` with a single super owner.
     pub fn single(public_key: PublicKey) -> Self {
         ChainOwnership {
             super_owners: iter::once((Owner::from(public_key), public_key)).collect(),
@@ -49,6 +53,7 @@ impl ChainOwnership {
         }
     }
 
+    /// Creates a `ChainOwnership` with the specified regular owners.
     pub fn multiple(
         keys_and_weights: impl IntoIterator<Item = (PublicKey, u64)>,
         multi_leader_rounds: u32,
@@ -65,16 +70,19 @@ impl ChainOwnership {
         }
     }
 
+    /// Adds a regular owner.
     pub fn with_regular_owner(mut self, public_key: PublicKey, weight: u64) -> Self {
         self.owners
             .insert(Owner::from(public_key), (public_key, weight));
         self
     }
 
+    /// Returns whether there are any owners or super owners.
     pub fn is_active(&self) -> bool {
         !self.super_owners.is_empty() || !self.owners.is_empty()
     }
 
+    /// Returns the given owner's public key, if they are an owner or super owner.
     pub fn verify_owner(&self, owner: &Owner) -> Option<PublicKey> {
         if let Some(public_key) = self.super_owners.get(owner) {
             Some(*public_key)
@@ -99,6 +107,7 @@ impl ChainOwnership {
         }
     }
 
+    /// Returns the first consensus round for this configuration.
     pub fn first_round(&self) -> Round {
         if !self.super_owners.is_empty() {
             Round::Fast
@@ -109,10 +118,12 @@ impl ChainOwnership {
         }
     }
 
+    /// Returns an iterator over all super owners' keys, followed by all owners'.
     pub fn all_owners(&self) -> impl Iterator<Item = &Owner> {
         self.super_owners.keys().chain(self.owners.keys())
     }
 
+    /// Returns the round following the specified one, if any.
     pub fn next_round(&self, round: Round) -> Option<Round> {
         let next_round = match round {
             Round::Fast if self.multi_leader_rounds == 0 => Round::SingleLeader(0),
@@ -126,6 +137,7 @@ impl ChainOwnership {
         Some(next_round)
     }
 
+    /// Returns the round preceding the specified one, if any.
     pub fn previous_round(&self, round: Round) -> Option<Round> {
         let previous_round = match round {
             Round::Fast => return None,
@@ -160,7 +172,7 @@ mod tests {
 
     #[test]
     fn test_ownership_round_timeouts() {
-        use linera_base::crypto::KeyPair;
+        use crate::crypto::KeyPair;
 
         let super_pub_key = KeyPair::generate().public();
         let super_owner = Owner::from(super_pub_key);
@@ -201,3 +213,5 @@ mod tests {
         );
     }
 }
+
+doc_scalar!(ChainOwnership, "Represents the owner(s) of a chain");

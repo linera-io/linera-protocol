@@ -24,6 +24,7 @@ use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
     data_types::{Amount, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner},
+    ownership::{ChainOwnership, TimeoutConfig},
     BcsHexParseError,
 };
 use linera_chain::{data_types::HashedValue, ChainStateView};
@@ -36,8 +37,8 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{AdminOperation, Recipient, SystemChannel, UserData},
-    Bytecode, ChainOwnership, Operation, Query, Response, SystemOperation, TimeoutConfig,
-    UserApplicationDescription, UserApplicationId,
+    Bytecode, Operation, Query, Response, SystemOperation, UserApplicationDescription,
+    UserApplicationId,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;

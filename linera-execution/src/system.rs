@@ -4,10 +4,9 @@
 
 use crate::{
     committee::{Committee, Epoch},
-    ownership::TimeoutConfig,
-    ApplicationRegistryView, Bytecode, BytecodeLocation, ChainOwnership, ChannelName,
-    ChannelSubscription, Destination, MessageContext, MessageKind, OperationContext, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
+    ApplicationRegistryView, Bytecode, BytecodeLocation, ChannelName, ChannelSubscription,
+    Destination, MessageContext, MessageKind, OperationContext, QueryContext, RawExecutionOutcome,
+    RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
 };
 use async_graphql::Enum;
 use custom_debug_derive::Debug;
@@ -18,6 +17,7 @@ use linera_base::{
     identifiers::{
         Account, ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId, Owner,
     },
+    ownership::{ChainOwnership, TimeoutConfig},
 };
 
 #[cfg(with_metrics)]
