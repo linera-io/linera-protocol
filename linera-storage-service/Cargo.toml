@@ -1,6 +1,6 @@
 [package]
 name = "linera-storage-service"
-version = "0.8.0"
+version = "0.9.0"
 description = "RPC shared key value store."
 authors = ["Linera <contact@linera.io>"]
 readme = "README.md"
@@ -32,8 +32,8 @@ linera-version.workspace = true
 linera-views.workspace = true
 prost.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread"] }
-tonic = { workspace = true, features = ["transport"] }
+tokio = { workspace = true, features = ["full"] }
+tonic = { workspace = true, features = ["codegen", "prost", "transport"] }
 
 [dev-dependencies]
 linera-storage-service = { path = ".", features = ["test"] }

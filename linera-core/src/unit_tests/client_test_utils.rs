@@ -20,16 +20,9 @@ use linera_execution::{
     committee::{Committee, ValidatorName},
     ResourceControlPolicy, WasmRuntime,
 };
-use linera_storage::{MemoryStorage, ServiceStorage, Storage, TestClock};
-use linera_storage_service::{
-    child::{StorageServiceGuard, StorageServiceSpanner},
-    client::service_config_from_endpoint,
-    common::get_service_storage_binary,
-};
+use linera_storage::{MemoryStorage, Storage, TestClock};
 use linera_version::VersionInfo;
-use linera_views::{
-    memory::TEST_MEMORY_MAX_STREAM_QUERIES, test_utils::generate_test_namespace, views::ViewError,
-};
+use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -39,6 +32,24 @@ use std::{
 };
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    with_rocksdb,
+    with_scylladb,
+    with_dynamodb
+))]
+use linera_views::test_utils::generate_test_namespace;
+
+#[cfg(not(target_arch = "wasm32"))]
+use {
+    linera_storage::ServiceStorage,
+    linera_storage_service::{
+        child::{StorageServiceGuard, StorageServiceSpanner},
+        client::service_config_from_endpoint,
+        common::get_service_storage_binary,
+    },
+};
 
 #[cfg(feature = "rocksdb")]
 use {
@@ -726,6 +737,7 @@ impl StorageBuilder for MakeRocksDbStorage {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub struct MakeServiceStorage {
     _guard: Option<StorageServiceGuard>,
     endpoint: String,
@@ -736,6 +748,7 @@ pub struct MakeServiceStorage {
     clock: TestClock,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Default for MakeServiceStorage {
     fn default() -> MakeServiceStorage {
         let _guard = None;
@@ -755,6 +768,7 @@ impl Default for MakeServiceStorage {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl MakeServiceStorage {
     /// Creates a `ServiceStorage` from just an endpoint
     pub fn new(endpoint: &str) -> Self {
@@ -793,6 +807,7 @@ impl MakeServiceStorage {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 impl StorageBuilder for MakeServiceStorage {
     type Storage = ServiceStorage<TestClock>;

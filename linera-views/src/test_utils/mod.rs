@@ -10,7 +10,10 @@ use crate::{
     common::{AdminKeyValueStore, KeyIterable, KeyValueIterable, KeyValueStore},
 };
 use rand::{Rng, SeedableRng};
-use std::collections::{BTreeMap, HashSet};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    fmt::Debug,
+};
 use tracing::warn;
 
 // The following seed is chosen to have equal numbers of 1s and 0s, as advised by
@@ -671,7 +674,7 @@ where
     let prefix = generate_test_namespace();
     let namespaces = namespaces_with_prefix::<S>(config, &prefix).await;
     assert_eq!(namespaces.len(), 0);
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    let mut rng = make_deterministic_rng();
     let size = 9;
     // Creating the initial list of namespaces
     let mut working_namespaces = BTreeSet::new();

@@ -12,6 +12,7 @@ mod memory;
 mod rocks_db;
 #[cfg(with_scylladb)]
 mod scylla_db;
+#[cfg(not(target_arch = "wasm32"))]
 mod service;
 
 #[cfg(any(test, feature = "test"))]
@@ -22,10 +23,11 @@ pub use crate::dynamo_db::DynamoDbStorage;
 pub use crate::rocks_db::RocksDbStorage;
 #[cfg(with_scylladb)]
 pub use crate::scylla_db::ScyllaDbStorage;
+#[cfg(not(target_arch = "wasm32"))]
+pub use crate::service::ServiceStorage;
 pub use crate::{
     db_storage::{Clock, DbStorage, WallClock},
     memory::MemoryStorage,
-    service::ServiceStorage,
 };
 
 #[cfg(with_metrics)]

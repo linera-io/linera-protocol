@@ -19,7 +19,6 @@ test = [
     "linera-chain/test",
     "linera-execution/test",
     "linera-storage/test",
-    "linera-storage-service/test",
     "linera-views/test",
     "proptest",
     "tempfile",
@@ -57,7 +56,6 @@ linera-base.workspace = true
 linera-chain.workspace = true
 linera-execution.workspace = true
 linera-storage.workspace = true
-linera-storage-service.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true
 lru.workspace = true
@@ -74,6 +72,9 @@ tokio.workspace = true
 tokio-stream.workspace = true
 tonic.workspace = true
 tracing.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+linera-storage-service.workspace = true
 
 [dev-dependencies]
 assert_matches.workspace = true

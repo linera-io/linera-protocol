@@ -7,9 +7,7 @@ mod wasm;
 
 use crate::{
     client::{
-        client_test_utils::{
-            FaultType, MakeMemoryStorage, MakeServiceStorage, StorageBuilder, TestBuilder,
-        },
+        client_test_utils::{FaultType, MakeMemoryStorage, StorageBuilder, TestBuilder},
         ChainClient, ChainClientError, ClientOutcome, MessageAction,
     },
     local_node::LocalNodeError,
@@ -43,6 +41,9 @@ use linera_views::views::ViewError;
 use std::{sync::Arc, time::Duration};
 use test_log::test;
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::client::client_test_utils::MakeServiceStorage;
+
 #[cfg(feature = "rocksdb")]
 use crate::client::client_test_utils::{MakeRocksDbStorage, ROCKS_DB_SEMAPHORE};
 
@@ -58,6 +59,7 @@ pub async fn test_memory_initiating_valid_transfer_with_notifications() -> Resul
     run_test_initiating_valid_transfer_with_notifications(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 pub async fn test_service_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
 {
@@ -145,6 +147,7 @@ async fn test_memory_claim_amount() -> Result<(), anyhow::Error> {
     run_test_claim_amount(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_claim_amount() -> Result<(), anyhow::Error> {
     run_test_claim_amount(MakeServiceStorage::new("127.0.0.1:9002")).await
@@ -295,6 +298,7 @@ async fn test_memory_rotate_key_pair() -> Result<(), anyhow::Error> {
     run_test_rotate_key_pair(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_rotate_key_pair() -> Result<(), anyhow::Error> {
     run_test_rotate_key_pair(MakeServiceStorage::new("127.0.0.1:9003")).await
@@ -367,6 +371,7 @@ async fn test_memory_transfer_ownership() -> Result<(), anyhow::Error> {
     run_test_transfer_ownership(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_transfer_ownership() -> Result<(), anyhow::Error> {
     run_test_transfer_ownership(MakeServiceStorage::new("127.0.0.1:9004")).await
@@ -448,6 +453,7 @@ async fn test_memory_share_ownership() -> Result<(), anyhow::Error> {
     run_test_share_ownership(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_share_ownership() -> Result<(), anyhow::Error> {
     run_test_share_ownership(MakeServiceStorage::new("127.0.0.1:9005")).await
@@ -616,6 +622,7 @@ async fn test_memory_open_chain_then_close_it() -> Result<(), anyhow::Error> {
     run_test_open_chain_then_close_it(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_open_chain_then_close_it() -> Result<(), anyhow::Error> {
     run_test_open_chain_then_close_it(MakeServiceStorage::new("127.0.0.1:9006")).await
@@ -679,6 +686,7 @@ async fn test_memory_transfer_then_open_chain() -> Result<(), anyhow::Error> {
     run_test_transfer_then_open_chain(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_transfer_then_open_chain() -> Result<(), anyhow::Error> {
     run_test_transfer_then_open_chain(MakeServiceStorage::new("127.0.0.1:9007")).await
@@ -802,6 +810,7 @@ async fn test_memory_open_chain_must_be_first() -> Result<(), anyhow::Error> {
     run_test_open_chain_must_be_first(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_open_chain_must_be_first() -> Result<(), anyhow::Error> {
     run_test_open_chain_must_be_first(MakeServiceStorage::new("127.0.0.1:9008")).await
@@ -911,6 +920,7 @@ async fn test_memory_open_chain_then_transfer() -> Result<(), anyhow::Error> {
     run_test_open_chain_then_transfer(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_open_chain_then_transfer() -> Result<(), anyhow::Error> {
     run_test_open_chain_then_transfer(MakeServiceStorage::new("127.0.0.1:9009")).await
@@ -1008,6 +1018,7 @@ async fn test_memory_close_chain() -> Result<(), anyhow::Error> {
     run_test_close_chain(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_close_chain() -> Result<(), anyhow::Error> {
     run_test_close_chain(MakeServiceStorage::new("127.0.0.1:9010")).await
@@ -1147,6 +1158,7 @@ async fn test_memory_initiating_valid_transfer_too_many_faults() -> Result<(), a
     run_test_initiating_valid_transfer_too_many_faults(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
     run_test_initiating_valid_transfer_too_many_faults(MakeServiceStorage::new("127.0.0.1:9011"))
@@ -1212,6 +1224,7 @@ async fn test_memory_bidirectional_transfer() -> Result<(), anyhow::Error> {
     run_test_bidirectional_transfer(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_bidirectional_transfer() -> Result<(), anyhow::Error> {
     run_test_bidirectional_transfer(MakeServiceStorage::new("127.0.0.1:9012")).await
@@ -1338,6 +1351,7 @@ async fn test_memory_receiving_unconfirmed_transfer() -> Result<(), anyhow::Erro
     run_test_receiving_unconfirmed_transfer(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
     run_test_receiving_unconfirmed_transfer(MakeServiceStorage::new("127.0.0.1:9013")).await
@@ -1414,6 +1428,7 @@ async fn test_memory_receiving_unconfirmed_transfer_with_lagging_sender_balances
     .await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_receiving_unconfirmed_transfer_with_lagging_sender_balances(
 ) -> Result<(), anyhow::Error> {
@@ -1557,6 +1572,7 @@ async fn test_memory_change_voting_rights() -> Result<(), anyhow::Error> {
     run_test_change_voting_rights(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_change_voting_rights() -> Result<(), anyhow::Error> {
     run_test_change_voting_rights(MakeServiceStorage::new("127.0.0.1:9015")).await
@@ -1712,6 +1728,7 @@ pub async fn test_memory_insufficient_balance() -> Result<(), anyhow::Error> {
     run_test_insufficient_balance(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 pub async fn test_service_insufficient_balance() -> Result<(), anyhow::Error> {
     run_test_insufficient_balance(MakeServiceStorage::new("127.0.0.1:9016")).await
@@ -1772,6 +1789,7 @@ async fn test_memory_request_leader_timeout() -> Result<(), anyhow::Error> {
     run_test_request_leader_timeout(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_request_leader_timeout() -> Result<(), anyhow::Error> {
     run_test_request_leader_timeout(MakeServiceStorage::new("127.0.0.1:9017")).await
@@ -1921,6 +1939,7 @@ async fn test_memory_propose_validated() -> Result<(), anyhow::Error> {
     run_test_propose_validated(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_propose_validated() -> Result<(), anyhow::Error> {
     run_test_propose_validated(MakeServiceStorage::new("127.0.0.1:9018")).await
@@ -2039,6 +2058,7 @@ async fn test_memory_propose_pending_block() -> Result<(), anyhow::Error> {
     run_test_propose_pending_block(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test(tokio::test)]
 async fn test_service_propose_pending_block() -> Result<(), anyhow::Error> {
     run_test_propose_pending_block(MakeServiceStorage::new("127.0.0.1:9019")).await
