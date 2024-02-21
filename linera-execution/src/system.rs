@@ -15,7 +15,9 @@ use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, ArithmeticError, Timestamp},
     ensure, hex_debug,
-    identifiers::{Account, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{
+        Account, ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId, Owner,
+    },
 };
 
 #[cfg(with_metrics)]
@@ -89,6 +91,8 @@ pub struct SystemExecutionStateView<C> {
     pub registry: ApplicationRegistryView<C>,
     /// Whether this chain has been closed.
     pub closed: RegisterView<C, bool>,
+    /// An optional chain application. If set, operations are restricted to this application's.
+    pub chain_application: RegisterView<C, Option<ApplicationId>>,
 }
 
 /// For testing only.
@@ -106,6 +110,7 @@ pub struct SystemExecutionState {
     pub timestamp: Timestamp,
     pub registry: ApplicationRegistry,
     pub closed: bool,
+    pub chain_application: Option<ApplicationId>,
 }
 
 /// The configuration for a new chain.
@@ -116,6 +121,7 @@ pub struct OpenChainConfig {
     pub epoch: Epoch,
     pub committees: BTreeMap<Epoch, Committee>,
     pub balance: Amount,
+    pub chain_application: Option<ApplicationId>,
 }
 
 /// A system operation.
@@ -941,6 +947,7 @@ where
             epoch,
             committees,
             balance,
+            chain_application,
         } = config;
         let description = ChainDescription::Child(message_id);
         self.description.set(Some(description));
@@ -956,6 +963,7 @@ where
         self.ownership.set(ownership);
         self.timestamp.set(timestamp);
         self.balance.set(balance);
+        self.chain_application.set(chain_application);
     }
 
     pub async fn handle_query(
@@ -1074,13 +1082,14 @@ mod tests {
         let epoch = view.system.epoch.get().unwrap();
         let admin_id = view.system.admin_id.get().unwrap();
         let committees = view.system.committees.get().clone();
-        let ownership = ChainOwnership::single(linera_base::crypto::KeyPair::generate().public());
+        let ownership = ChainOwnership::single(PublicKey::test_key(0));
         let config = OpenChainConfig {
             ownership,
             committees,
             epoch,
             admin_id,
             balance: Amount::ZERO,
+            chain_application: None,
         };
         let operation = SystemOperation::OpenChain(config.clone());
         let (result, new_application) = view

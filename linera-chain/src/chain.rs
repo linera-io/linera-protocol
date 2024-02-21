@@ -38,6 +38,10 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(test)]
+#[path = "unit_tests/chain_tests.rs"]
+mod chain_tests;
+
 #[cfg(with_metrics)]
 use {
     linera_base::{
@@ -784,6 +788,12 @@ where
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
+            if let Some(app_id) = self.execution_state.system.chain_application.get() {
+                ensure!(
+                    operation.application_id() == GenericApplicationId::User(*app_id),
+                    ChainError::ChainApplication(*app_id)
+                );
+            }
             #[cfg(with_metrics)]
             let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
