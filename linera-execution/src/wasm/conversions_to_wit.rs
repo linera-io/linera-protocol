@@ -14,9 +14,10 @@ use crate::{
     SessionId, UserApplicationId,
 };
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{CryptoHash, PublicKey},
     data_types::Amount,
     identifiers::{Account, ChainId, Owner},
+    ownership::{ChainOwnership, TimeoutConfig},
 };
 
 impl From<OperationContext> for contract::OperationContext {
@@ -88,6 +89,7 @@ impl From<QueryContext> for service::QueryContext {
     fn from(host: QueryContext) -> Self {
         service::QueryContext {
             chain_id: host.chain_id.into(),
+            next_block_height: host.next_block_height.into(),
         }
     }
 }
@@ -236,6 +238,54 @@ impl From<Amount> for contract_system_api::Amount {
         contract_system_api::Amount {
             lower_half: host.lower_half(),
             upper_half: host.upper_half(),
+        }
+    }
+}
+
+impl From<PublicKey> for contract_system_api::PublicKey {
+    fn from(host: PublicKey) -> Self {
+        let [part1, part2, part3, part4] = host.into();
+        Self {
+            part1,
+            part2,
+            part3,
+            part4,
+        }
+    }
+}
+
+impl From<TimeoutConfig> for contract_system_api::TimeoutConfig {
+    fn from(host: TimeoutConfig) -> Self {
+        let TimeoutConfig {
+            fast_round_duration,
+            base_timeout,
+            timeout_increment,
+        } = host;
+        Self {
+            fast_round_duration_ms: fast_round_duration
+                .map(|duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)),
+            base_timeout_ms: u64::try_from(base_timeout.as_millis()).unwrap_or(u64::MAX),
+            timeout_increment_ms: u64::try_from(timeout_increment.as_millis()).unwrap_or(u64::MAX),
+        }
+    }
+}
+
+impl From<ChainOwnership> for contract_system_api::ChainOwnershipResult {
+    fn from(host: ChainOwnership) -> Self {
+        let ChainOwnership {
+            super_owners,
+            owners,
+            multi_leader_rounds,
+            timeout_config,
+        } = host;
+        Self {
+            super_owners: super_owners.into_values().map(Into::into).collect(),
+            owners: owners
+                .into_values()
+                .map(|(pub_key, weight)| (pub_key.into(), weight))
+                .collect(),
+            multi_leader_rounds,
+            timeout_config: timeout_config.into(),
         }
     }
 }

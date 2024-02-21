@@ -110,6 +110,7 @@ async fn test_fuel_for_counter_wasm_application(
 
     let context = QueryContext {
         chain_id: ChainId::root(0),
+        next_block_height: BlockHeight(0),
     };
     let expected_value = async_graphql::Response::new(
         async_graphql::Value::from_json(json!({"value" : increments.into_iter().sum::<u64>()}))

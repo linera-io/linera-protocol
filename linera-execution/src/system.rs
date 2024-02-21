@@ -407,6 +407,8 @@ pub enum SystemExecutionError {
     UnknownBytecodeId(BytecodeId),
     #[error("Application {0:?} is not registered by the chain")]
     UnknownApplicationId(Box<UserApplicationId>),
+    #[error("Chain is not active yet.")]
+    InactiveChain,
 }
 
 impl<C> SystemExecutionStateView<C>

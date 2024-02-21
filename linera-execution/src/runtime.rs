@@ -7,19 +7,22 @@ use crate::{
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
-    ExecutionError, ExecutionOutcome, ServiceRuntime, SessionId, UserApplicationDescription,
-    UserApplicationId, UserContractCode, UserContractInstance, UserServiceInstance,
+    ExecutionError, ExecutionOutcome, RawExecutionOutcome, ServiceRuntime, SessionId,
+    UserApplicationDescription, UserApplicationId, UserContractCode, UserContractInstance,
+    UserServiceInstance,
 };
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{Amount, ArithmeticError, Timestamp},
+    data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     ensure,
-    identifiers::{Account, ChainId, Owner},
+    identifiers::{Account, ChainId, MessageId, Owner},
+    ownership::ChainOwnership,
 };
 use linera_views::batch::Batch;
 use oneshot::Receiver;
 use std::{
     collections::{hash_map, BTreeMap, HashMap, HashSet},
+    iter,
     sync::{Arc, Mutex},
 };
 
@@ -38,6 +41,13 @@ pub type ServiceSyncRuntime = SyncRuntime<UserServiceInstance>;
 pub struct SyncRuntimeInternal<UserInstance> {
     /// The current chain ID.
     chain_id: ChainId,
+    /// The height of the next block that will be added to this chain. During operations
+    /// and messages, this is the current block height.
+    height: BlockHeight,
+    /// The authenticated signer of the operation or message, if any.
+    authenticated_signer: Option<Owner>,
+    /// The index of the next message to be created.
+    next_message_index: u32,
 
     /// How to interact with the storage view of the execution state.
     execution_state_sender: ExecutionStateSender,
@@ -231,12 +241,18 @@ struct SessionState {
 impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     fn new(
         chain_id: ChainId,
+        height: BlockHeight,
+        authenticated_signer: Option<Owner>,
+        next_message_index: u32,
         execution_state_sender: ExecutionStateSender,
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
     ) -> Self {
         Self {
             chain_id,
+            height,
+            authenticated_signer,
+            next_message_index,
             execution_state_sender,
             loaded_applications: HashMap::new(),
             call_stack: Vec::new(),
@@ -607,6 +623,10 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().read_system_timestamp()
     }
 
+    fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError> {
+        self.inner().chain_ownership()
+    }
+
     fn write_batch(&mut self, batch: Batch) -> Result<(), ExecutionError> {
         self.inner().write_batch(batch)
     }
@@ -711,6 +731,12 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| Request::SystemTimestamp { callback })?
+            .recv_response()
+    }
+
+    fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError> {
+        self.execution_state_sender
+            .send_request(|callback| Request::ChainOwnership { callback })?
             .recv_response()
     }
 
@@ -894,6 +920,9 @@ impl ContractSyncRuntime {
     ) -> Result<(Vec<ExecutionOutcome>, ResourceController), ExecutionError> {
         let mut runtime = SyncRuntimeInternal::new(
             chain_id,
+            action.height(),
+            action.signer(),
+            action.next_message_index(),
             execution_state_sender,
             refund_grant_to,
             resource_controller,
@@ -1075,6 +1104,40 @@ impl ContractRuntime for ContractSyncRuntime {
             Ok(outcome)
         }
     }
+
+    fn open_chain(
+        &mut self,
+        ownership: ChainOwnership,
+        balance: Amount,
+    ) -> Result<ChainId, ExecutionError> {
+        let mut this = self.inner();
+        let next_message_id = MessageId {
+            chain_id: this.chain_id,
+            height: this.height,
+            index: this.next_message_index,
+        };
+        let chain_id = ChainId::child(next_message_id);
+        let authorized_applications = this
+            .call_stack
+            .last()
+            .map(|status| iter::once(status.id).collect());
+        let [open_chain_message, subscribe_message] = this
+            .execution_state_sender
+            .send_request(|callback| Request::OpenChain {
+                ownership,
+                balance,
+                next_message_id,
+                authorized_applications,
+                callback,
+            })?
+            .recv_response()?;
+        let outcome = RawExecutionOutcome::default()
+            .with_message(open_chain_message)
+            .with_message(subscribe_message);
+        this.execution_outcomes
+            .push(ExecutionOutcome::System(outcome));
+        Ok(chain_id)
+    }
 }
 
 impl ServiceSyncRuntime {
@@ -1086,6 +1149,9 @@ impl ServiceSyncRuntime {
     ) -> Result<Vec<u8>, ExecutionError> {
         let runtime_internal = SyncRuntimeInternal::new(
             context.chain_id,
+            context.next_block_height,
+            None,
+            0,
             execution_state_sender,
             None,
             ResourceController::default(),
@@ -1117,6 +1183,7 @@ impl ServiceRuntime for ServiceSyncRuntime {
             // Make the call to user code.
             let query_context = crate::QueryContext {
                 chain_id: this.chain_id,
+                next_block_height: this.height,
             };
             this.push_application(ApplicationStatus {
                 id: queried_id,

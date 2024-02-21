@@ -7,9 +7,11 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::PublicKey,
     data_types::{Amount, BlockHeight, Resources},
-    identifiers::{Account, ChainDescription, ChainId, Destination, Owner},
+    identifiers::{Account, ChainDescription, ChainId, Destination, MessageId, Owner},
+    ownership::ChainOwnership,
 };
 use linera_execution::{
+    committee::{Committee, Epoch},
     system::SystemMessage,
     test_utils::{
         create_dummy_user_application_registrations, register_mock_applications, ExpectedCall,
@@ -20,7 +22,7 @@ use linera_execution::{
     RawOutgoingMessage, ResourceController, Response, SessionCallOutcome,
 };
 use linera_views::batch::Batch;
-use std::vec;
+use std::{collections::BTreeMap, vec};
 
 #[tokio::test]
 async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
@@ -192,6 +194,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
 
     let context = QueryContext {
         chain_id: ChainId::root(0),
+        next_block_height: BlockHeight(0),
     };
     assert_eq!(
         view.query_application(
@@ -935,4 +938,71 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     );
 
     Ok(())
+}
+
+/// Tests the system API calls `open_chain` and `chain_ownership`.
+#[tokio::test]
+async fn test_open_chain() {
+    let committee = Committee::make_simple(vec![PublicKey::test_key(0).into()]);
+    let committees = BTreeMap::from([(Epoch::ZERO, committee)]);
+    let ownership = ChainOwnership::single(PublicKey::test_key(1));
+    let child_ownership = ChainOwnership::single(PublicKey::test_key(2));
+    let state = SystemExecutionState {
+        committees: committees.clone(),
+        ownership: ownership.clone(),
+        balance: Amount::from_tokens(5),
+        ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(0), ChainId::root(0))
+    };
+    let mut view = state.into_view().await;
+    let mut applications = register_mock_applications(&mut view, 1).await.unwrap();
+    let (application_id, application) = applications.next().unwrap();
+
+    let message_id = MessageId {
+        chain_id: ChainId::root(0),
+        height: BlockHeight(1),
+        index: 5,
+    };
+
+    let child_ownership2 = child_ownership.clone();
+    application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            assert_eq!(runtime.chain_ownership().unwrap(), ownership);
+            let chain_id = runtime.open_chain(child_ownership2, Amount::ONE).unwrap();
+            assert_eq!(chain_id, ChainId::child(message_id));
+            Ok(RawExecutionOutcome::default())
+        },
+    ));
+    let context = OperationContext {
+        chain_id: ChainId::root(0),
+        height: BlockHeight(1),
+        index: 0,
+        authenticated_signer: None,
+        next_message_index: 5,
+    };
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+    let outcomes = view
+        .execute_operation(context, operation, &mut controller)
+        .await
+        .unwrap();
+
+    assert_eq!(*view.system.balance.get(), Amount::from_tokens(4));
+    let ExecutionOutcome::System(outcome) = &outcomes[0] else {
+        panic!("Unexpected outcomes: {:?}", outcomes);
+    };
+    let RawOutgoingMessage {
+        message: SystemMessage::OpenChain(config),
+        destination: Destination::Recipient(recipient_id),
+        ..
+    } = &outcome.messages[0]
+    else {
+        panic!("Unexpected first message: {:?}", outcome.messages[0]);
+    };
+    assert_eq!(*recipient_id, ChainId::child(message_id));
+    assert_eq!(config.balance, Amount::ONE);
+    assert_eq!(config.ownership, child_ownership);
+    assert_eq!(config.committees, committees);
 }

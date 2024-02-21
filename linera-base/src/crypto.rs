@@ -271,6 +271,18 @@ impl TryFrom<&[u8]> for PublicKey {
     }
 }
 
+impl From<[u64; 4]> for PublicKey {
+    fn from(integers: [u64; 4]) -> Self {
+        PublicKey(u64_array_to_le_bytes(integers))
+    }
+}
+
+impl From<PublicKey> for [u64; 4] {
+    fn from(pub_key: PublicKey) -> Self {
+        le_bytes_to_u64_array(&pub_key.0)
+    }
+}
+
 impl FromStr for CryptoHash {
     type Err = CryptoError;
 
@@ -295,28 +307,13 @@ impl TryFrom<&[u8]> for CryptoHash {
 
 impl From<[u64; 4]> for CryptoHash {
     fn from(integers: [u64; 4]) -> Self {
-        let mut bytes = [0u8; 32];
-
-        bytes[0..8].copy_from_slice(&integers[0].to_le_bytes());
-        bytes[8..16].copy_from_slice(&integers[1].to_le_bytes());
-        bytes[16..24].copy_from_slice(&integers[2].to_le_bytes());
-        bytes[24..32].copy_from_slice(&integers[3].to_le_bytes());
-
-        CryptoHash(bytes.into())
+        CryptoHash(u64_array_to_le_bytes(integers).into())
     }
 }
 
 impl From<CryptoHash> for [u64; 4] {
     fn from(crypto_hash: CryptoHash) -> Self {
-        let bytes = crypto_hash.0;
-        let mut integers = [0u64; 4];
-
-        integers[0] = u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices"));
-        integers[1] = u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices"));
-        integers[2] = u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices"));
-        integers[3] = u64::from_le_bytes(bytes[24..32].try_into().expect("incorrect indices"));
-
-        integers
+        le_bytes_to_u64_array(&crypto_hash.0)
     }
 }
 
@@ -579,4 +576,28 @@ fn test_signatures() {
     assert!(s.check(&ts, addr2).is_err());
     assert!(s.check(&tsx, addr1).is_err());
     assert!(s.check(&foo, addr1).is_err());
+}
+
+/// Reads the `bytes` as four little-endian unsigned 64-bit integers and returns them.
+fn le_bytes_to_u64_array(bytes: &[u8]) -> [u64; 4] {
+    let mut integers = [0u64; 4];
+
+    integers[0] = u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices"));
+    integers[1] = u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices"));
+    integers[2] = u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices"));
+    integers[3] = u64::from_le_bytes(bytes[24..32].try_into().expect("incorrect indices"));
+
+    integers
+}
+
+/// Returns the bytes that represent the `integers` in little-endian.
+fn u64_array_to_le_bytes(integers: [u64; 4]) -> [u8; 32] {
+    let mut bytes = [0u8; 32];
+
+    bytes[0..8].copy_from_slice(&integers[0].to_le_bytes());
+    bytes[8..16].copy_from_slice(&integers[1].to_le_bytes());
+    bytes[16..24].copy_from_slice(&integers[2].to_le_bytes());
+    bytes[24..32].copy_from_slice(&integers[3].to_le_bytes());
+
+    bytes
 }

@@ -15,6 +15,7 @@ use super::contract_system_api as wit;
 use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::{Account, ApplicationId, ChainId, Owner},
+    ownership::ChainOwnership,
 };
 use std::fmt;
 
@@ -50,6 +51,11 @@ pub fn transfer(source: Option<Owner>, destination: Account, amount: Amount) {
 /// Claims amount from source to destination
 pub fn claim(source: Account, destination: Account, amount: Amount) {
     wit::claim(source.into(), destination.into(), amount.into())
+}
+
+/// Retrieves the owner configuration for the current chain.
+pub fn chain_ownership() -> ChainOwnership {
+    wit::chain_ownership().into()
 }
 
 /// Retrieves the current system time, i.e. the timestamp of the block in which this is called.

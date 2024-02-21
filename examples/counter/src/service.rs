@@ -95,6 +95,7 @@ mod tests {
     fn dummy_query_context() -> QueryContext {
         QueryContext {
             chain_id: ChainId([0; 4].into()),
+            next_block_height: BlockHeight(0),
         }
     }
 }

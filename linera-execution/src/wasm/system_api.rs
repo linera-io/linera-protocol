@@ -69,6 +69,21 @@ macro_rules! impl_contract_system_api {
                 BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
             }
 
+            fn chain_ownership(
+                &mut self,
+            ) -> Result<contract_system_api::ChainOwnershipResult, Self::Error> {
+                BaseRuntime::chain_ownership(self).map(Into::into)
+            }
+
+            fn open_chain(
+                &mut self,
+                chain_ownership: contract_system_api::ChainOwnershipParam,
+                balance: contract_system_api::Amount,
+            ) -> Result<contract_system_api::ChainId, Self::Error> {
+                ContractRuntime::open_chain(self, chain_ownership.into(), balance.into())
+                    .map(Into::into)
+            }
+
             fn try_call_application(
                 &mut self,
                 authenticated: bool,
