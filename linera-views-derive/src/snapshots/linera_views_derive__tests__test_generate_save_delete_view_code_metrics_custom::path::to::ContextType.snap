@@ -19,4 +19,3 @@ impl linera_views::views::RootView<custom::path::to::ContextType> for TestView {
         Ok(())
     }
 }
-

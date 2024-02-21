@@ -10,4 +10,3 @@ impl linera_views::views::ClonableView<custom::path::to::ContextType> for TestVi
         })
     }
 }
-

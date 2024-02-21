@@ -49,4 +49,3 @@ impl linera_views::views::View<custom::GenericContext<T>> for TestView {
         self.collection.clear();
     }
 }
-

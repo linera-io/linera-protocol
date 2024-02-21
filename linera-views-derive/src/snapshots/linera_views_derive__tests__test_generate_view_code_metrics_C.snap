@@ -51,4 +51,3 @@ where
         self.collection.clear();
     }
 }
-

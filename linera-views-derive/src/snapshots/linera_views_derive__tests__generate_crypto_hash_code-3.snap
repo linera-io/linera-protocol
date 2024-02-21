@@ -21,4 +21,3 @@ impl linera_views::views::CryptoHashView<CustomContext> for TestView {
         Ok(CryptoHash::new(&TestViewHash(hash)))
     }
 }
-
