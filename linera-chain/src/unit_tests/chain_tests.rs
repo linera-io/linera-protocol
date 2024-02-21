@@ -76,12 +76,12 @@ fn make_open_chain_config() -> OpenChainConfig {
         epoch: Epoch::ZERO,
         committees: iter::once((Epoch::ZERO, committee)).collect(),
         balance: Amount::from_tokens(10),
-        chain_application: None,
+        authorized_applications: None,
     }
 }
 
 #[tokio::test]
-async fn test_chain_application() {
+async fn test_authorized_applications() {
     let time = Timestamp::from(0);
     let message_id = make_admin_message_id(BlockHeight(3));
     let chain_id = ChainId::child(message_id);
@@ -98,7 +98,7 @@ async fn test_chain_application() {
 
     // Initialize the chain, with a chain application.
     let config = OpenChainConfig {
-        chain_application: Some(application_id),
+        authorized_applications: Some(iter::once(application_id).collect()),
         ..make_open_chain_config()
     };
     let message = SystemMessage::OpenChain(config).into();
@@ -120,7 +120,9 @@ async fn test_chain_application() {
         .with_incoming_message(register_app_message.clone())
         .with_simple_transfer(chain_id, Amount::ONE);
     let result = chain.execute_block(&invalid_block, time).await;
-    assert_matches!(result, Err(ChainError::ChainApplication(app_id)) if app_id == application_id);
+    assert_matches!(result, Err(ChainError::AuthorizedApplications(app_ids))
+        if app_ids == vec![application_id]
+    );
 
     // After registering, an app operation can already be used in the first block.
     application.expect_call(ExpectedCall::execute_operation(|_, _, _| {
@@ -140,7 +142,9 @@ async fn test_chain_application() {
     // In the second block, other operations are still not allowed.
     let invalid_block = make_child_block(&value).with_simple_transfer(chain_id, Amount::ONE);
     let result = chain.execute_block(&invalid_block, time).await;
-    assert_matches!(result, Err(ChainError::ChainApplication(app_id)) if app_id == application_id);
+    assert_matches!(result, Err(ChainError::AuthorizedApplications(app_ids))
+        if app_ids == vec![application_id]
+    );
 
     // But app operations continue to work.
     application.expect_call(ExpectedCall::execute_operation(|_, _, _| {

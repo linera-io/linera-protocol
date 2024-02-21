@@ -788,10 +788,13 @@ where
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
-            if let Some(app_id) = self.execution_state.system.chain_application.get() {
+            if let Some(app_ids) = self.execution_state.system.authorized_applications.get() {
                 ensure!(
-                    operation.application_id() == GenericApplicationId::User(*app_id),
-                    ChainError::ChainApplication(*app_id)
+                    operation
+                        .application_id()
+                        .user_application_id()
+                        .map_or(false, |app_id| app_ids.contains(app_id)),
+                    ChainError::AuthorizedApplications(app_ids.iter().cloned().collect())
                 );
             }
             #[cfg(with_metrics)]

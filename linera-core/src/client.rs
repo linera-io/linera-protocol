@@ -1882,7 +1882,7 @@ where
                 admin_id: self.admin_id,
                 epoch,
                 balance,
-                chain_application: None,
+                authorized_applications: None,
             };
             let operation = Operation::System(SystemOperation::OpenChain(config));
             let certificate = match self.execute_block(messages, vec![operation]).await? {

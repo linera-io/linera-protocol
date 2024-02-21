@@ -471,7 +471,7 @@ impl ClientContext {
                 admin_id: self.wallet_state.genesis_admin_chain(),
                 epoch,
                 balance,
-                chain_application: None,
+                authorized_applications: None,
             };
             let operations = iter::repeat(Operation::System(SystemOperation::OpenChain(config)))
                 .take(num_new_chains)
