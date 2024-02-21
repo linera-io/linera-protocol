@@ -13,6 +13,7 @@ use linera_base::{
     crypto::{CryptoHash, CryptoRng, PublicKey},
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId, MessageId, Owner},
+    ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::data_types::{CertificateValue, ExecutedBlock};
 use linera_core::{
@@ -26,7 +27,7 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
     system::{SystemChannel, UserData},
-    ChainOwnership, Message, ResourceControlPolicy, SystemMessage, TimeoutConfig,
+    Message, ResourceControlPolicy, SystemMessage,
 };
 use linera_service::{
     chain_listener::ClientContext as _,

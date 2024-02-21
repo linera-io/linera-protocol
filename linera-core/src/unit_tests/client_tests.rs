@@ -24,6 +24,7 @@ use linera_base::{
     crypto::*,
     data_types::*,
     identifiers::{Account, ChainDescription, ChainId, MessageId, Owner},
+    ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
     data_types::{CertificateValue, Event, ExecutedBlock, IncomingMessage, Medium, Origin},
@@ -32,8 +33,8 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{Recipient, SystemOperation, UserData},
-    ChainOwnership, ExecutionError, Message, MessageKind, Operation, ResourceControlPolicy,
-    SystemExecutionError, SystemMessage, SystemQuery, SystemResponse, TimeoutConfig,
+    ExecutionError, Message, MessageKind, Operation, ResourceControlPolicy, SystemExecutionError,
+    SystemMessage, SystemQuery, SystemResponse,
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;

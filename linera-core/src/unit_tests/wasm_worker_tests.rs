@@ -16,6 +16,7 @@ use linera_base::{
     crypto::KeyPair,
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{BytecodeId, ChainDescription, ChainId, Destination, MessageId},
+    ownership::ChainOwnership,
 };
 use linera_chain::{
     data_types::{
@@ -27,10 +28,10 @@ use linera_chain::{
 use linera_execution::{
     committee::Epoch,
     system::{SystemChannel, SystemMessage, SystemOperation},
-    Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription, ExecutionRuntimeConfig,
-    ExecutionStateView, GenericApplicationId, Message, MessageKind, Operation, OperationContext,
-    ResourceController, SystemExecutionState, UserApplicationDescription, UserApplicationId,
-    WasmContractModule, WasmRuntime,
+    Bytecode, BytecodeLocation, ChannelSubscription, ExecutionRuntimeConfig, ExecutionStateView,
+    GenericApplicationId, Message, MessageKind, Operation, OperationContext, ResourceController,
+    SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmContractModule,
+    WasmRuntime,
 };
 use linera_storage::{MemoryStorage, Storage};
 use linera_views::views::{CryptoHashView, ViewError};

@@ -18,6 +18,7 @@ use linera_base::{
     crypto::{CryptoHash, *},
     data_types::*,
     identifiers::{Account, ChainDescription, ChainId, ChannelName, Destination, MessageId, Owner},
+    ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
     data_types::{
@@ -33,9 +34,9 @@ use linera_execution::{
     system::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
     },
-    ChainOwnership, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionStateView, GenericApplicationId, Message, MessageKind, Query, Response,
-    SystemExecutionError, SystemExecutionState, SystemQuery, SystemResponse, TimeoutConfig,
+    ChannelSubscription, ExecutionError, ExecutionRuntimeConfig, ExecutionStateView,
+    GenericApplicationId, Message, MessageKind, Query, Response, SystemExecutionError,
+    SystemExecutionState, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, MemoryStorage, Storage, TestClock};
 use linera_views::{

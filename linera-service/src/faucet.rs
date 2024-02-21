@@ -9,13 +9,14 @@ use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, Timestamp},
     identifiers::{ChainId, MessageId},
+    ownership::ChainOwnership,
 };
 use linera_core::{
     client::{ChainClient, ChainClientError},
     data_types::ClientOutcome,
     node::ValidatorNodeProvider,
 };
-use linera_execution::{committee::ValidatorName, ChainOwnership};
+use linera_execution::committee::ValidatorName;
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use serde::Deserialize;

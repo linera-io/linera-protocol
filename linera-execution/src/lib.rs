@@ -8,7 +8,6 @@ pub mod committee;
 mod execution;
 mod execution_state_actor;
 mod graphql;
-mod ownership;
 mod policy;
 mod resources;
 mod runtime;
@@ -24,7 +23,6 @@ pub use applications::{
     UserApplicationId,
 };
 pub use execution::ExecutionStateView;
-pub use ownership::{ChainOwnership, TimeoutConfig};
 pub use policy::ResourceControlPolicy;
 pub use resources::{ResourceController, ResourceTracker};
 pub use system::{
