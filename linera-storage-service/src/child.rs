@@ -38,11 +38,10 @@ impl StorageServiceSpanner {
     }
 
     /// Wait for the absence of the endpoint. If a child is eliminated
-    /// then it might takes time to wait for its absence.
-    async fn wait_absence(&self) -> Result<()> {
+    /// then it might take time to wait for its absence.
+    async fn wait_for_absence(&self) -> Result<()> {
         for i in 1..10 {
-            let test = storage_service_check_absence(&self.endpoint).await?;
-            if test {
+            if storage_service_check_absence(&self.endpoint).await? {
                 return Ok(());
             }
             tokio::time::sleep(Duration::from_secs(i)).await;
@@ -51,7 +50,7 @@ impl StorageServiceSpanner {
     }
 
     pub async fn run_service(&self) -> Result<StorageServiceGuard> {
-        self.wait_absence().await?;
+        self.wait_for_absence().await?;
         let mut command = self.command().await;
         let _child = command.spawn_into()?;
         let guard = StorageServiceGuard { _child };
