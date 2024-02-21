@@ -527,6 +527,7 @@ pub mod tests {
             self.where_clause = Some(quote! {
                 where MyParam: Send + Sync + 'static,
             });
+            self.name.push_str("_with_where");
 
             self
         }

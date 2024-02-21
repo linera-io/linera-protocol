@@ -32,4 +32,3 @@ impl linera_views::views::HashableView<custom::path::to::ContextType> for TestVi
         Ok(hasher.finalize())
     }
 }
-

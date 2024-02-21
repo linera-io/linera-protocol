@@ -19,4 +19,3 @@ impl linera_views::views::RootView<custom::GenericContext<T>> for TestView {
         Ok(())
     }
 }
-

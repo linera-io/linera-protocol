@@ -3,10 +3,11 @@ source: linera-views-derive/src/lib.rs
 expression: pretty(generate_save_delete_view_code(input))
 ---
 #[async_trait::async_trait]
-impl<MyParam> linera_views::views::RootView<custom::GenericContext<T>>
-for TestView<MyParam>
+impl<C, MyParam> linera_views::views::RootView<C> for TestView<C, MyParam>
 where
     MyParam: Send + Sync + 'static,
+    C: linera_views::common::Context + Send + Sync + Clone + 'static,
+    linera_views::views::ViewError: From<C::Error>,
 {
     async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
         use linera_views::{common::Context, batch::Batch, views::View};
@@ -23,4 +24,3 @@ where
         Ok(())
     }
 }
-

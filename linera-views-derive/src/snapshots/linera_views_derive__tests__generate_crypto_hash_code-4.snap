@@ -24,4 +24,3 @@ where
         Ok(CryptoHash::new(&TestViewHash(hash)))
     }
 }
-

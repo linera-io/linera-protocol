@@ -10,4 +10,3 @@ impl<MyParam> linera_views::views::ClonableView<CustomContext> for TestView<MyPa
         })
     }
 }
-
