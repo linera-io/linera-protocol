@@ -30,7 +30,9 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    system::{AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation},
+    system::{
+        AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
+    },
     ChainOwnership, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
     ExecutionStateView, GenericApplicationId, Message, MessageKind, Query, Response,
     SystemExecutionError, SystemExecutionState, SystemQuery, SystemResponse, TimeoutConfig,
@@ -1558,13 +1560,13 @@ where
             refund_grant_to: None,
             kind: MessageKind::Protected,
             timestamp: Timestamp::from(0),
-            message: Message::System(SystemMessage::OpenChain {
+            message: Message::System(SystemMessage::OpenChain(OpenChainConfig {
                 ownership,
                 admin_id,
                 epoch,
                 committees,
                 balance,
-            }),
+            })),
         },
         action: MessageAction::Accept,
     };
@@ -2895,24 +2897,26 @@ where
         &committee,
         &worker,
         HashedValue::new_confirmed(ExecutedBlock {
-            block: make_first_block(admin_id).with_operation(SystemOperation::OpenChain {
-                ownership: ChainOwnership::single(key_pair.public()),
-                epoch: Epoch::ZERO,
-                committees: committees.clone(),
-                admin_id,
-                balance: Amount::ZERO,
-            }),
+            block: make_first_block(admin_id).with_operation(SystemOperation::OpenChain(
+                OpenChainConfig {
+                    ownership: ChainOwnership::single(key_pair.public()),
+                    epoch: Epoch::ZERO,
+                    committees: committees.clone(),
+                    admin_id,
+                    balance: Amount::ZERO,
+                },
+            )),
             messages: vec![
                 direct_outgoing_message(
                     user_id,
                     MessageKind::Protected,
-                    SystemMessage::OpenChain {
+                    SystemMessage::OpenChain(OpenChainConfig {
                         ownership: ChainOwnership::single(key_pair.public()),
                         epoch: Epoch::ZERO,
                         committees: committees.clone(),
                         admin_id,
                         balance: Amount::ZERO,
-                    },
+                    }),
                 ),
                 direct_outgoing_message(
                     admin_id,
@@ -3092,7 +3096,7 @@ where
                 .unwrap()[..],
             [
                 Event {
-                    message: Message::System(SystemMessage::OpenChain { .. }),
+                    message: Message::System(SystemMessage::OpenChain(_)),
                     ..
                 },
                 Event {
@@ -3137,13 +3141,13 @@ where
                         refund_grant_to: None,
                         kind: MessageKind::Protected,
                         timestamp: Timestamp::from(0),
-                        message: Message::System(SystemMessage::OpenChain {
+                        message: Message::System(SystemMessage::OpenChain(OpenChainConfig {
                             ownership: ChainOwnership::single(key_pair.public()),
                             epoch: Epoch::from(0),
                             committees: committees.clone(),
                             admin_id,
                             balance: Amount::ZERO,
-                        }),
+                        })),
                     },
                     action: MessageAction::Accept,
                 })

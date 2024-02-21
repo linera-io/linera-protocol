@@ -558,26 +558,13 @@ where
         timestamp: Timestamp,
         local_time: Timestamp,
     ) -> Result<bool, ChainError> {
-        let Message::System(SystemMessage::OpenChain {
-            ownership,
-            epoch,
-            committees,
-            admin_id,
-            balance,
-        }) = message
-        else {
+        let Message::System(SystemMessage::OpenChain(config)) = message else {
             return Ok(false);
         };
         // Initialize ourself.
-        self.execution_state.system.open_chain(
-            message_id,
-            ownership.clone(),
-            *epoch,
-            committees.clone(),
-            *admin_id,
-            timestamp,
-            *balance,
-        );
+        self.execution_state
+            .system
+            .open_chain(message_id, timestamp, config.clone());
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash().await?;
         self.execution_state_hash.set(Some(hash));
@@ -674,7 +661,7 @@ where
                     block.incoming_messages.first(),
                     Some(IncomingMessage {
                         event: Event {
-                            message: Message::System(SystemMessage::OpenChain { .. }),
+                            message: Message::System(SystemMessage::OpenChain(_)),
                             ..
                         },
                         action: MessageAction::Accept,
