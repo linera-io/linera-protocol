@@ -34,14 +34,14 @@ use linera_views::{
 use prometheus::IntCounterVec;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fmt::{self, Display, Formatter},
     iter,
 };
 use thiserror::Error;
 
 #[cfg(any(test, feature = "test"))]
-use {crate::applications::ApplicationRegistry, std::collections::BTreeSet};
+use crate::applications::ApplicationRegistry;
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
 pub static OPEN_CHAIN_MESSAGE_INDEX: u32 = 0;
@@ -91,8 +91,9 @@ pub struct SystemExecutionStateView<C> {
     pub registry: ApplicationRegistryView<C>,
     /// Whether this chain has been closed.
     pub closed: RegisterView<C, bool>,
-    /// An optional chain application. If set, operations are restricted to this application's.
-    pub chain_application: RegisterView<C, Option<ApplicationId>>,
+    /// An optional set of authorized applications. If set, operations are restricted to these
+    /// applications.
+    pub authorized_applications: RegisterView<C, Option<BTreeSet<ApplicationId>>>,
 }
 
 /// For testing only.
@@ -110,7 +111,7 @@ pub struct SystemExecutionState {
     pub timestamp: Timestamp,
     pub registry: ApplicationRegistry,
     pub closed: bool,
-    pub chain_application: Option<ApplicationId>,
+    pub authorized_applications: Option<BTreeSet<ApplicationId>>,
 }
 
 /// The configuration for a new chain.
@@ -121,7 +122,7 @@ pub struct OpenChainConfig {
     pub epoch: Epoch,
     pub committees: BTreeMap<Epoch, Committee>,
     pub balance: Amount,
-    pub chain_application: Option<ApplicationId>,
+    pub authorized_applications: Option<BTreeSet<ApplicationId>>,
 }
 
 /// A system operation.
@@ -947,7 +948,7 @@ where
             epoch,
             committees,
             balance,
-            chain_application,
+            authorized_applications,
         } = config;
         let description = ChainDescription::Child(message_id);
         self.description.set(Some(description));
@@ -963,7 +964,7 @@ where
         self.ownership.set(ownership);
         self.timestamp.set(timestamp);
         self.balance.set(balance);
-        self.chain_application.set(chain_application);
+        self.authorized_applications.set(authorized_applications);
     }
 
     pub async fn handle_query(
@@ -1089,7 +1090,7 @@ mod tests {
             epoch,
             admin_id,
             balance: Amount::ZERO,
-            chain_application: None,
+            authorized_applications: None,
         };
         let operation = SystemOperation::OpenChain(config.clone());
         let (result, new_application) = view

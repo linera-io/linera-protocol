@@ -582,9 +582,10 @@ OpenChainConfig:
             TYPENAME: Committee
     - balance:
         TYPENAME: Amount
-    - chain_application:
+    - authorized_applications:
         OPTION:
-          TYPENAME: ApplicationId
+          SEQ:
+            TYPENAME: ApplicationId
 Operation:
   ENUM:
     0:
