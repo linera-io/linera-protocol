@@ -41,7 +41,7 @@ macro_rules! contract {
                         application
                             .initialize(&context.into(), argument)
                             .await
-                            .map(|result| (application, result))
+                            .map(|outcome| (application, outcome))
                     },
                 )
             }
@@ -58,7 +58,7 @@ macro_rules! contract {
                         application
                             .execute_operation(&context.into(), operation)
                             .await
-                            .map(|result| (application, result))
+                            .map(|outcome| (application, outcome))
                     },
                 )
             }
@@ -75,7 +75,7 @@ macro_rules! contract {
                         application
                             .execute_message(&context.into(), message)
                             .await
-                            .map(|result| (application, result))
+                            .map(|outcome| (application, outcome))
                     },
                 )
             }
@@ -97,7 +97,7 @@ macro_rules! contract {
                         application
                             .handle_application_call(&context.into(), argument, forwarded_sessions)
                             .await
-                            .map(|result| (application, result))
+                            .map(|outcome| (application, outcome))
                     },
                 )
             }
@@ -127,7 +127,7 @@ macro_rules! contract {
                                 forwarded_sessions,
                             )
                             .await
-                            .map(|result| (application, result))
+                            .map(|outcome| (application, outcome))
                     },
                 )
             }
