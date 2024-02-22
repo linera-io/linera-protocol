@@ -24,23 +24,6 @@ wit_bindgen_guest_rust::import!("service_system_api.wit");
 #[macro_export]
 macro_rules! service {
     ($application:ty) => {
-        // Export the service interface.
-        $crate::export_service!($application);
-
-        /// Marks the service type to be exported.
-        impl $crate::service::wit_types::Service for $application {
-            fn handle_query(
-                context: $crate::service::wit_types::QueryContext,
-                argument: Vec<u8>,
-            ) -> Result<Vec<u8>, String> {
-                $crate::service::run_async_entrypoint(
-                    <
-                        <$application as $crate::Service>::Storage as $crate::ServiceStateStorage
-                    >::handle_query(context.into(), argument),
-                )
-            }
-        }
-
         #[doc(hidden)]
         #[no_mangle]
         fn __service_handle_query(
