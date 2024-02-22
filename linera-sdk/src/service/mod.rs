@@ -36,7 +36,7 @@ macro_rules! service {
                 $crate::service::run_async_entrypoint(
                     <
                         <$application as $crate::Service>::Storage as $crate::ServiceStateStorage
-                    >::handle_query(context, argument),
+                    >::handle_query(context.into(), argument),
                 )
             }
         }
