@@ -144,6 +144,15 @@ macro_rules! contract {
         /// than WebAssembly.
         #[cfg(not(target_arch = "wasm32"))]
         fn main() {}
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __service_handle_query(
+            context: $crate::QueryContext,
+            argument: Vec<u8>,
+        ) -> Result<Vec<u8>, String> {
+            unreachable!("Service entrypoint should not be called in contract");
+        }
     };
 }
 
