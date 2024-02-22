@@ -45,6 +45,54 @@ macro_rules! service {
         /// than WebAssembly.
         #[cfg(not(target_arch = "wasm32"))]
         fn main() {}
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_initialize(
+            _: $crate::OperationContext,
+            _: Vec<u8>,
+        ) -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
+            unreachable!("Contract entrypoint should not be called in service");
+        }
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_execute_operation(
+            _: $crate::OperationContext,
+            _: Vec<u8>,
+        ) -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
+            unreachable!("Contract entrypoint should not be called in service");
+        }
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_execute_message(
+            context: $crate::MessageContext,
+            message: Vec<u8>,
+        ) -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
+            unreachable!("Contract entrypoint should not be called in service");
+        }
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_handle_application_call(
+            _: $crate::CalleeContext,
+            _: Vec<u8>,
+            _: Vec<$crate::contract::wit_types::SessionId>,
+        ) -> Result<$crate::ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String> {
+            unreachable!("Contract entrypoint should not be called in service");
+        }
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_handle_session_call(
+            _: $crate::CalleeContext,
+            _: Vec<u8>,
+            _: Vec<u8>,
+            _: Vec<$crate::SessionId>,
+        ) -> Result<$crate::SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String> {
+            unreachable!("Contract entrypoint should not be called in service");
+        }
     };
 }
 
