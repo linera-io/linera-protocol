@@ -932,7 +932,7 @@ where
     }
 
     /// Initializes the system application state on a newly opened chain.
-    pub fn open_chain(
+    pub fn initialize_chain(
         &mut self,
         message_id: MessageId,
         timestamp: Timestamp,

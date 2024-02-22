@@ -568,7 +568,7 @@ where
         // Initialize ourself.
         self.execution_state
             .system
-            .open_chain(message_id, timestamp, config.clone());
+            .initialize_chain(message_id, timestamp, config.clone());
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash().await?;
         self.execution_state_hash.set(Some(hash));
