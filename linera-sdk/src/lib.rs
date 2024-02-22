@@ -55,7 +55,7 @@ use async_trait::async_trait;
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     data_types::BlockHeight,
-    identifiers::{ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId},
+    identifiers::{ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{error::Error, fmt::Debug, sync::Arc};
@@ -65,7 +65,7 @@ pub use self::{
     log::{ContractLogger, ServiceLogger},
     service::ServiceStateStorage,
 };
-pub use linera_base::{abi, data_types::Resources, ensure};
+pub use linera_base::{abi, data_types::Resources, ensure, identifiers::SessionId};
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
 

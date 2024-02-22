@@ -11,7 +11,10 @@ pub mod wit_types;
 
 pub use self::storage::ContractStateStorage;
 use super::log::ContractLogger;
-use crate::{util::BlockingWait, Contract};
+use crate::{
+    util::BlockingWait, ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome,
+    MessageContext, OperationContext, SessionCallOutcome, SessionId,
+};
 use std::future::Future;
 
 // Import the system interface.
@@ -133,6 +136,118 @@ macro_rules! contract {
             }
         }
 
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_initialize(
+            context: $crate::OperationContext,
+            argument: Vec<u8>,
+        ) -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
+            $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
+                move |mut application| async move {
+                    let argument = serde_json::from_slice(&argument)?;
+
+                    application
+                        .initialize(&context.into(), argument)
+                        .await
+                        .map(|outcome| (application, outcome.into_raw()))
+                },
+            )
+        }
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_execute_operation(
+            context: $crate::OperationContext,
+            operation: Vec<u8>,
+        ) -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
+            $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
+                move |mut application| async move {
+                    let operation: <$application as $crate::abi::ContractAbi>::Operation =
+                        bcs::from_bytes(&operation)?;
+
+                    application
+                        .execute_operation(&context.into(), operation)
+                        .await
+                        .map(|outcome| (application, outcome.into_raw()))
+                },
+            )
+        }
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_execute_message(
+            context: $crate::MessageContext,
+            message: Vec<u8>,
+        ) -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
+            $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
+                move |mut application| async move {
+                    let message: <$application as $crate::abi::ContractAbi>::Message =
+                        bcs::from_bytes(&message)?;
+
+                    application
+                        .execute_message(&context.into(), message)
+                        .await
+                        .map(|outcome| (application, outcome.into_raw()))
+                },
+            )
+        }
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_handle_application_call(
+            context: $crate::CalleeContext,
+            argument: Vec<u8>,
+            forwarded_sessions: Vec<$crate::contract::wit_types::SessionId>,
+        ) -> Result<$crate::ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String> {
+            $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
+                move |mut application| async move {
+                    let argument: <$application as $crate::abi::ContractAbi>::ApplicationCall =
+                        bcs::from_bytes(&argument)?;
+                    let forwarded_sessions = forwarded_sessions
+                        .into_iter()
+                        .map(SessionId::from)
+                        .collect();
+
+                    application
+                        .handle_application_call(&context.into(), argument, forwarded_sessions)
+                        .await
+                        .map(|outcome| (application, outcome.into_raw()))
+                },
+            )
+        }
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_handle_session_call(
+            context: $crate::CalleeContext,
+            session_state: Vec<u8>,
+            argument: Vec<u8>,
+            forwarded_sessions: Vec<$crate::SessionId>,
+        ) -> Result<$crate::SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String> {
+            $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
+                move |mut application| async move {
+                    let session_state: <$application as $crate::abi::ContractAbi>::SessionState =
+                        bcs::from_bytes(&session_state)?;
+                    let argument: <$application as $crate::abi::ContractAbi>::SessionCall =
+                        bcs::from_bytes(&argument)?;
+                    let forwarded_sessions = forwarded_sessions
+                        .into_iter()
+                        .map(SessionId::from)
+                        .collect();
+
+                    application
+                        .handle_session_call(
+                            &context.into(),
+                            session_state,
+                            argument,
+                            forwarded_sessions,
+                        )
+                        .await
+                        .map(|outcome| (application, outcome.into_raw()))
+                },
+            )
+        }
+
         /// Stub of a `main` entrypoint so that the binary doesn't fail to compile on targets other
         /// than WebAssembly.
         #[cfg(not(target_arch = "wasm32"))]
@@ -157,4 +272,35 @@ where
         .blocking_wait()
         .map(|output| output.into())
         .map_err(|error| error.to_string())
+}
+
+// Import entrypoint proxy functions that applications implement with the `contract!` macro.
+extern "Rust" {
+    fn __contract_initialize(
+        context: OperationContext,
+        argument: Vec<u8>,
+    ) -> Result<ExecutionOutcome<Vec<u8>>, String>;
+
+    fn __contract_execute_operation(
+        context: OperationContext,
+        argument: Vec<u8>,
+    ) -> Result<ExecutionOutcome<Vec<u8>>, String>;
+
+    fn __contract_execute_message(
+        context: MessageContext,
+        message: Vec<u8>,
+    ) -> Result<ExecutionOutcome<Vec<u8>>, String>;
+
+    fn __contract_handle_application_call(
+        context: CalleeContext,
+        argument: Vec<u8>,
+        forwarded_sessions: Vec<SessionId>,
+    ) -> Result<ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String>;
+
+    fn __contract_handle_session_call(
+        context: CalleeContext,
+        argument: Vec<u8>,
+        session_state: Vec<u8>,
+        forwarded_sessions: Vec<SessionId>,
+    ) -> Result<SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String>;
 }
