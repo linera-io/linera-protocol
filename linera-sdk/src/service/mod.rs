@@ -10,7 +10,7 @@ pub mod system_api;
 pub mod wit_types;
 
 pub use self::storage::ServiceStateStorage;
-use crate::{util::BlockingWait, ServiceLogger};
+use crate::{util::BlockingWait, QueryContext, ServiceLogger};
 use std::future::Future;
 
 // Import the system interface.
@@ -39,6 +39,19 @@ macro_rules! service {
                     >::handle_query(context.into(), argument),
                 )
             }
+        }
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __service_handle_query(
+            context: $crate::QueryContext,
+            argument: Vec<u8>,
+        ) -> Result<Vec<u8>, String> {
+            $crate::service::run_async_entrypoint(
+                <
+                    <$application as $crate::Service>::Storage as $crate::ServiceStateStorage
+                >::handle_query(context, argument),
+            )
         }
 
         /// Stub of a `main` entrypoint so that the binary doesn't fail to compile on targets other
@@ -112,4 +125,9 @@ where
         .blocking_wait()
         .map(|output| output.into())
         .map_err(|error| error.to_string())
+}
+
+// Import entrypoint proxy functions that applications implement with the `service!` macro.
+extern "Rust" {
+    fn __service_handle_query(context: QueryContext, argument: Vec<u8>) -> Result<Vec<u8>, String>;
 }
