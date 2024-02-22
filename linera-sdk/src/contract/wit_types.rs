@@ -6,9 +6,75 @@
 #![allow(missing_docs)]
 
 // Export the contract interface.
-wit_bindgen_guest_rust::export!(
-    export_macro = "export_contract"
-    types_path = "contract::wit_types"
-    reexported_crate_path = "wit_bindgen_guest_rust"
-    "contract.wit"
-);
+wit_bindgen_guest_rust::export!("contract.wit");
+
+pub use self::contract::{
+    ApplicationCallOutcome, ApplicationId, BlockHeight, BytecodeId, CalleeContext, ChainId,
+    ChannelName, CryptoHash, Destination, ExecutionOutcome, MessageContext, MessageId,
+    OperationContext, OutgoingMessage, Owner, Resources, SessionCallOutcome, SessionId,
+    SessionState,
+};
+use super::{
+    __contract_execute_message, __contract_execute_operation, __contract_handle_application_call,
+    __contract_handle_session_call, __contract_initialize,
+};
+
+/// Implementation of the contract WIT entrypoints.
+pub struct Contract;
+
+impl contract::Contract for Contract {
+    fn initialize(
+        context: OperationContext,
+        argument: Vec<u8>,
+    ) -> Result<ExecutionOutcome, String> {
+        let context = context.into();
+        unsafe { __contract_initialize(context, argument) }.map(|outcome| outcome.into())
+    }
+
+    fn execute_operation(
+        context: OperationContext,
+        operation: Vec<u8>,
+    ) -> Result<ExecutionOutcome, String> {
+        let context = context.into();
+        unsafe { __contract_execute_operation(context, operation) }.map(|outcome| outcome.into())
+    }
+
+    fn execute_message(
+        context: MessageContext,
+        message: Vec<u8>,
+    ) -> Result<ExecutionOutcome, String> {
+        let context = context.into();
+        unsafe { __contract_execute_message(context, message) }.map(|outcome| outcome.into())
+    }
+
+    fn handle_application_call(
+        context: CalleeContext,
+        argument: Vec<u8>,
+        forwarded_sessions: Vec<SessionId>,
+    ) -> Result<ApplicationCallOutcome, String> {
+        let context = context.into();
+        let forwarded_sessions = forwarded_sessions
+            .into_iter()
+            .map(|session_id| session_id.into())
+            .collect();
+        unsafe { __contract_handle_application_call(context, argument, forwarded_sessions) }
+            .map(|outcome| outcome.into())
+    }
+
+    fn handle_session_call(
+        context: CalleeContext,
+        argument: Vec<u8>,
+        session_state: Vec<u8>,
+        forwarded_sessions: Vec<SessionId>,
+    ) -> Result<SessionCallOutcome, String> {
+        let context = context.into();
+        let forwarded_sessions = forwarded_sessions
+            .into_iter()
+            .map(|session_id| session_id.into())
+            .collect();
+        unsafe {
+            __contract_handle_session_call(context, argument, session_state, forwarded_sessions)
+        }
+        .map(|outcome| outcome.into())
+    }
+}
