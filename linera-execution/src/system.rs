@@ -466,49 +466,9 @@ where
         let mut new_application = None;
         match operation {
             OpenChain(config) => {
-                let child_id = ChainId::child(context.next_message_id());
-                ensure!(
-                    self.admin_id.get().as_ref() == Some(&config.admin_id),
-                    SystemExecutionError::InvalidNewChainAdminId(child_id)
-                );
-                let admin_id = config.admin_id;
-                ensure!(
-                    self.committees.get() == &config.committees,
-                    SystemExecutionError::InvalidCommittees
-                );
-                ensure!(
-                    self.epoch.get().as_ref() == Some(&config.epoch),
-                    SystemExecutionError::InvalidEpoch {
-                        chain_id: child_id,
-                        epoch: config.epoch,
-                    }
-                );
-                let balance = self.balance.get_mut();
-                balance
-                    .try_sub_assign(config.balance)
-                    .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
-                let e1 = RawOutgoingMessage {
-                    destination: Destination::Recipient(child_id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
-                    message: SystemMessage::OpenChain(config),
-                };
-                let subscription = ChannelSubscription {
-                    chain_id: admin_id,
-                    name: SystemChannel::Admin.name(),
-                };
-                let e2 = RawOutgoingMessage {
-                    destination: Destination::Recipient(admin_id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
-                    message: SystemMessage::Subscribe {
-                        id: child_id,
-                        subscription,
-                    },
-                };
-                outcome.messages.extend([e1, e2]);
+                let next_message_id = context.next_message_id();
+                let messages = self.open_chain(config, next_message_id)?;
+                outcome.messages.extend(messages);
                 #[cfg(with_metrics)]
                 OPEN_CHAIN_COUNT.with_label_values(&[]).inc();
             }
@@ -977,6 +937,58 @@ where
             balance: *self.balance.get(),
         };
         Ok(response)
+    }
+
+    /// Returns the messages to open a new chain, and subtracts the new chain's balance
+    /// from this chain's.
+    pub fn open_chain(
+        &mut self,
+        config: OpenChainConfig,
+        next_message_id: MessageId,
+    ) -> Result<[RawOutgoingMessage<SystemMessage, Amount>; 2], SystemExecutionError> {
+        let child_id = ChainId::child(next_message_id);
+        ensure!(
+            self.admin_id.get().as_ref() == Some(&config.admin_id),
+            SystemExecutionError::InvalidNewChainAdminId(child_id)
+        );
+        let admin_id = config.admin_id;
+        ensure!(
+            self.committees.get() == &config.committees,
+            SystemExecutionError::InvalidCommittees
+        );
+        ensure!(
+            self.epoch.get().as_ref() == Some(&config.epoch),
+            SystemExecutionError::InvalidEpoch {
+                chain_id: child_id,
+                epoch: config.epoch,
+            }
+        );
+        let balance = self.balance.get_mut();
+        balance
+            .try_sub_assign(config.balance)
+            .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
+        let open_chain_message = RawOutgoingMessage {
+            destination: Destination::Recipient(child_id),
+            authenticated: false,
+            grant: Amount::ZERO,
+            kind: MessageKind::Protected,
+            message: SystemMessage::OpenChain(config),
+        };
+        let subscription = ChannelSubscription {
+            chain_id: admin_id,
+            name: SystemChannel::Admin.name(),
+        };
+        let subscribe_message = RawOutgoingMessage {
+            destination: Destination::Recipient(admin_id),
+            authenticated: false,
+            grant: Amount::ZERO,
+            kind: MessageKind::Protected,
+            message: SystemMessage::Subscribe {
+                id: child_id,
+                subscription,
+            },
+        };
+        Ok([open_chain_message, subscribe_message])
     }
 }
 
