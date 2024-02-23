@@ -11,8 +11,6 @@ use linera_base::{
     data_types::Resources,
     identifiers::{ApplicationId, ChannelName, Destination, MessageId, SessionId},
 };
-use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Debug;
 
 impl From<CryptoHash> for wit_system_api::CryptoHash {
     fn from(hash_value: CryptoHash) -> Self {
@@ -80,66 +78,33 @@ impl From<log::Level> for wit_system_api::LogLevel {
     }
 }
 
-impl<Message, Value, SessionState> From<ApplicationCallOutcome<Message, Value, SessionState>>
-    for wit_types::ApplicationCallOutcome
-where
-    Message: Serialize + DeserializeOwned + Debug,
-    Value: Serialize,
-    SessionState: Serialize,
-{
-    fn from(outcome: ApplicationCallOutcome<Message, Value, SessionState>) -> Self {
-        // TODO(#743): Do we need explicit error handling?
-        let value = bcs::to_bytes(&outcome.value)
-            .expect("failed to serialize Value for ApplicationCallOutcome");
-
-        let create_sessions = outcome
-            .create_sessions
-            .into_iter()
-            .map(|v| {
-                bcs::to_bytes(&v)
-                    .expect("failed to serialize session state for ApplicationCallOutcome")
-            })
-            .collect();
-
+impl From<ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>> for wit_types::ApplicationCallOutcome {
+    fn from(outcome: ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>) -> Self {
         wit_types::ApplicationCallOutcome {
-            value,
+            value: outcome.value,
             execution_outcome: outcome.execution_outcome.into(),
-            create_sessions,
+            create_sessions: outcome.create_sessions,
         }
     }
 }
 
-impl<Message, Value, SessionState> From<SessionCallOutcome<Message, Value, SessionState>>
-    for wit_types::SessionCallOutcome
-where
-    Message: Serialize + DeserializeOwned + Debug,
-    Value: Serialize,
-    SessionState: Serialize,
-{
-    fn from(outcome: SessionCallOutcome<Message, Value, SessionState>) -> Self {
-        // TODO(#743): Do we need explicit error handling?
-        let new_state = outcome.new_state.map(|state| {
-            bcs::to_bytes(&state).expect("failed to serialize Value for SessionCallOutcome")
-        });
-
+impl From<SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>> for wit_types::SessionCallOutcome {
+    fn from(outcome: SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>) -> Self {
         wit_types::SessionCallOutcome {
             inner: outcome.inner.into(),
-            new_state,
+            new_state: outcome.new_state,
         }
     }
 }
 
-impl<Message> From<OutgoingMessage<Message>> for wit_types::OutgoingMessage
-where
-    Message: Debug + Serialize + DeserializeOwned,
-{
-    fn from(message: OutgoingMessage<Message>) -> Self {
+impl From<OutgoingMessage<Vec<u8>>> for wit_types::OutgoingMessage {
+    fn from(message: OutgoingMessage<Vec<u8>>) -> Self {
         Self {
             destination: message.destination.into(),
             authenticated: message.authenticated,
             is_tracked: message.is_tracked,
             resources: message.resources.into(),
-            message: bcs::to_bytes(&message.message).expect("message serialization failed"),
+            message: message.message,
         }
     }
 }
@@ -159,11 +124,8 @@ impl From<Resources> for wit_types::Resources {
     }
 }
 
-impl<Message> From<ExecutionOutcome<Message>> for wit_types::ExecutionOutcome
-where
-    Message: Debug + Serialize + DeserializeOwned,
-{
-    fn from(outcome: ExecutionOutcome<Message>) -> Self {
+impl From<ExecutionOutcome<Vec<u8>>> for wit_types::ExecutionOutcome {
+    fn from(outcome: ExecutionOutcome<Vec<u8>>) -> Self {
         let messages = outcome
             .messages
             .into_iter()

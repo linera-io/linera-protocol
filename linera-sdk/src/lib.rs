@@ -55,7 +55,7 @@ use async_trait::async_trait;
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     data_types::BlockHeight,
-    identifiers::{ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId},
+    identifiers::{ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{error::Error, fmt::Debug, sync::Arc};
@@ -65,7 +65,7 @@ pub use self::{
     log::{ContractLogger, ServiceLogger},
     service::ServiceStateStorage,
 };
-pub use linera_base::{abi, data_types::Resources, ensure};
+pub use linera_base::{abi, data_types::Resources, ensure, identifiers::SessionId};
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
 
@@ -382,6 +382,24 @@ pub struct OutgoingMessage<Message> {
     pub message: Message,
 }
 
+impl<Message> OutgoingMessage<Message>
+where
+    Message: Serialize,
+{
+    /// Serializes the internal `Message` type into raw bytes.
+    pub fn into_raw(self) -> OutgoingMessage<Vec<u8>> {
+        let message = bcs::to_bytes(&self.message).expect("Failed to serialize message");
+
+        OutgoingMessage {
+            destination: self.destination,
+            authenticated: self.authenticated,
+            is_tracked: self.is_tracked,
+            resources: self.resources,
+            message,
+        }
+    }
+}
+
 /// Externally visible results of an execution. These results are meant in the context of
 /// the application that created them.
 #[derive(Debug, Deserialize, Serialize)]
@@ -476,6 +494,22 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
         });
         self
     }
+
+    /// Converts this [`ExecutionOutcome`] into a raw [`ExecutionOutcome`], by serializing the
+    /// messages.
+    pub fn into_raw(self) -> ExecutionOutcome<Vec<u8>> {
+        let messages = self
+            .messages
+            .into_iter()
+            .map(OutgoingMessage::into_raw)
+            .collect();
+
+        ExecutionOutcome {
+            messages,
+            subscribe: self.subscribe,
+            unsubscribe: self.unsubscribe,
+        }
+    }
 }
 
 /// The result of calling into an application.
@@ -503,6 +537,32 @@ where
     }
 }
 
+impl<Message, Value, SessionState> ApplicationCallOutcome<Message, Value, SessionState>
+where
+    Message: Debug + DeserializeOwned + Serialize,
+    Value: Serialize,
+    SessionState: Serialize,
+{
+    /// Serializes the internal `Message`, `Value` and `SessionState` types into raw bytes.
+    pub fn into_raw(self) -> ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>> {
+        let value = bcs::to_bytes(&self.value)
+            .expect("Failed to serialize `ApplicationCallOutcome`'s `Value`");
+        let create_sessions = self
+            .create_sessions
+            .into_iter()
+            .map(|session_state| {
+                bcs::to_bytes(&session_state).expect("Failed to serialize the session state")
+            })
+            .collect();
+
+        ApplicationCallOutcome {
+            value,
+            execution_outcome: self.execution_outcome.into_raw(),
+            create_sessions,
+        }
+    }
+}
+
 /// The result of calling into a session.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SessionCallOutcome<Message, Value, SessionState> {
@@ -511,4 +571,23 @@ pub struct SessionCallOutcome<Message, Value, SessionState> {
     /// The new state of the session, if any. `None` means that the session was consumed
     /// by the call.
     pub new_state: Option<SessionState>,
+}
+
+impl<Message, Value, SessionState> SessionCallOutcome<Message, Value, SessionState>
+where
+    Message: Debug + DeserializeOwned + Serialize,
+    Value: Serialize,
+    SessionState: Serialize,
+{
+    /// Serializes the internal `Message`, `Value` and `SessionState` types into raw bytes.
+    pub fn into_raw(self) -> SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>> {
+        let new_state = self.new_state.map(|session_state| {
+            bcs::to_bytes(&session_state).expect("Failed to serialize new session state")
+        });
+
+        SessionCallOutcome {
+            inner: self.inner.into_raw(),
+            new_state,
+        }
+    }
 }

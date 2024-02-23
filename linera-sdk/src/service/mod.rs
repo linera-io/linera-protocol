@@ -10,7 +10,7 @@ pub mod system_api;
 pub mod wit_types;
 
 pub use self::storage::ServiceStateStorage;
-use crate::{util::BlockingWait, ServiceLogger};
+use crate::{util::BlockingWait, QueryContext, ServiceLogger};
 use std::future::Future;
 
 // Import the system interface.
@@ -24,27 +24,71 @@ wit_bindgen_guest_rust::import!("service_system_api.wit");
 #[macro_export]
 macro_rules! service {
     ($application:ty) => {
-        // Export the service interface.
-        $crate::export_service!($application);
-
-        /// Marks the service type to be exported.
-        impl $crate::service::wit_types::Service for $application {
-            fn handle_query(
-                context: $crate::service::wit_types::QueryContext,
-                argument: Vec<u8>,
-            ) -> Result<Vec<u8>, String> {
-                $crate::service::run_async_entrypoint(
-                    <
-                        <$application as $crate::Service>::Storage as $crate::ServiceStateStorage
-                    >::handle_query(context, argument),
-                )
-            }
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __service_handle_query(
+            context: $crate::QueryContext,
+            argument: Vec<u8>,
+        ) -> Result<Vec<u8>, String> {
+            $crate::service::run_async_entrypoint(
+                <
+                    <$application as $crate::Service>::Storage as $crate::ServiceStateStorage
+                >::handle_query(context, argument),
+            )
         }
 
         /// Stub of a `main` entrypoint so that the binary doesn't fail to compile on targets other
         /// than WebAssembly.
         #[cfg(not(target_arch = "wasm32"))]
         fn main() {}
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_initialize(
+            _: $crate::OperationContext,
+            _: Vec<u8>,
+        ) -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
+            unreachable!("Contract entrypoint should not be called in service");
+        }
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_execute_operation(
+            _: $crate::OperationContext,
+            _: Vec<u8>,
+        ) -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
+            unreachable!("Contract entrypoint should not be called in service");
+        }
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_execute_message(
+            context: $crate::MessageContext,
+            message: Vec<u8>,
+        ) -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
+            unreachable!("Contract entrypoint should not be called in service");
+        }
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_handle_application_call(
+            _: $crate::CalleeContext,
+            _: Vec<u8>,
+            _: Vec<$crate::contract::wit_types::SessionId>,
+        ) -> Result<$crate::ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String> {
+            unreachable!("Contract entrypoint should not be called in service");
+        }
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_handle_session_call(
+            _: $crate::CalleeContext,
+            _: Vec<u8>,
+            _: Vec<u8>,
+            _: Vec<$crate::SessionId>,
+        ) -> Result<$crate::SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String> {
+            unreachable!("Contract entrypoint should not be called in service");
+        }
     };
 }
 
@@ -64,4 +108,9 @@ where
         .blocking_wait()
         .map(|output| output.into())
         .map_err(|error| error.to_string())
+}
+
+// Import entrypoint proxy functions that applications implement with the `service!` macro.
+extern "Rust" {
+    fn __service_handle_query(context: QueryContext, argument: Vec<u8>) -> Result<Vec<u8>, String>;
 }
