@@ -6,46 +6,59 @@
 
 # Linera
 
-This repository is used to develop the main protocol behind Linera. Linera is a
-decentralized blockchain infrastructure optimized for low-latency user interactions at scale.
+This repository is dedicated to the development of the Linera protocol, a decentralized
+blockchain infrastructure designed for low-latency, highly-scalable Web3 applications.
 
-To learn more about the Linera protocol, you may read
-
-* our [developer manual](https://linera.dev), and
-
-* our [whitepaper](https://linera.io/whitepaper).
+To learn more about the Linera protocol, you may visit our [developer page](https://linera.dev)
+and read our [whitepaper](https://linera.io/whitepaper).
 
 
 ## Repository Structure
 
-The main crates and directories of this repository can be summarized as follows: (listed from low to high level in the dependency graph)
+The main crates and directories of this repository can be summarized as follows: (listed
+from low to high levels in the dependency graph)
 
-* [`linera-base`](https://linera-io.github.io/linera-protocol/linera_base/index.html) Base definitions, including cryptography.
+* [`linera-base`](https://linera-io.github.io/linera-protocol/linera_base/index.html) Base
+  definitions, including cryptography.
 
-* [`linera-version`](https://linera-io.github.io/linera-protocol/linera_version/index.html) A library to manage version infos in binaries and services.
+* [`linera-version`](https://linera-io.github.io/linera-protocol/linera_version/index.html)
+  A library to manage version infos in binaries and services.
 
-* [`linera-views`](https://linera-io.github.io/linera-protocol/linera_views/index.html) A library mapping complex data structures onto a key-value store. The corresponding procedural macros are implemented in `linera-views-derive`.
+* [`linera-views`](https://linera-io.github.io/linera-protocol/linera_views/index.html) A
+  library mapping complex data structures onto a key-value store. The corresponding
+  procedural macros are implemented in `linera-views-derive`.
 
-* [`linera-execution`](https://linera-io.github.io/linera-protocol/linera_execution/index.html) Persistent data and the corresponding logics for runtime and execution of smart contracts / applications.
+* [`linera-execution`](https://linera-io.github.io/linera-protocol/linera_execution/index.html)
+  Persistent data and the corresponding logics for runtime and execution of Linera
+  applications.
 
-* [`linera-chain`](https://linera-io.github.io/linera-protocol/linera_chain/index.html) Persistent data and the corresponding logics for chains of blocks, certificates, and cross-chain messaging.
+* [`linera-chain`](https://linera-io.github.io/linera-protocol/linera_chain/index.html)
+  Persistent data and the corresponding logics for chains of blocks, certificates, and
+  cross-chain messaging.
 
-* [`linera-storage`](https://linera-io.github.io/linera-protocol/linera_storage/index.html) Defines the storage abstractions for the protocol on top of `linera-chain`.
+* [`linera-storage`](https://linera-io.github.io/linera-protocol/linera_storage/index.html)
+  Defines the storage abstractions for the protocol on top of `linera-chain`.
 
-* [`linera-core`](https://linera-io.github.io/linera-protocol/linera_core/index.html) The core Linera protocol, including client and server logic, node synchronization, etc.
+* [`linera-core`](https://linera-io.github.io/linera-protocol/linera_core/index.html) The
+  core Linera protocol, including client and server logic, node synchronization, etc.
 
-* [`linera-rpc`](https://linera-io.github.io/linera-protocol/linera_rpc/index.html) Defines the data-type for RPC messages (currently all client<->proxy<->chain<->chain interactions), and track the corresponding data schemas.
+* [`linera-rpc`](https://linera-io.github.io/linera-protocol/linera_rpc/index.html)
+  Defines the data-type for RPC messages (currently all client &#x2194; proxy &#x2194;
+  chain &#x2194; chain interactions), and track the corresponding data schemas.
 
-* [`linera-service`](https://linera-io.github.io/linera-protocol/linera_service/index.html) Executable for clients (aka CLI wallets), proxy (aka validator frontend) and servers.
+* [`linera-service`](https://linera-io.github.io/linera-protocol/linera_service/index.html)
+  Executable for clients (aka CLI wallets), proxy (aka validator frontend) and servers.
 
-* [`linera-sdk`](https://linera-io.github.io/linera-protocol/linera_sdk/index.html) The library to develop Linera applications written in Rust for the Wasm virtual machine.
+* [`linera-sdk`](https://linera-io.github.io/linera-protocol/linera_sdk/index.html) The
+  library to develop Linera applications written in Rust for the Wasm virtual machine. The
+  corresponding procedural macros are implemented in `linera-sdk-derive`.
 
 * [`examples`](./examples) Examples of Linera applications written in Rust.
 
 
 ## Quickstart with the Linera service CLI
 
-The following commands set up a local test network and run a few transfers between
+The following commands set up a local test network and run some transfers between the
 microchains owned by a single wallet.
 
 ```bash
@@ -57,9 +70,8 @@ export PATH="$PWD/target/debug:$PATH"
 source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 
 # Run a local test network with the default parameters and a number of microchains
-# owned by the default wallet.
-
-# The helper function will set the two environment variables LINERA_{WALLET,STORAGE}.
+# owned by the default wallet. (The helper function `linera_spawn_and_read_wallet_variables`
+# is used to set the two environment variables LINERA_{WALLET,STORAGE}.)
 linera_spawn_and_read_wallet_variables \
 linera net up
 
