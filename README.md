@@ -18,13 +18,13 @@ To learn more about the Linera protocol, you may read
 
 ## Repository Structure
 
-This repository is broken down into the following main crates and subdirectories: (from low-level to high-level in the dependency graph)
+The main crates and directories of this repository can be summarized as follows: (listed from low to high level in the dependency graph)
 
 * [`linera-base`](https://linera-io.github.io/linera-protocol/linera_base/index.html) Base definitions, including cryptography.
 
 * [`linera-version`](https://linera-io.github.io/linera-protocol/linera_version/index.html) A library to manage version infos in binaries and services.
 
-* [`linera-views`](https://linera-io.github.io/linera-protocol/linera_views/index.html) A library mapping complex data structures onto a key-value store. The corresponding procedural macros are implemented in `linera-view-derive`.
+* [`linera-views`](https://linera-io.github.io/linera-protocol/linera_views/index.html) A library mapping complex data structures onto a key-value store. The corresponding procedural macros are implemented in `linera-views-derive`.
 
 * [`linera-execution`](https://linera-io.github.io/linera-protocol/linera_execution/index.html) Persistent data and the corresponding logics for runtime and execution of smart contracts / applications.
 
@@ -42,6 +42,7 @@ This repository is broken down into the following main crates and subdirectories
 
 * [`examples`](./examples) Examples of Linera applications written in Rust.
 
+
 ## Quickstart with the Linera service CLI
 
 The following commands set up a local test network and run a few transfers between
@@ -57,14 +58,15 @@ source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 
 # Run a local test network with the default parameters and a number of microchains
 # owned by the default wallet.
-# The helper function will set the 2 environment variables LINERA_{WALLET,STORAGE}.
+
+# The helper function will set the two environment variables LINERA_{WALLET,STORAGE}.
 linera_spawn_and_read_wallet_variables \
 linera net up
 
 # Print the set of validators.
 linera query-validators
 
-# Query the default balance (aka the "chain balance") of some of the chains.
+# Query the chain balance of some of the chains.
 CHAIN1="e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
 CHAIN2="256e1dbc00482ddd619c293cc0df94d366afe7980022bb22d99e33036fd465dd"
 linera query-balance "$CHAIN1"
