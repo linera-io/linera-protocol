@@ -89,7 +89,7 @@ macro_rules! contract {
         fn __contract_handle_application_call(
             context: $crate::CalleeContext,
             argument: Vec<u8>,
-            forwarded_sessions: Vec<$crate::contract::wit_types::SessionId>,
+            forwarded_sessions: Vec<$crate::SessionId>,
         ) -> Result<$crate::ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String> {
             $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
                 move |mut application| async move {
