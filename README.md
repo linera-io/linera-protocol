@@ -7,7 +7,7 @@
 # Linera
 
 This repository is dedicated to the development of the Linera protocol, a decentralized
-blockchain infrastructure designed for low-latency, highly-scalable Web3 applications.
+blockchain infrastructure designed for highly scalable, low-latency Web3 applications.
 
 To learn more about the Linera protocol, you may visit our [developer page](https://linera.dev)
 and read our [whitepaper](https://linera.io/whitepaper).
