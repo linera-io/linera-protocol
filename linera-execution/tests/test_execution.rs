@@ -24,6 +24,16 @@ use linera_execution::{
 use linera_views::batch::Batch;
 use std::{collections::BTreeMap, vec};
 
+fn make_operation_context() -> OperationContext {
+    OperationContext {
+        chain_id: ChainId::root(0),
+        height: BlockHeight(0),
+        index: 0,
+        authenticated_signer: None,
+        next_message_index: 0,
+    }
+}
+
 #[tokio::test]
 async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
@@ -33,13 +43,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     let (app_id, app_desc) =
         &create_dummy_user_application_registrations(&mut view.system.registry, 1).await?[0];
 
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 0,
-    };
+    let context = make_operation_context();
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -143,11 +147,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     ));
 
     let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
         authenticated_signer: Some(owner),
-        next_message_index: 0,
+        ..make_operation_context()
     };
     let mut controller = ResourceController::default();
     let outcomes = view
@@ -242,13 +243,7 @@ async fn test_leaking_session() -> anyhow::Result<()> {
         },
     ));
 
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 0,
-    };
+    let context = make_operation_context();
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -309,13 +304,7 @@ async fn test_simple_session() -> anyhow::Result<()> {
         },
     ));
 
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 0,
-    };
+    let context = make_operation_context();
     let mut controller = ResourceController::default();
     let outcomes = view
         .execute_operation(
@@ -389,13 +378,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
         },
     ));
 
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 0,
-    };
+    let context = make_operation_context();
     let mut controller = ResourceController::default();
     assert_matches!(
         view.execute_operation(
@@ -442,13 +425,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
         }
     }));
 
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 0,
-    };
+    let context = make_operation_context();
     let mut controller = ResourceController::default();
     let outcomes = view
         .execute_operation(
@@ -547,13 +524,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         }
     }));
 
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 0,
-    };
+    let context = make_operation_context();
     let mut controller = ResourceController::default();
     let outcomes = view
         .execute_operation(
@@ -684,13 +655,7 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
         }
     }));
 
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 0,
-    };
+    let context = make_operation_context();
     let mut controller = ResourceController::default();
     let outcomes = view
         .execute_operation(
@@ -838,13 +803,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     }));
 
     // Execute the operation, starting the test scenario
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 0,
-    };
+    let context = make_operation_context();
     let mut controller = ResourceController::default();
     let mut outcomes = view
         .execute_operation(
@@ -957,10 +916,15 @@ async fn test_open_chain() {
     let mut applications = register_mock_applications(&mut view, 1).await.unwrap();
     let (application_id, application) = applications.next().unwrap();
 
-    let message_id = MessageId {
-        chain_id: ChainId::root(0),
+    let context = OperationContext {
         height: BlockHeight(1),
-        index: 5,
+        next_message_index: 5,
+        ..make_operation_context()
+    };
+    let message_id = MessageId {
+        chain_id: context.chain_id,
+        height: context.height,
+        index: context.next_message_index,
     };
 
     let child_ownership2 = child_ownership.clone();
@@ -972,13 +936,6 @@ async fn test_open_chain() {
             Ok(RawExecutionOutcome::default())
         },
     ));
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(1),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 5,
-    };
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
