@@ -9,9 +9,7 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use crate::worker::worker_tests::make_state;
-
-use super::{init_worker_with_chains, make_certificate, make_state_hash};
+use super::{init_worker_with_chains, make_certificate};
 use linera_base::{
     crypto::KeyPair,
     data_types::{Amount, BlockHeight, Timestamp},
@@ -134,9 +132,9 @@ where
         committees: [(Epoch::ZERO, committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(publisher_key_pair.public()),
         timestamp: Timestamp::from(1),
-        ..make_state(Epoch::ZERO, publisher_chain, admin_id)
+        ..SystemExecutionState::make(Epoch::ZERO, publisher_chain, admin_id)
     };
-    let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
+    let publisher_state_hash = publisher_system_state.clone().into_hash().await;
     let publish_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
         block: publish_block,
         messages: vec![OutgoingMessage {
@@ -201,7 +199,7 @@ where
         .registry
         .published_bytecodes
         .insert(bytecode_id, bytecode_location);
-    let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
+    let publisher_state_hash = publisher_system_state.clone().into_hash().await;
     let broadcast_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
         block: broadcast_block,
         messages: vec![OutgoingMessage {
@@ -250,7 +248,7 @@ where
         committees: [(Epoch::ZERO, committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(creator_key_pair.public()),
         timestamp: Timestamp::from(2),
-        ..make_state(Epoch::ZERO, creator_chain, admin_id)
+        ..SystemExecutionState::make(Epoch::ZERO, creator_chain, admin_id)
     };
     creator_system_state.subscriptions.insert(publisher_channel);
     let creator_state = ExecutionStateView::from_system_state(
@@ -305,7 +303,7 @@ where
         .with_timestamp(3)
         .with_incoming_message(accept_message);
     publisher_system_state.timestamp = Timestamp::from(3);
-    let publisher_state_hash = make_state_hash(publisher_system_state).await;
+    let publisher_state_hash = publisher_system_state.into_hash().await;
     let accept_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
         block: accept_block,
         messages: vec![OutgoingMessage {

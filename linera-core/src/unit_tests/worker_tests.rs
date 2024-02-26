@@ -35,16 +35,13 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
     },
     test_utils::SystemExecutionState,
-    ChannelSubscription, ExecutionError, ExecutionRuntimeConfig, ExecutionStateView,
-    GenericApplicationId, Message, MessageKind, Query, Response, SystemExecutionError, SystemQuery,
-    SystemResponse,
+    ChannelSubscription, ExecutionError, GenericApplicationId, Message, MessageKind, Query,
+    Response, SystemExecutionError, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, MemoryStorage, Storage, TestClock};
 use linera_views::{
-    common::KeyValueStore,
-    memory::TEST_MEMORY_MAX_STREAM_QUERIES,
-    value_splitting::DatabaseConsistencyError,
-    views::{CryptoHashView, ViewError},
+    common::KeyValueStore, memory::TEST_MEMORY_MAX_STREAM_QUERIES,
+    value_splitting::DatabaseConsistencyError, views::ViewError,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -61,38 +58,6 @@ use linera_storage::DynamoDbStorage;
 
 #[cfg(feature = "scylladb")]
 use linera_storage::ScyllaDbStorage;
-
-async fn make_state_hash(state: SystemExecutionState) -> CryptoHash {
-    ExecutionStateView::from_system_state(state, ExecutionRuntimeConfig::default())
-        .await
-        .crypto_hash()
-        .await
-        .expect("hashing from memory should not fail")
-}
-
-fn make_state(
-    epoch: Epoch,
-    description: ChainDescription,
-    admin_id: impl Into<ChainId>,
-) -> SystemExecutionState {
-    let admin_id = admin_id.into();
-    let subscriptions = if ChainId::from(description) == admin_id {
-        BTreeSet::new()
-    } else {
-        iter::once(ChannelSubscription {
-            chain_id: admin_id,
-            name: SystemChannel::Admin.name(),
-        })
-        .collect()
-    };
-    SystemExecutionState {
-        epoch: Some(epoch),
-        description: Some(description),
-        admin_id: Some(admin_id),
-        subscriptions,
-        ..SystemExecutionState::default()
-    }
-}
 
 /// The test worker accepts blocks with a timestamp this far in the future.
 const TEST_GRACE_PERIOD_MICROS: u64 = 500_000;
@@ -255,7 +220,7 @@ async fn make_transfer_certificate_for_epoch<S>(
         ownership: ChainOwnership::single(key_pair.public()),
         balance,
         balances,
-        ..make_state(epoch, chain_description, ChainId::root(0))
+        ..SystemExecutionState::make(epoch, chain_description, ChainId::root(0))
     };
     let block_template = match &previous_confirmed_block {
         None => make_first_block(chain_id),
@@ -305,7 +270,7 @@ async fn make_transfer_certificate_for_epoch<S>(
         Recipient::Burn => (),
     }
     message_counts.push(message_count);
-    let state_hash = make_state_hash(system_state).await;
+    let state_hash = system_state.into_hash().await;
     let value = HashedValue::new_confirmed(ExecutedBlock {
         block,
         messages,
@@ -605,9 +570,9 @@ where
             ownership: ChainOwnership::single(key_pair.public()),
             balance,
             timestamp: block_0_time,
-            ..make_state(epoch, ChainDescription::Root(1), ChainId::root(0))
+            ..SystemExecutionState::make(epoch, ChainDescription::Root(1), ChainId::root(0))
         };
-        let state_hash = make_state_hash(system_state).await;
+        let state_hash = system_state.into_hash().await;
         let value = HashedValue::new_confirmed(ExecutedBlock {
             block,
             messages: vec![],
@@ -868,6 +833,7 @@ where
     .await;
 
     let epoch = Epoch::ZERO;
+    let admin_id = ChainId::root(0);
     let certificate0 = make_certificate(
         &committee,
         &worker,
@@ -880,12 +846,13 @@ where
                 direct_credit_message(ChainId::root(2), Amount::from_tokens(2)),
             ],
             message_counts: vec![1, 2],
-            state_hash: make_state_hash(SystemExecutionState {
+            state_hash: SystemExecutionState {
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 ownership: ChainOwnership::single(sender_key_pair.public()),
                 balance: Amount::from_tokens(3),
-                ..make_state(epoch, ChainDescription::Root(1), ChainId::root(0))
-            })
+                ..SystemExecutionState::make(epoch, ChainDescription::Root(1), admin_id)
+            }
+            .into_hash()
             .await,
         }),
     );
@@ -901,11 +868,12 @@ where
                 Amount::from_tokens(3),
             )],
             message_counts: vec![1],
-            state_hash: make_state_hash(SystemExecutionState {
+            state_hash: SystemExecutionState {
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 ownership: ChainOwnership::single(sender_key_pair.public()),
-                ..make_state(epoch, ChainDescription::Root(1), ChainId::root(0))
-            })
+                ..SystemExecutionState::make(epoch, ChainDescription::Root(1), admin_id)
+            }
+            .into_hash()
             .await,
         }),
     );
@@ -980,7 +948,9 @@ where
                 ) if matches!(
                     *error,
                     ChainError::ExecutionError(
-                        ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }),
+                        ExecutionError::SystemError(
+                            SystemExecutionError::InsufficientFunding { .. }
+                        ),
                         ChainExecutionContext::Operation(_)
                     )
                 )
@@ -1155,11 +1125,12 @@ where
                 block: block_proposal.content.block,
                 messages: vec![direct_credit_message(ChainId::root(3), Amount::ONE)],
                 message_counts: vec![0, 1],
-                state_hash: make_state_hash(SystemExecutionState {
+                state_hash: SystemExecutionState {
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(recipient_key_pair.public()),
-                    ..make_state(epoch, ChainDescription::Root(2), ChainId::root(0))
-                })
+                    ..SystemExecutionState::make(epoch, ChainDescription::Root(2), admin_id)
+                }
+                .into_hash()
                 .await,
             }),
         );
@@ -1549,7 +1520,7 @@ where
         ownership: ownership.clone(),
         balance,
         subscriptions,
-        ..make_state(epoch, description, admin_id)
+        ..SystemExecutionState::make(epoch, description, admin_id)
     };
     let open_chain_message = IncomingMessage {
         origin: Origin::chain(ChainId::root(3)),
@@ -1577,7 +1548,7 @@ where
         block: make_first_block(chain_id).with_incoming_message(open_chain_message),
         messages: vec![],
         message_counts: vec![0],
-        state_hash: make_state_hash(state).await,
+        state_hash: state.into_hash().await,
     });
     let certificate = make_certificate(&committee, &worker, value);
     let info = worker
@@ -2933,12 +2904,13 @@ where
                 ),
             ],
             message_counts: vec![2],
-            state_hash: make_state_hash(SystemExecutionState {
+            state_hash: SystemExecutionState {
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair.public()),
                 balance: Amount::from_tokens(2),
-                ..make_state(Epoch::ZERO, ChainDescription::Root(0), admin_id)
-            })
+                ..SystemExecutionState::make(Epoch::ZERO, ChainDescription::Root(0), admin_id)
+            }
+            .into_hash()
             .await,
         }),
     );
@@ -2990,12 +2962,13 @@ where
                 direct_credit_message(user_id, Amount::from_tokens(2)),
             ],
             message_counts: vec![1, 2],
-            state_hash: make_state_hash(SystemExecutionState {
+            state_hash: SystemExecutionState {
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public()),
-                ..make_state(Epoch::from(1), ChainDescription::Root(0), admin_id)
-            })
+                ..SystemExecutionState::make(Epoch::from(1), ChainDescription::Root(0), admin_id)
+            }
+            .into_hash()
             .await,
         }),
     );
@@ -3035,12 +3008,13 @@ where
                 SystemMessage::Notify { id: user_id },
             )],
             message_counts: vec![1],
-            state_hash: make_state_hash(SystemExecutionState {
+            state_hash: SystemExecutionState {
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public()),
-                ..make_state(Epoch::from(1), ChainDescription::Root(0), admin_id)
-            })
+                ..SystemExecutionState::make(Epoch::from(1), ChainDescription::Root(0), admin_id)
+            }
+            .into_hash()
             .await,
         }),
     );
@@ -3207,7 +3181,7 @@ where
                 }),
             messages: Vec::new(),
             message_counts: vec![0, 0, 0, 0],
-            state_hash: make_state_hash(SystemExecutionState {
+            state_hash: SystemExecutionState {
                 subscriptions: [ChannelSubscription {
                     chain_id: admin_id,
                     name: SystemChannel::Admin.name(),
@@ -3218,8 +3192,9 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public()),
                 balance: Amount::from_tokens(2),
-                ..make_state(Epoch::from(1), user_description, admin_id)
-            })
+                ..SystemExecutionState::make(Epoch::from(1), user_description, admin_id)
+            }
+            .into_hash()
             .await,
         }),
     );
@@ -3339,12 +3314,13 @@ where
             block: make_first_block(user_id).with_simple_transfer(admin_id, Amount::ONE),
             messages: vec![direct_credit_message(admin_id, Amount::ONE)],
             message_counts: vec![1],
-            state_hash: make_state_hash(SystemExecutionState {
+            state_hash: SystemExecutionState {
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair1.public()),
                 balance: Amount::from_tokens(2),
-                ..make_state(Epoch::ZERO, ChainDescription::Root(1), admin_id)
-            })
+                ..SystemExecutionState::make(Epoch::ZERO, ChainDescription::Root(1), admin_id)
+            }
+            .into_hash()
             .await,
         }),
     );
@@ -3368,11 +3344,12 @@ where
                 committees: committees2.clone(),
             })],
             message_counts: vec![1],
-            state_hash: make_state_hash(SystemExecutionState {
+            state_hash: SystemExecutionState {
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair0.public()),
-                ..make_state(Epoch::from(1), ChainDescription::Root(0), admin_id)
-            })
+                ..SystemExecutionState::make(Epoch::from(1), ChainDescription::Root(0), admin_id)
+            }
+            .into_hash()
             .await,
         }),
     );
@@ -3482,12 +3459,13 @@ where
             block: make_first_block(user_id).with_simple_transfer(admin_id, Amount::ONE),
             messages: vec![direct_credit_message(admin_id, Amount::ONE)],
             message_counts: vec![1],
-            state_hash: make_state_hash(SystemExecutionState {
+            state_hash: SystemExecutionState {
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair1.public()),
                 balance: Amount::from_tokens(2),
-                ..make_state(Epoch::ZERO, ChainDescription::Root(1), admin_id)
-            })
+                ..SystemExecutionState::make(Epoch::ZERO, ChainDescription::Root(1), admin_id)
+            }
+            .into_hash()
             .await,
         }),
     );
@@ -3520,11 +3498,12 @@ where
                 }),
             ],
             message_counts: vec![1, 2],
-            state_hash: make_state_hash(SystemExecutionState {
+            state_hash: SystemExecutionState {
                 committees: committees3.clone(),
                 ownership: ChainOwnership::single(key_pair0.public()),
-                ..make_state(Epoch::from(1), ChainDescription::Root(0), admin_id)
-            })
+                ..SystemExecutionState::make(Epoch::from(1), ChainDescription::Root(0), admin_id)
+            }
+            .into_hash()
             .await,
         }),
     );
@@ -3584,12 +3563,13 @@ where
                 }),
             messages: Vec::new(),
             message_counts: vec![0],
-            state_hash: make_state_hash(SystemExecutionState {
+            state_hash: SystemExecutionState {
                 committees: committees3.clone(),
                 ownership: ChainOwnership::single(key_pair0.public()),
                 balance: Amount::ONE,
-                ..make_state(Epoch::from(1), ChainDescription::Root(0), admin_id)
-            })
+                ..SystemExecutionState::make(Epoch::from(1), ChainDescription::Root(0), admin_id)
+            }
+            .into_hash()
             .await,
         }),
     );

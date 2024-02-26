@@ -5,11 +5,13 @@ use crate::{
     applications::ApplicationRegistry,
     committee::{Committee, Epoch},
     execution::UserAction,
+    system::SystemChannel,
     ChannelSubscription, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
     ExecutionStateView, OperationContext, ResourceControlPolicy, ResourceController,
     ResourceTracker, TestExecutionRuntimeContext, UserApplicationDescription, UserContractCode,
 };
 use linera_base::{
+    crypto::CryptoHash,
     data_types::{Amount, Timestamp},
     identifiers::{ApplicationId, ChainDescription, ChainId, Owner},
     ownership::ChainOwnership,
@@ -17,7 +19,7 @@ use linera_base::{
 use linera_views::{
     common::Context,
     memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
-    views::{View, ViewError},
+    views::{CryptoHashView, View, ViewError},
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -39,6 +41,35 @@ pub struct SystemExecutionState {
     pub registry: ApplicationRegistry,
     pub closed: bool,
     pub authorized_applications: Option<BTreeSet<ApplicationId>>,
+}
+
+impl SystemExecutionState {
+    pub fn make(epoch: Epoch, description: ChainDescription, admin_id: impl Into<ChainId>) -> Self {
+        let admin_id = admin_id.into();
+        let subscriptions = if ChainId::from(description) == admin_id {
+            BTreeSet::new()
+        } else {
+            BTreeSet::from([ChannelSubscription {
+                chain_id: admin_id,
+                name: SystemChannel::Admin.name(),
+            }])
+        };
+        SystemExecutionState {
+            epoch: Some(epoch),
+            description: Some(description),
+            admin_id: Some(admin_id),
+            subscriptions,
+            ..SystemExecutionState::default()
+        }
+    }
+
+    pub async fn into_hash(self) -> CryptoHash {
+        ExecutionStateView::from_system_state(self, ExecutionRuntimeConfig::default())
+            .await
+            .crypto_hash()
+            .await
+            .expect("hashing from memory should not fail")
+    }
 }
 
 impl ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>
