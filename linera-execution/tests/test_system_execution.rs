@@ -10,9 +10,10 @@ use linera_base::{
 };
 use linera_execution::{
     system::{Recipient, UserData},
+    test_utils::SystemExecutionState,
     ExecutionOutcome, ExecutionStateView, Message, MessageContext, Operation, OperationContext,
-    Query, QueryContext, RawExecutionOutcome, ResourceController, Response, SystemExecutionState,
-    SystemMessage, SystemOperation, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
+    Query, QueryContext, RawExecutionOutcome, ResourceController, Response, SystemMessage,
+    SystemOperation, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
 };
 use linera_views::memory::MemoryContext;
 

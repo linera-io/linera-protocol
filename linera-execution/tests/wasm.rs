@@ -9,11 +9,11 @@ use linera_base::{
     identifiers::{Account, ChainDescription, ChainId},
 };
 use linera_execution::{
-    test_utils::create_dummy_user_application_description, ExecutionOutcome,
-    ExecutionRuntimeConfig, ExecutionRuntimeContext, ExecutionStateView, Operation,
-    OperationContext, Query, QueryContext, RawExecutionOutcome, ResourceControlPolicy,
-    ResourceController, ResourceTracker, Response, SystemExecutionState,
-    TestExecutionRuntimeContext, WasmContractModule, WasmRuntime, WasmServiceModule,
+    test_utils::{create_dummy_user_application_description, SystemExecutionState},
+    ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, ExecutionStateView,
+    Operation, OperationContext, Query, QueryContext, RawExecutionOutcome, ResourceControlPolicy,
+    ResourceController, ResourceTracker, Response, TestExecutionRuntimeContext, WasmContractModule,
+    WasmRuntime, WasmServiceModule,
 };
 use linera_views::{memory::MemoryContext, views::View};
 use serde_json::json;

@@ -6,8 +6,12 @@
 #![allow(unused_imports)]
 
 mod mock_application;
+mod system_execution_state;
 
-pub use self::mock_application::{ExpectedCall, MockApplication, MockApplicationInstance};
+pub use self::{
+    mock_application::{ExpectedCall, MockApplication, MockApplicationInstance},
+    system_execution_state::SystemExecutionState,
+};
 use crate::{
     ApplicationRegistryView, BytecodeLocation, ExecutionRuntimeContext, ExecutionStateView,
     TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,

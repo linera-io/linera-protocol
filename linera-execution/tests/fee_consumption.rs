@@ -11,10 +11,10 @@ use linera_base::{
     identifiers::{Account, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_execution::{
-    test_utils::{register_mock_applications, ExpectedCall},
+    test_utils::{register_mock_applications, ExpectedCall, SystemExecutionState},
     ContractRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionStateView,
     Message, MessageContext, RawExecutionOutcome, ResourceControlPolicy, ResourceController,
-    SystemExecutionState, TestExecutionRuntimeContext,
+    TestExecutionRuntimeContext,
 };
 use linera_views::memory::MemoryContext;
 use std::{sync::Arc, vec};
