@@ -13,7 +13,8 @@ use crate::{
 use futures::channel::mpsc;
 use linera_base::{
     data_types::{Amount, Timestamp},
-    identifiers::{Account, ApplicationId, MessageId, Owner},
+    ensure,
+    identifiers::{Account, ApplicationId, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 
@@ -233,6 +234,20 @@ where
                 let messages = self.system.open_chain(config, next_message_id)?;
                 callback.respond(messages)
             }
+
+            CloseChain {
+                application_id,
+                chain_id,
+                callback,
+            } => {
+                let apps = self.system.authorized_applications.get().as_ref();
+                ensure!(
+                    apps.map_or(false, |apps| apps.contains(&application_id)),
+                    ExecutionError::UnauthorizedApplication(application_id)
+                );
+                self.system.close_chain(chain_id).await?;
+                callback.respond(())
+            }
         }
 
         Ok(())
@@ -326,6 +341,12 @@ pub enum Request {
         next_message_id: MessageId,
         authorized_applications: Option<BTreeSet<ApplicationId>>,
         callback: Sender<[RawOutgoingMessage<SystemMessage, Amount>; 2]>,
+    },
+
+    CloseChain {
+        chain_id: ChainId,
+        application_id: UserApplicationId,
+        callback: oneshot::Sender<()>,
     },
 }
 
@@ -426,6 +447,16 @@ impl Debug for Request {
             Request::OpenChain { balance, .. } => formatter
                 .debug_struct("Request::OpenChain")
                 .field("balance", balance)
+                .finish_non_exhaustive(),
+
+            Request::CloseChain {
+                chain_id,
+                application_id,
+                ..
+            } => formatter
+                .debug_struct("Request::CloseChain")
+                .field("chain_id", chain_id)
+                .field("application_id", application_id)
                 .finish_non_exhaustive(),
         }
     }

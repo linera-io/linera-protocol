@@ -475,25 +475,8 @@ where
                 });
             }
             CloseChain => {
-                // Unsubscribe to all channels.
-                self.subscriptions
-                    .for_each_index(|subscription| {
-                        let message = RawOutgoingMessage {
-                            destination: Destination::Recipient(subscription.chain_id),
-                            authenticated: false,
-                            grant: Amount::ZERO,
-                            kind: MessageKind::Protected,
-                            message: SystemMessage::Unsubscribe {
-                                id: context.chain_id,
-                                subscription,
-                            },
-                        };
-                        outcome.messages.push(message);
-                        Ok(())
-                    })
-                    .await?;
-                self.subscriptions.clear();
-                self.closed.set(true);
+                let messages = self.close_chain(context.chain_id).await?;
+                outcome.messages.extend(messages);
             }
             Transfer {
                 owner,
@@ -1015,6 +998,30 @@ where
             },
         };
         Ok([open_chain_message, subscribe_message])
+    }
+
+    pub async fn close_chain(
+        &mut self,
+        id: ChainId,
+    ) -> Result<Vec<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
+        let mut messages = Vec::new();
+        // Unsubscribe to all channels.
+        self.subscriptions
+            .for_each_index(|subscription| {
+                let message = RawOutgoingMessage {
+                    destination: Destination::Recipient(subscription.chain_id),
+                    authenticated: false,
+                    grant: Amount::ZERO,
+                    kind: MessageKind::Protected,
+                    message: SystemMessage::Unsubscribe { id, subscription },
+                };
+                messages.push(message);
+                Ok(())
+            })
+            .await?;
+        self.subscriptions.clear();
+        self.closed.set(true);
+        Ok(messages)
     }
 }
 

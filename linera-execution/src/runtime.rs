@@ -1111,16 +1111,14 @@ impl ContractRuntime for ContractSyncRuntime {
         balance: Amount,
     ) -> Result<ChainId, ExecutionError> {
         let mut this = self.inner();
+        let id = this.current_application().id;
         let next_message_id = MessageId {
             chain_id: this.chain_id,
             height: this.height,
             index: this.next_message_index,
         };
         let chain_id = ChainId::child(next_message_id);
-        let authorized_applications = this
-            .call_stack
-            .last()
-            .map(|status| iter::once(status.id).collect());
+        let authorized_applications = Some(iter::once(id).collect());
         let [open_chain_message, subscribe_message] = this
             .execution_state_sender
             .send_request(|callback| Request::OpenChain {
@@ -1137,6 +1135,18 @@ impl ContractRuntime for ContractSyncRuntime {
         this.execution_outcomes
             .push(ExecutionOutcome::System(outcome));
         Ok(chain_id)
+    }
+
+    fn close_chain(&mut self) -> Result<(), ExecutionError> {
+        let mut this = self.inner();
+        let application_id = this.current_application().id;
+        this.execution_state_sender
+            .send_request(|callback| Request::CloseChain {
+                chain_id: this.chain_id,
+                application_id,
+                callback,
+            })?
+            .recv_response()
     }
 }
 
