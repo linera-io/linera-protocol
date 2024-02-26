@@ -22,13 +22,12 @@ use linera_views::{
 use linera_views_derive::CryptoHashView;
 use std::collections::{BTreeSet, HashMap};
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 use {
     crate::{
-        system::SystemExecutionState, ResourceControlPolicy, ResourceTracker,
-        TestExecutionRuntimeContext, UserContractCode,
+        ResourceControlPolicy, ResourceTracker, TestExecutionRuntimeContext, UserContractCode,
     },
-    linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
+    linera_views::memory::MemoryContext,
     std::sync::Arc,
 };
 
@@ -41,74 +40,14 @@ pub struct ExecutionStateView<C> {
     pub users: ReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
 }
 
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 impl ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>
 where
     MemoryContext<TestExecutionRuntimeContext>: Context + Clone + Send + Sync + 'static,
     ViewError:
         From<<MemoryContext<TestExecutionRuntimeContext> as linera_views::common::Context>::Error>,
 {
-    /// Creates an in-memory view where the system state is set. This is used notably to
-    /// generate state hashes in tests.
-    pub async fn from_system_state(
-        state: SystemExecutionState,
-        execution_runtime_config: ExecutionRuntimeConfig,
-    ) -> Self {
-        // Destructure, to make sure we don't miss any fields.
-        let SystemExecutionState {
-            description,
-            epoch,
-            admin_id,
-            subscriptions,
-            committees,
-            ownership,
-            balance,
-            balances,
-            timestamp,
-            registry,
-            closed,
-            authorized_applications,
-        } = state;
-        let extra = TestExecutionRuntimeContext::new(
-            description.expect("Chain description should be set").into(),
-            execution_runtime_config,
-        );
-        let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, extra);
-        let mut view = Self::load(context)
-            .await
-            .expect("Loading from memory should work");
-        view.system.description.set(description);
-        view.system.epoch.set(epoch);
-        view.system.admin_id.set(admin_id);
-        for subscription in subscriptions {
-            view.system
-                .subscriptions
-                .insert(&subscription)
-                .expect("serialization of subscription should not fail");
-        }
-        view.system.committees.set(committees);
-        view.system.ownership.set(ownership);
-        view.system.balance.set(balance);
-        for (owner, balance) in balances {
-            view.system
-                .balances
-                .insert(&owner, balance)
-                .expect("insertion of balances should not fail");
-        }
-        view.system.timestamp.set(timestamp);
-        view.system
-            .registry
-            .import(registry)
-            .expect("serialization of registry components should not fail");
-        view.system.closed.set(closed);
-        view.system
-            .authorized_applications
-            .set(authorized_applications);
-        view
-    }
-
     /// Simulates the initialization of an application.
-    #[cfg(any(test, feature = "test"))]
     pub async fn simulate_initialization(
         &mut self,
         contract: UserContractCode,

@@ -28,10 +28,10 @@ use linera_chain::{
 use linera_execution::{
     committee::Epoch,
     system::{SystemChannel, SystemMessage, SystemOperation},
+    test_utils::SystemExecutionState,
     Bytecode, BytecodeLocation, ChannelSubscription, ExecutionRuntimeConfig, ExecutionStateView,
     GenericApplicationId, Message, MessageKind, Operation, OperationContext, ResourceController,
-    SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmContractModule,
-    WasmRuntime,
+    UserApplicationDescription, UserApplicationId, WasmContractModule, WasmRuntime,
 };
 use linera_storage::{MemoryStorage, Storage};
 use linera_views::views::{CryptoHashView, ViewError};

@@ -34,9 +34,10 @@ use linera_execution::{
     system::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
     },
+    test_utils::SystemExecutionState,
     ChannelSubscription, ExecutionError, ExecutionRuntimeConfig, ExecutionStateView,
-    GenericApplicationId, Message, MessageKind, Query, Response, SystemExecutionError,
-    SystemExecutionState, SystemQuery, SystemResponse,
+    GenericApplicationId, Message, MessageKind, Query, Response, SystemExecutionError, SystemQuery,
+    SystemResponse,
 };
 use linera_storage::{DbStorage, MemoryStorage, Storage, TestClock};
 use linera_views::{

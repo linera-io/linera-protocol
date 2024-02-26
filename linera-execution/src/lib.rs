@@ -12,12 +12,14 @@ mod policy;
 mod resources;
 mod runtime;
 pub mod system;
-#[cfg(any(test, feature = "test"))]
+#[cfg(with_testing)]
 pub mod test_utils;
 mod util;
 mod wasm;
 
 pub use crate::runtime::{ContractSyncRuntime, ServiceSyncRuntime};
+#[cfg(with_testing)]
+pub use applications::ApplicationRegistry;
 pub use applications::{
     ApplicationRegistryView, BytecodeLocation, GenericApplicationId, UserApplicationDescription,
     UserApplicationId,
@@ -29,12 +31,10 @@ pub use system::{
     SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation, SystemQuery,
     SystemResponse,
 };
-#[cfg(all(any(test, feature = "test"), any(with_wasmer, with_wasmtime)))]
+#[cfg(all(with_testing, any(with_wasmer, with_wasmtime)))]
 pub use wasm::test as wasm_test;
 #[cfg(with_wasm_runtime)]
 pub use wasm::{WasmContractModule, WasmExecutionError, WasmServiceModule};
-#[cfg(any(test, feature = "test"))]
-pub use {applications::ApplicationRegistry, system::SystemExecutionState};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;

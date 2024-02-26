@@ -20,9 +20,8 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 
-#[cfg(with_metrics)]
-use linera_base::{prometheus_util, sync::Lazy};
-
+#[cfg(test)]
+use crate::test_utils::SystemExecutionState;
 use linera_views::{
     common::Context,
     map_view::MapView,
@@ -30,8 +29,6 @@ use linera_views::{
     set_view::SetView,
     views::{HashableView, View, ViewError},
 };
-#[cfg(with_metrics)]
-use prometheus::IntCounterVec;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -39,9 +36,11 @@ use std::{
     iter,
 };
 use thiserror::Error;
-
-#[cfg(any(test, feature = "test"))]
-use crate::applications::ApplicationRegistry;
+#[cfg(with_metrics)]
+use {
+    linera_base::{prometheus_util, sync::Lazy},
+    prometheus::IntCounterVec,
+};
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
 pub static OPEN_CHAIN_MESSAGE_INDEX: u32 = 0;
@@ -94,24 +93,6 @@ pub struct SystemExecutionStateView<C> {
     /// An optional set of authorized applications. If set, operations are restricted to these
     /// applications.
     pub authorized_applications: RegisterView<C, Option<BTreeSet<ApplicationId>>>,
-}
-
-/// For testing only.
-#[cfg(with_testing)]
-#[derive(Default, Debug, PartialEq, Eq, Clone)]
-pub struct SystemExecutionState {
-    pub description: Option<ChainDescription>,
-    pub epoch: Option<Epoch>,
-    pub admin_id: Option<ChainId>,
-    pub subscriptions: BTreeSet<ChannelSubscription>,
-    pub committees: BTreeMap<Epoch, Committee>,
-    pub ownership: ChainOwnership,
-    pub balance: Amount,
-    pub balances: BTreeMap<Owner, Amount>,
-    pub timestamp: Timestamp,
-    pub registry: ApplicationRegistry,
-    pub closed: bool,
-    pub authorized_applications: Option<BTreeSet<ApplicationId>>,
 }
 
 /// The configuration for a new chain.

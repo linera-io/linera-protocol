@@ -13,11 +13,12 @@ use linera_execution::{
     system::SystemMessage,
     test_utils::{
         create_dummy_user_application_registrations, register_mock_applications, ExpectedCall,
+        SystemExecutionState,
     },
     ApplicationCallOutcome, BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome,
     ExecutionRuntimeConfig, ExecutionStateView, MessageKind, Operation, OperationContext, Query,
     QueryContext, RawExecutionOutcome, RawOutgoingMessage, ResourceController, Response,
-    SessionCallOutcome, SystemExecutionState, TestExecutionRuntimeContext,
+    SessionCallOutcome, TestExecutionRuntimeContext,
 };
 use linera_views::{batch::Batch, memory::MemoryContext};
 use std::vec;
