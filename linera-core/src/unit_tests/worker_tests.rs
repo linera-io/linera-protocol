@@ -220,7 +220,7 @@ async fn make_transfer_certificate_for_epoch<S>(
         ownership: ChainOwnership::single(key_pair.public()),
         balance,
         balances,
-        ..SystemExecutionState::make(epoch, chain_description, ChainId::root(0))
+        ..SystemExecutionState::new(epoch, chain_description, ChainId::root(0))
     };
     let block_template = match &previous_confirmed_block {
         None => make_first_block(chain_id),
@@ -570,7 +570,7 @@ where
             ownership: ChainOwnership::single(key_pair.public()),
             balance,
             timestamp: block_0_time,
-            ..SystemExecutionState::make(epoch, ChainDescription::Root(1), ChainId::root(0))
+            ..SystemExecutionState::new(epoch, ChainDescription::Root(1), ChainId::root(0))
         };
         let state_hash = system_state.into_hash().await;
         let value = HashedValue::new_confirmed(ExecutedBlock {
@@ -850,7 +850,7 @@ where
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 ownership: ChainOwnership::single(sender_key_pair.public()),
                 balance: Amount::from_tokens(3),
-                ..SystemExecutionState::make(epoch, ChainDescription::Root(1), admin_id)
+                ..SystemExecutionState::new(epoch, ChainDescription::Root(1), admin_id)
             }
             .into_hash()
             .await,
@@ -871,7 +871,7 @@ where
             state_hash: SystemExecutionState {
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 ownership: ChainOwnership::single(sender_key_pair.public()),
-                ..SystemExecutionState::make(epoch, ChainDescription::Root(1), admin_id)
+                ..SystemExecutionState::new(epoch, ChainDescription::Root(1), admin_id)
             }
             .into_hash()
             .await,
@@ -1128,7 +1128,7 @@ where
                 state_hash: SystemExecutionState {
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(recipient_key_pair.public()),
-                    ..SystemExecutionState::make(epoch, ChainDescription::Root(2), admin_id)
+                    ..SystemExecutionState::new(epoch, ChainDescription::Root(2), admin_id)
                 }
                 .into_hash()
                 .await,
@@ -1520,7 +1520,7 @@ where
         ownership: ownership.clone(),
         balance,
         subscriptions,
-        ..SystemExecutionState::make(epoch, description, admin_id)
+        ..SystemExecutionState::new(epoch, description, admin_id)
     };
     let open_chain_message = IncomingMessage {
         origin: Origin::chain(ChainId::root(3)),
@@ -2908,7 +2908,7 @@ where
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair.public()),
                 balance: Amount::from_tokens(2),
-                ..SystemExecutionState::make(Epoch::ZERO, ChainDescription::Root(0), admin_id)
+                ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(0), admin_id)
             }
             .into_hash()
             .await,
@@ -2966,7 +2966,7 @@ where
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public()),
-                ..SystemExecutionState::make(Epoch::from(1), ChainDescription::Root(0), admin_id)
+                ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
             }
             .into_hash()
             .await,
@@ -3012,7 +3012,7 @@ where
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public()),
-                ..SystemExecutionState::make(Epoch::from(1), ChainDescription::Root(0), admin_id)
+                ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
             }
             .into_hash()
             .await,
@@ -3192,7 +3192,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public()),
                 balance: Amount::from_tokens(2),
-                ..SystemExecutionState::make(Epoch::from(1), user_description, admin_id)
+                ..SystemExecutionState::new(Epoch::from(1), user_description, admin_id)
             }
             .into_hash()
             .await,
@@ -3318,7 +3318,7 @@ where
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair1.public()),
                 balance: Amount::from_tokens(2),
-                ..SystemExecutionState::make(Epoch::ZERO, ChainDescription::Root(1), admin_id)
+                ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(1), admin_id)
             }
             .into_hash()
             .await,
@@ -3347,7 +3347,7 @@ where
             state_hash: SystemExecutionState {
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair0.public()),
-                ..SystemExecutionState::make(Epoch::from(1), ChainDescription::Root(0), admin_id)
+                ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
             }
             .into_hash()
             .await,
@@ -3463,7 +3463,7 @@ where
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair1.public()),
                 balance: Amount::from_tokens(2),
-                ..SystemExecutionState::make(Epoch::ZERO, ChainDescription::Root(1), admin_id)
+                ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(1), admin_id)
             }
             .into_hash()
             .await,
@@ -3501,7 +3501,7 @@ where
             state_hash: SystemExecutionState {
                 committees: committees3.clone(),
                 ownership: ChainOwnership::single(key_pair0.public()),
-                ..SystemExecutionState::make(Epoch::from(1), ChainDescription::Root(0), admin_id)
+                ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
             }
             .into_hash()
             .await,
@@ -3567,7 +3567,7 @@ where
                 committees: committees3.clone(),
                 ownership: ChainOwnership::single(key_pair0.public()),
                 balance: Amount::ONE,
-                ..SystemExecutionState::make(Epoch::from(1), ChainDescription::Root(0), admin_id)
+                ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
             }
             .into_hash()
             .await,

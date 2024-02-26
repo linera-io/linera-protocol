@@ -132,7 +132,7 @@ where
         committees: [(Epoch::ZERO, committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(publisher_key_pair.public()),
         timestamp: Timestamp::from(1),
-        ..SystemExecutionState::make(Epoch::ZERO, publisher_chain, admin_id)
+        ..SystemExecutionState::new(Epoch::ZERO, publisher_chain, admin_id)
     };
     let publisher_state_hash = publisher_system_state.clone().into_hash().await;
     let publish_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
@@ -248,7 +248,7 @@ where
         committees: [(Epoch::ZERO, committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(creator_key_pair.public()),
         timestamp: Timestamp::from(2),
-        ..SystemExecutionState::make(Epoch::ZERO, creator_chain, admin_id)
+        ..SystemExecutionState::new(Epoch::ZERO, creator_chain, admin_id)
     };
     creator_system_state.subscriptions.insert(publisher_channel);
     let creator_state = ExecutionStateView::from_system_state(

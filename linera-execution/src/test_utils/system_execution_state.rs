@@ -44,7 +44,7 @@ pub struct SystemExecutionState {
 }
 
 impl SystemExecutionState {
-    pub fn make(epoch: Epoch, description: ChainDescription, admin_id: impl Into<ChainId>) -> Self {
+    pub fn new(epoch: Epoch, description: ChainDescription, admin_id: impl Into<ChainId>) -> Self {
         let admin_id = admin_id.into();
         let subscriptions = if ChainId::from(description) == admin_id {
             BTreeSet::new()
