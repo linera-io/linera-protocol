@@ -46,8 +46,13 @@ pub enum RuntimeError {
     InvalidNumber(#[from] TryFromIntError),
 
     /// Attempt to load an `enum` type but the discriminant doesn't match any of the variants.
-    #[error("Unexpected variant discriminant")]
-    InvalidVariant,
+    #[error("Unexpected variant discriminant {discriminant} for `{type_name}`")]
+    InvalidVariant {
+        /// The `enum` type that failed being loaded.
+        type_name: &'static str,
+        /// The invalid discriminant that was received.
+        discriminant: i64,
+    },
 
     /// Wasmer runtime error.
     #[cfg(with_wasmer)]
