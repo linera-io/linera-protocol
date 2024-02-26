@@ -70,7 +70,12 @@ where
     Head::Layout: Add<Tail::Layout>,
     <Head::Layout as Add<Tail::Layout>>::Output: Layout,
 {
-    const SIZE: u32 = Self::SIZE_STARTING_AT_BYTE_BOUNDARIES[0];
+    const SIZE: u32 = {
+        let packed_size = Self::SIZE_STARTING_AT_BYTE_BOUNDARIES[0];
+        let aligned_size = GuestPointer(packed_size).after_padding_for::<Self>();
+
+        aligned_size.0
+    };
 
     type Layout = <Head::Layout as Add<Tail::Layout>>::Output;
 }
