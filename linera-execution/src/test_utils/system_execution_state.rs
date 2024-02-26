@@ -64,26 +64,21 @@ impl SystemExecutionState {
     }
 
     pub async fn into_hash(self) -> CryptoHash {
-        ExecutionStateView::from_system_state(self, ExecutionRuntimeConfig::default())
-            .await
-            .crypto_hash()
+        let view = self.into_view().await;
+        view.crypto_hash()
             .await
             .expect("hashing from memory should not fail")
     }
-}
 
-impl ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>
-where
-    MemoryContext<TestExecutionRuntimeContext>: Context + Clone + Send + Sync + 'static,
-    ViewError:
-        From<<MemoryContext<TestExecutionRuntimeContext> as linera_views::common::Context>::Error>,
-{
-    /// Creates an in-memory view where the system state is set. This is used notably to
-    /// generate state hashes in tests.
-    pub async fn from_system_state(
-        state: SystemExecutionState,
+    pub async fn into_view(self) -> ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>> {
+        self.into_view_with_runtime(ExecutionRuntimeConfig::default())
+            .await
+    }
+
+    pub async fn into_view_with_runtime(
+        self,
         execution_runtime_config: ExecutionRuntimeConfig,
-    ) -> Self {
+    ) -> ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>> {
         // Destructure, to make sure we don't miss any fields.
         let SystemExecutionState {
             description,
@@ -98,13 +93,13 @@ where
             registry,
             closed,
             authorized_applications,
-        } = state;
+        } = self;
         let extra = TestExecutionRuntimeContext::new(
             description.expect("Chain description should be set").into(),
             execution_runtime_config,
         );
         let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, extra);
-        let mut view = Self::load(context)
+        let mut view = ExecutionStateView::load(context)
             .await
             .expect("Loading from memory should work");
         view.system.description.set(description);

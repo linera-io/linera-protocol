@@ -976,7 +976,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ExecutionRuntimeConfig, ExecutionStateView, TestExecutionRuntimeContext};
+    use crate::{ExecutionStateView, TestExecutionRuntimeContext};
     use linera_base::{data_types::BlockHeight, identifiers::ApplicationId};
     use linera_views::memory::MemoryContext;
 
@@ -1001,8 +1001,7 @@ mod tests {
             committees: BTreeMap::new(),
             ..SystemExecutionState::default()
         };
-        let view =
-            ExecutionStateView::from_system_state(state, ExecutionRuntimeConfig::default()).await;
+        let view = state.into_view().await;
         (view, context)
     }
 

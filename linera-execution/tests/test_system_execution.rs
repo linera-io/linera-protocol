@@ -11,23 +11,17 @@ use linera_base::{
 use linera_execution::{
     system::{Recipient, UserData},
     test_utils::SystemExecutionState,
-    ExecutionOutcome, ExecutionStateView, Message, MessageContext, Operation, OperationContext,
-    Query, QueryContext, RawExecutionOutcome, ResourceController, Response, SystemMessage,
-    SystemOperation, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
+    ExecutionOutcome, Message, MessageContext, Operation, OperationContext, Query, QueryContext,
+    RawExecutionOutcome, ResourceController, Response, SystemMessage, SystemOperation, SystemQuery,
+    SystemResponse,
 };
-use linera_views::memory::MemoryContext;
 
 #[tokio::test]
 async fn test_simple_system_operation() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     state.balance = Amount::from_tokens(4);
-    let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-            state,
-            Default::default(),
-        )
-        .await;
+    let mut view = state.into_view().await;
     let operation = SystemOperation::Transfer {
         owner: None,
         amount: Amount::from_tokens(4),
@@ -64,12 +58,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
 async fn test_simple_system_message() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
-    let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-            state,
-            Default::default(),
-        )
-        .await;
+    let mut view = state.into_view().await;
     let message = SystemMessage::Credit {
         amount: Amount::from_tokens(4),
         target: None,
@@ -106,12 +95,7 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     state.balance = Amount::from_tokens(4);
-    let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-            state,
-            Default::default(),
-        )
-        .await;
+    let mut view = state.into_view().await;
     let context = QueryContext {
         chain_id: ChainId::root(0),
     };
