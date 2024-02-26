@@ -41,6 +41,24 @@ fn hlist_without_padding() {
     );
 }
 
+/// Test roundtrip of a heterogeneous list that needs some padding at the end to align its
+/// size.
+#[test]
+fn hlist_with_padding_at_the_end_for_size_alignment() {
+    let input = hlist![0x8081_8283_8485_8687_u64, true];
+
+    test_memory_roundtrip(
+        input,
+        &[
+            0x87, 0x86, 0x85, 0x84, 0x83, 0x82, 0x81, 0x80, 0x01, 0, 0, 0, 0, 0, 0, 0,
+        ],
+    );
+    test_flattening_roundtrip(
+        input,
+        hlist![0x8081_8283_8485_8687_u64 as i64, 0x0000_0001_i32],
+    );
+}
+
 /// Test roundtrip of a heterogeneous list that needs internal padding between some of its elements.
 #[test]
 fn hlist_with_padding() {
