@@ -12,11 +12,9 @@ use linera_base::{
 };
 use linera_execution::{
     test_utils::{register_mock_applications, ExpectedCall, SystemExecutionState},
-    ContractRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionStateView,
-    Message, MessageContext, RawExecutionOutcome, ResourceControlPolicy, ResourceController,
-    TestExecutionRuntimeContext,
+    ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
+    RawExecutionOutcome, ResourceControlPolicy, ResourceController,
 };
-use linera_views::memory::MemoryContext;
 use std::{sync::Arc, vec};
 use test_case::test_case;
 
@@ -122,12 +120,7 @@ async fn test_fee_consumption(
         description: Some(ChainDescription::Root(0)),
         ..SystemExecutionState::default()
     };
-    let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-            state,
-            ExecutionRuntimeConfig::Synchronous,
-        )
-        .await;
+    let mut view = state.into_view().await;
 
     let owner = Owner::from(PublicKey::test_key(0));
     view.system.balance.set(chain_balance);

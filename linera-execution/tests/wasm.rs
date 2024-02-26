@@ -10,12 +10,11 @@ use linera_base::{
 };
 use linera_execution::{
     test_utils::{create_dummy_user_application_description, SystemExecutionState},
-    ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, ExecutionStateView,
-    Operation, OperationContext, Query, QueryContext, RawExecutionOutcome, ResourceControlPolicy,
-    ResourceController, ResourceTracker, Response, TestExecutionRuntimeContext, WasmContractModule,
-    WasmRuntime, WasmServiceModule,
+    ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext,
+    Query, QueryContext, RawExecutionOutcome, ResourceControlPolicy, ResourceController,
+    ResourceTracker, Response, WasmContractModule, WasmRuntime, WasmServiceModule,
 };
-use linera_views::{memory::MemoryContext, views::View};
+use linera_views::views::View;
 use serde_json::json;
 use std::sync::Arc;
 use test_case::test_case;
@@ -38,12 +37,7 @@ async fn test_fuel_for_counter_wasm_application(
         description: Some(ChainDescription::Root(0)),
         ..Default::default()
     };
-    let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-            state,
-            execution_runtime_config,
-        )
-        .await;
+    let mut view = state.into_view_with_runtime(execution_runtime_config).await;
     let app_desc = create_dummy_user_application_description(1);
     let app_id = view
         .system

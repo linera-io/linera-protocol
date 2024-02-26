@@ -16,23 +16,17 @@ use linera_execution::{
         SystemExecutionState,
     },
     ApplicationCallOutcome, BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome,
-    ExecutionRuntimeConfig, ExecutionStateView, MessageKind, Operation, OperationContext, Query,
-    QueryContext, RawExecutionOutcome, RawOutgoingMessage, ResourceController, Response,
-    SessionCallOutcome, TestExecutionRuntimeContext,
+    MessageKind, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
+    RawOutgoingMessage, ResourceController, Response, SessionCallOutcome,
 };
-use linera_views::{batch::Batch, memory::MemoryContext};
+use linera_views::batch::Batch;
 use std::vec;
 
 #[tokio::test]
 async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
-    let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-            state,
-            Default::default(),
-        )
-        .await;
+    let mut view = state.into_view().await;
 
     let (app_id, app_desc) =
         &create_dummy_user_application_registrations(&mut view.system.registry, 1).await?[0];
@@ -68,12 +62,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
 async fn test_simple_user_operation() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
-    let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-            state,
-            ExecutionRuntimeConfig::Synchronous,
-        )
-        .await;
+    let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 2).await?;
     let (caller_id, caller_application) = applications
@@ -224,12 +213,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
 async fn test_leaking_session() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
-    let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-            state,
-            ExecutionRuntimeConfig::Synchronous,
-        )
-        .await;
+    let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 2).await?;
     let (caller_id, caller_application) = applications
@@ -283,12 +267,7 @@ async fn test_leaking_session() -> anyhow::Result<()> {
 async fn test_simple_session() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
-    let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-            state,
-            ExecutionRuntimeConfig::Synchronous,
-        )
-        .await;
+    let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 2).await?;
     let (caller_id, caller_application) = applications
@@ -377,12 +356,7 @@ async fn test_simple_session() -> anyhow::Result<()> {
 async fn test_cross_application_error() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
-    let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-            state,
-            ExecutionRuntimeConfig::Synchronous,
-        )
-        .await;
+    let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 2).await?;
     let (caller_id, caller_application) = applications
@@ -442,12 +416,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
 async fn test_simple_message() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
-    let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-            state,
-            ExecutionRuntimeConfig::Synchronous,
-        )
-        .await;
+    let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 1).await?;
     let (application_id, application) = applications
@@ -533,12 +502,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
 async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
-    let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-            state,
-            ExecutionRuntimeConfig::Synchronous,
-        )
-        .await;
+    let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 2).await?;
     let (caller_id, caller_application) = applications
@@ -642,12 +606,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
 async fn test_message_from_session_call() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
-    let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-            state,
-            ExecutionRuntimeConfig::Synchronous,
-        )
-        .await;
+    let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 3).await?;
     let (caller_id, caller_application) = applications
@@ -795,12 +754,7 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
 async fn test_multiple_messages_from_different_applications() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
-    let mut view =
-        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-            state,
-            ExecutionRuntimeConfig::Synchronous,
-        )
-        .await;
+    let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 3).await?;
     // The entrypoint application, which sends a message and calls other applications
