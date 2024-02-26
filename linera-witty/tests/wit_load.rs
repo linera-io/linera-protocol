@@ -10,7 +10,8 @@ use self::types::{
     Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, SpecializedGenericEnum,
     SpecializedGenericStruct, TupleWithPadding, TupleWithoutPadding,
 };
-use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, WitLoad};
+use assert_matches::assert_matches;
+use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, RuntimeError, WitLoad};
 use std::fmt::Debug;
 
 /// Check that a wrapper type is properly loaded from memory and lifted from its flat layout.
@@ -238,6 +239,70 @@ fn test_specialized_generic_enum_type() {
 
     test_load_from_memory(&[2, 3, 4, 5, 1, 6, 7, 8, 9, 10, 11, 12], &expected);
     test_lift_from_flat_layout(hlist![2_i32, 1_i32, 0x0c0b_0a09_i32], &expected, &[]);
+}
+
+/// Check that an invalid discriminant reports a useful error.
+#[test]
+fn test_invalid_discriminant() {
+    let mut instance = MockInstance::<()>::default();
+    let mut memory = instance.memory().unwrap();
+
+    let invalid_discriminant = 119_i8;
+
+    let memory_bytes = [
+        invalid_discriminant as u8,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+    ];
+
+    let address = memory.allocate(memory_bytes.len() as u32).unwrap();
+
+    memory.write(address, &memory_bytes).unwrap();
+
+    assert_matches!(
+        &Enum::load(&memory, address),
+        Err(RuntimeError::InvalidVariant {
+            type_name: "wit_load::types::Enum",
+            discriminant,
+        }) if *discriminant == invalid_discriminant as i64
+    );
+
+    let flat_layout = hlist![
+        invalid_discriminant as i32,
+        0_i64,
+        0_i32,
+        0_i32,
+        0_i32,
+        0_i32,
+        0_i32,
+        0_i32,
+        0_i32,
+        0_i32,
+        0_i32
+    ];
+
+    assert_matches!(
+        &Enum::lift_from(flat_layout, &memory),
+        Err(RuntimeError::InvalidVariant {
+            type_name: "wit_load::types::Enum",
+            discriminant,
+        }) if *discriminant == invalid_discriminant as i64
+    );
 }
 
 /// Tests that the type `T` can be loaded from an `input` sequence of bytes in memory and that it

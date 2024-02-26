@@ -28,6 +28,7 @@ wasmer-vm = { workspace = true, optional = true }
 wasmtime = { workspace = true, optional = true }
 
 [dev-dependencies]
+assert_matches.workspace = true
 linera-witty = { workspace = true, features = ["macros", "test"] }
 test-case.workspace = true
 tracing.workspace = true
