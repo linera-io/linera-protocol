@@ -235,7 +235,7 @@ You can check that the 200 tokens have arrived:
 
 ```gql,uri=$TOKEN1
 query {
-    balance(owner: "User:b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd")
+    accounts { entry(key: "User:b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd") { value } }
 }
 ```
 
@@ -268,7 +268,7 @@ check that we have received 110 tokens, in addition to the
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0
 query {
-    balance(owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f")
+    accounts { entry(key: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f") { value } }
 }
 ```
 
