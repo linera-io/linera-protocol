@@ -1,7 +1,7 @@
 # Values for charts linera-validator for local validators.
 
 # Linera
-lineraImage: linera-test:latest
+lineraImage: "" # Is set by helmfile.
 lineraImagePullPolicy: Never
 logLevel: "debug"
 proxyPort: 19100
