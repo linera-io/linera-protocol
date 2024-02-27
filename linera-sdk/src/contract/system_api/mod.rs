@@ -14,7 +14,7 @@ pub(crate) use self::private::{
 use super::contract_system_api as wit;
 use linera_base::{
     data_types::{Amount, Timestamp},
-    identifiers::{ApplicationId, ChainId},
+    identifiers::{Account, ApplicationId, ChainId, Owner},
 };
 use std::fmt;
 
@@ -31,6 +31,25 @@ pub fn current_application_id() -> ApplicationId {
 /// Retrieves the current chain balance.
 pub fn current_chain_balance() -> Amount {
     wit::read_chain_balance().into()
+}
+
+/// Retrieves the current balance for a given owner.
+pub fn current_owner_balance(owner: Owner) -> Amount {
+    wit::read_owner_balance(owner.into()).into()
+}
+
+/// Transfers amount from source to destination
+pub fn transfer(source: Option<Owner>, destination: Account, amount: Amount) {
+    wit::transfer(
+        source.map(|source| source.into()),
+        destination.into(),
+        amount.into(),
+    )
+}
+
+/// Claims amount from source to destination
+pub fn claim(source: Account, destination: Account, amount: Amount) {
+    wit::claim(source.into(), destination.into(), amount.into())
 }
 
 /// Retrieves the current system time, i.e. the timestamp of the block in which this is called.

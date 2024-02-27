@@ -4,11 +4,17 @@
 //! Handle requests from the synchronous execution thread of user applications.
 
 use crate::{
-    util::RespondExt, ExecutionError, ExecutionRuntimeContext, ExecutionStateView,
-    UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
+    system::{Recipient, UserData},
+    util::RespondExt,
+    ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
+    SystemMessage, UserApplicationDescription, UserApplicationId, UserContractCode,
+    UserServiceCode,
 };
 use futures::channel::mpsc;
-use linera_base::data_types::{Amount, Timestamp};
+use linera_base::{
+    data_types::{Amount, Timestamp},
+    identifiers::{Account, Owner},
+};
 
 #[cfg(with_metrics)]
 use linera_base::{
@@ -97,6 +103,55 @@ where
                 callback.respond(balance);
             }
 
+            OwnerBalance { owner, callback } => {
+                let balance = self.system.balances.get(&owner).await?.unwrap_or_default();
+                callback.respond(balance);
+            }
+
+            Transfer {
+                source,
+                destination,
+                amount,
+                signer,
+                callback,
+            } => {
+                let mut execution_outcome = RawExecutionOutcome::default();
+                let message = self
+                    .system
+                    .transfer(signer, source, Recipient::Account(destination), amount)
+                    .await?;
+
+                if let Some(message) = message {
+                    execution_outcome.messages.push(message);
+                }
+                callback.respond(execution_outcome);
+            }
+
+            Claim {
+                source,
+                destination,
+                amount,
+                signer,
+                callback,
+            } => {
+                let owner = source.owner.ok_or(ExecutionError::OwnerIsNone)?;
+                let mut execution_outcome = RawExecutionOutcome::default();
+                let message = self
+                    .system
+                    .claim(
+                        signer,
+                        owner,
+                        source.chain_id,
+                        Recipient::Account(destination),
+                        amount,
+                        UserData::default(),
+                    )
+                    .await?;
+
+                execution_outcome.messages.push(message);
+                callback.respond(execution_outcome);
+            }
+
             SystemTimestamp { callback } => {
                 let timestamp = *self.system.timestamp.get();
                 callback.respond(timestamp);
@@ -171,6 +226,27 @@ pub enum Request {
         callback: Sender<Amount>,
     },
 
+    OwnerBalance {
+        owner: Owner,
+        callback: Sender<Amount>,
+    },
+
+    Transfer {
+        source: Option<Owner>,
+        destination: Account,
+        amount: Amount,
+        signer: Option<Owner>,
+        callback: Sender<RawExecutionOutcome<SystemMessage, Amount>>,
+    },
+
+    Claim {
+        source: Account,
+        destination: Account,
+        amount: Amount,
+        signer: Option<Owner>,
+        callback: Sender<RawExecutionOutcome<SystemMessage, Amount>>,
+    },
+
     SystemTimestamp {
         callback: Sender<Timestamp>,
     },
@@ -227,6 +303,39 @@ impl Debug for Request {
 
             Request::ChainBalance { .. } => formatter
                 .debug_struct("Request::ChainBalance")
+                .finish_non_exhaustive(),
+
+            Request::OwnerBalance { owner, .. } => formatter
+                .debug_struct("Request::OwnerBalance")
+                .field("owner", owner)
+                .finish_non_exhaustive(),
+
+            Request::Transfer {
+                source,
+                destination,
+                amount,
+                signer,
+                ..
+            } => formatter
+                .debug_struct("Request::Transfer")
+                .field("source", source)
+                .field("destination", destination)
+                .field("amount", amount)
+                .field("signer", signer)
+                .finish_non_exhaustive(),
+
+            Request::Claim {
+                source,
+                destination,
+                amount,
+                signer,
+                ..
+            } => formatter
+                .debug_struct("Request::Claim")
+                .field("source", source)
+                .field("destination", destination)
+                .field("amount", amount)
+                .field("signer", signer)
                 .finish_non_exhaustive(),
 
             Request::SystemTimestamp { .. } => formatter

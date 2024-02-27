@@ -8,8 +8,8 @@ use super::{contract_system_api as wit_system_api, wit_types};
 use crate::{ApplicationCallOutcome, ExecutionOutcome, OutgoingMessage, SessionCallOutcome};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::Resources,
-    identifiers::{ApplicationId, ChannelName, Destination, MessageId, SessionId},
+    data_types::{Amount, Resources},
+    identifiers::{Account, ApplicationId, ChannelName, Destination, MessageId, Owner, SessionId},
 };
 
 impl From<CryptoHash> for wit_system_api::CryptoHash {
@@ -25,6 +25,21 @@ impl From<CryptoHash> for wit_system_api::CryptoHash {
     }
 }
 
+impl From<Owner> for wit_system_api::CryptoHash {
+    fn from(owner: Owner) -> Self {
+        wit_system_api::CryptoHash::from(owner.0)
+    }
+}
+
+impl From<Amount> for wit_system_api::Amount {
+    fn from(host: Amount) -> Self {
+        wit_system_api::Amount {
+            lower_half: host.lower_half(),
+            upper_half: host.upper_half(),
+        }
+    }
+}
+
 impl From<CryptoHash> for wit_types::CryptoHash {
     fn from(crypto_hash: CryptoHash) -> Self {
         let parts = <[u64; 4]>::from(crypto_hash);
@@ -34,6 +49,15 @@ impl From<CryptoHash> for wit_types::CryptoHash {
             part2: parts[1],
             part3: parts[2],
             part4: parts[3],
+        }
+    }
+}
+
+impl From<Account> for wit_system_api::Account {
+    fn from(account: Account) -> Self {
+        wit_system_api::Account {
+            chain_id: account.chain_id.0.into(),
+            owner: account.owner.map(|owner| owner.into()),
         }
     }
 }

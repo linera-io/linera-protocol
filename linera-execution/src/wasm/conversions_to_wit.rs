@@ -13,7 +13,11 @@ use crate::{
     CallOutcome, CalleeContext, MessageContext, MessageId, OperationContext, QueryContext,
     SessionId, UserApplicationId,
 };
-use linera_base::{crypto::CryptoHash, data_types::Amount, identifiers::ChainId};
+use linera_base::{
+    crypto::CryptoHash,
+    data_types::Amount,
+    identifiers::{Account, ChainId, Owner},
+};
 
 impl From<OperationContext> for contract::OperationContext {
     fn from(host: OperationContext) -> Self {
@@ -233,5 +237,20 @@ impl From<Amount> for contract_system_api::Amount {
             lower_half: host.lower_half(),
             upper_half: host.upper_half(),
         }
+    }
+}
+
+impl From<Account> for contract_system_api::Account {
+    fn from(account: Account) -> Self {
+        contract_system_api::Account {
+            chain_id: account.chain_id.into(),
+            owner: account.owner.map(|owner| owner.into()),
+        }
+    }
+}
+
+impl From<Owner> for contract_system_api::CryptoHash {
+    fn from(owner: Owner) -> Self {
+        contract_system_api::CryptoHash::from(owner.0)
     }
 }

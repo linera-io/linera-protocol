@@ -33,6 +33,36 @@ macro_rules! impl_contract_system_api {
                 BaseRuntime::read_chain_balance(self).map(|balance| balance.into())
             }
 
+            fn read_owner_balance(
+                &mut self,
+                owner: contract_system_api::Owner,
+            ) -> Result<contract_system_api::Amount, Self::Error> {
+                BaseRuntime::read_owner_balance(self, owner.into()).map(|balance| balance.into())
+            }
+
+            fn transfer(
+                &mut self,
+                source: Option<contract_system_api::Owner>,
+                destination: contract_system_api::Account,
+                amount: contract_system_api::Amount,
+            ) -> Result<(), Self::Error> {
+                ContractRuntime::transfer(
+                    self,
+                    source.map(|source| source.into()),
+                    destination.into(),
+                    amount.into(),
+                )
+            }
+
+            fn claim(
+                &mut self,
+                source: contract_system_api::Account,
+                destination: contract_system_api::Account,
+                amount: contract_system_api::Amount,
+            ) -> Result<(), Self::Error> {
+                ContractRuntime::claim(self, source.into(), destination.into(), amount.into())
+            }
+
             fn read_system_timestamp(
                 &mut self,
             ) -> Result<contract_system_api::Timestamp, Self::Error> {
@@ -131,6 +161,13 @@ macro_rules! impl_service_system_api {
 
             fn read_chain_balance(&mut self) -> Result<service_system_api::Amount, Self::Error> {
                 BaseRuntime::read_chain_balance(self).map(|balance| balance.into())
+            }
+
+            fn read_owner_balance(
+                &mut self,
+                owner: service_system_api::Owner,
+            ) -> Result<service_system_api::Amount, Self::Error> {
+                BaseRuntime::read_owner_balance(self, owner.into()).map(|balance| balance.into())
             }
 
             fn read_system_timestamp(

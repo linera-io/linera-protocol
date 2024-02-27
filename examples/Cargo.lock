@@ -2234,6 +2234,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "native-fungible"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-trait",
+ "bcs",
+ "fungible",
+ "linera-sdk",
+ "native-fungible",
+ "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

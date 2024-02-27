@@ -130,6 +130,8 @@ pub enum ExecutionError {
     MissingRuntimeResponse,
     #[error("Bytecode ID {0:?} is invalid")]
     InvalidBytecodeId(BytecodeId),
+    #[error("Owner is None")]
+    OwnerIsNone,
 }
 
 impl ExecutionError {
@@ -334,6 +336,9 @@ pub trait BaseRuntime {
     /// Reads the balance of the chain.
     fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError>;
 
+    /// Reads the owner balance.
+    fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError>;
+
     /// Reads the system timestamp.
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError>;
 
@@ -456,6 +461,22 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// Consumes some of the execution fuel.
     fn consume_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError>;
+
+    /// Transfers amount from source to destination.
+    fn transfer(
+        &mut self,
+        source: Option<Owner>,
+        destination: Account,
+        amount: Amount,
+    ) -> Result<(), ExecutionError>;
+
+    /// Claims amount from source to destination.
+    fn claim(
+        &mut self,
+        source: Account,
+        destination: Account,
+        amount: Amount,
+    ) -> Result<(), ExecutionError>;
 
     /// Calls another application. Forwarded sessions will now be visible to
     /// `callee_id` (but not to the caller any more).

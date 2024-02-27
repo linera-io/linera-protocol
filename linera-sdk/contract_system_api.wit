@@ -2,6 +2,9 @@ chain-id: func() -> chain-id
 application-id: func() -> application-id
 application-parameters: func() -> list<u8>
 read-chain-balance: func() -> amount
+read-owner-balance: func(owner: owner) -> amount
+transfer: func(source: option<owner>, destination: account, amount: amount)
+claim: func(source: account, destination: account, amount: amount)
 read-system-timestamp: func() -> timestamp
 
 log: func(message: string, level: log-level)
@@ -43,6 +46,7 @@ record application-id {
     creation: message-id,
 }
 
+type owner = crypto-hash
 type bytecode-id = message-id
 
 record message-id {
@@ -65,4 +69,9 @@ record crypto-hash {
 record amount {
     lower-half: u64,
     upper-half: u64,
+}
+
+record account {
+    chain-id: chain-id,
+    owner: option<owner>,
 }

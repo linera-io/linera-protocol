@@ -3349,6 +3349,7 @@ dependencies = [
  "linera-version",
  "linera-views",
  "matching-engine",
+ "native-fungible",
  "pathdiff",
  "port-selector",
  "prometheus",
@@ -3939,6 +3940,19 @@ name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
+
+[[package]]
+name = "native-fungible"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-trait",
+ "bcs",
+ "fungible",
+ "linera-sdk",
+ "serde_json",
+ "thiserror",
+]
 
 [[package]]
 name = "nom"

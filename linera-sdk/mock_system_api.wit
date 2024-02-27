@@ -2,6 +2,7 @@ mocked-chain-id: func() -> chain-id
 mocked-application-id: func() -> application-id
 mocked-application-parameters: func() -> list<u8>
 mocked-read-chain-balance: func() -> amount
+mocked-read-owner-balance: func() -> amount
 mocked-read-system-timestamp: func() -> timestamp
 
 mocked-log: func(message: string, level: log-level)

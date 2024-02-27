@@ -6,7 +6,7 @@
 use super::{service_system_api as wit_system_api, wit_types};
 use linera_base::{
     crypto::CryptoHash,
-    identifiers::{ApplicationId, MessageId},
+    identifiers::{ApplicationId, MessageId, Owner},
 };
 
 impl From<log::Level> for wit_system_api::LogLevel {
@@ -63,5 +63,11 @@ impl From<MessageId> for wit_system_api::MessageId {
             height: message_id.height.0,
             index: message_id.index,
         }
+    }
+}
+
+impl From<Owner> for wit_system_api::CryptoHash {
+    fn from(owner: Owner) -> Self {
+        wit_system_api::CryptoHash::from(owner.0)
     }
 }
