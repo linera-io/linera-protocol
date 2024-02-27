@@ -25,7 +25,7 @@ pub use applications::{
     UserApplicationId,
 };
 pub use execution::ExecutionStateView;
-pub use linera_base::execution::{CalleeContext, MessageContext, OperationContext};
+pub use linera_base::execution::{CalleeContext, MessageContext, OperationContext, QueryContext};
 pub use policy::ResourceControlPolicy;
 pub use resources::{ResourceController, ResourceTracker};
 pub use system::{
@@ -44,7 +44,7 @@ use dashmap::DashMap;
 use derive_more::Display;
 use linera_base::{
     abi::Abi,
-    data_types::{Amount, ArithmeticError, BlockHeight, Resources, Timestamp},
+    data_types::{Amount, ArithmeticError, Resources, Timestamp},
     doc_scalar, hex_debug,
     identifiers::{Account, BytecodeId, ChainId, ChannelName, Destination, Owner, SessionId},
     ownership::ChainOwnership,
@@ -263,14 +263,6 @@ pub trait ExecutionRuntimeContext {
         &self,
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct QueryContext {
-    /// The current chain id.
-    pub chain_id: ChainId,
-    /// The height of the next block on this chain.
-    pub next_block_height: BlockHeight,
 }
 
 pub trait BaseRuntime {

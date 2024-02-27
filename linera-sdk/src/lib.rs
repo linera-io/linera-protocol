@@ -54,7 +54,6 @@ use self::contract::ContractStateStorage;
 use async_trait::async_trait;
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
-    data_types::BlockHeight,
     identifiers::{ApplicationId, ChainId, ChannelName, Destination},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -69,7 +68,7 @@ pub use linera_base::{
     abi,
     data_types::Resources,
     ensure,
-    execution::{CalleeContext, MessageContext, OperationContext},
+    execution::{CalleeContext, MessageContext, OperationContext, QueryContext},
     identifiers::SessionId,
 };
 #[doc(hidden)]
@@ -322,15 +321,6 @@ pub trait Service: WithServiceAbi + ServiceAbi {
         let parameters = serde_json::from_slice(&bytes)?;
         Ok(parameters)
     }
-}
-
-/// The context of the execution of an application's query.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct QueryContext {
-    /// The current chain id.
-    pub chain_id: ChainId,
-    /// The height of the next block on this chain.
-    pub next_block_height: BlockHeight,
 }
 
 /// A message together with routing information.

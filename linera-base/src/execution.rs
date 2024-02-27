@@ -78,3 +78,12 @@ pub struct CalleeContext {
     /// for safety reasons).
     pub authenticated_caller_id: Option<ApplicationId>,
 }
+
+/// The context of an application service when it is handling a query.
+#[derive(Clone, Copy, Debug)]
+pub struct QueryContext {
+    /// The current chain id.
+    pub chain_id: ChainId,
+    /// The height of the next block on this chain.
+    pub next_block_height: BlockHeight,
+}
