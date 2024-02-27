@@ -9,7 +9,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use linera_base::data_types::Amount;
 use linera_execution::ResourceControlPolicy;
-use std::sync::Arc;
+use std::{env, sync::Arc};
 use tempfile::{tempdir, TempDir};
 
 #[cfg(any(test, feature = "test"))]
@@ -19,11 +19,14 @@ pub struct RemoteNetTestingConfig {
 
 #[cfg(any(test, feature = "test"))]
 impl RemoteNetTestingConfig {
-    pub fn new(faucet_url: Option<&str>) -> Self {
+    pub fn new(faucet_url: Option<String>) -> Self {
         Self {
-            faucet: Faucet::new(String::from(
-                faucet_url.unwrap_or("https://faucet.devnet.linera.net"),
-            )),
+            faucet: Faucet::new(
+                faucet_url.unwrap_or(
+                    env::var("LINERA_FAUCET_URL")
+                        .unwrap_or("https://faucet.devnet.linera.net".to_string()),
+                ),
+            ),
         }
     }
 }
