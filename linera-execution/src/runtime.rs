@@ -1142,7 +1142,6 @@ impl ContractRuntime for ContractSyncRuntime {
         let application_id = this.current_application().id;
         this.execution_state_sender
             .send_request(|callback| Request::CloseChain {
-                chain_id: this.chain_id,
                 application_id,
                 callback,
             })?
