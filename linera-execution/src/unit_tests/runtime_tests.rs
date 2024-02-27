@@ -87,8 +87,15 @@ fn create_contract_runtime() -> (
     let (execution_state_sender, execution_state_receiver) = mpsc::unbounded();
     let resource_controller = ResourceController::default();
 
-    let mut runtime =
-        SyncRuntimeInternal::new(chain_id, execution_state_sender, None, resource_controller);
+    let mut runtime = SyncRuntimeInternal::new(
+        chain_id,
+        BlockHeight(0),
+        None,
+        0,
+        execution_state_sender,
+        None,
+        resource_controller,
+    );
 
     runtime.push_application(create_dummy_application());
 

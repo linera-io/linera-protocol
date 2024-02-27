@@ -364,6 +364,8 @@ pub struct CalleeContext {
 pub struct QueryContext {
     /// The current chain id.
     pub chain_id: ChainId,
+    /// The height of the next block on this chain.
+    pub next_block_height: BlockHeight,
 }
 
 /// A message together with routing information.

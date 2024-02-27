@@ -15,9 +15,10 @@ use linera_base::{
 };
 
 impl From<wit_types::QueryContext> for QueryContext {
-    fn from(application_context: wit_types::QueryContext) -> Self {
+    fn from(query_context: wit_types::QueryContext) -> Self {
         QueryContext {
-            chain_id: ChainId(application_context.chain_id.into()),
+            chain_id: ChainId(query_context.chain_id.into()),
+            next_block_height: BlockHeight(query_context.next_block_height),
         }
     }
 }

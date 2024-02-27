@@ -10,7 +10,7 @@ use crate::{
 };
 use futures::{stream::FuturesUnordered, StreamExt, TryStreamExt};
 use linera_base::{
-    data_types::Amount,
+    data_types::{Amount, BlockHeight},
     identifiers::{Account, ChainId, Destination, Owner},
 };
 use linera_views::{
@@ -110,6 +110,22 @@ impl UserAction {
             Initialize(context, _) => context.authenticated_signer,
             Operation(context, _) => context.authenticated_signer,
             Message(context, _) => context.authenticated_signer,
+        }
+    }
+
+    pub(crate) fn height(&self) -> BlockHeight {
+        match self {
+            UserAction::Initialize(context, _) => context.height,
+            UserAction::Operation(context, _) => context.height,
+            UserAction::Message(context, _) => context.height,
+        }
+    }
+
+    pub(crate) fn next_message_index(&self) -> u32 {
+        match self {
+            UserAction::Initialize(context, _) => context.next_message_index,
+            UserAction::Operation(context, _) => context.next_message_index,
+            UserAction::Message(context, _) => context.next_message_index,
         }
     }
 }

@@ -71,12 +71,17 @@ impl SystemExecutionState {
     }
 
     pub async fn into_view(self) -> ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>> {
-        self.into_view_with_runtime(ExecutionRuntimeConfig::default())
+        let chain_id = self
+            .description
+            .expect("Chain description should be set")
+            .into();
+        self.into_view_with(chain_id, ExecutionRuntimeConfig::default())
             .await
     }
 
-    pub async fn into_view_with_runtime(
+    pub async fn into_view_with(
         self,
+        chain_id: ChainId,
         execution_runtime_config: ExecutionRuntimeConfig,
     ) -> ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>> {
         // Destructure, to make sure we don't miss any fields.
@@ -94,10 +99,7 @@ impl SystemExecutionState {
             closed,
             authorized_applications,
         } = self;
-        let extra = TestExecutionRuntimeContext::new(
-            description.expect("Chain description should be set").into(),
-            execution_runtime_config,
-        );
+        let extra = TestExecutionRuntimeContext::new(chain_id, execution_runtime_config);
         let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, extra);
         let mut view = ExecutionStateView::load(context)
             .await

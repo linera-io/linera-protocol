@@ -8,15 +8,18 @@
 
 #![allow(clippy::duplicate_mod)]
 
+use std::time::Duration;
+
 use super::{contract, contract_system_api, service_system_api};
 use crate::{
     ApplicationCallOutcome, ChannelName, Destination, MessageKind, RawExecutionOutcome,
     RawOutgoingMessage, SessionCallOutcome, SessionId, UserApplicationId,
 };
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight, Resources},
     identifiers::{Account, BytecodeId, ChainId, MessageId, Owner},
+    ownership::{ChainOwnership, TimeoutConfig},
 };
 
 impl From<contract::SessionCallOutcome> for (SessionCallOutcome, Vec<u8>) {
@@ -177,6 +180,59 @@ impl From<contract_system_api::CryptoHash> for CryptoHash {
     fn from(guest: contract_system_api::CryptoHash) -> Self {
         let integers = [guest.part1, guest.part2, guest.part3, guest.part4];
         CryptoHash::from(integers)
+    }
+}
+
+impl From<contract_system_api::PublicKey> for PublicKey {
+    fn from(guest: contract_system_api::PublicKey) -> PublicKey {
+        let contract_system_api::PublicKey {
+            part1,
+            part2,
+            part3,
+            part4,
+        } = guest;
+        [part1, part2, part3, part4].into()
+    }
+}
+
+impl From<contract_system_api::TimeoutConfig> for TimeoutConfig {
+    fn from(guest: contract_system_api::TimeoutConfig) -> TimeoutConfig {
+        let contract_system_api::TimeoutConfig {
+            fast_round_duration_ms,
+            base_timeout_ms,
+            timeout_increment_ms,
+        } = guest;
+        TimeoutConfig {
+            fast_round_duration: fast_round_duration_ms.map(Duration::from_millis),
+            base_timeout: Duration::from_millis(base_timeout_ms),
+            timeout_increment: Duration::from_millis(timeout_increment_ms),
+        }
+    }
+}
+
+impl<'a> From<contract_system_api::ChainOwnershipParam<'a>> for ChainOwnership {
+    fn from(guest: contract_system_api::ChainOwnershipParam<'a>) -> ChainOwnership {
+        let contract_system_api::ChainOwnershipParam {
+            super_owners,
+            owners,
+            multi_leader_rounds,
+            timeout_config,
+        } = guest;
+        let super_owners = super_owners.iter().map(|le| {
+            let pub_key = PublicKey::from(le.get());
+            (Owner::from(pub_key), pub_key)
+        });
+        let owners = owners.iter().map(|le| {
+            let (pub_key, weight) = le.get();
+            let pub_key = PublicKey::from(pub_key);
+            (Owner::from(pub_key), (pub_key, weight))
+        });
+        ChainOwnership {
+            super_owners: super_owners.collect(),
+            owners: owners.collect(),
+            multi_leader_rounds,
+            timeout_config: timeout_config.into(),
+        }
     }
 }
 

@@ -334,6 +334,7 @@ where
     pub async fn query_application(&mut self, query: Query) -> Result<Response, ChainError> {
         let context = QueryContext {
             chain_id: self.chain_id(),
+            next_block_height: self.tip_state.get().next_block_height,
         };
         let response = self
             .execution_state
@@ -680,6 +681,8 @@ where
             let _message_latency = MESSAGE_EXECUTION_LATENCY.measure_latency();
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let chain_execution_context = ChainExecutionContext::IncomingMessage(index);
+            let next_message_index =
+                u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?;
             // Execute the received message.
             let context = MessageContext {
                 chain_id,
@@ -693,6 +696,7 @@ where
                 },
                 authenticated_signer: message.event.authenticated_signer,
                 refund_grant_to: message.event.refund_grant_to,
+                next_message_index,
             };
             let outcomes = match message.action {
                 MessageAction::Accept => {

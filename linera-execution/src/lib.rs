@@ -49,6 +49,7 @@ use linera_base::{
     identifiers::{
         Account, BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId,
     },
+    ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -297,6 +298,8 @@ pub struct MessageContext {
     /// The id of the message (based on the operation height and index in the remote
     /// certificate).
     pub message_id: MessageId,
+    /// The index of the next message to be created.
+    pub next_message_index: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -314,6 +317,8 @@ pub struct CalleeContext {
 pub struct QueryContext {
     /// The current chain id.
     pub chain_id: ChainId,
+    /// The height of the next block on this chain.
+    pub next_block_height: BlockHeight,
 }
 
 pub trait BaseRuntime {
@@ -341,6 +346,9 @@ pub trait BaseRuntime {
 
     /// Reads the system timestamp.
     fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError>;
+
+    /// Reads the current ownership configuration for this chain.
+    fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError>;
 
     /// Tests whether a key exists in the key-value store
     #[cfg(feature = "test")]
@@ -497,6 +505,13 @@ pub trait ContractRuntime: BaseRuntime {
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallOutcome, ExecutionError>;
+
+    /// Opens a new chain.
+    fn open_chain(
+        &mut self,
+        ownership: ChainOwnership,
+        balance: Amount,
+    ) -> Result<ChainId, ExecutionError>;
 }
 
 /// An operation to be executed in a block.

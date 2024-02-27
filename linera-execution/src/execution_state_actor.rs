@@ -4,16 +4,17 @@
 //! Handle requests from the synchronous execution thread of user applications.
 
 use crate::{
-    system::{Recipient, UserData},
+    system::{OpenChainConfig, Recipient, UserData},
     util::RespondExt,
     ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
-    SystemMessage, UserApplicationDescription, UserApplicationId, UserContractCode,
-    UserServiceCode,
+    RawOutgoingMessage, SystemExecutionError, SystemMessage, UserApplicationDescription,
+    UserApplicationId, UserContractCode, UserServiceCode,
 };
 use futures::channel::mpsc;
 use linera_base::{
     data_types::{Amount, Timestamp},
-    identifiers::{Account, Owner},
+    identifiers::{Account, ApplicationId, MessageId, Owner},
+    ownership::ChainOwnership,
 };
 
 #[cfg(with_metrics)]
@@ -30,7 +31,10 @@ use linera_views::{
 use oneshot::Sender;
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
-use std::fmt::{self, Debug, Formatter};
+use std::{
+    collections::BTreeSet,
+    fmt::{self, Debug, Formatter},
+};
 
 #[cfg(with_metrics)]
 /// Histogram of the latency to load a contract bytecode.
@@ -157,6 +161,11 @@ where
                 callback.respond(timestamp);
             }
 
+            ChainOwnership { callback } => {
+                let ownership = self.system.ownership.get().clone();
+                callback.respond(ownership);
+            }
+
             ContainsKey { id, key, callback } => {
                 let view = self.users.try_load_entry_or_insert(&id).await?;
                 let result = view.contains_key(&key).await?;
@@ -203,6 +212,26 @@ where
                 let mut view = self.users.try_load_entry_mut(&id).await?;
                 view.write_batch(batch).await?;
                 callback.respond(());
+            }
+
+            OpenChain {
+                ownership,
+                balance,
+                next_message_id,
+                authorized_applications,
+                callback,
+            } => {
+                let inactive_err = || SystemExecutionError::InactiveChain;
+                let config = OpenChainConfig {
+                    ownership,
+                    admin_id: self.system.admin_id.get().ok_or_else(inactive_err)?,
+                    epoch: self.system.epoch.get().ok_or_else(inactive_err)?,
+                    committees: self.system.committees.get().clone(),
+                    balance,
+                    authorized_applications,
+                };
+                let messages = self.system.open_chain(config, next_message_id)?;
+                callback.respond(messages)
             }
         }
 
@@ -251,6 +280,10 @@ pub enum Request {
         callback: Sender<Timestamp>,
     },
 
+    ChainOwnership {
+        callback: Sender<ChainOwnership>,
+    },
+
     ReadValueBytes {
         id: UserApplicationId,
         key: Vec<u8>,
@@ -285,6 +318,14 @@ pub enum Request {
         id: UserApplicationId,
         batch: Batch,
         callback: Sender<()>,
+    },
+
+    OpenChain {
+        ownership: ChainOwnership,
+        balance: Amount,
+        next_message_id: MessageId,
+        authorized_applications: Option<BTreeSet<ApplicationId>>,
+        callback: Sender<[RawOutgoingMessage<SystemMessage, Amount>; 2]>,
     },
 }
 
@@ -342,6 +383,10 @@ impl Debug for Request {
                 .debug_struct("Request::SystemTimestamp")
                 .finish_non_exhaustive(),
 
+            Request::ChainOwnership { .. } => formatter
+                .debug_struct("Request::ChainOwnership")
+                .finish_non_exhaustive(),
+
             Request::ReadValueBytes { id, key, .. } => formatter
                 .debug_struct("Request::ReadValueBytes")
                 .field("id", id)
@@ -376,6 +421,11 @@ impl Debug for Request {
                 .debug_struct("Request::WriteBatch")
                 .field("id", id)
                 .field("batch", batch)
+                .finish_non_exhaustive(),
+
+            Request::OpenChain { balance, .. } => formatter
+                .debug_struct("Request::OpenChain")
+                .field("balance", balance)
                 .finish_non_exhaustive(),
         }
     }

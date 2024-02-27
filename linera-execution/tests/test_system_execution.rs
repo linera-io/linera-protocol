@@ -76,6 +76,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         },
         authenticated_signer: None,
         refund_grant_to: None,
+        next_message_index: 0,
     };
     let mut controller = ResourceController::default();
     let outcomes = view
@@ -98,6 +99,7 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
     let context = QueryContext {
         chain_id: ChainId::root(0),
+        next_block_height: BlockHeight(0),
     };
     let response = view
         .query_application(context, Query::System(SystemQuery))

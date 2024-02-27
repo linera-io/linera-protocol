@@ -6,10 +6,12 @@
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::PublicKey,
-    data_types::{Amount, BlockHeight, Resources},
-    identifiers::{Account, ChainDescription, ChainId, Destination, Owner},
+    data_types::{Amount, BlockHeight, Resources, Timestamp},
+    identifiers::{Account, ChainDescription, ChainId, Destination, MessageId, Owner},
+    ownership::ChainOwnership,
 };
 use linera_execution::{
+    committee::{Committee, Epoch},
     system::SystemMessage,
     test_utils::{
         create_dummy_user_application_registrations, register_mock_applications, ExpectedCall,
@@ -20,7 +22,20 @@ use linera_execution::{
     RawOutgoingMessage, ResourceController, Response, SessionCallOutcome,
 };
 use linera_views::batch::Batch;
-use std::vec;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    vec,
+};
+
+fn make_operation_context() -> OperationContext {
+    OperationContext {
+        chain_id: ChainId::root(0),
+        height: BlockHeight(0),
+        index: 0,
+        authenticated_signer: None,
+        next_message_index: 0,
+    }
+}
 
 #[tokio::test]
 async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
@@ -31,13 +46,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     let (app_id, app_desc) =
         &create_dummy_user_application_registrations(&mut view.system.registry, 1).await?[0];
 
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 0,
-    };
+    let context = make_operation_context();
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -141,11 +150,8 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     ));
 
     let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
         authenticated_signer: Some(owner),
-        next_message_index: 0,
+        ..make_operation_context()
     };
     let mut controller = ResourceController::default();
     let outcomes = view
@@ -192,6 +198,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
 
     let context = QueryContext {
         chain_id: ChainId::root(0),
+        next_block_height: BlockHeight(0),
     };
     assert_eq!(
         view.query_application(
@@ -239,13 +246,7 @@ async fn test_leaking_session() -> anyhow::Result<()> {
         },
     ));
 
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 0,
-    };
+    let context = make_operation_context();
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -306,13 +307,7 @@ async fn test_simple_session() -> anyhow::Result<()> {
         },
     ));
 
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 0,
-    };
+    let context = make_operation_context();
     let mut controller = ResourceController::default();
     let outcomes = view
         .execute_operation(
@@ -386,13 +381,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
         },
     ));
 
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 0,
-    };
+    let context = make_operation_context();
     let mut controller = ResourceController::default();
     assert_matches!(
         view.execute_operation(
@@ -439,13 +428,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
         }
     }));
 
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 0,
-    };
+    let context = make_operation_context();
     let mut controller = ResourceController::default();
     let outcomes = view
         .execute_operation(
@@ -544,13 +527,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         }
     }));
 
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 0,
-    };
+    let context = make_operation_context();
     let mut controller = ResourceController::default();
     let outcomes = view
         .execute_operation(
@@ -681,13 +658,7 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
         }
     }));
 
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 0,
-    };
+    let context = make_operation_context();
     let mut controller = ResourceController::default();
     let outcomes = view
         .execute_operation(
@@ -835,13 +806,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     }));
 
     // Execute the operation, starting the test scenario
-    let context = OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: 0,
-        authenticated_signer: None,
-        next_message_index: 0,
-    };
+    let context = make_operation_context();
     let mut controller = ResourceController::default();
     let mut outcomes = view
         .execute_operation(
@@ -935,4 +900,84 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     );
 
     Ok(())
+}
+
+/// Tests the system API calls `open_chain` and `chain_ownership`.
+#[tokio::test]
+async fn test_open_chain() {
+    let committee = Committee::make_simple(vec![PublicKey::test_key(0).into()]);
+    let committees = BTreeMap::from([(Epoch::ZERO, committee)]);
+    let ownership = ChainOwnership::single(PublicKey::test_key(1));
+    let child_ownership = ChainOwnership::single(PublicKey::test_key(2));
+    let state = SystemExecutionState {
+        committees: committees.clone(),
+        ownership: ownership.clone(),
+        balance: Amount::from_tokens(5),
+        ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(0), ChainId::root(0))
+    };
+    let mut view = state.into_view().await;
+    let mut applications = register_mock_applications(&mut view, 1).await.unwrap();
+    let (application_id, application) = applications.next().unwrap();
+
+    let context = OperationContext {
+        height: BlockHeight(1),
+        next_message_index: 5,
+        ..make_operation_context()
+    };
+    let message_id = MessageId {
+        chain_id: context.chain_id,
+        height: context.height,
+        index: context.next_message_index,
+    };
+
+    application.expect_call(ExpectedCall::execute_operation({
+        let child_ownership = child_ownership.clone();
+        move |runtime, _context, _operation| {
+            assert_eq!(runtime.chain_ownership().unwrap(), ownership);
+            let chain_id = runtime.open_chain(child_ownership, Amount::ONE).unwrap();
+            assert_eq!(chain_id, ChainId::child(message_id));
+            Ok(RawExecutionOutcome::default())
+        }
+    }));
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+    let outcomes = view
+        .execute_operation(context, operation, &mut controller)
+        .await
+        .unwrap();
+
+    assert_eq!(*view.system.balance.get(), Amount::from_tokens(4));
+    let ExecutionOutcome::System(outcome) = &outcomes[0] else {
+        panic!("Unexpected outcomes: {:?}", outcomes);
+    };
+    let RawOutgoingMessage {
+        message: SystemMessage::OpenChain(config),
+        destination: Destination::Recipient(recipient_id),
+        ..
+    } = &outcome.messages[0]
+    else {
+        panic!("Unexpected first message: {:?}", outcome.messages[0]);
+    };
+    assert_eq!(*recipient_id, ChainId::child(message_id));
+    assert_eq!(config.balance, Amount::ONE);
+    assert_eq!(config.ownership, child_ownership);
+    assert_eq!(config.committees, committees);
+
+    // Initialize the child chain using the config from the message.
+    let mut child_view = SystemExecutionState::default()
+        .into_view_with(ChainId::child(message_id), Default::default())
+        .await;
+    child_view
+        .system
+        .initialize_chain(message_id, Timestamp::from(0), config.clone());
+    assert_eq!(*child_view.system.balance.get(), Amount::ONE);
+    assert_eq!(*child_view.system.ownership.get(), child_ownership);
+    assert_eq!(*child_view.system.committees.get(), committees);
+    assert_eq!(
+        *child_view.system.authorized_applications.get(),
+        Some(BTreeSet::from([application_id]))
+    );
 }

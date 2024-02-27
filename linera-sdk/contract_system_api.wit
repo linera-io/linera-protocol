@@ -31,6 +31,13 @@ try-call-session: func(
     forwarded-sessions: list<session-id>,
 ) -> call-outcome
 
+open-chain: func(
+    ownership: chain-ownership,
+    balance: amount
+) -> chain-id
+
+chain-ownership: func() -> chain-ownership
+
 record call-outcome {
     value: list<u8>,
     sessions: list<session-id>,
@@ -58,6 +65,14 @@ record message-id {
 type chain-id = crypto-hash
 type block-height = u64
 type timestamp = u64
+type duration = u64
+
+record public-key {
+    part1: u64,
+    part2: u64,
+    part3: u64,
+    part4: u64,
+}
 
 record crypto-hash {
     part1: u64,
@@ -74,4 +89,17 @@ record amount {
 record account {
     chain-id: chain-id,
     owner: option<owner>,
+}
+
+record chain-ownership {
+    super-owners: list<public-key>,
+    owners: list<tuple<public-key, u64>>,
+    multi-leader-rounds: u32,
+    timeout-config: timeout-config,
+}
+
+record timeout-config {
+    fast-round-duration-ms: option<duration>,
+    base-timeout-ms: duration,
+    timeout-increment-ms: duration,
 }
