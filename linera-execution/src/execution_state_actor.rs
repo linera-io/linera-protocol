@@ -13,7 +13,6 @@ use crate::{
 use futures::channel::mpsc;
 use linera_base::{
     data_types::{Amount, Timestamp},
-    ensure,
     identifiers::{Account, ApplicationId, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
@@ -240,13 +239,13 @@ where
                 chain_id,
                 callback,
             } => {
-                let apps = self.system.authorized_applications.get().as_ref();
-                ensure!(
-                    apps.map_or(false, |apps| apps.contains(&application_id)),
-                    ExecutionError::UnauthorizedApplication(application_id)
-                );
-                self.system.close_chain(chain_id).await?;
-                callback.respond(())
+                let mut apps = self.system.authorized_applications.get().iter();
+                if !apps.any(|apps| apps.contains(&application_id)) {
+                    callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
+                } else {
+                    self.system.close_chain(chain_id).await?;
+                    callback.respond(Ok(()));
+                }
             }
         }
 
@@ -346,7 +345,7 @@ pub enum Request {
     CloseChain {
         chain_id: ChainId,
         application_id: UserApplicationId,
-        callback: oneshot::Sender<()>,
+        callback: oneshot::Sender<Result<(), ExecutionError>>,
     },
 }
 

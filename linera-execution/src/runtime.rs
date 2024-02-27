@@ -1146,7 +1146,7 @@ impl ContractRuntime for ContractSyncRuntime {
                 application_id,
                 callback,
             })?
-            .recv_response()
+            .recv_response()?
     }
 }
 

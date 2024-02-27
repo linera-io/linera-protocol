@@ -1002,7 +1002,7 @@ async fn test_close_chain() {
     let context = make_operation_context();
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
-            runtime.close_chain()?;
+            assert!(runtime.close_chain().is_err());
             Ok(RawExecutionOutcome::default())
         },
     ));
@@ -1011,10 +1011,9 @@ async fn test_close_chain() {
         application_id,
         bytes: vec![],
     };
-    let result = view
-        .execute_operation(context, operation, &mut controller)
-        .await;
-    assert!(result.is_err());
+    view.execute_operation(context, operation, &mut controller)
+        .await
+        .unwrap();
     assert!(!view.system.closed.get());
 
     // Now we authorize the application and it can close the chain.
