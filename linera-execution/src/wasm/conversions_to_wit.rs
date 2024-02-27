@@ -27,6 +27,7 @@ impl From<OperationContext> for contract::OperationContext {
             authenticated_signer: host.authenticated_signer.map(|owner| owner.0.into()),
             height: host.height.0,
             index: host.index,
+            next_message_index: host.next_message_index,
         }
     }
 }

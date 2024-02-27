@@ -65,7 +65,9 @@ pub use self::{
     log::{ContractLogger, ServiceLogger},
     service::ServiceStateStorage,
 };
-pub use linera_base::{abi, data_types::Resources, ensure, identifiers::SessionId};
+pub use linera_base::{
+    abi, data_types::Resources, ensure, execution::OperationContext, identifiers::SessionId,
+};
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
 
@@ -316,19 +318,6 @@ pub trait Service: WithServiceAbi + ServiceAbi {
         let parameters = serde_json::from_slice(&bytes)?;
         Ok(parameters)
     }
-}
-
-/// The context of the execution of an application's operation.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct OperationContext {
-    /// The current chain id.
-    pub chain_id: ChainId,
-    /// The authenticated signer of the operation, if any.
-    pub authenticated_signer: Option<Owner>,
-    /// The current block height.
-    pub height: BlockHeight,
-    /// The current index of the operation.
-    pub index: u32,
 }
 
 /// The context of the execution of an application's message.

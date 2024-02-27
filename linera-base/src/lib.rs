@@ -10,6 +10,7 @@
 pub mod abi;
 pub mod crypto;
 pub mod data_types;
+pub mod execution;
 mod graphql;
 pub mod identifiers;
 pub mod ownership;

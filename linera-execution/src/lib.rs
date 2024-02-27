@@ -25,6 +25,7 @@ pub use applications::{
     UserApplicationId,
 };
 pub use execution::ExecutionStateView;
+pub use linera_base::execution::OperationContext;
 pub use policy::ResourceControlPolicy;
 pub use resources::{ResourceController, ResourceTracker};
 pub use system::{
@@ -265,20 +266,6 @@ pub trait ExecutionRuntimeContext {
         &self,
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct OperationContext {
-    /// The current chain id.
-    pub chain_id: ChainId,
-    /// The authenticated signer of the operation, if any.
-    pub authenticated_signer: Option<Owner>,
-    /// The current block height.
-    pub height: BlockHeight,
-    /// The current index of the operation.
-    pub index: u32,
-    /// The index of the next message to be created.
-    pub next_message_index: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -722,23 +709,6 @@ impl<Message> RawExecutionOutcome<Message, Resources> {
             subscribe,
             unsubscribe,
         })
-    }
-}
-
-impl OperationContext {
-    fn refund_grant_to(&self) -> Option<Account> {
-        Some(Account {
-            chain_id: self.chain_id,
-            owner: self.authenticated_signer,
-        })
-    }
-
-    fn next_message_id(&self) -> MessageId {
-        MessageId {
-            chain_id: self.chain_id,
-            height: self.height,
-            index: self.next_message_index,
-        }
     }
 }
 

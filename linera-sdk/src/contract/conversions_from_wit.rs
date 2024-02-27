@@ -23,6 +23,7 @@ impl From<wit_types::OperationContext> for OperationContext {
             authenticated_signer: context.authenticated_signer.map(Owner::from),
             height: BlockHeight(context.height),
             index: context.index,
+            next_message_index: context.next_message_index,
         }
     }
 }

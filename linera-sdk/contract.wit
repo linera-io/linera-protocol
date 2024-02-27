@@ -28,6 +28,7 @@ record operation-context {
     authenticated-signer: option<owner>,
     height: block-height,
     index: u32,
+    next-message-index: u32,
 }
 
 record message-context {
