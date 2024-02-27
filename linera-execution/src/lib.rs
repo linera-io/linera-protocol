@@ -25,7 +25,7 @@ pub use applications::{
     UserApplicationId,
 };
 pub use execution::ExecutionStateView;
-pub use linera_base::execution::OperationContext;
+pub use linera_base::execution::{MessageContext, OperationContext};
 pub use policy::ResourceControlPolicy;
 pub use resources::{ResourceController, ResourceTracker};
 pub use system::{
@@ -44,12 +44,9 @@ use dashmap::DashMap;
 use derive_more::Display;
 use linera_base::{
     abi::Abi,
-    crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, Resources, Timestamp},
     doc_scalar, hex_debug,
-    identifiers::{
-        Account, BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId,
-    },
+    identifiers::{Account, BytecodeId, ChainId, ChannelName, Destination, Owner, SessionId},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, views::ViewError};
@@ -266,27 +263,6 @@ pub trait ExecutionRuntimeContext {
         &self,
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct MessageContext {
-    /// The current chain id.
-    pub chain_id: ChainId,
-    /// Whether the message was rejected by the original receiver and is now bouncing back.
-    pub is_bouncing: bool,
-    /// The authenticated signer of the operation that created the message, if any.
-    pub authenticated_signer: Option<Owner>,
-    /// Where to send a refund for the unused part of each grant after execution, if any.
-    pub refund_grant_to: Option<Account>,
-    /// The current block height.
-    pub height: BlockHeight,
-    /// The hash of the remote certificate that created the message.
-    pub certificate_hash: CryptoHash,
-    /// The id of the message (based on the operation height and index in the remote
-    /// certificate).
-    pub message_id: MessageId,
-    /// The index of the next message to be created.
-    pub next_message_index: u32,
 }
 
 #[derive(Clone, Copy, Debug)]

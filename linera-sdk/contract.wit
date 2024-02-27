@@ -35,8 +35,11 @@ record message-context {
     chain-id: chain-id,
     is-bouncing: bool,
     authenticated-signer: option<owner>,
+    refund-grant-to: option<account>,
     height: block-height,
+    certificate-hash: crypto-hash,
     message-id: message-id,
+    next-message-index: u32,
 }
 
 record message-id {
@@ -54,6 +57,11 @@ record callee-context {
 record application-id {
     bytecode-id: bytecode-id,
     creation: message-id,
+}
+
+record account {
+    chain-id: chain-id,
+    owner: option<owner>
 }
 
 type chain-id = crypto-hash

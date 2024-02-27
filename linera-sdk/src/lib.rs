@@ -55,7 +55,7 @@ use async_trait::async_trait;
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     data_types::BlockHeight,
-    identifiers::{ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
+    identifiers::{ApplicationId, ChainId, ChannelName, Destination, Owner},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{error::Error, fmt::Debug, sync::Arc};
@@ -66,7 +66,11 @@ pub use self::{
     service::ServiceStateStorage,
 };
 pub use linera_base::{
-    abi, data_types::Resources, ensure, execution::OperationContext, identifiers::SessionId,
+    abi,
+    data_types::Resources,
+    ensure,
+    execution::{MessageContext, OperationContext},
+    identifiers::SessionId,
 };
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
@@ -318,22 +322,6 @@ pub trait Service: WithServiceAbi + ServiceAbi {
         let parameters = serde_json::from_slice(&bytes)?;
         Ok(parameters)
     }
-}
-
-/// The context of the execution of an application's message.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct MessageContext {
-    /// The current chain id.
-    pub chain_id: ChainId,
-    /// Whether the message was rejected by the original receiver and is now bouncing back.
-    pub is_bouncing: bool,
-    /// The authenticated signer of the operation, if any.
-    pub authenticated_signer: Option<Owner>,
-    /// The current block height.
-    pub height: BlockHeight,
-    /// The id of the message (based on the operation height and index in the remote
-    /// chain that created the message).
-    pub message_id: MessageId,
 }
 
 /// The context of the execution of an application's cross-application call or session call handler.

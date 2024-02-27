@@ -5,6 +5,7 @@
 //! Data-types used in the execution of Linera applications.
 
 use crate::{
+    crypto::CryptoHash,
     data_types::BlockHeight,
     identifiers::{Account, ChainId, MessageId, Owner},
 };
@@ -42,4 +43,26 @@ impl OperationContext {
             index: self.next_message_index,
         }
     }
+}
+
+/// The context of an application when it is executing an incoming message.
+#[derive(Clone, Copy, Debug)]
+pub struct MessageContext {
+    /// The current chain id.
+    pub chain_id: ChainId,
+    /// Whether the message was rejected by the original receiver and is now bouncing back.
+    pub is_bouncing: bool,
+    /// The authenticated signer of the operation that created the message, if any.
+    pub authenticated_signer: Option<Owner>,
+    /// Where to send a refund for the unused part of each grant after execution, if any.
+    pub refund_grant_to: Option<Account>,
+    /// The current block height.
+    pub height: BlockHeight,
+    /// The hash of the remote certificate that created the message.
+    pub certificate_hash: CryptoHash,
+    /// The id of the message (based on the operation height and index in the remote
+    /// certificate).
+    pub message_id: MessageId,
+    /// The index of the next message to be created.
+    pub next_message_index: u32,
 }

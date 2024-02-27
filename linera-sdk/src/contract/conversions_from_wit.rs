@@ -11,7 +11,7 @@ use crate::{CalleeContext, MessageContext, OperationContext};
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight},
-    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner, SessionId},
+    identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner, SessionId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use std::time::Duration;
@@ -34,8 +34,11 @@ impl From<wit_types::MessageContext> for MessageContext {
             chain_id: ChainId(context.chain_id.into()),
             is_bouncing: context.is_bouncing,
             authenticated_signer: context.authenticated_signer.map(Owner::from),
+            refund_grant_to: context.refund_grant_to.map(Account::from),
             height: BlockHeight(context.height),
+            certificate_hash: context.certificate_hash.into(),
             message_id: context.message_id.into(),
+            next_message_index: context.next_message_index,
         }
     }
 }
@@ -56,6 +59,15 @@ impl From<wit_types::CalleeContext> for CalleeContext {
             chain_id: ChainId(context.chain_id.into()),
             authenticated_signer: context.authenticated_signer.map(Owner::from),
             authenticated_caller_id: context.authenticated_caller_id.map(ApplicationId::from),
+        }
+    }
+}
+
+impl From<wit_types::Account> for Account {
+    fn from(account: wit_types::Account) -> Self {
+        Account {
+            chain_id: account.chain_id.into(),
+            owner: account.owner.map(Owner::from),
         }
     }
 }
@@ -81,6 +93,12 @@ impl From<wit_types::SessionId> for SessionId {
 impl From<wit_types::CryptoHash> for Owner {
     fn from(crypto_hash: wit_types::CryptoHash) -> Self {
         Owner(crypto_hash.into())
+    }
+}
+
+impl From<wit_types::CryptoHash> for ChainId {
+    fn from(crypto_hash: wit_types::CryptoHash) -> Self {
+        ChainId(crypto_hash.into())
     }
 }
 
