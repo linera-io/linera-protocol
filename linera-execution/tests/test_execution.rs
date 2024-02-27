@@ -6,7 +6,7 @@
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::PublicKey,
-    data_types::{Amount, BlockHeight, Resources},
+    data_types::{Amount, BlockHeight, Resources, Timestamp},
     identifiers::{Account, ChainDescription, ChainId, Destination, MessageId, Owner},
     ownership::ChainOwnership,
 };
@@ -22,7 +22,10 @@ use linera_execution::{
     RawOutgoingMessage, ResourceController, Response, SessionCallOutcome,
 };
 use linera_views::batch::Batch;
-use std::{collections::BTreeMap, vec};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    vec,
+};
 
 fn make_operation_context() -> OperationContext {
     OperationContext {
@@ -927,15 +930,15 @@ async fn test_open_chain() {
         index: context.next_message_index,
     };
 
-    let child_ownership2 = child_ownership.clone();
-    application.expect_call(ExpectedCall::execute_operation(
+    application.expect_call(ExpectedCall::execute_operation({
+        let child_ownership = child_ownership.clone();
         move |runtime, _context, _operation| {
             assert_eq!(runtime.chain_ownership().unwrap(), ownership);
-            let chain_id = runtime.open_chain(child_ownership2, Amount::ONE).unwrap();
+            let chain_id = runtime.open_chain(child_ownership, Amount::ONE).unwrap();
             assert_eq!(chain_id, ChainId::child(message_id));
             Ok(RawExecutionOutcome::default())
-        },
-    ));
+        }
+    }));
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
@@ -962,4 +965,19 @@ async fn test_open_chain() {
     assert_eq!(config.balance, Amount::ONE);
     assert_eq!(config.ownership, child_ownership);
     assert_eq!(config.committees, committees);
+
+    // Initialize the child chain using the config from the message.
+    let mut child_view = SystemExecutionState::default()
+        .into_view_with(ChainId::child(message_id), Default::default())
+        .await;
+    child_view
+        .system
+        .initialize_chain(message_id, Timestamp::from(0), config.clone());
+    assert_eq!(*child_view.system.balance.get(), Amount::ONE);
+    assert_eq!(*child_view.system.ownership.get(), child_ownership);
+    assert_eq!(*child_view.system.committees.get(), committees);
+    assert_eq!(
+        *child_view.system.authorized_applications.get(),
+        Some(BTreeSet::from([application_id]))
+    );
 }

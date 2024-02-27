@@ -37,7 +37,9 @@ async fn test_fuel_for_counter_wasm_application(
         description: Some(ChainDescription::Root(0)),
         ..Default::default()
     };
-    let mut view = state.into_view_with_runtime(execution_runtime_config).await;
+    let mut view = state
+        .into_view_with(ChainId::root(0), execution_runtime_config)
+        .await;
     let app_desc = create_dummy_user_application_description(1);
     let app_id = view
         .system

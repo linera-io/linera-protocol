@@ -217,9 +217,9 @@ where
             OpenChain {
                 ownership,
                 balance,
-                callback,
                 next_message_id,
                 authorized_applications,
+                callback,
             } => {
                 let inactive_err = || SystemExecutionError::InactiveChain;
                 let config = OpenChainConfig {
