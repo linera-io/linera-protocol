@@ -25,7 +25,7 @@ pub use applications::{
     UserApplicationId,
 };
 pub use execution::ExecutionStateView;
-pub use linera_base::execution::{MessageContext, OperationContext};
+pub use linera_base::execution::{CalleeContext, MessageContext, OperationContext};
 pub use policy::ResourceControlPolicy;
 pub use resources::{ResourceController, ResourceTracker};
 pub use system::{
@@ -263,17 +263,6 @@ pub trait ExecutionRuntimeContext {
         &self,
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct CalleeContext {
-    /// The current chain id.
-    pub chain_id: ChainId,
-    /// The authenticated signer for the execution thread, if any.
-    pub authenticated_signer: Option<Owner>,
-    /// `None` if the caller doesn't want this particular call to be authenticated (e.g.
-    /// for safety reasons).
-    pub authenticated_caller_id: Option<UserApplicationId>,
 }
 
 #[derive(Clone, Copy, Debug)]

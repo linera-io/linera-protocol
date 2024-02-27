@@ -7,7 +7,7 @@
 use crate::{
     crypto::CryptoHash,
     data_types::BlockHeight,
-    identifiers::{Account, ChainId, MessageId, Owner},
+    identifiers::{Account, ApplicationId, ChainId, MessageId, Owner},
 };
 
 /// The context of an application when it is executing an operation.
@@ -65,4 +65,16 @@ pub struct MessageContext {
     pub message_id: MessageId,
     /// The index of the next message to be created.
     pub next_message_index: u32,
+}
+
+/// The context of an application when it is executing a cross-application call or a session call.
+#[derive(Clone, Copy, Debug)]
+pub struct CalleeContext {
+    /// The current chain id.
+    pub chain_id: ChainId,
+    /// The authenticated signer of the operation, if any.
+    pub authenticated_signer: Option<Owner>,
+    /// `None` if the caller doesn't want this particular call to be authenticated (e.g.
+    /// for safety reasons).
+    pub authenticated_caller_id: Option<ApplicationId>,
 }

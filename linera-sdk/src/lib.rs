@@ -55,7 +55,7 @@ use async_trait::async_trait;
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     data_types::BlockHeight,
-    identifiers::{ApplicationId, ChainId, ChannelName, Destination, Owner},
+    identifiers::{ApplicationId, ChainId, ChannelName, Destination},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{error::Error, fmt::Debug, sync::Arc};
@@ -69,7 +69,7 @@ pub use linera_base::{
     abi,
     data_types::Resources,
     ensure,
-    execution::{MessageContext, OperationContext},
+    execution::{CalleeContext, MessageContext, OperationContext},
     identifiers::SessionId,
 };
 #[doc(hidden)]
@@ -322,18 +322,6 @@ pub trait Service: WithServiceAbi + ServiceAbi {
         let parameters = serde_json::from_slice(&bytes)?;
         Ok(parameters)
     }
-}
-
-/// The context of the execution of an application's cross-application call or session call handler.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CalleeContext {
-    /// The current chain id.
-    pub chain_id: ChainId,
-    /// The authenticated signer of the operation, if any.
-    pub authenticated_signer: Option<Owner>,
-    /// `None` if the caller doesn't want this particular call to be authenticated (e.g.
-    /// for safety reasons).
-    pub authenticated_caller_id: Option<ApplicationId>,
 }
 
 /// The context of the execution of an application's query.
