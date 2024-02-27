@@ -56,7 +56,7 @@ use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     identifiers::{ApplicationId, ChainId, ChannelName, Destination},
 };
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use std::{error::Error, fmt::Debug, sync::Arc};
 
 pub use self::{
@@ -68,7 +68,10 @@ pub use linera_base::{
     abi,
     data_types::Resources,
     ensure,
-    execution::{CalleeContext, MessageContext, OperationContext, QueryContext},
+    execution::{
+        CalleeContext, MessageContext, MessageKind, OperationContext, QueryContext,
+        RawOutgoingMessage as OutgoingMessage,
+    },
     identifiers::SessionId,
 };
 #[doc(hidden)]
@@ -323,43 +326,9 @@ pub trait Service: WithServiceAbi + ServiceAbi {
     }
 }
 
-/// A message together with routing information.
-#[derive(Debug, Deserialize, Serialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct OutgoingMessage<Message> {
-    /// The destination of the message.
-    pub destination: Destination,
-    /// Whether the message is authenticated.
-    pub authenticated: bool,
-    /// Whether the message is tracked.
-    pub is_tracked: bool,
-    /// Resources to be forwarded with the message.
-    pub resources: Resources,
-    /// The message itself.
-    pub message: Message,
-}
-
-impl<Message> OutgoingMessage<Message>
-where
-    Message: Serialize,
-{
-    /// Serializes the internal `Message` type into raw bytes.
-    pub fn into_raw(self) -> OutgoingMessage<Vec<u8>> {
-        let message = bcs::to_bytes(&self.message).expect("Failed to serialize message");
-
-        OutgoingMessage {
-            destination: self.destination,
-            authenticated: self.authenticated,
-            is_tracked: self.is_tracked,
-            resources: self.resources,
-            message,
-        }
-    }
-}
-
 /// Externally visible results of an execution. These results are meant in the context of
 /// the application that created them.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ExecutionOutcome<Message> {
     /// Sends messages to the given destinations, possibly forwarding the authenticated
@@ -392,8 +361,8 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
         self.messages.push(OutgoingMessage {
             destination,
             authenticated: false,
-            is_tracked: false,
-            resources: Resources::default(),
+            kind: MessageKind::Simple,
+            grant: Resources::default(),
             message,
         });
         self
@@ -416,8 +385,8 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
         self.messages.push(OutgoingMessage {
             destination,
             authenticated: true,
-            is_tracked: false,
-            resources: Resources::default(),
+            kind: MessageKind::Simple,
+            grant: Resources::default(),
             message,
         });
         self
@@ -445,9 +414,9 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
         let destination = destination.into();
         self.messages.push(OutgoingMessage {
             destination,
-            authenticated: true,
-            is_tracked: false,
-            resources: Resources::default(),
+            authenticated: false,
+            kind: MessageKind::Tracked,
+            grant: Resources::default(),
             message,
         });
         self
@@ -477,9 +446,9 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
         let destination = destination.into();
         self.messages.push(OutgoingMessage {
             destination,
-            authenticated: false,
-            is_tracked: true,
-            resources: Resources::default(),
+            authenticated: true,
+            kind: MessageKind::Tracked,
+            grant: Resources::default(),
             message,
         });
         self
@@ -504,7 +473,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
         let messages = self
             .messages
             .into_iter()
-            .map(OutgoingMessage::into_raw)
+            .map(OutgoingMessage::serialize_message)
             .collect();
 
         ExecutionOutcome {
@@ -516,7 +485,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
 }
 
 /// The result of calling into an application.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ApplicationCallOutcome<Message, Value, SessionState> {
     /// The return value, if any.
@@ -567,7 +536,7 @@ where
 }
 
 /// The result of calling into a session.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default)]
 pub struct SessionCallOutcome<Message, Value, SessionState> {
     /// The result of the application call.
     pub inner: ApplicationCallOutcome<Message, Value, SessionState>,

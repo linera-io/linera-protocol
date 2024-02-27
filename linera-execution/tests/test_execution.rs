@@ -18,7 +18,7 @@ use linera_execution::{
         SystemExecutionState,
     },
     ApplicationCallOutcome, BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome,
-    MessageKind, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
+    IntoPriced, MessageKind, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
     RawOutgoingMessage, ResourceController, Response, SessionCallOutcome,
 };
 use linera_views::batch::Batch;

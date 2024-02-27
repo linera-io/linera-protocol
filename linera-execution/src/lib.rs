@@ -25,8 +25,10 @@ pub use applications::{
     UserApplicationId,
 };
 pub use execution::ExecutionStateView;
-pub use linera_base::execution::{CalleeContext, MessageContext, OperationContext, QueryContext};
-pub use policy::ResourceControlPolicy;
+pub use linera_base::execution::{
+    CalleeContext, MessageContext, MessageKind, OperationContext, QueryContext, RawOutgoingMessage,
+};
+pub use policy::{IntoPriced, ResourceControlPolicy};
 pub use resources::{ResourceController, ResourceTracker};
 pub use system::{
     SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation, SystemQuery,
@@ -513,37 +515,6 @@ pub enum Response {
     ),
 }
 
-/// A message together with routing information.
-#[derive(Clone, Debug)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct RawOutgoingMessage<Message, Grant = Resources> {
-    /// The destination of the message.
-    pub destination: Destination,
-    /// Whether the message is authenticated.
-    pub authenticated: bool,
-    /// The grant needed for message execution, typically specified as an `Amount` or as `Resources`.
-    pub grant: Grant,
-    /// The kind of outgoing message being sent.
-    pub kind: MessageKind,
-    /// The message itself.
-    pub message: Message,
-}
-
-/// The kind of outgoing message being sent.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Copy)]
-pub enum MessageKind {
-    /// The message can be skipped or rejected. No receipt is requested.
-    Simple,
-    /// The message cannot be skipped nor rejected. No receipt is requested.
-    /// This only concerns certain system messages that cannot fail.
-    Protected,
-    /// The message cannot be skipped but can be rejected. A receipt must be sent
-    /// when the message is rejected in a block of the receiver.
-    Tracked,
-    /// This event is a receipt automatically created when the original event was rejected.
-    Bouncing,
-}
-
 /// Externally visible results of an execution. These results are meant in the context of
 /// the application that created them.
 #[derive(Debug)]
@@ -618,28 +589,6 @@ impl<Message, Grant> Default for RawExecutionOutcome<Message, Grant> {
             subscribe: Vec::new(),
             unsubscribe: Vec::new(),
         }
-    }
-}
-
-impl<Message> RawOutgoingMessage<Message, Resources> {
-    pub fn into_priced(
-        self,
-        policy: &ResourceControlPolicy,
-    ) -> Result<RawOutgoingMessage<Message, Amount>, ArithmeticError> {
-        let RawOutgoingMessage {
-            destination,
-            authenticated,
-            grant,
-            kind,
-            message,
-        } = self;
-        Ok(RawOutgoingMessage {
-            destination,
-            authenticated,
-            grant: policy.total_price(&grant)?,
-            kind,
-            message,
-        })
     }
 }
 
@@ -963,4 +912,3 @@ doc_scalar!(
     Message,
     "An message to be sent and possibly executed in the receiver's block."
 );
-doc_scalar!(MessageKind, "The kind of outgoing message being sent");

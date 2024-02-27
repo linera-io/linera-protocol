@@ -9,7 +9,7 @@ use self::state::MetaCounter;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{ApplicationId, SessionId, WithContractAbi},
-    ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
+    ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext, MessageKind,
     OperationContext, OutgoingMessage, Resources, SessionCallOutcome, SimpleStateStorage,
 };
 use meta_counter::{Message, Operation};
@@ -59,11 +59,15 @@ impl Contract for MetaCounter {
             fuel_grant,
             message,
         } = operation;
+        // Formatting the `if-else` makes it more noisy and therefore harder to read
+        #[allow(clippy::obfuscated_if_else)]
         let message = OutgoingMessage {
             destination: recipient_id.into(),
             authenticated,
-            is_tracked,
-            resources: Resources {
+            kind: is_tracked
+                .then_some(MessageKind::Tracked)
+                .unwrap_or(MessageKind::Simple),
+            grant: Resources {
                 fuel: fuel_grant,
                 ..Default::default()
             },

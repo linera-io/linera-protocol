@@ -11,8 +11,8 @@ wit_bindgen_guest_rust::export!("contract.wit");
 pub use self::contract::{
     Account, ApplicationCallOutcome, ApplicationId, BlockHeight, BytecodeId, CalleeContext,
     ChainId, ChannelName, CryptoHash, Destination, ExecutionOutcome, MessageContext, MessageId,
-    OperationContext, OutgoingMessage, Owner, Resources, SessionCallOutcome, SessionId,
-    SessionState,
+    MessageKind, OperationContext, OutgoingMessage, Owner, Resources, SessionCallOutcome,
+    SessionId, SessionState,
 };
 use super::{
     __contract_execute_message, __contract_execute_operation, __contract_handle_application_call,

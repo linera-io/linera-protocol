@@ -65,13 +65,20 @@ impl From<contract::OutgoingMessage> for RawOutgoingMessage<Vec<u8>, Resources> 
         Self {
             destination: message.destination.into(),
             authenticated: message.authenticated,
-            grant: message.resources.into(),
-            kind: if message.is_tracked {
-                MessageKind::Tracked
-            } else {
-                MessageKind::Simple
-            },
+            grant: message.grant.into(),
+            kind: message.kind.into(),
             message: message.message,
+        }
+    }
+}
+
+impl From<contract::MessageKind> for MessageKind {
+    fn from(kind: contract::MessageKind) -> Self {
+        match kind {
+            contract::MessageKind::Simple => MessageKind::Simple,
+            contract::MessageKind::Protected => MessageKind::Protected,
+            contract::MessageKind::Tracked => MessageKind::Tracked,
+            contract::MessageKind::Bouncing => MessageKind::Bouncing,
         }
     }
 }

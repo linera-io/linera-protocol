@@ -6,9 +6,11 @@
 
 use crate::{
     crypto::CryptoHash,
-    data_types::BlockHeight,
-    identifiers::{Account, ApplicationId, ChainId, MessageId, Owner},
+    data_types::{BlockHeight, Resources},
+    doc_scalar,
+    identifiers::{Account, ApplicationId, ChainId, Destination, MessageId, Owner},
 };
+use serde::{Deserialize, Serialize};
 
 /// The context of an application when it is executing an operation.
 #[derive(Clone, Copy, Debug)]
@@ -87,3 +89,55 @@ pub struct QueryContext {
     /// The height of the next block on this chain.
     pub next_block_height: BlockHeight,
 }
+
+/// A message together with routing information.
+#[derive(Clone, Debug)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct RawOutgoingMessage<Message, Grant = Resources> {
+    /// The destination of the message.
+    pub destination: Destination,
+    /// Whether the message is authenticated.
+    pub authenticated: bool,
+    /// The grant needed for message execution, typically specified as an `Amount` or as
+    /// [`Resources`].
+    pub grant: Grant,
+    /// The kind of outgoing message being sent.
+    pub kind: MessageKind,
+    /// The message itself.
+    pub message: Message,
+}
+
+impl<Message, Grant> RawOutgoingMessage<Message, Grant>
+where
+    Message: Serialize,
+{
+    /// Serializes the internal `Message` type into raw bytes.
+    pub fn serialize_message(self) -> RawOutgoingMessage<Vec<u8>, Grant> {
+        let message = bcs::to_bytes(&self.message).expect("Failed to serialize message");
+
+        RawOutgoingMessage {
+            destination: self.destination,
+            authenticated: self.authenticated,
+            grant: self.grant,
+            kind: self.kind,
+            message,
+        }
+    }
+}
+
+/// The kind of outgoing message being sent.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum MessageKind {
+    /// The message can be skipped or rejected. No receipt is requested.
+    Simple,
+    /// The message cannot be skipped nor rejected. No receipt is requested.
+    /// This only concerns certain system messages that cannot fail.
+    Protected,
+    /// The message cannot be skipped but can be rejected. A receipt must be sent
+    /// when the message is rejected in a block of the receiver.
+    Tracked,
+    /// This event is a receipt automatically created when the original event was rejected.
+    Bouncing,
+}
+
+doc_scalar!(MessageKind, "The kind of outgoing message being sent");

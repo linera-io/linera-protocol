@@ -88,9 +88,16 @@ record session-call-outcome {
 record outgoing-message {
     destination: destination,
     authenticated: bool,
-    is-tracked: bool,
-    resources: resources,
+    kind: message-kind,
+    grant: resources,
     message: list<u8>,
+}
+
+enum message-kind {
+    simple,
+    protected,
+    tracked,
+    bouncing,
 }
 
 record resources {
