@@ -133,11 +133,6 @@ impl ChainManager {
         Ok(())
     }
 
-    /// Whether this chain is active, i.e. has any owners.
-    pub fn is_active(&self) -> bool {
-        self.ownership.is_active()
-    }
-
     /// Creates a new `ChainManager`, and starts the first round.
     fn new(
         ownership: ChainOwnership,
