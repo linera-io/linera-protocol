@@ -365,7 +365,7 @@ where
         session: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<(SessionCallOutcome, Vec<u8>), ExecutionError> {
+    ) -> Result<SessionCallOutcome, ExecutionError> {
         let forwarded_sessions = forwarded_sessions
             .into_iter()
             .map(contract::SessionId::from)
@@ -380,7 +380,7 @@ where
             &argument,
             &forwarded_sessions,
         )
-        .map(|inner| inner.map(<(SessionCallOutcome, Vec<u8>)>::from));
+        .map(|inner| inner.map(SessionCallOutcome::from));
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }

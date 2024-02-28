@@ -139,13 +139,10 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
             assert_eq!(session_state, dummy_session_state);
             assert!(argument.is_empty());
             assert!(forwarded_sessions.is_empty());
-            Ok((
-                SessionCallOutcome {
-                    inner: ApplicationCallOutcome::default(),
-                    close_session: true,
-                },
-                session_state,
-            ))
+            Ok(SessionCallOutcome {
+                inner: ApplicationCallOutcome::default(),
+                new_state: None,
+            })
         },
     ));
 
@@ -297,13 +294,7 @@ async fn test_simple_session() -> anyhow::Result<()> {
 
     target_application.expect_call(ExpectedCall::handle_session_call(
         |_runtime, _context, _session_state, _argument, _forwarded_sessions| {
-            Ok((
-                SessionCallOutcome {
-                    close_session: true,
-                    ..SessionCallOutcome::default()
-                },
-                vec![],
-            ))
+            Ok(SessionCallOutcome::default())
         },
     ));
 
@@ -648,13 +639,10 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
         let dummy_message = dummy_message.clone();
         move |_runtime, _context, session_state, _argument, _forwarded_sessions| {
             assert_eq!(session_state, dummy_session);
-            Ok((
-                SessionCallOutcome {
-                    inner: ApplicationCallOutcome::default().with_message(dummy_message),
-                    close_session: true,
-                },
-                session_state,
-            ))
+            Ok(SessionCallOutcome {
+                inner: ApplicationCallOutcome::default().with_message(dummy_message),
+                new_state: None,
+            })
         }
     }));
 

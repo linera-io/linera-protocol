@@ -1082,7 +1082,7 @@ impl ContractRuntime for ContractSyncRuntime {
             Ok::<_, ExecutionError>((contract, callee_context, session_state))
         }?;
 
-        let (raw_outcome, session_state) = contract
+        let raw_outcome = contract
             .try_lock()
             .expect("Applications should not have reentrant calls")
             .handle_session_call(callee_context, session_state, argument, forwarded_sessions)?;
@@ -1094,12 +1094,12 @@ impl ContractRuntime for ContractSyncRuntime {
 
             // Update the session.
             let caller_id = this.application_id()?;
-            if raw_outcome.close_session {
+            if let Some(new_session_state) = raw_outcome.new_state {
+                // Save the session.
+                this.try_save_session(session_id, caller_id, new_session_state)?;
+            } else {
                 // Terminate the session.
                 this.try_close_session(session_id, caller_id)?;
-            } else {
-                // Save the session.
-                this.try_save_session(session_id, caller_id, session_state)?;
             }
 
             Ok(outcome)

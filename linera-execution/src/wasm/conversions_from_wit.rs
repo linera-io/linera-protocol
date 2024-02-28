@@ -22,16 +22,12 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 
-impl From<contract::SessionCallOutcome> for (SessionCallOutcome, Vec<u8>) {
+impl From<contract::SessionCallOutcome> for SessionCallOutcome {
     fn from(outcome: contract::SessionCallOutcome) -> Self {
-        let session_call_outcome = SessionCallOutcome {
+        SessionCallOutcome {
             inner: outcome.inner.into(),
-            close_session: outcome.new_state.is_some(),
-        };
-
-        let updated_session_state = outcome.new_state.unwrap_or_default();
-
-        (session_call_outcome, updated_session_state)
+            new_state: outcome.new_state,
+        }
     }
 }
 

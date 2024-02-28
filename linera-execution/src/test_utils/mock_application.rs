@@ -100,7 +100,7 @@ type HandleSessionCallHandler = Box<
             Vec<u8>,
             Vec<u8>,
             Vec<SessionId>,
-        ) -> Result<(SessionCallOutcome, Vec<u8>), ExecutionError>
+        ) -> Result<SessionCallOutcome, ExecutionError>
         + Send
         + Sync,
 >;
@@ -217,7 +217,7 @@ impl ExpectedCall {
                 Vec<u8>,
                 Vec<u8>,
                 Vec<SessionId>,
-            ) -> Result<(SessionCallOutcome, Vec<u8>), ExecutionError>
+            ) -> Result<SessionCallOutcome, ExecutionError>
             + Send
             + Sync
             + 'static,
@@ -338,7 +338,7 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntime> {
         session_state: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<(SessionCallOutcome, Vec<u8>), ExecutionError> {
+    ) -> Result<SessionCallOutcome, ExecutionError> {
         match self.next_expected_call() {
             Some(ExpectedCall::HandleSessionCall(handler)) => {
                 handler(&mut self.runtime, context, session_state, argument, forwarded_sessions)

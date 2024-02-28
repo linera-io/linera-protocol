@@ -192,7 +192,7 @@ pub trait UserContract {
         session_state: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<(SessionCallOutcome, Vec<u8>), ExecutionError>;
+    ) -> Result<SessionCallOutcome, ExecutionError>;
 }
 
 /// The public entry points provided by the service part of an application.
@@ -210,8 +210,8 @@ pub trait UserService {
 pub struct SessionCallOutcome {
     /// The application result.
     pub inner: ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>,
-    /// If true, the session should be terminated.
-    pub close_session: bool,
+    /// The new state of the session, if any. `None` means that the session should be terminated.
+    pub new_state: Option<Vec<u8>>,
 }
 
 /// System runtime implementation in use.
