@@ -383,11 +383,39 @@ impl<Message> Default for ExecutionOutcome<Message> {
 
 impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
     /// Adds a message to the execution result.
-    pub fn with_message(mut self, destination: impl Into<Destination>, message: Message) -> Self {
+    pub fn add_message(
+        &mut self,
+        destination: impl Into<Destination>,
+        message: Message,
+    ) -> &mut Self {
         let destination = destination.into();
         self.messages.push(OutgoingMessage {
             destination,
             authenticated: false,
+            is_tracked: false,
+            resources: Resources::default(),
+            message,
+        });
+        self
+    }
+
+    /// Adds a message to the execution result.
+    pub fn with_message(mut self, destination: impl Into<Destination>, message: Message) -> Self {
+        self.add_message(destination, message);
+        self
+    }
+
+    /// Adds an authenticated message to the execution result. Authenticated messages can
+    /// act on behalf of the user that created them.
+    pub fn add_authenticated_message(
+        &mut self,
+        destination: impl Into<Destination>,
+        message: Message,
+    ) -> &mut Self {
+        let destination = destination.into();
+        self.messages.push(OutgoingMessage {
+            destination,
+            authenticated: true,
             is_tracked: false,
             resources: Resources::default(),
             message,
@@ -402,6 +430,18 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
         destination: impl Into<Destination>,
         message: Message,
     ) -> Self {
+        self.add_authenticated_message(destination, message);
+        self
+    }
+
+    /// Adds a tracked message to the execution result. Tracked messages are bounced if
+    /// rejected on the receiving end. To differentiate bounced messages from original
+    /// messages, the entrypoint `handle_message` should check `context.is_bounced`.
+    pub fn add_tracked_message(
+        &mut self,
+        destination: impl Into<Destination>,
+        message: Message,
+    ) -> &mut Self {
         let destination = destination.into();
         self.messages.push(OutgoingMessage {
             destination,
@@ -421,6 +461,19 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
         destination: impl Into<Destination>,
         message: Message,
     ) -> Self {
+        self.add_tracked_message(destination, message);
+        self
+    }
+
+    /// Adds a tracked and authenticated message to the execution result. Tracked messages
+    /// are bounced if rejected on the receiving end. To differentiate bounced messages
+    /// from original messages, the entrypoint `handle_message` should check
+    /// `context.is_bounced`.
+    pub fn add_tracked_authenticated_message(
+        &mut self,
+        destination: impl Into<Destination>,
+        message: Message,
+    ) -> &mut Self {
         let destination = destination.into();
         self.messages.push(OutgoingMessage {
             destination,
@@ -441,14 +494,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
         destination: impl Into<Destination>,
         message: Message,
     ) -> Self {
-        let destination = destination.into();
-        self.messages.push(OutgoingMessage {
-            destination,
-            authenticated: true,
-            is_tracked: true,
-            resources: Resources::default(),
-            message,
-        });
+        self.add_tracked_authenticated_message(destination, message);
         self
     }
 

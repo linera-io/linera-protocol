@@ -17,7 +17,7 @@ use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, Owner, SessionId, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
-    OperationContext, OutgoingMessage, Resources, SessionCallOutcome, ViewStateStorage,
+    OperationContext, SessionCallOutcome, ViewStateStorage,
 };
 
 linera_sdk::contract!(MatchingEngine);
@@ -313,13 +313,7 @@ impl MatchingEngine {
             let (amount, token_idx) = Self::get_amount_idx(&nature, &price, &amount);
             self.transfer(owner, amount, destination, token_idx)?;
         }
-        outcome.messages.push(OutgoingMessage {
-            destination: chain_id.into(),
-            authenticated: true,
-            is_tracked: false,
-            resources: Resources::default(),
-            message,
-        });
+        outcome.add_authenticated_message(chain_id, message);
         Ok(())
     }
 

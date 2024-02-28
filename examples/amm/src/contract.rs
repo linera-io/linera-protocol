@@ -13,7 +13,7 @@ use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, Owner, SessionId, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
-    OperationContext, OutgoingMessage, Resources, SessionCallOutcome, ViewStateStorage,
+    OperationContext, SessionCallOutcome, ViewStateStorage,
 };
 use num_bigint::BigUint;
 use num_traits::{cast::FromPrimitive, ToPrimitive};
@@ -317,13 +317,7 @@ impl Amm {
                     input_token_idx,
                     input_amount,
                 };
-                outcome.messages.push(OutgoingMessage {
-                    destination: chain_id.into(),
-                    authenticated: true,
-                    is_tracked: false,
-                    resources: Resources::default(),
-                    message,
-                });
+                outcome.add_authenticated_message(chain_id, message);
             }
             Operation::AddLiquidity {
                 owner: _,
@@ -361,13 +355,7 @@ impl Amm {
                     input_token_idx,
                     input_amount,
                 };
-                outcome.messages.push(OutgoingMessage {
-                    destination: chain_id.into(),
-                    authenticated: true,
-                    is_tracked: false,
-                    resources: Resources::default(),
-                    message,
-                });
+                outcome.add_authenticated_message(chain_id, message);
             }
         }
 
