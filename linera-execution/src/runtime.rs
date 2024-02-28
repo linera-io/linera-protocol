@@ -5,6 +5,7 @@ use crate::{
     execution::UserAction,
     execution_state_actor::{ExecutionStateSender, Request},
     resources::ResourceController,
+    system::ApplicationPermissions,
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
     ExecutionError, ExecutionOutcome, RawExecutionOutcome, ServiceRuntime, SessionId,
@@ -22,7 +23,6 @@ use linera_views::batch::Batch;
 use oneshot::Receiver;
 use std::{
     collections::{hash_map, BTreeMap, HashMap, HashSet},
-    iter,
     sync::{Arc, Mutex},
 };
 
@@ -1118,14 +1118,14 @@ impl ContractRuntime for ContractSyncRuntime {
             index: this.next_message_index,
         };
         let chain_id = ChainId::child(next_message_id);
-        let authorized_applications = Some(iter::once(id).collect());
+        let application_permissions = ApplicationPermissions::new_single(id);
         let [open_chain_message, subscribe_message] = this
             .execution_state_sender
             .send_request(|callback| Request::OpenChain {
                 ownership,
                 balance,
                 next_message_id,
-                authorized_applications,
+                application_permissions,
                 callback,
             })?
             .recv_response()?;

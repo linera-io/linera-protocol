@@ -12,7 +12,7 @@ use linera_base::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::SystemMessage,
+    system::{ApplicationPermissions, SystemMessage},
     test_utils::{
         create_dummy_user_application_registrations, register_mock_applications, ExpectedCall,
         SystemExecutionState,
@@ -22,10 +22,7 @@ use linera_execution::{
     RawOutgoingMessage, ResourceController, Response, SessionCallOutcome,
 };
 use linera_views::batch::Batch;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    vec,
-};
+use std::{collections::BTreeMap, vec};
 
 fn make_operation_context() -> OperationContext {
     OperationContext {
@@ -977,8 +974,8 @@ async fn test_open_chain() {
     assert_eq!(*child_view.system.ownership.get(), child_ownership);
     assert_eq!(*child_view.system.committees.get(), committees);
     assert_eq!(
-        *child_view.system.authorized_applications.get(),
-        Some(BTreeSet::from([application_id]))
+        *child_view.system.application_permissions.get(),
+        ApplicationPermissions::new_single(application_id)
     );
 }
 
@@ -1018,8 +1015,8 @@ async fn test_close_chain() {
 
     // Now we authorize the application and it can close the chain.
     view.system
-        .authorized_applications
-        .set(Some(BTreeSet::from([application_id])));
+        .application_permissions
+        .set(ApplicationPermissions::new_single(application_id));
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             assert!(runtime.close_chain().is_ok());

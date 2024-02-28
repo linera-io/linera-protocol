@@ -28,6 +28,15 @@ ApplicationId:
         TYPENAME: BytecodeId
     - creation:
         TYPENAME: MessageId
+ApplicationPermissions:
+  STRUCT:
+    - execute_operations:
+        OPTION:
+          SEQ:
+            TYPENAME: ApplicationId
+    - close_chain:
+        SEQ:
+          TYPENAME: ApplicationId
 Block:
   STRUCT:
     - chain_id:
@@ -582,10 +591,8 @@ OpenChainConfig:
             TYPENAME: Committee
     - balance:
         TYPENAME: Amount
-    - authorized_applications:
-        OPTION:
-          SEQ:
-            TYPENAME: ApplicationId
+    - application_permissions:
+        TYPENAME: ApplicationPermissions
 Operation:
   ENUM:
     0:
