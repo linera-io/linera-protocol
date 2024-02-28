@@ -103,7 +103,7 @@ macro_rules! contract {
                     application
                         .handle_application_call(&context.into(), argument, forwarded_sessions)
                         .await
-                        .map(|outcome| (application, outcome.into_raw()))
+                        .map(|outcome| (application, outcome.serialize_contents()))
                 },
             )
         }

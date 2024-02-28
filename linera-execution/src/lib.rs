@@ -26,8 +26,8 @@ pub use applications::{
 };
 pub use execution::ExecutionStateView;
 pub use linera_base::execution::{
-    CalleeContext, MessageContext, MessageKind, OperationContext, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage,
+    ApplicationCallOutcome, CalleeContext, MessageContext, MessageKind, OperationContext,
+    QueryContext, RawExecutionOutcome, RawOutgoingMessage,
 };
 pub use policy::{IntoPriced, ResourceControlPolicy};
 pub use resources::{ResourceController, ResourceTracker};
@@ -177,12 +177,13 @@ pub trait UserContract {
     ///
     /// When an application is executing an operation or a message it may call other applications,
     /// which can in turn call other applications.
+    #[allow(clippy::type_complexity)]
     fn handle_application_call(
         &mut self,
         context: CalleeContext,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallOutcome, ExecutionError>;
+    ) -> Result<ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, ExecutionError>;
 
     /// Executes a call from another application into a session created by this application.
     fn handle_session_call(
@@ -204,36 +205,11 @@ pub trait UserService {
     ) -> Result<Vec<u8>, ExecutionError>;
 }
 
-/// The result of calling into a user application.
-#[derive(Default)]
-pub struct ApplicationCallOutcome {
-    /// The return value.
-    pub value: Vec<u8>,
-    /// The externally-visible result.
-    pub execution_outcome: RawExecutionOutcome<Vec<u8>>,
-    /// The states of the new sessions to be created, if any.
-    pub create_sessions: Vec<Vec<u8>>,
-}
-
-impl ApplicationCallOutcome {
-    /// Adds a `message` to this [`ApplicationCallOutcome`].
-    pub fn with_message(mut self, message: RawOutgoingMessage<Vec<u8>>) -> Self {
-        self.execution_outcome.messages.push(message);
-        self
-    }
-
-    /// Registers a new session to be created with the provided `session_state`.
-    pub fn with_new_session(mut self, session_state: Vec<u8>) -> Self {
-        self.create_sessions.push(session_state);
-        self
-    }
-}
-
 /// The result of calling into a session.
 #[derive(Default)]
 pub struct SessionCallOutcome {
     /// The application result.
-    pub inner: ApplicationCallOutcome,
+    pub inner: ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>,
     /// If true, the session should be terminated.
     pub close_session: bool,
 }

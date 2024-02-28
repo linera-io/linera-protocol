@@ -332,3 +332,68 @@ where
         }
     }
 }
+
+/// The result of calling into an application.
+#[derive(Debug)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct ApplicationCallOutcome<Message, Value, SessionState> {
+    /// The return value, if any.
+    pub value: Value,
+    /// The externally-visible result.
+    pub execution_outcome: RawExecutionOutcome<Message>,
+    /// New sessions were created with the following new states.
+    pub create_sessions: Vec<SessionState>,
+}
+
+impl<Message, Value, SessionState> Default for ApplicationCallOutcome<Message, Value, SessionState>
+where
+    Value: Default,
+{
+    fn default() -> Self {
+        Self {
+            value: Value::default(),
+            execution_outcome: RawExecutionOutcome::default(),
+            create_sessions: vec![],
+        }
+    }
+}
+
+impl<Message, Value, SessionState> ApplicationCallOutcome<Message, Value, SessionState> {
+    /// Adds a `message` to this [`ApplicationCallOutcome`].
+    pub fn with_message(mut self, message: RawOutgoingMessage<Message>) -> Self {
+        self.execution_outcome.messages.push(message);
+        self
+    }
+
+    /// Registers a new session to be created with the provided `session_state`.
+    pub fn with_new_session(mut self, session_state: SessionState) -> Self {
+        self.create_sessions.push(session_state);
+        self
+    }
+}
+
+impl<Message, Value, SessionState> ApplicationCallOutcome<Message, Value, SessionState>
+where
+    Message: Serialize,
+    Value: Serialize,
+    SessionState: Serialize,
+{
+    /// Serializes the internal `Message`, `Value` and `SessionState` types into raw bytes.
+    pub fn serialize_contents(self) -> ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>> {
+        let value = bcs::to_bytes(&self.value)
+            .expect("Failed to serialize `ApplicationCallOutcome`'s `Value`");
+        let create_sessions = self
+            .create_sessions
+            .into_iter()
+            .map(|session_state| {
+                bcs::to_bytes(&session_state).expect("Failed to serialize the session state")
+            })
+            .collect();
+
+        ApplicationCallOutcome {
+            value,
+            execution_outcome: self.execution_outcome.serialize_messages(),
+            create_sessions,
+        }
+    }
+}

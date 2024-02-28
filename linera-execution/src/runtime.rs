@@ -392,7 +392,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
     /// Cleans up the runtime after the execution of a call to a different contract.
     fn finish_call(
         &mut self,
-        raw_outcome: ApplicationCallOutcome,
+        raw_outcome: ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>,
     ) -> Result<CallOutcome, ExecutionError> {
         let ApplicationStatus {
             id: callee_id,

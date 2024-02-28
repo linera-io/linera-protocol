@@ -69,8 +69,9 @@ pub use linera_base::{
     data_types::Resources,
     ensure,
     execution::{
-        CalleeContext, MessageContext, MessageKind, OperationContext, QueryContext,
-        RawExecutionOutcome as ExecutionOutcome, RawOutgoingMessage as OutgoingMessage,
+        ApplicationCallOutcome, CalleeContext, MessageContext, MessageKind, OperationContext,
+        QueryContext, RawExecutionOutcome as ExecutionOutcome,
+        RawOutgoingMessage as OutgoingMessage,
     },
     identifiers::SessionId,
 };
@@ -326,57 +327,6 @@ pub trait Service: WithServiceAbi + ServiceAbi {
     }
 }
 
-/// The result of calling into an application.
-#[derive(Debug)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct ApplicationCallOutcome<Message, Value, SessionState> {
-    /// The return value, if any.
-    pub value: Value,
-    /// The externally-visible result.
-    pub execution_outcome: ExecutionOutcome<Message>,
-    /// New sessions were created with the following new states.
-    pub create_sessions: Vec<SessionState>,
-}
-
-impl<Message, Value, SessionState> Default for ApplicationCallOutcome<Message, Value, SessionState>
-where
-    Value: Default,
-{
-    fn default() -> Self {
-        Self {
-            value: Value::default(),
-            execution_outcome: ExecutionOutcome::default(),
-            create_sessions: vec![],
-        }
-    }
-}
-
-impl<Message, Value, SessionState> ApplicationCallOutcome<Message, Value, SessionState>
-where
-    Message: Debug + DeserializeOwned + Serialize,
-    Value: Serialize,
-    SessionState: Serialize,
-{
-    /// Serializes the internal `Message`, `Value` and `SessionState` types into raw bytes.
-    pub fn into_raw(self) -> ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>> {
-        let value = bcs::to_bytes(&self.value)
-            .expect("Failed to serialize `ApplicationCallOutcome`'s `Value`");
-        let create_sessions = self
-            .create_sessions
-            .into_iter()
-            .map(|session_state| {
-                bcs::to_bytes(&session_state).expect("Failed to serialize the session state")
-            })
-            .collect();
-
-        ApplicationCallOutcome {
-            value,
-            execution_outcome: self.execution_outcome.serialize_messages(),
-            create_sessions,
-        }
-    }
-}
-
 /// The result of calling into a session.
 #[derive(Debug, Default)]
 pub struct SessionCallOutcome<Message, Value, SessionState> {
@@ -400,7 +350,7 @@ where
         });
 
         SessionCallOutcome {
-            inner: self.inner.into_raw(),
+            inner: self.inner.serialize_contents(),
             new_state,
         }
     }
