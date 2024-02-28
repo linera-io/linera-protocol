@@ -424,7 +424,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
     application.expect_call(ExpectedCall::execute_operation({
         let dummy_message = dummy_message.clone();
         move |_runtime, _context, _operation| {
-            Ok(RawExecutionOutcome::default().with_message(dummy_message))
+            Ok(RawExecutionOutcome::default().with_raw_message(dummy_message))
         }
     }));
 
@@ -465,12 +465,12 @@ async fn test_simple_message() -> anyhow::Result<()> {
         outcomes,
         &[
             ExecutionOutcome::System(
-                RawExecutionOutcome::default().with_message(registration_message)
+                RawExecutionOutcome::default().with_raw_message(registration_message)
             ),
             ExecutionOutcome::User(
                 application_id,
                 RawExecutionOutcome::default()
-                    .with_message(dummy_message)
+                    .with_raw_message(dummy_message)
                     .with_refund_grant_to(Some(account))
             )
         ]
@@ -521,7 +521,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         |_runtime, _context, _argument, _forwarded_sessions| {
             Ok(ApplicationCallOutcome {
                 value: vec![],
-                execution_outcome: RawExecutionOutcome::default().with_message(dummy_message),
+                execution_outcome: RawExecutionOutcome::default().with_raw_message(dummy_message),
                 create_sessions: vec![],
             })
         }
@@ -560,12 +560,12 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         outcomes,
         &[
             ExecutionOutcome::System(
-                RawExecutionOutcome::default().with_message(registration_message)
+                RawExecutionOutcome::default().with_raw_message(registration_message)
             ),
             ExecutionOutcome::User(
                 target_id,
                 RawExecutionOutcome::default()
-                    .with_message(dummy_message)
+                    .with_raw_message(dummy_message)
                     .with_refund_grant_to(Some(account))
             ),
             ExecutionOutcome::User(
@@ -690,7 +690,7 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
         outcomes,
         &[
             ExecutionOutcome::System(
-                RawExecutionOutcome::default().with_message(registration_message)
+                RawExecutionOutcome::default().with_raw_message(registration_message)
             ),
             ExecutionOutcome::User(
                 target_id,
@@ -699,7 +699,7 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
             ExecutionOutcome::User(
                 target_id,
                 RawExecutionOutcome::default()
-                    .with_message(dummy_message)
+                    .with_raw_message(dummy_message)
                     .with_refund_grant_to(Some(account))
             ),
             ExecutionOutcome::User(
@@ -772,7 +772,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
                 vec![],
                 vec![],
             )?;
-            Ok(RawExecutionOutcome::default().with_message(first_message))
+            Ok(RawExecutionOutcome::default().with_raw_message(first_message))
         }
     }));
 
@@ -798,8 +798,8 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
             Ok(ApplicationCallOutcome {
                 value: vec![],
                 execution_outcome: RawExecutionOutcome::default()
-                    .with_message(first_message)
-                    .with_message(second_message),
+                    .with_raw_message(first_message)
+                    .with_raw_message(second_message),
                 create_sessions: vec![],
             })
         }
@@ -886,14 +886,14 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
             ExecutionOutcome::User(
                 sending_target_id,
                 RawExecutionOutcome::default()
-                    .with_message(first_message.clone())
-                    .with_message(second_message)
+                    .with_raw_message(first_message.clone())
+                    .with_raw_message(second_message)
                     .with_refund_grant_to(Some(account))
             ),
             ExecutionOutcome::User(
                 caller_id,
                 RawExecutionOutcome::default()
-                    .with_message(first_message)
+                    .with_raw_message(first_message)
                     .with_refund_grant_to(Some(account))
             ),
         ]

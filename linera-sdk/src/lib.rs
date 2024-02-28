@@ -54,7 +54,7 @@ use self::contract::ContractStateStorage;
 use async_trait::async_trait;
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
-    identifiers::{ApplicationId, ChainId, ChannelName, Destination},
+    identifiers::ApplicationId,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::{error::Error, fmt::Debug, sync::Arc};
@@ -70,7 +70,7 @@ pub use linera_base::{
     ensure,
     execution::{
         CalleeContext, MessageContext, MessageKind, OperationContext, QueryContext,
-        RawOutgoingMessage as OutgoingMessage,
+        RawExecutionOutcome as ExecutionOutcome, RawOutgoingMessage as OutgoingMessage,
     },
     identifiers::SessionId,
 };
@@ -326,164 +326,6 @@ pub trait Service: WithServiceAbi + ServiceAbi {
     }
 }
 
-/// Externally visible results of an execution. These results are meant in the context of
-/// the application that created them.
-#[derive(Debug)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct ExecutionOutcome<Message> {
-    /// Sends messages to the given destinations, possibly forwarding the authenticated
-    /// signer.
-    pub messages: Vec<OutgoingMessage<Message>>,
-    /// Subscribe chains to channels.
-    pub subscribe: Vec<(ChannelName, ChainId)>,
-    /// Unsubscribe chains to channels.
-    pub unsubscribe: Vec<(ChannelName, ChainId)>,
-}
-
-impl<Message> Default for ExecutionOutcome<Message> {
-    fn default() -> Self {
-        Self {
-            messages: vec![],
-            subscribe: vec![],
-            unsubscribe: vec![],
-        }
-    }
-}
-
-impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
-    /// Adds a message to the execution result.
-    pub fn add_message(
-        &mut self,
-        destination: impl Into<Destination>,
-        message: Message,
-    ) -> &mut Self {
-        let destination = destination.into();
-        self.messages.push(OutgoingMessage {
-            destination,
-            authenticated: false,
-            kind: MessageKind::Simple,
-            grant: Resources::default(),
-            message,
-        });
-        self
-    }
-
-    /// Adds a message to the execution result.
-    pub fn with_message(mut self, destination: impl Into<Destination>, message: Message) -> Self {
-        self.add_message(destination, message);
-        self
-    }
-
-    /// Adds an authenticated message to the execution result. Authenticated messages can
-    /// act on behalf of the user that created them.
-    pub fn add_authenticated_message(
-        &mut self,
-        destination: impl Into<Destination>,
-        message: Message,
-    ) -> &mut Self {
-        let destination = destination.into();
-        self.messages.push(OutgoingMessage {
-            destination,
-            authenticated: true,
-            kind: MessageKind::Simple,
-            grant: Resources::default(),
-            message,
-        });
-        self
-    }
-
-    /// Adds an authenticated message to the execution result. Authenticated messages can
-    /// act on behalf of the user that created them.
-    pub fn with_authenticated_message(
-        mut self,
-        destination: impl Into<Destination>,
-        message: Message,
-    ) -> Self {
-        self.add_authenticated_message(destination, message);
-        self
-    }
-
-    /// Adds a tracked message to the execution result. Tracked messages are bounced if
-    /// rejected on the receiving end. To differentiate bounced messages from original
-    /// messages, the entrypoint `handle_message` should check `context.is_bounced`.
-    pub fn add_tracked_message(
-        &mut self,
-        destination: impl Into<Destination>,
-        message: Message,
-    ) -> &mut Self {
-        let destination = destination.into();
-        self.messages.push(OutgoingMessage {
-            destination,
-            authenticated: false,
-            kind: MessageKind::Tracked,
-            grant: Resources::default(),
-            message,
-        });
-        self
-    }
-
-    /// Adds a tracked message to the execution result. Tracked messages are bounced if
-    /// rejected on the receiving end. To differentiate bounced messages from original
-    /// messages, the entrypoint `handle_message` should check `context.is_bounced`.
-    pub fn with_tracked_message(
-        mut self,
-        destination: impl Into<Destination>,
-        message: Message,
-    ) -> Self {
-        self.add_tracked_message(destination, message);
-        self
-    }
-
-    /// Adds a tracked and authenticated message to the execution result. Tracked messages
-    /// are bounced if rejected on the receiving end. To differentiate bounced messages
-    /// from original messages, the entrypoint `handle_message` should check
-    /// `context.is_bounced`.
-    pub fn add_tracked_authenticated_message(
-        &mut self,
-        destination: impl Into<Destination>,
-        message: Message,
-    ) -> &mut Self {
-        let destination = destination.into();
-        self.messages.push(OutgoingMessage {
-            destination,
-            authenticated: true,
-            kind: MessageKind::Tracked,
-            grant: Resources::default(),
-            message,
-        });
-        self
-    }
-
-    /// Adds a tracked and authenticated message to the execution result. Tracked messages
-    /// are bounced if rejected on the receiving end. To differentiate bounced messages
-    /// from original messages, the entrypoint `handle_message` should check
-    /// `context.is_bounced`.
-    pub fn with_tracked_authenticated_message(
-        mut self,
-        destination: impl Into<Destination>,
-        message: Message,
-    ) -> Self {
-        self.add_tracked_authenticated_message(destination, message);
-        self
-    }
-
-    /// Converts this [`ExecutionOutcome`] into a raw [`ExecutionOutcome`], by serializing the
-    /// messages.
-    pub fn into_raw(self) -> ExecutionOutcome<Vec<u8>> {
-        let messages = self
-            .messages
-            .into_iter()
-            .map(OutgoingMessage::serialize_message)
-            .collect();
-
-        ExecutionOutcome {
-            messages,
-            subscribe: self.subscribe,
-            unsubscribe: self.unsubscribe,
-        }
-    }
-}
-
 /// The result of calling into an application.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
@@ -529,7 +371,7 @@ where
 
         ApplicationCallOutcome {
             value,
-            execution_outcome: self.execution_outcome.into_raw(),
+            execution_outcome: self.execution_outcome.serialize_messages(),
             create_sessions,
         }
     }

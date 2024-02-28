@@ -4,6 +4,7 @@
 use crate::{
     execution::UserAction,
     execution_state_actor::{ExecutionStateSender, Request},
+    policy::IntoPriced,
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
@@ -1132,8 +1133,8 @@ impl ContractRuntime for ContractSyncRuntime {
             })?
             .recv_response()?;
         let outcome = RawExecutionOutcome::default()
-            .with_message(open_chain_message)
-            .with_message(subscribe_message);
+            .with_raw_message(open_chain_message)
+            .with_raw_message(subscribe_message);
         this.execution_outcomes
             .push(ExecutionOutcome::System(outcome));
         Ok(chain_id)

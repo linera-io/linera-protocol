@@ -8,7 +8,7 @@ use crate::{
     crypto::CryptoHash,
     data_types::{BlockHeight, Resources},
     doc_scalar,
-    identifiers::{Account, ApplicationId, ChainId, Destination, MessageId, Owner},
+    identifiers::{Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
 };
 use serde::{Deserialize, Serialize};
 
@@ -141,3 +141,194 @@ pub enum MessageKind {
 }
 
 doc_scalar!(MessageKind, "The kind of outgoing message being sent");
+
+/// Externally visible results of an execution. These results are meant in the context of
+/// the application that created them.
+#[derive(Debug)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct RawExecutionOutcome<Message, Grant = Resources> {
+    /// The signer who created the messages.
+    pub authenticated_signer: Option<Owner>,
+    /// Where to send a refund for the unused part of each grant after execution, if any.
+    pub refund_grant_to: Option<Account>,
+    /// Sends messages to the given destinations, possibly forwarding the authenticated
+    /// signer and including grant with the refund policy described above.
+    pub messages: Vec<RawOutgoingMessage<Message, Grant>>,
+    /// Subscribe chains to channels.
+    pub subscribe: Vec<(ChannelName, ChainId)>,
+    /// Unsubscribe chains to channels.
+    pub unsubscribe: Vec<(ChannelName, ChainId)>,
+}
+
+impl<Message, Grant> Default for RawExecutionOutcome<Message, Grant> {
+    fn default() -> Self {
+        Self {
+            authenticated_signer: None,
+            refund_grant_to: None,
+            messages: Vec::new(),
+            subscribe: Vec::new(),
+            unsubscribe: Vec::new(),
+        }
+    }
+}
+
+impl<Message, Grant> RawExecutionOutcome<Message, Grant> {
+    /// Sets the `authenticated_signer` of this [`RawExecutionOutcome`].
+    pub fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
+        self.authenticated_signer = authenticated_signer;
+        self
+    }
+
+    /// Sets the `refund_grant_to` field of this [`RawExecutionOutcome`].
+    pub fn with_refund_grant_to(mut self, refund_grant_to: Option<Account>) -> Self {
+        self.refund_grant_to = refund_grant_to;
+        self
+    }
+
+    /// Adds a `message` to this [`RawExecutionOutcome`].
+    pub fn add_raw_message(&mut self, message: RawOutgoingMessage<Message, Grant>) -> &mut Self {
+        self.messages.push(message);
+        self
+    }
+
+    /// Adds a `message` to this [`RawExecutionOutcome`].
+    pub fn with_raw_message(mut self, message: RawOutgoingMessage<Message, Grant>) -> Self {
+        self.add_raw_message(message);
+        self
+    }
+}
+
+impl<Message, Grant> RawExecutionOutcome<Message, Grant>
+where
+    Grant: Default,
+{
+    /// Adds a `message` to be sent to `destination` to this [`RawExecutionOutcome`].
+    pub fn add_message(
+        &mut self,
+        destination: impl Into<Destination>,
+        message: Message,
+    ) -> &mut Self {
+        self.add_raw_message(RawOutgoingMessage {
+            destination: destination.into(),
+            authenticated: false,
+            kind: MessageKind::Simple,
+            grant: Grant::default(),
+            message,
+        })
+    }
+
+    /// Adds a `message` to be sent to `destination` to this [`RawExecutionOutcome`].
+    pub fn with_message(mut self, destination: impl Into<Destination>, message: Message) -> Self {
+        self.add_message(destination, message);
+        self
+    }
+
+    /// Adds an authenticated `message` to this [`RawExecutionOutcome`]. Authenticated messages can
+    /// act on behalf of the user that created them.
+    pub fn add_authenticated_message(
+        &mut self,
+        destination: impl Into<Destination>,
+        message: Message,
+    ) -> &mut Self {
+        self.add_raw_message(RawOutgoingMessage {
+            destination: destination.into(),
+            authenticated: true,
+            kind: MessageKind::Simple,
+            grant: Grant::default(),
+            message,
+        })
+    }
+
+    /// Adds an authenticated `message` to this [`RawExecutionOutcome`]. Authenticated messages can
+    /// act on behalf of the user that created them.
+    pub fn with_authenticated_message(
+        mut self,
+        destination: impl Into<Destination>,
+        message: Message,
+    ) -> Self {
+        self.add_authenticated_message(destination, message);
+        self
+    }
+
+    /// Adds a tracked `message` to this [`RawExecutionOutcome`]. Tracked messages are bounced if
+    /// rejected on the receiving end. To differentiate bounced messages from original
+    /// messages, the entrypoint `handle_message` should check `context.is_bounced`.
+    pub fn add_tracked_message(
+        &mut self,
+        destination: impl Into<Destination>,
+        message: Message,
+    ) -> &mut Self {
+        self.add_raw_message(RawOutgoingMessage {
+            destination: destination.into(),
+            authenticated: false,
+            kind: MessageKind::Tracked,
+            grant: Grant::default(),
+            message,
+        })
+    }
+
+    /// Adds a tracked `message` to this [`RawExecutionOutcome`]. Tracked messages are bounced if
+    /// rejected on the receiving end. To differentiate bounced messages from original
+    /// messages, the entrypoint `handle_message` should check `context.is_bounced`.
+    pub fn with_tracked_message(
+        mut self,
+        destination: impl Into<Destination>,
+        message: Message,
+    ) -> Self {
+        self.add_tracked_message(destination, message);
+        self
+    }
+
+    /// Adds a tracked and authenticated message to the execution result. Tracked messages
+    /// are bounced if rejected on the receiving end. To differentiate bounced messages
+    /// from original messages, the entrypoint `handle_message` should check
+    /// `context.is_bounced`.
+    pub fn add_tracked_authenticated_message(
+        &mut self,
+        destination: impl Into<Destination>,
+        message: Message,
+    ) -> &mut Self {
+        self.add_raw_message(RawOutgoingMessage {
+            destination: destination.into(),
+            authenticated: true,
+            kind: MessageKind::Tracked,
+            grant: Grant::default(),
+            message,
+        })
+    }
+
+    /// Adds a tracked and authenticated message to the execution result. Tracked messages
+    /// are bounced if rejected on the receiving end. To differentiate bounced messages
+    /// from original messages, the entrypoint `handle_message` should check
+    /// `context.is_bounced`.
+    pub fn with_tracked_authenticated_message(
+        mut self,
+        destination: impl Into<Destination>,
+        message: Message,
+    ) -> Self {
+        self.add_tracked_authenticated_message(destination, message);
+        self
+    }
+}
+
+impl<Message, Grant> RawExecutionOutcome<Message, Grant>
+where
+    Message: Serialize,
+{
+    /// Serializes the messages in this [`RawExecutionOutcome`].
+    pub fn serialize_messages(self) -> RawExecutionOutcome<Vec<u8>, Grant> {
+        let messages = self
+            .messages
+            .into_iter()
+            .map(RawOutgoingMessage::serialize_message)
+            .collect();
+
+        RawExecutionOutcome {
+            authenticated_signer: None,
+            refund_grant_to: None,
+            messages,
+            subscribe: self.subscribe,
+            unsubscribe: self.unsubscribe,
+        }
+    }
+}

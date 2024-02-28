@@ -26,7 +26,8 @@ pub use applications::{
 };
 pub use execution::ExecutionStateView;
 pub use linera_base::execution::{
-    CalleeContext, MessageContext, MessageKind, OperationContext, QueryContext, RawOutgoingMessage,
+    CalleeContext, MessageContext, MessageKind, OperationContext, QueryContext,
+    RawExecutionOutcome, RawOutgoingMessage,
 };
 pub use policy::{IntoPriced, ResourceControlPolicy};
 pub use resources::{ResourceController, ResourceTracker};
@@ -515,24 +516,6 @@ pub enum Response {
     ),
 }
 
-/// Externally visible results of an execution. These results are meant in the context of
-/// the application that created them.
-#[derive(Debug)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct RawExecutionOutcome<Message, Grant = Resources> {
-    /// The signer who created the messages.
-    pub authenticated_signer: Option<Owner>,
-    /// Where to send a refund for the unused part of each grant after execution, if any.
-    pub refund_grant_to: Option<Account>,
-    /// Sends messages to the given destinations, possibly forwarding the authenticated
-    /// signer and including grant with the refund policy described above.
-    pub messages: Vec<RawOutgoingMessage<Message, Grant>>,
-    /// Subscribe chains to channels.
-    pub subscribe: Vec<(ChannelName, ChainId)>,
-    /// Unsubscribe chains to channels.
-    pub unsubscribe: Vec<(ChannelName, ChainId)>,
-}
-
 /// The identifier of a channel, relative to a particular application.
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash, Serialize, Deserialize, SimpleObject,
@@ -562,41 +545,10 @@ impl ExecutionOutcome {
     }
 }
 
-impl<Message, Grant> RawExecutionOutcome<Message, Grant> {
-    pub fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
-        self.authenticated_signer = authenticated_signer;
-        self
-    }
+impl<Message> IntoPriced for RawExecutionOutcome<Message, Resources> {
+    type Output = RawExecutionOutcome<Message, Amount>;
 
-    pub fn with_refund_grant_to(mut self, refund_grant_to: Option<Account>) -> Self {
-        self.refund_grant_to = refund_grant_to;
-        self
-    }
-
-    /// Adds a `message` to this [`RawExecutionOutcome`].
-    pub fn with_message(mut self, message: RawOutgoingMessage<Message, Grant>) -> Self {
-        self.messages.push(message);
-        self
-    }
-}
-
-impl<Message, Grant> Default for RawExecutionOutcome<Message, Grant> {
-    fn default() -> Self {
-        Self {
-            authenticated_signer: None,
-            refund_grant_to: None,
-            messages: Vec::new(),
-            subscribe: Vec::new(),
-            unsubscribe: Vec::new(),
-        }
-    }
-}
-
-impl<Message> RawExecutionOutcome<Message, Resources> {
-    pub fn into_priced(
-        self,
-        policy: &ResourceControlPolicy,
-    ) -> Result<RawExecutionOutcome<Message, Amount>, ArithmeticError> {
+    fn into_priced(self, policy: &ResourceControlPolicy) -> Result<Self::Output, ArithmeticError> {
         let RawExecutionOutcome {
             authenticated_signer,
             refund_grant_to,
