@@ -303,7 +303,7 @@ where
         session: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallOutcome, ExecutionError> {
+    ) -> Result<SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, ExecutionError> {
         let forwarded_sessions = forwarded_sessions
             .into_iter()
             .map(contract::SessionId::from)

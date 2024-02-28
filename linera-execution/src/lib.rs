@@ -27,7 +27,7 @@ pub use applications::{
 pub use execution::ExecutionStateView;
 pub use linera_base::execution::{
     ApplicationCallOutcome, CalleeContext, MessageContext, MessageKind, OperationContext,
-    QueryContext, RawExecutionOutcome, RawOutgoingMessage,
+    QueryContext, RawExecutionOutcome, RawOutgoingMessage, SessionCallOutcome,
 };
 pub use policy::{IntoPriced, ResourceControlPolicy};
 pub use resources::{ResourceController, ResourceTracker};
@@ -186,13 +186,14 @@ pub trait UserContract {
     ) -> Result<ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, ExecutionError>;
 
     /// Executes a call from another application into a session created by this application.
+    #[allow(clippy::type_complexity)]
     fn handle_session_call(
         &mut self,
         context: CalleeContext,
         session_state: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallOutcome, ExecutionError>;
+    ) -> Result<SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, ExecutionError>;
 }
 
 /// The public entry points provided by the service part of an application.
@@ -203,15 +204,6 @@ pub trait UserService {
         context: QueryContext,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
-}
-
-/// The result of calling into a session.
-#[derive(Default)]
-pub struct SessionCallOutcome {
-    /// The application result.
-    pub inner: ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>,
-    /// The new state of the session, if any. `None` means that the session should be terminated.
-    pub new_state: Option<Vec<u8>>,
 }
 
 /// System runtime implementation in use.

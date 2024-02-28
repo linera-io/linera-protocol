@@ -135,7 +135,7 @@ macro_rules! contract {
                             forwarded_sessions,
                         )
                         .await
-                        .map(|outcome| (application, outcome.into_raw()))
+                        .map(|outcome| (application, outcome.serialize_contents()))
                 },
             )
         }

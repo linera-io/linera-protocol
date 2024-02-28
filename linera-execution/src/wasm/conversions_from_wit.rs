@@ -22,7 +22,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 
-impl From<contract::SessionCallOutcome> for SessionCallOutcome {
+impl From<contract::SessionCallOutcome> for SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>> {
     fn from(outcome: contract::SessionCallOutcome) -> Self {
         SessionCallOutcome {
             inner: outcome.inner.into(),

@@ -56,8 +56,7 @@ use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     identifiers::ApplicationId,
 };
-use serde::{de::DeserializeOwned, Serialize};
-use std::{error::Error, fmt::Debug, sync::Arc};
+use std::{error::Error, sync::Arc};
 
 pub use self::{
     extensions::{FromBcsBytes, ToBcsBytes},
@@ -71,7 +70,7 @@ pub use linera_base::{
     execution::{
         ApplicationCallOutcome, CalleeContext, MessageContext, MessageKind, OperationContext,
         QueryContext, RawExecutionOutcome as ExecutionOutcome,
-        RawOutgoingMessage as OutgoingMessage,
+        RawOutgoingMessage as OutgoingMessage, SessionCallOutcome,
     },
     identifiers::SessionId,
 };
@@ -324,34 +323,5 @@ pub trait Service: WithServiceAbi + ServiceAbi {
         let bytes = crate::service::system_api::current_application_parameters();
         let parameters = serde_json::from_slice(&bytes)?;
         Ok(parameters)
-    }
-}
-
-/// The result of calling into a session.
-#[derive(Debug, Default)]
-pub struct SessionCallOutcome<Message, Value, SessionState> {
-    /// The result of the application call.
-    pub inner: ApplicationCallOutcome<Message, Value, SessionState>,
-    /// The new state of the session, if any. `None` means that the session was consumed
-    /// by the call.
-    pub new_state: Option<SessionState>,
-}
-
-impl<Message, Value, SessionState> SessionCallOutcome<Message, Value, SessionState>
-where
-    Message: Debug + DeserializeOwned + Serialize,
-    Value: Serialize,
-    SessionState: Serialize,
-{
-    /// Serializes the internal `Message`, `Value` and `SessionState` types into raw bytes.
-    pub fn into_raw(self) -> SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>> {
-        let new_state = self.new_state.map(|session_state| {
-            bcs::to_bytes(&session_state).expect("Failed to serialize new session state")
-        });
-
-        SessionCallOutcome {
-            inner: self.inner.serialize_contents(),
-            new_state,
-        }
     }
 }

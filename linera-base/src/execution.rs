@@ -397,3 +397,44 @@ where
         }
     }
 }
+
+/// The result of calling into a session.
+#[derive(Debug)]
+pub struct SessionCallOutcome<Message, Value, SessionState> {
+    /// The result of the application call.
+    pub inner: ApplicationCallOutcome<Message, Value, SessionState>,
+    /// The new state of the session, if any. `None` means that the session was consumed
+    /// by the call.
+    pub new_state: Option<SessionState>,
+}
+
+impl<Message, Value, SessionState> Default for SessionCallOutcome<Message, Value, SessionState>
+where
+    Value: Default,
+{
+    fn default() -> Self {
+        SessionCallOutcome {
+            inner: ApplicationCallOutcome::default(),
+            new_state: None,
+        }
+    }
+}
+
+impl<Message, Value, SessionState> SessionCallOutcome<Message, Value, SessionState>
+where
+    Message: Serialize,
+    Value: Serialize,
+    SessionState: Serialize,
+{
+    /// Serializes the internal `Message`, `Value` and `SessionState` types into raw bytes.
+    pub fn serialize_contents(self) -> SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>> {
+        let new_state = self.new_state.map(|session_state| {
+            bcs::to_bytes(&session_state).expect("Failed to serialize new session state")
+        });
+
+        SessionCallOutcome {
+            inner: self.inner.serialize_contents(),
+            new_state,
+        }
+    }
+}
