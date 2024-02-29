@@ -200,8 +200,8 @@ extern "Rust" {
 
     fn __contract_handle_session_call(
         context: CalleeContext,
-        argument: Vec<u8>,
         session_state: Vec<u8>,
+        argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String>;
 }
