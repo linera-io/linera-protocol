@@ -42,7 +42,7 @@ const DEFAULT_NAMESPACE: &str = "table_linera";
 /// The configuration of the key value store in use.
 #[allow(clippy::large_enum_variant)]
 pub enum StoreConfig {
-    /// The storage service  key value store
+    /// The storage service key-value store
     Service(ServiceStoreConfig, String),
     /// The memory key value store
     Memory(MemoryStoreConfig, String),
