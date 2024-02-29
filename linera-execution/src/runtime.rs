@@ -74,6 +74,22 @@ pub struct SyncRuntimeInternal<UserInstance> {
     resource_controller: ResourceController,
 }
 
+impl<UserInstance> SyncRuntimeInternal<UserInstance> {
+    /// Returns the index of the next outcome's first message.
+    fn next_message_index(&self) -> Result<u32, ArithmeticError> {
+        let mut index = self.next_message_index;
+        for outcome in &self.execution_outcomes {
+            let len = match outcome {
+                ExecutionOutcome::System(outcome) => outcome.messages.len(),
+                ExecutionOutcome::User(_, outcome) => outcome.messages.len(),
+            };
+            let len = u32::try_from(len).map_err(|_| ArithmeticError::Overflow)?;
+            index = index.checked_add(len).ok_or(ArithmeticError::Overflow)?;
+        }
+        Ok(index)
+    }
+}
+
 /// The runtime status of an application.
 #[derive(Debug, Clone)]
 struct ApplicationStatus {
@@ -1115,7 +1131,7 @@ impl ContractRuntime for ContractSyncRuntime {
         let next_message_id = MessageId {
             chain_id: this.chain_id,
             height: this.height,
-            index: this.next_message_index,
+            index: this.next_message_index()?,
         };
         let chain_id = ChainId::child(next_message_id);
         let application_permissions = ApplicationPermissions::new_single(id);

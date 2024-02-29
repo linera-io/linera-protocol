@@ -921,16 +921,20 @@ async fn test_open_chain() {
         next_message_index: 5,
         ..make_operation_context()
     };
+    // We will send one additional message before calling open_chain.
+    let index = context.next_message_index + 1;
     let message_id = MessageId {
         chain_id: context.chain_id,
         height: context.height,
-        index: context.next_message_index,
+        index,
     };
 
     application.expect_call(ExpectedCall::execute_operation({
         let child_ownership = child_ownership.clone();
         move |runtime, _context, _operation| {
             assert_eq!(runtime.chain_ownership().unwrap(), ownership);
+            let destination = Account::chain(ChainId::root(2));
+            runtime.transfer(None, destination, Amount::ONE).unwrap();
             let chain_id = runtime.open_chain(child_ownership, Amount::ONE).unwrap();
             assert_eq!(chain_id, ChainId::child(message_id));
             Ok(RawExecutionOutcome::default())
@@ -946,17 +950,22 @@ async fn test_open_chain() {
         .await
         .unwrap();
 
-    assert_eq!(*view.system.balance.get(), Amount::from_tokens(4));
-    let ExecutionOutcome::System(outcome) = &outcomes[0] else {
-        panic!("Unexpected outcomes: {:?}", outcomes);
-    };
+    assert_eq!(*view.system.balance.get(), Amount::from_tokens(3));
+    let message = outcomes
+        .iter()
+        .flat_map(|outcome| match outcome {
+            ExecutionOutcome::System(outcome) => &outcome.messages,
+            ExecutionOutcome::User(_, _) => panic!("Unexpected message"),
+        })
+        .nth((index - context.next_message_index) as usize)
+        .unwrap();
     let RawOutgoingMessage {
         message: SystemMessage::OpenChain(config),
         destination: Destination::Recipient(recipient_id),
         ..
-    } = &outcome.messages[0]
+    } = message
     else {
-        panic!("Unexpected first message: {:?}", outcome.messages[0]);
+        panic!("Unexpected message at index {}: {:?}", index, message);
     };
     assert_eq!(*recipient_id, ChainId::child(message_id));
     assert_eq!(config.balance, Amount::ONE);
