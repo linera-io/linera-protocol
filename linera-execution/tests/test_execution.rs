@@ -999,7 +999,10 @@ async fn test_close_chain() {
     let context = make_operation_context();
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
-            assert!(!runtime.close_chain().unwrap());
+            assert_matches!(
+                runtime.close_chain(),
+                Err(ExecutionError::UnauthorizedApplication(_))
+            );
             Ok(RawExecutionOutcome::default())
         },
     ));
@@ -1019,7 +1022,7 @@ async fn test_close_chain() {
         .set(ApplicationPermissions::new_single(application_id));
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
-            assert!(runtime.close_chain().unwrap());
+            runtime.close_chain().unwrap();
             Ok(RawExecutionOutcome::default())
         },
     ));

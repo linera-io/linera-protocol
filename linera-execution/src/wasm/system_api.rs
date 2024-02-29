@@ -84,8 +84,20 @@ macro_rules! impl_contract_system_api {
                     .map(Into::into)
             }
 
-            fn close_chain(&mut self) -> Result<bool, Self::Error> {
+            fn close_chain(&mut self) -> Result<(), Self::Error> {
                 ContractRuntime::close_chain(self)
+            }
+
+            fn error_to_closechainerror(
+                &mut self,
+                error: Self::Error,
+            ) -> Result<contract_system_api::Closechainerror, $trap> {
+                match error {
+                    ExecutionError::UnauthorizedApplication(_) => {
+                        Ok(contract_system_api::Closechainerror::NotPermitted)
+                    }
+                    error => Err(error.into()),
+                }
             }
 
             fn try_call_application(
