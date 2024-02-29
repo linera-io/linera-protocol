@@ -812,7 +812,7 @@ impl MakeServiceStorage {
 impl StorageBuilder for MakeServiceStorage {
     type Storage = ServiceStorage<TestClock>;
 
-    async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
+    async fn build(&mut self) -> anyhow::Result<Self::Storage> {
         if self._guard.is_none() && self.use_child {
             let binary = get_service_storage_binary().await?.display().to_string();
             let spanner = StorageServiceSpanner::new(&self.endpoint, binary);
