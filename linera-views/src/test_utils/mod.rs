@@ -664,7 +664,7 @@ where
         .collect::<BTreeSet<_>>()
 }
 
-/// This function exercise the functionalities of the `AdminKeyValueStore`.
+/// Exercises the functionalities of the `AdminKeyValueStore`.
 /// This tests everything except the `delete_all` which would
 /// interact with other namespaces.
 pub async fn admin_test<S: AdminKeyValueStore>(config: &S::Config)
