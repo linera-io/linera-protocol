@@ -12,7 +12,7 @@ use linera_base::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::SystemMessage,
+    system::{ApplicationPermissions, SystemMessage},
     test_utils::{
         create_dummy_user_application_registrations, register_mock_applications, ExpectedCall,
         SystemExecutionState,
@@ -22,10 +22,7 @@ use linera_execution::{
     RawOutgoingMessage, ResourceController, Response, SessionCallOutcome,
 };
 use linera_views::batch::Batch;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    vec,
-};
+use std::{collections::BTreeMap, vec};
 
 fn make_operation_context() -> OperationContext {
     OperationContext {
@@ -977,7 +974,61 @@ async fn test_open_chain() {
     assert_eq!(*child_view.system.ownership.get(), child_ownership);
     assert_eq!(*child_view.system.committees.get(), committees);
     assert_eq!(
-        *child_view.system.authorized_applications.get(),
-        Some(BTreeSet::from([application_id]))
+        *child_view.system.application_permissions.get(),
+        ApplicationPermissions::new_single(application_id)
     );
+}
+
+/// Tests the system API call `close_chain``.
+#[tokio::test]
+async fn test_close_chain() {
+    let committee = Committee::make_simple(vec![PublicKey::test_key(0).into()]);
+    let committees = BTreeMap::from([(Epoch::ZERO, committee)]);
+    let ownership = ChainOwnership::single(PublicKey::test_key(1));
+    let state = SystemExecutionState {
+        committees: committees.clone(),
+        ownership: ownership.clone(),
+        balance: Amount::from_tokens(5),
+        ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(0), ChainId::root(0))
+    };
+    let mut view = state.into_view().await;
+    let mut applications = register_mock_applications(&mut view, 1).await.unwrap();
+    let (application_id, application) = applications.next().unwrap();
+
+    // The application is not authorized to close the chain.
+    let context = make_operation_context();
+    application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            assert!(!runtime.close_chain().unwrap());
+            Ok(RawExecutionOutcome::default())
+        },
+    ));
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+    view.execute_operation(context, operation, &mut controller)
+        .await
+        .unwrap();
+    assert!(!view.system.closed.get());
+
+    // Now we authorize the application and it can close the chain.
+    view.system
+        .application_permissions
+        .set(ApplicationPermissions::new_single(application_id));
+    application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            assert!(runtime.close_chain().unwrap());
+            Ok(RawExecutionOutcome::default())
+        },
+    ));
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+    view.execute_operation(context, operation, &mut controller)
+        .await
+        .unwrap();
+    assert!(view.system.closed.get());
 }

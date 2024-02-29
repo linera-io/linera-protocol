@@ -5,8 +5,8 @@
 use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, Bytecode, BytecodeLocation, ChannelName, ChannelSubscription,
-    Destination, MessageContext, MessageKind, OperationContext, QueryContext, RawExecutionOutcome,
-    RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
+    Destination, GenericApplicationId, MessageContext, MessageKind, OperationContext, QueryContext,
+    RawExecutionOutcome, RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
 };
 use async_graphql::Enum;
 use custom_debug_derive::Debug;
@@ -31,7 +31,7 @@ use linera_views::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fmt::{self, Display, Formatter},
     iter,
 };
@@ -90,9 +90,8 @@ pub struct SystemExecutionStateView<C> {
     pub registry: ApplicationRegistryView<C>,
     /// Whether this chain has been closed.
     pub closed: RegisterView<C, bool>,
-    /// An optional set of authorized applications. If set, operations are restricted to these
-    /// applications.
-    pub authorized_applications: RegisterView<C, Option<BTreeSet<ApplicationId>>>,
+    /// Permissions for applications on this chain.
+    pub application_permissions: RegisterView<C, ApplicationPermissions>,
 }
 
 /// The configuration for a new chain.
@@ -103,7 +102,43 @@ pub struct OpenChainConfig {
     pub epoch: Epoch,
     pub committees: BTreeMap<Epoch, Committee>,
     pub balance: Amount,
-    pub authorized_applications: Option<BTreeSet<ApplicationId>>,
+    pub application_permissions: ApplicationPermissions,
+}
+
+/// Permissions for applications on a chain.
+#[derive(Default, Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ApplicationPermissions {
+    /// If this is `None`, all system operations and application operations are allowed.
+    /// If it is `Some`, only operations from the specified applications are allowed, and
+    /// no system operations.
+    pub execute_operations: Option<Vec<ApplicationId>>,
+    /// These applications are allowed to close the current chain using the system API.
+    pub close_chain: Vec<ApplicationId>,
+}
+
+impl ApplicationPermissions {
+    /// Creates new `ApplicationPermissions` where the given application is the only one
+    /// whose operations are allowed, and it can also close the chain.
+    pub fn new_single(app_id: ApplicationId) -> Self {
+        Self {
+            execute_operations: Some(vec![app_id]),
+            close_chain: vec![app_id],
+        }
+    }
+
+    /// Returns whether operations with the given application ID are allowed on this chain.
+    pub fn can_execute_operations(&self, app_id: &GenericApplicationId) -> bool {
+        match (app_id, &self.execute_operations) {
+            (_, None) => true,
+            (GenericApplicationId::System, Some(_)) => false,
+            (GenericApplicationId::User(app_id), Some(app_ids)) => app_ids.contains(app_id),
+        }
+    }
+
+    /// Returns whether the given application is allowed to close this chain.
+    pub fn can_close_chain(&self, app_id: &ApplicationId) -> bool {
+        self.close_chain.contains(app_id)
+    }
 }
 
 /// A system operation.
@@ -475,25 +510,8 @@ where
                 });
             }
             CloseChain => {
-                // Unsubscribe to all channels.
-                self.subscriptions
-                    .for_each_index(|subscription| {
-                        let message = RawOutgoingMessage {
-                            destination: Destination::Recipient(subscription.chain_id),
-                            authenticated: false,
-                            grant: Amount::ZERO,
-                            kind: MessageKind::Protected,
-                            message: SystemMessage::Unsubscribe {
-                                id: context.chain_id,
-                                subscription,
-                            },
-                        };
-                        outcome.messages.push(message);
-                        Ok(())
-                    })
-                    .await?;
-                self.subscriptions.clear();
-                self.closed.set(true);
+                let messages = self.close_chain(context.chain_id).await?;
+                outcome.messages.extend(messages);
             }
             Transfer {
                 owner,
@@ -934,7 +952,7 @@ where
             epoch,
             committees,
             balance,
-            authorized_applications,
+            application_permissions,
         } = config;
         let description = ChainDescription::Child(message_id);
         self.description.set(Some(description));
@@ -950,7 +968,7 @@ where
         self.ownership.set(ownership);
         self.timestamp.set(timestamp);
         self.balance.set(balance);
-        self.authorized_applications.set(authorized_applications);
+        self.application_permissions.set(application_permissions);
     }
 
     pub async fn handle_query(
@@ -1015,6 +1033,30 @@ where
             },
         };
         Ok([open_chain_message, subscribe_message])
+    }
+
+    pub async fn close_chain(
+        &mut self,
+        id: ChainId,
+    ) -> Result<Vec<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
+        let mut messages = Vec::new();
+        // Unsubscribe to all channels.
+        self.subscriptions
+            .for_each_index(|subscription| {
+                let message = RawOutgoingMessage {
+                    destination: Destination::Recipient(subscription.chain_id),
+                    authenticated: false,
+                    grant: Amount::ZERO,
+                    kind: MessageKind::Protected,
+                    message: SystemMessage::Unsubscribe { id, subscription },
+                };
+                messages.push(message);
+                Ok(())
+            })
+            .await?;
+        self.subscriptions.clear();
+        self.closed.set(true);
+        Ok(messages)
     }
 }
 
@@ -1127,7 +1169,7 @@ mod tests {
             epoch,
             admin_id,
             balance: Amount::ZERO,
-            authorized_applications: None,
+            application_permissions: Default::default(),
         };
         let operation = SystemOperation::OpenChain(config.clone());
         let (result, new_application) = view

@@ -133,6 +133,8 @@ pub enum ExecutionError {
     InvalidBytecodeId(BytecodeId),
     #[error("Owner is None")]
     OwnerIsNone,
+    #[error("Application is not authorized to perform system operations on this chain: {0:}")]
+    UnauthorizedApplication(UserApplicationId),
 }
 
 impl ExecutionError {
@@ -512,6 +514,9 @@ pub trait ContractRuntime: BaseRuntime {
         ownership: ChainOwnership,
         balance: Amount,
     ) -> Result<ChainId, ExecutionError>;
+
+    /// Closes the current chain.
+    fn close_chain(&mut self) -> Result<bool, ExecutionError>;
 }
 
 /// An operation to be executed in a block.

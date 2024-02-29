@@ -5,6 +5,7 @@ use crate::{
     execution::UserAction,
     execution_state_actor::{ExecutionStateSender, Request},
     resources::ResourceController,
+    system::ApplicationPermissions,
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
     ExecutionError, ExecutionOutcome, RawExecutionOutcome, ServiceRuntime, SessionId,
@@ -22,7 +23,6 @@ use linera_views::batch::Batch;
 use oneshot::Receiver;
 use std::{
     collections::{hash_map, BTreeMap, HashMap, HashSet},
-    iter,
     sync::{Arc, Mutex},
 };
 
@@ -1111,23 +1111,21 @@ impl ContractRuntime for ContractSyncRuntime {
         balance: Amount,
     ) -> Result<ChainId, ExecutionError> {
         let mut this = self.inner();
+        let id = this.current_application().id;
         let next_message_id = MessageId {
             chain_id: this.chain_id,
             height: this.height,
             index: this.next_message_index,
         };
         let chain_id = ChainId::child(next_message_id);
-        let authorized_applications = this
-            .call_stack
-            .last()
-            .map(|status| iter::once(status.id).collect());
+        let application_permissions = ApplicationPermissions::new_single(id);
         let [open_chain_message, subscribe_message] = this
             .execution_state_sender
             .send_request(|callback| Request::OpenChain {
                 ownership,
                 balance,
                 next_message_id,
-                authorized_applications,
+                application_permissions,
                 callback,
             })?
             .recv_response()?;
@@ -1137,6 +1135,17 @@ impl ContractRuntime for ContractSyncRuntime {
         this.execution_outcomes
             .push(ExecutionOutcome::System(outcome));
         Ok(chain_id)
+    }
+
+    fn close_chain(&mut self) -> Result<bool, ExecutionError> {
+        let mut this = self.inner();
+        let application_id = this.current_application().id;
+        this.execution_state_sender
+            .send_request(|callback| Request::CloseChain {
+                application_id,
+                callback,
+            })?
+            .recv_response()?
     }
 }
 

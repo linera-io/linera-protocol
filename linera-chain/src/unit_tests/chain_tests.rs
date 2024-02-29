@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::OpenChainConfig,
+    system::{ApplicationPermissions, OpenChainConfig},
     test_utils::{ExpectedCall, MockApplication},
     BytecodeLocation, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation,
     RawExecutionOutcome, SystemMessage, TestExecutionRuntimeContext, UserApplicationDescription,
@@ -76,12 +76,12 @@ fn make_open_chain_config() -> OpenChainConfig {
         epoch: Epoch::ZERO,
         committees: iter::once((Epoch::ZERO, committee)).collect(),
         balance: Amount::from_tokens(10),
-        authorized_applications: None,
+        application_permissions: Default::default(),
     }
 }
 
 #[tokio::test]
-async fn test_authorized_applications() {
+async fn test_application_permissions() {
     let time = Timestamp::from(0);
     let message_id = make_admin_message_id(BlockHeight(3));
     let chain_id = ChainId::child(message_id);
@@ -98,7 +98,7 @@ async fn test_authorized_applications() {
 
     // Initialize the chain, with a chain application.
     let config = OpenChainConfig {
-        authorized_applications: Some(iter::once(application_id).collect()),
+        application_permissions: ApplicationPermissions::new_single(application_id),
         ..make_open_chain_config()
     };
     let message = SystemMessage::OpenChain(config).into();

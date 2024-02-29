@@ -792,15 +792,13 @@ where
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
-            if let Some(app_ids) = self.execution_state.system.authorized_applications.get() {
-                ensure!(
-                    operation
-                        .application_id()
-                        .user_application_id()
-                        .map_or(false, |app_id| app_ids.contains(app_id)),
-                    ChainError::AuthorizedApplications(app_ids.iter().cloned().collect())
-                );
-            }
+            let app_permissions = self.execution_state.system.application_permissions.get();
+            ensure!(
+                app_permissions.can_execute_operations(&operation.application_id()),
+                ChainError::AuthorizedApplications(
+                    app_permissions.execute_operations.clone().unwrap()
+                )
+            );
             #[cfg(with_metrics)]
             let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;

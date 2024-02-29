@@ -4,7 +4,7 @@
 //! Handle requests from the synchronous execution thread of user applications.
 
 use crate::{
-    system::{OpenChainConfig, Recipient, UserData},
+    system::{ApplicationPermissions, OpenChainConfig, Recipient, UserData},
     util::RespondExt,
     ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
     RawOutgoingMessage, SystemExecutionError, SystemMessage, UserApplicationDescription,
@@ -13,7 +13,7 @@ use crate::{
 use futures::channel::mpsc;
 use linera_base::{
     data_types::{Amount, Timestamp},
-    identifiers::{Account, ApplicationId, MessageId, Owner},
+    identifiers::{Account, MessageId, Owner},
     ownership::ChainOwnership,
 };
 
@@ -31,10 +31,7 @@ use linera_views::{
 use oneshot::Sender;
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
-use std::{
-    collections::BTreeSet,
-    fmt::{self, Debug, Formatter},
-};
+use std::fmt::{self, Debug, Formatter};
 
 #[cfg(with_metrics)]
 /// Histogram of the latency to load a contract bytecode.
@@ -218,7 +215,7 @@ where
                 ownership,
                 balance,
                 next_message_id,
-                authorized_applications,
+                application_permissions,
                 callback,
             } => {
                 let inactive_err = || SystemExecutionError::InactiveChain;
@@ -228,10 +225,24 @@ where
                     epoch: self.system.epoch.get().ok_or_else(inactive_err)?,
                     committees: self.system.committees.get().clone(),
                     balance,
-                    authorized_applications,
+                    application_permissions,
                 };
                 let messages = self.system.open_chain(config, next_message_id)?;
                 callback.respond(messages)
+            }
+
+            CloseChain {
+                application_id,
+                callback,
+            } => {
+                let app_permissions = self.system.application_permissions.get();
+                if !app_permissions.can_close_chain(&application_id) {
+                    callback.respond(Ok(false));
+                } else {
+                    let chain_id = self.context().extra().chain_id();
+                    self.system.close_chain(chain_id).await?;
+                    callback.respond(Ok(true));
+                }
             }
         }
 
@@ -324,8 +335,13 @@ pub enum Request {
         ownership: ChainOwnership,
         balance: Amount,
         next_message_id: MessageId,
-        authorized_applications: Option<BTreeSet<ApplicationId>>,
+        application_permissions: ApplicationPermissions,
         callback: Sender<[RawOutgoingMessage<SystemMessage, Amount>; 2]>,
+    },
+
+    CloseChain {
+        application_id: UserApplicationId,
+        callback: oneshot::Sender<Result<bool, ExecutionError>>,
     },
 }
 
@@ -426,6 +442,11 @@ impl Debug for Request {
             Request::OpenChain { balance, .. } => formatter
                 .debug_struct("Request::OpenChain")
                 .field("balance", balance)
+                .finish_non_exhaustive(),
+
+            Request::CloseChain { application_id, .. } => formatter
+                .debug_struct("Request::CloseChain")
+                .field("application_id", application_id)
                 .finish_non_exhaustive(),
         }
     }

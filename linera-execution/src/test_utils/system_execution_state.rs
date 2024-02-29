@@ -5,7 +5,7 @@ use crate::{
     applications::ApplicationRegistry,
     committee::{Committee, Epoch},
     execution::UserAction,
-    system::SystemChannel,
+    system::{ApplicationPermissions, SystemChannel},
     ChannelSubscription, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
     ExecutionStateView, OperationContext, ResourceControlPolicy, ResourceController,
     ResourceTracker, TestExecutionRuntimeContext, UserApplicationDescription, UserContractCode,
@@ -40,7 +40,7 @@ pub struct SystemExecutionState {
     pub timestamp: Timestamp,
     pub registry: ApplicationRegistry,
     pub closed: bool,
-    pub authorized_applications: Option<BTreeSet<ApplicationId>>,
+    pub application_permissions: ApplicationPermissions,
 }
 
 impl SystemExecutionState {
@@ -97,7 +97,7 @@ impl SystemExecutionState {
             timestamp,
             registry,
             closed,
-            authorized_applications,
+            application_permissions,
         } = self;
         let extra = TestExecutionRuntimeContext::new(chain_id, execution_runtime_config);
         let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, extra);
@@ -129,8 +129,8 @@ impl SystemExecutionState {
             .expect("serialization of registry components should not fail");
         view.system.closed.set(closed);
         view.system
-            .authorized_applications
-            .set(authorized_applications);
+            .application_permissions
+            .set(application_permissions);
         view
     }
 }
