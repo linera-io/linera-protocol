@@ -510,7 +510,7 @@ pub mod tests {
 
         pub fn new(context: &str) -> Self {
             SpecificContextInfo {
-                name: context.to_string(),
+                name: context.replace([':', '<', '>'], "_"),
                 attribute: Some(quote! { #[view(context = #context)] }),
                 context: syn::parse_str(context).unwrap(),
                 generics: parse_quote! { <> },
