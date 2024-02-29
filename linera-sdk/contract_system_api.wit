@@ -36,7 +36,7 @@ open-chain: func(
     balance: amount
 ) -> chain-id
 
-close-chain: func()
+close-chain: func() -> bool
 
 chain-ownership: func() -> chain-ownership
 

@@ -84,7 +84,7 @@ macro_rules! impl_contract_system_api {
                     .map(Into::into)
             }
 
-            fn close_chain(&mut self) -> Result<(), Self::Error> {
+            fn close_chain(&mut self) -> Result<bool, Self::Error> {
                 ContractRuntime::close_chain(self)
             }
 

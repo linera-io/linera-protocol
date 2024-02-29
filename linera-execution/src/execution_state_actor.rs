@@ -237,11 +237,11 @@ where
             } => {
                 let app_permissions = self.system.application_permissions.get();
                 if !app_permissions.can_close_chain(&application_id) {
-                    callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
+                    callback.respond(Ok(false));
                 } else {
                     let chain_id = self.context().extra().chain_id();
                     self.system.close_chain(chain_id).await?;
-                    callback.respond(Ok(()));
+                    callback.respond(Ok(true));
                 }
             }
         }
@@ -341,7 +341,7 @@ pub enum Request {
 
     CloseChain {
         application_id: UserApplicationId,
-        callback: oneshot::Sender<Result<(), ExecutionError>>,
+        callback: oneshot::Sender<Result<bool, ExecutionError>>,
     },
 }
 

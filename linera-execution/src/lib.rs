@@ -516,7 +516,7 @@ pub trait ContractRuntime: BaseRuntime {
     ) -> Result<ChainId, ExecutionError>;
 
     /// Closes the current chain.
-    fn close_chain(&mut self) -> Result<(), ExecutionError>;
+    fn close_chain(&mut self) -> Result<bool, ExecutionError>;
 }
 
 /// An operation to be executed in a block.
