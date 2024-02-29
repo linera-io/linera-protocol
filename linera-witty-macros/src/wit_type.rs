@@ -75,7 +75,8 @@ pub fn derive_for_enum<'variants>(
 
             #(#variant_sizes)*
 
-            size
+            let end_padding = (-(size as i32) & (variants_alignment as i32 - 1)) as u32;
+            size + end_padding
         };
 
         type Layout = linera_witty::HCons<#discriminant_type, #variant_layouts>;

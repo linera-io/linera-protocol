@@ -116,7 +116,8 @@ fn enum_type() {
                 size = variant_size;
             }
 
-            size
+            let end_padding = (-(size as i32) & (variants_alignment as i32 - 1)) as u32;
+            size + end_padding
         };
 
         type Layout = linera_witty::HCons<u8,
@@ -248,7 +249,8 @@ fn enum_type_with_skipped_fields() {
                 size = variant_size;
             }
 
-            size
+            let end_padding = (-(size as i32) & (variants_alignment as i32 - 1)) as u32;
+            size + end_padding
         };
 
         type Layout = linera_witty::HCons<u8,

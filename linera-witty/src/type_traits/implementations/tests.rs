@@ -16,6 +16,7 @@ fn hlist_without_padding() {
         0x3031_3233_u32,
         0x4041_i16,
         true,
+        false,
     ];
 
     test_memory_roundtrip(
@@ -23,7 +24,7 @@ fn hlist_without_padding() {
         &[
             0x1f, 0x1e, 0x1d, 0x1c, 0x1b, 0x1a, 0x19, 0x18, 0x17, 0x16, 0x15, 0x14, 0x13, 0x12,
             0x11, 0x10, 0x27, 0x26, 0x25, 0x24, 0x23, 0x22, 0x21, 0x20, 0x33, 0x32, 0x31, 0x30,
-            0x41, 0x40, 0x01,
+            0x41, 0x40, 0x01, 0x00,
         ],
     );
     test_flattening_roundtrip(
@@ -35,7 +36,26 @@ fn hlist_without_padding() {
             0x3031_3233_i32,
             0x0000_4041_i32,
             0x0000_0001_i32,
+            0x0000_0000_i32,
         ],
+    );
+}
+
+/// Test roundtrip of a heterogeneous list that needs some padding at the end to align its
+/// size.
+#[test]
+fn hlist_with_padding_at_the_end_for_size_alignment() {
+    let input = hlist![0x8081_8283_8485_8687_u64, true];
+
+    test_memory_roundtrip(
+        input,
+        &[
+            0x87, 0x86, 0x85, 0x84, 0x83, 0x82, 0x81, 0x80, 0x01, 0, 0, 0, 0, 0, 0, 0,
+        ],
+    );
+    test_flattening_roundtrip(
+        input,
+        hlist![0x8081_8283_8485_8687_u64 as i64, 0x0000_0001_i32],
     );
 }
 

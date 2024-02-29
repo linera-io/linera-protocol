@@ -29,7 +29,10 @@ fn test_simple_bool_wrapper() {
 fn test_tuple_struct_without_padding() {
     let expected = TupleWithoutPadding(0x0807_0605_0403_0201_u64, 0x0c0b_0a09_i32, 0x0e0d_i16);
 
-    test_load_from_memory(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], &expected);
+    test_load_from_memory(
+        &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+        &expected,
+    );
     test_lift_from_flat_layout(
         hlist![0x0807_0605_0403_0201_i64, 0x0c0b_0a09_i32, 0x0000_0e0d_i32],
         &expected,
