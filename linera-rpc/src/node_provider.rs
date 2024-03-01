@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{client::Client, grpc};
 #[cfg(with_simple_network)]
 use crate::simple;
+use crate::{client::Client, grpc};
 
 use linera_core::node::{NodeError, ValidatorNodeProvider};
 
@@ -32,19 +32,18 @@ impl ValidatorNodeProvider for NodeProvider {
     type Node = Client;
 
     fn make_node(&self, address: &str) -> anyhow::Result<Self::Node, NodeError> {
-        let client = match &address.to_lowercase() {
-            address if address.starts_with("tcp") || address.starts_with("udp") => {
-                Client::Simple(self.simple.make_node(address)?)
-            }
-            address if address.starts_with("grpc") => Client::Grpc(self.grpc.make_node(address)?),
-            _ => {
-                return Err(NodeError::CannotResolveValidatorAddress {
-                    address: address.to_string(),
-                })
-            }
-        };
+        let address = address.to_lowercase();
 
-        Ok(client)
+        #[cfg(with_simple_network)]
+        if address.starts_with("tcp") || address.starts_with("udp") {
+            return Ok(Client::Simple(self.simple.make_node(&address)?));
+        }
+
+        if address.starts_with("grpc") {
+            return Ok(Client::Grpc(self.grpc.make_node(&address)?));
+        }
+
+        Err(NodeError::CannotResolveValidatorAddress { address })
     }
 }
 

@@ -10,9 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     cfg_aliases::cfg_aliases! {
         web: { all(target_arch = "wasm32", target_os = "unknown") },
         with_metrics: { all(not(web), feature = "metrics") },
-        with_simple_network: { all(not(web), feature = "simple_network") },
-        with_tcp: { all(not(web), feature = "tcp") },
-        with_udp: { all(not(web), feature = "udp") },
+        with_simple_network: { all(not(web), feature = "simple-network") },
     };
 
     Ok(())

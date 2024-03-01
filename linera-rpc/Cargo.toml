@@ -29,9 +29,7 @@ metrics = [
     "linera-views/metrics",
 ]
 
-tcp = ["tonic/transport"]
-udp = ["tokio-util/net"]
-simple_network = []
+simple-network = []
 
 [dependencies]
 anyhow.workspace = true
@@ -58,8 +56,6 @@ rand.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-tokio-util = { workspace = true, features = ["codec"] }
-tonic-health.workspace = true
 tower.workspace = true
 tracing.workspace = true
 
@@ -78,9 +74,12 @@ tonic = { workspace = true, features = ["codegen", "prost", "tls"] }
 tonic-health.workspace = true
 tower.workspace = true
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tonic = { workspace = true, features = ["codegen", "prost"] }
+
 [build-dependencies]
 cfg_aliases.workspace = true
-tonic-build.workspace = true
+tonic-build = { workspace = true, features = ["prost"] }
 
 [package.metadata.cargo-machete]
 ignored = ["getrandom", "proptest", "prost"]

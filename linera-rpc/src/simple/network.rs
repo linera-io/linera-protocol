@@ -2,6 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{
+    codec,
+    transport::{MessageHandler, ServerHandle, TransportProtocol},
+};
 use crate::{
     config::{
         CrossChainConfig, ShardId, ValidatorInternalNetworkPreConfig,
@@ -9,10 +13,6 @@ use crate::{
     },
     mass::{MassClient, MassClientError},
     HandleCertificateRequest, HandleLiteCertificateRequest, RpcMessage,
-};
-use super::{
-    codec,
-    transport::{MessageHandler, ServerHandle, TransportProtocol},
 };
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
@@ -511,7 +511,8 @@ impl MassClient for SimpleMassClient {
                 Err(error) => {
                     tracing::error!(
                         "Timeout while receiving response: {} (in flight: {})",
-                        error, in_flight
+                        error,
+                        in_flight
                     );
                 }
             }

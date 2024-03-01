@@ -2,7 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{simple::{codec, codec::Codec}, RpcMessage};
+use crate::{
+    simple::{codec, codec::Codec},
+    RpcMessage,
+};
 use async_trait::async_trait;
 use futures::{
     future,
