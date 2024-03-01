@@ -63,8 +63,8 @@ We use the test-only CLI option `--testing-prng-seed` to make keys deterministic
 explanation.
 
 ```bash
-OWNER_1=e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316
-OWNER_2=453690095cdfe6dbde7fc577e56bb838a7ee7920a72512d4a87748b4e151ed61
+OWNER_1=7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f
+OWNER_2=90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f
 CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 CHAIN_2=e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3
 ```
@@ -125,7 +125,7 @@ mutation ExecuteOrder {
   executeOrder(
     order:{
         Insert : {
-        owner: "User:e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316",
+        owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
         amount: "1",
         nature: Bid,
         price: {

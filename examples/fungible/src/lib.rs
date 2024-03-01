@@ -97,9 +97,9 @@ would not be predictable without `--testing-prng-seed` above.)
 
 ```bash
 CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65  # default chain for the wallet
-OWNER_1=e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316  # owner of chain 1
+OWNER_1=7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f  # owner of chain 1
 CHAIN_2=256e1dbc00482ddd619c293cc0df94d366afe7980022bb22d99e33036fd465dd  # another chain in the wallet
-OWNER_2=0d677b87f1bc6e12442f98c06b9c105fbebf6bb21d885739e23c315956c7d7f3  # owner of chain 2
+OWNER_2=598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3  # owner of chain 2
 ```
 
 The example below creates a token application on the default chain CHAIN_1 and gives the owner 100 tokens:
