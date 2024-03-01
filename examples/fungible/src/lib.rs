@@ -128,7 +128,74 @@ PORT=8080
 linera service --port $PORT &
 ```
 
-Then the web frontend:
+### Using GraphiQL
+
+- Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID`.
+- To get the current balance of user $OWNER_1, run the query:
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
+    query{
+        accounts {
+            entry(
+                key: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f"
+            ) {
+                value
+            }
+        }
+    }
+```
+- To get the current balance of user $OWNER_2, run the query:
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
+    query{
+        accounts {
+            entry(
+                key: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
+            ) {
+                value
+            }
+        }
+    }
+```
+- To transfer 50 tokens from $OWNER_1 to $OWNER_2
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
+    mutation {
+        transfer(
+            owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
+            amount: "50.",
+            targetAccount: {
+                chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+                owner: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
+            }
+        )
+    }
+```
+- To get the new balance of user $OWNER_1, run the query:
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
+    query{
+        accounts {
+            entry(
+                key: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f"
+            ) {
+                value
+            }
+        }
+    }
+```
+- To get the new balance of user $OWNER_2, run the query:
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
+    query{
+        accounts {
+            entry(
+                key: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
+            ) {
+                value
+            }
+        }
+    }
+```
+
+### Using web frontend
+
+Installing and starting the web server:
 
 ```bash
 cd examples/fungible/web-frontend

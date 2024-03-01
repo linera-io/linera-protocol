@@ -47,6 +47,14 @@ APP_ID=$(linera create-application $BYTECODE_ID \
 ## Using the Token Application
 
 Refer to [Fungible Token Example Application - Using the Token Application](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#using-the-token-application).
+
+### Using GraphiQL
+
+Refer to [Fungible Token Example Application - Using GraphiQL](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#using-graphiql).
+
+### Using web frontend
+
+Refer to [Fungible Token Example Application - Using web frontend](https://github.com/linera-io/linera-protocol/blob/main/examples/fungible/README.md#using-web-frontend).
 */
 
 pub const TICKER_SYMBOL: &str = "NAT";

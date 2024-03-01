@@ -264,6 +264,11 @@ impl QuotedBashAndGraphQlScript {
                     }
                     quote += &line;
                     quote += "\n";
+
+                    if line.contains("linera service") {
+                        quote += "sleep 3";
+                        quote += "\n";
+                    }
                 }
                 result.push(quote);
             } else if let Some(uri) = line.strip_prefix("```gql,uri=") {
