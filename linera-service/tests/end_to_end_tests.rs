@@ -41,9 +41,13 @@ struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
 
 impl FungibleApp {
     async fn get_amount(&self, account_owner: &AccountOwner) -> Amount {
-        let query = format!("balance(owner: {})", account_owner.to_value());
+        let query = format!(
+            "accounts {{ entry(key: {}) {{ value }} }}",
+            account_owner.to_value()
+        );
         let response_body = self.0.query(&query).await.unwrap();
-        serde_json::from_value(response_body["balance"].clone()).unwrap_or_default()
+        serde_json::from_value(response_body["accounts"]["entry"]["value"].clone())
+            .unwrap_or_default()
     }
 
     async fn assert_balances(&self, accounts: impl IntoIterator<Item = (AccountOwner, Amount)>) {

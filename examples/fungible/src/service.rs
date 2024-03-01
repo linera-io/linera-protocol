@@ -6,13 +6,11 @@
 mod state;
 
 use self::state::FungibleToken;
-use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
+use async_graphql::{ComplexObject, EmptySubscription, Request, Response, Schema};
 use async_trait::async_trait;
 use fungible::Operation;
 use linera_sdk::{
-    base::{AccountOwner, Amount, WithServiceAbi},
-    graphql::GraphQLMutationRoot,
-    QueryContext, Service, ViewStateStorage,
+    base::WithServiceAbi, graphql::GraphQLMutationRoot, QueryContext, Service, ViewStateStorage,
 };
 use std::sync::Arc;
 use thiserror::Error;
@@ -33,29 +31,16 @@ impl Service for FungibleToken {
         _context: &QueryContext,
         request: Request,
     ) -> Result<Response, Self::Error> {
-        let schema = Schema::build(
-            QueryRoot {
-                fungible_token: self.clone(),
-            },
-            Operation::mutation_root(),
-            EmptySubscription,
-        )
-        .finish();
+        let schema =
+            Schema::build(self.clone(), Operation::mutation_root(), EmptySubscription).finish();
         let response = schema.execute(request).await;
         Ok(response)
     }
 }
 
-struct QueryRoot {
-    fungible_token: Arc<FungibleToken>,
-}
-
-#[Object]
-impl QueryRoot {
-    async fn balance(&self, owner: AccountOwner) -> Result<Option<Amount>, async_graphql::Error> {
-        Ok(self.fungible_token.balance(&owner).await)
-    }
-
+// Implements additional fields not derived from struct members of FungibleToken.
+#[ComplexObject]
+impl FungibleToken {
     async fn ticker_symbol(&self) -> Result<String, async_graphql::Error> {
         Ok(FungibleToken::parameters()?.ticker_symbol)
     }

@@ -304,3 +304,9 @@ impl From<Owner> for contract_system_api::CryptoHash {
         contract_system_api::CryptoHash::from(owner.0)
     }
 }
+
+impl From<Owner> for service_system_api::CryptoHash {
+    fn from(owner: Owner) -> Self {
+        service_system_api::CryptoHash::from(owner.0)
+    }
+}
