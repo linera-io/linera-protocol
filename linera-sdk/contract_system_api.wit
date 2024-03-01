@@ -1,5 +1,6 @@
 chain-id: func() -> chain-id
 application-id: func() -> application-id
+authenticated-signer: func() -> option<owner>
 application-parameters: func() -> list<u8>
 read-chain-balance: func() -> amount
 read-owner-balance: func(owner: owner) -> amount

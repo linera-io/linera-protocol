@@ -992,6 +992,10 @@ impl ContractSyncRuntime {
 }
 
 impl ContractRuntime for ContractSyncRuntime {
+    fn authenticated_signer(&mut self) -> Result<Option<Owner>, ExecutionError> {
+        Ok(self.inner().authenticated_signer)
+    }
+
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError> {
         Ok(self.inner().resource_controller.remaining_fuel())
     }

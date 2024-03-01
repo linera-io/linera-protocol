@@ -29,6 +29,13 @@ macro_rules! impl_contract_system_api {
                 BaseRuntime::application_parameters(self)
             }
 
+            fn authenticated_signer(
+                &mut self,
+            ) -> Result<Option<contract_system_api::Owner>, Self::Error> {
+                let maybe_owner = ContractRuntime::authenticated_signer(self)?;
+                Ok(maybe_owner.map(|owner| owner.into()))
+            }
+
             fn read_chain_balance(&mut self) -> Result<contract_system_api::Amount, Self::Error> {
                 BaseRuntime::read_chain_balance(self).map(|balance| balance.into())
             }
