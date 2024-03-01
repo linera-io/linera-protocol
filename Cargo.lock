@@ -3228,7 +3228,6 @@ dependencies = [
  "ed25519",
  "ed25519-dalek",
  "futures",
- "getrandom",
  "http 0.2.11",
  "linera-base",
  "linera-chain",

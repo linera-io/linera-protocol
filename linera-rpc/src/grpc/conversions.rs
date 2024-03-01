@@ -1,11 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    HandleCertificateRequest, HandleLiteCertificateRequest,
-};
 use super::api;
-use ed25519::signature::Signature as edSignature;
+use crate::{HandleCertificateRequest, HandleLiteCertificateRequest};
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey, Signature},
     data_types::BlockHeight,
@@ -444,7 +441,7 @@ impl TryFrom<api::PublicKey> for ValidatorName {
 impl From<Signature> for api::Signature {
     fn from(signature: Signature) -> Self {
         Self {
-            bytes: signature.0.as_bytes().to_vec(),
+            bytes: signature.0.to_vec(),
         }
     }
 }
@@ -453,9 +450,7 @@ impl TryFrom<api::Signature> for Signature {
     type Error = ProtoConversionError;
 
     fn try_from(signature: api::Signature) -> Result<Self, Self::Error> {
-        Ok(Self(ed25519_dalek::Signature::from_bytes(
-            &signature.bytes,
-        )?))
+        Ok(Self(signature.bytes.as_slice().try_into()?))
     }
 }
 

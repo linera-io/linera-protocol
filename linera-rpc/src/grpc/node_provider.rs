@@ -1,7 +1,6 @@
-use super::network::Client;
+use super::Client;
 
-use crate::config::ValidatorPublicNetworkConfig;
-use crate::node_provider::NodeOptions;
+use crate::{config::ValidatorPublicNetworkConfig, node_provider::NodeOptions};
 
 use linera_core::node::{NodeError, ValidatorNodeProvider};
 
