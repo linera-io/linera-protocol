@@ -36,7 +36,11 @@ open-chain: func(
     balance: amount
 ) -> chain-id
 
-close-chain: func() -> bool
+close-chain: func() -> result<tuple<>, closechainerror>
+
+variant closechainerror {
+    not-permitted
+}
 
 chain-ownership: func() -> chain-ownership
 

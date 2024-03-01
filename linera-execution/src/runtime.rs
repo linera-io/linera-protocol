@@ -1153,7 +1153,7 @@ impl ContractRuntime for ContractSyncRuntime {
         Ok(chain_id)
     }
 
-    fn close_chain(&mut self) -> Result<bool, ExecutionError> {
+    fn close_chain(&mut self) -> Result<(), ExecutionError> {
         let mut this = self.inner();
         let application_id = this.current_application().id;
         this.execution_state_sender
