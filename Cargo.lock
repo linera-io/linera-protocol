@@ -3441,6 +3441,7 @@ dependencies = [
  "linera-storage-service",
  "linera-version",
  "linera-views",
+ "port-selector",
  "proptest",
  "prost",
  "serde-reflection",

@@ -6,6 +6,19 @@ use anyhow::{bail, Result};
 use linera_base::command::CommandExt;
 use std::time::Duration;
 use tokio::process::{Child, Command};
+use port_selector::random_free_tcp_port;
+
+pub async fn get_free_port() -> Result<String> {
+    for i in 1..10 {
+        let port = random_free_tcp_port();
+        if let Some(port) = port {
+            return Ok(format!("127.0.0.1:{}", port));
+        }
+        tokio::time::sleep(Duration::from_secs(i)).await;
+    }
+    bail!("Failed to obtain a port");
+}
+
 
 /// Configuration for a storage service running as a child process
 pub struct StorageServiceSpanner {
