@@ -20,7 +20,7 @@ pub async fn get_free_port() -> Result<String> {
 }
 
 /// Configuration for a storage service running as a child process
-pub struct StorageServiceSpanner {
+pub struct StorageServiceBuilder {
     endpoint: String,
     binary: String,
 }
@@ -33,7 +33,7 @@ pub struct StorageServiceGuard {
     _child: Child,
 }
 
-impl StorageServiceSpanner {
+impl StorageServiceBuilder {
     /// Creates a new `StorageServiceChild`
     pub fn new(endpoint: &str, binary: String) -> Self {
         Self {

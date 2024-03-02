@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_storage_service::{
-    child::StorageServiceSpanner,
+    child::StorageServiceBuilder,
     client::{create_service_test_store, service_config_from_endpoint, ServiceStoreClient},
 };
 use linera_views::test_utils::{
@@ -11,9 +11,9 @@ use linera_views::test_utils::{
 
 /// The endpoint used for the storage service tests.
 #[cfg(test)]
-fn get_storage_service_guard(endpoint: &str) -> StorageServiceSpanner {
+fn get_storage_service_guard(endpoint: &str) -> StorageServiceBuilder {
     let binary = env!("CARGO_BIN_EXE_storage_service_server").to_string();
-    StorageServiceSpanner::new(endpoint, binary)
+    StorageServiceBuilder::new(endpoint, binary)
 }
 
 #[tokio::test]

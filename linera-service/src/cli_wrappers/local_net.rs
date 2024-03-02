@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_execution::ResourceControlPolicy;
 use linera_storage_service::{
-    child::{StorageServiceGuard, StorageServiceSpanner},
+    child::{StorageServiceBuilder, StorageServiceGuard},
     common::get_service_storage_binary,
 };
 use std::{
@@ -161,7 +161,7 @@ impl LineraNetConfig for LocalNetConfig {
             Database::Service => {
                 let binary = get_service_storage_binary().await?.display().to_string();
                 let spanner =
-                    StorageServiceSpanner::new(END_TO_END_STORAGE_SERVICE_ENDPOINT, binary);
+                    StorageServiceBuilder::new(END_TO_END_STORAGE_SERVICE_ENDPOINT, binary);
                 Some(spanner.run_service().await.expect("child"))
             }
             _ => None,

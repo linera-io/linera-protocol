@@ -45,7 +45,7 @@ use linera_views::test_utils::generate_test_namespace;
 use {
     linera_storage::ServiceStorage,
     linera_storage_service::{
-        child::{StorageServiceGuard, StorageServiceSpanner},
+        child::{StorageServiceBuilder, StorageServiceGuard},
         client::service_config_from_endpoint,
         common::get_service_storage_binary,
     },
@@ -802,7 +802,7 @@ impl StorageBuilder for MakeServiceStorage {
     async fn build(&mut self) -> anyhow::Result<Self::Storage> {
         if self._guard.is_none() && self.use_child {
             let binary = get_service_storage_binary().await?.display().to_string();
-            let spanner = StorageServiceSpanner::new(&self.endpoint, binary);
+            let spanner = StorageServiceBuilder::new(&self.endpoint, binary);
             self._guard = Some(spanner.run_service().await.expect("child"));
         }
         let store_config = service_config_from_endpoint(&self.endpoint).await?;
