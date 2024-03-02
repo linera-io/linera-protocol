@@ -16,7 +16,7 @@ use std::time::Duration;
 impl From<wit_types::OperationContext> for OperationContext {
     fn from(context: wit_types::OperationContext) -> Self {
         OperationContext {
-            chain_id: ChainId(context.chain_id.into()),
+            chain_id: context.chain_id.into(),
             authenticated_signer: context.authenticated_signer.map(Owner::from),
             height: BlockHeight(context.height),
             index: context.index,
@@ -27,7 +27,7 @@ impl From<wit_types::OperationContext> for OperationContext {
 impl From<wit_types::MessageContext> for MessageContext {
     fn from(context: wit_types::MessageContext) -> Self {
         MessageContext {
-            chain_id: ChainId(context.chain_id.into()),
+            chain_id: context.chain_id.into(),
             is_bouncing: context.is_bouncing,
             authenticated_signer: context.authenticated_signer.map(Owner::from),
             height: BlockHeight(context.height),
@@ -39,7 +39,7 @@ impl From<wit_types::MessageContext> for MessageContext {
 impl From<wit_types::MessageId> for MessageId {
     fn from(message_id: wit_types::MessageId) -> Self {
         MessageId {
-            chain_id: ChainId(message_id.chain_id.into()),
+            chain_id: message_id.chain_id.into(),
             height: BlockHeight(message_id.height),
             index: message_id.index,
         }
@@ -49,7 +49,7 @@ impl From<wit_types::MessageId> for MessageId {
 impl From<wit_types::CalleeContext> for CalleeContext {
     fn from(context: wit_types::CalleeContext) -> Self {
         CalleeContext {
-            chain_id: ChainId(context.chain_id.into()),
+            chain_id: context.chain_id.into(),
             authenticated_signer: context.authenticated_signer.map(Owner::from),
             authenticated_caller_id: context.authenticated_caller_id.map(ApplicationId::from),
         }
@@ -80,6 +80,12 @@ impl From<wit_types::CryptoHash> for Owner {
     }
 }
 
+impl From<wit_types::CryptoHash> for ChainId {
+    fn from(hash_value: wit_types::CryptoHash) -> Self {
+        ChainId(hash_value.into())
+    }
+}
+
 impl From<wit_types::CryptoHash> for CryptoHash {
     fn from(crypto_hash: wit_types::CryptoHash) -> Self {
         CryptoHash::from([
@@ -94,7 +100,7 @@ impl From<wit_types::CryptoHash> for CryptoHash {
 impl From<wit_system_api::MessageId> for MessageId {
     fn from(message_id: wit_system_api::MessageId) -> Self {
         MessageId {
-            chain_id: ChainId(message_id.chain_id.into()),
+            chain_id: message_id.chain_id.into(),
             height: BlockHeight(message_id.height),
             index: message_id.index,
         }
@@ -113,6 +119,12 @@ impl From<wit_system_api::ApplicationId> for ApplicationId {
 impl From<wit_system_api::CryptoHash> for Owner {
     fn from(crypto_hash: wit_system_api::CryptoHash) -> Self {
         Owner(crypto_hash.into())
+    }
+}
+
+impl From<wit_system_api::CryptoHash> for ChainId {
+    fn from(hash_value: wit_system_api::CryptoHash) -> Self {
+        ChainId(hash_value.into())
     }
 }
 
