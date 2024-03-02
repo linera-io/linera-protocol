@@ -50,7 +50,7 @@ impl StorageServiceSpanner {
         command
     }
 
-    /// Wait for the absence of the endpoint. If a child is eliminated
+    /// Waits for the absence of the endpoint. If a child is terminated
     /// then it might take time to wait for its absence.
     async fn wait_for_absence(&self) -> Result<()> {
         for i in 1..10 {
