@@ -343,14 +343,14 @@ pub trait BaseRuntime {
     /// The current application parameters.
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError>;
 
+    /// Reads the system timestamp.
+    fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError>;
+
     /// Reads the balance of the chain.
     fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError>;
 
     /// Reads the owner balance.
     fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError>;
-
-    /// Reads the system timestamp.
-    fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError>;
 
     /// Reads the current ownership configuration for this chain.
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError>;

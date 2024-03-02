@@ -630,16 +630,16 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().application_parameters()
     }
 
+    fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
+        self.inner().read_system_timestamp()
+    }
+
     fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError> {
         self.inner().read_chain_balance()
     }
 
     fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError> {
         self.inner().read_owner_balance(owner)
-    }
-
-    fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
-        self.inner().read_system_timestamp()
     }
 
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError> {
@@ -739,6 +739,12 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(self.current_application().parameters.clone())
     }
 
+    fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
+        self.execution_state_sender
+            .send_request(|callback| Request::SystemTimestamp { callback })?
+            .recv_response()
+    }
+
     fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| Request::ChainBalance { callback })?
@@ -748,12 +754,6 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| Request::OwnerBalance { owner, callback })?
-            .recv_response()
-    }
-
-    fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
-        self.execution_state_sender
-            .send_request(|callback| Request::SystemTimestamp { callback })?
             .recv_response()
     }
 

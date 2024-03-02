@@ -40,6 +40,12 @@ macro_rules! impl_contract_system_api {
                 Ok(maybe_owner.map(|owner| owner.into()))
             }
 
+            fn read_system_timestamp(
+                &mut self,
+            ) -> Result<contract_system_api::Timestamp, Self::Error> {
+                BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
+            }
+
             fn read_chain_balance(&mut self) -> Result<contract_system_api::Amount, Self::Error> {
                 BaseRuntime::read_chain_balance(self).map(|balance| balance.into())
             }
@@ -72,12 +78,6 @@ macro_rules! impl_contract_system_api {
                 amount: contract_system_api::Amount,
             ) -> Result<(), Self::Error> {
                 ContractRuntime::claim(self, source.into(), destination.into(), amount.into())
-            }
-
-            fn read_system_timestamp(
-                &mut self,
-            ) -> Result<contract_system_api::Timestamp, Self::Error> {
-                BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
             }
 
             fn chain_ownership(
