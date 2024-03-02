@@ -35,8 +35,8 @@ pub enum ServiceContextError {
     #[error(transparent)]
     TransportError(#[from] tonic::transport::Error),
 
-    /// An error occurred while doing BCS serialization.
-    #[error("failed to serialize value to calculate its hash")]
+    /// An error occurred while doing BCS
+    #[error("An error occurred while doing BCS")]
     Serialization(#[from] bcs::Error),
 
     /// The database is not consistent
