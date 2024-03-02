@@ -1977,6 +1977,7 @@ dependencies = [
  "linera-base",
  "linera-version",
  "linera-views",
+ "port-selector",
  "prost",
  "thiserror",
  "tokio",
@@ -2658,6 +2659,15 @@ name = "platforms"
 version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "626dec3cac7cc0e1577a2ec3fc496277ec2baa084bebad95bb6fdbfae235f84c"
+
+[[package]]
+name = "port-selector"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd119ef551a50cd8939f0ff93bd062891f7b0dbb771b4a05df8a9c13aebaff68"
+dependencies = [
+ "rand",
+]
 
 [[package]]
 name = "ppv-lite86"

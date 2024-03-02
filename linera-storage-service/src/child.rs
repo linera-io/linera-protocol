@@ -4,9 +4,9 @@
 use crate::client::{storage_service_check_absence, storage_service_check_validity};
 use anyhow::{bail, Result};
 use linera_base::command::CommandExt;
+use port_selector::random_free_tcp_port;
 use std::time::Duration;
 use tokio::process::{Child, Command};
-use port_selector::random_free_tcp_port;
 
 pub async fn get_free_port() -> Result<String> {
     for i in 1..10 {
@@ -18,7 +18,6 @@ pub async fn get_free_port() -> Result<String> {
     }
     bail!("Failed to obtain a port");
 }
-
 
 /// Configuration for a storage service running as a child process
 pub struct StorageServiceSpanner {
