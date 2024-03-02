@@ -94,7 +94,7 @@ message RequestExistsNamespace {
 }
 
 message ReplyExistsNamespace {
-  bool test = 1;
+  bool exists = 1;
 }
 
 

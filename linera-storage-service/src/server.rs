@@ -332,8 +332,8 @@ impl StoreProcessor for ServiceStoreServer {
     ) -> Result<Response<ReplyExistsNamespace>, Status> {
         let request = request.into_inner();
         let RequestExistsNamespace { namespace } = request;
-        let test = self.exists_namespace(&namespace).await?;
-        let response = ReplyExistsNamespace { test };
+        let exists = self.exists_namespace(&namespace).await?;
+        let response = ReplyExistsNamespace { exists };
         Ok(Response::new(response))
     }
 

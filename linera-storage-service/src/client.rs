@@ -290,8 +290,8 @@ impl AdminKeyValueStore for ServiceStoreClient {
         let mut client = StoreProcessorClient::connect(endpoint).await?;
         let response = client.process_exists_namespace(request).await?;
         let response = response.into_inner();
-        let ReplyExistsNamespace { test } = response;
-        Ok(test)
+        let ReplyExistsNamespace { exists } = response;
+        Ok(exists)
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), ServiceContextError> {
