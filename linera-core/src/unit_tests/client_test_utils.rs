@@ -772,20 +772,7 @@ impl Default for MakeServiceStorage {
 impl MakeServiceStorage {
     /// Creates a `ServiceStorage` from just an endpoint
     pub fn new(endpoint: &str) -> Self {
-        let _guard = None;
-        let endpoint = endpoint.to_string();
-        let clock = TestClock::default();
-        let namespace = generate_test_namespace();
-        let use_child = true;
-        Self {
-            _guard,
-            endpoint,
-            namespace,
-            use_child,
-            instance_counter: 0,
-            wasm_runtime: None,
-            clock,
-        }
+        Self::with_wasm_runtime(endpoint, None)
     }
 
     /// Creates a `ServiceStorage` from an endpoint and the wasm runtime.
