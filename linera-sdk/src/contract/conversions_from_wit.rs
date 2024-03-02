@@ -110,6 +110,12 @@ impl From<wit_system_api::ApplicationId> for ApplicationId {
     }
 }
 
+impl From<wit_system_api::CryptoHash> for Owner {
+    fn from(crypto_hash: wit_system_api::CryptoHash) -> Self {
+        Owner(crypto_hash.into())
+    }
+}
+
 impl From<wit_system_api::CryptoHash> for CryptoHash {
     fn from(hash_value: wit_system_api::CryptoHash) -> Self {
         CryptoHash::from([
