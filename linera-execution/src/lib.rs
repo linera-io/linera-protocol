@@ -334,6 +334,9 @@ pub trait BaseRuntime {
     /// The current chain ID.
     fn chain_id(&mut self) -> Result<ChainId, ExecutionError>;
 
+    /// The current block height.
+    fn block_height(&mut self) -> Result<BlockHeight, ExecutionError>;
+
     /// The current application ID.
     fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError>;
 

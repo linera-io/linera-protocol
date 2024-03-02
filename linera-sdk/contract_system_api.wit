@@ -1,4 +1,5 @@
 chain-id: func() -> chain-id
+block-height: func() -> block-height
 application-id: func() -> application-id
 authenticated-signer: func() -> option<owner>
 application-parameters: func() -> list<u8>

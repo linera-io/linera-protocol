@@ -19,6 +19,10 @@ macro_rules! impl_contract_system_api {
                 BaseRuntime::chain_id(self).map(|chain_id| chain_id.into())
             }
 
+            fn block_height(&mut self) -> Result<contract_system_api::BlockHeight, Self::Error> {
+                BaseRuntime::block_height(self).map(|height| height.into())
+            }
+
             fn application_id(
                 &mut self,
             ) -> Result<contract_system_api::ApplicationId, Self::Error> {
