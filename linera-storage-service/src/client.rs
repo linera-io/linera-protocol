@@ -5,10 +5,10 @@ use crate::{
     common::{ServiceContextError, ServiceStoreConfig},
     key_value_store::{
         statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
-        ReplyContainsKey, ReplyExistNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
+        ReplyContainsKey, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
         ReplyListAll, ReplyReadMultiValues, ReplyReadValue, RequestClearJournal,
         RequestContainsKey, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
-        RequestExistNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
+        RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
         RequestListAll, RequestReadMultiValues, RequestReadValue, RequestWriteBatch, Statement,
     },
 };
@@ -284,13 +284,13 @@ impl AdminKeyValueStore for ServiceStoreClient {
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ServiceContextError> {
         let namespace = bcs::to_bytes(namespace)?;
-        let query = RequestExistNamespace { namespace };
+        let query = RequestExistsNamespace { namespace };
         let request = tonic::Request::new(query);
         let endpoint = Endpoint::from_shared(config.endpoint.clone())?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
-        let response = client.process_exist_namespace(request).await?;
+        let response = client.process_exists_namespace(request).await?;
         let response = response.into_inner();
-        let ReplyExistNamespace { test } = response;
+        let ReplyExistsNamespace { test } = response;
         Ok(test)
     }
 

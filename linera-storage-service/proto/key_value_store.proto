@@ -89,11 +89,11 @@ message ReplyCreateNamespace {
 }
 
 
-message RequestExistNamespace {
+message RequestExistsNamespace {
   bytes namespace = 1;
 }
 
-message ReplyExistNamespace {
+message ReplyExistsNamespace {
   bool test = 1;
 }
 
@@ -129,7 +129,7 @@ service StoreProcessor {
   rpc ProcessWriteBatch (RequestWriteBatch) returns (ReplyWriteBatch) {}
   rpc ProcessClearJournal (RequestClearJournal) returns (ReplyClearJournal) {}
   rpc ProcessCreateNamespace (RequestCreateNamespace) returns (ReplyCreateNamespace) {}
-  rpc ProcessExistNamespace (RequestExistNamespace) returns (ReplyExistNamespace) {}
+  rpc ProcessExistsNamespace (RequestExistsNamespace) returns (ReplyExistsNamespace) {}
   rpc ProcessDeleteNamespace (RequestDeleteNamespace) returns (ReplyDeleteNamespace) {}
   rpc ProcessListAll (RequestListAll) returns (ReplyListAll) {}
   rpc ProcessDeleteAll (RequestDeleteAll) returns (ReplyDeleteAll) {}

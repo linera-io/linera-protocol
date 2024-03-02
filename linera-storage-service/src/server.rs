@@ -5,10 +5,10 @@ use crate::key_value_store::{
     statement::Operation,
     store_processor_server::{StoreProcessor, StoreProcessorServer},
     KeyValue, OptValue, ReplyClearJournal, ReplyContainsKey, ReplyCreateNamespace, ReplyDeleteAll,
-    ReplyDeleteNamespace, ReplyExistNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
+    ReplyDeleteNamespace, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
     ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplyWriteBatch, RequestClearJournal,
     RequestContainsKey, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
-    RequestExistNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListAll,
+    RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListAll,
     RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
 };
 use linera_views::{
@@ -157,12 +157,10 @@ impl ServiceStoreServer {
         let mut batch = Batch::new();
         batch.delete_key_prefix(vec![KeyTag::Key as u8]);
         batch.delete_key_prefix(vec![KeyTag::Namespace as u8]);
-        let base_key = vec![];
-        self.write_batch(batch, &base_key).await?;
-        self.clear_journal(&base_key).await
+        self.write_batch(batch, &[]).await
     }
 
-    pub async fn exist_namespace(&self, namespace: &[u8]) -> Result<bool, Status> {
+    pub async fn exists_namespace(&self, namespace: &[u8]) -> Result<bool, Status> {
         let mut full_key = vec![KeyTag::Namespace as u8];
         full_key.extend(namespace);
         self.contains_key(&full_key).await
@@ -173,9 +171,7 @@ impl ServiceStoreServer {
         full_key.extend(namespace);
         let mut batch = Batch::new();
         batch.put_key_value_bytes(full_key, vec![]);
-        let base_key = vec![];
-        self.write_batch(batch, &base_key).await?;
-        self.clear_journal(&base_key).await
+        self.write_batch(batch, &[]).await
     }
 
     pub async fn delete_namespace(&self, namespace: &[u8]) -> Result<(), Status> {
@@ -186,9 +182,7 @@ impl ServiceStoreServer {
         let mut key_prefix = vec![KeyTag::Key as u8];
         key_prefix.extend(namespace);
         batch.delete_key_prefix(key_prefix);
-        let base_key = vec![];
-        self.write_batch(batch, &base_key).await?;
-        self.clear_journal(&base_key).await
+        self.write_batch(batch, &[]).await
     }
 }
 
@@ -332,14 +326,14 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    async fn process_exist_namespace(
+    async fn process_exists_namespace(
         &self,
-        request: Request<RequestExistNamespace>,
-    ) -> Result<Response<ReplyExistNamespace>, Status> {
+        request: Request<RequestExistsNamespace>,
+    ) -> Result<Response<ReplyExistsNamespace>, Status> {
         let request = request.into_inner();
-        let RequestExistNamespace { namespace } = request;
-        let test = self.exist_namespace(&namespace).await?;
-        let response = ReplyExistNamespace { test };
+        let RequestExistsNamespace { namespace } = request;
+        let test = self.exists_namespace(&namespace).await?;
+        let response = ReplyExistsNamespace { test };
         Ok(Response::new(response))
     }
 
