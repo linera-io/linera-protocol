@@ -1728,14 +1728,21 @@ where
     let manager = client.chain_info().await.unwrap().manager;
 
     // The round has not timed out yet, so validators will not sign a timeout certificate.
+    // If the malicious and one honest validator happen to be much faster than the other
+    // two honest validators, only those two samples may be returned. Otherwise we get
+    // a trusted MissingVoteInValidatorResponse, because at least two returned that.
     let result = client.request_leader_timeout().await;
-    assert_matches!(
+    if !matches!(
         result,
         Err(ChainClientError::CommunicationError(
             CommunicationError::Trusted(NodeError::MissingVoteInValidatorResponse)
-        )),
-        "unexpected leader timeout result",
-    );
+        ))
+    ) && !matches!(&result,
+        Err(ChainClientError::CommunicationError(CommunicationError::Sample(samples)))
+        if samples.iter().any(|(err, _)| matches!(err, NodeError::MissingVoteInValidatorResponse))
+    ) {
+        panic!("unexpected leader timeout result: {:?}", result);
+    }
 
     clock.set(manager.round_timeout.unwrap());
 
