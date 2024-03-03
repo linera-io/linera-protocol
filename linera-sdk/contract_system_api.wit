@@ -5,6 +5,8 @@ authenticated-signer: func() -> option<owner>
 application-parameters: func() -> list<u8>
 read-system-timestamp: func() -> timestamp
 
+message-id: func() -> option<message-id>
+
 read-chain-balance: func() -> amount
 read-owner-balance: func(owner: owner) -> amount
 transfer: func(source: option<owner>, destination: account, amount: amount)

@@ -46,6 +46,13 @@ macro_rules! impl_contract_system_api {
                 BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
             }
 
+            fn message_id(
+                &mut self,
+            ) -> Result<Option<contract_system_api::MessageId>, Self::Error> {
+                let maybe_message_id = ContractRuntime::message_id(self)?;
+                Ok(maybe_message_id.map(|message_id| message_id.into()))
+            }
+
             fn read_chain_balance(&mut self) -> Result<contract_system_api::Amount, Self::Error> {
                 BaseRuntime::read_chain_balance(self).map(|balance| balance.into())
             }
