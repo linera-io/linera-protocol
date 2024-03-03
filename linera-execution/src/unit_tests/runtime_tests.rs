@@ -92,6 +92,7 @@ fn create_contract_runtime() -> (
         BlockHeight(0),
         None,
         0,
+        None,
         execution_state_sender,
         None,
         resource_controller,

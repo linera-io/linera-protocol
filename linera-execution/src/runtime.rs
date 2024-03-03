@@ -7,9 +7,9 @@ use crate::{
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
-    ExecutionError, ExecutionOutcome, RawExecutionOutcome, ServiceRuntime, SessionId,
-    UserApplicationDescription, UserApplicationId, UserContractCode, UserContractInstance,
-    UserServiceInstance,
+    ExecutionError, ExecutionOutcome, MessageContext, RawExecutionOutcome, ServiceRuntime,
+    SessionId, UserApplicationDescription, UserApplicationId, UserContractCode,
+    UserContractInstance, UserServiceInstance,
 };
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -45,6 +45,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     height: BlockHeight,
     /// The authenticated signer of the operation or message, if any.
     authenticated_signer: Option<Owner>,
+    /// The current message being executed, if there is one.
+    executing_message: Option<ExecutingMessage>,
     /// The index of the next message to be created.
     next_message_index: u32,
 
@@ -259,6 +261,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
         height: BlockHeight,
         authenticated_signer: Option<Owner>,
         next_message_index: u32,
+        executing_message: Option<ExecutingMessage>,
         execution_state_sender: ExecutionStateSender,
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
@@ -268,6 +271,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             height,
             authenticated_signer,
             next_message_index,
+            executing_message,
             execution_state_sender,
             loaded_applications: HashMap::new(),
             call_stack: Vec::new(),
@@ -941,11 +945,16 @@ impl ContractSyncRuntime {
         resource_controller: ResourceController,
         action: UserAction,
     ) -> Result<(Vec<ExecutionOutcome>, ResourceController), ExecutionError> {
+        let executing_message = match &action {
+            UserAction::Message(context, _) => Some(context.into()),
+            _ => None,
+        };
         let mut runtime = SyncRuntimeInternal::new(
             chain_id,
             action.height(),
             action.signer(),
             action.next_message_index(),
+            executing_message,
             execution_state_sender,
             refund_grant_to,
             resource_controller,
@@ -1188,6 +1197,7 @@ impl ServiceSyncRuntime {
             context.next_block_height,
             None,
             0,
+            None,
             execution_state_sender,
             None,
             ResourceController::default(),
@@ -1234,5 +1244,21 @@ impl ServiceRuntime for ServiceSyncRuntime {
             .handle_query(query_context, argument)?;
         self.inner().pop_application();
         Ok(response)
+    }
+}
+
+/// The origin of the execution.
+#[derive(Clone, Copy, Debug)]
+struct ExecutingMessage {
+    id: MessageId,
+    is_bouncing: bool,
+}
+
+impl From<&MessageContext> for ExecutingMessage {
+    fn from(context: &MessageContext) -> Self {
+        ExecutingMessage {
+            id: context.message_id,
+            is_bouncing: context.is_bouncing,
+        }
     }
 }
