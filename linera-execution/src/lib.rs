@@ -475,6 +475,10 @@ pub trait ContractRuntime: BaseRuntime {
     /// The current message ID, if there is one.
     fn message_id(&mut self) -> Result<Option<MessageId>, ExecutionError>;
 
+    /// If the current message (if there is one) was rejected by its destination and is now
+    /// bouncing back.
+    fn message_is_bouncing(&mut self) -> Result<Option<bool>, ExecutionError>;
+
     /// Returns the amount of execution fuel remaining before execution is aborted.
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError>;
 

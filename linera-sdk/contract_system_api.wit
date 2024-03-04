@@ -6,6 +6,7 @@ application-parameters: func() -> list<u8>
 read-system-timestamp: func() -> timestamp
 
 message-id: func() -> option<message-id>
+message-is-bouncing: func() -> option<bool>
 
 read-chain-balance: func() -> amount
 read-owner-balance: func(owner: owner) -> amount

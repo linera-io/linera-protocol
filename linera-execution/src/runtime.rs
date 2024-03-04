@@ -1017,6 +1017,13 @@ impl ContractRuntime for ContractSyncRuntime {
         Ok(self.inner().executing_message.map(|metadata| metadata.id))
     }
 
+    fn message_is_bouncing(&mut self) -> Result<Option<bool>, ExecutionError> {
+        Ok(self
+            .inner()
+            .executing_message
+            .map(|metadata| metadata.is_bouncing))
+    }
+
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError> {
         Ok(self.inner().resource_controller.remaining_fuel())
     }

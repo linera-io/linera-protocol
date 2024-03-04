@@ -53,6 +53,10 @@ macro_rules! impl_contract_system_api {
                 Ok(maybe_message_id.map(|message_id| message_id.into()))
             }
 
+            fn message_is_bouncing(&mut self) -> Result<Option<bool>, Self::Error> {
+                ContractRuntime::message_is_bouncing(self)
+            }
+
             fn read_chain_balance(&mut self) -> Result<contract_system_api::Amount, Self::Error> {
                 BaseRuntime::read_chain_balance(self).map(|balance| balance.into())
             }
