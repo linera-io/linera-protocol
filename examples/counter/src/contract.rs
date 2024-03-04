@@ -175,12 +175,7 @@ mod tests {
         let mut counter = create_and_initialize_counter(initial_value);
 
         let result = counter
-            .handle_session_call(
-                &mut ContractRuntime::default(),
-                Default::default(),
-                (),
-                vec![],
-            )
+            .handle_session_call(&mut ContractRuntime::default(), (), (), vec![])
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
