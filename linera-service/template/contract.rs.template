@@ -6,8 +6,8 @@ use self::state::Application;
 use async_trait::async_trait;
 use linera_sdk::{{
     base::{{SessionId, WithContractAbi}},
-    ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
-    OperationContext, SessionCallOutcome, ViewStateStorage,
+    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, SessionCallOutcome,
+    ViewStateStorage,
 }};
 use thiserror::Error;
 
@@ -24,7 +24,7 @@ impl Contract for Application {{
 
     async fn initialize(
         &mut self,
-        _context: &OperationContext,
+        _runtime: &mut ContractRuntime,
         _argument: Self::InitializationArgument,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {{
         Ok(ExecutionOutcome::default())
@@ -32,7 +32,7 @@ impl Contract for Application {{
 
     async fn execute_operation(
         &mut self,
-        _context: &OperationContext,
+        _runtime: &mut ContractRuntime,
         _operation: Self::Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {{
         Ok(ExecutionOutcome::default())
@@ -40,7 +40,7 @@ impl Contract for Application {{
 
     async fn execute_message(
         &mut self,
-        _context: &MessageContext,
+        _runtime: &mut ContractRuntime,
         _message: Self::Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {{
         Ok(ExecutionOutcome::default())
@@ -48,7 +48,7 @@ impl Contract for Application {{
 
     async fn handle_application_call(
         &mut self,
-        _context: &CalleeContext,
+        _runtime: &mut ContractRuntime,
         _call: Self::ApplicationCall,
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
@@ -58,7 +58,7 @@ impl Contract for Application {{
 
     async fn handle_session_call(
         &mut self,
-        _context: &CalleeContext,
+        _runtime: &mut ContractRuntime,
         _session: Self::SessionState,
         _call: Self::SessionCall,
         _forwarded_sessions: Vec<SessionId>,
