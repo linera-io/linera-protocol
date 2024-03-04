@@ -17,7 +17,7 @@ use linera_base::{
 impl From<wit_types::QueryContext> for QueryContext {
     fn from(query_context: wit_types::QueryContext) -> Self {
         QueryContext {
-            chain_id: ChainId(query_context.chain_id.into()),
+            chain_id: query_context.chain_id.into(),
             next_block_height: BlockHeight(query_context.next_block_height),
         }
     }
@@ -42,6 +42,18 @@ impl From<wit_system_api::CryptoHash> for CryptoHash {
             hash_value.part3,
             hash_value.part4,
         ])
+    }
+}
+
+impl From<wit_types::CryptoHash> for ChainId {
+    fn from(hash_value: wit_types::CryptoHash) -> Self {
+        ChainId(hash_value.into())
+    }
+}
+
+impl From<wit_system_api::CryptoHash> for ChainId {
+    fn from(hash_value: wit_system_api::CryptoHash) -> Self {
+        ChainId(hash_value.into())
     }
 }
 
