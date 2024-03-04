@@ -271,7 +271,7 @@ pub trait ExecutionRuntimeContext {
 
 #[derive(Clone, Copy, Debug)]
 pub struct OperationContext {
-    /// The current chain id.
+    /// The current chain ID.
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
     pub authenticated_signer: Option<Owner>,
@@ -285,7 +285,7 @@ pub struct OperationContext {
 
 #[derive(Clone, Copy, Debug)]
 pub struct MessageContext {
-    /// The current chain id.
+    /// The current chain ID.
     pub chain_id: ChainId,
     /// Whether the message was rejected by the original receiver and is now bouncing back.
     pub is_bouncing: bool,
@@ -297,7 +297,7 @@ pub struct MessageContext {
     pub height: BlockHeight,
     /// The hash of the remote certificate that created the message.
     pub certificate_hash: CryptoHash,
-    /// The id of the message (based on the operation height and index in the remote
+    /// The ID of the message (based on the operation height and index in the remote
     /// certificate).
     pub message_id: MessageId,
     /// The index of the next message to be created.
@@ -306,7 +306,7 @@ pub struct MessageContext {
 
 #[derive(Clone, Copy, Debug)]
 pub struct CalleeContext {
-    /// The current chain id.
+    /// The current chain ID.
     pub chain_id: ChainId,
     /// The authenticated signer for the execution thread, if any.
     pub authenticated_signer: Option<Owner>,
@@ -317,7 +317,7 @@ pub struct CalleeContext {
 
 #[derive(Clone, Copy, Debug)]
 pub struct QueryContext {
-    /// The current chain id.
+    /// The current chain ID.
     pub chain_id: ChainId,
     /// The height of the next block on this chain.
     pub next_block_height: BlockHeight,
@@ -331,10 +331,10 @@ pub trait BaseRuntime {
     type FindKeysByPrefix: fmt::Debug + Send;
     type FindKeyValuesByPrefix: fmt::Debug + Send;
 
-    /// The current chain id.
+    /// The current chain ID.
     fn chain_id(&mut self) -> Result<ChainId, ExecutionError>;
 
-    /// The current application id.
+    /// The current application ID.
     fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError>;
 
     /// The current application parameters.
@@ -628,7 +628,7 @@ pub struct RawExecutionOutcome<Message, Grant = Resources> {
     Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash, Serialize, Deserialize, SimpleObject,
 )]
 pub struct ChannelSubscription {
-    /// The chain id broadcasting on this channel.
+    /// The chain ID broadcasting on this channel.
     pub chain_id: ChainId,
     /// The name of the channel.
     pub name: ChannelName,

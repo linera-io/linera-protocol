@@ -196,7 +196,7 @@ type Chains {
 }
 
 """
-A channel name together with its application id
+A channel name together with its application ID
 """
 scalar ChannelFullName
 
@@ -224,7 +224,7 @@ The identifier of a channel, relative to a particular application.
 """
 type ChannelSubscription {
 	"""
-	The chain id broadcasting on this channel.
+	The chain ID broadcasting on this channel.
 	"""
 	chainId: ChainId!
 	"""

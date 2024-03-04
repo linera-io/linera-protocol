@@ -165,7 +165,7 @@ pub enum ClientCommand {
 
     /// Transfer funds
     Transfer {
-        /// Sending chain id (must be one of our chains)
+        /// Sending chain ID (must be one of our chains)
         #[arg(long = "from")]
         sender: Account,
 
@@ -179,7 +179,7 @@ pub enum ClientCommand {
 
     /// Open (i.e. activate) a new chain deriving the UID from an existing one.
     OpenChain {
-        /// Chain id (must be one of our chains).
+        /// Chain ID (must be one of our chains).
         #[arg(long = "from")]
         chain_id: Option<ChainId>,
 
@@ -195,11 +195,11 @@ pub enum ClientCommand {
 
     /// Subscribe to a system channel.
     Subscribe {
-        /// Chain id (must be one of our chains).
+        /// Chain ID (must be one of our chains).
         #[arg(long)]
         subscriber: Option<ChainId>,
 
-        /// Chain id.
+        /// Chain ID.
         #[arg(long)]
         publisher: Option<ChainId>,
 
@@ -210,11 +210,11 @@ pub enum ClientCommand {
 
     /// Unsubscribe from a system channel.
     Unsubscribe {
-        /// Chain id (must be one of our chains).
+        /// Chain ID (must be one of our chains).
         #[arg(long)]
         subscriber: Option<ChainId>,
 
-        /// Chain id.
+        /// Chain ID.
         #[arg(long)]
         publisher: Option<ChainId>,
 
@@ -225,7 +225,7 @@ pub enum ClientCommand {
 
     /// Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one.
     OpenMultiOwnerChain {
-        /// Chain id (must be one of our chains).
+        /// Chain ID (must be one of our chains).
         #[arg(long = "from")]
         chain_id: Option<ChainId>,
 
@@ -289,7 +289,7 @@ pub enum ClientCommand {
     /// A closed chain cannot execute operations or accept messages anymore.
     /// It can still reject incoming messages, so they bounce back to the sender.
     CloseChain {
-        /// Chain id (must be one of our chains)
+        /// Chain ID (must be one of our chains)
         #[arg(long = "from")]
         chain_id: ChainId,
     },
@@ -546,7 +546,7 @@ pub enum ClientCommand {
 
     /// Watch the network for notifications.
     Watch {
-        /// The chain id to watch.
+        /// The chain ID to watch.
         chain_id: Option<ChainId>,
 
         /// Show all notifications from all validators.

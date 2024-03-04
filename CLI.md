@@ -128,7 +128,7 @@ Transfer funds
 
 ###### **Options:**
 
-* `--from <SENDER>` — Sending chain id (must be one of our chains)
+* `--from <SENDER>` — Sending chain ID (must be one of our chains)
 * `--to <RECIPIENT>` — Recipient account
 
 
@@ -141,7 +141,7 @@ Open (i.e. activate) a new chain deriving the UID from an existing one
 
 ###### **Options:**
 
-* `--from <CHAIN_ID>` — Chain id (must be one of our chains)
+* `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
 * `--to-public-key <PUBLIC_KEY>` — Public key of the new owner (otherwise create a key pair and remember it)
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
@@ -157,8 +157,8 @@ Subscribe to a system channel
 
 ###### **Options:**
 
-* `--subscriber <SUBSCRIBER>` — Chain id (must be one of our chains)
-* `--publisher <PUBLISHER>` — Chain id
+* `--subscriber <SUBSCRIBER>` — Chain ID (must be one of our chains)
+* `--publisher <PUBLISHER>` — Chain ID
 * `--channel <CHANNEL>` — System channel available in the system application
 
   Possible values:
@@ -178,8 +178,8 @@ Unsubscribe from a system channel
 
 ###### **Options:**
 
-* `--subscriber <SUBSCRIBER>` — Chain id (must be one of our chains)
-* `--publisher <PUBLISHER>` — Chain id
+* `--subscriber <SUBSCRIBER>` — Chain ID (must be one of our chains)
+* `--publisher <PUBLISHER>` — Chain ID
 * `--channel <CHANNEL>` — System channel available in the system application
 
   Possible values:
@@ -199,7 +199,7 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 
 ###### **Options:**
 
-* `--from <CHAIN_ID>` — Chain id (must be one of our chains)
+* `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
 * `--to-public-keys <PUBLIC_KEYS>` — Public keys of the new owners
 * `--weights <WEIGHTS>` — Weights for the new owners
 * `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks
@@ -224,7 +224,7 @@ Changes the application permissions configuration
 
 ###### **Options:**
 
-* `--chain-id <CHAIN_ID>` — The id of the chain to which the new permissions will be applied
+* `--chain-id <CHAIN_ID>` — The ID of the chain to which the new permissions will be applied
 * `--execute-operations <EXECUTE_OPERATIONS>` — If this is not set, all system operations and application operations are allowed. If it is set, only operations from the specified applications are allowed, and no system operations
 * `--close-chain <CLOSE_CHAIN>` — These applications are allowed to close the current chain using the system API
 
@@ -240,7 +240,7 @@ A closed chain cannot execute operations or accept messages anymore. It can stil
 
 ###### **Options:**
 
-* `--from <CHAIN_ID>` — Chain id (must be one of our chains)
+* `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
 
 
 
@@ -443,7 +443,7 @@ Watch the network for notifications
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>` — The chain id to watch
+* `<CHAIN_ID>` — The chain ID to watch
 
 ###### **Options:**
 

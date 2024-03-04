@@ -392,9 +392,9 @@ pub enum SystemExecutionError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
 
-    #[error("Incorrect chain id: {0}")]
+    #[error("Incorrect chain ID: {0}")]
     IncorrectChainId(ChainId),
-    #[error("Invalid admin id in new chain: {0}")]
+    #[error("Invalid admin ID in new chain: {0}")]
     InvalidNewChainAdminId(ChainId),
     #[error("Invalid committees")]
     InvalidCommittees,

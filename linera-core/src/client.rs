@@ -154,7 +154,7 @@ impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
 /// * As a rule, operations are considered successful (and communication may stop) when
 /// they succeeded in gathering a quorum of responses.
 pub struct ChainClient<ValidatorNodeProvider, Storage> {
-    /// The off-chain chain id.
+    /// The off-chain chain ID.
     chain_id: ChainId,
     /// How to talk to the validators.
     validator_node_provider: ValidatorNodeProvider,
@@ -169,7 +169,7 @@ pub struct ChainClient<ValidatorNodeProvider, Storage> {
     pending_block: Option<Block>,
     /// Known key pairs from present and past identities.
     known_key_pairs: BTreeMap<Owner, KeyPair>,
-    /// The id of the admin chain.
+    /// The ID of the admin chain.
     admin_id: ChainId,
 
     /// Maximum number of pending messages processed at a time in a block.

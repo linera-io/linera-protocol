@@ -93,7 +93,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
 /// The runtime status of an application.
 #[derive(Debug, Clone)]
 struct ApplicationStatus {
-    /// The application id.
+    /// The application ID.
     id: UserApplicationId,
     /// The parameters from the application description.
     parameters: Vec<u8>,
