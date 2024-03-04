@@ -6,7 +6,7 @@
 use super::wit_system_api as wit;
 use linera_base::{
     data_types::BlockHeight,
-    identifiers::{ApplicationId, ChainId, Owner},
+    identifiers::{ApplicationId, ChainId, MessageId, Owner},
 };
 
 /// The common runtime to interface with the host executing the contract.
@@ -18,6 +18,8 @@ pub struct ContractRuntime {
     chain_id: Option<ChainId>,
     authenticated_signer: Option<Option<Owner>>,
     block_height: Option<BlockHeight>,
+    message_is_bouncing: Option<Option<bool>>,
+    message_id: Option<Option<MessageId>>,
 }
 
 impl ContractRuntime {
@@ -45,5 +47,21 @@ impl ContractRuntime {
         *self
             .block_height
             .get_or_insert_with(|| wit::block_height().into())
+    }
+
+    /// Returns the ID of the incoming message that is being handled, or [`None`] if not executing
+    /// an incoming message.
+    pub fn message_id(&mut self) -> Option<MessageId> {
+        *self
+            .message_id
+            .get_or_insert_with(|| wit::message_id().map(MessageId::from))
+    }
+
+    /// Returns [`true`] if the incoming message was rejected from the original destination and is
+    /// now bouncing back, or [`None`] if not executing an incoming message.
+    pub fn message_is_bouncing(&mut self) -> Option<bool> {
+        *self
+            .message_is_bouncing
+            .get_or_insert_with(wit::message_is_bouncing)
     }
 }
