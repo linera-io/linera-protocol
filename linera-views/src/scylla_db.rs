@@ -36,7 +36,7 @@ use crate::{
 };
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
-use futures::future::join_all;
+use futures::{future::join_all, StreamExt};
 use linera_base::ensure;
 use scylla::{
     frame::request::batch::BatchType,
@@ -141,22 +141,11 @@ impl ScyllaDbClient {
         // Read the value of a key
         let values = (key,);
         let query = &self.read_value;
-        let mut paging_state = None;
-        loop {
-            let result = session
-                .query_paged(query.clone(), &values, paging_state)
-                .await?;
-            if let Some(rows) = result.rows {
-                if let Some(row) = rows.into_typed::<(Vec<u8>,)>().next() {
-                    let value = row?;
-                    return Ok(Some(value.0));
-                }
-            }
-            if result.paging_state.is_none() {
-                return Ok(None);
-            }
-            paging_state = result.paging_state;
-        }
+        let mut rows = session.query_iter(query.clone(), &values).await?;
+        Ok(match rows.next().await {
+            Some(row) => Some(row?.into_typed::<(Vec<u8>,)>()?.0),
+            None => None,
+        })
     }
 
     async fn contains_key_internal(&self, key: Vec<u8>) -> Result<bool, ScyllaDbContextError> {
@@ -165,21 +154,8 @@ impl ScyllaDbClient {
         // Read the value of a key
         let values = (key,);
         let query = &self.contains_key;
-        let mut paging_state = None;
-        loop {
-            let result = session
-                .query_paged(query.clone(), &values, paging_state)
-                .await?;
-            if let Some(rows) = result.rows {
-                if let Some(_row) = rows.into_typed::<(Vec<u8>,)>().next() {
-                    return Ok(true);
-                }
-            }
-            if result.paging_state.is_none() {
-                return Ok(false);
-            }
-            paging_state = result.paging_state;
-        }
+        let mut rows = session.query_iter(query.clone(), &values).await?;
+        Ok(rows.next().await.is_some())
     }
 
     async fn write_batch_internal(
@@ -237,37 +213,25 @@ impl ScyllaDbClient {
         let session = &self.session;
         // Read the value of a key
         let len = key_prefix.len();
-        let mut keys = Vec::new();
         let query_unbounded = &self.find_keys_by_prefix_unbounded;
         let query_bounded = &self.find_keys_by_prefix_bounded;
-        let mut paging_state = None;
-        loop {
-            let result = match get_upper_bound_option(&key_prefix) {
-                None => {
-                    let values = (key_prefix.clone(),);
-                    session
-                        .query_paged(query_unbounded.clone(), values, paging_state)
-                        .await?
-                }
-                Some(upper_bound) => {
-                    let values = (key_prefix.clone(), upper_bound);
-                    session
-                        .query_paged(query_bounded.clone(), values, paging_state)
-                        .await?
-                }
-            };
-            if let Some(rows) = result.rows {
-                for row in rows.into_typed::<(Vec<u8>,)>() {
-                    let key = row?;
-                    let short_key = key.0[len..].to_vec();
-                    keys.push(short_key);
-                }
+        let mut rows = match get_upper_bound_option(&key_prefix) {
+            None => {
+                let values = (key_prefix.clone(),);
+                session.query_iter(query_unbounded.clone(), values).await?
             }
-            if result.paging_state.is_none() {
-                return Ok(keys);
+            Some(upper_bound) => {
+                let values = (key_prefix.clone(), upper_bound);
+                session.query_iter(query_bounded.clone(), values).await?
             }
-            paging_state = result.paging_state;
+        };
+        let mut keys = Vec::new();
+        while let Some(row) = rows.next().await {
+            let key = row?.into_typed::<(Vec<u8>,)>()?;
+            let short_key = key.0[len..].to_vec();
+            keys.push(short_key);
         }
+        Ok(keys)
     }
 
     async fn find_key_values_by_prefix_internal(
@@ -281,37 +245,25 @@ impl ScyllaDbClient {
         let session = &self.session;
         // Read the value of a key
         let len = key_prefix.len();
-        let mut key_values = Vec::new();
         let query_unbounded = &self.find_key_values_by_prefix_unbounded;
         let query_bounded = &self.find_key_values_by_prefix_bounded;
-        let mut paging_state = None;
-        loop {
-            let result = match get_upper_bound_option(&key_prefix) {
-                None => {
-                    let values = (key_prefix.clone(),);
-                    session
-                        .query_paged(query_unbounded.clone(), values, paging_state)
-                        .await?
-                }
-                Some(upper_bound) => {
-                    let values = (key_prefix.clone(), upper_bound);
-                    session
-                        .query_paged(query_bounded.clone(), values, paging_state)
-                        .await?
-                }
-            };
-            if let Some(rows) = result.rows {
-                for row in rows.into_typed::<(Vec<u8>, Vec<u8>)>() {
-                    let key = row?;
-                    let short_key = key.0[len..].to_vec();
-                    key_values.push((short_key, key.1));
-                }
+        let mut rows = match get_upper_bound_option(&key_prefix) {
+            None => {
+                let values = (key_prefix.clone(),);
+                session.query_iter(query_unbounded.clone(), values).await?
             }
-            if result.paging_state.is_none() {
-                return Ok(key_values);
+            Some(upper_bound) => {
+                let values = (key_prefix.clone(), upper_bound);
+                session.query_iter(query_bounded.clone(), values).await?
             }
-            paging_state = result.paging_state;
+        };
+        let mut key_values = Vec::new();
+        while let Some(row) = rows.next().await {
+            let key = row?.into_typed::<(Vec<u8>, Vec<u8>)>()?;
+            let short_key = key.0[len..].to_vec();
+            key_values.push((short_key, key.1));
         }
+        Ok(key_values)
     }
 }
 
