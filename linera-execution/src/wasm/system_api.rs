@@ -211,6 +211,12 @@ macro_rules! impl_service_system_api {
                 BaseRuntime::chain_id(self).map(|chain_id| chain_id.into())
             }
 
+            fn next_block_height(
+                &mut self,
+            ) -> Result<service_system_api::BlockHeight, Self::Error> {
+                BaseRuntime::block_height(self).map(|height| height.into())
+            }
+
             fn application_id(&mut self) -> Result<service_system_api::ApplicationId, Self::Error> {
                 BaseRuntime::application_id(self).map(|application_id| application_id.into())
             }
