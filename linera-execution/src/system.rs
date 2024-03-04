@@ -178,6 +178,8 @@ pub enum SystemOperation {
         /// The timeout configuration: how long fast, multi-leader and single-leader rounds last.
         timeout_config: TimeoutConfig,
     },
+    /// Changes the application permissions configuration on this chain.
+    ChangeApplicationPermissions(ApplicationPermissions),
     /// Subscribes to a system channel.
     Subscribe {
         chain_id: ChainId,
@@ -508,6 +510,9 @@ where
                     multi_leader_rounds,
                     timeout_config,
                 });
+            }
+            ChangeApplicationPermissions(application_permissions) => {
+                self.application_permissions.set(application_permissions);
             }
             CloseChain => {
                 let messages = self.close_chain(context.chain_id).await?;
