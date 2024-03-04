@@ -62,9 +62,10 @@ impl Contract for MatchingEngine {
         Ok(ExecutionOutcome::default())
     }
 
-    /// Executes the order operation.
+    /// Executes an order operation, or closes the chain.
+    ///
     /// If the chain is the one of the matching engine then the order is processed
-    /// locally otherwise, it gets transmitted as a message to the chain of the engine.
+    /// locally. Otherwise, it gets transmitted as a message to the chain of the engine.
     async fn execute_operation(
         &mut self,
         runtime: &mut ContractRuntime,
@@ -81,6 +82,17 @@ impl Contract for MatchingEngine {
                 } else {
                     self.execute_order_remote(&mut outcome, order)?;
                 }
+            }
+            Operation::CloseChain => {
+                for order_id in self.orders.indices().await? {
+                    match self.modify_order(order_id, ModifyAmount::All).await {
+                        Ok(transfer) => self.send_to(transfer)?,
+                        // Orders with amount zero may have been cleared in an earlier iteration.
+                        Err(MatchingEngineError::OrderNotPresent) => continue,
+                        Err(error) => return Err(error),
+                    }
+                }
+                system_api::close_chain().map_err(|_| MatchingEngineError::CloseChainError)?;
             }
         }
         Ok(outcome)

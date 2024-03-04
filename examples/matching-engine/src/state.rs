@@ -55,6 +55,9 @@ pub enum MatchingEngineError {
 
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
+
+    #[error("The application does not have permissions to close the chain.")]
+    CloseChainError,
 }
 
 /// The order entry in the order book

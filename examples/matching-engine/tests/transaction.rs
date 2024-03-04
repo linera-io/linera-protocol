@@ -8,7 +8,7 @@
 use async_graphql::InputType;
 use fungible::{FungibleTokenAbi, InitialStateBuilder};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId},
+    base::{AccountOwner, Amount, ApplicationId, ApplicationPermissions},
     test::{ActiveChain, TestValidator},
 };
 use matching_engine::{
@@ -50,11 +50,14 @@ pub async fn get_orders(
 ///   * user_a with 10 tokens A.
 ///   * user_b with 9 tokens B.
 /// * Then we create the following orders:
-///   * User_a: Offer to buy token B in exchange of token A for a price of 1 (or 2) with a quantity of 3 token B
-///   User_a thus commits 3 * 1 + 3 * 2 = 9 token A to the matching engine chain and is left with 1 token A
-///   on chain A
-///   * User_b: Offer to sell token B in exchange of token A for a pice of 2 (or 4) with a quantity of 4 token B
-///   User_b thus commits 4 + 4 = 8 token B on the matching engine chain and is left with 1 token B.
+///   * User_a: Offer to buy token B in exchange of token A for a price of 1 (or 2) with
+///     a quantity of 3 token B.
+///     User_a thus commits 3 * 1 + 3 * 2 = 9 token A to the matching engine chain and is
+///     left with 1 token A on chain A
+///   * User_b: Offer to sell token B in exchange of token A for a pice of 2 (or 4) with
+///     a quantity of 4 token B
+///     User_b thus commits 4 + 4 = 8 token B on the matching engine chain and is left
+///     with 1 token B.
 /// * The price that is matching is 2 where a transaction can actually occur
 ///   * Only 3 token B can be exhanged against 6 tokens A.
 ///   * So, the order from user_b is only partially filled.
@@ -240,28 +243,34 @@ async fn single_transaction() {
         );
     }
 
-    // Cancelling the remaining orders
-    let mut orders_cancels = Vec::new();
-    for (owner, user_chain, order_ids) in [
-        (owner_a, &user_chain_a, order_ids_a),
-        (owner_b, &user_chain_b, order_ids_b),
-    ] {
-        for order_id in order_ids {
-            let order = Order::Cancel { owner, order_id };
-            let operation = Operation::ExecuteOrder { order };
-            let order_messages = user_chain
-                .add_block(|block| {
-                    block.with_operation(matching_id, operation);
-                })
-                .await;
-            assert_eq!(order_messages.len(), 2);
-            orders_cancels.extend(order_messages);
-        }
-    }
-
+    // Cancel A's order.
+    let order = Order::Cancel {
+        owner: owner_a,
+        order_id: order_ids_a[0],
+    };
+    let operation = Operation::ExecuteOrder { order };
+    let order_messages = user_chain_a
+        .add_block(|block| {
+            block.with_operation(matching_id, operation);
+        })
+        .await;
+    assert_eq!(order_messages.len(), 2);
     matching_chain
         .add_block(|block| {
-            block.with_incoming_messages(orders_cancels);
+            block.with_incoming_messages(order_messages);
+        })
+        .await;
+    user_chain_a.handle_received_messages().await;
+
+    let permissions = ApplicationPermissions::new_single(matching_id.forget_abi());
+    matching_chain
+        .add_block(|block| {
+            block.with_change_application_permissions(permissions);
+        })
+        .await;
+    matching_chain
+        .add_block(|block| {
+            block.with_operation(matching_id, Operation::CloseChain);
         })
         .await;
 
