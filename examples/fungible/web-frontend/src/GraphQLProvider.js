@@ -20,12 +20,12 @@ function apolloClient(chainId, applicationId, port) {
 
   const wsLink = new GraphQLWsLink(
     createClient({
-      url: `wss://${currentHost}:${port}/ws`,
+      url: `ws://${currentHost}:${port}/ws`,
     })
   );
 
   const httpLink = new HttpLink({
-    uri: `https://${currentHost}:${port}/chains/${chainId}/applications/${applicationId}`,
+    uri: `http://${currentHost}:${port}/chains/${chainId}/applications/${applicationId}`,
   });
 
   const splitLink = split(
