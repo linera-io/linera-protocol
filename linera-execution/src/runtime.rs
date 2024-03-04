@@ -4,6 +4,7 @@
 use crate::{
     execution::UserAction,
     execution_state_actor::{ExecutionStateSender, Request},
+    policy::IntoPriced,
     resources::ResourceController,
     system::ApplicationPermissions,
     util::{ReceiverExt, UnboundedSenderExt},
@@ -407,7 +408,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
     /// Cleans up the runtime after the execution of a call to a different contract.
     fn finish_call(
         &mut self,
-        raw_outcome: ApplicationCallOutcome,
+        raw_outcome: ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>,
     ) -> Result<CallOutcome, ExecutionError> {
         let ApplicationStatus {
             id: callee_id,
@@ -1097,7 +1098,7 @@ impl ContractRuntime for ContractSyncRuntime {
             Ok::<_, ExecutionError>((contract, callee_context, session_state))
         }?;
 
-        let (raw_outcome, session_state) = contract
+        let raw_outcome = contract
             .try_lock()
             .expect("Applications should not have reentrant calls")
             .handle_session_call(callee_context, session_state, argument, forwarded_sessions)?;
@@ -1109,12 +1110,12 @@ impl ContractRuntime for ContractSyncRuntime {
 
             // Update the session.
             let caller_id = this.application_id()?;
-            if raw_outcome.close_session {
+            if let Some(new_session_state) = raw_outcome.new_state {
+                // Save the session.
+                this.try_save_session(session_id, caller_id, new_session_state)?;
+            } else {
                 // Terminate the session.
                 this.try_close_session(session_id, caller_id)?;
-            } else {
-                // Save the session.
-                this.try_save_session(session_id, caller_id, session_state)?;
             }
 
             Ok(outcome)
@@ -1146,8 +1147,8 @@ impl ContractRuntime for ContractSyncRuntime {
             })?
             .recv_response()?;
         let outcome = RawExecutionOutcome::default()
-            .with_message(open_chain_message)
-            .with_message(subscribe_message);
+            .with_raw_message(open_chain_message)
+            .with_raw_message(subscribe_message);
         this.execution_outcomes
             .push(ExecutionOutcome::System(outcome));
         Ok(chain_id)

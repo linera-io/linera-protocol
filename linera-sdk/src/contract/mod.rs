@@ -41,7 +41,7 @@ macro_rules! contract {
                     application
                         .initialize(&context.into(), argument)
                         .await
-                        .map(|outcome| (application, outcome.into_raw()))
+                        .map(|outcome| (application, outcome.serialize_messages()))
                 },
             )
         }
@@ -60,7 +60,7 @@ macro_rules! contract {
                     application
                         .execute_operation(&context.into(), operation)
                         .await
-                        .map(|outcome| (application, outcome.into_raw()))
+                        .map(|outcome| (application, outcome.serialize_messages()))
                 },
             )
         }
@@ -79,7 +79,7 @@ macro_rules! contract {
                     application
                         .execute_message(&context.into(), message)
                         .await
-                        .map(|outcome| (application, outcome.into_raw()))
+                        .map(|outcome| (application, outcome.serialize_messages()))
                 },
             )
         }
@@ -103,7 +103,7 @@ macro_rules! contract {
                     application
                         .handle_application_call(&context.into(), argument, forwarded_sessions)
                         .await
-                        .map(|outcome| (application, outcome.into_raw()))
+                        .map(|outcome| (application, outcome.serialize_contents()))
                 },
             )
         }
@@ -135,7 +135,7 @@ macro_rules! contract {
                             forwarded_sessions,
                         )
                         .await
-                        .map(|outcome| (application, outcome.into_raw()))
+                        .map(|outcome| (application, outcome.serialize_contents()))
                 },
             )
         }

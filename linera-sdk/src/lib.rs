@@ -54,18 +54,26 @@ use self::contract::ContractStateStorage;
 use async_trait::async_trait;
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
-    data_types::BlockHeight,
-    identifiers::{ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
+    identifiers::ApplicationId,
 };
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{error::Error, fmt::Debug, sync::Arc};
+use std::{error::Error, sync::Arc};
 
 pub use self::{
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
     service::ServiceStateStorage,
 };
-pub use linera_base::{abi, data_types::Resources, ensure, identifiers::SessionId};
+pub use linera_base::{
+    abi,
+    data_types::Resources,
+    ensure,
+    execution::{
+        ApplicationCallOutcome, CalleeContext, MessageContext, MessageKind, OperationContext,
+        QueryContext, RawExecutionOutcome as ExecutionOutcome,
+        RawOutgoingMessage as OutgoingMessage, SessionCallOutcome,
+    },
+    identifiers::SessionId,
+};
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
 
@@ -315,281 +323,5 @@ pub trait Service: WithServiceAbi + ServiceAbi {
         let bytes = crate::service::system_api::current_application_parameters();
         let parameters = serde_json::from_slice(&bytes)?;
         Ok(parameters)
-    }
-}
-
-/// The context of the execution of an application's operation.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct OperationContext {
-    /// The current chain id.
-    pub chain_id: ChainId,
-    /// The authenticated signer of the operation, if any.
-    pub authenticated_signer: Option<Owner>,
-    /// The current block height.
-    pub height: BlockHeight,
-    /// The current index of the operation.
-    pub index: u32,
-}
-
-/// The context of the execution of an application's message.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct MessageContext {
-    /// The current chain id.
-    pub chain_id: ChainId,
-    /// Whether the message was rejected by the original receiver and is now bouncing back.
-    pub is_bouncing: bool,
-    /// The authenticated signer of the operation, if any.
-    pub authenticated_signer: Option<Owner>,
-    /// The current block height.
-    pub height: BlockHeight,
-    /// The id of the message (based on the operation height and index in the remote
-    /// chain that created the message).
-    pub message_id: MessageId,
-}
-
-/// The context of the execution of an application's cross-application call or session call handler.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CalleeContext {
-    /// The current chain id.
-    pub chain_id: ChainId,
-    /// The authenticated signer of the operation, if any.
-    pub authenticated_signer: Option<Owner>,
-    /// `None` if the caller doesn't want this particular call to be authenticated (e.g.
-    /// for safety reasons).
-    pub authenticated_caller_id: Option<ApplicationId>,
-}
-
-/// The context of the execution of an application's query.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct QueryContext {
-    /// The current chain id.
-    pub chain_id: ChainId,
-    /// The height of the next block on this chain.
-    pub next_block_height: BlockHeight,
-}
-
-/// A message together with routing information.
-#[derive(Debug, Deserialize, Serialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct OutgoingMessage<Message> {
-    /// The destination of the message.
-    pub destination: Destination,
-    /// Whether the message is authenticated.
-    pub authenticated: bool,
-    /// Whether the message is tracked.
-    pub is_tracked: bool,
-    /// Resources to be forwarded with the message.
-    pub resources: Resources,
-    /// The message itself.
-    pub message: Message,
-}
-
-impl<Message> OutgoingMessage<Message>
-where
-    Message: Serialize,
-{
-    /// Serializes the internal `Message` type into raw bytes.
-    pub fn into_raw(self) -> OutgoingMessage<Vec<u8>> {
-        let message = bcs::to_bytes(&self.message).expect("Failed to serialize message");
-
-        OutgoingMessage {
-            destination: self.destination,
-            authenticated: self.authenticated,
-            is_tracked: self.is_tracked,
-            resources: self.resources,
-            message,
-        }
-    }
-}
-
-/// Externally visible results of an execution. These results are meant in the context of
-/// the application that created them.
-#[derive(Debug, Deserialize, Serialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct ExecutionOutcome<Message> {
-    /// Sends messages to the given destinations, possibly forwarding the authenticated
-    /// signer.
-    pub messages: Vec<OutgoingMessage<Message>>,
-    /// Subscribe chains to channels.
-    pub subscribe: Vec<(ChannelName, ChainId)>,
-    /// Unsubscribe chains to channels.
-    pub unsubscribe: Vec<(ChannelName, ChainId)>,
-}
-
-impl<Message> Default for ExecutionOutcome<Message> {
-    fn default() -> Self {
-        Self {
-            messages: vec![],
-            subscribe: vec![],
-            unsubscribe: vec![],
-        }
-    }
-}
-
-impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
-    /// Adds a message to the execution result.
-    pub fn with_message(mut self, destination: impl Into<Destination>, message: Message) -> Self {
-        let destination = destination.into();
-        self.messages.push(OutgoingMessage {
-            destination,
-            authenticated: false,
-            is_tracked: false,
-            resources: Resources::default(),
-            message,
-        });
-        self
-    }
-
-    /// Adds an authenticated message to the execution result. Authenticated messages can
-    /// act on behalf of the user that created them.
-    pub fn with_authenticated_message(
-        mut self,
-        destination: impl Into<Destination>,
-        message: Message,
-    ) -> Self {
-        let destination = destination.into();
-        self.messages.push(OutgoingMessage {
-            destination,
-            authenticated: true,
-            is_tracked: false,
-            resources: Resources::default(),
-            message,
-        });
-        self
-    }
-
-    /// Adds a tracked message to the execution result. Tracked messages are bounced if
-    /// rejected on the receiving end. To differentiate bounced messages from original
-    /// messages, the entrypoint `handle_message` should check `context.is_bounced`.
-    pub fn with_tracked_message(
-        mut self,
-        destination: impl Into<Destination>,
-        message: Message,
-    ) -> Self {
-        let destination = destination.into();
-        self.messages.push(OutgoingMessage {
-            destination,
-            authenticated: false,
-            is_tracked: true,
-            resources: Resources::default(),
-            message,
-        });
-        self
-    }
-
-    /// Adds a tracked and authenticated message to the execution result. Tracked messages
-    /// are bounced if rejected on the receiving end. To differentiate bounced messages
-    /// from original messages, the entrypoint `handle_message` should check
-    /// `context.is_bounced`.
-    pub fn with_tracked_authenticated_message(
-        mut self,
-        destination: impl Into<Destination>,
-        message: Message,
-    ) -> Self {
-        let destination = destination.into();
-        self.messages.push(OutgoingMessage {
-            destination,
-            authenticated: true,
-            is_tracked: true,
-            resources: Resources::default(),
-            message,
-        });
-        self
-    }
-
-    /// Converts this [`ExecutionOutcome`] into a raw [`ExecutionOutcome`], by serializing the
-    /// messages.
-    pub fn into_raw(self) -> ExecutionOutcome<Vec<u8>> {
-        let messages = self
-            .messages
-            .into_iter()
-            .map(OutgoingMessage::into_raw)
-            .collect();
-
-        ExecutionOutcome {
-            messages,
-            subscribe: self.subscribe,
-            unsubscribe: self.unsubscribe,
-        }
-    }
-}
-
-/// The result of calling into an application.
-#[derive(Debug, Deserialize, Serialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct ApplicationCallOutcome<Message, Value, SessionState> {
-    /// The return value, if any.
-    pub value: Value,
-    /// The externally-visible result.
-    pub execution_outcome: ExecutionOutcome<Message>,
-    /// New sessions were created with the following new states.
-    pub create_sessions: Vec<SessionState>,
-}
-
-impl<Message, Value, SessionState> Default for ApplicationCallOutcome<Message, Value, SessionState>
-where
-    Value: Default,
-{
-    fn default() -> Self {
-        Self {
-            value: Value::default(),
-            execution_outcome: ExecutionOutcome::default(),
-            create_sessions: vec![],
-        }
-    }
-}
-
-impl<Message, Value, SessionState> ApplicationCallOutcome<Message, Value, SessionState>
-where
-    Message: Debug + DeserializeOwned + Serialize,
-    Value: Serialize,
-    SessionState: Serialize,
-{
-    /// Serializes the internal `Message`, `Value` and `SessionState` types into raw bytes.
-    pub fn into_raw(self) -> ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>> {
-        let value = bcs::to_bytes(&self.value)
-            .expect("Failed to serialize `ApplicationCallOutcome`'s `Value`");
-        let create_sessions = self
-            .create_sessions
-            .into_iter()
-            .map(|session_state| {
-                bcs::to_bytes(&session_state).expect("Failed to serialize the session state")
-            })
-            .collect();
-
-        ApplicationCallOutcome {
-            value,
-            execution_outcome: self.execution_outcome.into_raw(),
-            create_sessions,
-        }
-    }
-}
-
-/// The result of calling into a session.
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub struct SessionCallOutcome<Message, Value, SessionState> {
-    /// The result of the application call.
-    pub inner: ApplicationCallOutcome<Message, Value, SessionState>,
-    /// The new state of the session, if any. `None` means that the session was consumed
-    /// by the call.
-    pub new_state: Option<SessionState>,
-}
-
-impl<Message, Value, SessionState> SessionCallOutcome<Message, Value, SessionState>
-where
-    Message: Debug + DeserializeOwned + Serialize,
-    Value: Serialize,
-    SessionState: Serialize,
-{
-    /// Serializes the internal `Message`, `Value` and `SessionState` types into raw bytes.
-    pub fn into_raw(self) -> SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>> {
-        let new_state = self.new_state.map(|session_state| {
-            bcs::to_bytes(&session_state).expect("Failed to serialize new session state")
-        });
-
-        SessionCallOutcome {
-            inner: self.inner.into_raw(),
-            new_state,
-        }
     }
 }

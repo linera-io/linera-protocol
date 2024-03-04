@@ -14,7 +14,7 @@ use linera_sdk::{
     ensure,
     views::View,
     ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
-    OperationContext, OutgoingMessage, Resources, SessionCallOutcome, ViewStateStorage,
+    OperationContext, SessionCallOutcome, ViewStateStorage,
 };
 use state::{CrowdFunding, Status};
 use thiserror::Error;
@@ -164,13 +164,7 @@ impl CrowdFunding {
         )?;
         // Second, schedule the attribution of the funds to the (remote) campaign.
         let message = Message::PledgeWithAccount { owner, amount };
-        outcome.messages.push(OutgoingMessage {
-            destination: chain_id.into(),
-            authenticated: true,
-            is_tracked: false,
-            resources: Resources::default(),
-            message,
-        });
+        outcome.add_authenticated_message(chain_id, message);
         Ok(())
     }
 

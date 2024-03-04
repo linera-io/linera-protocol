@@ -9,6 +9,7 @@ use crate::{ApplicationCallOutcome, ExecutionOutcome, OutgoingMessage, SessionCa
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, Resources},
+    execution::MessageKind,
     identifiers::{Account, ApplicationId, ChannelName, Destination, MessageId, Owner, SessionId},
 };
 
@@ -126,9 +127,20 @@ impl From<OutgoingMessage<Vec<u8>>> for wit_types::OutgoingMessage {
         Self {
             destination: message.destination.into(),
             authenticated: message.authenticated,
-            is_tracked: message.is_tracked,
-            resources: message.resources.into(),
+            kind: message.kind.into(),
+            grant: message.grant.into(),
             message: message.message,
+        }
+    }
+}
+
+impl From<MessageKind> for wit_types::MessageKind {
+    fn from(kind: MessageKind) -> Self {
+        match kind {
+            MessageKind::Simple => wit_types::MessageKind::Simple,
+            MessageKind::Protected => wit_types::MessageKind::Protected,
+            MessageKind::Tracked => wit_types::MessageKind::Tracked,
+            MessageKind::Bouncing => wit_types::MessageKind::Bouncing,
         }
     }
 }

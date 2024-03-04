@@ -4,7 +4,10 @@
 //! This module contains types related to fees and pricing.
 
 use async_graphql::InputObject;
-use linera_base::data_types::{Amount, ArithmeticError, Resources};
+use linera_base::{
+    data_types::{Amount, ArithmeticError, Resources},
+    execution::RawOutgoingMessage,
+};
 use serde::{Deserialize, Serialize};
 
 /// A collection of prices and limits associated with block execution.
@@ -177,5 +180,36 @@ impl ResourceControlPolicy {
             maximum_bytes_read_per_block: 100_000_000,
             maximum_bytes_written_per_block: 10_000_000,
         }
+    }
+}
+
+/// An extension trait to convert a [`Resources`] discrimination into an [`Amount`] of fees.
+pub trait IntoPriced {
+    /// The resulting priced type.
+    type Output;
+
+    /// Converts this type into [`Self::Output`], by appling the `policy` to convert the
+    /// discriminated [`Resources`] into a single fee [`Amount`].
+    fn into_priced(self, policy: &ResourceControlPolicy) -> Result<Self::Output, ArithmeticError>;
+}
+
+impl<Message> IntoPriced for RawOutgoingMessage<Message, Resources> {
+    type Output = RawOutgoingMessage<Message, Amount>;
+
+    fn into_priced(self, policy: &ResourceControlPolicy) -> Result<Self::Output, ArithmeticError> {
+        let RawOutgoingMessage {
+            destination,
+            authenticated,
+            grant,
+            kind,
+            message,
+        } = self;
+        Ok(RawOutgoingMessage {
+            destination,
+            authenticated,
+            grant: policy.total_price(&grant)?,
+            kind,
+            message,
+        })
     }
 }
