@@ -120,6 +120,7 @@ fn create_dummy_application() -> ApplicationStatus {
     };
 
     ApplicationStatus {
+        caller_id: None,
         id,
         parameters: vec![],
         signer: None,

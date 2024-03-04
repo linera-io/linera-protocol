@@ -57,6 +57,13 @@ macro_rules! impl_contract_system_api {
                 ContractRuntime::message_is_bouncing(self)
             }
 
+            fn authenticated_caller_id(
+                &mut self,
+            ) -> Result<Option<contract_system_api::ApplicationId>, Self::Error> {
+                let maybe_caller_id = ContractRuntime::authenticated_caller_id(self)?;
+                Ok(maybe_caller_id.map(|caller_id| caller_id.into()))
+            }
+
             fn read_chain_balance(&mut self) -> Result<contract_system_api::Amount, Self::Error> {
                 BaseRuntime::read_chain_balance(self).map(|balance| balance.into())
             }

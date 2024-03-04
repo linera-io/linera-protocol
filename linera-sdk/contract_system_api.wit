@@ -7,6 +7,7 @@ read-system-timestamp: func() -> timestamp
 
 message-id: func() -> option<message-id>
 message-is-bouncing: func() -> option<bool>
+authenticated-caller-id: func() -> option<application-id>
 
 read-chain-balance: func() -> amount
 read-owner-balance: func(owner: owner) -> amount
