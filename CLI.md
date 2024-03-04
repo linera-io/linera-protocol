@@ -10,6 +10,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera subscribe`↴](#linera-subscribe)
 * [`linera unsubscribe`↴](#linera-unsubscribe)
 * [`linera open-multi-owner-chain`↴](#linera-open-multi-owner-chain)
+* [`linera change-application-permissions`↴](#linera-change-application-permissions)
 * [`linera close-chain`↴](#linera-close-chain)
 * [`linera local-balance`↴](#linera-local-balance)
 * [`linera query-balance`↴](#linera-query-balance)
@@ -56,6 +57,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `subscribe` — Subscribe to a system channel
 * `unsubscribe` — Unsubscribe from a system channel
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
+* `change-application-permissions` — Changes the application permissions configuration
 * `close-chain` — Close an existing chain
 * `local-balance` — Read the current native-token balance of the given account directly from the local state
 * `query-balance` — Simulate the execution of one block made of pending messages from the local inbox, then read the native-token balance of the account from the local state
@@ -211,6 +213,20 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 * `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round
 
   Default value: `1000`
+
+
+
+## `linera change-application-permissions`
+
+Changes the application permissions configuration
+
+**Usage:** `linera change-application-permissions [OPTIONS] --chain-id <CHAIN_ID>`
+
+###### **Options:**
+
+* `--chain-id <CHAIN_ID>` — The id of the chain to which the new permissions will be applied
+* `--execute-operations <EXECUTE_OPERATIONS>` — If this is not set, all system operations and application operations are allowed. If it is set, only operations from the specified applications are allowed, and no system operations
+* `--close-chain <CLOSE_CHAIN>` — These applications are allowed to close the current chain using the system API
 
 
 

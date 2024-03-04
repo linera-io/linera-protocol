@@ -40,8 +40,9 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::{
-        AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation, UserData,
-        CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX, PUBLISH_BYTECODE_MESSAGE_INDEX,
+        AdminOperation, ApplicationPermissions, OpenChainConfig, Recipient, SystemChannel,
+        SystemOperation, UserData, CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
+        PUBLISH_BYTECODE_MESSAGE_INDEX,
     },
     Bytecode, ExecutionError, Message, Operation, Query, Response, SystemExecutionError,
     SystemMessage, SystemQuery, SystemResponse, UserApplicationId,
@@ -1863,6 +1864,15 @@ where
                 }
             };
         }
+    }
+
+    /// Changes the application permissions configuration on this chain.
+    pub async fn change_application_permissions(
+        &mut self,
+        application_permissions: ApplicationPermissions,
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+        let operation = SystemOperation::ChangeApplicationPermissions(application_permissions);
+        self.execute_operation(operation.into()).await
     }
 
     /// Opens a new chain with a derived UID.

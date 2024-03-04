@@ -36,7 +36,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::{AdminOperation, Recipient, SystemChannel, UserData},
+    system::{AdminOperation, ApplicationPermissions, Recipient, SystemChannel, UserData},
     Bytecode, Operation, Query, Response, SystemOperation, UserApplicationDescription,
     UserApplicationId,
 };
@@ -518,6 +518,20 @@ where
                 timeout_increment: Duration::from_millis(timeout_increment_ms),
             },
         };
+        self.execute_system_operation(operation, chain_id).await
+    }
+
+    /// Changes the application permissions configuration on this chain.
+    async fn change_application_permissions(
+        &self,
+        chain_id: ChainId,
+        close_chain: Vec<ApplicationId>,
+        execute_operations: Option<Vec<ApplicationId>>,
+    ) -> Result<CryptoHash, Error> {
+        let operation = SystemOperation::ChangeApplicationPermissions(ApplicationPermissions {
+            execute_operations,
+            close_chain,
+        });
         self.execute_system_operation(operation, chain_id).await
     }
 

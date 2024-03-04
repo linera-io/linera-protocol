@@ -19,7 +19,7 @@ use linera_execution::{
     },
     ApplicationCallOutcome, BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome,
     MessageKind, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
-    RawOutgoingMessage, ResourceController, Response, SessionCallOutcome,
+    RawOutgoingMessage, ResourceController, Response, SessionCallOutcome, SystemOperation,
 };
 use linera_views::batch::Batch;
 use std::{collections::BTreeMap, vec};
@@ -1026,9 +1026,11 @@ async fn test_close_chain() {
     assert!(!view.system.closed.get());
 
     // Now we authorize the application and it can close the chain.
-    view.system
-        .application_permissions
-        .set(ApplicationPermissions::new_single(application_id));
+    let permissions = ApplicationPermissions::new_single(application_id);
+    let operation = SystemOperation::ChangeApplicationPermissions(permissions);
+    view.execute_operation(context, operation.into(), &mut controller)
+        .await
+        .unwrap();
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             runtime.close_chain().unwrap();

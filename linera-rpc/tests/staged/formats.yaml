@@ -860,27 +860,31 @@ SystemOperation:
           - timeout_config:
               TYPENAME: TimeoutConfig
     5:
+      ChangeApplicationPermissions:
+        NEWTYPE:
+          TYPENAME: ApplicationPermissions
+    6:
       Subscribe:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - channel:
               TYPENAME: SystemChannel
-    6:
+    7:
       Unsubscribe:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - channel:
               TYPENAME: SystemChannel
-    7:
+    8:
       PublishBytecode:
         STRUCT:
           - contract:
               TYPENAME: Bytecode
           - service:
               TYPENAME: Bytecode
-    8:
+    9:
       CreateApplication:
         STRUCT:
           - bytecode_id:
@@ -890,14 +894,14 @@ SystemOperation:
           - required_application_ids:
               SEQ:
                 TYPENAME: ApplicationId
-    9:
+    10:
       RequestApplication:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - application_id:
               TYPENAME: ApplicationId
-    10:
+    11:
       Admin:
         NEWTYPE:
           TYPENAME: AdminOperation

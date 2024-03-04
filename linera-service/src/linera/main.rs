@@ -26,7 +26,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
-    system::{SystemChannel, UserData},
+    system::{ApplicationPermissions, SystemChannel, UserData},
     Message, ResourceControlPolicy, SystemMessage,
 };
 use linera_service::{
@@ -259,6 +259,27 @@ impl Runnable for Job {
                 // Print the new chain ID and message ID on stdout for scripting purposes.
                 println!("{}", message_id);
                 println!("{}", ChainId::child(message_id));
+            }
+
+            ChangeApplicationPermissions {
+                chain_id,
+                execute_operations,
+                close_chain,
+            } => {
+                let mut chain_client = context.make_chain_client(storage, chain_id);
+                info!("Changing application permissions for chain {}", chain_id);
+                let time_start = Instant::now();
+                let result = chain_client
+                    .change_application_permissions(ApplicationPermissions {
+                        execute_operations,
+                        close_chain,
+                    })
+                    .await;
+                context.update_and_save_wallet(&mut chain_client).await;
+                let certificate = result.context("failed to change application permissions")?;
+                let time_total = time_start.elapsed();
+                info!("Operation confirmed after {} ms", time_total.as_millis());
+                debug!("{:?}", certificate);
             }
 
             CloseChain { chain_id } => {
