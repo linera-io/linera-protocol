@@ -18,6 +18,7 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use std::fmt;
+pub use wit::Closechainerror as CloseChainError;
 
 /// Retrieves the current chain ID.
 pub fn current_chain_id() -> ChainId {
@@ -56,6 +57,12 @@ pub fn claim(source: Account, destination: Account, amount: Amount) {
 /// Retrieves the owner configuration for the current chain.
 pub fn chain_ownership() -> ChainOwnership {
     wit::chain_ownership().into()
+}
+
+/// Closes the current chain. Returns an error if the application doesn't have
+/// permission to do so.
+pub fn close_chain() -> Result<(), CloseChainError> {
+    wit::close_chain()
 }
 
 /// Retrieves the current system time, i.e. the timestamp of the block in which this is called.
