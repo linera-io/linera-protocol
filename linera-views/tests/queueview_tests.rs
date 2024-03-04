@@ -14,8 +14,6 @@ pub struct StateView<C> {
     pub queue: QueueView<C, u8>,
 }
 
-// TODO(#1692) this suffers from a hash collision — re-enable once fixed
-#[ignore]
 #[tokio::test]
 async fn queue_view_mutability_check() {
     let context = create_memory_context();
@@ -43,15 +41,13 @@ async fn queue_view_mutability_check() {
                     new_vector.push(val);
                 }
             }
-            if choice == 1 {
+            if choice == 1 && count > 0 {
                 // deleting some entries
-                if count > 0 {
-                    let n_remove = rng.gen_range(0..count);
-                    for _ in 0..n_remove {
-                        view.queue.delete_front();
-                        // slow but we do not care for tests.
-                        new_vector.remove(0);
-                    }
+                let n_remove = rng.gen_range(0..count);
+                for _ in 0..n_remove {
+                    view.queue.delete_front();
+                    // slow but we do not care for tests.
+                    new_vector.remove(0);
                 }
             }
             if choice == 2 && count > 0 {
