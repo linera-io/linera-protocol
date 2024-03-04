@@ -41,9 +41,9 @@ async fn queue_view_mutability_check() {
                     new_vector.push(val);
                 }
             }
-            if choice == 1 && count > 0 {
+            if choice == 1 {
                 // deleting some entries
-                let n_remove = rng.gen_range(0..count);
+                let n_remove = rng.gen_range(0..=count);
                 for _ in 0..n_remove {
                     view.queue.delete_front();
                     // slow but we do not care for tests.
