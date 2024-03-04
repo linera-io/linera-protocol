@@ -936,7 +936,7 @@ where
             .run(self.context.clone(), self.storage.clone())
             .await;
         let serve_fut =
-            Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
+            Server::bind(&SocketAddr::from(([0, 0, 0, 0], port))).serve(app.into_make_service());
         serve_fut.await?;
 
         Ok(())
