@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::PublicKey,
     data_types::Amount,
-    identifiers::{Account, BytecodeId, ChainId, MessageId},
+    identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId},
 };
 use linera_execution::{
     committee::ValidatorName, system::SystemChannel, UserApplicationId, WasmRuntime,
@@ -267,6 +267,21 @@ pub enum ClientCommand {
             value_parser = util::parse_millis
         )]
         timeout_increment: Duration,
+    },
+
+    /// Changes the application permissions configuration.
+    ChangeApplicationPermissions {
+        /// The id of the chain to which the new permissions will be applied.
+        #[arg(long)]
+        chain_id: ChainId,
+        /// If this is not set, all system operations and application operations are allowed.
+        /// If it is set, only operations from the specified applications are allowed, and
+        /// no system operations.
+        #[arg(long)]
+        execute_operations: Option<Vec<ApplicationId>>,
+        /// These applications are allowed to close the current chain using the system API.
+        #[arg(long)]
+        close_chain: Vec<ApplicationId>,
     },
 
     /// Close an existing chain.
