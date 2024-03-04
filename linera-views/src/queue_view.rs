@@ -450,6 +450,7 @@ where
     /// # })
     /// ```
     pub async fn iter_mut(&'a mut self) -> Result<IterMut<'a, T>, ViewError> {
+        *self.hash.get_mut() = None;
         self.load_all().await?;
         Ok(self.new_back_values.iter_mut())
     }
