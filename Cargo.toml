@@ -112,9 +112,10 @@ test-case = "3.2.1"
 test-log = { version = "0.2.13", default-features = false, features = ["trace"] }
 test-strategy = "0.2.1"
 thiserror = "1.0.50"
-tonic = { version = "0.10.2", default-features = false }
-tonic-build = { version = "0.10.2", default-features = false }
-tonic-health = "0.10.2"
+tonic = { version = "0.11", default-features = false }
+tonic-build = { version = "0.11", default-features = false }
+tonic-health = "0.11"
+tonic-web = "0.11"
 tokio = "1.33.0"
 tokio-stream = "0.1.14"
 tokio-test = "0.4.3"
