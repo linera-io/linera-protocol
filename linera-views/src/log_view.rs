@@ -4,6 +4,7 @@
 use crate::{
     batch::Batch,
     common::{from_bytes_opt, Context, HasherOutput, MIN_VIEW_TAG},
+    hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
@@ -384,3 +385,6 @@ where
         }
     }
 }
+
+/// Type wrapping `LogView` while memoizing the hash.
+pub type MemoizedLogView<C, T> = WrappedHashableContainerView<C, LogView<C, T>, HasherOutput>;

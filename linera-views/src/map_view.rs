@@ -43,6 +43,7 @@ use crate::{
         contains_key, get_interval, insert_key_prefix, Context, CustomSerialize, HasherOutput,
         KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
     },
+    hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
@@ -1660,6 +1661,17 @@ where
         self.map.hash().await
     }
 }
+
+/// Type wrapping `ByteMapView` while memoizing the hash.
+pub type MemoizedByteMapView<C, V> =
+    WrappedHashableContainerView<C, ByteMapView<C, V>, HasherOutput>;
+
+/// Type wrapping `MapView` while memoizing the hash.
+pub type MemoizedMapView<C, I, V> = WrappedHashableContainerView<C, MapView<C, I, V>, HasherOutput>;
+
+/// Type wrapping `CustomMapView` while memoizing the hash.
+pub type MemoizedCustomMapView<C, I, V> =
+    WrappedHashableContainerView<C, CustomMapView<C, I, V>, HasherOutput>;
 
 #[cfg(test)]
 pub mod tests {

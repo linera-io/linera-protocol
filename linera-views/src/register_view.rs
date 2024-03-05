@@ -256,5 +256,6 @@ where
     }
 }
 
-/// The trait is implementing `RegisterView` with storing of hash.
-pub type MemoizedRegisterView<C,T> = WrappedHashableContainerView<C, RegisterView<C,T>, HasherOutput>;
+/// Type wrapping `RegisterView` while memoizing the hash.
+pub type MemoizedRegisterView<C, T> =
+    WrappedHashableContainerView<C, RegisterView<C, T>, HasherOutput>;

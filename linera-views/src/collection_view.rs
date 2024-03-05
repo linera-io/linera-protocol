@@ -4,6 +4,7 @@
 use crate::{
     batch::Batch,
     common::{Context, CustomSerialize, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
+    hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 use async_lock::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -1306,3 +1307,15 @@ where
         self.collection.hash().await
     }
 }
+
+/// Type wrapping `ByteCollectionView` while memoizing the hash.
+pub type MemoizedByteCollectionView<C, W> =
+    WrappedHashableContainerView<C, ByteCollectionView<C, W>, HasherOutput>;
+
+/// Type wrapping `CollectionView` while memoizing the hash.
+pub type MemoizedCollectionView<C, I, W> =
+    WrappedHashableContainerView<C, CollectionView<C, I, W>, HasherOutput>;
+
+/// Type wrapping `CustomCollectionView` while memoizing the hash.
+pub type MemoizedCustomCollectionView<C, I, W> =
+    WrappedHashableContainerView<C, CustomCollectionView<C, I, W>, HasherOutput>;
