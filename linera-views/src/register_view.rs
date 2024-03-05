@@ -211,7 +211,7 @@ where
         }
     }
 
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+    fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
         let _hash_latency = REGISTER_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
@@ -234,7 +234,7 @@ where
         match hash {
             Some(hash) => Ok(hash),
             None => {
-                let new_hash = self.compute_hash().await?;
+                let new_hash = self.compute_hash()?;
                 let hash = self.hash.get_mut();
                 *hash = Some(new_hash);
                 Ok(new_hash)
@@ -247,7 +247,7 @@ where
         match *hash {
             Some(hash) => Ok(hash),
             None => {
-                let new_hash = self.compute_hash().await?;
+                let new_hash = self.compute_hash()?;
                 *hash = Some(new_hash);
                 Ok(new_hash)
             }
