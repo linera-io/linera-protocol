@@ -160,9 +160,9 @@ impl LineraNetConfig for LocalNetConfig {
         let guard = match self.database {
             Database::Service => {
                 let binary = get_service_storage_binary().await?.display().to_string();
-                let spanner =
+                let builder =
                     StorageServiceBuilder::new(END_TO_END_STORAGE_SERVICE_ENDPOINT, binary);
-                Some(spanner.run_service().await.expect("child"))
+                Some(builder.run_service().await.expect("child"))
             }
             _ => None,
         };
