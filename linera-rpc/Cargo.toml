@@ -29,6 +29,9 @@ metrics = [
     "linera-views/metrics",
 ]
 
+server = ["tonic-health"]
+simple-network = ["tokio-util/net"]
+
 web = [
     "linera-base/web",
     "linera-chain/web",
@@ -61,9 +64,8 @@ rand.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-tokio-util = { workspace = true, features = ["codec", "net"] }
-tonic = { workspace = true, features = ["prost", "codegen", "transport"] }
-tonic-health.workspace = true
+tokio-util = { workspace = true, optional = true, features = ["codec"] }
+tonic-health = { workspace = true, optional = true }
 tower.workspace = true
 tracing.workspace = true
 
@@ -74,6 +76,12 @@ serde-reflection.workspace = true
 serde_yaml.workspace = true
 similar-asserts.workspace = true
 test-strategy.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tonic = { workspace = true, features = ["prost", "codegen", "transport"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tonic = { workspace = true, features = ["prost", "codegen"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true

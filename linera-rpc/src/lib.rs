@@ -15,9 +15,10 @@ pub mod node_provider;
 pub mod client;
 
 mod message;
+#[cfg(with_simple_network)]
+pub mod simple;
 
 pub mod grpc;
-pub mod simple;
 
 pub use message::RpcMessage;
 

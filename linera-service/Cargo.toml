@@ -58,7 +58,7 @@ linera-base = { workspace = true, features = ["metrics"] }
 linera-chain = { workspace = true, features = ["metrics"] }
 linera-core = { workspace = true, features = ["metrics", "rocksdb", "wasmer"] }
 linera-execution = { workspace = true, features = ["fs", "metrics", "wasmer"] }
-linera-rpc.workspace = true
+linera-rpc = { workspace = true, features = ["server", "simple-network"] }
 linera-storage = { workspace = true, features = ["metrics", "wasmer"] }
 linera-storage-service.workspace = true
 linera-version.workspace = true

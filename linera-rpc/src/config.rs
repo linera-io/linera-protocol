@@ -1,9 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::simple;
 use linera_base::identifiers::ChainId;
 use serde::{Deserialize, Serialize};
+
+#[cfg(with_simple_network)]
+use crate::simple;
 
 #[derive(Clone, Debug, clap::Parser)]
 pub struct CrossChainConfig {
@@ -67,6 +69,7 @@ impl ShardConfig {
 /// The network protocol.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum NetworkProtocol {
+    #[cfg(with_simple_network)]
     Simple(simple::TransportProtocol),
     Grpc(TlsConfig),
 }
@@ -80,6 +83,7 @@ pub enum TlsConfig {
 impl NetworkProtocol {
     fn scheme(&self) -> &'static str {
         match self {
+            #[cfg(with_simple_network)]
             NetworkProtocol::Simple(transport) => transport.scheme(),
             NetworkProtocol::Grpc(tls) => match tls {
                 TlsConfig::ClearText => "http",
@@ -171,6 +175,7 @@ where
 impl std::fmt::Display for NetworkProtocol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            #[cfg(with_simple_network)]
             NetworkProtocol::Simple(protocol) => write!(f, "{:?}", protocol),
             NetworkProtocol::Grpc(tls) => match tls {
                 TlsConfig::ClearText => write!(f, "grpc"),
@@ -211,7 +216,10 @@ impl std::str::FromStr for NetworkProtocol {
         let protocol = match s {
             "grpc" => Self::Grpc(TlsConfig::ClearText),
             "grpcs" => Self::Grpc(TlsConfig::Tls),
+            #[cfg(with_simple_network)]
             s => Self::Simple(simple::TransportProtocol::from_str(s)?),
+            #[cfg(not(with_simple_network))]
+            s => return Err(format!("unsupported protocol: {s:?}")),
         };
         Ok(protocol)
     }
