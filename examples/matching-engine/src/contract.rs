@@ -14,7 +14,7 @@ use std::cmp::min;
 use async_trait::async_trait;
 use fungible::{Account, Destination, FungibleTokenAbi};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId, Owner, SessionId, WithContractAbi},
+    base::{AccountOwner, Amount, ApplicationId, ChainId, Owner, SessionId, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
     OperationContext, OutgoingMessage, Resources, SessionCallOutcome, ViewStateStorage,
@@ -39,7 +39,7 @@ enum ModifyAmount {
 #[derive(Clone)]
 pub struct Transfer {
     /// Beneficiary of the transfer
-    pub owner: AccountOwner,
+    pub account: Account,
     /// Amount being transferred
     pub amount: Amount,
     /// Index of the token being transferred (0 or 1)
@@ -76,7 +76,7 @@ impl Contract for MatchingEngine {
                 let owner = Self::get_owner(&order);
                 Self::check_account_authentication(None, context.authenticated_signer, owner)?;
                 if context.chain_id == system_api::current_application_id().creation.chain_id {
-                    self.execute_order_local(order).await?;
+                    self.execute_order_local(order, context.chain_id).await?;
                 } else {
                     self.execute_order_remote(&mut outcome, order)?;
                 }
@@ -99,7 +99,8 @@ impl Contract for MatchingEngine {
             Message::ExecuteOrder { order } => {
                 let owner = Self::get_owner(&order);
                 Self::check_account_authentication(None, context.authenticated_signer, owner)?;
-                self.execute_order_local(order).await?;
+                self.execute_order_local(order, context.message_id.chain_id)
+                    .await?;
             }
         }
         Ok(ExecutionOutcome::default())
@@ -126,7 +127,7 @@ impl Contract for MatchingEngine {
                     owner,
                 )?;
                 if context.chain_id == system_api::current_application_id().creation.chain_id {
-                    self.execute_order_local(order).await?;
+                    self.execute_order_local(order, context.chain_id).await?;
                 } else {
                     self.execute_order_remote(&mut outcome.execution_outcome, order)?;
                 }
@@ -205,11 +206,7 @@ impl MatchingEngine {
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
     fn send_to(&mut self, transfer: Transfer) -> Result<(), MatchingEngineError> {
-        let account = Account {
-            chain_id: system_api::current_chain_id(),
-            owner: transfer.owner,
-        };
-        let destination = Destination::Account(account);
+        let destination = Destination::Account(transfer.account);
         let owner_app = AccountOwner::Application(system_api::current_application_id());
         self.transfer(owner_app, transfer.amount, destination, transfer.token_idx)
     }
@@ -241,7 +238,11 @@ impl MatchingEngine {
     ///   - Insertion of the order into the market and immediately uncrossing the market that
     ///     is making sure that at the end we have best bid < best ask.
     ///   - Creation of the corresponding orders and operation of the corresponding transfers
-    async fn execute_order_local(&mut self, order: Order) -> Result<(), MatchingEngineError> {
+    async fn execute_order_local(
+        &mut self,
+        order: Order,
+        chain_id: ChainId,
+    ) -> Result<(), MatchingEngineError> {
         match order {
             Order::Insert {
                 owner,
@@ -250,8 +251,9 @@ impl MatchingEngine {
                 price,
             } => {
                 self.receive_from_account(&owner, &amount, &nature, &price)?;
+                let account = Account { chain_id, owner };
                 let transfers = self
-                    .insert_and_uncross_market(&owner, amount, nature, &price)
+                    .insert_and_uncross_market(&account, amount, nature, &price)
                     .await?;
                 for transfer in transfers {
                     self.send_to(transfer)?;
@@ -333,7 +335,7 @@ impl MatchingEngine {
         match value {
             None => Err(MatchingEngineError::OrderNotPresent),
             Some(value) => {
-                if &value.owner != owner {
+                if &value.account.owner != owner {
                     return Err(MatchingEngineError::WrongOwnerOfOrder);
                 }
                 Ok(())
@@ -376,7 +378,7 @@ impl MatchingEngine {
         Ok(())
     }
 
-    /// For a specific level of price, look at all the orders and find the one that
+    /// For a specific level of price, looks at all the orders and finds the one that
     /// has this specific order_id.
     /// When that order is found, then the cancellation is applied to it.
     /// Then the information is emitted for the handling of this operation.
@@ -391,12 +393,10 @@ impl MatchingEngine {
             .ok_or(MatchingEngineError::OrderNotPresent)?;
         let new_amount = match cancel_amount {
             ModifyAmount::All => Amount::ZERO,
-            ModifyAmount::Partial(cancel_amount) => {
-                if cancel_amount > state_order.amount {
-                    return Err(MatchingEngineError::TooLargeModifyOrder);
-                }
-                state_order.amount.try_sub(cancel_amount).unwrap()
-            }
+            ModifyAmount::Partial(cancel_amount) => state_order
+                .amount
+                .try_sub(cancel_amount)
+                .map_err(|_| MatchingEngineError::TooLargeModifyOrder)?,
         };
         let corr_cancel_amount = state_order.amount.try_sub(new_amount).unwrap();
         state_order.amount = new_amount;
@@ -404,7 +404,7 @@ impl MatchingEngine {
         Ok((corr_cancel_amount, new_amount == Amount::ZERO))
     }
 
-    /// Modification of the order from the order_id.
+    /// Modifies the order from the order_id.
     /// This means that some transfers have to be done and the size depends
     /// whether ask or bid.
     async fn modify_order(
@@ -413,44 +413,43 @@ impl MatchingEngine {
         cancel_amount: ModifyAmount,
     ) -> Result<Transfer, MatchingEngineError> {
         let key_book = self.orders.get(&order_id).await?;
-        if let Some(key_book) = key_book {
-            match key_book.nature {
-                OrderNature::Bid => {
-                    let view = self.bids.load_entry_mut(&key_book.price.to_bid()).await?;
-                    let (cancel_amount, remove_order_id) =
-                        Self::modify_order_level(view, order_id, cancel_amount).await?;
-                    if remove_order_id {
-                        self.remove_order_id((key_book.owner, order_id)).await?;
-                    }
-                    let cancel_amount0 = product_price_amount(key_book.price, cancel_amount);
-                    let transfer = Transfer {
-                        owner: key_book.owner,
-                        amount: cancel_amount0,
-                        token_idx: 0,
-                    };
-                    Ok(transfer)
+        let key_book = key_book.ok_or_else(|| MatchingEngineError::OrderNotPresent)?;
+        match key_book.nature {
+            OrderNature::Bid => {
+                let view = self.bids.load_entry_mut(&key_book.price.to_bid()).await?;
+                let (cancel_amount, remove_order_id) =
+                    Self::modify_order_level(view, order_id, cancel_amount).await?;
+                if remove_order_id {
+                    self.remove_order_id((key_book.account.owner, order_id))
+                        .await?;
                 }
-                OrderNature::Ask => {
-                    let view = self.asks.load_entry_mut(&key_book.price.to_ask()).await?;
-                    let (cancel_count, remove_order_id) =
-                        Self::modify_order_level(view, order_id, cancel_amount).await?;
-                    if remove_order_id {
-                        self.remove_order_id((key_book.owner, order_id)).await?;
-                    }
-                    let transfer = Transfer {
-                        owner: key_book.owner,
-                        amount: cancel_count,
-                        token_idx: 1,
-                    };
-                    Ok(transfer)
-                }
+                let cancel_amount0 = product_price_amount(key_book.price, cancel_amount);
+                let transfer = Transfer {
+                    account: key_book.account,
+                    amount: cancel_amount0,
+                    token_idx: 0,
+                };
+                Ok(transfer)
             }
-        } else {
-            Err(MatchingEngineError::OrderNotPresent)
+            OrderNature::Ask => {
+                let view = self.asks.load_entry_mut(&key_book.price.to_ask()).await?;
+                let (cancel_count, remove_order_id) =
+                    Self::modify_order_level(view, order_id, cancel_amount).await?;
+                if remove_order_id {
+                    self.remove_order_id((key_book.account.owner, order_id))
+                        .await?;
+                }
+                let transfer = Transfer {
+                    account: key_book.account,
+                    amount: cancel_count,
+                    token_idx: 1,
+                };
+                Ok(transfer)
+            }
         }
     }
 
-    /// Get the order_id that increases starting from 0.
+    /// Gets the order_id that increases starting from 0.
     fn get_new_order_id(&mut self) -> Result<OrderId, MatchingEngineError> {
         let value = self.next_order_number.get_mut();
         let value_ret = *value;
@@ -462,7 +461,7 @@ impl MatchingEngine {
     ///
     /// * `nature` is the nature of the order in question.
     /// * `fill` is the amount that is being processed.
-    /// * `owner` is the owner of the new order being inserted.
+    /// * `account` is the account owning the new order being inserted.
     /// * `order_level` is the liquidity providing order.
     /// * `price_level` is the price of the existing order that provides liquidity.
     /// * `price_insert` is the price that of the newly added order.
@@ -480,7 +479,7 @@ impl MatchingEngine {
     fn get_transfers(
         nature: &OrderNature,
         fill: Amount,
-        owner: &AccountOwner,
+        account: &Account,
         order_level: &OrderEntry,
         price_level: Price,  // the price that was present in the level
         price_insert: Price, // the price of the inserted order
@@ -498,13 +497,13 @@ impl MatchingEngine {
                 // * fill of token1 go to the buyer.
                 assert!(price_insert >= price_level);
                 let transfer_to_buyer = Transfer {
-                    owner: *owner,
+                    account: *account,
                     amount: fill,
                     token_idx: 1,
                 };
                 let fill0 = product_price_amount(price_insert, fill);
                 let transfer_to_seller = Transfer {
-                    owner: order_level.owner,
+                    account: order_level.account,
                     amount: fill0,
                     token_idx: 0,
                 };
@@ -525,12 +524,12 @@ impl MatchingEngine {
                 assert!(price_insert <= price_level);
                 let fill0 = product_price_amount(price_insert, fill);
                 let transfer_to_seller = Transfer {
-                    owner: *owner,
+                    account: *account,
                     amount: fill0,
                     token_idx: 0,
                 };
                 let transfer_to_buyer1 = Transfer {
-                    owner: order_level.owner,
+                    account: order_level.account,
                     amount: fill,
                     token_idx: 1,
                 };
@@ -542,7 +541,7 @@ impl MatchingEngine {
                     };
                     let fill0 = product_price_amount(price_diff, fill);
                     let transfer_to_buyer0 = Transfer {
-                        owner: order_level.owner,
+                        account: order_level.account,
                         amount: fill0,
                         token_idx: 0,
                     };
@@ -558,7 +557,7 @@ impl MatchingEngine {
     /// providing order remaining to fill it.
     async fn level_clearing(
         view: &mut LevelView,
-        owner: &AccountOwner,
+        account: &Account,
         amount: &mut Amount,
         transfers: &mut Vec<Transfer>,
         nature: &OrderNature,
@@ -574,14 +573,14 @@ impl MatchingEngine {
                 transfers.extend_from_slice(&Self::get_transfers(
                     nature,
                     fill,
-                    owner,
+                    account,
                     order,
                     price_level,
                     price_insert,
                 ));
             }
             if order.amount == Amount::ZERO {
-                remove_order.push((order.owner, order.order_id));
+                remove_order.push((order.account.owner, order.order_id));
             }
             if *amount == Amount::ZERO {
                 break;
@@ -591,28 +590,28 @@ impl MatchingEngine {
         Ok(remove_order)
     }
 
-    /// Insert the order_id and insert it into:
+    /// Inserts the order_id and insert it into:
     /// * account_info which give the orders by owner
     /// * The orders which contain the symbolic information and the key_book.
     async fn insert_order(
         &mut self,
-        owner: AccountOwner,
+        account: Account,
         nature: OrderNature,
         order_id: OrderId,
         price: Price,
     ) -> Result<(), MatchingEngineError> {
-        let account_info = self.account_info.get_mut_or_default(&owner).await?;
+        let account_info = self.account_info.get_mut_or_default(&account.owner).await?;
         account_info.orders.insert(order_id);
         let key_book = KeyBook {
             price,
             nature,
-            owner,
+            account,
         };
         self.orders.insert(&order_id, key_book)?;
         Ok(())
     }
 
-    /// Remove one single (owner, order_id) from the database
+    /// Removes one single (owner, order_id) from the database
     /// * This is done for the info by owners
     /// * And the symbolic information of orders
     async fn remove_order_id(
@@ -630,7 +629,7 @@ impl MatchingEngine {
         Ok(())
     }
 
-    /// Removing a bunch of order_id
+    /// Removes a bunch of order_id
     async fn remove_order_ids(
         &mut self,
         entries: Vec<(AccountOwner, OrderId)>,
@@ -641,7 +640,7 @@ impl MatchingEngine {
         Ok(())
     }
 
-    /// We insert an order into the matching engine and this creates several things:
+    /// Inserts an order into the matching engine and this creates several things:
     /// * The price levels that matches are selected
     /// * Getting from the best matching price to the least good the price levels
     ///   are cleared.
@@ -650,7 +649,7 @@ impl MatchingEngine {
     ///   inserted. Otherwise, it became a liquidity order in the matching engine
     async fn insert_and_uncross_market(
         &mut self,
-        owner: &AccountOwner,
+        account: &Account,
         amount: Amount,
         nature: OrderNature,
         price: &Price,
@@ -678,7 +677,7 @@ impl MatchingEngine {
                     let view = self.asks.load_entry_mut(&price_ask).await?;
                     let remove_entry = Self::level_clearing(
                         view,
-                        owner,
+                        account,
                         &mut final_amount,
                         &mut transfers,
                         &nature,
@@ -698,11 +697,11 @@ impl MatchingEngine {
                     let view = self.bids.load_entry_mut(&price.to_bid()).await?;
                     let order = OrderEntry {
                         amount: final_amount,
-                        owner: *owner,
+                        account: *account,
                         order_id,
                     };
                     view.queue.push_back(order);
-                    self.insert_order(*owner, OrderNature::Bid, order_id, *price)
+                    self.insert_order(*account, OrderNature::Bid, order_id, *price)
                         .await?;
                 }
             }
@@ -721,7 +720,7 @@ impl MatchingEngine {
                     let view = self.bids.load_entry_mut(&price_bid).await?;
                     let remove_entry = Self::level_clearing(
                         view,
-                        owner,
+                        account,
                         &mut final_amount,
                         &mut transfers,
                         &nature,
@@ -741,11 +740,11 @@ impl MatchingEngine {
                     let view = self.asks.load_entry_mut(&price.to_ask()).await?;
                     let order = OrderEntry {
                         amount: final_amount,
-                        owner: *owner,
+                        account: *account,
                         order_id,
                     };
                     view.queue.push_back(order);
-                    self.insert_order(*owner, OrderNature::Ask, order_id, *price)
+                    self.insert_order(*account, OrderNature::Ask, order_id, *price)
                         .await?;
                 }
             }

@@ -224,7 +224,7 @@ transfer tokens from OWNER_1 to OWNER_2 at CHAIN_2 will instantly update the UI 
 second page.
 */
 
-use async_graphql::{scalar, InputObject, Request, Response};
+use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
     base::{AccountOwner, Amount, ChainId, ContractAbi, ServiceAbi},
     graphql::GraphQLMutationRoot,
@@ -360,7 +360,17 @@ impl Parameters {
 
 /// An account.
 #[derive(
-    Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, InputObject,
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    SimpleObject,
+    InputObject,
 )]
 pub struct Account {
     pub chain_id: ChainId,

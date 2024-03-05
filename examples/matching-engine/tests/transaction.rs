@@ -268,23 +268,27 @@ async fn single_transaction() {
     user_chain_a.handle_received_messages().await;
     user_chain_b.handle_received_messages().await;
 
-    // Check balances on tha matching engine chain
-    for (owner, amount) in [
-        (owner_a, Amount::from_tokens(3)),
-        (owner_b, Amount::from_tokens(6)),
+    // Check owner balances
+    for (owner, user_chain, amount) in [
+        (owner_a, &matching_chain, None),
+        (owner_b, &matching_chain, None),
+        (owner_a, &user_chain_a, Some(Amount::from_tokens(4))),
+        (owner_b, &user_chain_b, Some(Amount::from_tokens(6))),
     ] {
         assert_eq!(
-            FungibleTokenAbi::query_account(token_id_a, &matching_chain, owner).await,
-            Some(amount)
+            FungibleTokenAbi::query_account(token_id_a, user_chain, owner).await,
+            amount
         );
     }
-    for (owner, amount) in [
-        (owner_a, Amount::from_tokens(3)),
-        (owner_b, Amount::from_tokens(5)),
+    for (owner, user_chain, amount) in [
+        (owner_a, &matching_chain, None),
+        (owner_b, &matching_chain, None),
+        (owner_a, &user_chain_a, Some(Amount::from_tokens(3))),
+        (owner_b, &user_chain_b, Some(Amount::from_tokens(6))),
     ] {
         assert_eq!(
-            FungibleTokenAbi::query_account(token_id_b, &matching_chain, owner).await,
-            Some(amount)
+            FungibleTokenAbi::query_account(token_id_b, user_chain, owner).await,
+            amount
         );
     }
 }
