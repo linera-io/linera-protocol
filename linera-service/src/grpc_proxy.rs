@@ -15,17 +15,17 @@ use linera_rpc::{
     config::{
         ShardConfig, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
     },
-    grpc_network::{
-        grpc::{
+    grpc::{
+        api::{
             notifier_service_server::{NotifierService, NotifierServiceServer},
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
             BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, LiteCertificate,
             Notification, SubscriptionRequest, VersionInfo,
         },
+        pool::ConnectionPool,
         Proxyable, MAX_MESSAGE_SIZE,
     },
-    grpc_pool::ConnectionPool,
 };
 use prometheus::{HistogramVec, IntCounterVec};
 use rcgen::generate_simple_self_signed;

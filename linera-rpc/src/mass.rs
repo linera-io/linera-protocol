@@ -12,7 +12,7 @@ pub enum MassClientError {
     #[error("tonic transport: {0}")]
     Tonic(#[from] tonic::transport::Error),
     #[error("conversion error: {0}")]
-    Conversion(#[from] crate::conversions::ProtoConversionError),
+    Conversion(#[from] crate::grpc::ProtoConversionError),
     #[error("error while making a remote call: {0}")]
     Rpc(#[from] tonic::Status),
 }
