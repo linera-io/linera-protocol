@@ -91,7 +91,7 @@ impl<P, S> ChainClients<P, S> {
     ) -> Result<OwnedMutexGuard<ChainClient<P, S>>, Error> {
         self.client_lock(chain_id)
             .await
-            .ok_or_else(|| Error::new("Unknown chain ID"))
+            .ok_or_else(|| Error::new(format!("Unknown chain ID: {}", chain_id)))
     }
 
     pub(crate) async fn map_lock(&self) -> MutexGuard<ClientMapInner<P, S>> {
@@ -142,7 +142,7 @@ enum NodeServiceError {
     #[error("application service error")]
     ApplicationServiceError { errors: Vec<String> },
     #[error("chain ID not found")]
-    UnknownChainId,
+    UnknownChainId { chain_id: String },
     #[error("malformed chain ID")]
     InvalidChainId(CryptoError),
 }
@@ -181,9 +181,10 @@ impl IntoResponse for NodeServiceError {
             NodeServiceError::ApplicationServiceError { errors } => {
                 (StatusCode::BAD_REQUEST, errors)
             }
-            NodeServiceError::UnknownChainId => {
-                (StatusCode::NOT_FOUND, vec!["unknown chain ID".to_string()])
-            }
+            NodeServiceError::UnknownChainId { chain_id } => (
+                StatusCode::NOT_FOUND,
+                vec![format!("unknown chain ID: {}", chain_id)],
+            ),
             NodeServiceError::InvalidChainId(_) => (
                 StatusCode::BAD_REQUEST,
                 vec!["invalid chain ID".to_string()],
@@ -970,7 +971,9 @@ where
             bytes,
         };
         let Some(client) = self.clients.client_lock(&chain_id).await else {
-            return Err(NodeServiceError::UnknownChainId);
+            return Err(NodeServiceError::UnknownChainId {
+                chain_id: chain_id.to_string(),
+            });
         };
         let response = client.query_application(query).await?;
         let user_response_bytes = match response {
@@ -1014,7 +1017,9 @@ where
 
         let hash = loop {
             let Some(mut client) = self.clients.client_lock(&chain_id).await else {
-                return Err(NodeServiceError::UnknownChainId);
+                return Err(NodeServiceError::UnknownChainId {
+                    chain_id: chain_id.to_string(),
+                });
             };
             let timeout = match client.execute_operations(operations.clone()).await? {
                 ClientOutcome::Committed(certificate) => break certificate.value.hash(),
