@@ -51,7 +51,7 @@ impl BlockHeightRange {
     derive(test_strategy::Arbitrary, Eq, PartialEq)
 )]
 pub struct ChainInfoQuery {
-    /// The chain id
+    /// The chain ID.
     pub chain_id: ChainId,
     /// Optionally test that the block height is the one expected.
     pub test_next_block_height: Option<BlockHeight>,
@@ -138,7 +138,7 @@ impl ChainInfoQuery {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ChainInfo {
-    /// The chain id.
+    /// The chain ID.
     pub chain_id: ChainId,
     /// The number identifying the current configuration.
     pub epoch: Option<Epoch>,

@@ -115,7 +115,7 @@ message ConfirmUpdatedRecipient {
 
 // Request information on a chain.
 message ChainInfoQuery {
-  // The chain id
+  // The chain ID
   ChainId chain_id = 1;
 
   // Optionally test that the block height is as expected

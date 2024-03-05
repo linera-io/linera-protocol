@@ -190,7 +190,7 @@ pub struct MessageBundle {
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
-/// A channel name together with its application id.
+/// A channel name together with its application ID.
 pub struct ChannelFullName {
     /// The application owning the channel.
     pub application_id: GenericApplicationId,
@@ -1050,7 +1050,7 @@ doc_scalar!(
 );
 doc_scalar!(
     ChannelFullName,
-    "A channel name together with its application id"
+    "A channel name together with its application ID"
 );
 doc_scalar!(
     Event,

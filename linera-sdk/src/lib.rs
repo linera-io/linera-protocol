@@ -321,7 +321,7 @@ pub trait Service: WithServiceAbi + ServiceAbi {
 /// The context of the execution of an application's operation.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OperationContext {
-    /// The current chain id.
+    /// The current chain ID.
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
     pub authenticated_signer: Option<Owner>,
@@ -334,7 +334,7 @@ pub struct OperationContext {
 /// The context of the execution of an application's message.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MessageContext {
-    /// The current chain id.
+    /// The current chain ID.
     pub chain_id: ChainId,
     /// Whether the message was rejected by the original receiver and is now bouncing back.
     pub is_bouncing: bool,
@@ -342,7 +342,7 @@ pub struct MessageContext {
     pub authenticated_signer: Option<Owner>,
     /// The current block height.
     pub height: BlockHeight,
-    /// The id of the message (based on the operation height and index in the remote
+    /// The ID of the message (based on the operation height and index in the remote
     /// chain that created the message).
     pub message_id: MessageId,
 }
@@ -350,7 +350,7 @@ pub struct MessageContext {
 /// The context of the execution of an application's cross-application call or session call handler.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CalleeContext {
-    /// The current chain id.
+    /// The current chain ID.
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
     pub authenticated_signer: Option<Owner>,
@@ -362,7 +362,7 @@ pub struct CalleeContext {
 /// The context of the execution of an application's query.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct QueryContext {
-    /// The current chain id.
+    /// The current chain ID.
     pub chain_id: ChainId,
     /// The height of the next block on this chain.
     pub next_block_height: BlockHeight,
