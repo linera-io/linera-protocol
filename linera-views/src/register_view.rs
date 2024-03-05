@@ -4,6 +4,7 @@
 use crate::{
     batch::Batch,
     common::{from_bytes_opt, Context, HasherOutput, MIN_VIEW_TAG},
+    hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
@@ -254,3 +255,6 @@ where
         }
     }
 }
+
+/// The trait is implementing `RegisterView` with storing of hash.
+pub type MemoizedRegisterView<C,T> = WrappedHashableContainerView<C, RegisterView<C,T>, HasherOutput>;
