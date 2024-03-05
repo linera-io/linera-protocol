@@ -8,6 +8,7 @@ use crate::{
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
+use futures::join;
 use serde::{de::DeserializeOwned, Serialize};
 use std::ops::{Deref, DerefMut};
 
@@ -34,7 +35,7 @@ impl<C, W, O> View<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: HashableView<C>,
+    W: HashableView<C> + Send,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {
@@ -43,10 +44,14 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let key = context.base_tag(KeyTag::Hash as u8);
-        let hash = context.read_value(&key).await?;
+        let hash_key = context.base_tag(KeyTag::Hash as u8);
         let base_key = context.base_tag(KeyTag::Index as u8);
-        let inner = W::load(context.clone_with_base_key(base_key)).await?;
+        let (hash, inner) = join!(
+            context.read_value(&hash_key),
+            W::load(context.clone_with_base_key(base_key))
+        );
+        let hash = hash?;
+        let inner = inner?;
         Ok(Self {
             context,
             stored_hash: hash,
@@ -84,7 +89,7 @@ impl<C, W, O> ClonableView<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: HashableView<C> + ClonableView<C>,
+    W: HashableView<C> + ClonableView<C> + Send,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {
