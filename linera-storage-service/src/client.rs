@@ -315,7 +315,7 @@ impl AdminKeyValueStore for ServiceStoreClient {
     }
 }
 
-/// Create the `CommonStoreConfig` for the `ServiceStoreClient`.
+/// Creates the `CommonStoreConfig` for the `ServiceStoreClient`.
 pub fn create_service_store_common_config() -> CommonStoreConfig {
     let max_stream_queries = 100;
     let cache_size = 10; // unused
