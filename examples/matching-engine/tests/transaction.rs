@@ -168,26 +168,20 @@ async fn single_transaction() {
     // Checking the values for token_a
     for (owner, amount) in [
         (admin_account, None),
-        (owner_a, Some(Amount::from_tokens(1))),
+        (owner_a, Some(Amount::ONE)),
         (owner_b, None),
     ] {
         let value = FungibleTokenAbi::query_account(token_id_a, &user_chain_a, owner).await;
         assert_eq!(value, amount);
     }
-    for (owner, amount) in [(admin_account, None), (owner_a, None), (owner_b, None)] {
+    for owner in [admin_account, owner_a, owner_b] {
         assert_eq!(
             FungibleTokenAbi::query_account(token_id_a, &user_chain_b, owner).await,
-            amount
+            None
         );
-    }
-    for (owner, amount) in [
-        (admin_account, None),
-        (owner_a, Some(Amount::ZERO)),
-        (owner_b, None),
-    ] {
         assert_eq!(
             FungibleTokenAbi::query_account(token_id_a, &matching_chain, owner).await,
-            amount
+            None
         );
     }
 
