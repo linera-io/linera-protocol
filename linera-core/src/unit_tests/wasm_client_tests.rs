@@ -9,7 +9,7 @@
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
 use crate::client::client_tests::{
-    MakeMemoryStorage, MakeServiceStorage, StorageBuilder, TestBuilder,
+    get_free_port, MakeMemoryStorage, MakeServiceStorage, StorageBuilder, TestBuilder,
 };
 use assert_matches::assert_matches;
 use async_graphql::Request;
@@ -48,8 +48,9 @@ async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> Result<(),
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_service_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
     run_test_create_application(MakeServiceStorage::with_wasm_runtime(
-        "127.0.0.1:9100",
+        &endpoint,
         wasm_runtime,
     ))
     .await
@@ -172,8 +173,9 @@ async fn test_memory_run_application_with_dependency(
 async fn test_service_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
     run_test_run_application_with_dependency(MakeServiceStorage::with_wasm_runtime(
-        "127.0.0.1:9101",
+        &endpoint,
         wasm_runtime,
     ))
     .await
@@ -390,8 +392,9 @@ async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<()
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_service_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
     run_test_cross_chain_message(MakeServiceStorage::with_wasm_runtime(
-        "127.0.0.1:9102",
+        &endpoint,
         wasm_runtime,
     ))
     .await
@@ -603,8 +606,9 @@ async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> Result<
 async fn test_service_user_pub_sub_channels(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
     run_test_user_pub_sub_channels(MakeServiceStorage::with_wasm_runtime(
-        "127.0.0.1:9103",
+        &endpoint,
         wasm_runtime,
     ))
     .await

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_storage_service::{
-    child::StorageServiceBuilder,
+    child::{get_free_port, StorageServiceBuilder},
     client::{create_service_test_store, service_config_from_endpoint, ServiceStoreClient},
 };
 use linera_views::test_utils::{
@@ -18,35 +18,35 @@ fn get_storage_service_guard(endpoint: &str) -> StorageServiceBuilder {
 
 #[tokio::test]
 async fn test_reads_service_store() {
-    let endpoint = "127.0.0.1:8942";
+    let endpoint = get_free_port().await.unwrap();
     for scenario in get_random_test_scenarios() {
-        let _guard = get_storage_service_guard(endpoint).run_service().await;
-        let key_value_store = create_service_test_store(endpoint).await.unwrap();
+        let _guard = get_storage_service_guard(&endpoint).run_service().await;
+        let key_value_store = create_service_test_store(&endpoint).await.unwrap();
         run_reads(key_value_store, scenario).await;
     }
 }
 
 #[tokio::test]
 async fn test_service_store_writes_from_blank() {
-    let endpoint = "127.0.0.1:8943";
-    let _guard = get_storage_service_guard(endpoint).run_service().await;
-    let key_value_store = create_service_test_store(endpoint).await.unwrap();
+    let endpoint = get_free_port().await.unwrap();
+    let _guard = get_storage_service_guard(&endpoint).run_service().await;
+    let key_value_store = create_service_test_store(&endpoint).await.unwrap();
     run_writes_from_blank(&key_value_store).await;
 }
 
 #[tokio::test]
 async fn test_service_store_writes_from_state() {
-    let endpoint = "127.0.0.1:8944";
-    let _guard = get_storage_service_guard(endpoint).run_service().await;
-    let key_value_store = create_service_test_store(endpoint).await.unwrap();
+    let endpoint = get_free_port().await.unwrap();
+    let _guard = get_storage_service_guard(&endpoint).run_service().await;
+    let key_value_store = create_service_test_store(&endpoint).await.unwrap();
     run_writes_from_state(&key_value_store).await;
 }
 
 #[tokio::test]
 async fn test_service_admin() {
-    let endpoint = "127.0.0.1:8945";
-    let _guard = get_storage_service_guard(endpoint).run_service().await;
-    let config = service_config_from_endpoint(endpoint)
+    let endpoint = get_free_port().await.unwrap();
+    let _guard = get_storage_service_guard(&endpoint).run_service().await;
+    let config = service_config_from_endpoint(&endpoint)
         .await
         .expect("config");
     admin_test::<ServiceStoreClient>(&config).await;
