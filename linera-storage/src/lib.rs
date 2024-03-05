@@ -38,7 +38,7 @@ use futures::future;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{ChainDescription, ChainId},
+    identifiers::{ChainDescription, ChainId, GenericApplicationId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
@@ -49,8 +49,7 @@ use linera_execution::{
     committee::{Committee, Epoch},
     system::SystemChannel,
     ChannelSubscription, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    GenericApplicationId, UserApplicationDescription, UserApplicationId, UserContractCode,
-    UserServiceCode, WasmRuntime,
+    UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode, WasmRuntime,
 };
 use linera_views::{
     common::Context,

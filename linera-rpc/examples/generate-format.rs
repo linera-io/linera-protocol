@@ -7,7 +7,7 @@
 
 use linera_base::{
     data_types::Round,
-    identifiers::{ChainDescription, Destination},
+    identifiers::{ChainDescription, Destination, GenericApplicationId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
@@ -17,7 +17,7 @@ use linera_chain::{
 use linera_core::{data_types::CrossChainRequest, node::NodeError};
 use linera_execution::{
     system::{AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation},
-    GenericApplicationId, Message, MessageKind, Operation,
+    Message, MessageKind, Operation,
 };
 use linera_rpc::RpcMessage;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};

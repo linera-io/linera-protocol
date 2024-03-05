@@ -16,13 +16,12 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     ensure,
-    identifiers::{ChainId, Destination, MessageId},
+    identifiers::{ChainId, Destination, GenericApplicationId, MessageId},
 };
 use linera_execution::{
-    system::SystemMessage, ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView,
-    GenericApplicationId, Message, MessageContext, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, ResourceController, ResourceTracker, Response,
-    UserApplicationDescription, UserApplicationId,
+    system::SystemMessage, ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView, Message,
+    MessageContext, OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
+    ResourceController, ResourceTracker, Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     common::Context,

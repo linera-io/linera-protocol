@@ -17,7 +17,10 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::{CryptoHash, *},
     data_types::*,
-    identifiers::{Account, ChainDescription, ChainId, ChannelName, Destination, MessageId, Owner},
+    identifiers::{
+        Account, ChainDescription, ChainId, ChannelName, Destination, GenericApplicationId,
+        MessageId, Owner,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -35,8 +38,8 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
     },
     test_utils::SystemExecutionState,
-    ChannelSubscription, ExecutionError, GenericApplicationId, Message, MessageKind, Query,
-    Response, SystemExecutionError, SystemQuery, SystemResponse,
+    ChannelSubscription, ExecutionError, Message, MessageKind, Query, Response,
+    SystemExecutionError, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, MemoryStorage, Storage, TestClock};
 use linera_views::{

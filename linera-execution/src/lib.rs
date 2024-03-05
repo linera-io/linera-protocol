@@ -21,8 +21,7 @@ pub use crate::runtime::{ContractSyncRuntime, ServiceSyncRuntime};
 #[cfg(with_testing)]
 pub use applications::ApplicationRegistry;
 pub use applications::{
-    ApplicationRegistryView, BytecodeLocation, GenericApplicationId, UserApplicationDescription,
-    UserApplicationId,
+    ApplicationRegistryView, BytecodeLocation, UserApplicationDescription, UserApplicationId,
 };
 pub use execution::ExecutionStateView;
 pub use policy::ResourceControlPolicy;
@@ -47,7 +46,8 @@ use linera_base::{
     data_types::{Amount, ArithmeticError, BlockHeight, Resources, Timestamp},
     doc_scalar, hex_debug,
     identifiers::{
-        Account, BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId,
+        Account, BytecodeId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId,
+        Owner, SessionId,
     },
     ownership::ChainOwnership,
 };

@@ -131,6 +131,32 @@ pub struct ApplicationId<A = ()> {
     pub creation: MessageId,
 }
 
+/// A unique identifier for an application.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+pub enum GenericApplicationId {
+    /// The system application.
+    System,
+    /// A user application.
+    User(ApplicationId),
+}
+
+impl GenericApplicationId {
+    /// Returns the `ApplicationId`, or `None` if it is `System`.
+    pub fn user_application_id(&self) -> Option<&ApplicationId> {
+        if let GenericApplicationId::User(app_id) = self {
+            Some(app_id)
+        } else {
+            None
+        }
+    }
+}
+
+impl From<ApplicationId> for GenericApplicationId {
+    fn from(user_application_id: ApplicationId) -> Self {
+        GenericApplicationId::User(user_application_id)
+    }
+}
+
 /// A unique identifier for an application bytecode.
 #[cfg_attr(with_testing, derive(Default))]
 pub struct BytecodeId<A = ()> {
@@ -766,6 +792,10 @@ impl ChainId {
 impl BcsHashable for ChainDescription {}
 
 bcs_scalar!(ApplicationId, "A unique identifier for a user application");
+doc_scalar!(
+    GenericApplicationId,
+    "A unique identifier for a user application or for the system application"
+);
 bcs_scalar!(
     BytecodeId,
     "A unique identifier for an application bytecode"
