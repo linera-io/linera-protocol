@@ -38,7 +38,6 @@
 #![deny(missing_docs)]
 
 pub mod base;
-#[allow(missing_docs)]
 pub mod contract;
 mod extensions;
 pub mod graphql;

@@ -7,18 +7,16 @@ mod conversions_from_wit;
 mod conversions_to_wit;
 mod storage;
 pub mod system_api;
+mod wit_system_api;
 pub mod wit_types;
 
 pub use self::storage::ContractStateStorage;
-use super::log::ContractLogger;
+use self::wit_system_api as contract_system_api;
 use crate::{
-    util::BlockingWait, ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome,
-    MessageContext, OperationContext, SessionCallOutcome, SessionId,
+    log::ContractLogger, util::BlockingWait, ApplicationCallOutcome, CalleeContext, Contract,
+    ExecutionOutcome, MessageContext, OperationContext, SessionCallOutcome, SessionId,
 };
 use std::future::Future;
-
-// Import the system interface.
-wit_bindgen_guest_rust::import!("contract_system_api.wit");
 
 /// Declares an implementation of the [`Contract`][`crate::Contract`] trait, exporting it from the
 /// Wasm module.
