@@ -8,7 +8,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .compile(&["proto/rpc.proto"], no_includes)?;
 
     cfg_aliases::cfg_aliases! {
-        with_metrics: { all(not(target_arch = "wasm32"), feature = "metrics") },
+        web: { all(target_arch = "wasm32", target_os = "unknown") },
+        with_metrics: { all(not(web), feature = "metrics") },
     };
 
     Ok(())

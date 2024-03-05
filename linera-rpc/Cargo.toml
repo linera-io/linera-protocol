@@ -18,6 +18,7 @@ test = [
     "linera-execution/test",
     "linera-storage/test",
 ]
+
 metrics = [
     "prometheus",
     "linera-base/metrics",
@@ -26,6 +27,14 @@ metrics = [
     "linera-execution/metrics",
     "linera-storage/metrics",
     "linera-views/metrics",
+]
+
+web = [
+    "linera-base/web",
+    "linera-chain/web",
+    "linera-core/web",
+    "linera-execution/web",
+    "linera-views/web",
 ]
 
 [dependencies]
@@ -51,23 +60,20 @@ prost.workspace = true
 rand.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+tokio-util = { workspace = true, features = ["codec", "net"] }
+tonic = { workspace = true, features = ["prost", "codegen", "transport"] }
+tonic-health.workspace = true
+tower.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-assert_matches.workspace = true
 linera-rpc = { path = ".", features = ["test"] }
 proptest.workspace = true
 serde-reflection.workspace = true
 serde_yaml.workspace = true
 similar-asserts.workspace = true
 test-strategy.workspace = true
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio.workspace = true
-tokio-util = { workspace = true, features = ["codec", "net"] }
-tonic = { workspace = true, features = ["codegen", "prost", "tls"] }
-tonic-health.workspace = true
-tower.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
