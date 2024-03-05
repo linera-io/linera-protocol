@@ -11,7 +11,6 @@ mod wit_system_api;
 pub mod wit_types;
 
 pub use self::storage::ContractStateStorage;
-use self::wit_system_api as contract_system_api;
 use crate::{
     log::ContractLogger, util::BlockingWait, ApplicationCallOutcome, CalleeContext, Contract,
     ExecutionOutcome, MessageContext, OperationContext, SessionCallOutcome, SessionId,

@@ -11,7 +11,7 @@ pub mod private;
 pub(crate) use self::private::{
     call_application, call_session, current_application_parameters, load_view, store_view,
 };
-use super::contract_system_api as wit;
+use super::wit_system_api as wit;
 use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::{Account, ApplicationId, ChainId, Owner},
