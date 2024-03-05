@@ -4,7 +4,7 @@
 //! Handle requests from the synchronous execution thread of user applications.
 
 use crate::{
-    system::{ApplicationPermissions, OpenChainConfig, Recipient, UserData},
+    system::{OpenChainConfig, Recipient, UserData},
     util::RespondExt,
     ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
     RawOutgoingMessage, SystemExecutionError, SystemMessage, UserApplicationDescription,
@@ -12,7 +12,7 @@ use crate::{
 };
 use futures::channel::mpsc;
 use linera_base::{
-    data_types::{Amount, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{Account, MessageId, Owner},
     ownership::ChainOwnership,
 };

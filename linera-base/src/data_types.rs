@@ -11,7 +11,10 @@ use std::{
 };
 use thiserror::Error;
 
-use crate::doc_scalar;
+use crate::{
+    doc_scalar,
+    identifiers::{ApplicationId, GenericApplicationId},
+};
 
 /// A non-negative amount of tokens.
 ///
@@ -520,6 +523,42 @@ impl Amount {
     /// Divides this by the other amount. If the other is 0, it returns `u128::MAX`.
     pub fn saturating_div(self, other: Amount) -> u128 {
         self.0.checked_div(other.0).unwrap_or(u128::MAX)
+    }
+}
+
+/// Permissions for applications on a chain.
+#[derive(Default, Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ApplicationPermissions {
+    /// If this is `None`, all system operations and application operations are allowed.
+    /// If it is `Some`, only operations from the specified applications are allowed, and
+    /// no system operations.
+    pub execute_operations: Option<Vec<ApplicationId>>,
+    /// These applications are allowed to close the current chain using the system API.
+    pub close_chain: Vec<ApplicationId>,
+}
+
+impl ApplicationPermissions {
+    /// Creates new `ApplicationPermissions` where the given application is the only one
+    /// whose operations are allowed, and it can also close the chain.
+    pub fn new_single(app_id: ApplicationId) -> Self {
+        Self {
+            execute_operations: Some(vec![app_id]),
+            close_chain: vec![app_id],
+        }
+    }
+
+    /// Returns whether operations with the given application ID are allowed on this chain.
+    pub fn can_execute_operations(&self, app_id: &GenericApplicationId) -> bool {
+        match (app_id, &self.execute_operations) {
+            (_, None) => true,
+            (GenericApplicationId::System, Some(_)) => false,
+            (GenericApplicationId::User(app_id), Some(app_ids)) => app_ids.contains(app_id),
+        }
+    }
+
+    /// Returns whether the given application is allowed to close this chain.
+    pub fn can_close_chain(&self, app_id: &ApplicationId) -> bool {
+        self.close_chain.contains(app_id)
     }
 }
 

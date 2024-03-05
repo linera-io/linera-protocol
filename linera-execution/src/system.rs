@@ -5,18 +5,16 @@
 use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, Bytecode, BytecodeLocation, ChannelName, ChannelSubscription,
-    Destination, GenericApplicationId, MessageContext, MessageKind, OperationContext, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
+    Destination, MessageContext, MessageKind, OperationContext, QueryContext, RawExecutionOutcome,
+    RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
 };
 use async_graphql::Enum;
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, ArithmeticError, Timestamp},
+    data_types::{Amount, ApplicationPermissions, ArithmeticError, Timestamp},
     ensure, hex_debug,
-    identifiers::{
-        Account, ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId, Owner,
-    },
+    identifiers::{Account, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 
@@ -103,42 +101,6 @@ pub struct OpenChainConfig {
     pub committees: BTreeMap<Epoch, Committee>,
     pub balance: Amount,
     pub application_permissions: ApplicationPermissions,
-}
-
-/// Permissions for applications on a chain.
-#[derive(Default, Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct ApplicationPermissions {
-    /// If this is `None`, all system operations and application operations are allowed.
-    /// If it is `Some`, only operations from the specified applications are allowed, and
-    /// no system operations.
-    pub execute_operations: Option<Vec<ApplicationId>>,
-    /// These applications are allowed to close the current chain using the system API.
-    pub close_chain: Vec<ApplicationId>,
-}
-
-impl ApplicationPermissions {
-    /// Creates new `ApplicationPermissions` where the given application is the only one
-    /// whose operations are allowed, and it can also close the chain.
-    pub fn new_single(app_id: ApplicationId) -> Self {
-        Self {
-            execute_operations: Some(vec![app_id]),
-            close_chain: vec![app_id],
-        }
-    }
-
-    /// Returns whether operations with the given application ID are allowed on this chain.
-    pub fn can_execute_operations(&self, app_id: &GenericApplicationId) -> bool {
-        match (app_id, &self.execute_operations) {
-            (_, None) => true,
-            (GenericApplicationId::System, Some(_)) => false,
-            (GenericApplicationId::User(app_id), Some(app_ids)) => app_ids.contains(app_id),
-        }
-    }
-
-    /// Returns whether the given application is allowed to close this chain.
-    pub fn can_close_chain(&self, app_id: &ApplicationId) -> bool {
-        self.close_chain.contains(app_id)
-    }
 }
 
 /// A system operation.
