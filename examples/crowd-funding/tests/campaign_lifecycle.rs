@@ -105,7 +105,7 @@ async fn collect_pledges() {
         );
         assert_eq!(
             FungibleTokenAbi::query_account(token_id, &campaign_chain, backer_account).await,
-            Some(Amount::ZERO),
+            None,
         );
     }
 }
@@ -194,7 +194,7 @@ async fn cancel_successful_campaign() {
 
     assert_eq!(
         FungibleTokenAbi::query_account(token_id, &campaign_chain, campaign_account).await,
-        Some(Amount::ZERO),
+        None,
     );
 
     for (backer_chain, backer_account, initial_amount) in backers {

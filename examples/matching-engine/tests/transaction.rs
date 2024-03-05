@@ -180,11 +180,7 @@ async fn single_transaction() {
             amount
         );
     }
-    for (owner, amount) in [
-        (admin_account, None),
-        (owner_a, Some(Amount::ZERO)),
-        (owner_b, None),
-    ] {
+    for (owner, amount) in [(admin_account, None), (owner_a, None), (owner_b, None)] {
         assert_eq!(
             FungibleTokenAbi::query_account(token_id_a, &matching_chain, owner).await,
             amount

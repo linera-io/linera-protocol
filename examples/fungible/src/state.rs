@@ -4,7 +4,7 @@
 use fungible::InitialState;
 use linera_sdk::{
     base::{AccountOwner, Amount},
-    views::{linera_views, MapView, RootView, ViewStorageContext},
+    views::{linera_views, MapView, RootView, ViewError, ViewStorageContext},
 };
 use thiserror::Error;
 
@@ -25,9 +25,11 @@ impl FungibleToken {
     /// Initializes the application state with some accounts with initial balances.
     pub(crate) async fn initialize_accounts(&mut self, state: InitialState) {
         for (k, v) in state.accounts {
-            self.accounts
-                .insert(&k, v)
-                .expect("Error in insert statement");
+            if v != Amount::ZERO {
+                self.accounts
+                    .insert(&k, v)
+                    .expect("Error in insert statement");
+            }
         }
     }
 
@@ -46,6 +48,9 @@ impl FungibleToken {
 
     /// Credits an `account` with the provided `amount`.
     pub(crate) async fn credit(&mut self, account: AccountOwner, amount: Amount) {
+        if amount == Amount::ZERO {
+            return;
+        }
         let mut balance = self.balance_or_default(&account).await;
         balance.saturating_add_assign(amount);
         self.accounts
@@ -63,9 +68,16 @@ impl FungibleToken {
         balance
             .try_sub_assign(amount)
             .map_err(|_| InsufficientBalanceError)?;
-        self.accounts
-            .insert(&account, balance)
-            .expect("Failed insertion operation");
+        if balance == Amount::ZERO {
+            match self.accounts.remove(&account) {
+                Ok(()) | Err(ViewError::NotFound(_)) => {}
+                Err(error) => panic!("Failed to remove empty account: {}", error),
+            }
+        } else {
+            self.accounts
+                .insert(&account, balance)
+                .expect("Failed insertion operation");
+        }
         Ok(())
     }
 }
