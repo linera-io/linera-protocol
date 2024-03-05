@@ -1,20 +1,16 @@
-
-![Linera_Red_White_H](https://github.com/papadritta/linera-protocol/assets/90826754/4513e5f7-b364-4fb4-9a43-c3b49c749f01)
-
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE)
 [![Build Status for Rust](https://github.com/linera-io/linera-protocol/actions/workflows/rust.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/rust.yml)
 [![Build Status for Documentation](https://github.com/linera-io/linera-protocol/actions/workflows/documentation.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/documentation.yml)
 [![Build Status for DynamoDB](https://github.com/linera-io/linera-protocol/actions/workflows/dynamodb.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/dynamodb.yml)
 <!-- [![Build Status for Kubernetes](https://github.com/linera-io/linera-protocol/actions/workflows/kubernetes.yml/badge.svg)](https://github.com/linera-io/linera-protocol/actions/workflows/kubernetes.yml) -->
 
-# Linera
+# <img src="https://github.com/linera-io/linera-protocol/assets/1105398/fe08c941-93af-4114-bb83-bcc0eaec95f9" width="250" height="80" />
 
-This repository is dedicated to the development of the Linera protocol, a decentralized
-blockchain infrastructure designed for highly scalable, low-latency Web3 applications.
+Linera is a decentralized blockchain infrastructure designed for highly scalable,
+low-latency Web3 applications.
 
-To learn more about the Linera protocol, you may visit our [developer page](https://linera.dev)
-and read our [whitepaper](https://linera.io/whitepaper).
-
+Visit our [developer page](https://linera.dev) and read our
+[whitepaper](https://linera.io/whitepaper) to learn more about the Linera protocol.
 
 ## Repository Structure
 
