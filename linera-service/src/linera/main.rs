@@ -11,7 +11,7 @@ use colored::Colorize;
 use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::{CryptoHash, CryptoRng, PublicKey},
-    data_types::{Amount, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{ChainDescription, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -26,7 +26,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
-    system::{ApplicationPermissions, SystemChannel, UserData},
+    system::{SystemChannel, UserData},
     Message, ResourceControlPolicy, SystemMessage,
 };
 use linera_service::{

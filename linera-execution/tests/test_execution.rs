@@ -6,13 +6,13 @@
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::PublicKey,
-    data_types::{Amount, BlockHeight, Resources, Timestamp},
+    data_types::{Amount, ApplicationPermissions, BlockHeight, Resources, Timestamp},
     identifiers::{Account, ChainDescription, ChainId, Destination, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::{ApplicationPermissions, SystemMessage},
+    system::SystemMessage,
     test_utils::{
         create_dummy_user_application_registrations, register_mock_applications, ExpectedCall,
         SystemExecutionState,

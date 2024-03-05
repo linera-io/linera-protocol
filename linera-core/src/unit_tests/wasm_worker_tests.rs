@@ -13,7 +13,9 @@ use super::{init_worker_with_chains, make_certificate};
 use linera_base::{
     crypto::KeyPair,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{BytecodeId, ChainDescription, ChainId, Destination, MessageId},
+    identifiers::{
+        BytecodeId, ChainDescription, ChainId, Destination, GenericApplicationId, MessageId,
+    },
     ownership::ChainOwnership,
 };
 use linera_chain::{
@@ -27,8 +29,8 @@ use linera_execution::{
     committee::Epoch,
     system::{SystemChannel, SystemMessage, SystemOperation},
     test_utils::SystemExecutionState,
-    Bytecode, BytecodeLocation, ChannelSubscription, GenericApplicationId, Message, MessageKind,
-    Operation, OperationContext, ResourceController, UserApplicationDescription, UserApplicationId,
+    Bytecode, BytecodeLocation, ChannelSubscription, Message, MessageKind, Operation,
+    OperationContext, ResourceController, UserApplicationDescription, UserApplicationId,
     WasmContractModule, WasmRuntime,
 };
 use linera_storage::{MemoryStorage, Storage};

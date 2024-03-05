@@ -9,13 +9,13 @@ use crate::{
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, ApplicationPermissions, BlockHeight, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::{ApplicationPermissions, OpenChainConfig},
+    system::OpenChainConfig,
     test_utils::{ExpectedCall, MockApplication},
     BytecodeLocation, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation,
     RawExecutionOutcome, SystemMessage, TestExecutionRuntimeContext, UserApplicationDescription,

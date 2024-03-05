@@ -27,27 +27,8 @@ use {
 #[path = "unit_tests/applications_tests.rs"]
 mod applications_tests;
 
-/// A unique identifier for an application.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub enum GenericApplicationId {
-    /// The system application.
-    System,
-    /// A user application.
-    User(UserApplicationId),
-}
-
-impl GenericApplicationId {
-    pub fn user_application_id(&self) -> Option<&UserApplicationId> {
-        if let GenericApplicationId::User(app_id) = self {
-            Some(app_id)
-        } else {
-            None
-        }
-    }
-}
-
 /// Alias for `linera_base::identifiers::ApplicationId`. Use this alias in the core
-/// protocol where the distinction with the more general enum [`GenericApplicationId`] matters.
+/// protocol where the distinction with the more general enum `GenericApplicationId` matters.
 pub type UserApplicationId<A = ()> = linera_base::identifiers::ApplicationId<A>;
 
 /// Description of the necessary information to run a user application.
@@ -74,12 +55,6 @@ impl From<&UserApplicationDescription> for UserApplicationId {
             bytecode_id: description.bytecode_id,
             creation: description.creation,
         }
-    }
-}
-
-impl From<UserApplicationId> for GenericApplicationId {
-    fn from(user_application_id: UserApplicationId) -> Self {
-        GenericApplicationId::User(user_application_id)
     }
 }
 

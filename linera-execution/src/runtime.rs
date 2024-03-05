@@ -5,7 +5,6 @@ use crate::{
     execution::UserAction,
     execution_state_actor::{ExecutionStateSender, Request},
     resources::ResourceController,
-    system::ApplicationPermissions,
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
     ExecutionError, ExecutionOutcome, RawExecutionOutcome, ServiceRuntime, SessionId,
@@ -14,7 +13,7 @@ use crate::{
 };
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
+    data_types::{Amount, ApplicationPermissions, ArithmeticError, BlockHeight, Timestamp},
     ensure,
     identifiers::{Account, ChainId, MessageId, Owner},
     ownership::ChainOwnership,

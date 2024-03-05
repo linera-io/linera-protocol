@@ -22,7 +22,7 @@ use futures::{
 };
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
-    data_types::{Amount, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
     BcsHexParseError,
@@ -36,7 +36,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::{AdminOperation, ApplicationPermissions, Recipient, SystemChannel, UserData},
+    system::{AdminOperation, Recipient, SystemChannel, UserData},
     Bytecode, Operation, Query, Response, SystemOperation, UserApplicationDescription,
     UserApplicationId,
 };
