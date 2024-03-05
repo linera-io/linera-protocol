@@ -4,7 +4,7 @@
 use fungible::InitialState;
 use linera_sdk::{
     base::{AccountOwner, Amount},
-    views::{linera_views, MapView, RootView, ViewError, ViewStorageContext},
+    views::{linera_views, MapView, RootView, ViewStorageContext},
 };
 use thiserror::Error;
 
@@ -64,15 +64,17 @@ impl FungibleToken {
         account: AccountOwner,
         amount: Amount,
     ) -> Result<(), InsufficientBalanceError> {
+        if amount == Amount::ZERO {
+            return Ok(());
+        }
         let mut balance = self.balance_or_default(&account).await;
         balance
             .try_sub_assign(amount)
             .map_err(|_| InsufficientBalanceError)?;
         if balance == Amount::ZERO {
-            match self.accounts.remove(&account) {
-                Ok(()) | Err(ViewError::NotFound(_)) => {}
-                Err(error) => panic!("Failed to remove empty account: {}", error),
-            }
+            self.accounts
+                .remove(&account)
+                .expect("Failed to remove an empty account");
         } else {
             self.accounts
                 .insert(&account, balance)
