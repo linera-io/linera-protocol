@@ -1345,7 +1345,7 @@ async fn test_resolve_binary() {
         .is_err());
 }
 
-// TODO(#1655): Make the scyllacb_udp / rocksdb_udp test work.
+// TODO(#1655): Make the scylladb_udp / rocksdb_udp test work.
 //#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
 //#[cfg_attr(feature = "rocksdb", test_case(LocalNetConfig::new_test(Database::RocksDb, Network::Udp) ; "rocksdb_udp"))]
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
