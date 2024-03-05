@@ -4,7 +4,7 @@
 //! Functions and types that interface with the system API available to application contracts but
 //! that shouldn't be used by applications directly.
 
-use super::super::contract_system_api as wit;
+use super::super::wit_system_api as wit;
 use crate::views::ViewStorageContext;
 use linera_base::identifiers::{ApplicationId, SessionId};
 use linera_views::views::{RootView, View};
