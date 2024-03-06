@@ -49,7 +49,7 @@ impl Contract for NonFungibleTokenContract {
         _state: Self::InitializationArgument,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
-        assert!(Self::parameters().is_ok());
+        self.runtime.application_parameters();
         self.state.num_minted_nfts.set(0);
         Ok(ExecutionOutcome::default())
     }
