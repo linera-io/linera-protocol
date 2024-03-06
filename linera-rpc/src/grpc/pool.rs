@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::Error;
+use super::GrpcError;
 
 use dashmap::DashMap;
 use std::time::Duration;
@@ -9,13 +9,13 @@ use tonic::transport::{Channel, Endpoint};
 
 /// A pool of transport channels to be used by Grpc.
 #[derive(Clone, Default)]
-pub struct ConnectionPool {
+pub struct GrpcConnectionPool {
     connect_timeout: Option<Duration>,
     timeout: Option<Duration>,
     channels: DashMap<String, Channel>,
 }
 
-impl ConnectionPool {
+impl GrpcConnectionPool {
     pub fn with_connect_timeout(mut self, connect_timeout: impl Into<Option<Duration>>) -> Self {
         self.connect_timeout = connect_timeout.into();
         self
@@ -29,7 +29,7 @@ impl ConnectionPool {
     /// Obtains a channel for the current address. Either clones an existing one (thereby
     /// reusing the connection), or creates one if needed. New channels do not create a
     /// connection immediately.
-    pub fn channel(&self, address: String) -> Result<Channel, Error> {
+    pub fn channel(&self, address: String) -> Result<Channel, GrpcError> {
         let channel = self
             .channels
             .entry(address.clone())
@@ -41,7 +41,7 @@ impl ConnectionPool {
                 if let Some(timeout) = self.timeout {
                     endpoint = endpoint.timeout(timeout);
                 }
-                Ok::<_, Error>(endpoint.connect_lazy())
+                Ok::<_, GrpcError>(endpoint.connect_lazy())
             })?;
         Ok(channel.clone())
     }

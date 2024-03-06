@@ -126,7 +126,7 @@ impl ServerContext {
                 if let Some(port) = shard.metrics_port {
                     Self::start_metrics(listen_address, &port);
                 }
-                let spawned_server = match grpc::Server::spawn(
+                let spawned_server = match grpc::GrpcServer::spawn(
                     listen_address.to_string(),
                     shard.port,
                     state,

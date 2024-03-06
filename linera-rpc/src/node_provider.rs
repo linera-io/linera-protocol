@@ -11,15 +11,15 @@ use std::time::Duration;
 /// node provider according to the `ValidatorPublicNetworkConfig`.
 #[derive(Copy, Clone)]
 pub struct NodeProvider {
-    grpc: grpc::NodeProvider,
-    simple: simple::NodeProvider,
+    grpc: grpc::GrpcNodeProvider,
+    simple: simple::SimpleNodeProvider,
 }
 
 impl NodeProvider {
     pub fn new(options: NodeOptions) -> Self {
         Self {
-            grpc: grpc::NodeProvider::new(options),
-            simple: simple::NodeProvider::new(options),
+            grpc: grpc::GrpcNodeProvider::new(options),
+            simple: simple::SimpleNodeProvider::new(options),
         }
     }
 }

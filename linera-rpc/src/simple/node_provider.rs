@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::Client;
+use super::SimpleClient;
 
 use crate::{config::ValidatorPublicNetworkPreConfig, node_provider::NodeOptions};
 
@@ -11,16 +11,16 @@ use std::str::FromStr as _;
 
 /// A client without an address - serves as a client factory.
 #[derive(Copy, Clone)]
-pub struct NodeProvider(NodeOptions);
+pub struct SimpleNodeProvider(NodeOptions);
 
-impl NodeProvider {
+impl SimpleNodeProvider {
     pub fn new(options: NodeOptions) -> Self {
         Self(options)
     }
 }
 
-impl ValidatorNodeProvider for NodeProvider {
-    type Node = Client;
+impl ValidatorNodeProvider for SimpleNodeProvider {
+    type Node = SimpleClient;
 
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
         let network = ValidatorPublicNetworkPreConfig::from_str(address).map_err(|_| {
@@ -29,7 +29,7 @@ impl ValidatorNodeProvider for NodeProvider {
             }
         })?;
 
-        let client = Client::new(network, self.0.send_timeout, self.0.recv_timeout);
+        let client = SimpleClient::new(network, self.0.send_timeout, self.0.recv_timeout);
 
         Ok(client)
     }

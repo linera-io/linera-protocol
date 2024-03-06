@@ -6,13 +6,13 @@ use async_trait::async_trait;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum Error {
+pub enum MassClientError {
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("tonic transport: {0}")]
     Tonic(#[from] tonic::transport::Error),
     #[error("conversion error: {0}")]
-    Conversion(#[from] crate::grpc::ProtoConversionError),
+    Conversion(#[from] crate::grpc::GrpcProtoConversionError),
     #[error("error while making a remote call: {0}")]
     Rpc(#[from] tonic::Status),
 }
@@ -23,5 +23,5 @@ pub trait MassClient: Send + Sync {
         &mut self,
         requests: Vec<RpcMessage>,
         max_in_flight: usize,
-    ) -> Result<Vec<RpcMessage>, Error>;
+    ) -> Result<Vec<RpcMessage>, MassClientError>;
 }

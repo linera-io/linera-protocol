@@ -22,7 +22,7 @@ use thiserror::Error;
 use tonic::{Code, Status};
 
 #[derive(Error, Debug)]
-pub enum ProtoConversionError {
+pub enum GrpcProtoConversionError {
     #[error(transparent)]
     BincodeError(#[from] bincode::Error),
     #[error("Conversion failed due to missing field")]
@@ -36,15 +36,15 @@ pub enum ProtoConversionError {
 }
 
 /// Extracts an optional field from a Proto type and tries to map it.
-fn try_proto_convert<S, T>(t: Option<T>) -> Result<S, ProtoConversionError>
+fn try_proto_convert<S, T>(t: Option<T>) -> Result<S, GrpcProtoConversionError>
 where
-    T: TryInto<S, Error = ProtoConversionError>,
+    T: TryInto<S, Error = GrpcProtoConversionError>,
 {
-    t.ok_or(ProtoConversionError::MissingField)?.try_into()
+    t.ok_or(GrpcProtoConversionError::MissingField)?.try_into()
 }
 
-impl From<ProtoConversionError> for Status {
-    fn from(error: ProtoConversionError) -> Self {
+impl From<GrpcProtoConversionError> for Status {
+    fn from(error: GrpcProtoConversionError) -> Self {
         Status::new(Code::InvalidArgument, error.to_string())
     }
 }
@@ -117,7 +117,7 @@ impl From<api::VersionInfo> for linera_version::VersionInfo {
 }
 
 impl TryFrom<Notification> for api::Notification {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(notification: Notification) -> Result<Self, Self::Error> {
         Ok(Self {
@@ -128,7 +128,7 @@ impl TryFrom<Notification> for api::Notification {
 }
 
 impl TryFrom<api::Notification> for Notification {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(notification: api::Notification) -> Result<Self, Self::Error> {
         Ok(Self {
@@ -139,7 +139,7 @@ impl TryFrom<api::Notification> for Notification {
 }
 
 impl TryFrom<ChainInfoResponse> for api::ChainInfoResult {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(chain_info_response: ChainInfoResponse) -> Result<Self, Self::Error> {
         let response = chain_info_response.try_into()?;
@@ -150,7 +150,7 @@ impl TryFrom<ChainInfoResponse> for api::ChainInfoResult {
 }
 
 impl TryFrom<NodeError> for api::ChainInfoResult {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(node_error: NodeError) -> Result<Self, Self::Error> {
         let error = bincode::serialize(&node_error)?;
@@ -161,7 +161,7 @@ impl TryFrom<NodeError> for api::ChainInfoResult {
 }
 
 impl TryFrom<BlockProposal> for api::BlockProposal {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(block_proposal: BlockProposal) -> Result<Self, Self::Error> {
         Ok(Self {
@@ -179,13 +179,13 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
 }
 
 impl TryFrom<api::BlockProposal> for BlockProposal {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(block_proposal: api::BlockProposal) -> Result<Self, Self::Error> {
         let content: BlockAndRound = bincode::deserialize(&block_proposal.content)?;
         ensure!(
             Some(content.block.chain_id.into()) == block_proposal.chain_id,
-            ProtoConversionError::InconsistentChainId
+            GrpcProtoConversionError::InconsistentChainId
         );
         Ok(Self {
             content,
@@ -201,14 +201,14 @@ impl TryFrom<api::BlockProposal> for BlockProposal {
 }
 
 impl TryFrom<api::CrossChainRequest> for CrossChainRequest {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(cross_chain_request: api::CrossChainRequest) -> Result<Self, Self::Error> {
         use api::cross_chain_request::Inner;
 
         let ccr = match cross_chain_request
             .inner
-            .ok_or(ProtoConversionError::MissingField)?
+            .ok_or(GrpcProtoConversionError::MissingField)?
         {
             Inner::UpdateRecipient(api::UpdateRecipient {
                 sender,
@@ -234,7 +234,7 @@ impl TryFrom<api::CrossChainRequest> for CrossChainRequest {
 }
 
 impl TryFrom<CrossChainRequest> for api::CrossChainRequest {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(cross_chain_request: CrossChainRequest) -> Result<Self, Self::Error> {
         use api::cross_chain_request::Inner;
@@ -264,7 +264,7 @@ impl TryFrom<CrossChainRequest> for api::CrossChainRequest {
 }
 
 impl<'a> TryFrom<api::LiteCertificate> for HandleLiteCertificateRequest<'a> {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(certificate: api::LiteCertificate) -> Result<Self, Self::Error> {
         let value = LiteValue {
@@ -281,7 +281,7 @@ impl<'a> TryFrom<api::LiteCertificate> for HandleLiteCertificateRequest<'a> {
 }
 
 impl<'a> TryFrom<HandleLiteCertificateRequest<'a>> for api::LiteCertificate {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(request: HandleLiteCertificateRequest) -> Result<Self, Self::Error> {
         Ok(Self {
@@ -295,13 +295,13 @@ impl<'a> TryFrom<HandleLiteCertificateRequest<'a>> for api::LiteCertificate {
 }
 
 impl TryFrom<api::Certificate> for HandleCertificateRequest {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(cert_request: api::Certificate) -> Result<Self, Self::Error> {
         let value: HashedValue = bincode::deserialize(&cert_request.value)?;
         ensure!(
             Some(value.inner().chain_id().into()) == cert_request.chain_id,
-            ProtoConversionError::InconsistentChainId
+            GrpcProtoConversionError::InconsistentChainId
         );
         let signatures = bincode::deserialize(&cert_request.signatures)?;
         let blobs = bincode::deserialize(&cert_request.blobs)?;
@@ -315,7 +315,7 @@ impl TryFrom<api::Certificate> for HandleCertificateRequest {
 }
 
 impl TryFrom<HandleCertificateRequest> for api::Certificate {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(request: HandleCertificateRequest) -> Result<Self, Self::Error> {
         Ok(Self {
@@ -330,7 +330,7 @@ impl TryFrom<HandleCertificateRequest> for api::Certificate {
 }
 
 impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(chain_info_query: api::ChainInfoQuery) -> Result<Self, Self::Error> {
         let request_sent_certificates_in_range = chain_info_query
@@ -362,7 +362,7 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
 }
 
 impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(chain_info_query: ChainInfoQuery) -> Result<Self, Self::Error> {
         let request_sent_certificates_in_range = chain_info_query
@@ -399,7 +399,7 @@ impl From<ChainId> for api::ChainId {
 }
 
 impl TryFrom<api::ChainId> for ChainId {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(chain_id: api::ChainId) -> Result<Self, Self::Error> {
         Ok(ChainId::try_from(chain_id.bytes.as_slice())?)
@@ -415,7 +415,7 @@ impl From<PublicKey> for api::PublicKey {
 }
 
 impl TryFrom<api::PublicKey> for PublicKey {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(public_key: api::PublicKey) -> Result<Self, Self::Error> {
         Ok(PublicKey::try_from(public_key.bytes.as_slice())?)
@@ -431,7 +431,7 @@ impl From<ValidatorName> for api::PublicKey {
 }
 
 impl TryFrom<api::PublicKey> for ValidatorName {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(public_key: api::PublicKey) -> Result<Self, Self::Error> {
         Ok(ValidatorName(public_key.try_into()?))
@@ -447,7 +447,7 @@ impl From<Signature> for api::Signature {
 }
 
 impl TryFrom<api::Signature> for Signature {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(signature: api::Signature) -> Result<Self, Self::Error> {
         Ok(Self(signature.bytes.as_slice().try_into()?))
@@ -455,7 +455,7 @@ impl TryFrom<api::Signature> for Signature {
 }
 
 impl TryFrom<ChainInfoResponse> for api::ChainInfoResponse {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(chain_info_response: ChainInfoResponse) -> Result<Self, Self::Error> {
         Ok(Self {
@@ -466,7 +466,7 @@ impl TryFrom<ChainInfoResponse> for api::ChainInfoResponse {
 }
 
 impl TryFrom<api::ChainInfoResponse> for ChainInfoResponse {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(chain_info_response: api::ChainInfoResponse) -> Result<Self, Self::Error> {
         let signature = chain_info_response
@@ -501,7 +501,7 @@ impl From<Owner> for api::Owner {
 }
 
 impl TryFrom<api::Owner> for Owner {
-    type Error = ProtoConversionError;
+    type Error = GrpcProtoConversionError;
 
     fn try_from(owner: api::Owner) -> Result<Self, Self::Error> {
         Ok(Self(CryptoHash::try_from(owner.bytes.as_slice())?))

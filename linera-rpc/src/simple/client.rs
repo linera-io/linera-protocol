@@ -22,13 +22,13 @@ use std::time::Duration;
 use tokio::time;
 
 #[derive(Clone)]
-pub struct Client {
+pub struct SimpleClient {
     network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
     send_timeout: Duration,
     recv_timeout: Duration,
 }
 
-impl Client {
+impl SimpleClient {
     pub(crate) fn new(
         network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
         send_timeout: Duration,
@@ -69,7 +69,7 @@ impl Client {
 }
 
 #[async_trait]
-impl ValidatorNode for Client {
+impl ValidatorNode for SimpleClient {
     /// Initiates a new block.
     async fn handle_block_proposal(
         &mut self,
@@ -128,13 +128,13 @@ impl ValidatorNode for Client {
 }
 
 #[derive(Clone)]
-pub struct MassClient {
+pub struct SimpleMassClient {
     pub network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
 }
 
-impl MassClient {
+impl SimpleMassClient {
     pub fn new(
         network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
         send_timeout: std::time::Duration,
@@ -149,12 +149,12 @@ impl MassClient {
 }
 
 #[async_trait]
-impl mass_client::MassClient for MassClient {
+impl mass_client::MassClient for SimpleMassClient {
     async fn send(
         &mut self,
         requests: Vec<RpcMessage>,
         max_in_flight: usize,
-    ) -> Result<Vec<RpcMessage>, mass_client::Error> {
+    ) -> Result<Vec<RpcMessage>, mass_client::MassClientError> {
         let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = self.network.protocol.connect(address).await?;
         let mut requests = requests.into_iter();

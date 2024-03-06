@@ -733,14 +733,15 @@ impl ClientContext {
             let client: Box<dyn MassClient> = match config.network.protocol {
                 NetworkProtocol::Simple(protocol) => {
                     let network = config.network.clone_with_protocol(protocol);
-                    Box::new(simple::MassClient::new(
+                    Box::new(simple::SimpleMassClient::new(
                         network,
                         self.send_timeout,
                         self.recv_timeout,
                     ))
                 }
                 NetworkProtocol::Grpc { .. } => Box::new(
-                    grpc::Client::new(config.network.clone(), self.make_node_options()).unwrap(),
+                    grpc::GrpcClient::new(config.network.clone(), self.make_node_options())
+                        .unwrap(),
                 ),
             };
 

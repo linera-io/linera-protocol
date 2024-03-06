@@ -19,7 +19,7 @@ pub mod api {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum Error {
+pub enum GrpcError {
     #[error("failed to connect to address: {0}")]
     ConnectionFailed(#[from] tonic::transport::Error),
 
@@ -37,4 +37,4 @@ pub enum Error {
 }
 
 const MEBIBYTE: usize = 1024 * 1024;
-pub const MAX_MESSAGE_SIZE: usize = 8 * MEBIBYTE;
+pub const GRPC_MAX_MESSAGE_SIZE: usize = 8 * MEBIBYTE;

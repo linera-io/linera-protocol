@@ -13,18 +13,18 @@ use linera_core::{
 
 #[derive(Clone)]
 pub enum Client {
-    Grpc(grpc::Client),
-    Simple(simple::Client),
+    Grpc(grpc::GrpcClient),
+    Simple(simple::SimpleClient),
 }
 
-impl From<grpc::Client> for Client {
-    fn from(client: grpc::Client) -> Self {
+impl From<grpc::GrpcClient> for Client {
+    fn from(client: grpc::GrpcClient) -> Self {
         Self::Grpc(client)
     }
 }
 
-impl From<simple::Client> for Client {
-    fn from(client: simple::Client) -> Self {
+impl From<simple::SimpleClient> for Client {
+    fn from(client: simple::SimpleClient) -> Self {
         Self::Simple(client)
     }
 }
