@@ -27,8 +27,8 @@ reqwest.workspace = true
 serde = { workspace = true, features = [ "derive" ] }
 serde-wasm-bindgen = "0.5"
 serde_json.workspace = true
-url = "2.4"
-uuid = { version = "1.5", features = [ "v3" ] }
+url = "2.5"
+uuid = { version = "1.7", features = [ "v3" ] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [ "console", "Window", "History", "Storage", "Location" ] }
