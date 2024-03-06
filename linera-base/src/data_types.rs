@@ -136,11 +136,11 @@ impl From<u64> for Timestamp {
 
 impl fmt::Display for Timestamp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(date_time) = chrono::NaiveDateTime::from_timestamp_opt(
+        if let Some(date_time) = chrono::DateTime::from_timestamp(
             (self.0 / 1_000_000) as i64,
             ((self.0 % 1_000_000) * 1_000) as u32,
         ) {
-            return date_time.fmt(f);
+            return date_time.naive_utc().fmt(f);
         }
         self.0.fmt(f)
     }
