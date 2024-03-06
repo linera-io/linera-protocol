@@ -50,7 +50,10 @@ use {
         system::{OpenChainConfig, Recipient, SystemOperation, UserData, OPEN_CHAIN_MESSAGE_INDEX},
         Operation,
     },
-    linera_rpc::{config::NetworkProtocol, grpc, mass_client::MassClient, simple, RpcMessage},
+    linera_rpc::{
+        config::NetworkProtocol, grpc::GrpcClient, mass_client::MassClient,
+        simple::SimpleMassClient, RpcMessage,
+    },
     std::{
         collections::{HashMap, HashSet},
         iter,
@@ -733,15 +736,14 @@ impl ClientContext {
             let client: Box<dyn MassClient> = match config.network.protocol {
                 NetworkProtocol::Simple(protocol) => {
                     let network = config.network.clone_with_protocol(protocol);
-                    Box::new(simple::SimpleMassClient::new(
+                    Box::new(SimpleMassClient::new(
                         network,
                         self.send_timeout,
                         self.recv_timeout,
                     ))
                 }
                 NetworkProtocol::Grpc { .. } => Box::new(
-                    grpc::GrpcClient::new(config.network.clone(), self.make_node_options())
-                        .unwrap(),
+                    GrpcClient::new(config.network.clone(), self.make_node_options()).unwrap(),
                 ),
             };
 

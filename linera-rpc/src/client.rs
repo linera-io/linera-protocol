@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 
-use crate::{grpc, simple};
+use crate::{grpc::GrpcClient, simple::SimpleClient};
 use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
@@ -13,18 +13,18 @@ use linera_core::{
 
 #[derive(Clone)]
 pub enum Client {
-    Grpc(grpc::GrpcClient),
-    Simple(simple::SimpleClient),
+    Grpc(GrpcClient),
+    Simple(SimpleClient),
 }
 
-impl From<grpc::GrpcClient> for Client {
-    fn from(client: grpc::GrpcClient) -> Self {
+impl From<GrpcClient> for Client {
+    fn from(client: GrpcClient) -> Self {
         Self::Grpc(client)
     }
 }
 
-impl From<simple::SimpleClient> for Client {
-    fn from(client: simple::SimpleClient) -> Self {
+impl From<SimpleClient> for Client {
+    fn from(client: SimpleClient) -> Self {
         Self::Simple(client)
     }
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{client::Client, grpc, simple};
+use crate::{client::Client, grpc::GrpcNodeProvider, simple::SimpleNodeProvider};
 
 use linera_core::node::{NodeError, ValidatorNodeProvider};
 
@@ -11,15 +11,15 @@ use std::time::Duration;
 /// node provider according to the `ValidatorPublicNetworkConfig`.
 #[derive(Copy, Clone)]
 pub struct NodeProvider {
-    grpc: grpc::GrpcNodeProvider,
-    simple: simple::SimpleNodeProvider,
+    grpc: GrpcNodeProvider,
+    simple: SimpleNodeProvider,
 }
 
 impl NodeProvider {
     pub fn new(options: NodeOptions) -> Self {
         Self {
-            grpc: grpc::GrpcNodeProvider::new(options),
-            simple: simple::SimpleNodeProvider::new(options),
+            grpc: GrpcNodeProvider::new(options),
+            simple: SimpleNodeProvider::new(options),
         }
     }
 }
