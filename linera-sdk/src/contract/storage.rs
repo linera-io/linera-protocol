@@ -8,7 +8,6 @@
 //! contract type that implements [`Contract`].
 
 use crate::{
-    contract::system_api,
     views::{AppStateStore, ViewStorageContext},
     Contract, SimpleStateStorage, ViewStateStorage,
 };
@@ -68,10 +67,15 @@ where
     Application: Contract + RootView<ViewStorageContext> + Send + 'static,
 {
     async fn load() -> Application {
-        system_api::load_view().await
+        Application::load(ViewStorageContext::default())
+            .await
+            .expect("Failed to load application state")
     }
 
     async fn store(state: &mut Application) {
-        system_api::store_view(state).await;
+        state
+            .save()
+            .await
+            .expect("Failed to store application state")
     }
 }
