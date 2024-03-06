@@ -128,23 +128,23 @@ impl FromStr for StorageConfig {
                 ));
             }
             let parts = s.split(':').collect::<Vec<_>>();
-            if parts.len() == 4 {
-                let protocol = parts[0];
-                let address = parts[1];
-                let port = parts[2];
-                let mut endpoint = protocol.to_string();
-                endpoint.push(':');
-                endpoint.push_str(address);
-                endpoint.push(':');
-                endpoint.push_str(port);
-                let endpoint = endpoint.to_string();
-                let namespace = parts[3].to_string();
-                return Ok(Self::Service {
-                    endpoint,
-                    namespace,
-                });
+            if parts.len() != 4 {
+                return Err(format_err!("We should have one endpoint and one namespace"));
             }
-            return Err(format_err!("We should have one endpoint and one namespace"));
+            let protocol = parts[0];
+            let address = parts[1];
+            let port = parts[2];
+            let mut endpoint = protocol.to_string();
+            endpoint.push(':');
+            endpoint.push_str(address);
+            endpoint.push(':');
+            endpoint.push_str(port);
+            let endpoint = endpoint.to_string();
+            let namespace = parts[3].to_string();
+            return Ok(Self::Service {
+                endpoint,
+                namespace,
+            });
         }
         #[cfg(feature = "rocksdb")]
         if let Some(s) = input.strip_prefix(ROCKS_DB) {

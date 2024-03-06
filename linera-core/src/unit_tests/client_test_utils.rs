@@ -33,14 +33,6 @@ use std::{
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    with_rocksdb,
-    with_scylladb,
-    with_dynamodb
-))]
-use linera_views::test_utils::generate_test_namespace;
-
 #[cfg(not(target_arch = "wasm32"))]
 use {
     linera_storage::ServiceStorage,
@@ -49,6 +41,7 @@ use {
         client::service_config_from_endpoint,
         common::get_service_storage_binary,
     },
+    linera_views::test_utils::generate_test_namespace,
 };
 
 #[cfg(feature = "rocksdb")]
