@@ -6,6 +6,7 @@
 use super::{wit_system_api as wit, CloseChainError};
 use crate::Contract;
 use linera_base::{
+    abi::ContractAbi,
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{Account, ApplicationId, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
@@ -19,6 +20,7 @@ pub struct ContractRuntime<Application>
 where
     Application: Contract,
 {
+    application_parameters: Option<<Application::Abi as ContractAbi>::Parameters>,
     application_id: Option<ApplicationId<Application::Abi>>,
     chain_id: Option<ChainId>,
     authenticated_signer: Option<Option<Owner>>,
@@ -36,6 +38,7 @@ where
     /// Creates a new [`ContractRuntime`] instance for a contract.
     pub(crate) fn new() -> Self {
         ContractRuntime {
+            application_parameters: None,
             application_id: None,
             chain_id: None,
             authenticated_signer: None,
@@ -45,6 +48,17 @@ where
             authenticated_caller_id: None,
             timestamp: None,
         }
+    }
+
+    /// Returns the application parameters provided when the application was created.
+    pub fn application_parameters(&mut self) -> <Application::Abi as ContractAbi>::Parameters {
+        self.application_parameters
+            .get_or_insert_with(|| {
+                let bytes = wit::application_parameters();
+                serde_json::from_slice(&bytes)
+                    .expect("Application parameters must be deserializable")
+            })
+            .clone()
     }
 
     /// Returns the ID of the current application.
