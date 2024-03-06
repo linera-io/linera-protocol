@@ -805,7 +805,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     // Execute the operation, starting the test scenario
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let mut outcomes = view
+    let outcomes = view
         .execute_operation(
             context,
             Operation::User {
@@ -846,25 +846,6 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         },
     };
 
-    // Need to deconstruct the outcome and verify each field individually because the messages are
-    // built from a `HashMap`, which may produce a different order every run
-    let ExecutionOutcome::System(system_outcome) = outcomes.remove(0) else {
-        panic!(
-            "First execution outcome is not the system outcome with messages to \
-            register applications"
-        );
-    };
-    assert!(system_outcome.authenticated_signer.is_none());
-    assert!(system_outcome.subscribe.is_empty());
-    assert!(system_outcome.unsubscribe.is_empty());
-    // Check for the two registration messages
-    assert_eq!(system_outcome.messages.len(), 2);
-    assert!(system_outcome
-        .messages
-        .contains(&first_registration_message));
-    assert!(system_outcome
-        .messages
-        .contains(&second_registration_message));
     let account = Account {
         chain_id: ChainId::root(0),
         owner: None,
@@ -876,6 +857,11 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     assert_eq!(
         outcomes,
         &[
+            ExecutionOutcome::System(
+                RawExecutionOutcome::default()
+                    .with_message(first_registration_message)
+                    .with_message(second_registration_message)
+            ),
             ExecutionOutcome::User(
                 silent_target_id,
                 RawExecutionOutcome::default().with_refund_grant_to(Some(account)),
