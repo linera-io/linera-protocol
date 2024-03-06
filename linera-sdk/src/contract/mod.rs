@@ -11,7 +11,9 @@ pub mod system_api;
 mod wit_system_api;
 pub mod wit_types;
 
-pub use self::{runtime::ContractRuntime, storage::ContractStateStorage};
+pub use self::{
+    runtime::ContractRuntime, storage::ContractStateStorage, system_api::CloseChainError,
+};
 use crate::{
     log::ContractLogger, util::BlockingWait, ApplicationCallOutcome, Contract, ExecutionOutcome,
 };

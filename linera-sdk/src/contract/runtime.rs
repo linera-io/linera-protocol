@@ -3,10 +3,11 @@
 
 //! Runtime types to interface with the host executing the contract.
 
-use super::wit_system_api as wit;
+use super::{wit_system_api as wit, CloseChainError};
 use linera_base::{
-    data_types::BlockHeight,
-    identifiers::{ApplicationId, ChainId, MessageId, Owner},
+    data_types::{Amount, BlockHeight, Timestamp},
+    identifiers::{Account, ApplicationId, ChainId, MessageId, Owner},
+    ownership::ChainOwnership,
 };
 
 /// The common runtime to interface with the host executing the contract.
@@ -21,6 +22,7 @@ pub struct ContractRuntime {
     message_is_bouncing: Option<Option<bool>>,
     message_id: Option<Option<MessageId>>,
     authenticated_caller_id: Option<Option<ApplicationId>>,
+    timestamp: Option<Timestamp>,
 }
 
 impl ContractRuntime {
@@ -34,6 +36,7 @@ impl ContractRuntime {
             message_is_bouncing: None,
             message_id: None,
             authenticated_caller_id: None,
+            timestamp: None,
         }
     }
 
@@ -85,5 +88,48 @@ impl ContractRuntime {
         *self
             .authenticated_caller_id
             .get_or_insert_with(|| wit::authenticated_caller_id().map(ApplicationId::from))
+    }
+
+    /// Retrieves the current system time, i.e. the timestamp of the block in which this is called.
+    pub fn system_time(&mut self) -> Timestamp {
+        *self
+            .timestamp
+            .get_or_insert_with(|| wit::read_system_timestamp().into())
+    }
+
+    /// Returns the current chain balance.
+    pub fn chain_balance(&mut self) -> Amount {
+        wit::read_chain_balance().into()
+    }
+
+    /// Returns the balance of one of the accounts on this chain.
+    pub fn owner_balance(&mut self, owner: Owner) -> Amount {
+        wit::read_owner_balance(owner.into()).into()
+    }
+
+    /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
+    /// balance) to `destination`.
+    pub fn transfer(&mut self, source: Option<Owner>, destination: Account, amount: Amount) {
+        wit::transfer(
+            source.map(|source| source.into()),
+            destination.into(),
+            amount.into(),
+        )
+    }
+
+    /// Claims an `amount` of native tokens from a `source` account to a `destination` account.
+    pub fn claim(&mut self, source: Account, destination: Account, amount: Amount) {
+        wit::claim(source.into(), destination.into(), amount.into())
+    }
+
+    /// Retrieves the owner configuration for the current chain.
+    pub fn chain_ownership(&mut self) -> ChainOwnership {
+        wit::chain_ownership().into()
+    }
+
+    /// Closes the current chain. Returns an error if the application doesn't have
+    /// permission to do so.
+    pub fn close_chain(&mut self) -> Result<(), CloseChainError> {
+        wit::close_chain()
     }
 }
