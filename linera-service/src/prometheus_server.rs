@@ -10,9 +10,11 @@ pub fn start_metrics(address: SocketAddr) {
     let prometheus_router = Router::new().route("/metrics", get(serve_metrics));
 
     tokio::spawn(async move {
-        if let Err(e) = axum::Server::bind(&address)
-            .serve(prometheus_router.into_make_service())
-            .await
+        if let Err(e) = axum::serve(
+            tokio::net::TcpListener::bind(address).await.unwrap(),
+            prometheus_router,
+        )
+        .await
         {
             panic!("Error serving metrics: {}", e);
         }

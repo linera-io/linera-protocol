@@ -153,7 +153,10 @@ where
         self.service.poll_ready(cx)
     }
 
-    fn call(&mut self, request: http::Request<tonic::transport::Body>) -> Self::Future {
+    fn call(
+        &mut self,
+        request: tonic::codegen::http::Request<tonic::transport::Body>,
+    ) -> Self::Future {
         #[cfg(with_metrics)]
         let start = Instant::now();
         let future = self.service.call(request);

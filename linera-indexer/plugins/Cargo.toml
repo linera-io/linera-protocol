@@ -22,7 +22,7 @@ wasmtime = ["linera-execution/wasmtime"]
 [dependencies]
 async-graphql.workspace = true
 async-trait.workspace = true
-axum = { workspace = true, features = ["ws", "headers"] }
+axum = { workspace = true, features = ["ws"] }
 bcs.workspace = true
 linera-base.workspace = true
 linera-chain.workspace = true

@@ -385,7 +385,6 @@ where
 }
 
 use crate::register_view::RegisterView;
-#[async_trait::async_trait]
 impl<C, T> async_graphql::OutputType for RegisterView<C, T>
 where
     C: Context + Send + Sync,
@@ -410,7 +409,6 @@ where
 }
 
 use crate::collection_view::ReadGuardedView;
-#[async_trait::async_trait]
 impl<'value, T: async_graphql::OutputType> async_graphql::OutputType
     for ReadGuardedView<'value, T>
 {
@@ -553,7 +551,6 @@ where
 }
 
 use crate::reentrant_collection_view as reentrant;
-#[async_trait::async_trait]
 impl<T: async_graphql::OutputType> async_graphql::OutputType for reentrant::ReadGuardedView<T> {
     fn type_name() -> Cow<'static, str> {
         T::type_name()
@@ -719,7 +716,6 @@ where
 }
 
 use crate::set_view::SetView;
-#[async_trait::async_trait]
 impl<C: Context, I: async_graphql::OutputType> async_graphql::OutputType for SetView<C, I>
 where
     C: Send + Sync,
@@ -754,7 +750,6 @@ where
 }
 
 use crate::set_view::CustomSetView;
-#[async_trait::async_trait]
 impl<C: Context, I: async_graphql::OutputType> async_graphql::OutputType for CustomSetView<C, I>
 where
     C: Send + Sync,
@@ -813,7 +808,6 @@ where
 }
 
 use crate::hashable_wrapper::WrappedHashableContainerView;
-#[async_trait::async_trait]
 impl<C, W, O> async_graphql::OutputType for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,

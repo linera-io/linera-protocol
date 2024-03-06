@@ -110,7 +110,7 @@ where
         self.service.poll_ready(cx)
     }
 
-    fn call(&mut self, request: http::Request<Body>) -> Self::Future {
+    fn call(&mut self, request: tonic::codegen::http::Request<Body>) -> Self::Future {
         let start = std::time::Instant::now();
         let future = self.service.call(request);
         async move {
