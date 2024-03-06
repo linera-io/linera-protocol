@@ -27,7 +27,7 @@ use linera_views::{
     common::Context,
     log_view::LogView,
     reentrant_collection_view::ReentrantCollectionView,
-    register_view::{RegisterView, MemoizedRegisterView},
+    register_view::RegisterView,
     set_view::SetView,
     views::{CryptoHashView, RootView, View, ViewError},
 };

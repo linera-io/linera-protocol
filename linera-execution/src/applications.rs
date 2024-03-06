@@ -10,7 +10,7 @@ use linera_base::{
 };
 use linera_views::{
     common::Context,
-    map_view::MapView,
+    map_view::MemoizedMapView,
     views::{HashableView, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -70,9 +70,9 @@ pub struct BytecodeLocation {
 #[derive(Debug, HashableView)]
 pub struct ApplicationRegistryView<C> {
     /// The application bytecodes that have been published.
-    pub published_bytecodes: MapView<C, BytecodeId, BytecodeLocation>,
+    pub published_bytecodes: MemoizedMapView<C, BytecodeId, BytecodeLocation>,
     /// The applications that are known by the chain.
-    pub known_applications: MapView<C, UserApplicationId, UserApplicationDescription>,
+    pub known_applications: MemoizedMapView<C, UserApplicationId, UserApplicationDescription>,
 }
 
 #[cfg(any(test, feature = "test"))]

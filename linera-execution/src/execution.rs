@@ -16,7 +16,7 @@ use linera_base::{
 use linera_views::{
     common::Context,
     key_value_store_view::KeyValueStoreView,
-    reentrant_collection_view::ReentrantCollectionView,
+    reentrant_collection_view::MemoizedReentrantCollectionView,
     views::{View, ViewError},
 };
 use linera_views_derive::CryptoHashView;
@@ -37,7 +37,7 @@ pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,
     /// User applications.
-    pub users: ReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
+    pub users: MemoizedReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
 }
 
 #[cfg(with_testing)]
