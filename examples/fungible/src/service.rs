@@ -29,7 +29,7 @@ impl Service for FungibleTokenService {
     type Storage = ViewStateStorage<Self>;
     type State = FungibleToken;
 
-    async fn new(state: Self::State, _runtime: ServiceRuntime) -> Result<Self, Self::Error> {
+    async fn new(state: Self::State, _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(FungibleTokenService {
             state: Arc::new(state),
         })

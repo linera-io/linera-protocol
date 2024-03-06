@@ -4,22 +4,31 @@
 //! Runtime types to interface with the host executing the service.
 
 use super::service_system_api as wit;
+use crate::Service;
 use linera_base::{data_types::BlockHeight, identifiers::ChainId};
 use std::cell::Cell;
 
 /// The runtime available during execution of a query.
 #[derive(Debug)]
-pub struct ServiceRuntime {
+pub struct ServiceRuntime<Application>
+where
+    Application: Service,
+{
     chain_id: Cell<Option<ChainId>>,
     next_block_height: Cell<Option<BlockHeight>>,
+    _abi: std::marker::PhantomData<Application>,
 }
 
-impl ServiceRuntime {
+impl<Application> ServiceRuntime<Application>
+where
+    Application: Service,
+{
     /// Creates a new [`ServiceRuntime`] instance for a service.
     pub(crate) fn new() -> Self {
         ServiceRuntime {
-            chain_id: Cell::default(),
-            next_block_height: Cell::default(),
+            chain_id: Cell::new(None),
+            next_block_height: Cell::new(None),
+            _abi: std::marker::PhantomData,
         }
     }
 
