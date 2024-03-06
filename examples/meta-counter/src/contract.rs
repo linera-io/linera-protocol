@@ -12,12 +12,12 @@ use linera_sdk::{
     ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
     Resources, SimpleStateStorage,
 };
-use meta_counter::{Message, Operation};
+use meta_counter::{Message, MetaCounterAbi, Operation};
 use thiserror::Error;
 
 pub struct MetaCounterContract {
     state: MetaCounter,
-    runtime: ContractRuntime,
+    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(MetaCounterContract);
@@ -29,7 +29,7 @@ impl MetaCounterContract {
 }
 
 impl WithContractAbi for MetaCounterContract {
-    type Abi = meta_counter::MetaCounterAbi;
+    type Abi = MetaCounterAbi;
 }
 
 #[async_trait]
@@ -38,7 +38,7 @@ impl Contract for MetaCounterContract {
     type Storage = SimpleStateStorage<Self>;
     type State = MetaCounter;
 
-    async fn new(state: MetaCounter, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+    async fn new(state: MetaCounter, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(MetaCounterContract { state, runtime })
     }
 

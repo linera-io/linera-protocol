@@ -20,7 +20,7 @@ impl<T> Abi for T where T: ContractAbi + ServiceAbi<Parameters = <T as ContractA
 /// A trait that includes all the types exported by a Linera application contract.
 pub trait ContractAbi {
     /// Immutable parameters specific to this application (e.g. the name of a token).
-    type Parameters: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
+    type Parameters: Serialize + DeserializeOwned + Send + Sync + Clone + Debug + 'static;
 
     /// Initialization argument passed to a new application on the chain that created it
     /// (e.g. an initial amount of tokens minted).

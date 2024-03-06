@@ -13,20 +13,21 @@ use linera_sdk::{
     Resources, ViewStateStorage,
 };
 use matching_engine::{
-    product_price_amount, ApplicationCall, Message, Operation, Order, OrderId, OrderNature, Price,
+    product_price_amount, ApplicationCall, MatchingEngineAbi, Message, Operation, Order, OrderId,
+    OrderNature, Price,
 };
 use state::{LevelView, MatchingEngine, MatchingEngineError};
 use std::cmp::min;
 
 pub struct MatchingEngineContract {
     state: MatchingEngine,
-    runtime: ContractRuntime,
+    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(MatchingEngineContract);
 
 impl WithContractAbi for MatchingEngineContract {
-    type Abi = matching_engine::MatchingEngineAbi;
+    type Abi = MatchingEngineAbi;
 }
 
 /// An order can be cancelled which removes it totally or
@@ -55,7 +56,10 @@ impl Contract for MatchingEngineContract {
     type Storage = ViewStateStorage<Self>;
     type State = MatchingEngine;
 
-    async fn new(state: MatchingEngine, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+    async fn new(
+        state: MatchingEngine,
+        runtime: ContractRuntime<Self>,
+    ) -> Result<Self, Self::Error> {
         Ok(MatchingEngineContract { state, runtime })
     }
 
@@ -215,7 +219,7 @@ impl MatchingEngineContract {
     ) -> Result<(), MatchingEngineError> {
         let destination = Account {
             chain_id: self.runtime.chain_id(),
-            owner: AccountOwner::Application(self.runtime.application_id()),
+            owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
         };
         let (amount, token_idx) = Self::get_amount_idx(nature, price, amount);
         self.transfer(*owner, amount, destination, token_idx)
@@ -224,7 +228,7 @@ impl MatchingEngineContract {
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
     fn send_to(&mut self, transfer: Transfer) -> Result<(), MatchingEngineError> {
         let destination = transfer.account;
-        let owner_app = AccountOwner::Application(self.runtime.application_id());
+        let owner_app = AccountOwner::Application(self.runtime.application_id().forget_abi());
         self.transfer(owner_app, transfer.amount, destination, transfer.token_idx)
     }
 

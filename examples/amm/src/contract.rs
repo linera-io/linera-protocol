@@ -6,7 +6,7 @@
 mod state;
 
 use self::state::Amm;
-use amm::{AmmError, ApplicationCall, Message, Operation};
+use amm::{AmmAbi, AmmError, ApplicationCall, Message, Operation};
 use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
@@ -19,13 +19,13 @@ use num_traits::{cast::FromPrimitive, ToPrimitive};
 
 pub struct AmmContract {
     state: Amm,
-    runtime: ContractRuntime,
+    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(AmmContract);
 
 impl WithContractAbi for AmmContract {
-    type Abi = amm::AmmAbi;
+    type Abi = AmmAbi;
 }
 
 #[async_trait]
@@ -34,7 +34,7 @@ impl Contract for AmmContract {
     type Storage = ViewStateStorage<Self>;
     type State = Amm;
 
-    async fn new(state: Amm, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+    async fn new(state: Amm, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(AmmContract { state, runtime })
     }
 
@@ -417,7 +417,7 @@ impl AmmContract {
     }
 
     fn get_pool_balance(&mut self, token_idx: u32) -> Result<Amount, AmmError> {
-        let pool_owner = AccountOwner::Application(self.runtime.application_id());
+        let pool_owner = AccountOwner::Application(self.runtime.application_id().forget_abi());
         self.balance(&pool_owner, token_idx)
     }
 
@@ -460,7 +460,7 @@ impl AmmContract {
     ) -> Result<(), AmmError> {
         let destination = Account {
             chain_id: self.runtime.chain_id(),
-            owner: AccountOwner::Application(self.runtime.application_id()),
+            owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
         };
         self.transfer(owner, amount, destination, token_idx)
     }
@@ -475,7 +475,7 @@ impl AmmContract {
             chain_id: self.runtime.chain_id(),
             owner: *owner,
         };
-        let owner_app = AccountOwner::Application(self.runtime.application_id());
+        let owner_app = AccountOwner::Application(self.runtime.application_id().forget_abi());
         self.transfer(&owner_app, amount, destination, token_idx)
     }
 }

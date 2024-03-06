@@ -7,6 +7,7 @@ mod state;
 
 use self::state::Counter;
 use async_trait::async_trait;
+use counter::CounterAbi;
 use linera_sdk::{
     base::WithContractAbi, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome,
     SimpleStateStorage,
@@ -20,7 +21,7 @@ pub struct CounterContract {
 linera_sdk::contract!(CounterContract);
 
 impl WithContractAbi for CounterContract {
-    type Abi = counter::CounterAbi;
+    type Abi = CounterAbi;
 }
 
 #[async_trait]
@@ -29,7 +30,7 @@ impl Contract for CounterContract {
     type Storage = SimpleStateStorage<Self>;
     type State = Counter;
 
-    async fn new(state: Counter, _runtime: ContractRuntime) -> Result<Self, Self::Error> {
+    async fn new(state: Counter, _runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(CounterContract { state })
     }
 

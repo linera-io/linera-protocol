@@ -11,7 +11,7 @@ use linera_sdk::{
     views::ViewError,
     ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
-use social::{Key, Message, Operation, OwnPost};
+use social::{Key, Message, Operation, OwnPost, SocialAbi};
 use state::Social;
 use thiserror::Error;
 
@@ -22,13 +22,13 @@ const RECENT_POSTS: usize = 10;
 
 pub struct SocialContract {
     state: Social,
-    runtime: ContractRuntime,
+    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(SocialContract);
 
 impl WithContractAbi for SocialContract {
-    type Abi = social::SocialAbi;
+    type Abi = SocialAbi;
 }
 
 #[async_trait]
@@ -37,7 +37,7 @@ impl Contract for SocialContract {
     type Storage = ViewStateStorage<Self>;
     type State = Social;
 
-    async fn new(state: Social, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+    async fn new(state: Social, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(SocialContract { state, runtime })
     }
 

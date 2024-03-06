@@ -6,7 +6,7 @@
 mod state;
 
 use async_trait::async_trait;
-use crowd_funding::{ApplicationCall, InitializationArgument, Message, Operation};
+use crowd_funding::{ApplicationCall, CrowdFundingAbi, InitializationArgument, Message, Operation};
 use fungible::{Account, FungibleResponse, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
@@ -20,13 +20,13 @@ use thiserror::Error;
 
 pub struct CrowdFundingContract {
     state: CrowdFunding,
-    runtime: ContractRuntime,
+    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(CrowdFundingContract);
 
 impl WithContractAbi for CrowdFundingContract {
-    type Abi = crowd_funding::CrowdFundingAbi;
+    type Abi = CrowdFundingAbi;
 }
 
 #[async_trait]
@@ -35,7 +35,7 @@ impl Contract for CrowdFundingContract {
     type Storage = ViewStateStorage<Self>;
     type State = CrowdFunding;
 
-    async fn new(state: CrowdFunding, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+    async fn new(state: CrowdFunding, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
         Ok(CrowdFundingContract { state, runtime })
     }
 
@@ -242,7 +242,7 @@ impl CrowdFundingContract {
 
     /// Queries the token application to determine the total amount of tokens in custody.
     fn balance(&mut self) -> Result<Amount, Error> {
-        let owner = AccountOwner::Application(self.runtime.application_id());
+        let owner = AccountOwner::Application(self.runtime.application_id().forget_abi());
         let response = self.call_application(
             true,
             Self::fungible_id()?,
@@ -261,7 +261,7 @@ impl CrowdFundingContract {
             owner,
         };
         let transfer = fungible::ApplicationCall::Transfer {
-            owner: AccountOwner::Application(self.runtime.application_id()),
+            owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
             amount,
             destination,
         };
@@ -273,7 +273,7 @@ impl CrowdFundingContract {
     fn receive_from_account(&mut self, owner: AccountOwner, amount: Amount) -> Result<(), Error> {
         let destination = Account {
             chain_id: self.runtime.chain_id(),
-            owner: AccountOwner::Application(self.runtime.application_id()),
+            owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
         };
         let transfer = fungible::ApplicationCall::Transfer {
             owner,

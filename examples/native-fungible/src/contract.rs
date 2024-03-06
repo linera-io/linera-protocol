@@ -7,7 +7,7 @@ mod state;
 
 use self::state::NativeFungibleToken;
 use async_trait::async_trait;
-use fungible::{ApplicationCall, FungibleResponse, Message, Operation};
+use fungible::{ApplicationCall, FungibleResponse, FungibleTokenAbi, Message, Operation};
 use linera_sdk::{
     base::{Account, AccountOwner, Amount, Owner, WithContractAbi},
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
@@ -17,13 +17,13 @@ use thiserror::Error;
 
 pub struct NativeFungibleTokenContract {
     state: NativeFungibleToken,
-    runtime: ContractRuntime,
+    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(NativeFungibleTokenContract);
 
 impl WithContractAbi for NativeFungibleTokenContract {
-    type Abi = fungible::FungibleTokenAbi;
+    type Abi = FungibleTokenAbi;
 }
 
 #[async_trait]
@@ -34,7 +34,7 @@ impl Contract for NativeFungibleTokenContract {
 
     async fn new(
         state: NativeFungibleToken,
-        runtime: ContractRuntime,
+        runtime: ContractRuntime<Self>,
     ) -> Result<Self, Self::Error> {
         Ok(NativeFungibleTokenContract { state, runtime })
     }
