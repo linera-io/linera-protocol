@@ -23,6 +23,7 @@ use linera_execution::{
 use linera_storage::{MemoryStorage, Storage, TestClock};
 use linera_version::VersionInfo;
 use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
+
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     slice::SliceIndex,
@@ -31,6 +32,17 @@ use std::{
 };
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
+
+#[cfg(not(target_arch = "wasm32"))]
+use {
+    linera_storage::ServiceStorage,
+    linera_storage_service::{
+        child::{StorageServiceBuilder, StorageServiceGuard},
+        client::service_config_from_endpoint,
+        common::get_service_storage_binary,
+    },
+    linera_views::test_utils::generate_test_namespace,
+};
 
 #[cfg(feature = "rocksdb")]
 use {
@@ -50,9 +62,6 @@ use {
     linera_storage::ScyllaDbStorage, linera_views::scylla_db::create_scylla_db_common_config,
     linera_views::scylla_db::ScyllaDbStoreConfig,
 };
-
-#[cfg(any(feature = "aws", feature = "scylladb", feature = "rocksdb"))]
-use linera_views::test_utils::generate_test_namespace;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum FaultType {
@@ -714,6 +723,91 @@ impl StorageBuilder for MakeRocksDbStorage {
         )
         .await?;
         Ok(storage)
+    }
+
+    fn clock(&self) -> &TestClock {
+        &self.clock
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub struct MakeServiceStorage {
+    _guard: Option<StorageServiceGuard>,
+    endpoint: String,
+    namespace: String,
+    use_child: bool,
+    instance_counter: usize,
+    wasm_runtime: Option<WasmRuntime>,
+    clock: TestClock,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Default for MakeServiceStorage {
+    fn default() -> MakeServiceStorage {
+        let _guard = None;
+        let clock = TestClock::default();
+        let endpoint = "127.0.0.1:8742".to_string();
+        let namespace = generate_test_namespace();
+        let use_child = true;
+        Self {
+            _guard,
+            endpoint,
+            namespace,
+            use_child,
+            instance_counter: 0,
+            wasm_runtime: None,
+            clock,
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl MakeServiceStorage {
+    /// Creates a `ServiceStorage` from just an endpoint
+    pub fn new(endpoint: &str) -> Self {
+        Self::with_wasm_runtime(endpoint, None)
+    }
+
+    /// Creates a `ServiceStorage` from an endpoint and the wasm runtime.
+    pub fn with_wasm_runtime(endpoint: &str, wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
+        let _guard = None;
+        let endpoint = endpoint.to_string();
+        let clock = TestClock::default();
+        let namespace = generate_test_namespace();
+        let use_child = true;
+        Self {
+            _guard,
+            endpoint,
+            namespace,
+            use_child,
+            instance_counter: 0,
+            wasm_runtime: wasm_runtime.into(),
+            clock,
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[async_trait]
+impl StorageBuilder for MakeServiceStorage {
+    type Storage = ServiceStorage<TestClock>;
+
+    async fn build(&mut self) -> anyhow::Result<Self::Storage> {
+        if self._guard.is_none() && self.use_child {
+            let binary = get_service_storage_binary().await?.display().to_string();
+            let spanner = StorageServiceBuilder::new(&self.endpoint, binary);
+            self._guard = Some(spanner.run_service().await.expect("child"));
+        }
+        let store_config = service_config_from_endpoint(&self.endpoint).await?;
+        let namespace = format!("{}_{}", self.namespace, self.instance_counter);
+        self.instance_counter += 1;
+        Ok(ServiceStorage::new_for_testing(
+            store_config,
+            &namespace,
+            self.wasm_runtime,
+            self.clock.clone(),
+        )
+        .await?)
     }
 
     fn clock(&self) -> &TestClock {

@@ -4,7 +4,7 @@
 use anyhow::{Context, Result};
 use tokio::process::{Child, Command};
 
-use crate::util::CommandExt;
+use linera_base::command::CommandExt;
 
 pub struct KubectlInstance {
     pub port_forward_children: Vec<Child>,

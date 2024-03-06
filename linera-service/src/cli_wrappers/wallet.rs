@@ -5,13 +5,13 @@ use crate::{
     cli_wrappers::Network,
     config::{GenesisConfig, WalletState},
     faucet::ClaimOutcome,
-    util,
-    util::{ChildExt, CommandExt},
+    util::ChildExt,
 };
 use anyhow::{bail, Context, Result};
 use async_graphql::InputType;
 use linera_base::{
     abi::ContractAbi,
+    command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, PublicKey},
     data_types::Amount,
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
@@ -131,7 +131,7 @@ impl ClientWrapper {
     }
 
     async fn command(&self) -> Result<Command> {
-        let path = util::resolve_binary("linera", env!("CARGO_PKG_NAME")).await?;
+        let path = resolve_binary("linera", env!("CARGO_PKG_NAME")).await?;
         let mut command = Command::new(path);
         command
             .current_dir(self.tmp_dir.path())

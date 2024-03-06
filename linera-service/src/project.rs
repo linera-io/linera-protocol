@@ -1,11 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::util;
 use anyhow::{ensure, Context, Result};
 use cargo_toml::Manifest;
 use current_platform::CURRENT_PLATFORM;
 use fs_err::File;
+use linera_base::command::resolve_binary;
 use std::{
     io::Write,
     path::{Path, PathBuf},
@@ -79,7 +79,7 @@ impl Project {
     }
 
     pub async fn test(&self) -> Result<()> {
-        let runner_path = util::resolve_binary(RUNNER_BIN_NAME, RUNNER_BIN_CRATE).await?;
+        let runner_path = resolve_binary(RUNNER_BIN_NAME, RUNNER_BIN_CRATE).await?;
         let unit_tests = Command::new("cargo")
             .env(
                 "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER",

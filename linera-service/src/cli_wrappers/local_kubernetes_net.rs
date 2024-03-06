@@ -1,23 +1,23 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    cli_wrappers::{
-        docker::{BuildArg, DockerImage},
-        helmfile::HelmFile,
-        kind::KindCluster,
-        kubectl::KubectlInstance,
-        util::get_github_root,
-        ClientWrapper, LineraNet, LineraNetConfig, Network,
-    },
-    util::{self, CommandExt},
+use crate::cli_wrappers::{
+    docker::{BuildArg, DockerImage},
+    helmfile::HelmFile,
+    kind::KindCluster,
+    kubectl::KubectlInstance,
+    util::get_github_root,
+    ClientWrapper, LineraNet, LineraNetConfig, Network,
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use futures::{future, lock::Mutex};
 use k8s_openapi::api::core::v1::Pod;
 use kube::{api::ListParams, Api, Client};
-use linera_base::data_types::Amount;
+use linera_base::{
+    command::{resolve_binary, CommandExt},
+    data_types::Amount,
+};
 use linera_execution::ResourceControlPolicy;
 use std::sync::Arc;
 use tempfile::{tempdir, TempDir};
@@ -25,7 +25,7 @@ use tokio::process::Command;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::{cli_wrappers::wallet::FaucetOption, util::current_binary_parent},
+    crate::cli_wrappers::wallet::FaucetOption, linera_base::command::current_binary_parent,
     tokio::sync::OnceCell,
 };
 
@@ -317,7 +317,7 @@ impl LocalKubernetesNet {
     }
 
     async fn command_for_binary(&self, name: &'static str) -> Result<Command> {
-        let path = util::resolve_binary(name, env!("CARGO_PKG_NAME")).await?;
+        let path = resolve_binary(name, env!("CARGO_PKG_NAME")).await?;
         let mut command = Command::new(path);
         command.current_dir(self.tmp_dir.path());
         Ok(command)

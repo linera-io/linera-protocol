@@ -8,7 +8,9 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use crate::client::client_tests::{MakeMemoryStorage, StorageBuilder, TestBuilder};
+use crate::client::client_tests::{
+    get_free_port, MakeMemoryStorage, MakeServiceStorage, StorageBuilder, TestBuilder,
+};
 use assert_matches::assert_matches;
 use async_graphql::Request;
 use linera_base::{
@@ -40,6 +42,18 @@ use crate::client::client_tests::MakeScyllaDbStorage;
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
     run_test_create_application(MakeMemoryStorage::with_wasm_runtime(wasm_runtime)).await
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_service_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_create_application(MakeServiceStorage::with_wasm_runtime(
+        &endpoint,
+        wasm_runtime,
+    ))
+    .await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -151,6 +165,20 @@ async fn test_memory_run_application_with_dependency(
 ) -> Result<(), anyhow::Error> {
     run_test_run_application_with_dependency(MakeMemoryStorage::with_wasm_runtime(wasm_runtime))
         .await
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_service_run_application_with_dependency(
+    wasm_runtime: WasmRuntime,
+) -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_run_application_with_dependency(MakeServiceStorage::with_wasm_runtime(
+        &endpoint,
+        wasm_runtime,
+    ))
+    .await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -360,6 +388,18 @@ async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<()
     run_test_cross_chain_message(MakeMemoryStorage::with_wasm_runtime(wasm_runtime)).await
 }
 
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_service_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_cross_chain_message(MakeServiceStorage::with_wasm_runtime(
+        &endpoint,
+        wasm_runtime,
+    ))
+    .await
+}
+
 #[cfg(feature = "rocksdb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -558,6 +598,20 @@ where
 #[test_log::test(tokio::test)]
 async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
     run_test_user_pub_sub_channels(MakeMemoryStorage::with_wasm_runtime(wasm_runtime)).await
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_service_user_pub_sub_channels(
+    wasm_runtime: WasmRuntime,
+) -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_user_pub_sub_channels(MakeServiceStorage::with_wasm_runtime(
+        &endpoint,
+        wasm_runtime,
+    ))
+    .await
 }
 
 #[cfg(feature = "rocksdb")]

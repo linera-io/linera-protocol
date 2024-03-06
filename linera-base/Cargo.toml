@@ -18,6 +18,7 @@ web = ["getrandom/js", "rand/getrandom", "rand/std", "rand/std_rng"]
 [dependencies]
 anyhow.workspace = true
 async-graphql.workspace = true
+async-trait.workspace = true
 bcs.workspace = true
 chrono.workspace = true
 ed25519-dalek.workspace = true
@@ -35,7 +36,11 @@ test-strategy = { workspace = true, optional = true }
 thiserror.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+chrono.workspace = true
 rand = { workspace = true, features = ["getrandom", "std", "std_rng"] }
+tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
+tracing.workspace = true
+prometheus.workspace = true
 
 [dev-dependencies]
 custom_debug_derive.workspace = true

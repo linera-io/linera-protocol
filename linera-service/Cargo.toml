@@ -60,6 +60,7 @@ linera-core = { workspace = true, features = ["metrics"] }
 linera-execution = { workspace = true, features = ["fs", "metrics"] }
 linera-rpc = { workspace = true, features = ["metrics"] }
 linera-storage = { workspace = true, features = ["metrics"] }
+linera-storage-service.workspace = true
 linera-version.workspace = true
 linera-views = { workspace = true, features = ["metrics"] }
 pathdiff = { workspace = true, optional = true }

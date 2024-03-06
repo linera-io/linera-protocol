@@ -5,7 +5,8 @@ use crate::config::GenesisConfig;
 use anyhow::{bail, format_err};
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
-use linera_storage::{MemoryStorage, Storage};
+use linera_storage::{MemoryStorage, ServiceStorage, Storage};
+use linera_storage_service::{client::ServiceStoreClient, common::ServiceStoreConfig};
 use linera_views::{
     common::{AdminKeyValueStore, CommonStoreConfig},
     memory::MemoryStoreConfig,
@@ -41,6 +42,8 @@ const DEFAULT_NAMESPACE: &str = "table_linera";
 /// The configuration of the key value store in use.
 #[allow(clippy::large_enum_variant)]
 pub enum StoreConfig {
+    /// The storage service key-value store
+    Service(ServiceStoreConfig, String),
     /// The memory key value store
     Memory(MemoryStoreConfig, String),
     /// The RocksDb key value store
@@ -58,6 +61,13 @@ pub enum StoreConfig {
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
 pub enum StorageConfig {
+    /// The storage service description
+    Service {
+        /// The endpoint used
+        endpoint: String,
+        /// The namespace used
+        namespace: String,
+    },
     /// The memory description
     Memory {
         /// The namespace
@@ -91,6 +101,7 @@ pub enum StorageConfig {
 
 const MEMORY: &str = "memory";
 const MEMORY_EXT: &str = "memory:";
+const STORAGE_SERVICE: &str = "service:";
 #[cfg(feature = "rocksdb")]
 const ROCKS_DB: &str = "rocksdb:";
 #[cfg(feature = "aws")]
@@ -109,6 +120,31 @@ impl FromStr for StorageConfig {
         if let Some(s) = input.strip_prefix(MEMORY_EXT) {
             let namespace = s.to_string();
             return Ok(Self::Memory { namespace });
+        }
+        if let Some(s) = input.strip_prefix(STORAGE_SERVICE) {
+            if s.is_empty() {
+                return Err(format_err!(
+                    "For Storage service, the formatting has to be service:endpoint:namespace"
+                ));
+            }
+            let parts = s.split(':').collect::<Vec<_>>();
+            if parts.len() != 4 {
+                return Err(format_err!("We should have one endpoint and one namespace"));
+            }
+            let protocol = parts[0];
+            let address = parts[1];
+            let port = parts[2];
+            let mut endpoint = protocol.to_string();
+            endpoint.push(':');
+            endpoint.push_str(address);
+            endpoint.push(':');
+            endpoint.push_str(port);
+            let endpoint = endpoint.to_string();
+            let namespace = parts[3].to_string();
+            return Ok(Self::Service {
+                endpoint,
+                namespace,
+            });
         }
         #[cfg(feature = "rocksdb")]
         if let Some(s) = input.strip_prefix(ROCKS_DB) {
@@ -216,6 +252,18 @@ impl StorageConfig {
         common_config: CommonStoreConfig,
     ) -> Result<StoreConfig, anyhow::Error> {
         match self {
+            StorageConfig::Service {
+                endpoint,
+                namespace,
+            } => {
+                let endpoint = endpoint.clone();
+                let config = ServiceStoreConfig {
+                    endpoint,
+                    common_config,
+                };
+                let namespace = namespace.clone();
+                Ok(StoreConfig::Service(config, namespace))
+            }
             StorageConfig::Memory { namespace } => {
                 let config = MemoryStoreConfig { common_config };
                 let namespace = namespace.clone();
@@ -265,6 +313,10 @@ impl StoreConfig {
                 backend: "memory".to_string(),
                 error: "delete_all does not make sense for memory storage".to_string(),
             }),
+            StoreConfig::Service(config, _namespace) => {
+                ServiceStoreClient::delete_all(&config).await?;
+                Ok(())
+            }
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config, _namespace) => {
                 RocksDbStore::delete_all(&config).await?;
@@ -290,6 +342,10 @@ impl StoreConfig {
                 backend: "memory".to_string(),
                 error: "delete_namespace does not make sense for memory storage".to_string(),
             }),
+            StoreConfig::Service(config, namespace) => {
+                ServiceStoreClient::delete(&config, &namespace).await?;
+                Ok(())
+            }
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config, namespace) => {
                 RocksDbStore::delete(&config, &namespace).await?;
@@ -315,6 +371,9 @@ impl StoreConfig {
                 backend: "memory".to_string(),
                 error: "test_existence does not make sense for memory storage".to_string(),
             }),
+            StoreConfig::Service(config, namespace) => {
+                Ok(ServiceStoreClient::exists(&config, &namespace).await?)
+            }
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config, namespace) => {
                 Ok(RocksDbStore::exists(&config, &namespace).await?)
@@ -337,6 +396,10 @@ impl StoreConfig {
                 backend: "memory".to_string(),
                 error: "initialize does not make sense for memory storage".to_string(),
             }),
+            StoreConfig::Service(config, namespace) => {
+                ServiceStoreClient::maybe_create_and_connect(&config, &namespace).await?;
+                Ok(())
+            }
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config, namespace) => {
                 RocksDbStore::maybe_create_and_connect(&config, &namespace).await?;
@@ -362,6 +425,10 @@ impl StoreConfig {
                 backend: "memory".to_string(),
                 error: "list_all is not supported for the memory storage".to_string(),
             }),
+            StoreConfig::Service(config, _namespace) => {
+                let tables = ServiceStoreClient::list_all(&config).await?;
+                Ok(tables)
+            }
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config, _namespace) => {
                 let tables = RocksDbStore::list_all(&config).await?;
@@ -412,6 +479,10 @@ where
             genesis_config.initialize_storage(&mut storage).await?;
             job.run(storage).await
         }
+        StoreConfig::Service(config, namespace) => {
+            let storage = ServiceStorage::new(config, &namespace, wasm_runtime).await?;
+            job.run(storage).await
+        }
         #[cfg(feature = "rocksdb")]
         StoreConfig::RocksDb(config, namespace) => {
             let storage = RocksDbStorage::new(config, &namespace, wasm_runtime).await?;
@@ -438,6 +509,11 @@ pub async fn full_initialize_storage(
     match config {
         StoreConfig::Memory(_, _) => {
             bail!("The initialization should not be called for memory");
+        }
+        StoreConfig::Service(config, namespace) => {
+            let wasm_runtime = None;
+            let mut storage = ServiceStorage::initialize(config, &namespace, wasm_runtime).await?;
+            genesis_config.initialize_storage(&mut storage).await
         }
         #[cfg(feature = "rocksdb")]
         StoreConfig::RocksDb(config, namespace) => {
@@ -480,6 +556,19 @@ fn test_memory_storage_config_from_str() {
             namespace: DEFAULT_NAMESPACE.into()
         }
     );
+}
+
+#[test]
+fn test_shared_store_config_from_str() {
+    assert_eq!(
+        StorageConfig::from_str("service:http://127.0.0.1:8942:linera").unwrap(),
+        StorageConfig::Service {
+            endpoint: "http://127.0.0.1:8942".to_string(),
+            namespace: "linera".into()
+        }
+    );
+    assert!(StorageConfig::from_str("service:http://127.0.0.1:8942").is_err());
+    assert!(StorageConfig::from_str("service:http://127.0.0.1:linera").is_err());
 }
 
 #[cfg(feature = "rocksdb")]

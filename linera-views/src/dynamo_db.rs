@@ -941,6 +941,11 @@ impl WritableKeyValueStore<DynamoDbContextError> for DynamoDbStore {
 }
 
 #[async_trait]
+impl KeyValueStore for DynamoDbStore {
+    type Error = DynamoDbContextError;
+}
+
+#[async_trait]
 impl AdminKeyValueStore for DynamoDbStore {
     type Error = DynamoDbContextError;
     type Config = DynamoDbStoreConfig;
@@ -979,11 +984,6 @@ impl AdminKeyValueStore for DynamoDbStore {
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbContextError> {
         DynamoDbStoreInternal::delete(config, namespace).await
     }
-}
-
-#[async_trait]
-impl KeyValueStore for DynamoDbStore {
-    type Error = DynamoDbContextError;
 }
 
 /// An implementation of [`Context`][trait1] based on [`DynamoDbStore`].

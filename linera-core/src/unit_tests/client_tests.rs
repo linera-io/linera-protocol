@@ -41,6 +41,12 @@ use linera_views::views::ViewError;
 use std::{sync::Arc, time::Duration};
 use test_log::test;
 
+#[cfg(not(target_arch = "wasm32"))]
+use {
+    crate::client::client_test_utils::MakeServiceStorage,
+    linera_storage_service::child::get_free_port,
+};
+
 #[cfg(feature = "rocksdb")]
 use crate::client::client_test_utils::{MakeRocksDbStorage, ROCKS_DB_SEMAPHORE};
 
@@ -54,6 +60,14 @@ use crate::client::client_test_utils::MakeScyllaDbStorage;
 pub async fn test_memory_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
 {
     run_test_initiating_valid_transfer_with_notifications(MakeMemoryStorage::default()).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+pub async fn test_service_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
+{
+    let endpoint = get_free_port().await.unwrap();
+    run_test_initiating_valid_transfer_with_notifications(MakeServiceStorage::new(&endpoint)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -134,6 +148,13 @@ where
 #[test(tokio::test)]
 async fn test_memory_claim_amount() -> Result<(), anyhow::Error> {
     run_test_claim_amount(MakeMemoryStorage::default()).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_claim_amount() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_claim_amount(MakeServiceStorage::new(&endpoint)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -281,6 +302,13 @@ async fn test_memory_rotate_key_pair() -> Result<(), anyhow::Error> {
     run_test_rotate_key_pair(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_rotate_key_pair() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_rotate_key_pair(MakeServiceStorage::new(&endpoint)).await
+}
+
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_rotate_key_pair() -> Result<(), anyhow::Error> {
@@ -346,6 +374,13 @@ where
 #[test(tokio::test)]
 async fn test_memory_transfer_ownership() -> Result<(), anyhow::Error> {
     run_test_transfer_ownership(MakeMemoryStorage::default()).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_transfer_ownership() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_transfer_ownership(MakeServiceStorage::new(&endpoint)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -422,6 +457,13 @@ where
 #[test(tokio::test)]
 async fn test_memory_share_ownership() -> Result<(), anyhow::Error> {
     run_test_share_ownership(MakeMemoryStorage::default()).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_share_ownership() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_share_ownership(MakeServiceStorage::new(&endpoint)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -587,6 +629,13 @@ async fn test_memory_open_chain_then_close_it() -> Result<(), anyhow::Error> {
     run_test_open_chain_then_close_it(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_open_chain_then_close_it() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_open_chain_then_close_it(MakeServiceStorage::new(&endpoint)).await
+}
+
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_open_chain_then_close_it() -> Result<(), anyhow::Error> {
@@ -643,6 +692,13 @@ where
 #[test(tokio::test)]
 async fn test_memory_transfer_then_open_chain() -> Result<(), anyhow::Error> {
     run_test_transfer_then_open_chain(MakeMemoryStorage::default()).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_transfer_then_open_chain() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_transfer_then_open_chain(MakeServiceStorage::new(&endpoint)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -763,6 +819,13 @@ async fn test_memory_open_chain_must_be_first() -> Result<(), anyhow::Error> {
     run_test_open_chain_must_be_first(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_open_chain_must_be_first() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_open_chain_must_be_first(MakeServiceStorage::new(&endpoint)).await
+}
+
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_open_chain_must_be_first() -> Result<(), anyhow::Error> {
@@ -867,6 +930,13 @@ async fn test_memory_open_chain_then_transfer() -> Result<(), anyhow::Error> {
     run_test_open_chain_then_transfer(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_open_chain_then_transfer() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_open_chain_then_transfer(MakeServiceStorage::new(&endpoint)).await
+}
+
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_open_chain_then_transfer() -> Result<(), anyhow::Error> {
@@ -957,6 +1027,13 @@ where
 #[test(tokio::test)]
 async fn test_memory_close_chain() -> Result<(), anyhow::Error> {
     run_test_close_chain(MakeMemoryStorage::default()).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_close_chain() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_close_chain(MakeServiceStorage::new(&endpoint)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -1093,6 +1170,13 @@ async fn test_memory_initiating_valid_transfer_too_many_faults() -> Result<(), a
     run_test_initiating_valid_transfer_too_many_faults(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_initiating_valid_transfer_too_many_faults(MakeServiceStorage::new(&endpoint)).await
+}
+
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
@@ -1150,6 +1234,13 @@ where
 #[test(tokio::test)]
 async fn test_memory_bidirectional_transfer() -> Result<(), anyhow::Error> {
     run_test_bidirectional_transfer(MakeMemoryStorage::default()).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_bidirectional_transfer() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_bidirectional_transfer(MakeServiceStorage::new(&endpoint)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -1273,6 +1364,13 @@ async fn test_memory_receiving_unconfirmed_transfer() -> Result<(), anyhow::Erro
     run_test_receiving_unconfirmed_transfer(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_receiving_unconfirmed_transfer(MakeServiceStorage::new(&endpoint)).await
+}
+
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
@@ -1341,6 +1439,17 @@ async fn test_memory_receiving_unconfirmed_transfer_with_lagging_sender_balances
     run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
         MakeMemoryStorage::default(),
     )
+    .await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_receiving_unconfirmed_transfer_with_lagging_sender_balances(
+) -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(MakeServiceStorage::new(
+        &endpoint,
+    ))
     .await
 }
 
@@ -1476,6 +1585,13 @@ where
 #[test(tokio::test)]
 async fn test_memory_change_voting_rights() -> Result<(), anyhow::Error> {
     run_test_change_voting_rights(MakeMemoryStorage::default()).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_change_voting_rights() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_change_voting_rights(MakeServiceStorage::new(&endpoint)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -1628,6 +1744,13 @@ pub async fn test_memory_insufficient_balance() -> Result<(), anyhow::Error> {
     run_test_insufficient_balance(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+pub async fn test_service_insufficient_balance() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_insufficient_balance(MakeServiceStorage::new(&endpoint)).await
+}
+
 async fn run_test_insufficient_balance<B>(storage_builder: B) -> Result<(), anyhow::Error>
 where
     B: StorageBuilder,
@@ -1681,6 +1804,13 @@ where
 #[test(tokio::test)]
 async fn test_memory_request_leader_timeout() -> Result<(), anyhow::Error> {
     run_test_request_leader_timeout(MakeMemoryStorage::default()).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_request_leader_timeout() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_request_leader_timeout(MakeServiceStorage::new(&endpoint)).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -1827,6 +1957,13 @@ async fn test_memory_propose_validated() -> Result<(), anyhow::Error> {
     run_test_propose_validated(MakeMemoryStorage::default()).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_propose_validated() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_propose_validated(MakeServiceStorage::new(&endpoint)).await
+}
+
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_propose_validated() -> Result<(), anyhow::Error> {
@@ -1938,6 +2075,13 @@ where
 #[test(tokio::test)]
 async fn test_memory_propose_pending_block() -> Result<(), anyhow::Error> {
     run_test_propose_pending_block(MakeMemoryStorage::default()).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test(tokio::test)]
+async fn test_service_propose_pending_block() -> Result<(), anyhow::Error> {
+    let endpoint = get_free_port().await.unwrap();
+    run_test_propose_pending_block(MakeServiceStorage::new(&endpoint)).await
 }
 
 #[cfg(feature = "rocksdb")]

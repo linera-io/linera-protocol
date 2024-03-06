@@ -4,13 +4,19 @@
 use crate::key_value_store::{
     statement::Operation,
     store_processor_server::{StoreProcessor, StoreProcessorServer},
-    KeyValue, OptValue, ReplyClearJournal, ReplyContainsKey, ReplyFindKeyValuesByPrefix,
-    ReplyFindKeysByPrefix, ReplyReadMultiValues, ReplyReadValue, ReplyWriteBatch,
-    RequestClearJournal, RequestContainsKey, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
+    KeyValue, OptValue, ReplyClearJournal, ReplyContainsKey, ReplyCreateNamespace, ReplyDeleteAll,
+    ReplyDeleteNamespace, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
+    ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplyWriteBatch, RequestClearJournal,
+    RequestContainsKey, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
+    RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListAll,
     RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
 };
 use linera_views::{
-    common::{AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
+    batch::Batch,
+    common::{
+        AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore,
+        MIN_VIEW_TAG,
+    },
     memory::{create_memory_store_stream_queries, MemoryStore},
     rocks_db::{RocksDbStore, RocksDbStoreConfig},
 };
@@ -22,22 +28,31 @@ pub mod key_value_store {
     tonic::include_proto!("key_value_store.v1");
 }
 
-pub enum SharedStoreServer {
+/// Key tags to create the sub keys used for storing data on storage.
+#[repr(u8)]
+pub(crate) enum KeyTag {
+    /// Prefix for the storage of the keys of the map
+    Key = MIN_VIEW_TAG,
+    /// Prefix for the storage of existence or not of the namespaces.
+    Namespace,
+}
+
+pub enum ServiceStoreServer {
     Memory(MemoryStore),
     /// The RocksDb key value store
     #[cfg(feature = "rocksdb")]
     RocksDb(RocksDbStore),
 }
 
-impl SharedStoreServer {
+impl ServiceStoreServer {
     pub async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Status> {
         match self {
-            SharedStoreServer::Memory(store) => store
+            ServiceStoreServer::Memory(store) => store
                 .read_value_bytes(key)
                 .await
                 .map_err(|_e| Status::not_found("read_value_bytes")),
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => store
+            ServiceStoreServer::RocksDb(store) => store
                 .read_value_bytes(key)
                 .await
                 .map_err(|_e| Status::not_found("read_value_bytes")),
@@ -46,12 +61,12 @@ impl SharedStoreServer {
 
     pub async fn contains_key(&self, key: &[u8]) -> Result<bool, Status> {
         match self {
-            SharedStoreServer::Memory(store) => store
+            ServiceStoreServer::Memory(store) => store
                 .contains_key(key)
                 .await
                 .map_err(|_e| Status::not_found("contains_key")),
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => store
+            ServiceStoreServer::RocksDb(store) => store
                 .contains_key(key)
                 .await
                 .map_err(|_e| Status::not_found("contains_key")),
@@ -63,12 +78,12 @@ impl SharedStoreServer {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Status> {
         match self {
-            SharedStoreServer::Memory(store) => store
+            ServiceStoreServer::Memory(store) => store
                 .read_multi_values_bytes(keys)
                 .await
                 .map_err(|_e| Status::not_found("read_multi_values_bytes")),
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => store
+            ServiceStoreServer::RocksDb(store) => store
                 .read_multi_values_bytes(keys)
                 .await
                 .map_err(|_e| Status::not_found("read_multi_values_bytes")),
@@ -77,12 +92,12 @@ impl SharedStoreServer {
 
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Status> {
         match self {
-            SharedStoreServer::Memory(store) => store
+            ServiceStoreServer::Memory(store) => store
                 .find_keys_by_prefix(key_prefix)
                 .await
                 .map_err(|_e| Status::not_found("find_keys_by_prefix")),
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => store
+            ServiceStoreServer::RocksDb(store) => store
                 .find_keys_by_prefix(key_prefix)
                 .await
                 .map_err(|_e| Status::not_found("find_keys_by_prefix")),
@@ -94,30 +109,26 @@ impl SharedStoreServer {
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Status> {
         match self {
-            SharedStoreServer::Memory(store) => store
+            ServiceStoreServer::Memory(store) => store
                 .find_key_values_by_prefix(key_prefix)
                 .await
                 .map_err(|_e| Status::not_found("find_key_values_by_prefix")),
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => store
+            ServiceStoreServer::RocksDb(store) => store
                 .find_key_values_by_prefix(key_prefix)
                 .await
                 .map_err(|_e| Status::not_found("find_key_values_by_prefix")),
         }
     }
 
-    pub async fn write_batch(
-        &self,
-        batch: linera_views::batch::Batch,
-        base_key: &[u8],
-    ) -> Result<(), Status> {
+    pub async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Status> {
         match self {
-            SharedStoreServer::Memory(store) => store
+            ServiceStoreServer::Memory(store) => store
                 .write_batch(batch, base_key)
                 .await
                 .map_err(|_e| Status::not_found("write_batch")),
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => store
+            ServiceStoreServer::RocksDb(store) => store
                 .write_batch(batch, base_key)
                 .await
                 .map_err(|_e| Status::not_found("write_batch")),
@@ -126,21 +137,62 @@ impl SharedStoreServer {
 
     pub async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Status> {
         match self {
-            SharedStoreServer::Memory(store) => store
+            ServiceStoreServer::Memory(store) => store
                 .clear_journal(base_key)
                 .await
                 .map_err(|_e| Status::not_found("clear_journal")),
             #[cfg(feature = "rocksdb")]
-            SharedStoreServer::RocksDb(store) => store
+            ServiceStoreServer::RocksDb(store) => store
                 .clear_journal(base_key)
                 .await
                 .map_err(|_e| Status::not_found("clear_journal")),
         }
     }
+
+    pub async fn list_all(&self) -> Result<Vec<Vec<u8>>, Status> {
+        self.find_keys_by_prefix(&[KeyTag::Namespace as u8]).await
+    }
+
+    pub async fn delete_all(&self) -> Result<(), Status> {
+        let mut batch = Batch::new();
+        batch.delete_key_prefix(vec![KeyTag::Key as u8]);
+        batch.delete_key_prefix(vec![KeyTag::Namespace as u8]);
+        self.write_batch(batch, &[]).await
+    }
+
+    pub async fn exists_namespace(&self, namespace: &[u8]) -> Result<bool, Status> {
+        let mut full_key = vec![KeyTag::Namespace as u8];
+        full_key.extend(namespace);
+        self.contains_key(&full_key).await
+    }
+
+    pub async fn create_namespace(&self, namespace: &[u8]) -> Result<(), Status> {
+        let mut full_key = vec![KeyTag::Namespace as u8];
+        full_key.extend(namespace);
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(full_key, vec![]);
+        self.write_batch(batch, &[]).await
+    }
+
+    pub async fn delete_namespace(&self, namespace: &[u8]) -> Result<(), Status> {
+        let mut batch = Batch::new();
+        let mut full_key = vec![KeyTag::Namespace as u8];
+        full_key.extend(namespace);
+        batch.delete_key(full_key);
+        let mut key_prefix = vec![KeyTag::Key as u8];
+        key_prefix.extend(namespace);
+        batch.delete_key_prefix(key_prefix);
+        self.write_batch(batch, &[]).await
+    }
 }
 
 #[derive(clap::Parser)]
-enum SharedStoreServerOptions {
+#[command(
+    name = "storage_service_server",
+    version = linera_version::VersionInfo::default_clap_str(),
+    about = "A server providing storage service",
+)]
+enum ServiceStoreServerOptions {
     #[command(name = "memory")]
     Memory {
         #[arg(long = "endpoint")]
@@ -157,7 +209,7 @@ enum SharedStoreServerOptions {
 }
 
 #[tonic::async_trait]
-impl StoreProcessor for SharedStoreServer {
+impl StoreProcessor for ServiceStoreServer {
     async fn process_read_value(
         &self,
         request: Request<RequestReadValue>,
@@ -233,7 +285,7 @@ impl StoreProcessor for SharedStoreServer {
             statements,
             base_key,
         } = request;
-        let mut batch = linera_views::batch::Batch::default();
+        let mut batch = Batch::default();
         for statement in statements {
             match statement.operation.unwrap() {
                 Operation::Delete(key) => {
@@ -262,18 +314,69 @@ impl StoreProcessor for SharedStoreServer {
         let response = ReplyClearJournal {};
         Ok(Response::new(response))
     }
+
+    async fn process_create_namespace(
+        &self,
+        request: Request<RequestCreateNamespace>,
+    ) -> Result<Response<ReplyCreateNamespace>, Status> {
+        let request = request.into_inner();
+        let RequestCreateNamespace { namespace } = request;
+        self.create_namespace(&namespace).await?;
+        let response = ReplyCreateNamespace {};
+        Ok(Response::new(response))
+    }
+
+    async fn process_exists_namespace(
+        &self,
+        request: Request<RequestExistsNamespace>,
+    ) -> Result<Response<ReplyExistsNamespace>, Status> {
+        let request = request.into_inner();
+        let RequestExistsNamespace { namespace } = request;
+        let exists = self.exists_namespace(&namespace).await?;
+        let response = ReplyExistsNamespace { exists };
+        Ok(Response::new(response))
+    }
+
+    async fn process_delete_namespace(
+        &self,
+        request: Request<RequestDeleteNamespace>,
+    ) -> Result<Response<ReplyDeleteNamespace>, Status> {
+        let request = request.into_inner();
+        let RequestDeleteNamespace { namespace } = request;
+        self.delete_namespace(&namespace).await?;
+        let response = ReplyDeleteNamespace {};
+        Ok(Response::new(response))
+    }
+
+    async fn process_list_all(
+        &self,
+        _request: Request<RequestListAll>,
+    ) -> Result<Response<ReplyListAll>, Status> {
+        let namespaces = self.list_all().await?;
+        let response = ReplyListAll { namespaces };
+        Ok(Response::new(response))
+    }
+
+    async fn process_delete_all(
+        &self,
+        _request: Request<RequestDeleteAll>,
+    ) -> Result<Response<ReplyDeleteAll>, Status> {
+        self.delete_all().await?;
+        let response = ReplyDeleteAll {};
+        Ok(Response::new(response))
+    }
 }
 
 #[tokio::main]
 async fn main() {
-    let options = <SharedStoreServerOptions as clap::Parser>::parse();
+    let options = <ServiceStoreServerOptions as clap::Parser>::parse();
     let common_config = CommonStoreConfig::default();
     let (shared_store, endpoint) = match options {
-        SharedStoreServerOptions::Memory { endpoint } => {
+        ServiceStoreServerOptions::Memory { endpoint } => {
             let store = create_memory_store_stream_queries(common_config.max_stream_queries);
-            (SharedStoreServer::Memory(store), endpoint)
+            (ServiceStoreServer::Memory(store), endpoint)
         }
-        SharedStoreServerOptions::RocksDb { path, endpoint } => {
+        ServiceStoreServerOptions::RocksDb { path, endpoint } => {
             let path_buf = path.into();
             let config = RocksDbStoreConfig {
                 path_buf,
@@ -283,7 +386,7 @@ async fn main() {
             let store = RocksDbStore::maybe_create_and_connect(&config, namespace)
                 .await
                 .expect("store");
-            (SharedStoreServer::RocksDb(store), endpoint)
+            (ServiceStoreServer::RocksDb(store), endpoint)
         }
     };
     let endpoint = endpoint.parse().unwrap();

@@ -3,13 +3,19 @@
 
 use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
-    util,
-    util::{ChildExt, CommandExt},
+    util::ChildExt,
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use async_trait::async_trait;
-use linera_base::data_types::Amount;
+use linera_base::{
+    command::{resolve_binary, CommandExt},
+    data_types::Amount,
+};
 use linera_execution::ResourceControlPolicy;
+use linera_storage_service::{
+    child::{StorageServiceBuilder, StorageServiceGuard},
+    common::get_service_storage_binary,
+};
 use std::{
     collections::{BTreeMap, HashSet},
     env,
@@ -22,6 +28,9 @@ use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
 use tracing::{info, warn};
+
+/// The endpoint used for all the tests
+const END_TO_END_STORAGE_SERVICE_ENDPOINT: &str = "127.0.0.1:8742";
 
 /// The information needed to start a [`LocalNet`].
 pub struct LocalNetConfig {
@@ -49,6 +58,7 @@ pub struct LocalNet {
     table_name: String,
     set_init: HashSet<(usize, usize)>,
     tmp_dir: Arc<TempDir>,
+    _guard: Option<StorageServiceGuard>,
 }
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -58,6 +68,7 @@ const SERVER_ENV: &str = "LINERA_SERVER_PARAMS";
 /// Description of the database engine to use inside a local Linera network.
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum Database {
+    Service,
     RocksDb,
     DynamoDb,
     ScyllaDb,
@@ -118,6 +129,7 @@ impl Validator {
 impl LocalNetConfig {
     pub fn new_test(database: Database, network: Network) -> Self {
         let num_shards = match database {
+            Database::Service => 4,
             Database::RocksDb => 1,
             Database::DynamoDb => 4,
             Database::ScyllaDb => 4,
@@ -145,6 +157,15 @@ impl LineraNetConfig for LocalNetConfig {
             self.num_shards == 1 || self.database != Database::RocksDb,
             "Multiple shards not supported with RocksDB"
         );
+        let guard = match self.database {
+            Database::Service => {
+                let binary = get_service_storage_binary().await?.display().to_string();
+                let builder =
+                    StorageServiceBuilder::new(END_TO_END_STORAGE_SERVICE_ENDPOINT, binary);
+                Some(builder.run_service().await.expect("child"))
+            }
+            _ => None,
+        };
         let mut net = LocalNet::new(
             self.database,
             self.network,
@@ -152,6 +173,7 @@ impl LineraNetConfig for LocalNetConfig {
             self.table_name,
             self.num_initial_validators,
             self.num_shards,
+            guard,
         )?;
         let client = net.make_client().await;
         ensure!(
@@ -215,6 +237,7 @@ impl LocalNet {
         table_name: String,
         num_initial_validators: usize,
         num_shards: usize,
+        guard: Option<StorageServiceGuard>,
     ) -> Result<Self> {
         Ok(Self {
             database,
@@ -228,11 +251,12 @@ impl LocalNet {
             table_name,
             set_init: HashSet::new(),
             tmp_dir: Arc::new(tempdir()?),
+            _guard: guard,
         })
     }
 
     async fn command_for_binary(&self, name: &'static str) -> Result<Command> {
-        let path = util::resolve_binary(name, env!("CARGO_PKG_NAME")).await?;
+        let path = resolve_binary(name, env!("CARGO_PKG_NAME")).await?;
         let mut command = Command::new(path);
         command.current_dir(self.tmp_dir.path());
         Ok(command)
@@ -366,6 +390,13 @@ impl LocalNet {
 
     async fn run_server(&mut self, i: usize, j: usize) -> Result<Child> {
         let (storage, key) = match self.database {
+            Database::Service => (
+                format!(
+                    "service:http://{}:{}_server_{}_db",
+                    END_TO_END_STORAGE_SERVICE_ENDPOINT, self.table_name, i
+                ),
+                (i, 0),
+            ),
             Database::RocksDb => (format!("rocksdb:server_{}_{}.db", i, j), (i, j)),
             Database::DynamoDb => (
                 format!("dynamodb:{}_server_{}.db:localstack", self.table_name, i),

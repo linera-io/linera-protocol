@@ -6,7 +6,7 @@ use pathdiff::diff_paths;
 use std::path::PathBuf;
 use tokio::process::Command;
 
-use crate::util::{current_binary_parent, CommandExt};
+use linera_base::command::{current_binary_parent, CommandExt};
 
 pub struct DockerImage {
     name: String,

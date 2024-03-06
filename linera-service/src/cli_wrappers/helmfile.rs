@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::util::CommandExt;
 use anyhow::Result;
 use fs_extra::dir::CopyOptions;
+use linera_base::command::CommandExt;
 use std::path::Path;
 use tokio::process::Command;
 

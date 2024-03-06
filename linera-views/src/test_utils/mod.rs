@@ -7,10 +7,13 @@ use crate::{
         Batch, WriteOperation,
         WriteOperation::{Delete, Put},
     },
-    common::{KeyIterable, KeyValueIterable, KeyValueStore},
+    common::{AdminKeyValueStore, KeyIterable, KeyValueIterable, KeyValueStore},
 };
 use rand::{Rng, SeedableRng};
-use std::collections::{BTreeMap, HashSet};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    fmt::Debug,
+};
 use tracing::warn;
 
 // The following seed is chosen to have equal numbers of 1s and 0s, as advised by
@@ -644,5 +647,73 @@ pub async fn run_writes_from_state<C: KeyValueStore + Sync>(key_value_store: &C)
         };
         let state_batch = generate_specific_state_batch(&key_prefix, option);
         run_test_batch_from_state(key_value_store, key_prefix, state_batch).await;
+    }
+}
+
+async fn namespaces_with_prefix<S: AdminKeyValueStore>(
+    config: &S::Config,
+    prefix: &str,
+) -> BTreeSet<String>
+where
+    S::Error: Debug,
+{
+    let namespaces = S::list_all(config).await.expect("namespaces");
+    namespaces
+        .into_iter()
+        .filter(|x| x.starts_with(prefix))
+        .collect::<BTreeSet<_>>()
+}
+
+/// Exercises the functionalities of the `AdminKeyValueStore`.
+/// This tests everything except the `delete_all` which would
+/// interact with other namespaces.
+pub async fn admin_test<S: AdminKeyValueStore>(config: &S::Config)
+where
+    S::Error: Debug,
+{
+    let prefix = generate_test_namespace();
+    let namespaces = namespaces_with_prefix::<S>(config, &prefix).await;
+    assert_eq!(namespaces.len(), 0);
+    let mut rng = make_deterministic_rng();
+    let size = 9;
+    // Creating the initial list of namespaces
+    let mut working_namespaces = BTreeSet::new();
+    for i in 0..size {
+        let namespace = format!("{}_{}", prefix, i);
+        assert!(!S::exists(config, &namespace).await.expect("test"));
+        working_namespaces.insert(namespace);
+    }
+    // Creating the namespaces
+    for namespace in &working_namespaces {
+        S::create(config, namespace)
+            .await
+            .expect("creation of a namespace");
+        assert!(S::exists(config, namespace).await.expect("test"));
+    }
+    // Listing all of them
+    let namespaces = namespaces_with_prefix::<S>(config, &prefix).await;
+    assert_eq!(namespaces, working_namespaces);
+    // Selecting at random some for deletion
+    let mut kept_namespaces = BTreeSet::new();
+    for namespace in working_namespaces {
+        let delete = rng.gen::<bool>();
+        if delete {
+            S::delete(config, &namespace)
+                .await
+                .expect("A successful deletion");
+            assert!(!S::exists(config, &namespace).await.expect("test"));
+        } else {
+            kept_namespaces.insert(namespace);
+        }
+    }
+    for namespace in &kept_namespaces {
+        assert!(S::exists(config, namespace).await.expect("test"));
+    }
+    let namespaces = namespaces_with_prefix::<S>(config, &prefix).await;
+    assert_eq!(namespaces, kept_namespaces);
+    for namespace in kept_namespaces {
+        S::delete(config, &namespace)
+            .await
+            .expect("A successful deletion");
     }
 }

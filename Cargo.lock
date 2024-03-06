@@ -2975,6 +2975,7 @@ version = "0.9.0"
 dependencies = [
  "anyhow",
  "async-graphql",
+ "async-trait",
  "bcs",
  "cfg_aliases",
  "chrono",
@@ -2993,6 +2994,8 @@ dependencies = [
  "sha3",
  "test-strategy",
  "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3036,6 +3039,7 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-storage",
+ "linera-storage-service",
  "linera-version",
  "linera-views",
  "lru",
@@ -3346,6 +3350,7 @@ dependencies = [
  "linera-rpc",
  "linera-service",
  "linera-storage",
+ "linera-storage-service",
  "linera-version",
  "linera-views",
  "matching-engine",
@@ -3414,6 +3419,7 @@ dependencies = [
  "linera-chain",
  "linera-execution",
  "linera-storage",
+ "linera-storage-service",
  "linera-views",
  "prometheus",
  "serde",
@@ -3424,15 +3430,18 @@ dependencies = [
 
 [[package]]
 name = "linera-storage-service"
-version = "0.6.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "async-lock",
  "async-trait",
+ "bcs",
  "clap 4.4.11",
- "linera-service",
+ "linera-base",
  "linera-storage-service",
+ "linera-version",
  "linera-views",
+ "port-selector",
  "proptest",
  "prost",
  "serde-reflection",
