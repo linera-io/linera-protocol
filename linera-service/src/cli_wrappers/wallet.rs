@@ -803,7 +803,7 @@ impl NodeService {
         application_id: &ApplicationId<A>,
     ) -> Result<ApplicationWrapper<A>> {
         let application_id = application_id.forget_abi().to_string();
-        let n_try = 30;
+        let n_try = 15;
         for i in 0..n_try {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let values = self.try_get_applications_uri(chain_id).await?;
@@ -861,7 +861,7 @@ impl NodeService {
     }
 
     pub async fn query_node(&self, query: impl AsRef<str>) -> Result<Value> {
-        let n_try = 30;
+        let n_try = 15;
         let query = query.as_ref();
         for i in 0..n_try {
             tokio::time::sleep(Duration::from_secs(i)).await;
