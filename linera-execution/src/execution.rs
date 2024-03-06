@@ -20,7 +20,7 @@ use linera_views::{
     views::{View, ViewError},
 };
 use linera_views_derive::CryptoHashView;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[cfg(with_testing)]
 use {
@@ -218,7 +218,7 @@ where
             _ => None,
         });
 
-        let mut applications_to_register_per_destination = HashMap::<_, BTreeSet<_>>::new();
+        let mut applications_to_register_per_destination = BTreeMap::<_, BTreeSet<_>>::new();
 
         for (application_id, result) in user_application_outcomes {
             for message in &result.messages {

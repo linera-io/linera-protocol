@@ -15,7 +15,7 @@ use linera_chain::{
     data_types::{
         Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
         HashedValue, IncomingMessage, LiteCertificate, Medium, MessageAction, MessageBundle,
-        Origin, Target,
+        Origin, OutgoingMessage, Target,
     },
     ChainError, ChainManagerOutcome, ChainStateView,
 };
@@ -217,8 +217,17 @@ pub enum WorkerError {
     InvalidBlockChaining,
     #[error("The given state hash is not what we computed after executing the block")]
     IncorrectStateHash,
-    #[error("The given messages are not what we computed after executing the block")]
-    IncorrectMessages,
+    #[error(
+        "
+        The given messages are not what we computed after executing the block.\n\
+        Computed: {computed:#?}\n\
+        Submitted: {submitted:#?}\n
+    "
+    )]
+    IncorrectMessages {
+        computed: Vec<OutgoingMessage>,
+        submitted: Vec<OutgoingMessage>,
+    },
     #[error("The given message counts are not what we computed after executing the block")]
     IncorrectMessageCounts,
     #[error("The timestamp of a Tick operation is in the future.")]
@@ -649,7 +658,10 @@ where
         // We should always agree on the messages and state hash.
         ensure!(
             *messages == verified_outcome.messages,
-            WorkerError::IncorrectMessages
+            WorkerError::IncorrectMessages {
+                computed: verified_outcome.messages,
+                submitted: messages.clone(),
+            }
         );
         ensure!(
             *message_counts == verified_outcome.message_counts,

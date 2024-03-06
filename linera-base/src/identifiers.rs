@@ -179,7 +179,7 @@ pub struct SessionId<A = ()> {
 pub struct ChannelName(#[serde(with = "serde_bytes")] Vec<u8>);
 
 /// The destination of a message, relative to a particular application.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Destination {
     /// Direct message to a chain.
     Recipient(ChainId),
