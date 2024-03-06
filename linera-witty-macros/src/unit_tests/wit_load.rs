@@ -208,7 +208,10 @@ fn enum_type() {
 
                     Ok(Enum::Struct { first, second })
                 }
-                _ => Err(linera_witty::RuntimeError::InvalidVariant),
+                discriminant => Err(linera_witty::RuntimeError::InvalidVariant {
+                    type_name: ::std::any::type_name::<Self>(),
+                    discriminant: discriminant.into(),
+                }),
             }
         }
 
@@ -255,7 +258,10 @@ fn enum_type() {
 
                     Ok(Enum::Struct { first, second })
                 }
-                _ => Err(linera_witty::RuntimeError::InvalidVariant),
+                discriminant => Err(linera_witty::RuntimeError::InvalidVariant {
+                    type_name: ::std::any::type_name::<Self>(),
+                    discriminant: discriminant.into(),
+                }),
             }
         }
     };
@@ -488,7 +494,10 @@ fn enum_type_with_skipped_fields() {
                         ignored3
                     })
                 }
-                _ => Err(linera_witty::RuntimeError::InvalidVariant),
+                discriminant => Err(linera_witty::RuntimeError::InvalidVariant {
+                    type_name: ::std::any::type_name::<Self>(),
+                    discriminant: discriminant.into(),
+                }),
             }
         }
 
@@ -547,7 +556,10 @@ fn enum_type_with_skipped_fields() {
                         ignored3
                     })
                 }
-                _ => Err(linera_witty::RuntimeError::InvalidVariant),
+                discriminant => Err(linera_witty::RuntimeError::InvalidVariant {
+                    type_name: ::std::any::type_name::<Self>(),
+                    discriminant: discriminant.into(),
+                }),
             }
         }
     };
