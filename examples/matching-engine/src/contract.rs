@@ -100,7 +100,7 @@ impl Contract for MatchingEngineContract {
             Operation::CloseChain => {
                 for order_id in self.state.orders.indices().await? {
                     match self.modify_order(order_id, ModifyAmount::All).await {
-                        Ok(transfer) => self.send_to(transfer)?,
+                        Ok(transfer) => self.send_to(transfer),
                         // Orders with amount zero may have been cleared in an earlier iteration.
                         Err(MatchingEngineError::OrderNotPresent) => continue,
                         Err(error) => return Err(error),
@@ -215,7 +215,7 @@ impl MatchingEngineContract {
         amount: &Amount,
         nature: &OrderNature,
         price: &Price,
-    ) -> Result<(), MatchingEngineError> {
+    ) {
         let destination = Account {
             chain_id: self.runtime.chain_id(),
             owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
@@ -225,10 +225,10 @@ impl MatchingEngineContract {
     }
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
-    fn send_to(&mut self, transfer: Transfer) -> Result<(), MatchingEngineError> {
+    fn send_to(&mut self, transfer: Transfer) {
         let destination = transfer.account;
         let owner_app = AccountOwner::Application(self.runtime.application_id().forget_abi());
-        self.transfer(owner_app, transfer.amount, destination, transfer.token_idx)
+        self.transfer(owner_app, transfer.amount, destination, transfer.token_idx);
     }
 
     /// Transfers tokens from the owner to the destination
@@ -238,15 +238,14 @@ impl MatchingEngineContract {
         amount: Amount,
         destination: Account,
         token_idx: u32,
-    ) -> Result<(), MatchingEngineError> {
+    ) {
         let transfer = fungible::ApplicationCall::Transfer {
             owner,
             amount,
             destination,
         };
         let token = self.fungible_id(token_idx);
-        self.call_application(true, token, &transfer)?;
-        Ok(())
+        self.runtime.call_application(true, token, &transfer);
     }
 
     /// Execution of orders. There are three kinds:
@@ -270,13 +269,13 @@ impl MatchingEngineContract {
                 nature,
                 price,
             } => {
-                self.receive_from_account(&owner, &amount, &nature, &price)?;
+                self.receive_from_account(&owner, &amount, &nature, &price);
                 let account = Account { chain_id, owner };
                 let transfers = self
                     .insert_and_uncross_market(&account, amount, nature, &price)
                     .await?;
                 for transfer in transfers {
-                    self.send_to(transfer)?;
+                    self.send_to(transfer);
                 }
             }
             Order::Cancel { owner, order_id } => {
@@ -333,7 +332,7 @@ impl MatchingEngineContract {
             // First, move the funds to the matching engine chain (under the same owner).
             let destination = Account { chain_id, owner };
             let (amount, token_idx) = Self::get_amount_idx(&nature, &price, &amount);
-            self.transfer(owner, amount, destination, token_idx)?;
+            self.transfer(owner, amount, destination, token_idx);
         }
         outcome.messages.push(OutgoingMessage {
             destination: chain_id.into(),
@@ -375,7 +374,8 @@ impl MatchingEngineContract {
     ) -> Result<(), MatchingEngineError> {
         self.check_order_id(&order_id, owner).await?;
         let transfer = self.modify_order(order_id, cancel_amount).await?;
-        self.send_to(transfer)
+        self.send_to(transfer);
+        Ok(())
     }
 
     /// Orders which have length 0 should be removed from the system.

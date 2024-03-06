@@ -215,8 +215,8 @@ impl AmmContract {
                     token1_amount = max_token1_amount;
                 }
 
-                self.receive_from_account(&owner, 0, token0_amount)?;
-                self.receive_from_account(&owner, 1, token1_amount)?;
+                self.receive_from_account(&owner, 0, token0_amount);
+                self.receive_from_account(&owner, 1, token1_amount);
 
                 Ok(())
             }
@@ -265,8 +265,8 @@ impl AmmContract {
                     )
                 };
 
-                self.send_to(&owner, token_to_remove_idx, token_to_remove_amount)?;
-                self.send_to(&owner, other_token_to_remove_idx, other_amount)?;
+                self.send_to(&owner, token_to_remove_idx, token_to_remove_amount);
+                self.send_to(&owner, other_token_to_remove_idx, other_amount);
                 Ok(())
             }
         }
@@ -293,8 +293,8 @@ impl AmmContract {
         let output_amount =
             self.calculate_output_amount(input_amount, input_pool_balance, output_pool_balance)?;
 
-        self.receive_from_account(&owner, input_token_idx, input_amount)?;
-        self.send_to(&owner, output_token_idx, output_amount)?;
+        self.receive_from_account(&owner, input_token_idx, input_amount);
+        self.send_to(&owner, output_token_idx, output_amount);
 
         Ok(())
     }
@@ -431,50 +431,39 @@ impl AmmContract {
         amount: Amount,
         destination: Account,
         token_idx: u32,
-    ) -> Result<(), AmmError> {
+    ) {
         let transfer = fungible::ApplicationCall::Transfer {
             owner: *owner,
             amount,
             destination,
         };
         let token = self.fungible_id(token_idx);
-        self.call_application(true, token, &transfer)?;
-        Ok(())
+        self.runtime.call_application(true, token, &transfer);
     }
 
     fn balance(&mut self, owner: &AccountOwner, token_idx: u32) -> Result<Amount, AmmError> {
         let balance = fungible::ApplicationCall::Balance { owner: *owner };
         let token = self.fungible_id(token_idx);
-        match self.call_application(true, token, &balance)? {
+        match self.runtime.call_application(true, token, &balance) {
             fungible::FungibleResponse::Balance(balance) => Ok(balance),
             response => Err(AmmError::UnexpectedFungibleResponse(response)),
         }
     }
 
-    fn receive_from_account(
-        &mut self,
-        owner: &AccountOwner,
-        token_idx: u32,
-        amount: Amount,
-    ) -> Result<(), AmmError> {
+    fn receive_from_account(&mut self, owner: &AccountOwner, token_idx: u32, amount: Amount) {
         let destination = Account {
             chain_id: self.runtime.chain_id(),
             owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
         };
-        self.transfer(owner, amount, destination, token_idx)
+        self.transfer(owner, amount, destination, token_idx);
     }
 
-    fn send_to(
-        &mut self,
-        owner: &AccountOwner,
-        token_idx: u32,
-        amount: Amount,
-    ) -> Result<(), AmmError> {
+    fn send_to(&mut self, owner: &AccountOwner, token_idx: u32, amount: Amount) {
         let destination = Account {
             chain_id: self.runtime.chain_id(),
             owner: *owner,
         };
         let owner_app = AccountOwner::Application(self.runtime.application_id().forget_abi());
-        self.transfer(&owner_app, amount, destination, token_idx)
+        self.transfer(&owner_app, amount, destination, token_idx);
     }
 }

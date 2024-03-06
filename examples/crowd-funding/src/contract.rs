@@ -142,7 +142,8 @@ impl CrowdFundingContract {
             destination,
         };
         let fungible_id = self.fungible_id();
-        self.call_application(/* authenticated by owner */ true, fungible_id, &call)?;
+        self.runtime
+            .call_application(/* authenticated by owner */ true, fungible_id, &call);
         // Second, schedule the attribution of the funds to the (remote) campaign.
         let message = Message::PledgeWithAccount { owner, amount };
         outcome.messages.push(OutgoingMessage {
@@ -162,7 +163,7 @@ impl CrowdFundingContract {
         amount: Amount,
     ) -> Result<(), Error> {
         ensure!(amount > Amount::ZERO, Error::EmptyPledge);
-        self.receive_from_account(owner, amount)?;
+        self.receive_from_account(owner, amount);
         self.finish_pledge(owner, amount).await
     }
 
@@ -179,7 +180,10 @@ impl CrowdFundingContract {
                     .saturating_add_assign(amount);
                 Ok(())
             }
-            Status::Complete => self.send_to(amount, self.initialization_argument().owner),
+            Status::Complete => {
+                self.send_to(amount, self.initialization_argument().owner);
+                Ok(())
+            }
             Status::Cancelled => Err(Error::Cancelled),
         }
     }
@@ -199,7 +203,7 @@ impl CrowdFundingContract {
             Status::Cancelled => return Err(Error::Cancelled),
         }
 
-        self.send_to(total, self.initialization_argument().owner)?;
+        self.send_to(total, self.initialization_argument().owner);
         self.state.pledges.clear();
         self.state.status.set(Status::Complete);
 
@@ -227,11 +231,11 @@ impl CrowdFundingContract {
             .await
             .expect("view iteration should not fail");
         for (pledger, amount) in pledges {
-            self.send_to(amount, pledger)?;
+            self.send_to(amount, pledger);
         }
 
         let balance = self.balance()?;
-        self.send_to(balance, self.initialization_argument().owner)?;
+        self.send_to(balance, self.initialization_argument().owner);
         self.state.status.set(Status::Cancelled);
 
         Ok(())
@@ -241,11 +245,11 @@ impl CrowdFundingContract {
     fn balance(&mut self) -> Result<Amount, Error> {
         let owner = AccountOwner::Application(self.runtime.application_id().forget_abi());
         let fungible_id = self.fungible_id();
-        let response = self.call_application(
+        let response = self.runtime.call_application(
             true,
             fungible_id,
             &fungible::ApplicationCall::Balance { owner },
-        )?;
+        );
         match response {
             fungible::FungibleResponse::Balance(balance) => Ok(balance),
             response => Err(Error::UnexpectedFungibleResponse(response)),
@@ -253,7 +257,7 @@ impl CrowdFundingContract {
     }
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
-    fn send_to(&mut self, amount: Amount, owner: AccountOwner) -> Result<(), Error> {
+    fn send_to(&mut self, amount: Amount, owner: AccountOwner) {
         let destination = Account {
             chain_id: self.runtime.chain_id(),
             owner,
@@ -264,12 +268,11 @@ impl CrowdFundingContract {
             destination,
         };
         let fungible_id = self.fungible_id();
-        self.call_application(true, fungible_id, &transfer)?;
-        Ok(())
+        self.runtime.call_application(true, fungible_id, &transfer);
     }
 
     /// Calls into the Fungible Token application to receive tokens from the given account.
-    fn receive_from_account(&mut self, owner: AccountOwner, amount: Amount) -> Result<(), Error> {
+    fn receive_from_account(&mut self, owner: AccountOwner, amount: Amount) {
         let destination = Account {
             chain_id: self.runtime.chain_id(),
             owner: AccountOwner::Application(self.runtime.application_id().forget_abi()),
@@ -280,8 +283,7 @@ impl CrowdFundingContract {
             destination,
         };
         let fungible_id = self.fungible_id();
-        self.call_application(true, fungible_id, &transfer)?;
-        Ok(())
+        self.runtime.call_application(true, fungible_id, &transfer);
     }
 
     pub fn initialization_argument(&self) -> &InitializationArgument {
