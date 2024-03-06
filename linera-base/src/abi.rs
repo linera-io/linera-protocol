@@ -54,7 +54,7 @@ pub trait ContractAbi {
 /// A trait that includes all the types exported by a Linera application service.
 pub trait ServiceAbi {
     /// Immutable parameters specific to this application (e.g. the name of a token).
-    type Parameters: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
+    type Parameters: Serialize + DeserializeOwned + Send + Sync + Clone + Debug + 'static;
 
     /// The type of a query receivable by the application's service.
     type Query: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;

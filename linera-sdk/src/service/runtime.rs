@@ -5,18 +5,17 @@
 
 use super::service_system_api as wit;
 use crate::Service;
-use linera_base::{data_types::BlockHeight, identifiers::ChainId};
+use linera_base::{abi::ServiceAbi, data_types::BlockHeight, identifiers::ChainId};
 use std::cell::Cell;
 
 /// The runtime available during execution of a query.
-#[derive(Debug)]
 pub struct ServiceRuntime<Application>
 where
     Application: Service,
 {
+    application_parameters: Cell<Option<<Application::Abi as ServiceAbi>::Parameters>>,
     chain_id: Cell<Option<ChainId>>,
     next_block_height: Cell<Option<BlockHeight>>,
-    _abi: std::marker::PhantomData<Application>,
 }
 
 impl<Application> ServiceRuntime<Application>
@@ -26,10 +25,18 @@ where
     /// Creates a new [`ServiceRuntime`] instance for a service.
     pub(crate) fn new() -> Self {
         ServiceRuntime {
+            application_parameters: Cell::new(None),
             chain_id: Cell::new(None),
             next_block_height: Cell::new(None),
-            _abi: std::marker::PhantomData,
         }
+    }
+
+    /// Returns the application parameters provided when the application was created.
+    pub fn application_parameters(&self) -> <Application::Abi as ServiceAbi>::Parameters {
+        Self::fetch_value_through_cache(&self.application_parameters, || {
+            let bytes = wit::application_parameters();
+            serde_json::from_slice(&bytes).expect("Application parameters must be deserializable")
+        })
     }
 
     /// Returns the ID of the current chain.
