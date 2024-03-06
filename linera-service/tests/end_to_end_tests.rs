@@ -807,9 +807,38 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
     let mut node_service_a = client_a.run_node_service(8081).await.unwrap();
     let mut node_service_b = client_b.run_node_service(8082).await.unwrap();
 
+    node_service_a
+        .request_application(&chain_a, &token1)
+        .await
+        .unwrap();
+    node_service_b
+        .request_application(&chain_b, &token0)
+        .await
+        .unwrap();
+    node_service_admin
+        .request_application(&chain_admin, &token0)
+        .await
+        .unwrap();
+    node_service_admin
+        .request_application(&chain_admin, &token1)
+        .await
+        .unwrap();
+
     let app_fungible0_a = FungibleApp(
         node_service_a
             .make_application(&chain_a, &token0)
+            .await
+            .unwrap(),
+    );
+    let app_fungible1_a = FungibleApp(
+        node_service_a
+            .make_application(&chain_a, &token1)
+            .await
+            .unwrap(),
+    );
+    let app_fungible0_b = FungibleApp(
+        node_service_b
+            .make_application(&chain_b, &token0)
             .await
             .unwrap(),
     );
@@ -833,21 +862,12 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
             (owner_admin, Amount::ZERO),
         ])
         .await;
-
-    node_service_admin
-        .request_application(&chain_admin, &token0)
-        .await
-        .unwrap();
     let app_fungible0_admin = FungibleApp(
         node_service_admin
             .make_application(&chain_admin, &token0)
             .await
             .unwrap(),
     );
-    node_service_admin
-        .request_application(&chain_admin, &token1)
-        .await
-        .unwrap();
     let app_fungible1_admin = FungibleApp(
         node_service_admin
             .make_application(&chain_admin, &token1)
@@ -975,22 +995,22 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) {
 
     // Check balances
     app_fungible0_a
-        .assert_balances([(owner_a, Amount::ONE), (owner_b, Amount::ZERO)])
+        .assert_balances([(owner_a, Amount::from_tokens(4)), (owner_b, Amount::ZERO)])
+        .await;
+    app_fungible1_a
+        .assert_balances([(owner_a, Amount::from_tokens(3)), (owner_b, Amount::ZERO)])
         .await;
     app_fungible0_admin
-        .assert_balances([
-            (owner_a, Amount::from_tokens(3)),
-            (owner_b, Amount::from_tokens(6)),
-        ])
+        .assert_balances([(owner_a, Amount::ZERO), (owner_b, Amount::ZERO)])
+        .await;
+    app_fungible0_b
+        .assert_balances([(owner_a, Amount::ZERO), (owner_b, Amount::from_tokens(6))])
         .await;
     app_fungible1_b
-        .assert_balances([(owner_a, Amount::ZERO), (owner_b, Amount::ONE)])
+        .assert_balances([(owner_a, Amount::ZERO), (owner_b, Amount::from_tokens(6))])
         .await;
     app_fungible1_admin
-        .assert_balances([
-            (owner_a, Amount::from_tokens(3)),
-            (owner_b, Amount::from_tokens(5)),
-        ])
+        .assert_balances([(owner_a, Amount::ZERO), (owner_b, Amount::ZERO)])
         .await;
 
     node_service_admin.ensure_is_running().unwrap();

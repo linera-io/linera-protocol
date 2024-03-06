@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::SimpleObject;
+use fungible::Account;
 use linera_sdk::{
     base::{AccountOwner, Amount, ArithmeticError},
     views::{
@@ -62,7 +63,7 @@ pub struct OrderEntry {
     /// The number of token1 being bought or sold
     pub amount: Amount,
     /// The one who has created the order
-    pub owner: AccountOwner,
+    pub account: Account,
     /// The order_id (needed for possible cancel or modification)
     pub order_id: OrderId,
 }
@@ -76,7 +77,7 @@ pub struct KeyBook {
     /// The nature of the order
     pub nature: OrderNature,
     /// The owner used for checks
-    pub owner: AccountOwner,
+    pub account: Account,
 }
 
 /// The AccountInfo used for storing which order_id are owned by
