@@ -23,8 +23,8 @@ pub struct MetaCounterContract {
 linera_sdk::contract!(MetaCounterContract);
 
 impl MetaCounterContract {
-    fn counter_id() -> Result<ApplicationId<counter::CounterAbi>, Error> {
-        Self::parameters()
+    fn counter_id(&mut self) -> ApplicationId<counter::CounterAbi> {
+        self.runtime.application_parameters()
     }
 }
 
@@ -51,9 +51,7 @@ impl Contract for MetaCounterContract {
         _argument: (),
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
-        assert!(Self::parameters().is_ok());
-
-        Self::counter_id()?;
+        self.counter_id();
         // Send a no-op message to ourselves. This is only for testing contracts that send messages
         // on initialization. Since the value is 0 it does not change the counter value.
         Ok(
@@ -107,8 +105,9 @@ impl Contract for MetaCounterContract {
                 Err(Error::MessageFailed)
             }
             Message::Increment(value) => {
-                log::trace!("executing {} via {:?}", value, Self::counter_id()?);
-                self.call_application(true, Self::counter_id()?, &value)?;
+                let counter_id = self.counter_id();
+                log::trace!("executing {} via {:?}", value, counter_id);
+                self.call_application(true, counter_id, &value)?;
                 Ok(ExecutionOutcome::default())
             }
         }

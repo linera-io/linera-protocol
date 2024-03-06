@@ -47,7 +47,7 @@ impl Contract for AmmContract {
         _argument: (),
     ) -> Result<ExecutionOutcome<Self::Message>, AmmError> {
         // Validate that the application parameters were configured correctly.
-        assert!(Self::parameters().is_ok());
+        let _ = self.runtime.application_parameters();
 
         Ok(ExecutionOutcome::default())
     }
@@ -421,9 +421,8 @@ impl AmmContract {
         self.balance(&pool_owner, token_idx)
     }
 
-    fn fungible_id(token_idx: u32) -> Result<ApplicationId<FungibleTokenAbi>, AmmError> {
-        let parameter = Self::parameters()?;
-        Ok(parameter.tokens[token_idx as usize])
+    fn fungible_id(&mut self, token_idx: u32) -> ApplicationId<FungibleTokenAbi> {
+        self.runtime.application_parameters().tokens[token_idx as usize]
     }
 
     fn transfer(
@@ -438,14 +437,14 @@ impl AmmContract {
             amount,
             destination,
         };
-        let token = Self::fungible_id(token_idx).expect("failed to get the token");
+        let token = self.fungible_id(token_idx);
         self.call_application(true, token, &transfer)?;
         Ok(())
     }
 
     fn balance(&mut self, owner: &AccountOwner, token_idx: u32) -> Result<Amount, AmmError> {
         let balance = fungible::ApplicationCall::Balance { owner: *owner };
-        let token = Self::fungible_id(token_idx).expect("failed to get the token");
+        let token = self.fungible_id(token_idx);
         match self.call_application(true, token, &balance)? {
             fungible::FungibleResponse::Balance(balance) => Ok(balance),
             response => Err(AmmError::UnexpectedFungibleResponse(response)),

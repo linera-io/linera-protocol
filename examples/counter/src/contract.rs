@@ -16,6 +16,7 @@ use thiserror::Error;
 
 pub struct CounterContract {
     state: Counter,
+    runtime: ContractRuntime<Self>,
 }
 
 linera_sdk::contract!(CounterContract);
@@ -30,8 +31,8 @@ impl Contract for CounterContract {
     type Storage = SimpleStateStorage<Self>;
     type State = Counter;
 
-    async fn new(state: Counter, _runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
-        Ok(CounterContract { state })
+    async fn new(state: Counter, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
+        Ok(CounterContract { state, runtime })
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
@@ -43,7 +44,7 @@ impl Contract for CounterContract {
         value: u64,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
-        assert!(Self::parameters().is_ok());
+        let _ = self.runtime.application_parameters();
 
         self.state.value = value;
 
@@ -99,7 +100,8 @@ mod tests {
     use assert_matches::assert_matches;
     use futures::FutureExt;
     use linera_sdk::{
-        test::mock_application_parameters, ApplicationCallOutcome, Contract, ExecutionOutcome,
+        test::{mock_application_parameters, test_contract_runtime},
+        ApplicationCallOutcome, Contract, ExecutionOutcome,
     };
     use webassembly_test::webassembly_test;
 
@@ -159,7 +161,10 @@ mod tests {
 
     fn create_and_initialize_counter(initial_value: u64) -> CounterContract {
         let counter = Counter::default();
-        let mut contract = CounterContract { state: counter };
+        let mut contract = CounterContract {
+            state: counter,
+            runtime: test_contract_runtime(),
+        };
 
         mock_application_parameters(&());
 

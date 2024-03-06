@@ -72,7 +72,7 @@ impl Contract for MatchingEngineContract {
         _argument: (),
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
-        assert!(Self::parameters().is_ok());
+        let _ = self.runtime.application_parameters();
 
         Ok(ExecutionOutcome::default())
     }
@@ -204,9 +204,8 @@ impl MatchingEngineContract {
 
     /// The application engine is trading between two tokens. Those tokens are the parameters of the
     /// construction of the exchange and are accessed by index in the system.
-    fn fungible_id(token_idx: u32) -> Result<ApplicationId<FungibleTokenAbi>, MatchingEngineError> {
-        let parameter = Self::parameters()?;
-        Ok(parameter.tokens[token_idx as usize])
+    fn fungible_id(&mut self, token_idx: u32) -> ApplicationId<FungibleTokenAbi> {
+        self.runtime.application_parameters().tokens[token_idx as usize]
     }
 
     /// Calls into the Fungible Token application to receive tokens from the given account.
@@ -245,7 +244,7 @@ impl MatchingEngineContract {
             amount,
             destination,
         };
-        let token = Self::fungible_id(token_idx).expect("failed to get the token");
+        let token = self.fungible_id(token_idx);
         self.call_application(true, token, &transfer)?;
         Ok(())
     }
