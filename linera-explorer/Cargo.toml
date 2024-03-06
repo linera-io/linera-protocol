@@ -25,7 +25,7 @@ linera-service-graphql-client.workspace = true
 once_cell.workspace = true
 reqwest.workspace = true
 serde = { workspace = true, features = [ "derive" ] }
-serde-wasm-bindgen = "0.5"
+serde-wasm-bindgen = "0.6"
 serde_json.workspace = true
 url = "2.5"
 uuid = { version = "1.7", features = [ "v3" ] }

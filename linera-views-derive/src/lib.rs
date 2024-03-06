@@ -427,7 +427,7 @@ pub mod tests {
     fn test_generate_view_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
-            insta::assert_display_snapshot!(
+            insta::assert_snapshot!(
                 format!(
                     "test_generate_view_code{}_{}",
                     if cfg!(feature = "metrics") {
@@ -446,7 +446,7 @@ pub mod tests {
     fn test_generate_hash_view_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
-            insta::assert_display_snapshot!(
+            insta::assert_snapshot!(
                 format!("test_generate_hash_view_code_{}", context.name,),
                 pretty(generate_hash_view_code(input))
             );
@@ -457,7 +457,7 @@ pub mod tests {
     fn test_generate_save_delete_view_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
-            insta::assert_display_snapshot!(
+            insta::assert_snapshot!(
                 format!(
                     "test_generate_save_delete_view_code{}_{}",
                     if cfg!(feature = "metrics") {
@@ -476,7 +476,7 @@ pub mod tests {
     fn test_generate_crypto_hash_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
-            insta::assert_display_snapshot!(pretty(generate_crypto_hash_code(input)));
+            insta::assert_snapshot!(pretty(generate_crypto_hash_code(input)));
         }
     }
 
@@ -484,7 +484,7 @@ pub mod tests {
     fn test_generate_clonable_view_code() {
         for context in SpecificContextInfo::test_cases() {
             let input = context.test_view_input();
-            insta::assert_display_snapshot!(pretty(generate_clonable_view_code(input)));
+            insta::assert_snapshot!(pretty(generate_clonable_view_code(input)));
         }
     }
 

@@ -37,7 +37,7 @@ async-graphql-axum.workspace = true
 async-trait.workspace = true
 axum = { workspace = true, features = ["ws", "headers"] }
 bcs.workspace = true
-cargo_toml = "0.15.3"
+cargo_toml.workspace = true
 chrono = { workspace = true, features = ["clock"] }
 clap.workspace = true
 clap-markdown.workspace = true
