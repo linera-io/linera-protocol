@@ -153,4 +153,21 @@ where
     pub fn close_chain(&mut self) -> Result<(), CloseChainError> {
         wit::close_chain()
     }
+
+    /// Calls another application.
+    pub fn call_application<A: ContractAbi + Send>(
+        &mut self,
+        authenticated: bool,
+        application: ApplicationId<A>,
+        call: &A::ApplicationCall,
+    ) -> A::Response {
+        let call_bytes = bcs::to_bytes(call)
+            .expect("Failed to serialize `ApplicationCall` type for a cross-application call");
+
+        let response_bytes =
+            wit::try_call_application(authenticated, application.forget_abi().into(), &call_bytes);
+
+        bcs::from_bytes(&response_bytes)
+            .expect("Failed to deserialize `Response` type from cross-application call")
+    }
 }
