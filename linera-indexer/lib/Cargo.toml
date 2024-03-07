@@ -22,7 +22,7 @@ async-graphql.workspace = true
 async-graphql-axum.workspace = true
 async-trait.workspace = true
 async-tungstenite = { version = "0.22", features = ["tokio-runtime"] }
-axum = { workspace = true, features = ["ws", "headers"] }
+axum = { workspace = true, features = ["ws"] }
 bcs.workspace = true
 clap.workspace = true
 futures.workspace = true

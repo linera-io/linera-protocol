@@ -96,7 +96,6 @@ macro_rules! bcs_scalar {
             }
         }
 
-        #[$crate::async_graphql::async_trait::async_trait]
         impl $crate::async_graphql::OutputType for $ty {
             fn type_name() -> ::std::borrow::Cow<'static, ::std::primitive::str> {
                 ::std::borrow::Cow::Borrowed(::std::stringify!($ty))

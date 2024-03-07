@@ -12,9 +12,7 @@ use async_graphql::{
     Subscription,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
-use axum::{
-    extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router, Server,
-};
+use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
 use futures::{
     future::{self},
     lock::{Mutex, MutexGuard, OwnedMutexGuard},
@@ -951,8 +949,10 @@ where
         ChainListener::new(self.config, self.clients.clone())
             .run(self.context.clone(), self.storage.clone())
             .await;
-        let serve_fut =
-            Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
+        let serve_fut = axum::serve(
+            tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await?,
+            app,
+        );
         serve_fut.await?;
 
         Ok(())

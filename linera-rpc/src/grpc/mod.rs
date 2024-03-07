@@ -33,7 +33,7 @@ pub enum GrpcError {
     SocketAddr(#[from] std::net::AddrParseError),
 
     #[error(transparent)]
-    InvalidUri(#[from] http::uri::InvalidUri),
+    InvalidUri(#[from] tonic::codegen::http::uri::InvalidUri),
 }
 
 const MEBIBYTE: usize = 1024 * 1024;

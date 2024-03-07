@@ -24,6 +24,8 @@ pub enum IndexerError {
     #[error(transparent)]
     InvalidHeader(#[from] InvalidHeaderValue),
     #[error(transparent)]
+    IoError(#[from] std::io::Error),
+    #[error(transparent)]
     ParserError(#[from] AddrParseError),
     #[error(transparent)]
     ServerError(#[from] hyper::Error),

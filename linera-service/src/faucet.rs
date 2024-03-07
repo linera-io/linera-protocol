@@ -3,7 +3,7 @@
 
 use async_graphql::{EmptySubscription, Error, Object, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
-use axum::{http::StatusCode, response, response::IntoResponse, Extension, Router, Server};
+use axum::{http::StatusCode, response, response::IntoResponse, Extension, Router};
 use futures::lock::Mutex;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
@@ -278,9 +278,11 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        Server::bind(&SocketAddr::from(([0, 0, 0, 0], port)))
-            .serve(app.into_make_service())
-            .await?;
+        axum::serve(
+            tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?,
+            app,
+        )
+        .await?;
 
         Ok(())
     }

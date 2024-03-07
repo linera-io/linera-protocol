@@ -4,7 +4,6 @@
 //! This module defines the trait for indexer runners.
 
 use crate::{common::IndexerError, indexer::Indexer, plugin::Plugin, service::Listener};
-use axum::Server;
 use linera_base::identifiers::ChainId;
 use linera_views::{
     common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
@@ -83,9 +82,11 @@ where
         for plugin in indexer.plugins.values() {
             app = plugin.route(app);
         }
-        Server::bind(&format!("127.0.0.1:{}", port).parse()?)
-            .serve(app.into_make_service())
-            .await?;
+        axum::serve(
+            tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port)).await?,
+            app,
+        )
+        .await?;
         Ok(())
     }
 

@@ -167,7 +167,7 @@ pub enum GrpcError {
     SocketAddr(#[from] AddrParseError),
 
     #[error(transparent)]
-    InvalidUri(#[from] http::uri::InvalidUri),
+    InvalidUri(#[from] tonic::codegen::http::uri::InvalidUri),
 }
 
 #[derive(Clone)]
@@ -199,7 +199,7 @@ where
         self.service.poll_ready(cx)
     }
 
-    fn call(&mut self, request: http::Request<Body>) -> Self::Future {
+    fn call(&mut self, request: tonic::codegen::http::Request<Body>) -> Self::Future {
         #[cfg(with_metrics)]
         let start = Instant::now();
         let future = self.service.call(request);
