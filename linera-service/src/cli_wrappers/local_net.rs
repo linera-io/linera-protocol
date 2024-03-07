@@ -262,24 +262,24 @@ impl LocalNet {
         Ok(command)
     }
 
-    pub fn proxy_port(i: usize) -> usize {
-        9000 + i * 100
+    pub fn proxy_port(validator: usize) -> usize {
+        9000 + validator * 100
     }
 
-    fn shard_port(i: usize, j: usize) -> usize {
-        9000 + i * 100 + j + 1
+    fn shard_port(validator: usize, shard: usize) -> usize {
+        9000 + validator * 100 + shard + 1
     }
 
-    fn internal_port(i: usize) -> usize {
-        10000 + i * 100
+    fn internal_port(validator: usize) -> usize {
+        10000 + validator * 100
     }
 
-    fn proxy_metrics_port(i: usize) -> usize {
-        11000 + i * 100
+    fn proxy_metrics_port(validator: usize) -> usize {
+        11000 + validator * 100
     }
 
-    fn shard_metrics_port(i: usize, j: usize) -> usize {
-        11000 + i * 100 + j + 1
+    fn shard_metrics_port(validator: usize, shard: usize) -> usize {
+        11000 + validator * 100 + shard + 1
     }
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {
@@ -349,21 +349,21 @@ impl LocalNet {
         Ok(())
     }
 
-    async fn run_proxy(&self, i: usize) -> Result<Child> {
+    async fn run_proxy(&self, validator: usize) -> Result<Child> {
         let child = self
             .command_for_binary("linera-proxy")
             .await?
-            .arg(format!("server_{}.json", i))
+            .arg(format!("server_{}.json", validator))
             .spawn_into()?;
 
         match self.network {
             Network::Grpc => {
-                let port = Self::proxy_port(i);
-                let nickname = format!("validator proxy {i}");
+                let port = Self::proxy_port(validator);
+                let nickname = format!("validator proxy {validator}");
                 Self::ensure_grpc_server_has_started(&nickname, port).await?;
             }
             Network::Tcp | Network::Udp => {
-                info!("Letting validator proxy {i} start");
+                info!("Letting validator proxy {validator} start");
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
         }
@@ -388,23 +388,23 @@ impl LocalNet {
         bail!("Failed to start {nickname}");
     }
 
-    async fn run_server(&mut self, i: usize, j: usize) -> Result<Child> {
+    async fn run_server(&mut self, validator: usize, shard: usize) -> Result<Child> {
         let (storage, key) = match self.database {
             Database::Service => (
                 format!(
                     "service:http://{}:{}_server_{}_db",
-                    END_TO_END_STORAGE_SERVICE_ENDPOINT, self.table_name, i
+                    END_TO_END_STORAGE_SERVICE_ENDPOINT, self.table_name, validator
                 ),
-                (i, 0),
+                (validator, 0),
             ),
-            Database::RocksDb => (format!("rocksdb:server_{}_{}.db", i, j), (i, j)),
+            Database::RocksDb => (format!("rocksdb:server_{}_{}.db", validator, shard), (validator, shard)),
             Database::DynamoDb => (
-                format!("dynamodb:{}_server_{}.db:localstack", self.table_name, i),
-                (i, 0),
+                format!("dynamodb:{}_server_{}.db:localstack", self.table_name, validator),
+                (validator, 0),
             ),
             Database::ScyllaDb => (
-                format!("scylladb:{}_server_{}_db", self.table_name, i),
-                (i, 0),
+                format!("scylladb:{}_server_{}_db", self.table_name, validator),
+                (validator, 0),
             ),
         };
         if !self.set_init.contains(&key) {
@@ -445,19 +445,19 @@ impl LocalNet {
         command.arg("run");
         let child = command
             .args(["--storage", &storage])
-            .args(["--server", &format!("server_{}.json", i)])
-            .args(["--shard", &j.to_string()])
+            .args(["--server", &format!("server_{}.json", validator)])
+            .args(["--shard", &shard.to_string()])
             .args(["--genesis", "genesis.json"])
             .spawn_into()?;
 
         match self.network {
             Network::Grpc => {
-                let port = Self::shard_port(i, j);
-                let nickname = format!("validator server {i}:{j}");
+                let port = Self::shard_port(validator, shard);
+                let nickname = format!("validator server {validator}:{shard}");
                 Self::ensure_grpc_server_has_started(&nickname, port).await?;
             }
             Network::Tcp | Network::Udp => {
-                info!("Letting validator server {i}:{j} start");
+                info!("Letting validator server {validator}:{shard} start");
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
         }
@@ -465,63 +465,63 @@ impl LocalNet {
     }
 
     async fn run(&mut self) -> Result<()> {
-        for i in 0..self.num_initial_validators {
-            self.start_validator(i).await?;
+        for validator in 0..self.num_initial_validators {
+            self.start_validator(validator).await?;
         }
         Ok(())
     }
 
-    pub async fn start_validator(&mut self, i: usize) -> Result<()> {
-        let proxy = self.run_proxy(i).await?;
-        let mut validator = Validator::new(proxy);
-        for j in 0..self.num_shards {
-            let server = self.run_server(i, j).await?;
-            validator.add_server(server);
+    pub async fn start_validator(&mut self, validator: usize) -> Result<()> {
+        let proxy = self.run_proxy(validator).await?;
+        let mut validator_proxy = Validator::new(proxy);
+        for shard in 0..self.num_shards {
+            let server = self.run_server(validator, shard).await?;
+            validator_proxy.add_server(server);
         }
-        self.running_validators.insert(i, validator);
+        self.running_validators.insert(validator, validator_proxy);
         Ok(())
     }
 }
 
 #[cfg(any(test, feature = "test"))]
 impl LocalNet {
-    pub fn validator_name(&self, i: usize) -> Option<&String> {
-        self.validator_names.get(&i)
+    pub fn validator_name(&self, validator: usize) -> Option<&String> {
+        self.validator_names.get(&validator)
     }
 
-    pub async fn generate_validator_config(&mut self, i: usize) -> Result<()> {
+    pub async fn generate_validator_config(&mut self, validator: usize) -> Result<()> {
         let stdout = self
             .command_for_binary("linera-server")
             .await?
             .arg("generate")
             .arg("--validators")
-            .arg(&self.configuration_string(i)?)
+            .arg(&self.configuration_string(validator)?)
             .spawn_and_wait_for_stdout()
             .await?;
-        self.validator_names.insert(i, stdout.trim().to_string());
+        self.validator_names.insert(validator, stdout.trim().to_string());
         Ok(())
     }
 
-    pub async fn terminate_server(&mut self, i: usize, j: usize) -> Result<()> {
+    pub async fn terminate_server(&mut self, validator: usize, shard: usize) -> Result<()> {
         self.running_validators
-            .get_mut(&i)
+            .get_mut(&validator)
             .context("server not found")?
-            .terminate_server(j)
+            .terminate_server(shard)
             .await?;
         Ok(())
     }
 
-    pub fn remove_validator(&mut self, i: usize) -> Result<()> {
+    pub fn remove_validator(&mut self, validator: usize) -> Result<()> {
         self.running_validators
-            .remove(&i)
+            .remove(&validator)
             .context("validator not found")?;
         Ok(())
     }
 
-    pub async fn start_server(&mut self, i: usize, j: usize) -> Result<()> {
-        let server = self.run_server(i, j).await?;
+    pub async fn start_server(&mut self, validator: usize, shard: usize) -> Result<()> {
+        let server = self.run_server(validator, shard).await?;
         self.running_validators
-            .get_mut(&i)
+            .get_mut(&validator)
             .context("could not find server")?
             .add_server(server);
         Ok(())
