@@ -11,8 +11,8 @@ use fungible::{ApplicationCall, FungibleResponse, Message, Operation};
 use linera_sdk::{
     base::{Account, AccountOwner, Amount, Owner, SessionId, WithContractAbi},
     contract::system_api,
-    ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
-    OperationContext, SessionCallOutcome, ViewStateStorage,
+    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, SessionCallOutcome,
+    ViewStateStorage,
 };
 use native_fungible::TICKER_SYMBOL;
 use thiserror::Error;
@@ -30,7 +30,7 @@ impl Contract for NativeFungibleToken {
 
     async fn initialize(
         &mut self,
-        _context: &OperationContext,
+        _runtime: &mut ContractRuntime,
         state: Self::InitializationArgument,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
@@ -51,7 +51,7 @@ impl Contract for NativeFungibleToken {
 
     async fn execute_operation(
         &mut self,
-        context: &OperationContext,
+        runtime: &mut ContractRuntime,
         operation: Self::Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         match operation {
@@ -60,7 +60,7 @@ impl Contract for NativeFungibleToken {
                 amount,
                 target_account,
             } => {
-                Self::check_account_authentication(context.authenticated_signer, owner)?;
+                Self::check_account_authentication(runtime.authenticated_signer(), owner)?;
                 let account_owner = owner;
                 let owner = self.normalize_owner(owner);
 
@@ -78,7 +78,7 @@ impl Contract for NativeFungibleToken {
                 target_account,
             } => {
                 Self::check_account_authentication(
-                    context.authenticated_signer,
+                    runtime.authenticated_signer(),
                     source_account.owner,
                 )?;
 
@@ -104,7 +104,7 @@ impl Contract for NativeFungibleToken {
     // to be the only message used here, simple message (no authentication, not tracked)
     async fn execute_message(
         &mut self,
-        context: &MessageContext,
+        runtime: &mut ContractRuntime,
         message: Self::Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Messages for now don't do anything, just pass messages around
@@ -123,7 +123,7 @@ impl Contract for NativeFungibleToken {
                 amount,
                 target_account,
             } => {
-                Self::check_account_authentication(context.authenticated_signer, owner)?;
+                Self::check_account_authentication(runtime.authenticated_signer(), owner)?;
                 Ok(self.get_transfer_outcome(owner, target_account, amount))
             }
         }
@@ -131,7 +131,7 @@ impl Contract for NativeFungibleToken {
 
     async fn handle_application_call(
         &mut self,
-        context: &CalleeContext,
+        runtime: &mut ContractRuntime,
         call: ApplicationCall,
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<
@@ -153,7 +153,7 @@ impl Contract for NativeFungibleToken {
                 amount,
                 destination,
             } => {
-                Self::check_account_authentication(context.authenticated_signer, owner)?;
+                Self::check_account_authentication(runtime.authenticated_signer(), owner)?;
                 let account_owner = owner;
                 let owner = self.normalize_owner(owner);
 
@@ -175,7 +175,7 @@ impl Contract for NativeFungibleToken {
                 target_account,
             } => {
                 Self::check_account_authentication(
-                    context.authenticated_signer,
+                    runtime.authenticated_signer(),
                     source_account.owner,
                 )?;
 
@@ -209,7 +209,7 @@ impl Contract for NativeFungibleToken {
 
     async fn handle_session_call(
         &mut self,
-        _context: &CalleeContext,
+        _runtime: &mut ContractRuntime,
         _state: Self::SessionState,
         _request: Self::SessionCall,
         _forwarded_sessions: Vec<SessionId>,

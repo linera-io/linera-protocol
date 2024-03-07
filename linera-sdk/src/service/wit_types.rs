@@ -8,15 +8,13 @@
 // Export the service interface.
 wit_bindgen_guest_rust::export!("service.wit");
 
-pub use self::service::{ChainId, CryptoHash, QueryContext};
 use super::__service_handle_query;
 
 /// Implementation of the service WIT entrypoints.
 pub struct Service;
 
 impl service::Service for Service {
-    fn handle_query(context: QueryContext, argument: Vec<u8>) -> Result<Vec<u8>, String> {
-        let context = context.into();
-        unsafe { __service_handle_query(context, argument) }
+    fn handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String> {
+        unsafe { __service_handle_query(argument) }
     }
 }

@@ -9,7 +9,7 @@ use self::state::Amm;
 use amm::{AmmError, Operation};
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use async_trait::async_trait;
-use linera_sdk::{base::WithServiceAbi, QueryContext, Service, ViewStateStorage};
+use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime, ViewStateStorage};
 use std::sync::Arc;
 
 linera_sdk::service!(Amm);
@@ -25,7 +25,7 @@ impl Service for Amm {
 
     async fn handle_query(
         self: Arc<Self>,
-        _context: &QueryContext,
+        _runtime: &ServiceRuntime,
         request: Request,
     ) -> Result<Response, AmmError> {
         let schema = Schema::build(self.clone(), MutationRoot, EmptySubscription).finish();

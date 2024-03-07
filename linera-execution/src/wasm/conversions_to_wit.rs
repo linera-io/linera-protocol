@@ -8,40 +8,14 @@
 
 #![allow(clippy::duplicate_mod)]
 
-use super::{contract, contract_system_api, service, service_system_api};
-use crate::{
-    CallOutcome, CalleeContext, MessageContext, MessageId, OperationContext, QueryContext,
-    SessionId, UserApplicationId,
-};
+use super::{contract, contract_system_api, service_system_api};
+use crate::{CallOutcome, MessageId, SessionId, UserApplicationId};
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::Amount,
     identifiers::{Account, ChainId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
-
-impl From<OperationContext> for contract::OperationContext {
-    fn from(host: OperationContext) -> Self {
-        contract::OperationContext {
-            chain_id: host.chain_id.into(),
-            authenticated_signer: host.authenticated_signer.map(|owner| owner.0.into()),
-            height: host.height.0,
-            index: host.index,
-        }
-    }
-}
-
-impl From<MessageContext> for contract::MessageContext {
-    fn from(host: MessageContext) -> Self {
-        contract::MessageContext {
-            chain_id: host.chain_id.into(),
-            is_bouncing: host.is_bouncing,
-            authenticated_signer: host.authenticated_signer.map(|owner| owner.0.into()),
-            height: host.height.0,
-            message_id: host.message_id.into(),
-        }
-    }
-}
 
 impl From<MessageId> for service_system_api::MessageId {
     fn from(host: MessageId) -> Self {
@@ -69,27 +43,6 @@ impl From<MessageId> for contract::MessageId {
             chain_id: host.chain_id.into(),
             height: host.height.0,
             index: host.index,
-        }
-    }
-}
-
-impl From<CalleeContext> for contract::CalleeContext {
-    fn from(host: CalleeContext) -> Self {
-        contract::CalleeContext {
-            chain_id: host.chain_id.into(),
-            authenticated_signer: host.authenticated_signer.map(|owner| owner.0.into()),
-            authenticated_caller_id: host
-                .authenticated_caller_id
-                .map(contract::ApplicationId::from),
-        }
-    }
-}
-
-impl From<QueryContext> for service::QueryContext {
-    fn from(host: QueryContext) -> Self {
-        service::QueryContext {
-            chain_id: host.chain_id.into(),
-            next_block_height: host.next_block_height.into(),
         }
     }
 }
@@ -157,28 +110,10 @@ impl From<ChainId> for contract::ChainId {
     }
 }
 
-impl From<ChainId> for service::ChainId {
-    fn from(chain_id: ChainId) -> Self {
-        chain_id.0.into()
-    }
-}
-
 impl From<CryptoHash> for contract::CryptoHash {
     fn from(crypto_hash: CryptoHash) -> Self {
         let [part1, part2, part3, part4]: [u64; 4] = crypto_hash.into();
         contract::CryptoHash {
-            part1,
-            part2,
-            part3,
-            part4,
-        }
-    }
-}
-
-impl From<CryptoHash> for service::CryptoHash {
-    fn from(crypto_hash: CryptoHash) -> Self {
-        let [part1, part2, part3, part4]: [u64; 4] = crypto_hash.into();
-        service::CryptoHash {
             part1,
             part2,
             part3,

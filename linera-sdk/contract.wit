@@ -1,53 +1,22 @@
-initialize: func(context: operation-context, argument: list<u8>) -> result<execution-outcome, string>
-
-execute-operation: func(
-    context: operation-context,
-    operation: list<u8>,
-) -> result<execution-outcome, string>
-
-execute-message: func(
-    context: message-context,
-    message: list<u8>,
-) -> result<execution-outcome, string>
+initialize: func(argument: list<u8>) -> result<execution-outcome, string>
+execute-operation: func(operation: list<u8>) -> result<execution-outcome, string>
+execute-message: func(message: list<u8>) -> result<execution-outcome, string>
 
 handle-application-call: func(
-    context: callee-context,
     argument: list<u8>,
     forwarded-sessions: list<session-id>,
 ) -> result<application-call-outcome, string>
 
 handle-session-call: func(
-    context: callee-context,
     state: session-state,
     argument: list<u8>,
     forwarded-sessions: list<session-id>,
 ) -> result<session-call-outcome, string>
 
-record operation-context {
-    chain-id: chain-id,
-    authenticated-signer: option<owner>,
-    height: block-height,
-    index: u32,
-}
-
-record message-context {
-    chain-id: chain-id,
-    is-bouncing: bool,
-    authenticated-signer: option<owner>,
-    height: block-height,
-    message-id: message-id,
-}
-
 record message-id {
     chain-id: chain-id,
     height: block-height,
     index: u32,
-}
-
-record callee-context {
-    chain-id: chain-id,
-    authenticated-signer: option<owner>,
-    authenticated-caller-id: option<application-id>,
 }
 
 record application-id {
@@ -56,7 +25,6 @@ record application-id {
 }
 
 type chain-id = crypto-hash
-type owner = crypto-hash
 type block-height = u64
 type bytecode-id = message-id
 
