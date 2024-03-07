@@ -13,8 +13,8 @@ use linera_sdk::{
     contract::system_api,
     ensure,
     views::View,
-    ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
-    OperationContext, OutgoingMessage, Resources, SessionCallOutcome, ViewStateStorage,
+    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
+    Resources, SessionCallOutcome, ViewStateStorage,
 };
 use state::{CrowdFunding, Status};
 use thiserror::Error;
@@ -32,7 +32,7 @@ impl Contract for CrowdFunding {
 
     async fn initialize(
         &mut self,
-        _context: &OperationContext,
+        _runtime: &mut ContractRuntime,
         argument: InitializationArgument,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
@@ -50,14 +50,14 @@ impl Contract for CrowdFunding {
 
     async fn execute_operation(
         &mut self,
-        context: &OperationContext,
+        runtime: &mut ContractRuntime,
         operation: Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         let mut outcome = ExecutionOutcome::default();
 
         match operation {
             Operation::PledgeWithTransfer { owner, amount } => {
-                if context.chain_id == system_api::current_application_id().creation.chain_id {
+                if runtime.chain_id() == system_api::current_application_id().creation.chain_id {
                     self.execute_pledge_with_account(owner, amount).await?;
                 } else {
                     self.execute_pledge_with_transfer(&mut outcome, owner, amount)?;
@@ -72,13 +72,13 @@ impl Contract for CrowdFunding {
 
     async fn execute_message(
         &mut self,
-        context: &MessageContext,
+        runtime: &mut ContractRuntime,
         message: Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         match message {
             Message::PledgeWithAccount { owner, amount } => {
                 ensure!(
-                    context.chain_id == system_api::current_application_id().creation.chain_id,
+                    runtime.chain_id() == system_api::current_application_id().creation.chain_id,
                     Error::CampaignChainOnly
                 );
                 self.execute_pledge_with_account(owner, amount).await?;
@@ -89,7 +89,7 @@ impl Contract for CrowdFunding {
 
     async fn handle_application_call(
         &mut self,
-        context: &CalleeContext,
+        runtime: &mut ContractRuntime,
         call: ApplicationCall,
         sessions: Vec<SessionId>,
     ) -> Result<
@@ -101,7 +101,7 @@ impl Contract for CrowdFunding {
             ApplicationCall::PledgeWithSessions { source } => {
                 // Only sessions on the campaign chain are supported.
                 ensure!(
-                    context.chain_id == system_api::current_application_id().creation.chain_id,
+                    runtime.chain_id() == system_api::current_application_id().creation.chain_id,
                     Error::CampaignChainOnly
                 );
                 // In real-life applications, the source could be constrained so that a
@@ -120,7 +120,7 @@ impl Contract for CrowdFunding {
 
     async fn handle_session_call(
         &mut self,
-        _context: &CalleeContext,
+        _runtime: &mut ContractRuntime,
         _state: Self::SessionState,
         _call: (),
         _forwarded_sessions: Vec<SessionId>,

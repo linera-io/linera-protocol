@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use crowd_funding::Operation;
 
 use linera_sdk::{
-    base::WithServiceAbi, graphql::GraphQLMutationRoot, QueryContext, Service, ViewStateStorage,
+    base::WithServiceAbi, graphql::GraphQLMutationRoot, Service, ServiceRuntime, ViewStateStorage,
 };
 use state::CrowdFunding;
 use std::sync::Arc;
@@ -29,7 +29,7 @@ impl Service for CrowdFunding {
 
     async fn handle_query(
         self: Arc<Self>,
-        _context: &QueryContext,
+        _runtime: &ServiceRuntime,
         request: Request,
     ) -> Result<Response, Self::Error> {
         let schema =

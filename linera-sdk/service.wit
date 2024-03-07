@@ -1,16 +1,1 @@
-handle-query: func(context: query-context, argument: list<u8>) -> result<list<u8>, string>
-
-record query-context {
-    chain-id: chain-id,
-    next-block-height: block-height,
-}
-
-type chain-id = crypto-hash
-type block-height = u64
-
-record crypto-hash {
-    part1: u64,
-    part2: u64,
-    part3: u64,
-    part4: u64,
-}
+handle-query: func(argument: list<u8>) -> result<list<u8>, string>

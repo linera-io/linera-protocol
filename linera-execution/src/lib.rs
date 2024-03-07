@@ -334,20 +334,23 @@ pub trait BaseRuntime {
     /// The current chain ID.
     fn chain_id(&mut self) -> Result<ChainId, ExecutionError>;
 
+    /// The current block height.
+    fn block_height(&mut self) -> Result<BlockHeight, ExecutionError>;
+
     /// The current application ID.
     fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError>;
 
     /// The current application parameters.
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError>;
 
+    /// Reads the system timestamp.
+    fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError>;
+
     /// Reads the balance of the chain.
     fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError>;
 
     /// Reads the owner balance.
     fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError>;
-
-    /// Reads the system timestamp.
-    fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError>;
 
     /// Reads the current ownership configuration for this chain.
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError>;
@@ -466,6 +469,20 @@ pub struct CallOutcome {
 }
 
 pub trait ContractRuntime: BaseRuntime {
+    /// The authenticated signer for this execution, if there is one.
+    fn authenticated_signer(&mut self) -> Result<Option<Owner>, ExecutionError>;
+
+    /// The current message ID, if there is one.
+    fn message_id(&mut self) -> Result<Option<MessageId>, ExecutionError>;
+
+    /// If the current message (if there is one) was rejected by its destination and is now
+    /// bouncing back.
+    fn message_is_bouncing(&mut self) -> Result<Option<bool>, ExecutionError>;
+
+    /// The optional authenticated caller application ID, if it was provided and if there is one
+    /// based on the execution context.
+    fn authenticated_caller_id(&mut self) -> Result<Option<UserApplicationId>, ExecutionError>;
+
     /// Returns the amount of execution fuel remaining before execution is aborted.
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError>;
 

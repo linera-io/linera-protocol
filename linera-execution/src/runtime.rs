@@ -7,9 +7,9 @@ use crate::{
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
-    ExecutionError, ExecutionOutcome, RawExecutionOutcome, ServiceRuntime, SessionId,
-    UserApplicationDescription, UserApplicationId, UserContractCode, UserContractInstance,
-    UserServiceInstance,
+    ExecutionError, ExecutionOutcome, MessageContext, RawExecutionOutcome, ServiceRuntime,
+    SessionId, UserApplicationDescription, UserApplicationId, UserContractCode,
+    UserContractInstance, UserServiceInstance,
 };
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -45,6 +45,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     height: BlockHeight,
     /// The authenticated signer of the operation or message, if any.
     authenticated_signer: Option<Owner>,
+    /// The current message being executed, if there is one.
+    executing_message: Option<ExecutingMessage>,
     /// The index of the next message to be created.
     next_message_index: u32,
 
@@ -92,6 +94,8 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
 /// The runtime status of an application.
 #[derive(Debug, Clone)]
 struct ApplicationStatus {
+    /// The caller application ID, if forwarded during the call.
+    caller_id: Option<UserApplicationId>,
     /// The application ID.
     id: UserApplicationId,
     /// The parameters from the application description.
@@ -254,11 +258,13 @@ struct SessionState {
 }
 
 impl<UserInstance> SyncRuntimeInternal<UserInstance> {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         chain_id: ChainId,
         height: BlockHeight,
         authenticated_signer: Option<Owner>,
         next_message_index: u32,
+        executing_message: Option<ExecutingMessage>,
         execution_state_sender: ExecutionStateSender,
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
@@ -268,6 +274,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             height,
             authenticated_signer,
             next_message_index,
+            executing_message,
             execution_state_sender,
             loaded_applications: HashMap::new(),
             call_stack: Vec::new(),
@@ -395,6 +402,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
             authenticated_caller_id,
         };
         self.push_application(ApplicationStatus {
+            caller_id: authenticated_caller_id,
             id: callee_id,
             parameters: application.parameters,
             // Allow further nested calls to be authenticated if this one is.
@@ -618,6 +626,10 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().chain_id()
     }
 
+    fn block_height(&mut self) -> Result<BlockHeight, ExecutionError> {
+        self.inner().block_height()
+    }
+
     fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError> {
         self.inner().application_id()
     }
@@ -626,16 +638,16 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().application_parameters()
     }
 
+    fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
+        self.inner().read_system_timestamp()
+    }
+
     fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError> {
         self.inner().read_chain_balance()
     }
 
     fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError> {
         self.inner().read_owner_balance(owner)
-    }
-
-    fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
-        self.inner().read_system_timestamp()
     }
 
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError> {
@@ -723,12 +735,22 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         Ok(self.chain_id)
     }
 
+    fn block_height(&mut self) -> Result<BlockHeight, ExecutionError> {
+        Ok(self.height)
+    }
+
     fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError> {
         Ok(self.current_application().id)
     }
 
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError> {
         Ok(self.current_application().parameters.clone())
+    }
+
+    fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
+        self.execution_state_sender
+            .send_request(|callback| Request::SystemTimestamp { callback })?
+            .recv_response()
     }
 
     fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError> {
@@ -740,12 +762,6 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| Request::OwnerBalance { owner, callback })?
-            .recv_response()
-    }
-
-    fn read_system_timestamp(&mut self) -> Result<Timestamp, ExecutionError> {
-        self.execution_state_sender
-            .send_request(|callback| Request::SystemTimestamp { callback })?
             .recv_response()
     }
 
@@ -933,11 +949,16 @@ impl ContractSyncRuntime {
         resource_controller: ResourceController,
         action: UserAction,
     ) -> Result<(Vec<ExecutionOutcome>, ResourceController), ExecutionError> {
+        let executing_message = match &action {
+            UserAction::Message(context, _) => Some(context.into()),
+            _ => None,
+        };
         let mut runtime = SyncRuntimeInternal::new(
             chain_id,
             action.height(),
             action.signer(),
             action.next_message_index(),
+            executing_message,
             execution_state_sender,
             refund_grant_to,
             resource_controller,
@@ -945,6 +966,7 @@ impl ContractSyncRuntime {
         let (code, description) = runtime.load_contract(application_id)?;
         let signer = action.signer();
         runtime.push_application(ApplicationStatus {
+            caller_id: None,
             id: application_id,
             parameters: description.parameters,
             signer,
@@ -992,6 +1014,29 @@ impl ContractSyncRuntime {
 }
 
 impl ContractRuntime for ContractSyncRuntime {
+    fn authenticated_signer(&mut self) -> Result<Option<Owner>, ExecutionError> {
+        Ok(self.inner().authenticated_signer)
+    }
+
+    fn message_id(&mut self) -> Result<Option<MessageId>, ExecutionError> {
+        Ok(self.inner().executing_message.map(|metadata| metadata.id))
+    }
+
+    fn message_is_bouncing(&mut self) -> Result<Option<bool>, ExecutionError> {
+        Ok(self
+            .inner()
+            .executing_message
+            .map(|metadata| metadata.is_bouncing))
+    }
+
+    fn authenticated_caller_id(&mut self) -> Result<Option<UserApplicationId>, ExecutionError> {
+        let mut this = self.inner();
+        if this.call_stack.len() <= 1 {
+            return Ok(None);
+        }
+        Ok(this.current_application().caller_id)
+    }
+
     fn remaining_fuel(&mut self) -> Result<u64, ExecutionError> {
         Ok(self.inner().resource_controller.remaining_fuel())
     }
@@ -1176,6 +1221,7 @@ impl ServiceSyncRuntime {
             context.next_block_height,
             None,
             0,
+            None,
             execution_state_sender,
             None,
             ResourceController::default(),
@@ -1210,6 +1256,7 @@ impl ServiceRuntime for ServiceSyncRuntime {
                 next_block_height: this.height,
             };
             this.push_application(ApplicationStatus {
+                caller_id: None,
                 id: queried_id,
                 parameters: application.parameters,
                 signer: None,
@@ -1222,5 +1269,21 @@ impl ServiceRuntime for ServiceSyncRuntime {
             .handle_query(query_context, argument)?;
         self.inner().pop_application();
         Ok(response)
+    }
+}
+
+/// The origin of the execution.
+#[derive(Clone, Copy, Debug)]
+struct ExecutingMessage {
+    id: MessageId,
+    is_bouncing: bool,
+}
+
+impl From<&MessageContext> for ExecutingMessage {
+    fn from(context: &MessageContext) -> Self {
+        ExecutingMessage {
+            id: context.message_id,
+            is_bouncing: context.is_bouncing,
+        }
     }
 }

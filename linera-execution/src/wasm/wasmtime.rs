@@ -286,58 +286,45 @@ where
 {
     fn initialize(
         &mut self,
-        context: OperationContext,
+        _context: OperationContext,
         argument: Vec<u8>,
     ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
         self.configure_initial_fuel()?;
-        let result = contract::Contract::initialize(
-            &self.application,
-            &mut self.store,
-            context.into(),
-            &argument,
-        )
-        .map(|inner| inner.map(RawExecutionOutcome::from));
+        let result = contract::Contract::initialize(&self.application, &mut self.store, &argument)
+            .map(|inner| inner.map(RawExecutionOutcome::from));
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }
 
     fn execute_operation(
         &mut self,
-        context: OperationContext,
+        _context: OperationContext,
         operation: Vec<u8>,
     ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
         self.configure_initial_fuel()?;
-        let result = contract::Contract::execute_operation(
-            &self.application,
-            &mut self.store,
-            context.into(),
-            &operation,
-        )
-        .map(|inner| inner.map(RawExecutionOutcome::from));
+        let result =
+            contract::Contract::execute_operation(&self.application, &mut self.store, &operation)
+                .map(|inner| inner.map(RawExecutionOutcome::from));
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }
 
     fn execute_message(
         &mut self,
-        context: MessageContext,
+        _context: MessageContext,
         message: Vec<u8>,
     ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
         self.configure_initial_fuel()?;
-        let result = contract::Contract::execute_message(
-            &self.application,
-            &mut self.store,
-            context.into(),
-            &message,
-        )
-        .map(|inner| inner.map(RawExecutionOutcome::from));
+        let result =
+            contract::Contract::execute_message(&self.application, &mut self.store, &message)
+                .map(|inner| inner.map(RawExecutionOutcome::from));
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }
 
     fn handle_application_call(
         &mut self,
-        context: CalleeContext,
+        _context: CalleeContext,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallOutcome, ExecutionError> {
@@ -350,7 +337,6 @@ where
         let result = contract::Contract::handle_application_call(
             &self.application,
             &mut self.store,
-            context.into(),
             &argument,
             &forwarded_sessions,
         )
@@ -361,7 +347,7 @@ where
 
     fn handle_session_call(
         &mut self,
-        context: CalleeContext,
+        _context: CalleeContext,
         session: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
@@ -375,7 +361,6 @@ where
         let result = contract::Contract::handle_session_call(
             &self.application,
             &mut self.store,
-            context.into(),
             &session,
             &argument,
             &forwarded_sessions,
@@ -392,16 +377,11 @@ where
 {
     fn handle_query(
         &mut self,
-        context: QueryContext,
+        _context: QueryContext,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        service::Service::handle_query(
-            &self.application,
-            &mut self.store,
-            context.into(),
-            &argument,
-        )?
-        .map_err(ExecutionError::UserError)
+        service::Service::handle_query(&self.application, &mut self.store, &argument)?
+            .map_err(ExecutionError::UserError)
     }
 }
 

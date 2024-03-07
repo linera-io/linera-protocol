@@ -61,9 +61,10 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{error::Error, fmt::Debug, sync::Arc};
 
 pub use self::{
+    contract::ContractRuntime,
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
-    service::ServiceStateStorage,
+    service::{ServiceRuntime, ServiceStateStorage},
 };
 pub use linera_base::{abi, data_types::Resources, ensure, identifiers::SessionId};
 #[doc(hidden)]
@@ -112,7 +113,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// to channels and messages to be sent to this application on another chain.
     async fn initialize(
         &mut self,
-        context: &OperationContext,
+        runtime: &mut ContractRuntime,
         argument: Self::InitializationArgument,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error>;
 
@@ -125,7 +126,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// to channels and messages to be sent to this application on another chain.
     async fn execute_operation(
         &mut self,
-        context: &OperationContext,
+        runtime: &mut ContractRuntime,
         operation: Self::Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error>;
 
@@ -145,7 +146,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// on another chain and subscription or unsubscription requests to channels.
     async fn execute_message(
         &mut self,
-        context: &MessageContext,
+        runtime: &mut ContractRuntime,
         message: Self::Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error>;
 
@@ -168,7 +169,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// See [`Self::handle_session_call`] for more information on
     async fn handle_application_call(
         &mut self,
-        context: &CalleeContext,
+        runtime: &mut ContractRuntime,
         argument: Self::ApplicationCall,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<
@@ -212,7 +213,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     ///     chains and channel subscription and unsubscription requests.
     async fn handle_session_call(
         &mut self,
-        context: &CalleeContext,
+        runtime: &mut ContractRuntime,
         session: Self::SessionState,
         argument: Self::SessionCall,
         forwarded_sessions: Vec<SessionId>,
@@ -291,7 +292,7 @@ pub trait Service: WithServiceAbi + ServiceAbi {
     /// Executes a read-only query on the state of this application.
     async fn handle_query(
         self: Arc<Self>,
-        context: &QueryContext,
+        runtime: &ServiceRuntime,
         query: Self::Query,
     ) -> Result<Self::QueryResponse, Self::Error>;
 

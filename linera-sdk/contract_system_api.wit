@@ -1,11 +1,18 @@
 chain-id: func() -> chain-id
+block-height: func() -> block-height
 application-id: func() -> application-id
+authenticated-signer: func() -> option<owner>
 application-parameters: func() -> list<u8>
+read-system-timestamp: func() -> timestamp
+
+message-id: func() -> option<message-id>
+message-is-bouncing: func() -> option<bool>
+authenticated-caller-id: func() -> option<application-id>
+
 read-chain-balance: func() -> amount
 read-owner-balance: func(owner: owner) -> amount
 transfer: func(source: option<owner>, destination: account, amount: amount)
 claim: func(source: account, destination: account, amount: amount)
-read-system-timestamp: func() -> timestamp
 
 log: func(message: string, level: log-level)
 

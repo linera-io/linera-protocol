@@ -19,6 +19,10 @@ macro_rules! impl_contract_system_api {
                 BaseRuntime::chain_id(self).map(|chain_id| chain_id.into())
             }
 
+            fn block_height(&mut self) -> Result<contract_system_api::BlockHeight, Self::Error> {
+                BaseRuntime::block_height(self).map(|height| height.into())
+            }
+
             fn application_id(
                 &mut self,
             ) -> Result<contract_system_api::ApplicationId, Self::Error> {
@@ -27,6 +31,37 @@ macro_rules! impl_contract_system_api {
 
             fn application_parameters(&mut self) -> Result<Vec<u8>, Self::Error> {
                 BaseRuntime::application_parameters(self)
+            }
+
+            fn authenticated_signer(
+                &mut self,
+            ) -> Result<Option<contract_system_api::Owner>, Self::Error> {
+                let maybe_owner = ContractRuntime::authenticated_signer(self)?;
+                Ok(maybe_owner.map(|owner| owner.into()))
+            }
+
+            fn read_system_timestamp(
+                &mut self,
+            ) -> Result<contract_system_api::Timestamp, Self::Error> {
+                BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
+            }
+
+            fn message_id(
+                &mut self,
+            ) -> Result<Option<contract_system_api::MessageId>, Self::Error> {
+                let maybe_message_id = ContractRuntime::message_id(self)?;
+                Ok(maybe_message_id.map(|message_id| message_id.into()))
+            }
+
+            fn message_is_bouncing(&mut self) -> Result<Option<bool>, Self::Error> {
+                ContractRuntime::message_is_bouncing(self)
+            }
+
+            fn authenticated_caller_id(
+                &mut self,
+            ) -> Result<Option<contract_system_api::ApplicationId>, Self::Error> {
+                let maybe_caller_id = ContractRuntime::authenticated_caller_id(self)?;
+                Ok(maybe_caller_id.map(|caller_id| caller_id.into()))
             }
 
             fn read_chain_balance(&mut self) -> Result<contract_system_api::Amount, Self::Error> {
@@ -61,12 +96,6 @@ macro_rules! impl_contract_system_api {
                 amount: contract_system_api::Amount,
             ) -> Result<(), Self::Error> {
                 ContractRuntime::claim(self, source.into(), destination.into(), amount.into())
-            }
-
-            fn read_system_timestamp(
-                &mut self,
-            ) -> Result<contract_system_api::Timestamp, Self::Error> {
-                BaseRuntime::read_system_timestamp(self).map(|timestamp| timestamp.micros())
             }
 
             fn chain_ownership(
@@ -180,6 +209,12 @@ macro_rules! impl_service_system_api {
 
             fn chain_id(&mut self) -> Result<service_system_api::ChainId, Self::Error> {
                 BaseRuntime::chain_id(self).map(|chain_id| chain_id.into())
+            }
+
+            fn next_block_height(
+                &mut self,
+            ) -> Result<service_system_api::BlockHeight, Self::Error> {
+                BaseRuntime::block_height(self).map(|height| height.into())
             }
 
             fn application_id(&mut self) -> Result<service_system_api::ApplicationId, Self::Error> {

@@ -9,8 +9,8 @@ use self::state::Counter;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{SessionId, WithContractAbi},
-    ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
-    OperationContext, SessionCallOutcome, SimpleStateStorage,
+    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, SessionCallOutcome,
+    SimpleStateStorage,
 };
 use thiserror::Error;
 
@@ -27,7 +27,7 @@ impl Contract for Counter {
 
     async fn initialize(
         &mut self,
-        _context: &OperationContext,
+        _runtime: &mut ContractRuntime,
         value: u64,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
@@ -40,7 +40,7 @@ impl Contract for Counter {
 
     async fn execute_operation(
         &mut self,
-        _context: &OperationContext,
+        _runtime: &mut ContractRuntime,
         operation: u64,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         self.value += operation;
@@ -49,7 +49,7 @@ impl Contract for Counter {
 
     async fn execute_message(
         &mut self,
-        _context: &MessageContext,
+        _runtime: &mut ContractRuntime,
         _message: (),
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         Err(Error::MessagesNotSupported)
@@ -57,7 +57,7 @@ impl Contract for Counter {
 
     async fn handle_application_call(
         &mut self,
-        _context: &CalleeContext,
+        _runtime: &mut ContractRuntime,
         increment: u64,
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<
@@ -73,7 +73,7 @@ impl Contract for Counter {
 
     async fn handle_session_call(
         &mut self,
-        _context: &CalleeContext,
+        _runtime: &mut ContractRuntime,
         _state: Self::SessionState,
         _call: (),
         _forwarded_sessions: Vec<SessionId>,
@@ -109,10 +109,8 @@ mod tests {
     use assert_matches::assert_matches;
     use futures::FutureExt;
     use linera_sdk::{
-        base::{BlockHeight, ChainId, MessageId},
-        test::mock_application_parameters,
-        ApplicationCallOutcome, CalleeContext, Contract, ExecutionOutcome, MessageContext,
-        OperationContext,
+        test::mock_application_parameters, ApplicationCallOutcome, Contract, ContractRuntime,
+        ExecutionOutcome,
     };
     use webassembly_test::webassembly_test;
 
@@ -124,7 +122,7 @@ mod tests {
         let increment = 42_308_u64;
 
         let result = counter
-            .execute_operation(&dummy_operation_context(), increment)
+            .execute_operation(&mut ContractRuntime::default(), increment)
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
@@ -139,7 +137,7 @@ mod tests {
         let mut counter = create_and_initialize_counter(initial_value);
 
         let result = counter
-            .execute_message(&dummy_message_context(), ())
+            .execute_message(&mut ContractRuntime::default(), ())
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
@@ -155,7 +153,7 @@ mod tests {
         let increment = 8_u64;
 
         let result = counter
-            .handle_application_call(&dummy_callee_context(), increment, vec![])
+            .handle_application_call(&mut ContractRuntime::default(), increment, vec![])
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
@@ -177,7 +175,7 @@ mod tests {
         let mut counter = create_and_initialize_counter(initial_value);
 
         let result = counter
-            .handle_session_call(&dummy_callee_context(), Default::default(), (), vec![])
+            .handle_session_call(&mut ContractRuntime::default(), (), (), vec![])
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
@@ -191,7 +189,7 @@ mod tests {
         mock_application_parameters(&());
 
         let result = counter
-            .initialize(&dummy_operation_context(), initial_value)
+            .initialize(&mut ContractRuntime::default(), initial_value)
             .now_or_never()
             .expect("Initialization of counter state should not await anything");
 
@@ -200,36 +198,5 @@ mod tests {
         assert_eq!(counter.value, initial_value);
 
         counter
-    }
-
-    fn dummy_operation_context() -> OperationContext {
-        OperationContext {
-            chain_id: ChainId([0; 4].into()),
-            authenticated_signer: None,
-            height: BlockHeight(0),
-            index: 0,
-        }
-    }
-
-    fn dummy_message_context() -> MessageContext {
-        MessageContext {
-            chain_id: ChainId([0; 4].into()),
-            is_bouncing: false,
-            authenticated_signer: None,
-            height: BlockHeight(0),
-            message_id: MessageId {
-                chain_id: ChainId([1; 4].into()),
-                height: BlockHeight(1),
-                index: 1,
-            },
-        }
-    }
-
-    fn dummy_callee_context() -> CalleeContext {
-        CalleeContext {
-            chain_id: ChainId([0; 4].into()),
-            authenticated_signer: None,
-            authenticated_caller_id: None,
-        }
     }
 }

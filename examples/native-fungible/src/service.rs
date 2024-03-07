@@ -15,7 +15,7 @@ use linera_sdk::{
     base::{AccountOwner, Amount, WithServiceAbi},
     graphql::GraphQLMutationRoot,
     service::system_api,
-    QueryContext, Service, ViewStateStorage,
+    Service, ServiceRuntime, ViewStateStorage,
 };
 use native_fungible::TICKER_SYMBOL;
 use std::sync::Arc;
@@ -34,7 +34,7 @@ impl Service for NativeFungibleToken {
 
     async fn handle_query(
         self: Arc<Self>,
-        _context: &QueryContext,
+        _runtime: &ServiceRuntime,
         request: Request,
     ) -> Result<Response, Self::Error> {
         let schema =
