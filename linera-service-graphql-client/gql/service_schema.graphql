@@ -495,7 +495,20 @@ type MutationRoot {
 	Creates (or activates) a new chain by installing the given authentication keys.
 	This will automatically subscribe to the future committees created by `admin_id`.
 	"""
-	openMultiOwnerChain(chainId: ChainId!, publicKeys: [PublicKey!]!, weights: [Int!], multiLeaderRounds: Int, balance: Amount, fastRoundMs: Int, baseTimeoutMs: Int! = 10000, timeoutIncrementMs: Int! = 1000): ChainId!
+	openMultiOwnerChain(		chainId: ChainId!,		publicKeys: [PublicKey!]!,		weights: [Int!],		multiLeaderRounds: Int,		balance: Amount,
+		"""
+		The duration of the fast round, in milliseconds; default: no timeout
+		"""
+		fastRoundMs: Int,
+		"""
+		The duration of the first single-leader and all multi-leader rounds
+		"""
+		baseTimeoutMs: Int! = 10000,
+		"""
+		The number of milliseconds by which the timeout increases after each single-leader round
+		"""
+		timeoutIncrementMs: Int! = 1000
+	): ChainId!
 	"""
 	Closes the chain.
 	"""
@@ -507,7 +520,20 @@ type MutationRoot {
 	"""
 	Changes the authentication key of the chain.
 	"""
-	changeMultipleOwners(chainId: ChainId!, newPublicKeys: [PublicKey!]!, newWeights: [Int!]!, multiLeaderRounds: Int!, fastRoundMs: Int, baseTimeoutMs: Int! = 10000, timeoutIncrementMs: Int! = 1000): CryptoHash!
+	changeMultipleOwners(		chainId: ChainId!,		newPublicKeys: [PublicKey!]!,		newWeights: [Int!]!,		multiLeaderRounds: Int!,
+		"""
+		The duration of the fast round, in milliseconds; default: no timeout
+		"""
+		fastRoundMs: Int,
+		"""
+		The duration of the first single-leader and all multi-leader rounds
+		"""
+		baseTimeoutMs: Int! = 10000,
+		"""
+		The number of milliseconds by which the timeout increases after each single-leader round
+		"""
+		timeoutIncrementMs: Int! = 1000
+	): CryptoHash!
 	"""
 	Changes the application permissions configuration on this chain.
 	"""
@@ -808,6 +834,8 @@ type VersionInfo {
 	witHash: String!
 }
 
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: QueryRoot
 	mutation: MutationRoot
