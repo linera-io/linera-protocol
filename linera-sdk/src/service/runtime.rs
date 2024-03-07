@@ -3,7 +3,7 @@
 
 //! Runtime types to interface with the host executing the service.
 
-use super::service_system_api as wit;
+use super::wit_system_api as wit;
 use crate::Service;
 use linera_base::{
     abi::ServiceAbi,

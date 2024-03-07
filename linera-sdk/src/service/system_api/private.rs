@@ -4,7 +4,7 @@
 //! Functions and types that interface with the system API available to application services but
 //! that shouldn't be used by applications directly.
 
-use super::super::service_system_api as wit;
+use super::super::wit_system_api as wit;
 use linera_base::identifiers::ApplicationId;
 
 /// Retrieves the current application parameters.

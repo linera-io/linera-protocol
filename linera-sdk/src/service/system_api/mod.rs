@@ -9,7 +9,7 @@ mod private;
 pub mod private;
 
 pub(crate) use self::private::{current_application_parameters, query_application};
-use super::service_system_api as wit;
+use super::wit_system_api as wit;
 use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::{ApplicationId, ChainId, Owner},
