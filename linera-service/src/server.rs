@@ -13,9 +13,7 @@ use linera_rpc::{
         CrossChainConfig, NetworkProtocol, NotificationConfig, ShardConfig, ShardId, TlsConfig,
         ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
     },
-    grpc_network::GrpcServer,
-    simple_network,
-    transport::TransportProtocol,
+    grpc, simple,
 };
 use linera_service::{
     config::{
@@ -66,7 +64,7 @@ impl ServerContext {
         &self,
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
-        protocol: TransportProtocol,
+        protocol: simple::TransportProtocol,
     ) -> Result<(), anyhow::Error>
     where
         S: Storage + Clone + Send + Sync + 'static,
@@ -85,7 +83,7 @@ impl ServerContext {
                 if let Some(port) = shard.metrics_port {
                     Self::start_metrics(listen_address, &port);
                 }
-                let server = simple_network::Server::new(
+                let server = simple::Server::new(
                     internal_network,
                     listen_address.to_string(),
                     shard.port,
@@ -128,7 +126,7 @@ impl ServerContext {
                 if let Some(port) = shard.metrics_port {
                     Self::start_metrics(listen_address, &port);
                 }
-                let spawned_server = match GrpcServer::spawn(
+                let spawned_server = match grpc::GrpcServer::spawn(
                     listen_address.to_string(),
                     shard.port,
                     state,
@@ -520,7 +518,7 @@ async fn run(options: ServerOptions) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use linera_rpc::transport::TransportProtocol;
+    use linera_rpc::simple::TransportProtocol;
 
     #[test]
     fn test_validator_options() {

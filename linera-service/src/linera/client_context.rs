@@ -51,8 +51,8 @@ use {
         Operation,
     },
     linera_rpc::{
-        config::NetworkProtocol, grpc_network::GrpcClient, mass::MassClient, simple_network,
-        RpcMessage,
+        config::NetworkProtocol, grpc::GrpcClient, mass_client::MassClient,
+        simple::SimpleMassClient, RpcMessage,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -736,7 +736,7 @@ impl ClientContext {
             let client: Box<dyn MassClient> = match config.network.protocol {
                 NetworkProtocol::Simple(protocol) => {
                     let network = config.network.clone_with_protocol(protocol);
-                    Box::new(simple_network::SimpleMassClient::new(
+                    Box::new(SimpleMassClient::new(
                         network,
                         self.send_timeout,
                         self.recv_timeout,

@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 
-use crate::{grpc_network::GrpcClient, simple_network::SimpleClient};
+use crate::{grpc::GrpcClient, simple::SimpleClient};
 use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
@@ -52,6 +52,7 @@ impl ValidatorNode for Client {
                     .handle_lite_certificate(certificate, delivery)
                     .await
             }
+
             Client::Simple(simple_client) => {
                 simple_client
                     .handle_lite_certificate(certificate, delivery)
@@ -72,6 +73,7 @@ impl ValidatorNode for Client {
                     .handle_certificate(certificate, blobs, delivery)
                     .await
             }
+
             Client::Simple(simple_client) => {
                 simple_client
                     .handle_certificate(certificate, blobs, delivery)

@@ -15,17 +15,17 @@ use linera_rpc::{
     config::{
         ShardConfig, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
     },
-    grpc_network::{
-        grpc::{
+    grpc::{
+        api::{
             notifier_service_server::{NotifierService, NotifierServiceServer},
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
             BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, LiteCertificate,
             Notification, SubscriptionRequest, VersionInfo,
         },
-        Proxyable, MAX_MESSAGE_SIZE,
+        pool::GrpcConnectionPool,
+        GrpcProxyable, GRPC_MAX_MESSAGE_SIZE,
     },
-    grpc_pool::ConnectionPool,
 };
 use prometheus::{HistogramVec, IntCounterVec};
 use rcgen::generate_simple_self_signed;
@@ -131,7 +131,7 @@ pub struct GrpcProxy(Arc<GrpcProxyInner>);
 struct GrpcProxyInner {
     public_config: ValidatorPublicNetworkConfig,
     internal_config: ValidatorInternalNetworkConfig,
-    worker_connection_pool: ConnectionPool,
+    worker_connection_pool: GrpcConnectionPool,
     notifier: Notifier<Result<Notification, Status>>,
     tls: TlsConfig,
 }
@@ -147,7 +147,7 @@ impl GrpcProxy {
         Self(Arc::new(GrpcProxyInner {
             public_config,
             internal_config,
-            worker_connection_pool: ConnectionPool::default()
+            worker_connection_pool: GrpcConnectionPool::default()
                 .with_connect_timeout(connect_timeout)
                 .with_timeout(timeout),
             notifier: Notifier::default(),
@@ -157,8 +157,8 @@ impl GrpcProxy {
 
     fn as_validator_node(&self) -> ValidatorNodeServer<Self> {
         ValidatorNodeServer::new(self.clone())
-            .max_encoding_message_size(MAX_MESSAGE_SIZE)
-            .max_decoding_message_size(MAX_MESSAGE_SIZE)
+            .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+            .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE)
     }
 
     fn as_notifier_service(&self) -> NotifierServiceServer<Self> {
@@ -177,7 +177,7 @@ impl GrpcProxy {
         SocketAddr::from(([0, 0, 0, 0], self.0.internal_config.port))
     }
 
-    fn shard_for(&self, proxyable: &impl Proxyable) -> Option<ShardConfig> {
+    fn shard_for(&self, proxyable: &impl GrpcProxyable) -> Option<ShardConfig> {
         Some(
             self.0
                 .internal_config
@@ -193,8 +193,8 @@ impl GrpcProxy {
         let address = shard.http_address();
         let channel = self.0.worker_connection_pool.channel(address)?;
         let client = ValidatorWorkerClient::new(channel)
-            .max_encoding_message_size(MAX_MESSAGE_SIZE)
-            .max_decoding_message_size(MAX_MESSAGE_SIZE);
+            .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+            .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
 
         Ok(client)
     }
@@ -252,7 +252,7 @@ impl GrpcProxy {
         request: Request<R>,
     ) -> Result<(ValidatorWorkerClient<Channel>, R), Status>
     where
-        R: Debug + Proxyable,
+        R: Debug + GrpcProxyable,
     {
         debug!("proxying request from {:?}", request.remote_addr());
         let inner = request.into_inner();
