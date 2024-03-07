@@ -99,8 +99,8 @@ fn criterion_benchmark<M: Measurement + 'static>(c: &mut Criterion<M>) {
     c.bench_function("claim", |b| {
         b.to_async(tokio::runtime::Runtime::new().unwrap())
             .iter_batched(
-                setup_claim_bench::<MakeMemoryStorage>,
-                run_claim_bench::<MakeMemoryStorage>,
+                setup_claim_bench::<MemoryStorageBuilder>,
+                run_claim_bench::<MemoryStorageBuilder>,
                 BatchSize::PerIteration,
             )
     });
