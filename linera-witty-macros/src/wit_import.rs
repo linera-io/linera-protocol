@@ -3,7 +3,7 @@
 
 //! Generation of code to import functions from a Wasm guest module.
 
-use crate::util::TokensSetItem;
+use crate::util::{AttributeParameters, TokensSetItem};
 use heck::ToKebabCase;
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::abort;
@@ -16,8 +16,8 @@ use syn::{spanned::Spanned, FnArg, Ident, ItemTrait, LitStr, ReturnType, TraitIt
 /// The generated code contains a new generic type with the `trait_definition`'s name that allows
 /// calling into the functions imported from a guest Wasm instance represented by a generic
 /// parameter.
-pub fn generate(trait_definition: ItemTrait, namespace: &LitStr) -> TokenStream {
-    WitImportGenerator::new(&trait_definition, namespace).generate()
+pub fn generate(trait_definition: ItemTrait, parameters: AttributeParameters) -> TokenStream {
+    WitImportGenerator::new(&trait_definition, parameters).generate()
 }
 
 /// A helper type for generation of the importing of Wasm functions.
@@ -26,7 +26,7 @@ pub fn generate(trait_definition: ItemTrait, namespace: &LitStr) -> TokenStream 
 /// this type. Then, they are used to generate the final code.
 pub struct WitImportGenerator<'input> {
     trait_name: &'input Ident,
-    namespace: &'input LitStr,
+    namespace: LitStr,
     functions: Vec<FunctionInformation<'input>>,
 }
 
@@ -42,7 +42,9 @@ struct FunctionInformation<'input> {
 
 impl<'input> WitImportGenerator<'input> {
     /// Collects the pieces necessary for code generation from the inputs.
-    fn new(trait_definition: &'input ItemTrait, namespace: &'input LitStr) -> Self {
+    fn new(trait_definition: &'input ItemTrait, parameters: AttributeParameters) -> Self {
+        let trait_name = &trait_definition.ident;
+        let namespace = parameters.namespace(trait_name);
         let functions = trait_definition
             .items
             .iter()
@@ -50,7 +52,7 @@ impl<'input> WitImportGenerator<'input> {
             .collect::<Vec<_>>();
 
         WitImportGenerator {
-            trait_name: &trait_definition.ident,
+            trait_name,
             namespace,
             functions,
         }
@@ -126,7 +128,7 @@ impl<'input> WitImportGenerator<'input> {
     /// Returns the code to import and call each function.
     fn imported_functions(&self) -> impl Iterator<Item = TokenStream> + '_ {
         self.functions.iter().map(|function| {
-            let namespace = self.namespace;
+            let namespace = &self.namespace;
 
             let function_name = function.name();
             let function_wit_name = function_name.to_string().to_kebab_case();
