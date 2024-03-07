@@ -215,28 +215,6 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
 
     /// Executes a read-only query on the state of this application.
     async fn handle_query(&self, query: Self::Query) -> Result<Self::QueryResponse, Self::Error>;
-
-    /// Queries another application.
-    fn query_application<A: ServiceAbi>(
-        application: ApplicationId<A>,
-        query: &A::Query,
-    ) -> Result<A::QueryResponse, Self::Error>
-    where
-        Self::Error: From<String>,
-    {
-        let query_bytes = serde_json::to_vec(&query)?;
-        let response_bytes =
-            crate::service::system_api::query_application(application.forget_abi(), &query_bytes);
-        let response = serde_json::from_slice(&response_bytes)?;
-        Ok(response)
-    }
-
-    /// Retrieves the parameters of the application.
-    fn parameters() -> Result<Self::Parameters, Self::Error> {
-        let bytes = crate::service::system_api::current_application_parameters();
-        let parameters = serde_json::from_slice(&bytes)?;
-        Ok(parameters)
-    }
 }
 
 /// The context of the execution of an application's operation.
