@@ -2,8 +2,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
-
 mod common;
 use async_graphql::InputType;
 use common::INTEGRATION_TEST_GUARD;
