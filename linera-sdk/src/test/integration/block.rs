@@ -8,7 +8,7 @@
 use super::TestValidator;
 use crate::ToBcsBytes;
 use linera_base::{
-    data_types::{Round, Timestamp},
+    data_types::{ApplicationPermissions, Round, Timestamp},
     identifiers::{ApplicationId, ChainId, MessageId, Owner},
 };
 use linera_chain::data_types::{
@@ -91,6 +91,14 @@ impl BlockBuilder {
             chain_id: application.creation.chain_id,
             application_id: application.forget_abi(),
         })
+    }
+
+    /// Adds an application permissions change to this block.
+    pub fn with_change_application_permissions(
+        &mut self,
+        permissions: ApplicationPermissions,
+    ) -> &mut Self {
+        self.with_system_operation(SystemOperation::ChangeApplicationPermissions(permissions))
     }
 
     /// Adds a user `operation` to this block.

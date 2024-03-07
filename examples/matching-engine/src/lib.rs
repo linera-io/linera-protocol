@@ -332,6 +332,9 @@ scalar!(Parameters);
 pub enum Operation {
     /// The order that is going to be executed on the chain of the order book.
     ExecuteOrder { order: Order },
+    /// Close this chain, and cancel all orders.
+    /// Requires that this application is authorized to close the chain.
+    CloseChain,
 }
 
 /// Messages that can be processed by the application.
