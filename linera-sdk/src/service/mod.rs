@@ -7,7 +7,6 @@ mod conversions_from_wit;
 mod conversions_to_wit;
 mod runtime;
 mod storage;
-pub mod system_api;
 pub(crate) mod wit_system_api;
 pub mod wit_types;
 
