@@ -8,7 +8,7 @@ use crate::Service;
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{ApplicationId, ChainId},
+    identifiers::{ApplicationId, ChainId, Owner},
 };
 use std::cell::Cell;
 
@@ -74,6 +74,11 @@ where
     /// Returns the current chain balance.
     pub fn chain_balance(&self) -> Amount {
         Self::fetch_value_through_cache(&self.chain_balance, || wit::read_chain_balance().into())
+    }
+
+    /// Returns the balance of one of the accounts on this chain.
+    pub fn owner_balance(&self, owner: Owner) -> Amount {
+        wit::read_owner_balance(owner.into()).into()
     }
 
     /// Loads a value from the `cell` cache or fetches it and stores it in the cache.
