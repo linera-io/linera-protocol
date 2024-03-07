@@ -75,7 +75,7 @@ impl<T> std::ops::DerefMut for WriteGuardedView<T> {
 #[allow(clippy::type_complexity)]
 pub struct ReentrantByteCollectionView<C, W> {
     context: C,
-    needs_clear: bool,
+    delete_storage_first: bool,
     updates: Mutex<BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
@@ -114,7 +114,7 @@ where
         let hash = context.read_value(&key).await?;
         Ok(Self {
             context,
-            needs_clear: false,
+            delete_storage_first: false,
             updates: Mutex::new(BTreeMap::new()),
             stored_hash: hash,
             hash: Mutex::new(hash),
@@ -122,13 +122,13 @@ where
     }
 
     fn rollback(&mut self) {
-        self.needs_clear = false;
+        self.delete_storage_first = false;
         self.updates.get_mut().clear();
         *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.needs_clear {
+        if self.delete_storage_first {
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(self.updates.get_mut()) {
                 if let Update::Set(view) = update {
@@ -168,12 +168,12 @@ where
             }
             self.stored_hash = hash;
         }
-        self.needs_clear = false;
+        self.delete_storage_first = false;
         Ok(())
     }
 
     fn clear(&mut self) {
-        self.needs_clear = true;
+        self.delete_storage_first = true;
         self.updates.get_mut().clear();
         *self.hash.get_mut() = None;
     }
@@ -207,7 +207,7 @@ where
 
         Ok(ReentrantByteCollectionView {
             context: self.context.clone(),
-            needs_clear: self.needs_clear,
+            delete_storage_first: self.delete_storage_first,
             updates: Mutex::new(cloned_updates),
             stored_hash: self.stored_hash,
             hash: Mutex::new(*self.hash.get_mut()),
@@ -239,14 +239,14 @@ where
     /// Reads the view and if missing returns the default view
     async fn wrapped_view(
         context: &C,
-        needs_clear: bool,
+        delete_storage_first: bool,
         short_key: &[u8],
     ) -> Result<Arc<RwLock<W>>, ViewError> {
         let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
         let context = context.clone_with_base_key(key);
         // Obtain a view and set its pending state to the default (e.g. empty) state
         let mut view = W::load(context).await?;
-        if needs_clear {
+        if delete_storage_first {
             view.clear();
         }
         Ok(Arc::new(RwLock::new(view)))
@@ -268,7 +268,7 @@ where
             },
             Vacant(entry) => {
                 let wrapped_view =
-                    Self::wrapped_view(&self.context, self.needs_clear, short_key).await?;
+                    Self::wrapped_view(&self.context, self.delete_storage_first, short_key).await?;
                 entry.insert(Update::Set(wrapped_view.clone()));
                 wrapped_view
             }
@@ -287,7 +287,7 @@ where
             },
             None => {
                 let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
-                if self.needs_clear || !self.context.contains_key(&key_index).await? {
+                if self.delete_storage_first || !self.context.contains_key(&key_index).await? {
                     None
                 } else {
                     Some(Self::wrapped_view(&self.context, false, short_key).await?)
@@ -406,7 +406,7 @@ where
             },
             None => {
                 let key_index = self.context.base_tag_index(KeyTag::Index as u8, short_key);
-                !self.needs_clear && self.context.contains_key(&key_index).await?
+                !self.delete_storage_first && self.context.contains_key(&key_index).await?
             }
         })
     }
@@ -430,7 +430,7 @@ where
     /// ```
     pub fn remove_entry(&mut self, short_key: Vec<u8>) {
         *self.hash.get_mut() = None;
-        if self.needs_clear {
+        if self.delete_storage_first {
             // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
             self.updates.get_mut().remove(&short_key);
         } else {
@@ -517,7 +517,7 @@ where
                     }
                 }
                 btree_map::Entry::Vacant(_entry) => {
-                    selected_short_keys.push((short_key, self.needs_clear));
+                    selected_short_keys.push((short_key, self.delete_storage_first));
                 }
             }
         }
@@ -595,7 +595,7 @@ where
                     }
                 }
                 btree_map::Entry::Vacant(_entry) => {
-                    selected_short_keys.push((short_key, self.needs_clear));
+                    selected_short_keys.push((short_key, self.delete_storage_first));
                 }
             }
         }
@@ -699,7 +699,7 @@ where
         let updates = self.updates.lock().await;
         let mut updates = updates.iter();
         let mut update = updates.next();
-        if !self.needs_clear {
+        if !self.delete_storage_first {
             let base = self.get_index_key(&[]);
             for index in self.context.find_keys_by_prefix(&base).await?.iterator() {
                 let index = index?;
