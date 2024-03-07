@@ -35,7 +35,7 @@ impl Service for MetaCounterService {
 
     async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
         let counter_id = self.runtime.application_parameters();
-        Self::query_application(counter_id, &request)
+        Ok(self.runtime.query_application(counter_id, &request))
     }
 }
 
