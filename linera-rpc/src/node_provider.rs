@@ -1,7 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{client::Client, grpc::GrpcNodeProvider, simple::SimpleNodeProvider};
+#[cfg(with_simple_network)]
+use crate::simple::SimpleNodeProvider;
+use crate::{client::Client, grpc::GrpcNodeProvider};
 
 use linera_core::node::{NodeError, ValidatorNodeProvider};
 
@@ -12,6 +14,7 @@ use std::time::Duration;
 #[derive(Copy, Clone)]
 pub struct NodeProvider {
     grpc: GrpcNodeProvider,
+    #[cfg(with_simple_network)]
     simple: SimpleNodeProvider,
 }
 
@@ -19,6 +22,7 @@ impl NodeProvider {
     pub fn new(options: NodeOptions) -> Self {
         Self {
             grpc: GrpcNodeProvider::new(options),
+            #[cfg(with_simple_network)]
             simple: SimpleNodeProvider::new(options),
         }
     }
@@ -30,6 +34,7 @@ impl ValidatorNodeProvider for NodeProvider {
     fn make_node(&self, address: &str) -> anyhow::Result<Self::Node, NodeError> {
         let address = address.to_lowercase();
 
+        #[cfg(with_simple_network)]
         if address.starts_with("tcp") || address.starts_with("udp") {
             return Ok(Client::Simple(self.simple.make_node(&address)?));
         }

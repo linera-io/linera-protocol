@@ -5,11 +5,14 @@ mod client;
 mod conversions;
 mod node_provider;
 pub mod pool;
+
+#[cfg(with_server)]
 mod server;
 
 pub use client::*;
 pub use conversions::*;
 pub use node_provider::*;
+#[cfg(with_server)]
 pub use server::*;
 
 #[allow(clippy::derive_partial_eq_without_eq)]

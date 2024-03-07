@@ -3,7 +3,9 @@
 
 use async_trait::async_trait;
 
-use crate::{grpc::GrpcClient, simple::SimpleClient};
+use crate::grpc::GrpcClient;
+#[cfg(with_simple_network)]
+use crate::simple::SimpleClient;
 use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
@@ -14,6 +16,7 @@ use linera_core::{
 #[derive(Clone)]
 pub enum Client {
     Grpc(GrpcClient),
+    #[cfg(with_simple_network)]
     Simple(SimpleClient),
 }
 
@@ -23,6 +26,7 @@ impl From<GrpcClient> for Client {
     }
 }
 
+#[cfg(with_simple_network)]
 impl From<SimpleClient> for Client {
     fn from(client: SimpleClient) -> Self {
         Self::Simple(client)
@@ -37,6 +41,8 @@ impl ValidatorNode for Client {
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
             Client::Grpc(grpc_client) => grpc_client.handle_block_proposal(proposal).await,
+
+            #[cfg(with_simple_network)]
             Client::Simple(simple_client) => simple_client.handle_block_proposal(proposal).await,
         }
     }
@@ -53,6 +59,7 @@ impl ValidatorNode for Client {
                     .await
             }
 
+            #[cfg(with_simple_network)]
             Client::Simple(simple_client) => {
                 simple_client
                     .handle_lite_certificate(certificate, delivery)
@@ -74,6 +81,7 @@ impl ValidatorNode for Client {
                     .await
             }
 
+            #[cfg(with_simple_network)]
             Client::Simple(simple_client) => {
                 simple_client
                     .handle_certificate(certificate, blobs, delivery)
@@ -88,6 +96,8 @@ impl ValidatorNode for Client {
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
             Client::Grpc(grpc_client) => grpc_client.handle_chain_info_query(query).await,
+
+            #[cfg(with_simple_network)]
             Client::Simple(simple_client) => simple_client.handle_chain_info_query(query).await,
         }
     }
@@ -95,6 +105,8 @@ impl ValidatorNode for Client {
     async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => Box::pin(grpc_client.subscribe(chains).await?),
+
+            #[cfg(with_simple_network)]
             Client::Simple(simple_client) => Box::pin(simple_client.subscribe(chains).await?),
         })
     }
@@ -102,6 +114,8 @@ impl ValidatorNode for Client {
     async fn get_version_info(&mut self) -> Result<linera_version::VersionInfo, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.get_version_info().await?,
+
+            #[cfg(with_simple_network)]
             Client::Simple(simple_client) => simple_client.get_version_info().await?,
         })
     }
