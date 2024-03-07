@@ -4,10 +4,14 @@
 //! Traits used to allow complex types to be sent and received between hosts and guests using WIT.
 
 mod implementations;
+mod register_wit_types;
+
+pub use self::register_wit_types::RegisterWitTypes;
 
 use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
 };
+use std::borrow::Cow;
 
 /// A type that is representable by fundamental WIT types.
 pub trait WitType: Sized {
@@ -16,6 +20,15 @@ pub trait WitType: Sized {
 
     /// The layout of the type as fundamental types.
     type Layout: Layout;
+
+    /// Other [`WitType`]s that this type depends on.
+    type Dependencies: RegisterWitTypes;
+
+    /// Generates the WIT type name for this type.
+    fn wit_type_name() -> Cow<'static, str>;
+
+    /// Generates the WIT type declaration for this type.
+    fn wit_type_declaration() -> Cow<'static, str>;
 }
 
 /// A type that can be loaded from a guest Wasm module.

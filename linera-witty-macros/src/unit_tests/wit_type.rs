@@ -1,30 +1,42 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for the `WitLoad` derive macro.
+//! Unit tests for the `WitType` derive macro.
 
 #![cfg(test)]
 
 use super::{derive_for_enum, derive_for_struct};
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{parse_quote, Fields, ItemEnum, ItemStruct};
 
-/// Check the generated code for the body of the implementation of `WitLoad` for a unit struct.
+/// Check the generated code for the body of the implementation of `WitType` for a unit struct.
 #[test]
 fn zero_sized_type() {
     let input = Fields::Unit;
-    let output = derive_for_struct(&input);
+    let output = derive_for_struct(&format_ident!("ZeroSizedType"), &input);
 
     let expected = quote! {
         const SIZE: u32 = <linera_witty::HList![] as linera_witty::WitType>::SIZE;
 
         type Layout = <linera_witty::HList![] as linera_witty::WitType>::Layout;
+        type Dependencies = linera_witty::HList![];
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            "zero-sized-type".into()
+        }
+
+        fn wit_type_declaration() -> std::borrow::Cow<'static, str> {
+            let mut wit_declaration =
+                String::from(concat!("    record " , "zero-sized-type" , " {\n"));
+            wit_declaration.push_str("    }\n");
+            wit_declaration.into ()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitLoad` for a named struct.
+/// Check the generated code for the body of the implementation of `WitType` for a named struct.
 #[test]
 fn named_struct() {
     let input: ItemStruct = parse_quote! {
@@ -33,24 +45,48 @@ fn named_struct() {
             second: CustomType,
         }
     };
-    let output = derive_for_struct(&input.fields);
+    let output = derive_for_struct(&input.ident, &input.fields);
 
     let expected = quote! {
         const SIZE: u32 = <linera_witty::HList![u8, CustomType] as linera_witty::WitType>::SIZE;
 
         type Layout = <linera_witty::HList![u8, CustomType] as linera_witty::WitType>::Layout;
+        type Dependencies = linera_witty::HList![u8, CustomType];
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            "type".into()
+        }
+
+        fn wit_type_declaration() -> std::borrow::Cow<'static, str> {
+            let mut wit_declaration = String::from(concat!("    record " , "type" , " {\n"));
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("first");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<u8 as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("second");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<CustomType as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("    }\n");
+            wit_declaration.into ()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitLoad` for a tuple struct.
+/// Check the generated code for the body of the implementation of `WitType` for a tuple struct.
 #[test]
 fn tuple_struct() {
     let input: ItemStruct = parse_quote! {
         struct Type(String, Vec<CustomType>, i64);
     };
-    let output = derive_for_struct(&input.fields);
+    let output = derive_for_struct(&input.ident, &input.fields);
 
     let expected = quote! {
         const SIZE: u32 =
@@ -58,6 +94,37 @@ fn tuple_struct() {
 
         type Layout =
             <linera_witty::HList![String, Vec<CustomType>, i64] as linera_witty::WitType>::Layout;
+
+        type Dependencies = linera_witty::HList![String, Vec<CustomType>, i64];
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            "type".into()
+        }
+
+        fn wit_type_declaration() -> std::borrow::Cow<'static, str> {
+            let mut wit_declaration = String::from(concat!("    record " , "type" , " {\n"));
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("inner0");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<String as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("inner1");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<Vec<CustomType> as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("inner2");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<i64 as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("    }\n");
+            wit_declaration.into ()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
@@ -127,12 +194,57 @@ fn enum_type() {
                     <linera_witty::HList![(), String] as linera_witty::WitType>::Layout
                 >>::Output
             >>::Output>;
+
+        type Dependencies = linera_witty::HList![i8, CustomType, (), String];
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            "enum".into()
+        }
+
+        fn wit_type_declaration() -> std::borrow::Cow<'static, str> {
+            let mut wit_declaration = String::from(
+                concat!("    ", "variant", " ", "enum" , " {\n"),
+            );
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("empty");
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("tuple");
+            wit_declaration.push_str("(tuple<");
+            wit_declaration.push_str(
+                &<i8 as linera_witty::WitType>::wit_type_name(),
+            );
+            wit_declaration.push_str(", ");
+            wit_declaration.push_str(
+                &<CustomType as linera_witty::WitType>::wit_type_name(),
+            );
+            wit_declaration.push_str(">)");
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("struct");
+            wit_declaration.push_str("(tuple<");
+            wit_declaration.push_str(
+                &<() as linera_witty::WitType>::wit_type_name(),
+            );
+            wit_declaration.push_str(", ");
+            wit_declaration.push_str(
+                &<String as linera_witty::WitType>::wit_type_name(),
+            );
+            wit_declaration.push_str(">)");
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("    }\n");
+            wit_declaration.into ()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitLoad` for a named struct
+/// Check the generated code for the body of the implementation of `WitType` for a named struct
 /// with some ignored fields.
 #[test]
 fn named_struct_with_skipped_fields() {
@@ -150,18 +262,42 @@ fn named_struct_with_skipped_fields() {
             ignored4: Vec<()>,
         }
     };
-    let output = derive_for_struct(&input.fields);
+    let output = derive_for_struct(&input.ident, &input.fields);
 
     let expected = quote! {
         const SIZE: u32 = <linera_witty::HList![u8, CustomType] as linera_witty::WitType>::SIZE;
 
         type Layout = <linera_witty::HList![u8, CustomType] as linera_witty::WitType>::Layout;
+        type Dependencies = linera_witty::HList![u8, CustomType];
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            "type".into()
+        }
+
+        fn wit_type_declaration() -> std::borrow::Cow<'static, str> {
+            let mut wit_declaration = String::from(concat!("    record " , "type" , " {\n"));
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("first");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<u8 as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("second");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<CustomType as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("    }\n");
+            wit_declaration.into ()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
 }
 
-/// Check the generated code for the body of the implementation of `WitLoad` for a tuple struct
+/// Check the generated code for the body of the implementation of `WitType` for a tuple struct
 /// with some ignored fields.
 #[test]
 fn tuple_struct_with_skipped_fields() {
@@ -176,7 +312,7 @@ fn tuple_struct_with_skipped_fields() {
             i64,
         );
     };
-    let output = derive_for_struct(&input.fields);
+    let output = derive_for_struct(&input.ident, &input.fields);
 
     let expected = quote! {
         const SIZE: u32 =
@@ -184,6 +320,37 @@ fn tuple_struct_with_skipped_fields() {
 
         type Layout =
             <linera_witty::HList![String, Vec<CustomType>, i64] as linera_witty::WitType>::Layout;
+
+        type Dependencies = linera_witty::HList![String, Vec<CustomType>, i64];
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            "type".into()
+        }
+
+        fn wit_type_declaration() -> std::borrow::Cow<'static, str> {
+            let mut wit_declaration = String::from(concat!("    record " , "type" , " {\n"));
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("inner1");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<String as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("inner2");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<Vec<CustomType> as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("inner4");
+            wit_declaration.push_str(": ");
+            wit_declaration.push_str(&*<i64 as linera_witty::WitType>::wit_type_name());
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("    }\n");
+            wit_declaration.into ()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());
@@ -260,6 +427,51 @@ fn enum_type_with_skipped_fields() {
                     <linera_witty::HList![(), String] as linera_witty::WitType>::Layout
                 >>::Output
             >>::Output>;
+
+        type Dependencies = linera_witty::HList![i8, CustomType, (), String];
+
+        fn wit_type_name() -> std::borrow::Cow<'static, str> {
+            "enum".into()
+        }
+
+        fn wit_type_declaration() -> std::borrow::Cow<'static, str> {
+            let mut wit_declaration = String::from(
+                concat!("    ", "variant", " ", "enum" , " {\n"),
+            );
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("empty");
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("tuple");
+            wit_declaration.push_str("(tuple<");
+            wit_declaration.push_str(
+                &<i8 as linera_witty::WitType>::wit_type_name(),
+            );
+            wit_declaration.push_str(", ");
+            wit_declaration.push_str(
+                &<CustomType as linera_witty::WitType>::wit_type_name(),
+            );
+            wit_declaration.push_str(">)");
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("        ");
+            wit_declaration.push_str("struct");
+            wit_declaration.push_str("(tuple<");
+            wit_declaration.push_str(
+                &<() as linera_witty::WitType>::wit_type_name(),
+            );
+            wit_declaration.push_str(", ");
+            wit_declaration.push_str(
+                &<String as linera_witty::WitType>::wit_type_name(),
+            );
+            wit_declaration.push_str(">)");
+            wit_declaration.push_str(",\n");
+
+            wit_declaration.push_str("    }\n");
+            wit_declaration.into ()
+        }
     };
 
     assert_eq!(output.to_string(), expected.to_string());

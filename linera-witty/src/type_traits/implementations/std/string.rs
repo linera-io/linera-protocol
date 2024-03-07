@@ -8,11 +8,22 @@ use crate::{
     WitLoad, WitStore, WitType,
 };
 use frunk::{hlist, hlist_pat, HList};
+use std::borrow::Cow;
 
 impl WitType for String {
     const SIZE: u32 = 8;
 
     type Layout = HList![i32, i32];
+    type Dependencies = HList![];
+
+    fn wit_type_name() -> Cow<'static, str> {
+        "string".into()
+    }
+
+    fn wit_type_declaration() -> Cow<'static, str> {
+        // Primitive types don't need to be declared
+        "".into()
+    }
 }
 
 impl WitLoad for String {

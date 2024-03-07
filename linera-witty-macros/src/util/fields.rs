@@ -3,10 +3,11 @@
 
 //! Helper types to process [`Fields`] from `struct`s and `enum` variants.
 
+use heck::ToKebabCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::{borrow::Cow, ops::Deref};
-use syn::{Field, Fields, Ident, Meta, MetaList};
+use syn::{spanned::Spanned, Field, Fields, Ident, LitStr, Meta, MetaList, Type};
 
 /// A helper type with information about a list of [`Fields`].
 pub struct FieldsInformation<'input> {
@@ -27,10 +28,26 @@ impl<'input> FieldsInformation<'input> {
         self.fields.iter().map(FieldInformation::name)
     }
 
+    /// Returns an iterator over the types of the non-skipped fields.
+    pub fn types(&self) -> impl Iterator<Item = &Type> + Clone + '_ {
+        self.non_skipped_fields().map(FieldInformation::field_type)
+    }
+
+    /// Returns an iterator over the WIT compatible names of the non-skipped fields.
+    pub fn wit_names(&self) -> impl Iterator<Item = &LitStr> + '_ {
+        self.non_skipped_fields().map(FieldInformation::wit_name)
+    }
+
+    /// Returns an iterator over the code to obtain the WIT type names of the non-skipped fields.
+    pub fn wit_type_names(&self) -> impl Iterator<Item = TokenStream> + '_ {
+        self.non_skipped_fields()
+            .map(FieldInformation::wit_type_name)
+    }
+
     /// Returns the code with a pattern to match a heterogenous list using the `field_names` as
     /// bindings.
     pub fn hlist_type(&self) -> TokenStream {
-        let field_types = self.non_skipped_fields().map(|field| &field.ty);
+        let field_types = self.types();
         quote! { linera_witty::HList![#( #field_types ),*] }
     }
 
@@ -122,6 +139,7 @@ impl<'input> From<&'input Fields> for FieldsInformation<'input> {
 pub struct FieldInformation<'input> {
     field: &'input Field,
     name: Cow<'input, Ident>,
+    wit_name: LitStr,
     is_skipped: bool,
 }
 
@@ -129,6 +147,23 @@ impl FieldInformation<'_> {
     /// Returns the name to use for this field.
     pub fn name(&self) -> &Ident {
         &self.name
+    }
+
+    /// Returns the type of this field.
+    pub fn field_type(&self) -> &Type {
+        &self.field.ty
+    }
+
+    /// Returns the string literal with the WIT compatible name.
+    pub fn wit_name(&self) -> &LitStr {
+        &self.wit_name
+    }
+
+    /// Returns the code to obtain the field's WIT type name.
+    pub fn wit_type_name(&self) -> TokenStream {
+        let field_type = &self.field.ty;
+
+        quote! { <#field_type as linera_witty::WitType>::wit_type_name() }
     }
 
     /// Returns `true` if this field was marked to be skipped.
@@ -153,6 +188,16 @@ impl<'input> From<(usize, &'input Field)> for FieldInformation<'input> {
             .map(Cow::Borrowed)
             .unwrap_or_else(|| Cow::Owned(format_ident!("field{index}")));
 
+        let wit_name = LitStr::new(
+            &field
+                .ident
+                .as_ref()
+                .map(Ident::to_string)
+                .unwrap_or_else(|| format!("inner{index}"))
+                .to_kebab_case(),
+            field.span(),
+        );
+
         let is_skipped = field.attrs.iter().any(|attribute| {
             matches!(
                 &attribute.meta,
@@ -164,6 +209,7 @@ impl<'input> From<(usize, &'input Field)> for FieldInformation<'input> {
         FieldInformation {
             field,
             name,
+            wit_name,
             is_skipped,
         }
     }
