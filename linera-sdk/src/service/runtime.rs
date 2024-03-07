@@ -105,6 +105,22 @@ where
         })
     }
 
+    /// Queries another application.
+    pub fn query_application<A: ServiceAbi>(
+        &self,
+        application: ApplicationId<A>,
+        query: &A::Query,
+    ) -> A::QueryResponse {
+        let query_bytes =
+            serde_json::to_vec(&query).expect("Failed to serialize query to another application");
+
+        let response_bytes =
+            wit::try_query_application(application.forget_abi().into(), &query_bytes);
+
+        serde_json::from_slice(&response_bytes)
+            .expect("Failed to deserialize query response from application")
+    }
+
     /// Loads a value from the `cell` cache or fetches it and stores it in the cache.
     fn fetch_value_through_cache<T>(cell: &Cell<Option<T>>, fetch: impl FnOnce() -> T) -> T
     where
