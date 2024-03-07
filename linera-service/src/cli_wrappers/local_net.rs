@@ -397,9 +397,15 @@ impl LocalNet {
                 ),
                 (validator, 0),
             ),
-            Database::RocksDb => (format!("rocksdb:server_{}_{}.db", validator, shard), (validator, shard)),
+            Database::RocksDb => (
+                format!("rocksdb:server_{}_{}.db", validator, shard),
+                (validator, shard),
+            ),
             Database::DynamoDb => (
-                format!("dynamodb:{}_server_{}.db:localstack", self.table_name, validator),
+                format!(
+                    "dynamodb:{}_server_{}.db:localstack",
+                    self.table_name, validator
+                ),
                 (validator, 0),
             ),
             Database::ScyllaDb => (
@@ -498,7 +504,8 @@ impl LocalNet {
             .arg(&self.configuration_string(validator)?)
             .spawn_and_wait_for_stdout()
             .await?;
-        self.validator_names.insert(validator, stdout.trim().to_string());
+        self.validator_names
+            .insert(validator, stdout.trim().to_string());
         Ok(())
     }
 

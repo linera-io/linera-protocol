@@ -12,7 +12,7 @@ use linera_base::{
 };
 use linera_core::client::{
     client_test_utils::{
-        FaultType, MakeMemoryStorage, NodeProvider, StorageBuilder as _, TestBuilder,
+        FaultType, MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder,
     },
     ChainClient,
 };
@@ -58,7 +58,7 @@ impl chain_listener::ClientContext<NodeProvider<DbStorage<MemoryStore, TestClock
 
 #[tokio::test]
 async fn test_faucet_rate_limiting() {
-    let storage_builder = MakeMemoryStorage::default();
+    let storage_builder = MemoryStorageBuilder::default();
     let clock = storage_builder.clock().clone();
     clock.set(Timestamp::from(0));
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await.unwrap();
