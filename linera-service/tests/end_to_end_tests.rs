@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod common;
+
+use assert_matches::assert_matches;
 use async_graphql::InputType;
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::{
@@ -1911,6 +1913,56 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) {
 
     assert!(client1.query_balance(account2).await.unwrap() <= Amount::from_tokens(3),);
     assert!(client2.query_balance(account2).await.unwrap() <= Amount::from_tokens(3),);
+
+    net.ensure_is_running().await.unwrap();
+    net.terminate().await.unwrap();
+}
+
+#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    // Create runner and two clients.
+    let (mut net, client) = config.instantiate().await.unwrap();
+
+    let chain = client.get_wallet().unwrap().default_chain().unwrap();
+    let pub_key1 = {
+        let wallet = client.get_wallet().unwrap();
+        let user_chain = wallet.get(chain).unwrap();
+        user_chain.key_pair.as_ref().unwrap().public()
+    };
+    let pub_key2 = client.keygen().await.unwrap();
+
+    // Make both keys owners.
+    client
+        .change_ownership(chain, vec![], vec![pub_key1, pub_key2], false)
+        .await
+        .unwrap();
+
+    // We can't remove a key without `--force`.
+    let result = client
+        .change_ownership(chain, vec![], vec![pub_key1], false)
+        .await;
+    assert_matches!(result, Err(_));
+    client
+        .change_ownership(chain, vec![], vec![pub_key1], true)
+        .await
+        .unwrap();
+
+    // We can't add a super owner without `--force`.
+    let result = client
+        .change_ownership(chain, vec![pub_key2], vec![pub_key1], false)
+        .await;
+    assert_matches!(result, Err(_));
+    client
+        .change_ownership(chain, vec![pub_key2], vec![pub_key1], true)
+        .await
+        .unwrap();
 
     net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();

@@ -603,10 +603,14 @@ impl ClientWrapper {
         command
             .arg("open-multi-owner-chain")
             .args(["--from", &from.to_string()])
-            .arg("--to-public-keys")
-            .args(to_public_keys.iter().map(PublicKey::to_string))
-            .arg("--weights")
-            .args(weights.iter().map(u64::to_string))
+            .arg("--owner-public-keys")
+            .args(to_public_keys.iter().map(PublicKey::to_string));
+        if !weights.is_empty() {
+            command
+                .arg("--owner-weights")
+                .args(weights.iter().map(u64::to_string));
+        };
+        command
             .args(["--multi-leader-rounds", &multi_leader_rounds.to_string()])
             .args(["--initial-balance", &balance.to_string()]);
 
@@ -616,6 +620,34 @@ impl ClientWrapper {
         let chain_id = ChainId::from_str(split.next().context("no chain ID in output")?)?;
 
         Ok((message_id, chain_id))
+    }
+
+    pub async fn change_ownership(
+        &self,
+        chain_id: ChainId,
+        super_owner_public_keys: Vec<PublicKey>,
+        owner_public_keys: Vec<PublicKey>,
+        force: bool,
+    ) -> Result<()> {
+        let mut command = self.command().await?;
+        command
+            .arg("change-ownership")
+            .args(["--chain-id", &chain_id.to_string()]);
+        if !super_owner_public_keys.is_empty() {
+            command
+                .arg("--super-owner-public-keys")
+                .args(super_owner_public_keys.iter().map(PublicKey::to_string));
+        }
+        if !owner_public_keys.is_empty() {
+            command
+                .arg("--owner-public-keys")
+                .args(owner_public_keys.iter().map(PublicKey::to_string));
+        }
+        if force {
+            command.arg("-f");
+        }
+        command.spawn_and_wait_for_stdout().await?;
+        Ok(())
     }
 
     pub async fn retry_pending_block(
