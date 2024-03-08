@@ -60,10 +60,7 @@ impl Contract for Counter {
         _runtime: &mut ContractRuntime,
         increment: u64,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<
-        ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>,
-        Self::Error,
-    > {
+    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         self.value += increment;
         Ok(ApplicationCallOutcome {
             value: self.value,
@@ -160,7 +157,6 @@ mod tests {
         let expected_value = initial_value + increment;
         let expected_outcome = ApplicationCallOutcome {
             value: expected_value,
-            create_sessions: vec![],
             execution_outcome: ExecutionOutcome::default(),
         };
 

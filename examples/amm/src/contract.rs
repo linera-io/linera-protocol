@@ -84,8 +84,7 @@ impl Contract for Amm {
         runtime: &mut ContractRuntime,
         application_call: ApplicationCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>, AmmError>
-    {
+    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, AmmError> {
         let mut outcome = ApplicationCallOutcome::default();
         match application_call {
             ApplicationCall::Swap {

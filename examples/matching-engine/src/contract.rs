@@ -128,10 +128,7 @@ impl Contract for MatchingEngine {
         runtime: &mut ContractRuntime,
         argument: ApplicationCall,
         _sessions: Vec<SessionId>,
-    ) -> Result<
-        ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>,
-        Self::Error,
-    > {
+    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         let mut outcome = ApplicationCallOutcome::default();
         match argument {
             ApplicationCall::ExecuteOrder { order } => {

@@ -93,12 +93,11 @@ impl From<log::Level> for wit_system_api::LogLevel {
     }
 }
 
-impl From<ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>> for wit_types::ApplicationCallOutcome {
-    fn from(outcome: ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>) -> Self {
+impl From<ApplicationCallOutcome<Vec<u8>, Vec<u8>>> for wit_types::ApplicationCallOutcome {
+    fn from(outcome: ApplicationCallOutcome<Vec<u8>, Vec<u8>>) -> Self {
         wit_types::ApplicationCallOutcome {
             value: outcome.value,
             execution_outcome: outcome.execution_outcome.into(),
-            create_sessions: outcome.create_sessions,
         }
     }
 }

@@ -162,7 +162,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// Returns an [`ApplicationCallOutcome`], which contains:
     ///
     /// - a return value sent to the caller application;
-    /// - a list of new session states; the newly-created sessions will be owned by the caller application;
     /// - an [`ExecutionOutcome`] with messages to be sent to this application on other chains
     ///   and channel subscription and unsubscription requests.
     ///
@@ -172,10 +171,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
         runtime: &mut ContractRuntime,
         argument: Self::ApplicationCall,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<
-        ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>,
-        Self::Error,
-    >;
+    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error>;
 
     /// Handles a call into a session created by this application.
     ///
@@ -208,7 +204,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// - the updated session state, or `None` if the session should be terminated;
     /// - an [`ApplicationCallOutcome`], which contains:
     ///   - a return value sent to the caller application;
-    ///   - a list of new session states; the newly-created sessions will be owned by the caller application;
     ///   - an [`ExecutionOutcome`] with messages to be sent to this application on other
     ///     chains and channel subscription and unsubscription requests.
     async fn handle_session_call(
@@ -513,16 +508,14 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionOutcome<Message> {
 /// The result of calling into an application.
 #[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct ApplicationCallOutcome<Message, Value, SessionState> {
+pub struct ApplicationCallOutcome<Message, Value> {
     /// The return value, if any.
     pub value: Value,
     /// The externally-visible result.
     pub execution_outcome: ExecutionOutcome<Message>,
-    /// New sessions were created with the following new states.
-    pub create_sessions: Vec<SessionState>,
 }
 
-impl<Message, Value, SessionState> Default for ApplicationCallOutcome<Message, Value, SessionState>
+impl<Message, Value> Default for ApplicationCallOutcome<Message, Value>
 where
     Value: Default,
 {
@@ -530,33 +523,23 @@ where
         Self {
             value: Value::default(),
             execution_outcome: ExecutionOutcome::default(),
-            create_sessions: vec![],
         }
     }
 }
 
-impl<Message, Value, SessionState> ApplicationCallOutcome<Message, Value, SessionState>
+impl<Message, Value> ApplicationCallOutcome<Message, Value>
 where
     Message: Debug + DeserializeOwned + Serialize,
     Value: Serialize,
-    SessionState: Serialize,
 {
     /// Serializes the internal `Message`, `Value` and `SessionState` types into raw bytes.
-    pub fn into_raw(self) -> ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>> {
+    pub fn into_raw(self) -> ApplicationCallOutcome<Vec<u8>, Vec<u8>> {
         let value = bcs::to_bytes(&self.value)
             .expect("Failed to serialize `ApplicationCallOutcome`'s `Value`");
-        let create_sessions = self
-            .create_sessions
-            .into_iter()
-            .map(|session_state| {
-                bcs::to_bytes(&session_state).expect("Failed to serialize the session state")
-            })
-            .collect();
 
         ApplicationCallOutcome {
             value,
             execution_outcome: self.execution_outcome.into_raw(),
-            create_sessions,
         }
     }
 }
@@ -565,7 +548,7 @@ where
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SessionCallOutcome<Message, Value, SessionState> {
     /// The result of the application call.
-    pub inner: ApplicationCallOutcome<Message, Value, SessionState>,
+    pub inner: ApplicationCallOutcome<Message, Value>,
     /// The new state of the session, if any. `None` means that the session was consumed
     /// by the call.
     pub new_state: Option<SessionState>,

@@ -38,7 +38,7 @@ impl From<contract::SessionCallOutcome> for (SessionCallOutcome, Vec<u8>) {
 impl From<contract::ApplicationCallOutcome> for ApplicationCallOutcome {
     fn from(outcome: contract::ApplicationCallOutcome) -> Self {
         ApplicationCallOutcome {
-            create_sessions: outcome.create_sessions,
+            create_sessions: vec![],
             execution_outcome: outcome.execution_outcome.into(),
             value: outcome.value,
         }

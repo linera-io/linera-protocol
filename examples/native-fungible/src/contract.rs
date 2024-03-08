@@ -134,10 +134,7 @@ impl Contract for NativeFungibleToken {
         runtime: &mut ContractRuntime,
         call: ApplicationCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<
-        ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>,
-        Self::Error,
-    > {
+    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         match call {
             ApplicationCall::Balance { owner } => {
                 let owner = self.normalize_owner(owner);

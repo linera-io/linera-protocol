@@ -33,7 +33,6 @@ type bytecode-id = message-id
 record application-call-outcome {
     value: list<u8>,
     execution-outcome: execution-outcome,
-    create-sessions: list<session-state>,
 }
 
 record session-id {

@@ -51,8 +51,7 @@ impl Contract for Application {{
         _runtime: &mut ContractRuntime,
         _call: Self::ApplicationCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
-    {{
+    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {{
         Ok(ApplicationCallOutcome::default())
     }}
 

@@ -150,10 +150,7 @@ impl Contract for NonFungibleToken {
         runtime: &mut ContractRuntime,
         call: Self::ApplicationCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<
-        ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>,
-        Self::Error,
-    > {
+    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         match call {
             Self::ApplicationCall::Mint { name, payload } => {
                 let execution_outcome = self

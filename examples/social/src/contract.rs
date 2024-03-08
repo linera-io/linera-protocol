@@ -90,10 +90,7 @@ impl Contract for Social {
         _runtime: &mut ContractRuntime,
         _call: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<
-        ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>,
-        Self::Error,
-    > {
+    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         Err(Error::ApplicationCallsNotSupported)
     }
 
