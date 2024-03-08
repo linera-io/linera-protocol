@@ -111,16 +111,13 @@ cargo install --git https://github.com/ma2bd/cargo-all-features --branch workspa
 cargo check-all-features --all-targets
 ```
 
+## Snapshot tests
 
-## Dealing with test failures `test_format` after code changes
-
-Getting an error with the test in [`linera-rpc/tests/format.rs`](linera-rpc/tests/format.rs) ?
-Probably the file [`linera-rpc/tests/staged/formats.yaml`](linera-rpc/tests/staged/formats.yaml) (recording message formats) is
-outdated. In most cases (but not always sadly), this can be fixed by running
-[`linera-rpc/generate-format.sh`](linera-rpc/generate-format.sh).
-
-See https://github.com/zefchain/serde-reflection for more context.
-
+Several crates (`linera-rpc`, `linera-views-derive`, and others) use [`insta`](https://insta.rs/) to
+manage snapshot tests and ensure output or RPC formats don't unintentially change.  If you've
+deliberately changed the output of one of these crates, and the test fails, you can use `cargo insta
+review` to update the staged snapshot, or manually move the `.snap.new` file into place.  See the
+[`insta` documentation](https://insta.rs/docs/quickstart/) for more information.
 
 ## Wasm support
 

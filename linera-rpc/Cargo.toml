@@ -58,7 +58,6 @@ linera-storage.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true
 prometheus = { workspace = true, optional = true }
-proptest = { workspace = true, optional = true }
 prost.workspace = true
 rand.workspace = true
 serde.workspace = true
@@ -70,11 +69,10 @@ tower.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+insta = { workspace = true, features = ["yaml"] }
 linera-rpc = { path = ".", features = ["test"] }
 proptest.workspace = true
 serde-reflection.workspace = true
-serde_yaml.workspace = true
-similar-asserts.workspace = true
 test-strategy.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -88,4 +86,4 @@ cfg_aliases.workspace = true
 tonic-build = { workspace = true, features = ["prost"] }
 
 [package.metadata.cargo-machete]
-ignored = ["getrandom", "proptest", "prost"]
+ignored = ["prost"]
