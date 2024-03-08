@@ -46,18 +46,3 @@ pub fn call_application(
     )
     .into()
 }
-
-/// Calls another application's session.
-pub fn call_session(
-    authenticated: bool,
-    session: SessionId,
-    argument: &[u8],
-    forwarded_sessions: Vec<SessionId>,
-) -> (Vec<u8>, Vec<SessionId>) {
-    let forwarded_sessions = forwarded_sessions
-        .into_iter()
-        .map(wit::SessionId::from)
-        .collect::<Vec<_>>();
-
-    wit::try_call_session(authenticated, session.into(), argument, &forwarded_sessions).into()
-}

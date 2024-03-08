@@ -152,29 +152,6 @@ macro_rules! impl_contract_system_api {
                 .map(|call_outcome| call_outcome.into())
             }
 
-            fn try_call_session(
-                &mut self,
-                authenticated: bool,
-                session: contract_system_api::SessionId,
-                argument: &[u8],
-                forwarded_sessions: &[Le<contract_system_api::SessionId>],
-            ) -> Result<contract_system_api::CallOutcome, Self::Error> {
-                let forwarded_sessions = forwarded_sessions
-                    .iter()
-                    .map(Le::get)
-                    .map(SessionId::from)
-                    .collect();
-
-                ContractRuntime::try_call_session(
-                    self,
-                    authenticated,
-                    session.into(),
-                    argument.to_vec(),
-                    forwarded_sessions,
-                )
-                .map(|call_outcome| call_outcome.into())
-            }
-
             fn log(
                 &mut self,
                 message: &str,
