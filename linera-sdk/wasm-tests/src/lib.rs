@@ -10,14 +10,13 @@
 
 use async_trait::async_trait;
 use linera_sdk::{
-    abi::{ContractAbi, WithContractAbi},
+    abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     base::{Amount, ApplicationId, BlockHeight, BytecodeId, ChainId, MessageId, Timestamp},
-    service,
-    test::{self, test_contract_runtime},
+    test::{self, test_contract_runtime, test_service_runtime},
     util::BlockingWait,
     views::ViewStorageContext,
-    ApplicationCallOutcome, Contract, ContractLogger, ContractRuntime, ExecutionOutcome,
-    ServiceLogger, SimpleStateStorage,
+    ApplicationCallOutcome, Contract, ContractLogger, ContractRuntime, ExecutionOutcome, Service,
+    ServiceLogger, ServiceRuntime, SimpleStateStorage,
 };
 use linera_views::{
     map_view::MapView,
@@ -35,7 +34,7 @@ fn mock_chain_id() {
     test::mock_chain_id(chain_id);
 
     assert_eq!(test_contract_runtime::<TestApp>().chain_id(), chain_id);
-    assert_eq!(service::system_api::current_chain_id(), chain_id);
+    assert_eq!(test_service_runtime::<TestApp>().chain_id(), chain_id);
 }
 
 /// Test if the application ID getter API is mocked successfully.
@@ -61,8 +60,8 @@ fn mock_application_id() {
         application_id.with_abi()
     );
     assert_eq!(
-        service::system_api::current_application_id(),
-        application_id
+        test_service_runtime::<TestApp>().application_id(),
+        application_id.with_abi()
     );
 }
 
@@ -73,16 +72,13 @@ fn mock_application_parameters() {
 
     test::mock_application_parameters(&parameters);
 
-    let serialized_parameters =
-        serde_json::to_vec(&parameters).expect("Failed to serialize parameters");
-
     assert_eq!(
         test_contract_runtime::<TestApp>().application_parameters(),
         parameters
     );
     assert_eq!(
-        service::system_api::private::current_application_parameters(),
-        serialized_parameters
+        test_service_runtime::<TestApp>().application_parameters(),
+        parameters
     );
 }
 
@@ -94,7 +90,7 @@ fn mock_chain_balance() {
     test::mock_chain_balance(balance);
 
     assert_eq!(test_contract_runtime::<TestApp>().chain_balance(), balance);
-    assert_eq!(service::system_api::current_chain_balance(), balance);
+    assert_eq!(test_service_runtime::<TestApp>().chain_balance(), balance);
 }
 
 /// Test if the system timestamp getter API is mocked successfully.
@@ -105,7 +101,7 @@ fn mock_system_timestamp() {
     test::mock_system_timestamp(timestamp);
 
     assert_eq!(test_contract_runtime::<TestApp>().system_time(), timestamp);
-    assert_eq!(service::system_api::current_system_time(), timestamp);
+    assert_eq!(test_service_runtime::<TestApp>().system_time(), timestamp);
 }
 
 /// Test if messages logged by a contract can be inspected.
@@ -348,12 +344,13 @@ fn mock_query() {
     let expected_response = response.clone();
 
     test::mock_try_query_application(move |application_id, query| {
+        assert_eq!(query, b"[17,23,31,37]");
         unsafe {
             INTERCEPTED_APPLICATION_ID = Some(application_id);
             INTERCEPTED_ARGUMENT = Some(query);
         }
 
-        response.clone()
+        serde_json::to_vec(&response).expect("Failed to serialize query response")
     });
 
     let application_id = ApplicationId {
@@ -369,14 +366,16 @@ fn mock_query() {
         },
     };
     let query = vec![17, 23, 31, 37];
+    let expected_query = serde_json::to_vec(&query).expect("Failed to serialize query");
 
-    let response = service::system_api::private::query_application(application_id, &query);
+    let response = test_service_runtime::<TestApp>()
+        .query_application(application_id.with_abi::<TestApp>(), &query);
 
     assert_eq!(
         unsafe { INTERCEPTED_APPLICATION_ID.take() },
         Some(application_id)
     );
-    assert_eq!(unsafe { INTERCEPTED_ARGUMENT.take() }, Some(query));
+    assert_eq!(unsafe { INTERCEPTED_ARGUMENT.take() }, Some(expected_query));
 
     assert_eq!(response, expected_response);
 }
@@ -394,11 +393,21 @@ impl ContractAbi for Abi {
     type Response = Vec<u8>;
 }
 
+impl ServiceAbi for Abi {
+    type Parameters = Vec<u8>;
+    type Query = Vec<u8>;
+    type QueryResponse = Vec<u8>;
+}
+
 pub struct TestApp {
     state: (),
 }
 
 impl WithContractAbi for TestApp {
+    type Abi = Abi;
+}
+
+impl WithServiceAbi for TestApp {
     type Abi = Abi;
 }
 
@@ -442,6 +451,20 @@ impl Contract for TestApp {
         _argument: Self::ApplicationCall,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         Ok(ApplicationCallOutcome::default())
+    }
+}
+
+impl Service for TestApp {
+    type Error = TestAppError;
+    type Storage = SimpleStateStorage<Self>;
+    type State = ();
+
+    async fn new(state: (), _runtime: ServiceRuntime<Self>) -> Result<Self, Self::Error> {
+        Ok(TestApp { state })
+    }
+
+    async fn handle_query(&self, _query: Self::Query) -> Result<Self::QueryResponse, Self::Error> {
+        Ok(vec![])
     }
 }
 
