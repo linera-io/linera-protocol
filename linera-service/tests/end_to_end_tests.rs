@@ -9,7 +9,7 @@ use async_graphql::InputType;
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::{
     command::resolve_binary,
-    crypto::KeyPair,
+    crypto::{KeyPair, PublicKey},
     data_types::{Amount, Timestamp},
     identifiers::{Account, AccountOwner, ChainId, Owner},
 };
@@ -1936,33 +1936,23 @@ async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) {
         let user_chain = wallet.get(chain).unwrap();
         user_chain.key_pair.as_ref().unwrap().public()
     };
-    let pub_key2 = client.keygen().await.unwrap();
+    let pub_key2 = PublicKey::test_key(2);
 
     // Make both keys owners.
     client
-        .change_ownership(chain, vec![], vec![pub_key1, pub_key2], false)
+        .change_ownership(chain, vec![], vec![pub_key1, pub_key2])
         .await
         .unwrap();
 
-    // We can't remove a key without `--force`.
-    let result = client
-        .change_ownership(chain, vec![], vec![pub_key1], false)
-        .await;
-    assert_matches!(result, Err(_));
+    // Make pub_key2 the only (super) owner.
     client
-        .change_ownership(chain, vec![], vec![pub_key1], true)
+        .change_ownership(chain, vec![pub_key2], vec![])
         .await
         .unwrap();
 
-    // We can't add a super owner without `--force`.
-    let result = client
-        .change_ownership(chain, vec![pub_key2], vec![pub_key1], false)
-        .await;
+    // Now we're not the owner anymore.
+    let result = client.change_ownership(chain, vec![], vec![pub_key1]).await;
     assert_matches!(result, Err(_));
-    client
-        .change_ownership(chain, vec![pub_key2], vec![pub_key1], true)
-        .await
-        .unwrap();
 
     net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();

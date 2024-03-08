@@ -627,7 +627,6 @@ impl ClientWrapper {
         chain_id: ChainId,
         super_owner_public_keys: Vec<PublicKey>,
         owner_public_keys: Vec<PublicKey>,
-        force: bool,
     ) -> Result<()> {
         let mut command = self.command().await?;
         command
@@ -642,9 +641,6 @@ impl ClientWrapper {
             command
                 .arg("--owner-public-keys")
                 .args(owner_public_keys.iter().map(PublicKey::to_string));
-        }
-        if force {
-            command.arg("-f");
         }
         command.spawn_and_wait_for_stdout().await?;
         Ok(())

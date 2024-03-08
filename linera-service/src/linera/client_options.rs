@@ -248,10 +248,6 @@ pub enum ClientCommand {
 
         #[clap(flatten)]
         ownership_config: ChainOwnershipConfig,
-
-        /// Perform the change even if it removes existing owners or has super owners.
-        #[clap(long, short = 'f')]
-        force: bool,
     },
 
     /// Changes the application permissions configuration.

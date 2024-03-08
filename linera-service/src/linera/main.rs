@@ -236,10 +236,9 @@ impl Runnable for Job {
             ChangeOwnership {
                 chain_id,
                 ownership_config,
-                force,
             } => {
                 context
-                    .change_ownership(chain_id, ownership_config, force, storage)
+                    .change_ownership(chain_id, ownership_config, storage)
                     .await?
             }
 

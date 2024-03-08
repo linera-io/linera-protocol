@@ -241,7 +241,6 @@ Specify the complete set of new owners, by public key. Existing owners that are 
 * `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round
 
   Default value: `1000`
-* `-f`, `--force` — Perform the change even if it removes existing owners or has super owners
 
 
 

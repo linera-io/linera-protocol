@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_chain::data_types::Certificate;
 use linera_core::{
-    client::{ChainClient, ChainClientBuilder, ChangeOwnershipError},
+    client::{ChainClient, ChainClientBuilder},
     data_types::ClientOutcome,
     node::{CrossChainMessageDelivery, ValidatorNodeProvider},
 };
@@ -412,7 +412,6 @@ impl ClientContext {
         &mut self,
         chain_id: Option<ChainId>,
         ownership_config: ChainOwnershipConfig,
-        force: bool,
         storage: S,
     ) -> anyhow::Result<()>
     where
@@ -424,29 +423,13 @@ impl ClientContext {
         info!("Changing ownership for chain {}", chain_id);
         let time_start = Instant::now();
         let ownership = ChainOwnership::try_from(ownership_config)?;
-        anyhow::ensure!(
-            force || ownership.super_owners.is_empty(),
-            "Regular ownership is recommended to guarantee the chain's liveness. \
-            If you really want to set super owners, please use -f or --force."
-        );
-
-        let with_context = |error: ChangeOwnershipError| {
-            let context = match error {
-                ChangeOwnershipError::ChainClient(_) => "failed to change ownership",
-                ChangeOwnershipError::RemoveOwners(_) => {
-                    "If you really want to set super owners, \
-                    please use -f or --force."
-                }
-            };
-            anyhow::Error::from(error).context(context)
-        };
 
         let (certificate, _) = self
             .apply_client_command(chain_client, |mut chain_client| async {
                 let result = chain_client
-                    .change_ownership(ownership.clone(), force)
-                    .await;
-                let result = result.map_err(with_context);
+                    .change_ownership(ownership.clone())
+                    .await
+                    .context("failed to change ownership");
                 (result, chain_client)
             })
             .await?;

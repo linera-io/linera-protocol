@@ -50,7 +50,7 @@ use linera_storage::Storage;
 use linera_views::views::ViewError;
 use lru::LruCache;
 use std::{
-    collections::{hash_map, BTreeMap, HashMap, HashSet},
+    collections::{hash_map, BTreeMap, HashMap},
     convert::Infallible,
     iter,
     num::NonZeroUsize,
@@ -232,19 +232,6 @@ pub enum ChainClientError {
 
     #[error("Found several possible identities to interact with chain {0}")]
     FoundMultipleKeysForChain(ChainId),
-}
-
-/// Error type for [`ChainClient::change_ownership`].
-#[derive(Debug, Error)]
-pub enum ChangeOwnershipError {
-    #[error(transparent)]
-    ChainClient(#[from] ChainClientError),
-
-    #[error(
-        "This would remove the following existing owners: {:}",
-        .0.iter().map(Owner::to_string).collect::<Vec<_>>().join(", "))
-    ]
-    RemoveOwners(Vec<Owner>),
 }
 
 impl From<Infallible> for ChainClientError {
@@ -1883,48 +1870,14 @@ where
     pub async fn change_ownership(
         &mut self,
         ownership: ChainOwnership,
-        remove_owners: bool,
-    ) -> Result<ClientOutcome<Certificate>, ChangeOwnershipError> {
-        loop {
-            let old_ownership = self.prepare_chain().await?.manager.ownership;
-            ensure!(
-                old_ownership.is_active(),
-                ChainClientError::from(ChainError::InactiveChain(self.chain_id))
-            );
-            if !remove_owners {
-                let new_owners = ownership.all_owners().collect::<HashSet<_>>();
-                let removed_owners = old_ownership
-                    .all_owners()
-                    .filter(|owner| !new_owners.contains(owner))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                ensure!(
-                    removed_owners.is_empty(),
-                    ChangeOwnershipError::RemoveOwners(removed_owners)
-                );
-            }
-            let messages = self.pending_messages().await?;
-            let operations = vec![Operation::System(SystemOperation::ChangeOwnership {
-                super_owners: ownership.super_owners.values().cloned().collect(),
-                owners: ownership.owners.values().cloned().collect(),
-                multi_leader_rounds: ownership.multi_leader_rounds,
-                timeout_config: ownership.timeout_config.clone(),
-            })];
-            match self.execute_block(messages, operations).await? {
-                ExecuteBlockOutcome::Executed(certificate) => {
-                    return Ok(ClientOutcome::Committed(certificate));
-                }
-                ExecuteBlockOutcome::Conflict(certificate) => {
-                    info!(
-                        height = %certificate.value().height(),
-                        "Another block was committed; retrying."
-                    );
-                }
-                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
-                    return Ok(ClientOutcome::WaitForTimeout(timeout));
-                }
-            };
-        }
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+        self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
+            super_owners: ownership.super_owners.values().cloned().collect(),
+            owners: ownership.owners.values().cloned().collect(),
+            multi_leader_rounds: ownership.multi_leader_rounds,
+            timeout_config: ownership.timeout_config.clone(),
+        }))
+        .await
     }
 
     /// Changes the application permissions configuration on this chain.
