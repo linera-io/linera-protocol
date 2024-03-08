@@ -647,6 +647,21 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     Please ensure `linera_sdk::test::mock_try_call_application` was called",
                 );
 
+                let alloc_function = get_function(&mut caller, "cabi_realloc")
+                    .expect(
+                        "Missing `cabi_realloc` function in the module. \
+                        Please ensure `linera_sdk` is compiled in with the module",
+                    )
+                    .typed::<(i32, i32, i32, i32), i32, _>(&mut caller)
+                    .expect("Incorrect `cabi_realloc` function signature");
+
+                let new_query_address = alloc_function
+                    .call_async(&mut caller, (0, 0, 1, query_length))
+                    .await
+                    .expect("Failed to call `cabi_realloc` function");
+
+                copy_memory_slices(&mut caller, query_address, new_query_address, query_length);
+
                 let (result_offset,) = function
                     .typed::<(
                         i64,
@@ -680,7 +695,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                             application_creation_chain_id_part4,
                             application_creation_height,
                             application_creation_index,
-                            query_address,
+                            new_query_address,
                             query_length,
                         ),
                     )
