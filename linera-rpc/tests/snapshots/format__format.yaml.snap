@@ -1,4 +1,7 @@
 ---
+source: linera-rpc/tests/format.rs
+expression: get_registry().unwrap()
+---
 Account:
   STRUCT:
     - chain_id:
@@ -950,4 +953,3 @@ VersionInfo:
     - rpc_hash: STR
     - graphql_hash: STR
     - wit_hash: STR
-
