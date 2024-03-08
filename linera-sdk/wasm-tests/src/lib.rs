@@ -324,7 +324,7 @@ fn mock_write_batch() {
 
     let loaded_view = DummyView::load(store)
         .blocking_wait()
-        .expect("Failed to initialize `DummyView` with the mock key value store");
+        .expect("Failed to reload `DummyView` from the mock key value store");
 
     let loaded_keys = loaded_view
         .map
