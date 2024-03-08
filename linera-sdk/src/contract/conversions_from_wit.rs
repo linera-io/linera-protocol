@@ -112,29 +112,6 @@ impl From<wit_system_api::Amount> for Amount {
     }
 }
 
-impl From<wit_system_api::CallOutcome> for (Vec<u8>, Vec<SessionId>) {
-    fn from(call_outcome: wit_system_api::CallOutcome) -> (Vec<u8>, Vec<SessionId>) {
-        let value = call_outcome.value;
-
-        let sessions = call_outcome
-            .sessions
-            .into_iter()
-            .map(SessionId::from)
-            .collect();
-
-        (value, sessions)
-    }
-}
-
-impl From<wit_system_api::SessionId> for SessionId {
-    fn from(session_id: wit_system_api::SessionId) -> SessionId {
-        SessionId {
-            application_id: session_id.application_id.into(),
-            index: session_id.index,
-        }
-    }
-}
-
 impl From<wit_system_api::PublicKey> for PublicKey {
     fn from(guest: wit_system_api::PublicKey) -> PublicKey {
         let wit_system_api::PublicKey {

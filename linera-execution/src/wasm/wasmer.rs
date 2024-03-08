@@ -48,7 +48,6 @@ use wasmer::{
     Singlepass, Store,
 };
 use wasmer_middlewares::metering::{self, Metering, MeteringPoints};
-use wit_bindgen_host_wasmer_rust::Le;
 
 /// An [`Engine`] instance configured to run application services.
 static SERVICE_ENGINE: Lazy<Engine> = Lazy::new(|| {

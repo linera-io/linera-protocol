@@ -44,7 +44,6 @@ use once_cell::sync::Lazy;
 use std::error::Error;
 use tokio::sync::Mutex;
 use wasmtime::{Config, Engine, Linker, Module, Store};
-use wit_bindgen_host_wasmtime_rust::Le;
 
 /// An [`Engine`] instance configured to run application contracts.
 static CONTRACT_ENGINE: Lazy<Engine> = Lazy::new(|| {

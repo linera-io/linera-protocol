@@ -150,7 +150,6 @@ impl CrowdFunding {
             /* authenticated by owner */ true,
             Self::fungible_id()?,
             &call,
-            vec![],
         )?;
         // Second, schedule the attribution of the funds to the (remote) campaign.
         let message = Message::PledgeWithAccount { owner, amount };
@@ -247,11 +246,10 @@ impl CrowdFunding {
     /// Queries the token application to determine the total amount of tokens in custody.
     fn balance(&mut self) -> Result<Amount, Error> {
         let owner = AccountOwner::Application(system_api::current_application_id());
-        let (response, _) = self.call_application(
+        let response = self.call_application(
             true,
             Self::fungible_id()?,
             &fungible::ApplicationCall::Balance { owner },
-            vec![],
         )?;
         match response {
             fungible::FungibleResponse::Balance(balance) => Ok(balance),
@@ -270,7 +268,7 @@ impl CrowdFunding {
             amount,
             destination,
         };
-        self.call_application(true, Self::fungible_id()?, &transfer, vec![])?;
+        self.call_application(true, Self::fungible_id()?, &transfer)?;
         Ok(())
     }
 
@@ -285,7 +283,7 @@ impl CrowdFunding {
             amount,
             destination,
         };
-        self.call_application(true, Self::fungible_id()?, &transfer, vec![])?;
+        self.call_application(true, Self::fungible_id()?, &transfer)?;
         Ok(())
     }
 

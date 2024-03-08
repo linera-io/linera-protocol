@@ -93,7 +93,7 @@ impl Contract for MetaCounter {
             }
             Message::Increment(value) => {
                 log::trace!("executing {} via {:?}", value, Self::counter_id()?);
-                self.call_application(true, Self::counter_id()?, &value, vec![])?;
+                self.call_application(true, Self::counter_id()?, &value)?;
                 Ok(ExecutionOutcome::default())
             }
         }

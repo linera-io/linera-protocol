@@ -9,7 +9,7 @@ use crate::{ApplicationCallOutcome, ExecutionOutcome, OutgoingMessage, SessionCa
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, Resources},
-    identifiers::{Account, ApplicationId, ChannelName, Destination, MessageId, Owner, SessionId},
+    identifiers::{Account, ApplicationId, ChannelName, Destination, MessageId, Owner},
 };
 
 impl From<CryptoHash> for wit_system_api::CryptoHash {
@@ -67,15 +67,6 @@ impl From<ApplicationId> for wit_system_api::ApplicationId {
         wit_system_api::ApplicationId {
             bytecode_id: application_id.bytecode_id.message_id.into(),
             creation: application_id.creation.into(),
-        }
-    }
-}
-
-impl From<SessionId> for wit_system_api::SessionId {
-    fn from(session_id: SessionId) -> Self {
-        wit_system_api::SessionId {
-            application_id: session_id.application_id.into(),
-            index: session_id.index,
         }
     }
 }

@@ -13,7 +13,7 @@ use std::time::Duration;
 use super::{contract, contract_system_api, service_system_api};
 use crate::{
     ApplicationCallOutcome, ChannelName, Destination, MessageKind, RawExecutionOutcome,
-    RawOutgoingMessage, SessionCallOutcome, SessionId, UserApplicationId,
+    RawOutgoingMessage, SessionCallOutcome, UserApplicationId,
 };
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
@@ -133,15 +133,6 @@ impl From<contract::CryptoHash> for CryptoHash {
 impl From<contract::ChainId> for ChainId {
     fn from(guest: contract::ChainId) -> Self {
         ChainId(guest.into())
-    }
-}
-
-impl From<contract_system_api::SessionId> for SessionId {
-    fn from(guest: contract_system_api::SessionId) -> Self {
-        SessionId {
-            application_id: guest.application_id.into(),
-            index: guest.index,
-        }
     }
 }
 

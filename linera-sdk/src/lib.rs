@@ -241,17 +241,15 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
         authenticated: bool,
         application: ApplicationId<A>,
         call: &A::ApplicationCall,
-        forwarded_sessions: Vec<SessionId>,
-    ) -> Result<(A::Response, Vec<SessionId>), Self::Error> {
+    ) -> Result<A::Response, Self::Error> {
         let call_bytes = bcs::to_bytes(call)?;
-        let (response_bytes, ids) = crate::contract::system_api::call_application(
+        let response_bytes = crate::contract::system_api::call_application(
             authenticated,
             application.forget_abi(),
             &call_bytes,
-            forwarded_sessions,
         );
         let response = bcs::from_bytes(&response_bytes)?;
-        Ok((response, ids))
+        Ok(response)
     }
 
     /// Retrieves the parameters of the application.

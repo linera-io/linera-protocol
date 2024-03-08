@@ -6,7 +6,7 @@
 
 use super::super::wit_system_api as wit;
 use crate::views::ViewStorageContext;
-use linera_base::identifiers::{ApplicationId, SessionId};
+use linera_base::identifiers::ApplicationId;
 use linera_views::views::{RootView, View};
 
 /// Retrieves the current application parameters.
@@ -31,18 +31,6 @@ pub fn call_application(
     authenticated: bool,
     application: ApplicationId,
     argument: &[u8],
-    forwarded_sessions: Vec<SessionId>,
-) -> (Vec<u8>, Vec<SessionId>) {
-    let forwarded_sessions = forwarded_sessions
-        .into_iter()
-        .map(wit::SessionId::from)
-        .collect::<Vec<_>>();
-
-    wit::try_call_application(
-        authenticated,
-        application.into(),
-        argument,
-        &forwarded_sessions,
-    )
-    .into()
+) -> Vec<u8> {
+    wit::try_call_application(authenticated, application.into(), argument)
 }
