@@ -644,13 +644,13 @@ where
 pub static ROCKS_DB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
 
 #[derive(Default)]
-pub struct MakeMemoryStorage {
+pub struct MemoryStorageBuilder {
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
 }
 
 #[async_trait]
-impl StorageBuilder for MakeMemoryStorage {
+impl StorageBuilder for MemoryStorageBuilder {
     type Storage = MemoryStorage<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
@@ -667,42 +667,42 @@ impl StorageBuilder for MakeMemoryStorage {
     }
 }
 
-impl MakeMemoryStorage {
-    /// Creates a [`MakeMemoryStorage`] that uses the specified [`WasmRuntime`] to run Wasm
+impl MemoryStorageBuilder {
+    /// Creates a [`MemoryStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        MakeMemoryStorage {
+        MemoryStorageBuilder {
             wasm_runtime: wasm_runtime.into(),
-            ..MakeMemoryStorage::default()
+            ..MemoryStorageBuilder::default()
         }
     }
 }
 
 #[cfg(feature = "rocksdb")]
 #[derive(Default)]
-pub struct MakeRocksDbStorage {
+pub struct RocksDbStorageBuilder {
     temp_dirs: Vec<tempfile::TempDir>,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
 }
 
 #[cfg(feature = "rocksdb")]
-impl MakeRocksDbStorage {
-    /// Creates a [`MakeRocksDbStorage`] that uses the specified [`WasmRuntime`] to run Wasm
+impl RocksDbStorageBuilder {
+    /// Creates a [`RocksDbStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        MakeRocksDbStorage {
+        RocksDbStorageBuilder {
             wasm_runtime: wasm_runtime.into(),
-            ..MakeRocksDbStorage::default()
+            ..RocksDbStorageBuilder::default()
         }
     }
 }
 
 #[cfg(feature = "rocksdb")]
 #[async_trait]
-impl StorageBuilder for MakeRocksDbStorage {
+impl StorageBuilder for RocksDbStorageBuilder {
     type Storage = RocksDbStorage<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
@@ -731,7 +731,7 @@ impl StorageBuilder for MakeRocksDbStorage {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub struct MakeServiceStorage {
+pub struct ServiceStorageBuilder {
     _guard: Option<StorageServiceGuard>,
     endpoint: String,
     namespace: String,
@@ -742,8 +742,8 @@ pub struct MakeServiceStorage {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-impl Default for MakeServiceStorage {
-    fn default() -> MakeServiceStorage {
+impl Default for ServiceStorageBuilder {
+    fn default() -> ServiceStorageBuilder {
         let _guard = None;
         let clock = TestClock::default();
         let endpoint = "127.0.0.1:8742".to_string();
@@ -762,7 +762,7 @@ impl Default for MakeServiceStorage {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-impl MakeServiceStorage {
+impl ServiceStorageBuilder {
     /// Creates a `ServiceStorage` from just an endpoint
     pub fn new(endpoint: &str) -> Self {
         Self::with_wasm_runtime(endpoint, None)
@@ -789,7 +789,7 @@ impl MakeServiceStorage {
 
 #[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
-impl StorageBuilder for MakeServiceStorage {
+impl StorageBuilder for ServiceStorageBuilder {
     type Storage = ServiceStorage<TestClock>;
 
     async fn build(&mut self) -> anyhow::Result<Self::Storage> {
@@ -817,7 +817,7 @@ impl StorageBuilder for MakeServiceStorage {
 
 #[cfg(feature = "aws")]
 #[derive(Default)]
-pub struct MakeDynamoDbStorage {
+pub struct DynamoDbStorageBuilder {
     instance_counter: usize,
     localstack: Option<LocalStackTestContext>,
     wasm_runtime: Option<WasmRuntime>,
@@ -825,21 +825,21 @@ pub struct MakeDynamoDbStorage {
 }
 
 #[cfg(feature = "aws")]
-impl MakeDynamoDbStorage {
-    /// Creates a [`MakeDynamoDbStorage`] that uses the specified [`WasmRuntime`] to run Wasm
+impl DynamoDbStorageBuilder {
+    /// Creates a [`DynamoDbStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        MakeDynamoDbStorage {
+        DynamoDbStorageBuilder {
             wasm_runtime: wasm_runtime.into(),
-            ..MakeDynamoDbStorage::default()
+            ..DynamoDbStorageBuilder::default()
         }
     }
 }
 
 #[cfg(feature = "aws")]
 #[async_trait]
-impl StorageBuilder for MakeDynamoDbStorage {
+impl StorageBuilder for DynamoDbStorageBuilder {
     type Storage = DynamoDbStorage<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
@@ -871,7 +871,7 @@ impl StorageBuilder for MakeDynamoDbStorage {
 }
 
 #[cfg(feature = "scylladb")]
-pub struct MakeScyllaDbStorage {
+pub struct ScyllaDbStorageBuilder {
     instance_counter: usize,
     uri: String,
     wasm_runtime: Option<WasmRuntime>,
@@ -879,13 +879,13 @@ pub struct MakeScyllaDbStorage {
 }
 
 #[cfg(feature = "scylladb")]
-impl Default for MakeScyllaDbStorage {
+impl Default for ScyllaDbStorageBuilder {
     fn default() -> Self {
         let instance_counter = 0;
         let uri = "localhost:9042".to_string();
         let wasm_runtime = None;
         let clock = TestClock::new();
-        MakeScyllaDbStorage {
+        ScyllaDbStorageBuilder {
             instance_counter,
             uri,
             wasm_runtime,
@@ -895,21 +895,21 @@ impl Default for MakeScyllaDbStorage {
 }
 
 #[cfg(feature = "scylladb")]
-impl MakeScyllaDbStorage {
-    /// Creates a [`MakeScyllaDbStorage`] that uses the specified [`WasmRuntime`] to run Wasm
+impl ScyllaDbStorageBuilder {
+    /// Creates a [`ScyllaDbStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        MakeScyllaDbStorage {
+        ScyllaDbStorageBuilder {
             wasm_runtime: wasm_runtime.into(),
-            ..MakeScyllaDbStorage::default()
+            ..ScyllaDbStorageBuilder::default()
         }
     }
 }
 
 #[cfg(feature = "scylladb")]
 #[async_trait]
-impl StorageBuilder for MakeScyllaDbStorage {
+impl StorageBuilder for ScyllaDbStorageBuilder {
     type Storage = ScyllaDbStorage<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
