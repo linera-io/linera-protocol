@@ -56,7 +56,7 @@ impl Contract for CrowdFunding {
         let mut outcome = ExecutionOutcome::default();
 
         match operation {
-            Operation::PledgeWithTransfer { owner, amount } => {
+            Operation::Pledge { owner, amount } => {
                 if runtime.chain_id() == system_api::current_application_id().creation.chain_id {
                     self.execute_pledge_with_account(owner, amount).await?;
                 } else {
@@ -89,26 +89,16 @@ impl Contract for CrowdFunding {
 
     async fn handle_application_call(
         &mut self,
-        runtime: &mut ContractRuntime,
+        _runtime: &mut ContractRuntime,
         call: ApplicationCall,
-        sessions: Vec<SessionId>,
+        _sessions: Vec<SessionId>,
     ) -> Result<
         ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>,
         Self::Error,
     > {
         let mut outcome = ApplicationCallOutcome::default();
         match call {
-            ApplicationCall::PledgeWithSessions { source } => {
-                // Only sessions on the campaign chain are supported.
-                ensure!(
-                    runtime.chain_id() == system_api::current_application_id().creation.chain_id,
-                    Error::CampaignChainOnly
-                );
-                // In real-life applications, the source could be constrained so that a
-                // refund cannot be used as a transfer.
-                self.execute_pledge_with_sessions(source, sessions).await?
-            }
-            ApplicationCall::PledgeWithTransfer { owner, amount } => {
+            ApplicationCall::Pledge { owner, amount } => {
                 self.execute_pledge_with_transfer(&mut outcome.execution_outcome, owner, amount)?;
             }
             ApplicationCall::Collect => self.collect_pledges()?,
@@ -183,69 +173,6 @@ impl CrowdFunding {
         ensure!(amount > Amount::ZERO, Error::EmptyPledge);
         self.receive_from_account(owner, amount)?;
         self.finish_pledge(owner, amount).await
-    }
-
-    /// Adds a pledge sent from an application using token sessions.
-    async fn execute_pledge_with_sessions(
-        &mut self,
-        source: AccountOwner,
-        sessions: Vec<SessionId>,
-    ) -> Result<(), Error> {
-        let sessions = self.check_session_tokens(sessions)?;
-
-        let session_balances = self.query_session_balances(&sessions)?;
-        let amount = session_balances.iter().sum();
-
-        ensure!(amount > Amount::ZERO, Error::EmptyPledge);
-
-        self.collect_session_tokens(sessions, session_balances)?;
-        self.finish_pledge(source, amount).await
-    }
-
-    /// Checks that the sessions pledged all use the correct token. Marks the sessions
-    /// with the correct Abi.
-    fn check_session_tokens(
-        &self,
-        sessions: Vec<SessionId>,
-    ) -> Result<Vec<SessionId<FungibleTokenAbi>>, Error> {
-        let fungible_id = Self::fungible_id()?.forget_abi();
-        ensure!(
-            sessions
-                .iter()
-                .all(|session_id| session_id.application_id == fungible_id),
-            Error::IncorrectToken
-        );
-        let sessions = sessions.into_iter().map(|s| s.with_abi()).collect();
-        Ok(sessions)
-    }
-
-    /// Gathers the balances in all the pledged sessions.
-    fn query_session_balances(
-        &mut self,
-        sessions: &[SessionId<FungibleTokenAbi>],
-    ) -> Result<Vec<Amount>, Error> {
-        let mut balances = Vec::with_capacity(sessions.len());
-        for session in sessions {
-            let (response, _) =
-                self.call_session(false, *session, &fungible::SessionCall::Balance, vec![])?;
-            match response {
-                FungibleResponse::Balance(balance) => balances.push(balance),
-                response => return Err(Error::UnexpectedFungibleResponse(response)),
-            }
-        }
-        Ok(balances)
-    }
-
-    /// Collects all tokens in the sessions and places them in custody of the campaign.
-    fn collect_session_tokens(
-        &mut self,
-        sessions: Vec<SessionId<FungibleTokenAbi>>,
-        balances: Vec<Amount>,
-    ) -> Result<(), Error> {
-        for (session, balance) in sessions.into_iter().zip(balances) {
-            self.receive_from_session(session, balance)?;
-        }
-        Ok(())
     }
 
     /// Marks a pledge in the application state, so that it can be returned if the campaign is
@@ -361,25 +288,6 @@ impl CrowdFunding {
             destination,
         };
         self.call_application(true, Self::fungible_id()?, &transfer, vec![])?;
-        Ok(())
-    }
-
-    /// Calls into the Fungible Token application to receive tokens from the given account.
-    fn receive_from_session(
-        &mut self,
-        session: SessionId<FungibleTokenAbi>,
-        amount: Amount,
-    ) -> Result<(), Error> {
-        let account = Account {
-            chain_id: system_api::current_chain_id(),
-            owner: AccountOwner::Application(system_api::current_application_id()),
-        };
-        let destination = Destination::Account(account);
-        let transfer = fungible::SessionCall::Transfer {
-            amount,
-            destination,
-        };
-        self.call_session(false, session, &transfer, vec![])?;
         Ok(())
     }
 

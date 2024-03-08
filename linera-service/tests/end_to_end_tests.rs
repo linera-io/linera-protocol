@@ -1038,7 +1038,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) {
 
     // Transferring
     let mutation = format!(
-        "pledgeWithTransfer(owner: {}, amount: \"{}\")",
+        "pledge(owner: {}, amount: \"{}\")",
         account_owner2.to_value(),
         Amount::ONE,
     );
