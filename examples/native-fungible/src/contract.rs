@@ -157,12 +157,11 @@ impl Contract for NativeFungibleToken {
                 let account_owner = owner;
                 let owner = self.normalize_owner(owner);
 
-                let fungible_target_account = self.destination_to_account(destination);
-                let target_account = self.normalize_account(fungible_target_account);
+                let target_account = self.normalize_account(destination);
 
                 system_api::transfer(Some(owner), target_account, amount);
                 let execution_outcome =
-                    self.get_transfer_outcome(account_owner, fungible_target_account, amount);
+                    self.get_transfer_outcome(account_owner, destination, amount);
                 Ok(ApplicationCallOutcome {
                     execution_outcome,
                     ..Default::default()
@@ -270,13 +269,6 @@ impl NativeFungibleToken {
         Account {
             chain_id: account.chain_id,
             owner: Some(owner),
-        }
-    }
-
-    fn destination_to_account(&self, destination: fungible::Destination) -> fungible::Account {
-        match destination {
-            fungible::Destination::Account(account) => account,
-            fungible::Destination::NewSession => panic!("Sessions not supported yet!"),
         }
     }
 

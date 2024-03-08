@@ -7,7 +7,7 @@ mod state;
 
 use async_trait::async_trait;
 use crowd_funding::{ApplicationCall, InitializationArgument, Message, Operation};
-use fungible::{Account, Destination, FungibleResponse, FungibleTokenAbi};
+use fungible::{Account, FungibleResponse, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, SessionId, WithContractAbi},
     contract::system_api,
@@ -140,7 +140,7 @@ impl CrowdFunding {
         // First, move the funds to the campaign chain (under the same owner).
         // TODO(#589): Simplify this when the messaging system guarantees atomic delivery
         // of all messages created in the same operation/message.
-        let destination = fungible::Destination::Account(Account { chain_id, owner });
+        let destination = Account { chain_id, owner };
         let call = fungible::ApplicationCall::Transfer {
             owner,
             amount,
@@ -261,11 +261,10 @@ impl CrowdFunding {
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
     fn send_to(&mut self, amount: Amount, owner: AccountOwner) -> Result<(), Error> {
-        let account = Account {
+        let destination = Account {
             chain_id: system_api::current_chain_id(),
             owner,
         };
-        let destination = Destination::Account(account);
         let transfer = fungible::ApplicationCall::Transfer {
             owner: AccountOwner::Application(system_api::current_application_id()),
             amount,
@@ -277,11 +276,10 @@ impl CrowdFunding {
 
     /// Calls into the Fungible Token application to receive tokens from the given account.
     fn receive_from_account(&mut self, owner: AccountOwner, amount: Amount) -> Result<(), Error> {
-        let account = Account {
+        let destination = Account {
             chain_id: system_api::current_chain_id(),
             owner: AccountOwner::Application(system_api::current_application_id()),
         };
-        let destination = Destination::Account(account);
         let transfer = fungible::ApplicationCall::Transfer {
             owner,
             amount,

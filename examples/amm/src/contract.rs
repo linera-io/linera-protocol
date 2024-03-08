@@ -8,7 +8,7 @@ mod state;
 use self::state::Amm;
 use amm::{AmmError, ApplicationCall, Message, Operation};
 use async_trait::async_trait;
-use fungible::{Account, Destination, FungibleTokenAbi};
+use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, Owner, SessionId, WithContractAbi},
     contract::system_api,
@@ -431,7 +431,7 @@ impl Amm {
         &mut self,
         owner: &AccountOwner,
         amount: Amount,
-        destination: Destination,
+        destination: Account,
         token_idx: u32,
     ) -> Result<(), AmmError> {
         let transfer = fungible::ApplicationCall::Transfer {
@@ -459,11 +459,10 @@ impl Amm {
         token_idx: u32,
         amount: Amount,
     ) -> Result<(), AmmError> {
-        let account = Account {
+        let destination = Account {
             chain_id: system_api::current_chain_id(),
             owner: AccountOwner::Application(system_api::current_application_id()),
         };
-        let destination = Destination::Account(account);
         self.transfer(owner, amount, destination, token_idx)
     }
 
@@ -473,11 +472,10 @@ impl Amm {
         token_idx: u32,
         amount: Amount,
     ) -> Result<(), AmmError> {
-        let account = Account {
+        let destination = Account {
             chain_id: system_api::current_chain_id(),
             owner: *owner,
         };
-        let destination = Destination::Account(account);
         let owner_app = AccountOwner::Application(system_api::current_application_id());
         self.transfer(&owner_app, amount, destination, token_idx)
     }

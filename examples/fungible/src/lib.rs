@@ -25,8 +25,7 @@ Tokens can be transferred from an account to different destinations, such as:
 
 - other accounts on the same chain,
 - the same account on another chain,
-- other accounts on other chains,
-- sessions so that other applications can use some tokens.
+- other accounts on other chains.
 
 # Usage
 
@@ -224,7 +223,7 @@ transfer tokens from OWNER_1 to OWNER_2 at CHAIN_2 will instantly update the UI 
 second page.
 */
 
-use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
+use async_graphql::{InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
     base::{AccountOwner, Amount, ChainId, ContractAbi, ServiceAbi},
     graphql::GraphQLMutationRoot,
@@ -249,9 +248,9 @@ impl ContractAbi for FungibleTokenAbi {
     type ApplicationCall = ApplicationCall;
     type Operation = Operation;
     type Message = Message;
-    type SessionCall = SessionCall;
+    type SessionCall = ();
     type Response = FungibleResponse;
-    type SessionState = Amount;
+    type SessionState = ();
 }
 
 impl ServiceAbi for FungibleTokenAbi {
@@ -307,7 +306,7 @@ pub enum ApplicationCall {
     Transfer {
         owner: AccountOwner,
         amount: Amount,
-        destination: Destination,
+        destination: Account,
     },
     /// Same as transfer but the source account may be remote.
     Claim {
@@ -317,20 +316,6 @@ pub enum ApplicationCall {
     },
     /// Requests this fungible token's ticker symbol.
     TickerSymbol,
-}
-
-/// A cross-application call into a session.
-#[derive(Debug, Deserialize, Serialize)]
-pub enum SessionCall {
-    /// Requests the session's balance.
-    Balance,
-    /// Transfers the given `amount` from the session to the given `destination`. If the
-    /// destination is an account on a remote chain, any bouncing message will credit the
-    /// local account for the same owner.
-    Transfer {
-        amount: Amount,
-        destination: Destination,
-    },
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]
@@ -376,14 +361,6 @@ pub struct Account {
     pub chain_id: ChainId,
     pub owner: AccountOwner,
 }
-
-#[derive(Debug, Deserialize, Serialize)]
-pub enum Destination {
-    Account(Account),
-    NewSession,
-}
-
-scalar!(Destination);
 
 /// A builder type for constructing the initial state of the application.
 #[derive(Debug, Default)]
