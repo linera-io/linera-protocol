@@ -14,7 +14,7 @@ use linera_sdk::{
     ensure,
     views::View,
     ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
-    Resources, SessionCallOutcome, ViewStateStorage,
+    Resources, ViewStateStorage,
 };
 use state::{CrowdFunding, Status};
 use thiserror::Error;
@@ -103,17 +103,6 @@ impl Contract for CrowdFunding {
         }
 
         Ok(outcome)
-    }
-
-    async fn handle_session_call(
-        &mut self,
-        _runtime: &mut ContractRuntime,
-        _state: Self::SessionState,
-        _call: (),
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
-    {
-        Err(Error::SessionsNotSupported)
     }
 }
 
@@ -299,10 +288,6 @@ pub enum Error {
     /// Action can only be executed on the chain that created the crowd-funding campaign
     #[error("Action can only be executed on the chain that created the crowd-funding campaign")]
     CampaignChainOnly,
-
-    /// Crowd-funding application doesn't support any cross-application sessions.
-    #[error("Crowd-funding application doesn't support any cross-application sessions")]
-    SessionsNotSupported,
 
     /// Crowd-funding campaign cannot start after its deadline.
     #[error("Crowd-funding campaign cannot start after its deadline")]

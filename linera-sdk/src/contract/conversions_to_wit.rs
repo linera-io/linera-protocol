@@ -5,7 +5,7 @@
 //! [`wit-bindgen-guest-rust`].
 
 use super::{wit_system_api, wit_types};
-use crate::{ApplicationCallOutcome, ExecutionOutcome, OutgoingMessage, SessionCallOutcome};
+use crate::{ApplicationCallOutcome, ExecutionOutcome, OutgoingMessage};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, Resources},
@@ -98,15 +98,6 @@ impl From<ApplicationCallOutcome<Vec<u8>, Vec<u8>>> for wit_types::ApplicationCa
         wit_types::ApplicationCallOutcome {
             value: outcome.value,
             execution_outcome: outcome.execution_outcome.into(),
-        }
-    }
-}
-
-impl From<SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>> for wit_types::SessionCallOutcome {
-    fn from(outcome: SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>) -> Self {
-        wit_types::SessionCallOutcome {
-            inner: outcome.inner.into(),
-            new_state: outcome.new_state,
         }
     }
 }

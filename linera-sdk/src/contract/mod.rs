@@ -14,7 +14,7 @@ pub mod wit_types;
 pub use self::{runtime::ContractRuntime, storage::ContractStateStorage};
 use crate::{
     log::ContractLogger, util::BlockingWait, ApplicationCallOutcome, Contract, ExecutionOutcome,
-    SessionCallOutcome, SessionId,
+    SessionId,
 };
 
 /// Declares an implementation of the [`Contract`][`crate::Contract`] trait, exporting it from the
@@ -118,39 +118,6 @@ macro_rules! contract {
 
         #[doc(hidden)]
         #[no_mangle]
-        fn __contract_handle_session_call(
-            session_state: Vec<u8>,
-            argument: Vec<u8>,
-            forwarded_sessions: Vec<$crate::SessionId>,
-        ) -> Result<$crate::SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String> {
-            use $crate::util::BlockingWait;
-            $crate::contract::run_async_entrypoint::<$application, _, _, _>(
-                unsafe { &mut APPLICATION },
-                move |application| {
-                    let session_state: <$application as $crate::abi::ContractAbi>::SessionState =
-                        bcs::from_bytes(&session_state)?;
-                    let argument: <$application as $crate::abi::ContractAbi>::SessionCall =
-                        bcs::from_bytes(&argument)?;
-                    let forwarded_sessions = forwarded_sessions
-                        .into_iter()
-                        .map(SessionId::from)
-                        .collect();
-
-                    application
-                        .handle_session_call(
-                            &mut $crate::ContractRuntime::default(),
-                            session_state,
-                            argument,
-                            forwarded_sessions,
-                        )
-                        .blocking_wait()
-                        .map(|outcome| outcome.into_raw())
-                },
-            )
-        }
-
-        #[doc(hidden)]
-        #[no_mangle]
         fn __contract_finalize() -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
             use $crate::util::BlockingWait;
             $crate::contract::run_async_entrypoint::<$application, _, _, _>(
@@ -213,12 +180,6 @@ extern "Rust" {
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallOutcome<Vec<u8>, Vec<u8>>, String>;
-
-    fn __contract_handle_session_call(
-        session_state: Vec<u8>,
-        argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String>;
 
     fn __contract_finalize() -> Result<ExecutionOutcome<Vec<u8>>, String>;
 }

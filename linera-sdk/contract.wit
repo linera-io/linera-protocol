@@ -7,12 +7,6 @@ handle-application-call: func(
     forwarded-sessions: list<session-id>,
 ) -> result<application-call-outcome, string>
 
-handle-session-call: func(
-    state: session-state,
-    argument: list<u8>,
-    forwarded-sessions: list<session-id>,
-) -> result<session-call-outcome, string>
-
 finalize: func() -> result<execution-outcome, string>
 
 record message-id {
@@ -38,11 +32,6 @@ record application-call-outcome {
 record session-id {
     application-id: application-id,
     index: u64,
-}
-
-record session-call-outcome {
-    inner: application-call-outcome,
-    new-state: option<session-state>,
 }
 
 record outgoing-message {
@@ -78,8 +67,6 @@ variant destination {
 record channel-name {
     name: list<u8>,
 }
-
-type session-state = list<u8>
 
 record crypto-hash {
     part1: u64,

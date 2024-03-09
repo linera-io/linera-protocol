@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use linera_sdk::{
     base::{ApplicationId, SessionId, WithContractAbi},
     ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
-    Resources, SessionCallOutcome, SimpleStateStorage,
+    Resources, SimpleStateStorage,
 };
 use meta_counter::{Message, Operation};
 use thiserror::Error;
@@ -107,17 +107,6 @@ impl Contract for MetaCounter {
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         Err(Error::CallsNotSupported)
     }
-
-    async fn handle_session_call(
-        &mut self,
-        _runtime: &mut ContractRuntime,
-        _state: Self::SessionState,
-        _call: (),
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
-    {
-        Err(Error::SessionsNotSupported)
-    }
 }
 
 /// An error that can occur during the contract execution.
@@ -128,9 +117,6 @@ pub enum Error {
 
     #[error("MetaCounter application doesn't support any cross-application calls")]
     CallsNotSupported,
-
-    #[error("MetaCounter application doesn't support any cross-application sessions")]
-    SessionsNotSupported,
 
     #[error("Message failed intentionally")]
     MessageFailed,

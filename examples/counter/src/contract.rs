@@ -9,8 +9,7 @@ use self::state::Counter;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{SessionId, WithContractAbi},
-    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, SessionCallOutcome,
-    SimpleStateStorage,
+    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, SimpleStateStorage,
 };
 use thiserror::Error;
 
@@ -67,17 +66,6 @@ impl Contract for Counter {
             ..ApplicationCallOutcome::default()
         })
     }
-
-    async fn handle_session_call(
-        &mut self,
-        _runtime: &mut ContractRuntime,
-        _state: Self::SessionState,
-        _call: (),
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
-    {
-        Err(Error::SessionsNotSupported)
-    }
 }
 
 /// An error that can occur during the contract execution.
@@ -86,10 +74,6 @@ pub enum Error {
     /// Counter application doesn't support any cross-chain messages.
     #[error("Counter application doesn't support any cross-chain messages")]
     MessagesNotSupported,
-
-    /// Counter application doesn't support any cross-application sessions.
-    #[error("Counter application doesn't support any cross-application sessions")]
-    SessionsNotSupported,
 
     /// Failed to deserialize BCS bytes
     #[error("Failed to deserialize BCS bytes")]
@@ -163,20 +147,6 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), expected_outcome);
         assert_eq!(counter.value, expected_value);
-    }
-
-    #[webassembly_test]
-    fn sessions() {
-        let initial_value = 72_u64;
-        let mut counter = create_and_initialize_counter(initial_value);
-
-        let result = counter
-            .handle_session_call(&mut ContractRuntime::default(), (), (), vec![])
-            .now_or_never()
-            .expect("Execution of counter operation should not await anything");
-
-        assert_matches!(result, Err(Error::SessionsNotSupported));
-        assert_eq!(counter.value, initial_value);
     }
 
     fn create_and_initialize_counter(initial_value: u64) -> Counter {

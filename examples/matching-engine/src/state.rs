@@ -43,10 +43,6 @@ pub enum MatchingEngineError {
     #[error("The owner of the order is not matching with the owner put")]
     WrongOwnerOfOrder,
 
-    /// Matching-Engine application doesn't support any cross-application sessions.
-    #[error("Matching-Engine application doesn't support any cross-application sessions")]
-    SessionsNotSupported,
-
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
 

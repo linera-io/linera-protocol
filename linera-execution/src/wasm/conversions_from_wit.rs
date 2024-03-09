@@ -13,7 +13,7 @@ use std::time::Duration;
 use super::{contract, contract_system_api, service_system_api};
 use crate::{
     ApplicationCallOutcome, ChannelName, Destination, MessageKind, RawExecutionOutcome,
-    RawOutgoingMessage, SessionCallOutcome, UserApplicationId,
+    RawOutgoingMessage, UserApplicationId,
 };
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
@@ -21,19 +21,6 @@ use linera_base::{
     identifiers::{Account, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
-
-impl From<contract::SessionCallOutcome> for (SessionCallOutcome, Vec<u8>) {
-    fn from(outcome: contract::SessionCallOutcome) -> Self {
-        let session_call_outcome = SessionCallOutcome {
-            inner: outcome.inner.into(),
-            close_session: outcome.new_state.is_some(),
-        };
-
-        let updated_session_state = outcome.new_state.unwrap_or_default();
-
-        (session_call_outcome, updated_session_state)
-    }
-}
 
 impl From<contract::ApplicationCallOutcome> for ApplicationCallOutcome {
     fn from(outcome: contract::ApplicationCallOutcome) -> Self {

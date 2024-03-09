@@ -277,9 +277,6 @@ pub enum AmmError {
     #[error("AMM application doesn't support any cross-chain messages")]
     MessagesNotSupported,
 
-    #[error("AMM application doesn't support any cross-application sessions")]
-    SessionsNotSupported,
-
     #[error("AMM application doesn't support any application calls")]
     ApplicationCallsNotSupported,
 

@@ -17,7 +17,7 @@ use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ChainId, Owner, SessionId, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
-    Resources, SessionCallOutcome, ViewStateStorage,
+    Resources, ViewStateStorage,
 };
 
 linera_sdk::contract!(MatchingEngine);
@@ -147,17 +147,6 @@ impl Contract for MatchingEngine {
             }
         }
         Ok(outcome)
-    }
-
-    async fn handle_session_call(
-        &mut self,
-        _runtime: &mut ContractRuntime,
-        _state: Self::SessionState,
-        _call: (),
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
-    {
-        Err(Self::Error::SessionsNotSupported)
     }
 }
 

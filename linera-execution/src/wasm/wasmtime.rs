@@ -375,26 +375,11 @@ where
     fn handle_session_call(
         &mut self,
         _context: CalleeContext,
-        session: Vec<u8>,
-        argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
+        _session: Vec<u8>,
+        _argument: Vec<u8>,
+        _forwarded_sessions: Vec<SessionId>,
     ) -> Result<(SessionCallOutcome, Vec<u8>), ExecutionError> {
-        let forwarded_sessions = forwarded_sessions
-            .into_iter()
-            .map(contract::SessionId::from)
-            .collect::<Vec<_>>();
-
-        self.configure_initial_fuel()?;
-        let result = contract::Contract::handle_session_call(
-            &self.application,
-            &mut self.store,
-            &session,
-            &argument,
-            &forwarded_sessions,
-        )
-        .map(|inner| inner.map(<(SessionCallOutcome, Vec<u8>)>::from));
-        self.persist_remaining_fuel()?;
-        result?.map_err(ExecutionError::UserError)
+        Ok(Default::default())
     }
 
     fn finalize(
