@@ -579,6 +579,13 @@ pub trait Context: Clone {
         key
     }
 
+    /// Concatenates the base_key and index.
+    fn base_index(&self, index: &[u8]) -> Vec<u8> {
+        let mut key = self.base_key();
+        key.extend_from_slice(index);
+        key
+    }
+
     /// Obtains the `Vec<u8>` key from the key by serialization and using the base_key.
     fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error> {
         let mut key = self.base_key();
