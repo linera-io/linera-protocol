@@ -30,6 +30,12 @@ enum KeyTag {
     Hash,
 }
 
+/// That is used for accessing whether we need to delete the storage first before
+/// writing
+pub(crate) trait DeleteStorageFirst {
+    fn delete_storage_first(&self) -> bool;
+}
+
 #[async_trait]
 impl<C, W, O> View<C> for WrappedHashableContainerView<C, W, O>
 where

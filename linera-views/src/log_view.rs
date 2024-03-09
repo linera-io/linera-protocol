@@ -4,7 +4,7 @@
 use crate::{
     batch::Batch,
     common::{from_bytes_opt, Context, HasherOutput, MIN_VIEW_TAG},
-    hashable_wrapper::WrappedHashableContainerView,
+    hashable_wrapper::{DeleteStorageFirst, WrappedHashableContainerView},
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
@@ -383,6 +383,12 @@ where
                 Ok(new_hash)
             }
         }
+    }
+}
+
+impl<C, T> DeleteStorageFirst for LogView<C, T> {
+    fn delete_storage_first(&self) -> bool {
+        self.delete_storage_first
     }
 }
 
