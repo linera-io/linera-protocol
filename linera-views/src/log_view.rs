@@ -3,11 +3,10 @@
 
 use crate::{
     batch::Batch,
-    common::{from_bytes_opt, Context, HasherOutput, MIN_VIEW_TAG},
+    common::{Context, HasherOutput, MIN_VIEW_TAG},
     hashable_wrapper::{DeleteStorageFirst, WrappedHashableContainerView},
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
-use async_lock::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -43,8 +42,6 @@ enum KeyTag {
     Store = MIN_VIEW_TAG,
     /// Prefix for the indices of the log.
     Index,
-    /// Prefix for the hash.
-    Hash,
 }
 
 /// A view that supports logging values of type `T`.
@@ -54,8 +51,6 @@ pub struct LogView<C, T> {
     delete_storage_first: bool,
     stored_count: usize,
     new_values: Vec<T>,
-    stored_hash: Option<HasherOutput>,
-    hash: Mutex<Option<HasherOutput>>,
 }
 
 #[async_trait]
@@ -70,33 +65,26 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let key1 = context.base_tag(KeyTag::Store as u8);
-        let key2 = context.base_tag(KeyTag::Hash as u8);
-        let keys = vec![key1, key2];
-        let values_bytes = context.read_multi_values_bytes(keys).await?;
-        let stored_count = from_bytes_opt(&values_bytes[0])?.unwrap_or_default();
-        let hash = from_bytes_opt(&values_bytes[1])?;
+        let key = context.base_tag(KeyTag::Store as u8);
+        let value = context.read_value(&key).await?;
+        let stored_count = value.unwrap_or_default();
         Ok(Self {
             context,
             delete_storage_first: false,
             stored_count,
             new_values: Vec::new(),
-            stored_hash: hash,
-            hash: Mutex::new(hash),
         })
     }
 
     fn rollback(&mut self) {
         self.delete_storage_first = false;
         self.new_values.clear();
-        *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.delete_storage_first {
             batch.delete_key_prefix(self.context.base_key());
             self.stored_count = 0;
-            self.stored_hash = None;
         }
         if !self.new_values.is_empty() {
             for value in &self.new_values {
@@ -110,15 +98,6 @@ where
             batch.put_key_value(key, &self.stored_count)?;
             self.new_values.clear();
         }
-        let hash = *self.hash.get_mut();
-        if self.stored_hash != hash {
-            let key = self.context.base_tag(KeyTag::Hash as u8);
-            match hash {
-                None => batch.delete_key(key),
-                Some(hash) => batch.put_key_value(key, &hash)?,
-            }
-            self.stored_hash = hash;
-        }
         self.delete_storage_first = false;
         Ok(())
     }
@@ -126,7 +105,6 @@ where
     fn clear(&mut self) {
         self.delete_storage_first = true;
         self.new_values.clear();
-        *self.hash.get_mut() = None;
     }
 }
 
@@ -142,8 +120,6 @@ where
             delete_storage_first: self.delete_storage_first,
             stored_count: self.stored_count,
             new_values: self.new_values.clone(),
-            stored_hash: self.stored_hash,
-            hash: Mutex::new(*self.hash.get_mut()),
         })
     }
 }
@@ -165,7 +141,6 @@ where
     /// ```
     pub fn push(&mut self, value: T) {
         self.new_values.push(value);
-        *self.hash.get_mut() = None;
     }
 
     /// Reads the size of the log.
@@ -361,28 +336,11 @@ where
     type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let hash = *self.hash.get_mut();
-        match hash {
-            Some(hash) => Ok(hash),
-            None => {
-                let new_hash = self.compute_hash().await?;
-                let hash = self.hash.get_mut();
-                *hash = Some(new_hash);
-                Ok(new_hash)
-            }
-        }
+        self.compute_hash().await
     }
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hash = self.hash.lock().await;
-        match *hash {
-            Some(hash) => Ok(hash),
-            None => {
-                let new_hash = self.compute_hash().await?;
-                *hash = Some(new_hash);
-                Ok(new_hash)
-            }
-        }
+        self.compute_hash().await
     }
 }
 
