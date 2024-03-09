@@ -20,8 +20,7 @@ use linera_execution::{
     },
     ApplicationCallOutcome, BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome,
     MessageKind, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
-    RawOutgoingMessage, ResourceControlPolicy, ResourceController, Response, SessionCallOutcome,
-    SystemOperation,
+    RawOutgoingMessage, ResourceControlPolicy, ResourceController, Response, SystemOperation,
 };
 use linera_views::batch::Batch;
 use std::{collections::BTreeMap, vec};
@@ -102,49 +101,38 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
             let call_outcome = runtime.try_call_application(
                 /* authenticated */ true,
                 target_id,
-                vec![],
+                vec![SessionCall::StartSession as u8],
                 vec![],
             )?;
             assert!(call_outcome.value.is_empty());
-            assert_eq!(call_outcome.sessions.len(), 1);
 
-            // Call the session to close it.
-            let session_id = call_outcome.sessions[0];
-            runtime.try_call_session(/* authenticated */ false, session_id, vec![], vec![])?;
+            // Call the target application to end the session
+            let call_outcome = runtime.try_call_application(
+                /* authenticated */ false,
+                target_id,
+                vec![SessionCall::EndSession as u8],
+                vec![],
+            )?;
+            assert!(call_outcome.value.is_empty());
 
             Ok(RawExecutionOutcome::default())
         })
     });
 
-    let dummy_session_state = vec![1];
-
-    target_application.expect_call({
-        let dummy_session_state = dummy_session_state.clone();
-        ExpectedCall::handle_application_call(
-            move |_runtime, context, argument, forwarded_sessions| {
-                assert_eq!(context.authenticated_signer, Some(owner));
-                assert!(argument.is_empty());
-                assert!(forwarded_sessions.is_empty());
-                Ok(ApplicationCallOutcome {
-                    create_sessions: vec![dummy_session_state],
-                    ..ApplicationCallOutcome::default()
-                })
-            },
-        )
-    });
-    target_application.expect_call(ExpectedCall::handle_session_call(
-        move |_runtime, context, session_state, argument, forwarded_sessions| {
-            assert_eq!(context.authenticated_signer, None);
-            assert_eq!(session_state, dummy_session_state);
-            assert!(argument.is_empty());
+    target_application.expect_call(ExpectedCall::handle_application_call(
+        move |_runtime, context, argument, forwarded_sessions| {
+            assert_eq!(context.authenticated_signer, Some(owner));
+            assert_eq!(&argument, &[SessionCall::StartSession as u8]);
             assert!(forwarded_sessions.is_empty());
-            Ok((
-                SessionCallOutcome {
-                    inner: ApplicationCallOutcome::default(),
-                    close_session: true,
-                },
-                session_state,
-            ))
+            Ok(ApplicationCallOutcome::default())
+        },
+    ));
+    target_application.expect_call(ExpectedCall::handle_application_call(
+        move |_runtime, context, argument, forwarded_sessions| {
+            assert_eq!(context.authenticated_signer, None);
+            assert_eq!(&argument, &[SessionCall::EndSession as u8]);
+            assert!(forwarded_sessions.is_empty());
+            Ok(ApplicationCallOutcome::default())
         },
     ));
 
@@ -229,9 +217,19 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Tests if execution fails if a session is created and leaked by its owner.
+/// A cross-application call to start or end a session.
+///
+/// Here a session is a test scenario where the transaction is prevented from succeeding while
+/// there in an open session.
+#[repr(u8)]
+enum SessionCall {
+    StartSession,
+    EndSession,
+}
+
+/// Tests a simulated session.
 #[tokio::test]
-async fn test_leaking_session() -> anyhow::Result<()> {
+async fn test_simulated_session() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
@@ -246,21 +244,165 @@ async fn test_leaking_session() -> anyhow::Result<()> {
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
-            runtime.try_call_application(false, target_id, vec![], vec![])?;
+            runtime.try_call_application(
+                false,
+                target_id,
+                vec![SessionCall::StartSession as u8],
+                vec![],
+            )?;
+            runtime.try_call_application(
+                false,
+                target_id,
+                vec![SessionCall::EndSession as u8],
+                vec![],
+            )?;
             Ok(RawExecutionOutcome::default())
         },
     ));
 
-    target_application.expect_call(ExpectedCall::handle_application_call(
-        |_runtime, _context, _argument, _forwarded_sessions| {
-            Ok(ApplicationCallOutcome {
-                create_sessions: vec![vec![]],
-                ..ApplicationCallOutcome::default()
-            })
+    let state_key = vec![];
+
+    target_application.expect_call(ExpectedCall::handle_application_call({
+        let state_key = state_key.clone();
+        move |runtime, _context, argument, _forwarded_sessions| {
+            assert_eq!(&argument, &[SessionCall::StartSession as u8]);
+
+            let mut batch = Batch::new();
+            batch.put_key_value_bytes(state_key, vec![true as u8]);
+            runtime.write_batch(batch)?;
+
+            Ok(ApplicationCallOutcome::default())
+        }
+    }));
+
+    target_application.expect_call(ExpectedCall::handle_application_call({
+        let state_key = state_key.clone();
+        move |runtime, _context, argument, _forwarded_sessions| {
+            assert_eq!(&argument, &[SessionCall::EndSession as u8]);
+
+            let mut batch = Batch::new();
+            batch.put_key_value_bytes(state_key, vec![false as u8]);
+            runtime.write_batch(batch)?;
+
+            Ok(ApplicationCallOutcome::default())
+        }
+    }));
+
+    target_application.expect_call(ExpectedCall::finalize(|runtime, _context| {
+        match runtime.read_value_bytes(state_key)? {
+            Some(session_is_open) if session_is_open == vec![u8::from(false)] => {
+                Ok(RawExecutionOutcome::default())
+            }
+            Some(_) => Err(ExecutionError::UserError("Leaked session".to_owned())),
+            _ => Err(ExecutionError::UserError(
+                "Missing or invalid session state".to_owned(),
+            )),
+        }
+    }));
+    caller_application.expect_call(ExpectedCall::default_finalize());
+
+    let context = make_operation_context();
+    let mut controller = ResourceController::default();
+    let outcomes = view
+        .execute_operation(
+            context,
+            Operation::User {
+                application_id: caller_id,
+                bytes: vec![],
+            },
+            &mut controller,
+        )
+        .await?;
+    let account = Account {
+        chain_id: ChainId::root(0),
+        owner: None,
+    };
+    assert_eq!(
+        outcomes,
+        vec![
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                caller_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                caller_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+        ]
+    );
+    Ok(())
+}
+
+/// Tests if execution fails if a simulated session isn't properly closed.
+#[tokio::test]
+async fn test_simulated_session_leak() -> anyhow::Result<()> {
+    let mut state = SystemExecutionState::default();
+    state.description = Some(ChainDescription::Root(0));
+    let mut view = state.into_view().await;
+
+    let mut applications = register_mock_applications(&mut view, 2).await?;
+    let (caller_id, caller_application) = applications
+        .next()
+        .expect("Caller mock application should be registered");
+    let (target_id, target_application) = applications
+        .next()
+        .expect("Target mock application should be registered");
+
+    caller_application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            runtime.try_call_application(
+                false,
+                target_id,
+                vec![SessionCall::StartSession as u8],
+                vec![],
+            )?;
+            Ok(RawExecutionOutcome::default())
         },
     ));
 
-    target_application.expect_call(ExpectedCall::default_finalize());
+    let state_key = vec![];
+
+    target_application.expect_call(ExpectedCall::handle_application_call({
+        let state_key = state_key.clone();
+        |runtime, _context, argument, _forwarded_sessions| {
+            assert_eq!(argument, &[SessionCall::StartSession as u8]);
+
+            let mut batch = Batch::new();
+            batch.put_key_value_bytes(state_key, vec![true as u8]);
+            runtime.write_batch(batch)?;
+
+            Ok(ApplicationCallOutcome {
+                ..ApplicationCallOutcome::default()
+            })
+        }
+    }));
+
+    let error_message = "Session leaked";
+
+    target_application.expect_call(ExpectedCall::finalize(|runtime, _context| {
+        match runtime.read_value_bytes(state_key)? {
+            Some(session_is_open) if session_is_open == vec![u8::from(false)] => {
+                Ok(RawExecutionOutcome::default())
+            }
+            Some(_) => Err(ExecutionError::UserError(error_message.to_owned())),
+            _ => Err(ExecutionError::UserError(
+                "Missing or invalid session state".to_owned(),
+            )),
+        }
+    }));
+
     caller_application.expect_call(ExpectedCall::default_finalize());
 
     let context = make_operation_context();
@@ -276,7 +418,7 @@ async fn test_leaking_session() -> anyhow::Result<()> {
         )
         .await;
 
-    assert_matches!(result, Err(ExecutionError::SessionWasNotClosed(_)));
+    assert_matches!(result, Err(ExecutionError::UserError(message)) if message == error_message);
     Ok(())
 }
 
@@ -721,97 +863,6 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
             if *caller_id == expected_caller_id && *callee_id == expected_callee_id
     );
 
-    Ok(())
-}
-
-/// Tests if a session is called correctly during execution.
-#[tokio::test]
-async fn test_simple_session() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
-    let mut view = state.into_view().await;
-
-    let mut applications = register_mock_applications(&mut view, 2).await?;
-    let (caller_id, caller_application) = applications
-        .next()
-        .expect("Caller mock application should be registered");
-    let (target_id, target_application) = applications
-        .next()
-        .expect("Target mock application should be registered");
-
-    caller_application.expect_call(ExpectedCall::execute_operation(
-        move |runtime, _context, _operation| {
-            let outcome = runtime.try_call_application(false, target_id, vec![], vec![])?;
-            runtime.try_call_session(false, outcome.sessions[0], vec![], vec![])?;
-            Ok(RawExecutionOutcome::default())
-        },
-    ));
-
-    target_application.expect_call(ExpectedCall::handle_application_call(
-        |_runtime, _context, _argument, _forwarded_sessions| {
-            Ok(ApplicationCallOutcome {
-                create_sessions: vec![vec![]],
-                ..ApplicationCallOutcome::default()
-            })
-        },
-    ));
-
-    target_application.expect_call(ExpectedCall::handle_session_call(
-        |_runtime, _context, _session_state, _argument, _forwarded_sessions| {
-            Ok((
-                SessionCallOutcome {
-                    close_session: true,
-                    ..SessionCallOutcome::default()
-                },
-                vec![],
-            ))
-        },
-    ));
-
-    target_application.expect_call(ExpectedCall::default_finalize());
-    caller_application.expect_call(ExpectedCall::default_finalize());
-
-    let context = make_operation_context();
-    let mut controller = ResourceController::default();
-    let outcomes = view
-        .execute_operation(
-            context,
-            Operation::User {
-                application_id: caller_id,
-                bytes: vec![],
-            },
-            &mut controller,
-        )
-        .await?;
-    let account = Account {
-        chain_id: ChainId::root(0),
-        owner: None,
-    };
-    assert_eq!(
-        outcomes,
-        vec![
-            ExecutionOutcome::User(
-                target_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                target_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                caller_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                target_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-            ExecutionOutcome::User(
-                caller_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            ),
-        ]
-    );
     Ok(())
 }
 
