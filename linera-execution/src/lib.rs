@@ -164,15 +164,6 @@ pub trait UserContract {
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallOutcome, ExecutionError>;
 
-    /// Executes a call from another application into a session created by this application.
-    fn handle_session_call(
-        &mut self,
-        context: CalleeContext,
-        session_state: Vec<u8>,
-        argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
-    ) -> Result<(SessionCallOutcome, Vec<u8>), ExecutionError>;
-
     /// Finishes execution of the current transaction.
     fn finalize(
         &mut self,
@@ -213,15 +204,6 @@ impl ApplicationCallOutcome {
         self.create_sessions.push(session_state);
         self
     }
-}
-
-/// The result of calling into a session.
-#[derive(Default)]
-pub struct SessionCallOutcome {
-    /// The application result.
-    pub inner: ApplicationCallOutcome,
-    /// If true, the session should be terminated.
-    pub close_session: bool,
 }
 
 /// System runtime implementation in use.
