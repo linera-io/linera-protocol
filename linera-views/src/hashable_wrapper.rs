@@ -72,6 +72,9 @@ where
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+        if self.delete_storage_first() {
+            self.stored_hash = None;
+        }
         self.inner.flush(batch)?;
         let hash = *self.hash.get_mut();
         if self.stored_hash != hash {
