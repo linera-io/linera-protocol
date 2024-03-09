@@ -98,22 +98,22 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
             runtime.write_batch(batch)?;
 
             // Call the target application to create a session
-            let call_outcome = runtime.try_call_application(
+            let response = runtime.try_call_application(
                 /* authenticated */ true,
                 target_id,
                 vec![SessionCall::StartSession as u8],
                 vec![],
             )?;
-            assert!(call_outcome.value.is_empty());
+            assert!(response.is_empty());
 
             // Call the target application to end the session
-            let call_outcome = runtime.try_call_application(
+            let response = runtime.try_call_application(
                 /* authenticated */ false,
                 target_id,
                 vec![SessionCall::EndSession as u8],
                 vec![],
             )?;
-            assert!(call_outcome.value.is_empty());
+            assert!(response.is_empty());
 
             Ok(RawExecutionOutcome::default())
         })

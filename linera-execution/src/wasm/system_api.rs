@@ -142,7 +142,6 @@ macro_rules! impl_contract_system_api {
                     argument.to_vec(),
                     vec![],
                 )
-                .map(|call_outcome| call_outcome.value)
             }
 
             fn log(

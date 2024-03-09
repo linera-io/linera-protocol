@@ -6,9 +6,9 @@ use crate::{
     execution_state_actor::{ExecutionStateSender, Request},
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
-    ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
-    ExecutionError, ExecutionOutcome, FinalizeContext, MessageContext, RawExecutionOutcome,
-    ServiceRuntime, SessionId, UserApplicationDescription, UserApplicationId, UserContractInstance,
+    ApplicationCallOutcome, BaseRuntime, CalleeContext, ContractRuntime, ExecutionError,
+    ExecutionOutcome, FinalizeContext, MessageContext, RawExecutionOutcome, ServiceRuntime,
+    SessionId, UserApplicationDescription, UserApplicationId, UserContractInstance,
     UserServiceInstance,
 };
 use custom_debug_derive::Debug;
@@ -405,18 +405,16 @@ impl SyncRuntimeInternal<UserContractInstance> {
     fn finish_call(
         &mut self,
         raw_outcome: ApplicationCallOutcome,
-    ) -> Result<CallOutcome, ExecutionError> {
+    ) -> Result<Vec<u8>, ExecutionError> {
         let ApplicationStatus {
             id: callee_id,
             signer,
             ..
         } = self.pop_application();
-        let outcome = CallOutcome {
-            value: raw_outcome.value,
-            sessions: vec![],
-        };
+
         self.handle_outcome(raw_outcome.execution_outcome, signer, callee_id)?;
-        Ok(outcome)
+
+        Ok(raw_outcome.value)
     }
 
     /// Handles a newly produced [`RawExecutionOutcome`], conditioning and adding it to the stack
@@ -1036,7 +1034,7 @@ impl ContractRuntime for ContractSyncRuntime {
         callee_id: UserApplicationId,
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallOutcome, ExecutionError> {
+    ) -> Result<Vec<u8>, ExecutionError> {
         let cloned_self = self.clone().0;
         let (contract, callee_context) = self.inner().prepare_for_call(
             cloned_self,
