@@ -9,7 +9,7 @@ use self::state::NonFungibleToken;
 use async_trait::async_trait;
 use fungible::Account;
 use linera_sdk::{
-    base::{AccountOwner, ApplicationId, Owner, SessionId, WithContractAbi},
+    base::{AccountOwner, ApplicationId, Owner, WithContractAbi},
     contract::system_api,
     ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
@@ -148,7 +148,6 @@ impl Contract for NonFungibleToken {
         &mut self,
         runtime: &mut ContractRuntime,
         call: Self::ApplicationCall,
-        _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         match call {
             Self::ApplicationCall::Mint { name, payload } => {

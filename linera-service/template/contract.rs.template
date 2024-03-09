@@ -5,8 +5,8 @@ mod state;
 use self::state::Application;
 use async_trait::async_trait;
 use linera_sdk::{{
-    base::{{SessionId, WithContractAbi}},
-    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
+    base::WithContractAbi, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome,
+    ViewStateStorage,
 }};
 use thiserror::Error;
 
@@ -49,7 +49,6 @@ impl Contract for Application {{
         &mut self,
         _runtime: &mut ContractRuntime,
         _call: Self::ApplicationCall,
-        _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {{
         Ok(ApplicationCallOutcome::default())
     }}

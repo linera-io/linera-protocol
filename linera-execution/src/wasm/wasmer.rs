@@ -263,19 +263,13 @@ where
         &mut self,
         _context: CalleeContext,
         argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
+        _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallOutcome, ExecutionError> {
-        let forwarded_sessions = forwarded_sessions
-            .into_iter()
-            .map(contract::SessionId::from)
-            .collect::<Vec<_>>();
-
         self.configure_initial_fuel()?;
         let result = contract::Contract::handle_application_call(
             &self.application,
             &mut self.store,
             &argument,
-            &forwarded_sessions,
         )
         .map(|inner| inner.map(ApplicationCallOutcome::from));
         self.persist_remaining_fuel()?;

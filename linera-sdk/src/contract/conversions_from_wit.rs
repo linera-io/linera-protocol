@@ -7,38 +7,10 @@ use super::{wit_system_api, wit_types};
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight},
-    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner, SessionId},
+    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use std::time::Duration;
-
-impl From<wit_types::MessageId> for MessageId {
-    fn from(message_id: wit_types::MessageId) -> Self {
-        MessageId {
-            chain_id: message_id.chain_id.into(),
-            height: BlockHeight(message_id.height),
-            index: message_id.index,
-        }
-    }
-}
-
-impl From<wit_types::ApplicationId> for ApplicationId {
-    fn from(application_id: wit_types::ApplicationId) -> Self {
-        ApplicationId {
-            bytecode_id: BytecodeId::new(application_id.bytecode_id.into()),
-            creation: application_id.creation.into(),
-        }
-    }
-}
-
-impl From<wit_types::SessionId> for SessionId {
-    fn from(session_id: wit_types::SessionId) -> Self {
-        SessionId {
-            application_id: session_id.application_id.into(),
-            index: session_id.index,
-        }
-    }
-}
 
 impl From<wit_types::CryptoHash> for Owner {
     fn from(crypto_hash: wit_types::CryptoHash) -> Self {

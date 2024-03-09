@@ -14,7 +14,7 @@ use std::cmp::min;
 use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId, ChainId, Owner, SessionId, WithContractAbi},
+    base::{AccountOwner, Amount, ApplicationId, ChainId, Owner, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
     Resources, ViewStateStorage,
@@ -127,7 +127,6 @@ impl Contract for MatchingEngine {
         &mut self,
         runtime: &mut ContractRuntime,
         argument: ApplicationCall,
-        _sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         let mut outcome = ApplicationCallOutcome::default();
         match argument {

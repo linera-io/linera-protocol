@@ -8,7 +8,7 @@ mod state;
 use self::state::MetaCounter;
 use async_trait::async_trait;
 use linera_sdk::{
-    base::{ApplicationId, SessionId, WithContractAbi},
+    base::{ApplicationId, WithContractAbi},
     ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
     Resources, SimpleStateStorage,
 };
@@ -103,7 +103,6 @@ impl Contract for MetaCounter {
         &mut self,
         _runtime: &mut ContractRuntime,
         _call: (),
-        _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         Err(Error::CallsNotSupported)
     }

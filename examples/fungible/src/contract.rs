@@ -9,7 +9,7 @@ use self::state::FungibleToken;
 use async_trait::async_trait;
 use fungible::{Account, ApplicationCall, FungibleResponse, Message, Operation};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId, Owner, SessionId, WithContractAbi},
+    base::{AccountOwner, Amount, ApplicationId, Owner, WithContractAbi},
     contract::system_api,
     ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
@@ -118,7 +118,6 @@ impl Contract for FungibleToken {
         &mut self,
         runtime: &mut ContractRuntime,
         call: ApplicationCall,
-        _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         match call {
             ApplicationCall::Balance { owner } => {

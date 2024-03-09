@@ -10,7 +10,7 @@ use amm::{AmmError, ApplicationCall, Message, Operation};
 use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId, Owner, SessionId, WithContractAbi},
+    base::{AccountOwner, Amount, ApplicationId, Owner, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
     Resources, ViewStateStorage,
@@ -83,7 +83,6 @@ impl Contract for Amm {
         &mut self,
         runtime: &mut ContractRuntime,
         application_call: ApplicationCall,
-        _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, AmmError> {
         let mut outcome = ApplicationCallOutcome::default();
         match application_call {

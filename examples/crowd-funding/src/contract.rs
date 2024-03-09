@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use crowd_funding::{ApplicationCall, InitializationArgument, Message, Operation};
 use fungible::{Account, FungibleResponse, FungibleTokenAbi};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId, SessionId, WithContractAbi},
+    base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
     contract::system_api,
     ensure,
     views::View,
@@ -91,7 +91,6 @@ impl Contract for CrowdFunding {
         &mut self,
         _runtime: &mut ContractRuntime,
         call: ApplicationCall,
-        _sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         let mut outcome = ApplicationCallOutcome::default();
         match call {
