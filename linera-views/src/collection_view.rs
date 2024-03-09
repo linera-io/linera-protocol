@@ -556,15 +556,15 @@ where
         let mut hasher = sha3::Sha3_256::default();
         let keys = self.keys().await?;
         hasher.update_with_bcs_bytes(&keys.len())?;
-        let updates = self.updates.read().await;
+        let updates = self.updates.get_mut();
         for key in keys {
             hasher.update_with_bytes(&key)?;
-            let hash = match updates.get(&key) {
+            let hash = match updates.get_mut(&key) {
                 Some(entry) => {
                     let Update::Set(view) = entry else {
                         unreachable!();
                     };
-                    view.hash().await?
+                    view.hash_mut().await?
                 }
                 None => {
                     let key = self.context.base_tag_index(KeyTag::Subview as u8, &key);
