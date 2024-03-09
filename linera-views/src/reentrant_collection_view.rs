@@ -761,15 +761,15 @@ where
         let updates = self.updates.get_mut();
         for key in keys {
             hasher.update_with_bytes(&key)?;
-            let hash = match updates.get(&key) {
+            let hash = match updates.get_mut(&key) {
                 Some(entry) => {
                     let Update::Set(view) = entry else {
                         unreachable!();
                     };
-                    let view = view
-                        .try_read_arc()
+                    let mut view = view
+                        .try_write_arc()
                         .ok_or_else(|| ViewError::TryLockError(key))?;
-                    view.hash().await?
+                    view.hash_mut().await?
                 }
                 None => {
                     let key = self.context.base_tag_index(KeyTag::Subview as u8, &key);
