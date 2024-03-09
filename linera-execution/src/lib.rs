@@ -188,20 +188,12 @@ pub struct ApplicationCallOutcome {
     pub value: Vec<u8>,
     /// The externally-visible result.
     pub execution_outcome: RawExecutionOutcome<Vec<u8>>,
-    /// The states of the new sessions to be created, if any.
-    pub create_sessions: Vec<Vec<u8>>,
 }
 
 impl ApplicationCallOutcome {
     /// Adds a `message` to this [`ApplicationCallOutcome`].
     pub fn with_message(mut self, message: RawOutgoingMessage<Vec<u8>>) -> Self {
         self.execution_outcome.messages.push(message);
-        self
-    }
-
-    /// Registers a new session to be created with the provided `session_state`.
-    pub fn with_new_session(mut self, session_state: Vec<u8>) -> Self {
-        self.create_sessions.push(session_state);
         self
     }
 }

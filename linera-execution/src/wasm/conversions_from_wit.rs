@@ -25,7 +25,6 @@ use linera_base::{
 impl From<contract::ApplicationCallOutcome> for ApplicationCallOutcome {
     fn from(outcome: contract::ApplicationCallOutcome) -> Self {
         ApplicationCallOutcome {
-            create_sessions: vec![],
             execution_outcome: outcome.execution_outcome.into(),
             value: outcome.value,
         }
