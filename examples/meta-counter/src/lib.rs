@@ -1,11 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/*!
-# Meta-Counter Example Application
-
-This application is only used for testing cross-application calls.
-*/
+#![doc = include_str!("../README.md")]
 
 use async_graphql::{Request, Response};
 use linera_sdk::base::{ApplicationId, ChainId, ContractAbi, ServiceAbi};
