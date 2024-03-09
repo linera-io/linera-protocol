@@ -475,7 +475,6 @@ pub trait ContractRuntime: BaseRuntime {
         authenticated: bool,
         callee_id: UserApplicationId,
         argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
     /// Opens a new chain.

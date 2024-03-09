@@ -102,7 +102,6 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
                 /* authenticated */ true,
                 target_id,
                 vec![SessionCall::StartSession as u8],
-                vec![],
             )?;
             assert!(response.is_empty());
 
@@ -111,7 +110,6 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
                 /* authenticated */ false,
                 target_id,
                 vec![SessionCall::EndSession as u8],
-                vec![],
             )?;
             assert!(response.is_empty());
 
@@ -248,14 +246,8 @@ async fn test_simulated_session() -> anyhow::Result<()> {
                 false,
                 target_id,
                 vec![SessionCall::StartSession as u8],
-                vec![],
             )?;
-            runtime.try_call_application(
-                false,
-                target_id,
-                vec![SessionCall::EndSession as u8],
-                vec![],
-            )?;
+            runtime.try_call_application(false, target_id, vec![SessionCall::EndSession as u8])?;
             Ok(RawExecutionOutcome::default())
         },
     ));
@@ -366,7 +358,6 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
                 false,
                 target_id,
                 vec![SessionCall::StartSession as u8],
-                vec![],
             )?;
             Ok(RawExecutionOutcome::default())
         },
@@ -484,19 +475,19 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
 
     first_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
-            runtime.try_call_application(false, second_id, vec![], vec![])?;
+            runtime.try_call_application(false, second_id, vec![])?;
             Ok(RawExecutionOutcome::default())
         },
     ));
     second_application.expect_call(ExpectedCall::handle_application_call(
         move |runtime, _context, _argument, _forwarded_sessions| {
-            runtime.try_call_application(false, third_id, vec![], vec![])?;
+            runtime.try_call_application(false, third_id, vec![])?;
             Ok(ApplicationCallOutcome::default())
         },
     ));
     third_application.expect_call(ExpectedCall::handle_application_call(
         move |runtime, _context, _argument, _forwarded_sessions| {
-            runtime.try_call_application(false, fourth_id, vec![], vec![])?;
+            runtime.try_call_application(false, fourth_id, vec![])?;
             Ok(ApplicationCallOutcome::default())
         },
     ));
@@ -562,20 +553,20 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
 
     first_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
-            runtime.try_call_application(false, second_id, vec![], vec![])?;
+            runtime.try_call_application(false, second_id, vec![])?;
             Ok(RawExecutionOutcome::default())
         },
     ));
     second_application.expect_call(ExpectedCall::handle_application_call(
         move |runtime, _context, _argument, _forwarded_sessions| {
-            runtime.try_call_application(false, third_id, vec![], vec![])?;
+            runtime.try_call_application(false, third_id, vec![])?;
             Ok(ApplicationCallOutcome::default())
         },
     ));
     third_application.expect_call(ExpectedCall::handle_application_call({
         let first_message = first_message.clone();
         move |runtime, _context, _argument, _forwarded_sessions| {
-            runtime.try_call_application(false, fourth_id, vec![], vec![])?;
+            runtime.try_call_application(false, fourth_id, vec![])?;
             Ok(ApplicationCallOutcome::default().with_message(first_message))
         }
     }));
@@ -722,7 +713,7 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
 
     caller_application.expect_call(ExpectedCall::finalize({
         move |runtime, _context| {
-            runtime.try_call_application(false, target_id, vec![], vec![])?;
+            runtime.try_call_application(false, target_id, vec![])?;
             Ok(RawExecutionOutcome::default())
         }
     }));
@@ -769,7 +760,7 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
-            runtime.try_call_application(false, target_id, vec![], vec![])?;
+            runtime.try_call_application(false, target_id, vec![])?;
             Ok(RawExecutionOutcome::default())
         },
     ));
@@ -779,7 +770,7 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
 
     target_application.expect_call(ExpectedCall::finalize({
         move |runtime, _context| {
-            runtime.try_call_application(false, caller_id, vec![], vec![])?;
+            runtime.try_call_application(false, caller_id, vec![])?;
             Ok(RawExecutionOutcome::default())
         }
     }));
@@ -826,7 +817,7 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
-            runtime.try_call_application(false, target_id, vec![], vec![])?;
+            runtime.try_call_application(false, target_id, vec![])?;
             Ok(RawExecutionOutcome::default())
         },
     ));
@@ -837,7 +828,7 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
     target_application.expect_call(ExpectedCall::default_finalize());
     caller_application.expect_call(ExpectedCall::finalize({
         move |runtime, _context| {
-            runtime.try_call_application(false, target_id, vec![], vec![])?;
+            runtime.try_call_application(false, target_id, vec![])?;
             Ok(RawExecutionOutcome::default())
         }
     }));
@@ -886,12 +877,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
-            runtime.try_call_application(
-                /* authenticated */ false,
-                target_id,
-                vec![],
-                vec![],
-            )?;
+            runtime.try_call_application(/* authenticated */ false, target_id, vec![])?;
             Ok(RawExecutionOutcome::default())
         },
     ));
@@ -1025,12 +1011,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
-            runtime.try_call_application(
-                /* authenticated */ false,
-                target_id,
-                vec![],
-                vec![],
-            )?;
+            runtime.try_call_application(/* authenticated */ false, target_id, vec![])?;
             Ok(RawExecutionOutcome::default())
         },
     ));
@@ -1136,24 +1117,14 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
 
     caller_application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
-            runtime.try_call_application(
-                /* authenticated */ false,
-                middle_id,
-                vec![],
-                vec![],
-            )?;
+            runtime.try_call_application(/* authenticated */ false, middle_id, vec![])?;
             Ok(RawExecutionOutcome::default())
         },
     ));
 
     middle_application.expect_call(ExpectedCall::handle_application_call(
         move |runtime, _context, _argument, _forwarded_sessions| {
-            runtime.try_call_application(
-                /* authenticated */ false,
-                target_id,
-                vec![],
-                vec![],
-            )?;
+            runtime.try_call_application(/* authenticated */ false, target_id, vec![])?;
             Ok(ApplicationCallOutcome::default())
         },
     ));
@@ -1292,12 +1263,10 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
                 /* authenticated */ false,
                 silent_target_id,
                 vec![],
-                vec![],
             )?;
             runtime.try_call_application(
                 /* authenticated */ false,
                 sending_target_id,
-                vec![],
                 vec![],
             )?;
             Ok(RawExecutionOutcome::default().with_message(first_message))
