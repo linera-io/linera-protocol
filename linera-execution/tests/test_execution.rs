@@ -1066,9 +1066,9 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Tests if a message is scheduled to be sent while an application is handling a session call.
+/// Tests if a message is scheduled to be sent by a deeper cross-application call.
 #[tokio::test]
-async fn test_message_from_session_call() -> anyhow::Result<()> {
+async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
@@ -1098,24 +1098,15 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
 
     middle_application.expect_call(ExpectedCall::handle_application_call(
         move |runtime, _context, _argument, _forwarded_sessions| {
-            let outcome = runtime.try_call_application(
+            runtime.try_call_application(
                 /* authenticated */ false,
                 target_id,
-                vec![],
-                vec![],
-            )?;
-            assert_eq!(outcome.sessions.len(), 1);
-            runtime.try_call_session(
-                /* authenticated */ false,
-                outcome.sessions[0],
                 vec![],
                 vec![],
             )?;
             Ok(ApplicationCallOutcome::default())
         },
     ));
-
-    let dummy_session = b"session".to_vec();
 
     let destination_chain = ChainId::from(ChainDescription::Root(1));
     let dummy_message = RawOutgoingMessage {
@@ -1127,22 +1118,9 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
     };
 
     target_application.expect_call(ExpectedCall::handle_application_call({
-        let dummy_session = dummy_session.clone();
-        move |_runtime, _context, _argument, _forwarded_sessions| {
-            Ok(ApplicationCallOutcome::default().with_new_session(dummy_session))
-        }
-    }));
-    target_application.expect_call(ExpectedCall::handle_session_call({
         let dummy_message = dummy_message.clone();
-        move |_runtime, _context, session_state, _argument, _forwarded_sessions| {
-            assert_eq!(session_state, dummy_session);
-            Ok((
-                SessionCallOutcome {
-                    inner: ApplicationCallOutcome::default().with_message(dummy_message),
-                    close_session: true,
-                },
-                session_state,
-            ))
+        move |_runtime, _context, _argument, _forwarded_sessions| {
+            Ok(ApplicationCallOutcome::default().with_message(dummy_message))
         }
     }));
 
@@ -1183,10 +1161,6 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
         &[
             ExecutionOutcome::System(
                 RawExecutionOutcome::default().with_message(registration_message)
-            ),
-            ExecutionOutcome::User(
-                target_id,
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
             ),
             ExecutionOutcome::User(
                 target_id,
