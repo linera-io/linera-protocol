@@ -1040,7 +1040,7 @@ impl ContractRuntime for ContractSyncRuntime {
         let raw_outcome = contract
             .try_lock()
             .expect("Applications should not have reentrant calls")
-            .handle_application_call(callee_context, argument, vec![])?;
+            .handle_application_call(callee_context, argument)?;
 
         self.inner().finish_call(raw_outcome)
     }

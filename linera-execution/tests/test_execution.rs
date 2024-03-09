@@ -118,18 +118,16 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     });
 
     target_application.expect_call(ExpectedCall::handle_application_call(
-        move |_runtime, context, argument, forwarded_sessions| {
+        move |_runtime, context, argument| {
             assert_eq!(context.authenticated_signer, Some(owner));
             assert_eq!(&argument, &[SessionCall::StartSession as u8]);
-            assert!(forwarded_sessions.is_empty());
             Ok(ApplicationCallOutcome::default())
         },
     ));
     target_application.expect_call(ExpectedCall::handle_application_call(
-        move |_runtime, context, argument, forwarded_sessions| {
+        move |_runtime, context, argument| {
             assert_eq!(context.authenticated_signer, None);
             assert_eq!(&argument, &[SessionCall::EndSession as u8]);
-            assert!(forwarded_sessions.is_empty());
             Ok(ApplicationCallOutcome::default())
         },
     ));
@@ -256,7 +254,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
 
     target_application.expect_call(ExpectedCall::handle_application_call({
         let state_key = state_key.clone();
-        move |runtime, _context, argument, _forwarded_sessions| {
+        move |runtime, _context, argument| {
             assert_eq!(&argument, &[SessionCall::StartSession as u8]);
 
             let mut batch = Batch::new();
@@ -269,7 +267,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
 
     target_application.expect_call(ExpectedCall::handle_application_call({
         let state_key = state_key.clone();
-        move |runtime, _context, argument, _forwarded_sessions| {
+        move |runtime, _context, argument| {
             assert_eq!(&argument, &[SessionCall::EndSession as u8]);
 
             let mut batch = Batch::new();
@@ -367,7 +365,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
 
     target_application.expect_call(ExpectedCall::handle_application_call({
         let state_key = state_key.clone();
-        |runtime, _context, argument, _forwarded_sessions| {
+        |runtime, _context, argument| {
             assert_eq!(argument, &[SessionCall::StartSession as u8]);
 
             let mut batch = Batch::new();
@@ -480,19 +478,19 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
         },
     ));
     second_application.expect_call(ExpectedCall::handle_application_call(
-        move |runtime, _context, _argument, _forwarded_sessions| {
+        move |runtime, _context, _argument| {
             runtime.try_call_application(false, third_id, vec![])?;
             Ok(ApplicationCallOutcome::default())
         },
     ));
     third_application.expect_call(ExpectedCall::handle_application_call(
-        move |runtime, _context, _argument, _forwarded_sessions| {
+        move |runtime, _context, _argument| {
             runtime.try_call_application(false, fourth_id, vec![])?;
             Ok(ApplicationCallOutcome::default())
         },
     ));
     fourth_application.expect_call(ExpectedCall::handle_application_call(
-        |_runtime, _context, _argument, _forwarded_sessions| Ok(ApplicationCallOutcome::default()),
+        |_runtime, _context, _argument| Ok(ApplicationCallOutcome::default()),
     ));
 
     let error_message = "Third application aborted execution";
@@ -558,20 +556,20 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
         },
     ));
     second_application.expect_call(ExpectedCall::handle_application_call(
-        move |runtime, _context, _argument, _forwarded_sessions| {
+        move |runtime, _context, _argument| {
             runtime.try_call_application(false, third_id, vec![])?;
             Ok(ApplicationCallOutcome::default())
         },
     ));
     third_application.expect_call(ExpectedCall::handle_application_call({
         let first_message = first_message.clone();
-        move |runtime, _context, _argument, _forwarded_sessions| {
+        move |runtime, _context, _argument| {
             runtime.try_call_application(false, fourth_id, vec![])?;
             Ok(ApplicationCallOutcome::default().with_message(first_message))
         }
     }));
     fourth_application.expect_call(ExpectedCall::handle_application_call(
-        |_runtime, _context, _argument, _forwarded_sessions| Ok(ApplicationCallOutcome::default()),
+        |_runtime, _context, _argument| Ok(ApplicationCallOutcome::default()),
     ));
 
     let second_message = RawOutgoingMessage {
@@ -765,7 +763,7 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
         },
     ));
     target_application.expect_call(ExpectedCall::handle_application_call(
-        |_runtime, _context, _argument, _forwarded_sessions| Ok(ApplicationCallOutcome::default()),
+        |_runtime, _context, _argument| Ok(ApplicationCallOutcome::default()),
     ));
 
     target_application.expect_call(ExpectedCall::finalize({
@@ -822,7 +820,7 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
         },
     ));
     target_application.expect_call(ExpectedCall::handle_application_call(
-        |_runtime, _context, _argument, _forwarded_sessions| Ok(ApplicationCallOutcome::default()),
+        |_runtime, _context, _argument| Ok(ApplicationCallOutcome::default()),
     ));
 
     target_application.expect_call(ExpectedCall::default_finalize());
@@ -885,9 +883,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
     let error_message = "Cross-application call failed";
 
     target_application.expect_call(ExpectedCall::handle_application_call(
-        |_runtime, _context, _argument, _forwarded_sessions| {
-            Err(ExecutionError::UserError(error_message.to_owned()))
-        },
+        |_runtime, _context, _argument| Err(ExecutionError::UserError(error_message.to_owned())),
     ));
 
     let context = make_operation_context();
@@ -1027,7 +1023,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
 
     target_application.expect_call(ExpectedCall::handle_application_call({
         let dummy_message = dummy_message.clone();
-        |_runtime, _context, _argument, _forwarded_sessions| {
+        |_runtime, _context, _argument| {
             Ok(ApplicationCallOutcome {
                 value: vec![],
                 execution_outcome: RawExecutionOutcome::default().with_message(dummy_message),
@@ -1123,7 +1119,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     ));
 
     middle_application.expect_call(ExpectedCall::handle_application_call(
-        move |runtime, _context, _argument, _forwarded_sessions| {
+        move |runtime, _context, _argument| {
             runtime.try_call_application(/* authenticated */ false, target_id, vec![])?;
             Ok(ApplicationCallOutcome::default())
         },
@@ -1140,7 +1136,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
 
     target_application.expect_call(ExpectedCall::handle_application_call({
         let dummy_message = dummy_message.clone();
-        move |_runtime, _context, _argument, _forwarded_sessions| {
+        move |_runtime, _context, _argument| {
             Ok(ApplicationCallOutcome::default().with_message(dummy_message))
         }
     }));
@@ -1275,7 +1271,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
 
     // The silent application does nothing
     silent_target_application.expect_call(ExpectedCall::handle_application_call(
-        |_runtime, _context, _argument, _forwarded_sessions| Ok(ApplicationCallOutcome::default()),
+        |_runtime, _context, _argument| Ok(ApplicationCallOutcome::default()),
     ));
 
     // The message sent to the second destination chain by the sending application
@@ -1291,7 +1287,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     sending_target_application.expect_call(ExpectedCall::handle_application_call({
         let first_message = first_message.clone();
         let second_message = second_message.clone();
-        |_runtime, _context, _argument, _forwarded_sessions| {
+        |_runtime, _context, _argument| {
             Ok(ApplicationCallOutcome {
                 value: vec![],
                 execution_outcome: RawExecutionOutcome::default()

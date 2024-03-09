@@ -47,7 +47,7 @@ use linera_base::{
     doc_scalar, hex_debug,
     identifiers::{
         Account, BytecodeId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId,
-        Owner, SessionId,
+        Owner,
     },
     ownership::ChainOwnership,
 };
@@ -161,7 +161,6 @@ pub trait UserContract {
         &mut self,
         context: CalleeContext,
         argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallOutcome, ExecutionError>;
 
     /// Finishes execution of the current transaction.
