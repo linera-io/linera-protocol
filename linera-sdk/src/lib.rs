@@ -66,7 +66,7 @@ pub use self::{
     log::{ContractLogger, ServiceLogger},
     service::{ServiceRuntime, ServiceStateStorage},
 };
-pub use linera_base::{abi, data_types::Resources, ensure, identifiers::SessionId};
+pub use linera_base::{abi, data_types::Resources, ensure};
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
 
