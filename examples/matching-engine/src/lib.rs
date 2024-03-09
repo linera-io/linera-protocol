@@ -167,9 +167,7 @@ impl ContractAbi for MatchingEngineAbi {
     type Operation = Operation;
     type ApplicationCall = ApplicationCall;
     type Message = Message;
-    type SessionCall = ();
     type Response = ();
-    type SessionState = ();
 }
 
 impl ServiceAbi for MatchingEngineAbi {

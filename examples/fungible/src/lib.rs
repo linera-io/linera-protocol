@@ -248,9 +248,7 @@ impl ContractAbi for FungibleTokenAbi {
     type ApplicationCall = ApplicationCall;
     type Operation = Operation;
     type Message = Message;
-    type SessionCall = ();
     type Response = FungibleResponse;
-    type SessionState = ();
 }
 
 impl ServiceAbi for FungibleTokenAbi {
