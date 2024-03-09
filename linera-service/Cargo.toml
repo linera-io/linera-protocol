@@ -32,6 +32,7 @@ remote_net = ["dep:k8s-openapi", "dep:kube"]
 
 [dependencies]
 anyhow.workspace = true
+assert_matches.workspace = true
 async-graphql.workspace = true
 async-graphql-axum.workspace = true
 async-trait.workspace = true

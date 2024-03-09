@@ -1865,6 +1865,21 @@ where
         }
     }
 
+    /// Changes the ownership of this chain. Fails if it would remove existing owners, unless
+    /// `remove_owners` is `true`.
+    pub async fn change_ownership(
+        &mut self,
+        ownership: ChainOwnership,
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+        self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
+            super_owners: ownership.super_owners.values().cloned().collect(),
+            owners: ownership.owners.values().cloned().collect(),
+            multi_leader_rounds: ownership.multi_leader_rounds,
+            timeout_config: ownership.timeout_config.clone(),
+        }))
+        .await
+    }
+
     /// Changes the application permissions configuration on this chain.
     pub async fn change_application_permissions(
         &mut self,

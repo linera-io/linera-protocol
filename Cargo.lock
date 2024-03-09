@@ -3382,6 +3382,7 @@ version = "0.9.0"
 dependencies = [
  "amm",
  "anyhow",
+ "assert_matches",
  "async-graphql",
  "async-graphql-axum",
  "async-trait",

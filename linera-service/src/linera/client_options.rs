@@ -1,13 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ClientContext;
+use crate::{ClientContext, Job};
 use anyhow::Error;
 use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::PublicKey,
     data_types::Amount,
-    identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId},
+    identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_execution::{
     committee::ValidatorName, system::SystemChannel, UserApplicationId, WasmRuntime,
@@ -19,9 +20,7 @@ use linera_service::{
     util,
 };
 use linera_views::common::CommonStoreConfig;
-use std::{env, num::NonZeroU16, path::PathBuf, time::Duration};
-
-use crate::Job;
+use std::{env, iter, num::NonZeroU16, path::PathBuf, time::Duration};
 
 #[derive(clap::Parser)]
 #[command(
@@ -229,44 +228,26 @@ pub enum ClientCommand {
         #[arg(long = "from")]
         chain_id: Option<ChainId>,
 
-        /// Public keys of the new owners
-        #[arg(long = "to-public-keys", num_args(0..))]
-        public_keys: Vec<PublicKey>,
-
-        /// Weights for the new owners
-        #[arg(long = "weights", num_args(0..))]
-        weights: Vec<u64>,
-
-        /// The number of rounds in which every owner can propose blocks, i.e. the first round
-        /// number in which only a single designated leader is allowed to propose blocks.
-        #[arg(long = "multi-leader-rounds")]
-        multi_leader_rounds: Option<u32>,
+        #[clap(flatten)]
+        ownership_config: ChainOwnershipConfig,
 
         /// The initial balance of the new chain. This is subtracted from the parent chain's
         /// balance.
         #[arg(long = "initial-balance", default_value = "0")]
         balance: Amount,
+    },
 
-        /// The duration of the fast round, in milliseconds.
-        #[arg(long = "fast-round-ms", value_parser = util::parse_millis)]
-        fast_round_duration: Option<Duration>,
+    /// Change who owns the chain, and how the owners work together proposing blocks.
+    ///
+    /// Specify the complete set of new owners, by public key. Existing owners that are
+    /// not included will be removed.
+    ChangeOwnership {
+        /// The ID of the chain whose owners will be changed.
+        #[clap(long)]
+        chain_id: Option<ChainId>,
 
-        /// The duration of the first single-leader and all multi-leader rounds.
-        #[arg(
-            long = "base-timeout-ms",
-            default_value = "10000",
-            value_parser = util::parse_millis
-        )]
-        base_timeout: Duration,
-
-        /// The number of milliseconds by which the timeout increases after each
-        /// single-leader round.
-        #[arg(
-            long = "timeout-increment-ms",
-            default_value = "1000",
-            value_parser = util::parse_millis
-        )]
-        timeout_increment: Duration,
+        #[clap(flatten)]
+        ownership_config: ChainOwnershipConfig,
     },
 
     /// Changes the application permissions configuration.
@@ -855,4 +836,91 @@ pub enum ProjectCommand {
         #[arg(long, num_args(0..))]
         required_application_ids: Option<Vec<UserApplicationId>>,
     },
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct ChainOwnershipConfig {
+    /// Public keys of the new super owners.
+    #[arg(long, num_args(0..))]
+    super_owner_public_keys: Vec<PublicKey>,
+
+    /// Public keys of the new regular owners.
+    #[arg(long, num_args(0..))]
+    owner_public_keys: Vec<PublicKey>,
+
+    /// Weights for the new owners.
+    ///
+    /// If they are specified there must be exactly one weight for each owner.
+    /// If no weights are given, every owner will have weight 100.
+    #[arg(long, num_args(0..))]
+    owner_weights: Vec<u64>,
+
+    /// The number of rounds in which every owner can propose blocks, i.e. the first round
+    /// number in which only a single designated leader is allowed to propose blocks.
+    #[arg(long)]
+    multi_leader_rounds: Option<u32>,
+
+    /// The duration of the fast round, in milliseconds.
+    #[arg(long = "fast-round-ms", value_parser = util::parse_millis)]
+    fast_round_duration: Option<Duration>,
+
+    /// The duration of the first single-leader and all multi-leader rounds.
+    #[arg(
+        long = "base-timeout-ms",
+        default_value = "10000",
+        value_parser = util::parse_millis
+    )]
+    base_timeout: Duration,
+
+    /// The number of milliseconds by which the timeout increases after each
+    /// single-leader round.
+    #[arg(
+        long = "timeout-increment-ms",
+        default_value = "1000",
+        value_parser = util::parse_millis
+    )]
+    timeout_increment: Duration,
+}
+
+impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
+    type Error = Error;
+
+    fn try_from(config: ChainOwnershipConfig) -> Result<ChainOwnership, Error> {
+        let ChainOwnershipConfig {
+            super_owner_public_keys,
+            owner_public_keys,
+            owner_weights,
+            multi_leader_rounds,
+            fast_round_duration,
+            base_timeout,
+            timeout_increment,
+        } = config;
+        anyhow::ensure!(
+            owner_weights.is_empty() || owner_weights.len() == owner_public_keys.len(),
+            "There are {} public keys but {} weights.",
+            owner_public_keys.len(),
+            owner_weights.len()
+        );
+        let super_owners = super_owner_public_keys
+            .into_iter()
+            .map(|pub_key| (Owner::from(pub_key), pub_key))
+            .collect();
+        let owners = owner_public_keys
+            .into_iter()
+            .zip(owner_weights.into_iter().chain(iter::repeat(100)))
+            .map(|(pub_key, weight)| (Owner::from(pub_key), (pub_key, weight)))
+            .collect();
+        let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
+        let timeout_config = TimeoutConfig {
+            fast_round_duration,
+            base_timeout,
+            timeout_increment,
+        };
+        Ok(ChainOwnership {
+            super_owners,
+            owners,
+            multi_leader_rounds,
+            timeout_config,
+        })
+    }
 }

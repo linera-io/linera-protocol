@@ -10,6 +10,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera subscribe`↴](#linera-subscribe)
 * [`linera unsubscribe`↴](#linera-unsubscribe)
 * [`linera open-multi-owner-chain`↴](#linera-open-multi-owner-chain)
+* [`linera change-ownership`↴](#linera-change-ownership)
 * [`linera change-application-permissions`↴](#linera-change-application-permissions)
 * [`linera close-chain`↴](#linera-close-chain)
 * [`linera local-balance`↴](#linera-local-balance)
@@ -57,6 +58,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `subscribe` — Subscribe to a system channel
 * `unsubscribe` — Unsubscribe from a system channel
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
+* `change-ownership` — Change who owns the chain, and how the owners work together proposing blocks
 * `change-application-permissions` — Changes the application permissions configuration
 * `close-chain` — Close an existing chain
 * `local-balance` — Read the current native-token balance of the given account directly from the local state
@@ -200,12 +202,38 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 ###### **Options:**
 
 * `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
-* `--to-public-keys <PUBLIC_KEYS>` — Public keys of the new owners
-* `--weights <WEIGHTS>` — Weights for the new owners
+* `--super-owner-public-keys <SUPER_OWNER_PUBLIC_KEYS>` — Public keys of the new super owners
+* `--owner-public-keys <OWNER_PUBLIC_KEYS>` — Public keys of the new regular owners
+* `--owner-weights <OWNER_WEIGHTS>` — Weights for the new owners
 * `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks
+* `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds
+* `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds
+
+  Default value: `10000`
+* `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round
+
+  Default value: `1000`
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
+
+
+
+## `linera change-ownership`
+
+Change who owns the chain, and how the owners work together proposing blocks.
+
+Specify the complete set of new owners, by public key. Existing owners that are not included will be removed.
+
+**Usage:** `linera change-ownership [OPTIONS]`
+
+###### **Options:**
+
+* `--chain-id <CHAIN_ID>` — The ID of the chain whose owners will be changed
+* `--super-owner-public-keys <SUPER_OWNER_PUBLIC_KEYS>` — Public keys of the new super owners
+* `--owner-public-keys <OWNER_PUBLIC_KEYS>` — Public keys of the new regular owners
+* `--owner-weights <OWNER_WEIGHTS>` — Weights for the new owners
+* `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks
 * `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds
 * `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds
 

@@ -13,7 +13,7 @@ use linera_base::{
     crypto::{CryptoHash, CryptoRng, PublicKey},
     data_types::{Amount, ApplicationPermissions, Timestamp},
     identifiers::{ChainDescription, ChainId, MessageId, Owner},
-    ownership::{ChainOwnership, TimeoutConfig},
+    ownership::ChainOwnership,
 };
 use linera_chain::data_types::{CertificateValue, ExecutedBlock};
 use linera_core::{
@@ -48,7 +48,7 @@ use rand::Rng as _;
 use serde_json::Value;
 use std::{
     collections::HashMap,
-    env, iter,
+    env,
     path::PathBuf,
     sync::Arc,
     time::{Duration, Instant},
@@ -190,13 +190,8 @@ impl Runnable for Job {
 
             OpenMultiOwnerChain {
                 chain_id,
-                public_keys,
-                weights,
-                multi_leader_rounds,
                 balance,
-                fast_round_duration,
-                base_timeout,
-                timeout_increment,
+                ownership_config,
             } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(storage, chain_id);
@@ -205,33 +200,10 @@ impl Runnable for Job {
                     chain_id
                 );
                 let time_start = Instant::now();
-                let owners = if weights.is_empty() {
-                    public_keys
-                        .into_iter()
-                        .zip(iter::repeat(100))
-                        .collect::<Vec<_>>()
-                } else if weights.len() != public_keys.len() {
-                    bail!(
-                        "There are {} public keys but {} weights.",
-                        public_keys.len(),
-                        weights.len()
-                    );
-                } else {
-                    public_keys.into_iter().zip(weights).collect::<Vec<_>>()
-                };
-                let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
-                let timeout_config = TimeoutConfig {
-                    fast_round_duration,
-                    base_timeout,
-                    timeout_increment,
-                };
+                let ownership = ChainOwnership::try_from(ownership_config)?;
                 let ((message_id, certificate), _) = context
                     .apply_client_command(chain_client, |mut chain_client| {
-                        let ownership = ChainOwnership::multiple(
-                            owners.clone(),
-                            multi_leader_rounds,
-                            timeout_config.clone(),
-                        );
+                        let ownership = ownership.clone();
                         async move {
                             let result = chain_client
                                 .open_chain(ownership, balance)
@@ -259,6 +231,15 @@ impl Runnable for Job {
                 // Print the new chain ID and message ID on stdout for scripting purposes.
                 println!("{}", message_id);
                 println!("{}", ChainId::child(message_id));
+            }
+
+            ChangeOwnership {
+                chain_id,
+                ownership_config,
+            } => {
+                context
+                    .change_ownership(chain_id, ownership_config, storage)
+                    .await?
             }
 
             ChangeApplicationPermissions {
