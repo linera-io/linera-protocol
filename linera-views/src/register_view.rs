@@ -3,11 +3,10 @@
 
 use crate::{
     batch::Batch,
-    common::{from_bytes_opt, Context, HasherOutput, MIN_VIEW_TAG},
+    common::{Context, HasherOutput},
     hashable_wrapper::{DeleteStorageFirst, WrappedHashableContainerView},
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
-use async_lock::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
@@ -33,15 +32,6 @@ static REGISTER_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Histogram can be created")
 });
 
-/// Key tags to create the sub-keys of a RegisterView on top of the base key.
-#[repr(u8)]
-enum KeyTag {
-    /// Prefix for the storing of the value
-    Value = MIN_VIEW_TAG,
-    /// Prefix for the hash
-    Hash,
-}
-
 /// A view that supports modifying a single value of type `T`.
 #[derive(Debug)]
 pub struct RegisterView<C, T> {
@@ -49,8 +39,6 @@ pub struct RegisterView<C, T> {
     context: C,
     stored_value: Box<T>,
     update: Option<Box<T>>,
-    stored_hash: Option<HasherOutput>,
-    hash: Mutex<Option<HasherOutput>>,
 }
 
 #[async_trait]
@@ -65,46 +53,30 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let key1 = context.base_tag(KeyTag::Value as u8);
-        let key2 = context.base_tag(KeyTag::Hash as u8);
-        let keys = vec![key1, key2];
-        let values_bytes = context.read_multi_values_bytes(keys).await?;
-        let stored_value = Box::new(from_bytes_opt(&values_bytes[0])?.unwrap_or_default());
-        let hash = from_bytes_opt(&values_bytes[1])?;
+        let key = context.base_key();
+        let value = context.read_value(&key).await?;
+        let stored_value = Box::new(value.unwrap_or_default());
         Ok(Self {
             delete_storage_first: false,
             context,
             stored_value,
             update: None,
-            stored_hash: hash,
-            hash: Mutex::new(hash),
         })
     }
 
     fn rollback(&mut self) {
         self.delete_storage_first = false;
         self.update = None;
-        *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.delete_storage_first {
             batch.delete_key_prefix(self.context.base_key());
             self.stored_value = Box::default();
-            self.stored_hash = None;
         } else if let Some(value) = self.update.take() {
-            let key = self.context.base_tag(KeyTag::Value as u8);
+            let key = self.context.base_key();
             batch.put_key_value(key, &value)?;
             self.stored_value = value;
-        }
-        let hash = *self.hash.get_mut();
-        if self.stored_hash != hash {
-            let key = self.context.base_tag(KeyTag::Hash as u8);
-            match hash {
-                None => batch.delete_key(key),
-                Some(hash) => batch.put_key_value(key, &hash)?,
-            }
-            self.stored_hash = hash;
         }
         self.delete_storage_first = false;
         Ok(())
@@ -113,7 +85,6 @@ where
     fn clear(&mut self) {
         self.delete_storage_first = true;
         self.update = Some(Box::default());
-        *self.hash.get_mut() = None;
     }
 }
 
@@ -129,8 +100,6 @@ where
             context: self.context.clone(),
             stored_value: self.stored_value.clone(),
             update: self.update.clone(),
-            stored_hash: self.stored_hash,
-            hash: Mutex::new(*self.hash.get_mut()),
         })
     }
 }
@@ -174,7 +143,6 @@ where
     pub fn set(&mut self, value: T) {
         self.delete_storage_first = false;
         self.update = Some(Box::new(value));
-        *self.hash.get_mut() = None;
     }
 
     /// Obtains the extra data.
@@ -201,7 +169,6 @@ where
     /// # })
     /// ```
     pub fn get_mut(&mut self) -> &mut T {
-        *self.hash.get_mut() = None;
         self.delete_storage_first = false;
         match &mut self.update {
             Some(value) => value,
@@ -231,28 +198,11 @@ where
     type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let hash = *self.hash.get_mut();
-        match hash {
-            Some(hash) => Ok(hash),
-            None => {
-                let new_hash = self.compute_hash()?;
-                let hash = self.hash.get_mut();
-                *hash = Some(new_hash);
-                Ok(new_hash)
-            }
-        }
+        self.compute_hash()
     }
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hash = self.hash.lock().await;
-        match *hash {
-            Some(hash) => Ok(hash),
-            None => {
-                let new_hash = self.compute_hash()?;
-                *hash = Some(new_hash);
-                Ok(new_hash)
-            }
-        }
+        self.compute_hash()
     }
 }
 
