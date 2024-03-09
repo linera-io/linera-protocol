@@ -541,16 +541,6 @@ pub trait ContractRuntime: BaseRuntime {
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallOutcome, ExecutionError>;
 
-    /// Calls into a session that is in our scope. Forwarded sessions will be visible to
-    /// the application that runs `session_id`.
-    fn try_call_session(
-        &mut self,
-        authenticated: bool,
-        session_id: SessionId,
-        argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallOutcome, ExecutionError>;
-
     /// Opens a new chain.
     fn open_chain(
         &mut self,

@@ -517,83 +517,6 @@ impl SyncRuntimeInternal<UserContractInstance> {
         }
         session_ids
     }
-
-    fn try_load_session(
-        &mut self,
-        session_id: SessionId,
-        application_id: UserApplicationId,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        let state = self
-            .session_manager
-            .states
-            .get_mut(&session_id)
-            .ok_or(ExecutionError::InvalidSession(session_id))?;
-        // Verify locking.
-        ensure!(!state.locked, ExecutionError::SessionIsInUse(session_id));
-        // Verify ownership.
-        ensure!(
-            state.owner == application_id,
-            ExecutionError::invalid_session_owner(session_id, application_id, state.owner,)
-        );
-        // Lock state and return data.
-        state.locked = true;
-        Ok(state.data.clone())
-    }
-
-    fn try_save_session(
-        &mut self,
-        session_id: SessionId,
-        application_id: UserApplicationId,
-        data: Vec<u8>,
-    ) -> Result<(), ExecutionError> {
-        let state = self
-            .session_manager
-            .states
-            .get_mut(&session_id)
-            .ok_or(ExecutionError::InvalidSession(session_id))?;
-        // Verify locking.
-        ensure!(
-            state.locked,
-            ExecutionError::SessionStateNotLocked(session_id)
-        );
-        // Verify ownership.
-        ensure!(
-            state.owner == application_id,
-            ExecutionError::invalid_session_owner(session_id, application_id, state.owner,)
-        );
-        // Save data.
-        state.data = data;
-        state.locked = false;
-        Ok(())
-    }
-
-    fn try_close_session(
-        &mut self,
-        session_id: SessionId,
-        application_id: UserApplicationId,
-    ) -> Result<(), ExecutionError> {
-        let state = self
-            .session_manager
-            .states
-            .get(&session_id)
-            .ok_or(ExecutionError::InvalidSession(session_id))?;
-        // Verify locking.
-        ensure!(
-            state.locked,
-            ExecutionError::SessionStateNotLocked(session_id)
-        );
-        // Verify ownership.
-        ensure!(
-            state.owner == application_id,
-            ExecutionError::invalid_session_owner(session_id, application_id, state.owner,)
-        );
-        // Delete the session entirely.
-        self.session_manager
-            .states
-            .remove(&session_id)
-            .ok_or(ExecutionError::InvalidSession(session_id))?;
-        Ok(())
-    }
 }
 
 impl SyncRuntimeInternal<UserServiceInstance> {
@@ -1206,53 +1129,6 @@ impl ContractRuntime for ContractSyncRuntime {
             .handle_application_call(callee_context, argument, forwarded_sessions)?;
 
         self.inner().finish_call(raw_outcome)
-    }
-
-    fn try_call_session(
-        &mut self,
-        authenticated: bool,
-        session_id: SessionId,
-        argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallOutcome, ExecutionError> {
-        let callee_id = session_id.application_id;
-
-        let (contract, callee_context, session_state) = {
-            let cloned_self = self.clone().0;
-            let mut this = self.inner();
-
-            // Load the session.
-            let caller_id = this.application_id()?;
-            let session_state = this.try_load_session(session_id, caller_id)?;
-
-            let (contract, callee_context) =
-                this.prepare_for_call(cloned_self, authenticated, callee_id, &forwarded_sessions)?;
-
-            Ok::<_, ExecutionError>((contract, callee_context, session_state))
-        }?;
-
-        let (raw_outcome, session_state) = contract
-            .try_lock()
-            .expect("Applications should not have reentrant calls")
-            .handle_session_call(callee_context, session_state, argument, forwarded_sessions)?;
-
-        {
-            let mut this = self.inner();
-
-            let outcome = this.finish_call(raw_outcome.inner)?;
-
-            // Update the session.
-            let caller_id = this.application_id()?;
-            if raw_outcome.close_session {
-                // Terminate the session.
-                this.try_close_session(session_id, caller_id)?;
-            } else {
-                // Save the session.
-                this.try_save_session(session_id, caller_id, session_state)?;
-            }
-
-            Ok(outcome)
-        }
     }
 
     fn open_chain(
