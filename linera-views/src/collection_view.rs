@@ -7,7 +7,7 @@ use crate::{
     hashable_wrapper::{DeleteStorageFirst, WrappedHashableContainerView},
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
-use async_lock::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -47,8 +47,6 @@ pub struct ByteCollectionView<C, W> {
     context: C,
     delete_storage_first: bool,
     updates: RwLock<BTreeMap<Vec<u8>, Update<W>>>,
-    stored_hash: Option<HasherOutput>,
-    hash: Mutex<Option<HasherOutput>>,
 }
 
 /// A read-only accessor for a particular subview in a [`CollectionView`].
@@ -81,8 +79,6 @@ enum KeyTag {
     Index = MIN_VIEW_TAG,
     /// Prefix for specifying as the prefix for the sub-view.
     Subview,
-    /// Prefix for the hash value.
-    Hash,
 }
 
 #[async_trait]
@@ -97,21 +93,16 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let key = context.base_tag(KeyTag::Hash as u8);
-        let hash = context.read_value(&key).await?;
         Ok(Self {
             context,
             delete_storage_first: false,
             updates: RwLock::new(BTreeMap::new()),
-            stored_hash: hash,
-            hash: Mutex::new(hash),
         })
     }
 
     fn rollback(&mut self) {
         self.delete_storage_first = false;
         self.updates.get_mut().clear();
-        *self.hash.get_mut() = self.stored_hash;
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
@@ -123,7 +114,6 @@ where
                     self.add_index(batch, &index);
                 }
             }
-            self.stored_hash = None;
         } else {
             for (index, update) in mem::take(self.updates.get_mut()) {
                 match update {
@@ -140,15 +130,6 @@ where
                 }
             }
         }
-        let hash = *self.hash.get_mut();
-        if self.stored_hash != hash {
-            let key = self.context.base_tag(KeyTag::Hash as u8);
-            match hash {
-                None => batch.delete_key(key),
-                Some(hash) => batch.put_key_value(key, &hash)?,
-            }
-            self.stored_hash = hash;
-        }
         self.delete_storage_first = false;
         Ok(())
     }
@@ -156,7 +137,6 @@ where
     fn clear(&mut self) {
         self.delete_storage_first = true;
         self.updates.get_mut().clear();
-        *self.hash.get_mut() = None;
     }
 }
 
@@ -184,8 +164,6 @@ where
             context: self.context.clone(),
             delete_storage_first: self.delete_storage_first,
             updates: RwLock::new(cloned_updates),
-            stored_hash: self.stored_hash,
-            hash: Mutex::new(*self.hash.get_mut()),
         })
     }
 }
@@ -381,7 +359,6 @@ where
     /// # })
     /// ```
     pub fn remove_entry(&mut self, short_key: Vec<u8>) {
-        *self.hash.get_mut() = None;
         if self.delete_storage_first {
             // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
             self.updates.get_mut().remove(&short_key);
@@ -396,7 +373,6 @@ where
     }
 
     async fn do_load_entry_mut(&mut self, short_key: Vec<u8>) -> Result<&mut W, ViewError> {
-        *self.hash.get_mut() = None;
         match self.updates.get_mut().entry(short_key.clone()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
@@ -565,14 +541,44 @@ where
     }
 }
 
-impl<C, W> ByteCollectionView<C, W>
+#[async_trait]
+impl<C, W> HashableView<C> for ByteCollectionView<C, W>
 where
-    C: Context + Send,
+    C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: HashableView<C> + Sync,
+    W: HashableView<C> + Send + Sync + 'static,
 {
-    /// Computes the hash of the view
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+    type Hasher = sha3::Sha3_256;
+
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        #[cfg(with_metrics)]
+        let _hash_latency = COLLECTION_VIEW_HASH_RUNTIME.measure_latency();
+        let mut hasher = sha3::Sha3_256::default();
+        let keys = self.keys().await?;
+        hasher.update_with_bcs_bytes(&keys.len())?;
+        let updates = self.updates.read().await;
+        for key in keys {
+            hasher.update_with_bytes(&key)?;
+            let hash = match updates.get(&key) {
+                Some(entry) => {
+                    let Update::Set(view) = entry else {
+                        unreachable!();
+                    };
+                    view.hash().await?
+                }
+                None => {
+                    let key = self.context.base_tag_index(KeyTag::Subview as u8, &key);
+                    let context = self.context.clone_with_base_key(key);
+                    let mut view = W::load(context).await?;
+                    view.hash_mut().await?
+                }
+            };
+            hasher.write_all(hash.as_ref())?;
+        }
+        Ok(hasher.finalize())
+    }
+
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
         let _hash_latency = COLLECTION_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
@@ -598,41 +604,6 @@ where
             hasher.write_all(hash.as_ref())?;
         }
         Ok(hasher.finalize())
-    }
-}
-
-#[async_trait]
-impl<C, W> HashableView<C> for ByteCollectionView<C, W>
-where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    W: HashableView<C> + Send + Sync + 'static,
-{
-    type Hasher = sha3::Sha3_256;
-
-    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let hash = *self.hash.get_mut();
-        match hash {
-            Some(hash) => Ok(hash),
-            None => {
-                let new_hash = self.compute_hash().await?;
-                let hash = self.hash.get_mut();
-                *hash = Some(new_hash);
-                Ok(new_hash)
-            }
-        }
-    }
-
-    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hash = self.hash.lock().await;
-        match *hash {
-            Some(hash) => Ok(hash),
-            None => {
-                let new_hash = self.compute_hash().await?;
-                *hash = Some(new_hash);
-                Ok(new_hash)
-            }
-        }
     }
 }
 
