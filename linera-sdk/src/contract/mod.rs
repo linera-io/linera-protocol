@@ -147,12 +147,16 @@ where
 {
     ContractLogger::install();
 
-    let application =
-        application.get_or_insert_with(|| Application::Storage::load().blocking_wait());
+    let application = application.get_or_insert_with(|| {
+        let state = Application::Storage::load().blocking_wait();
+        Application::new(state)
+            .blocking_wait()
+            .expect("Failed to create application contract hnadler instance")
+    });
 
     let output = entrypoint(application).map_err(|error| error.to_string())?;
 
-    Application::Storage::store(application).blocking_wait();
+    Application::Storage::store(application.state_mut()).blocking_wait();
 
     Ok(output.into())
 }

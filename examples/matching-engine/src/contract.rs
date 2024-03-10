@@ -20,9 +20,13 @@ use linera_sdk::{
     Resources, ViewStateStorage,
 };
 
-linera_sdk::contract!(MatchingEngine);
+pub struct MatchingEngineContract {
+    state: MatchingEngine,
+}
 
-impl WithContractAbi for MatchingEngine {
+linera_sdk::contract!(MatchingEngineContract);
+
+impl WithContractAbi for MatchingEngineContract {
     type Abi = matching_engine::MatchingEngineAbi;
 }
 
@@ -47,9 +51,18 @@ pub struct Transfer {
 }
 
 #[async_trait]
-impl Contract for MatchingEngine {
+impl Contract for MatchingEngineContract {
     type Error = MatchingEngineError;
     type Storage = ViewStateStorage<Self>;
+    type State = MatchingEngine;
+
+    async fn new(state: MatchingEngine) -> Result<Self, Self::Error> {
+        Ok(MatchingEngineContract { state })
+    }
+
+    fn state_mut(&mut self) -> &mut Self::State {
+        &mut self.state
+    }
 
     async fn initialize(
         &mut self,
@@ -84,7 +97,7 @@ impl Contract for MatchingEngine {
                 }
             }
             Operation::CloseChain => {
-                for order_id in self.orders.indices().await? {
+                for order_id in self.state.orders.indices().await? {
                     match self.modify_order(order_id, ModifyAmount::All).await {
                         Ok(transfer) => self.send_to(transfer)?,
                         // Orders with amount zero may have been cleared in an earlier iteration.
@@ -149,7 +162,7 @@ impl Contract for MatchingEngine {
     }
 }
 
-impl MatchingEngine {
+impl MatchingEngineContract {
     /// Get the owner from the order
     fn get_owner(order: &Order) -> AccountOwner {
         match order {
@@ -331,7 +344,7 @@ impl MatchingEngine {
         order_id: &OrderId,
         owner: &AccountOwner,
     ) -> Result<(), MatchingEngineError> {
-        let value = self.orders.get(order_id).await?;
+        let value = self.state.orders.get(order_id).await?;
         match value {
             None => Err(MatchingEngineError::OrderNotPresent),
             Some(value) => {
@@ -412,11 +425,15 @@ impl MatchingEngine {
         order_id: OrderId,
         cancel_amount: ModifyAmount,
     ) -> Result<Transfer, MatchingEngineError> {
-        let key_book = self.orders.get(&order_id).await?;
+        let key_book = self.state.orders.get(&order_id).await?;
         let key_book = key_book.ok_or_else(|| MatchingEngineError::OrderNotPresent)?;
         match key_book.nature {
             OrderNature::Bid => {
-                let view = self.bids.load_entry_mut(&key_book.price.to_bid()).await?;
+                let view = self
+                    .state
+                    .bids
+                    .load_entry_mut(&key_book.price.to_bid())
+                    .await?;
                 let (cancel_amount, remove_order_id) =
                     Self::modify_order_level(view, order_id, cancel_amount).await?;
                 if remove_order_id {
@@ -432,7 +449,11 @@ impl MatchingEngine {
                 Ok(transfer)
             }
             OrderNature::Ask => {
-                let view = self.asks.load_entry_mut(&key_book.price.to_ask()).await?;
+                let view = self
+                    .state
+                    .asks
+                    .load_entry_mut(&key_book.price.to_ask())
+                    .await?;
                 let (cancel_count, remove_order_id) =
                     Self::modify_order_level(view, order_id, cancel_amount).await?;
                 if remove_order_id {
@@ -451,7 +472,7 @@ impl MatchingEngine {
 
     /// Gets the order_id that increases starting from 0.
     fn get_new_order_id(&mut self) -> Result<OrderId, MatchingEngineError> {
-        let value = self.next_order_number.get_mut();
+        let value = self.state.next_order_number.get_mut();
         let value_ret = *value;
         *value += 1;
         Ok(value_ret)
@@ -600,14 +621,18 @@ impl MatchingEngine {
         order_id: OrderId,
         price: Price,
     ) -> Result<(), MatchingEngineError> {
-        let account_info = self.account_info.get_mut_or_default(&account.owner).await?;
+        let account_info = self
+            .state
+            .account_info
+            .get_mut_or_default(&account.owner)
+            .await?;
         account_info.orders.insert(order_id);
         let key_book = KeyBook {
             price,
             nature,
             account,
         };
-        self.orders.insert(&order_id, key_book)?;
+        self.state.orders.insert(&order_id, key_book)?;
         Ok(())
     }
 
@@ -620,6 +645,7 @@ impl MatchingEngine {
     ) -> Result<(), MatchingEngineError> {
         let (owner, order_id) = entry;
         let account_info = self
+            .state
             .account_info
             .get_mut(&owner)
             .await
@@ -664,7 +690,8 @@ impl MatchingEngine {
         match nature {
             OrderNature::Bid => {
                 let mut matching_price_asks = Vec::new();
-                self.asks
+                self.state
+                    .asks
                     .for_each_index_while(|price_ask| {
                         let matches = price_ask.to_price() <= *price;
                         if matches {
@@ -674,7 +701,7 @@ impl MatchingEngine {
                     })
                     .await?;
                 for price_ask in matching_price_asks {
-                    let view = self.asks.load_entry_mut(&price_ask).await?;
+                    let view = self.state.asks.load_entry_mut(&price_ask).await?;
                     let remove_entry = Self::level_clearing(
                         view,
                         account,
@@ -686,7 +713,7 @@ impl MatchingEngine {
                     )
                     .await?;
                     if view.queue.count() == 0 {
-                        self.asks.remove_entry(&price_ask)?;
+                        self.state.asks.remove_entry(&price_ask)?;
                     }
                     self.remove_order_ids(remove_entry).await?;
                     if final_amount == Amount::ZERO {
@@ -694,7 +721,7 @@ impl MatchingEngine {
                     }
                 }
                 if final_amount != Amount::ZERO {
-                    let view = self.bids.load_entry_mut(&price.to_bid()).await?;
+                    let view = self.state.bids.load_entry_mut(&price.to_bid()).await?;
                     let order = OrderEntry {
                         amount: final_amount,
                         account: *account,
@@ -707,7 +734,8 @@ impl MatchingEngine {
             }
             OrderNature::Ask => {
                 let mut matching_price_bids = Vec::new();
-                self.bids
+                self.state
+                    .bids
                     .for_each_index_while(|price_bid| {
                         let matches = price_bid.to_price() >= *price;
                         if matches {
@@ -717,7 +745,7 @@ impl MatchingEngine {
                     })
                     .await?;
                 for price_bid in matching_price_bids {
-                    let view = self.bids.load_entry_mut(&price_bid).await?;
+                    let view = self.state.bids.load_entry_mut(&price_bid).await?;
                     let remove_entry = Self::level_clearing(
                         view,
                         account,
@@ -729,7 +757,7 @@ impl MatchingEngine {
                     )
                     .await?;
                     if view.queue.count() == 0 {
-                        self.bids.remove_entry(&price_bid)?;
+                        self.state.bids.remove_entry(&price_bid)?;
                     }
                     self.remove_order_ids(remove_entry).await?;
                     if final_amount == Amount::ZERO {
@@ -737,7 +765,7 @@ impl MatchingEngine {
                     }
                 }
                 if final_amount != Amount::ZERO {
-                    let view = self.asks.load_entry_mut(&price.to_ask()).await?;
+                    let view = self.state.asks.load_entry_mut(&price.to_ask()).await?;
                     let order = OrderEntry {
                         amount: final_amount,
                         account: *account,

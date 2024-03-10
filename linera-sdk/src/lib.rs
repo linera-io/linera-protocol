@@ -92,6 +92,9 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// recoverable errors in the case of application calls, you may use the response types.
     type Error: Error + From<serde_json::Error> + From<bcs::Error> + 'static;
 
+    /// The type used to store the persisted application state.
+    type State: Sync;
+
     /// The desired storage backend used to store the application's state.
     ///
     /// Currently, the two supported backends are [`SimpleStateStorage`] or
@@ -102,6 +105,12 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// state if [`SimpleStateStorage`] is used, or the [`Default`] value of all sub-views in the
     /// state if the [`ViewStateStorage`] is used.
     type Storage: ContractStateStorage<Self> + Send + 'static;
+
+    /// Creates a in-memory instance of the contract handler from the application's `state`.
+    async fn new(state: Self::State) -> Result<Self, Self::Error>;
+
+    /// Returns the current state of the application so that it can be persisted.
+    fn state_mut(&mut self) -> &mut Self::State;
 
     /// Initializes the application on the chain that created it.
     ///
@@ -181,7 +190,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
         &mut self,
         _runtime: &mut ContractRuntime,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        Self::Storage::store(self).await;
+        Self::Storage::store(self.state_mut()).await;
         Ok(ExecutionOutcome::default())
     }
 

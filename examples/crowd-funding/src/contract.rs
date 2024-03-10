@@ -19,16 +19,29 @@ use linera_sdk::{
 use state::{CrowdFunding, Status};
 use thiserror::Error;
 
-linera_sdk::contract!(CrowdFunding);
+pub struct CrowdFundingContract {
+    state: CrowdFunding,
+}
 
-impl WithContractAbi for CrowdFunding {
+linera_sdk::contract!(CrowdFundingContract);
+
+impl WithContractAbi for CrowdFundingContract {
     type Abi = crowd_funding::CrowdFundingAbi;
 }
 
 #[async_trait]
-impl Contract for CrowdFunding {
+impl Contract for CrowdFundingContract {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
+    type State = CrowdFunding;
+
+    async fn new(state: CrowdFunding) -> Result<Self, Self::Error> {
+        Ok(CrowdFundingContract { state })
+    }
+
+    fn state_mut(&mut self) -> &mut Self::State {
+        &mut self.state
+    }
 
     async fn initialize(
         &mut self,
@@ -38,10 +51,10 @@ impl Contract for CrowdFunding {
         // Validate that the application parameters were configured correctly.
         assert!(Self::parameters().is_ok());
 
-        self.initialization_argument.set(Some(argument));
+        self.state.initialization_argument.set(Some(argument));
 
         ensure!(
-            self.initialization_argument_().deadline > system_api::current_system_time(),
+            self.initialization_argument().deadline > system_api::current_system_time(),
             Error::DeadlineInThePast
         );
 
@@ -105,7 +118,7 @@ impl Contract for CrowdFunding {
     }
 }
 
-impl CrowdFunding {
+impl CrowdFundingContract {
     fn fungible_id() -> Result<ApplicationId<FungibleTokenAbi>, Error> {
         // TODO(#723): We should be able to pull the fungible ID from the
         // `required_application_ids` of the application description.
@@ -162,16 +175,17 @@ impl CrowdFunding {
     /// Marks a pledge in the application state, so that it can be returned if the campaign is
     /// cancelled.
     async fn finish_pledge(&mut self, source: AccountOwner, amount: Amount) -> Result<(), Error> {
-        match self.status.get() {
+        match self.state.status.get() {
             Status::Active => {
-                self.pledges
+                self.state
+                    .pledges
                     .get_mut_or_default(&source)
                     .await
                     .expect("view access should not fail")
                     .saturating_add_assign(amount);
                 Ok(())
             }
-            Status::Complete => self.send_to(amount, self.initialization_argument_().owner),
+            Status::Complete => self.send_to(amount, self.initialization_argument().owner),
             Status::Cancelled => Err(Error::Cancelled),
         }
     }
@@ -180,10 +194,10 @@ impl CrowdFunding {
     fn collect_pledges(&mut self) -> Result<(), Error> {
         let total = self.balance()?;
 
-        match self.status.get() {
+        match self.state.status.get() {
             Status::Active => {
                 ensure!(
-                    total >= self.initialization_argument_().target,
+                    total >= self.initialization_argument().target,
                     Error::TargetNotReached
                 );
             }
@@ -191,26 +205,27 @@ impl CrowdFunding {
             Status::Cancelled => return Err(Error::Cancelled),
         }
 
-        self.send_to(total, self.initialization_argument_().owner)?;
-        self.pledges.clear();
-        self.status.set(Status::Complete);
+        self.send_to(total, self.initialization_argument().owner)?;
+        self.state.pledges.clear();
+        self.state.status.set(Status::Complete);
 
         Ok(())
     }
 
     /// Cancels the campaign if the deadline has passed, refunding all pledges.
     async fn cancel_campaign(&mut self) -> Result<(), Error> {
-        ensure!(!self.status.get().is_complete(), Error::Completed);
+        ensure!(!self.state.status.get().is_complete(), Error::Completed);
 
         // TODO(#728): Remove this.
         #[cfg(not(any(test, feature = "test")))]
         ensure!(
-            system_api::current_system_time() >= self.initialization_argument_().deadline,
+            system_api::current_system_time() >= self.initialization_argument().deadline,
             Error::DeadlineNotReached
         );
 
         let mut pledges = Vec::new();
-        self.pledges
+        self.state
+            .pledges
             .for_each_index_value(|pledger, amount| {
                 pledges.push((pledger, amount));
                 Ok(())
@@ -222,8 +237,8 @@ impl CrowdFunding {
         }
 
         let balance = self.balance()?;
-        self.send_to(balance, self.initialization_argument_().owner)?;
-        self.status.set(Status::Cancelled);
+        self.send_to(balance, self.initialization_argument().owner)?;
+        self.state.status.set(Status::Cancelled);
 
         Ok(())
     }
@@ -272,9 +287,9 @@ impl CrowdFunding {
         Ok(())
     }
 
-    // Trailing underscore to avoid conflict with the generated GraphQL function.
-    pub fn initialization_argument_(&self) -> &InitializationArgument {
-        self.initialization_argument
+    pub fn initialization_argument(&self) -> &InitializationArgument {
+        self.state
+            .initialization_argument
             .get()
             .as_ref()
             .expect("Application is not running on the host chain or was not initialized yet")

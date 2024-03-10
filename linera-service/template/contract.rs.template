@@ -10,16 +10,29 @@ use linera_sdk::{{
 }};
 use thiserror::Error;
 
-linera_sdk::contract!(Application);
+pub struct ApplicationContract {{
+    state: Application,
+}}
 
-impl WithContractAbi for Application {{
+linera_sdk::contract!(ApplicationContract);
+
+impl WithContractAbi for ApplicationContract {{
     type Abi = {project_name}::ApplicationAbi;
 }}
 
 #[async_trait]
-impl Contract for Application {{
+impl Contract for ApplicationContract {{
     type Error = ContractError;
     type Storage = ViewStateStorage<Self>;
+    type State = Application;
+
+    async fn new(state: Self::State) -> Result<Self, Self::Error> {{
+        Ok(ApplicationContract {{ state }})
+    }}
+
+    fn state_mut(&mut self) -> &mut Self::State {{
+        &mut self.state
+    }}
 
     async fn initialize(
         &mut self,

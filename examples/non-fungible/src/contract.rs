@@ -17,16 +17,29 @@ use non_fungible::{Message, Nft, Operation, TokenId};
 use std::collections::BTreeSet;
 use thiserror::Error;
 
-linera_sdk::contract!(NonFungibleToken);
+pub struct NonFungibleTokenContract {
+    state: NonFungibleToken,
+}
 
-impl WithContractAbi for NonFungibleToken {
+linera_sdk::contract!(NonFungibleTokenContract);
+
+impl WithContractAbi for NonFungibleTokenContract {
     type Abi = non_fungible::NonFungibleTokenAbi;
 }
 
 #[async_trait]
-impl Contract for NonFungibleToken {
+impl Contract for NonFungibleTokenContract {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
+    type State = NonFungibleToken;
+
+    async fn new(state: NonFungibleToken) -> Result<Self, Self::Error> {
+        Ok(NonFungibleTokenContract { state })
+    }
+
+    fn state_mut(&mut self) -> &mut Self::State {
+        &mut self.state
+    }
 
     async fn initialize(
         &mut self,
@@ -224,7 +237,7 @@ impl Contract for NonFungibleToken {
     }
 }
 
-impl NonFungibleToken {
+impl NonFungibleTokenContract {
     /// Verifies that a transfer is authenticated for this local account.
     fn check_account_authentication(
         authenticated_application_id: Option<ApplicationId>,
@@ -261,7 +274,8 @@ impl NonFungibleToken {
     }
 
     async fn get_nft(&self, token_id: &TokenId) -> Nft {
-        self.nfts
+        self.state
+            .nfts
             .get(token_id)
             .await
             .expect("Failure in retrieving NFT")
@@ -312,10 +326,12 @@ impl NonFungibleToken {
         let token_id = nft.token_id.clone();
         let owner = nft.owner;
 
-        self.nfts
+        self.state
+            .nfts
             .insert(&token_id, nft)
             .expect("Error in insert statement");
         if let Some(owned_token_ids) = self
+            .state
             .owned_token_ids
             .get_mut(&owner)
             .await
@@ -325,17 +341,20 @@ impl NonFungibleToken {
         } else {
             let mut owned_token_ids = BTreeSet::new();
             owned_token_ids.insert(token_id);
-            self.owned_token_ids
+            self.state
+                .owned_token_ids
                 .insert(&owner, owned_token_ids)
                 .expect("Error in insert statement");
         }
     }
 
     async fn remove_nft(&mut self, nft: &Nft) {
-        self.nfts
+        self.state
+            .nfts
             .remove(&nft.token_id)
             .expect("Failure removing NFT");
         let owned_token_ids = self
+            .state
             .owned_token_ids
             .get_mut(&nft.owner)
             .await

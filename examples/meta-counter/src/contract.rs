@@ -15,22 +15,35 @@ use linera_sdk::{
 use meta_counter::{Message, Operation};
 use thiserror::Error;
 
-linera_sdk::contract!(MetaCounter);
+pub struct MetaCounterContract {
+    state: MetaCounter,
+}
 
-impl MetaCounter {
+linera_sdk::contract!(MetaCounterContract);
+
+impl MetaCounterContract {
     fn counter_id() -> Result<ApplicationId<counter::CounterAbi>, Error> {
         Self::parameters()
     }
 }
 
-impl WithContractAbi for MetaCounter {
+impl WithContractAbi for MetaCounterContract {
     type Abi = meta_counter::MetaCounterAbi;
 }
 
 #[async_trait]
-impl Contract for MetaCounter {
+impl Contract for MetaCounterContract {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
+    type State = MetaCounter;
+
+    async fn new(state: MetaCounter) -> Result<Self, Self::Error> {
+        Ok(MetaCounterContract { state })
+    }
+
+    fn state_mut(&mut self) -> &mut Self::State {
+        &mut self.state
+    }
 
     async fn initialize(
         &mut self,

@@ -18,16 +18,29 @@ use linera_sdk::{
 use num_bigint::BigUint;
 use num_traits::{cast::FromPrimitive, ToPrimitive};
 
-linera_sdk::contract!(Amm);
+pub struct AmmContract {
+    state: Amm,
+}
 
-impl WithContractAbi for Amm {
+linera_sdk::contract!(AmmContract);
+
+impl WithContractAbi for AmmContract {
     type Abi = amm::AmmAbi;
 }
 
 #[async_trait]
-impl Contract for Amm {
+impl Contract for AmmContract {
     type Error = AmmError;
     type Storage = ViewStateStorage<Self>;
+    type State = Amm;
+
+    async fn new(state: Amm) -> Result<Self, Self::Error> {
+        Ok(AmmContract { state })
+    }
+
+    fn state_mut(&mut self) -> &mut Self::State {
+        &mut self.state
+    }
 
     async fn initialize(
         &mut self,
@@ -111,7 +124,7 @@ impl Contract for Amm {
     }
 }
 
-impl Amm {
+impl AmmContract {
     /// authenticate the originator of the message
     fn check_account_authentication(
         authenticated_application_id: Option<ApplicationId>,

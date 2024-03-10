@@ -16,16 +16,29 @@ use linera_sdk::{
 use native_fungible::TICKER_SYMBOL;
 use thiserror::Error;
 
-linera_sdk::contract!(NativeFungibleToken);
+pub struct NativeFungibleTokenContract {
+    state: NativeFungibleToken,
+}
 
-impl WithContractAbi for NativeFungibleToken {
+linera_sdk::contract!(NativeFungibleTokenContract);
+
+impl WithContractAbi for NativeFungibleTokenContract {
     type Abi = fungible::FungibleTokenAbi;
 }
 
 #[async_trait]
-impl Contract for NativeFungibleToken {
+impl Contract for NativeFungibleTokenContract {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
+    type State = NativeFungibleToken;
+
+    async fn new(state: NativeFungibleToken) -> Result<Self, Self::Error> {
+        Ok(NativeFungibleTokenContract { state })
+    }
+
+    fn state_mut(&mut self) -> &mut Self::State {
+        &mut self.state
+    }
 
     async fn initialize(
         &mut self,
@@ -202,7 +215,7 @@ impl Contract for NativeFungibleToken {
     }
 }
 
-impl NativeFungibleToken {
+impl NativeFungibleTokenContract {
     fn get_transfer_outcome(
         &self,
         source: AccountOwner,

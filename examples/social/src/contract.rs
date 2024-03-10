@@ -21,16 +21,29 @@ const POSTS_CHANNEL_NAME: &[u8] = b"posts";
 /// The number of recent posts sent in each cross-chain message.
 const RECENT_POSTS: usize = 10;
 
-linera_sdk::contract!(Social);
+pub struct SocialContract {
+    state: Social,
+}
 
-impl WithContractAbi for Social {
+linera_sdk::contract!(SocialContract);
+
+impl WithContractAbi for SocialContract {
     type Abi = social::SocialAbi;
 }
 
 #[async_trait]
-impl Contract for Social {
+impl Contract for SocialContract {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
+    type State = Social;
+
+    async fn new(state: Social) -> Result<Self, Self::Error> {
+        Ok(SocialContract { state })
+    }
+
+    fn state_mut(&mut self) -> &mut Self::State {
+        &mut self.state
+    }
 
     async fn initialize(
         &mut self,
@@ -93,17 +106,17 @@ impl Contract for Social {
     }
 }
 
-impl Social {
+impl SocialContract {
     async fn execute_post_operation(
         &mut self,
         text: String,
     ) -> Result<ExecutionOutcome<Message>, Error> {
         let timestamp = system_api::current_system_time();
-        self.own_posts.push(OwnPost { timestamp, text });
-        let count = self.own_posts.count();
+        self.state.own_posts.push(OwnPost { timestamp, text });
+        let count = self.state.own_posts.count();
         let mut posts = vec![];
         for index in (0..count).rev().take(RECENT_POSTS) {
-            let maybe_post = self.own_posts.get(index).await?;
+            let maybe_post = self.state.own_posts.get(index).await?;
             let own_post = maybe_post
                 .expect("post with valid index missing; this is a bug in the social application!");
             posts.push(own_post);
@@ -125,7 +138,7 @@ impl Social {
                 author: message_id.chain_id,
                 index,
             };
-            self.received_posts.insert(&key, post.text)?;
+            self.state.received_posts.insert(&key, post.text)?;
         }
         Ok(())
     }

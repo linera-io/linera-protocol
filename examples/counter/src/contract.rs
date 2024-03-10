@@ -13,16 +13,29 @@ use linera_sdk::{
 };
 use thiserror::Error;
 
-linera_sdk::contract!(Counter);
+pub struct CounterContract {
+    state: Counter,
+}
 
-impl WithContractAbi for Counter {
+linera_sdk::contract!(CounterContract);
+
+impl WithContractAbi for CounterContract {
     type Abi = counter::CounterAbi;
 }
 
 #[async_trait]
-impl Contract for Counter {
+impl Contract for CounterContract {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
+    type State = Counter;
+
+    async fn new(state: Counter) -> Result<Self, Self::Error> {
+        Ok(CounterContract { state })
+    }
+
+    fn state_mut(&mut self) -> &mut Self::State {
+        &mut self.state
+    }
 
     async fn initialize(
         &mut self,
@@ -32,7 +45,7 @@ impl Contract for Counter {
         // Validate that the application parameters were configured correctly.
         assert!(Self::parameters().is_ok());
 
-        self.value = value;
+        self.state.value = value;
 
         Ok(ExecutionOutcome::default())
     }
@@ -42,7 +55,7 @@ impl Contract for Counter {
         _runtime: &mut ContractRuntime,
         operation: u64,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        self.value += operation;
+        self.state.value += operation;
         Ok(ExecutionOutcome::default())
     }
 
@@ -59,9 +72,9 @@ impl Contract for Counter {
         _runtime: &mut ContractRuntime,
         increment: u64,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
-        self.value += increment;
+        self.state.value += increment;
         Ok(ApplicationCallOutcome {
-            value: self.value,
+            value: self.state.value,
             ..ApplicationCallOutcome::default()
         })
     }
@@ -85,7 +98,7 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{Counter, Error};
+    use super::{Counter, CounterContract, Error};
     use assert_matches::assert_matches;
     use futures::FutureExt;
     use linera_sdk::{
@@ -108,7 +121,7 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), ExecutionOutcome::default());
-        assert_eq!(counter.value, initial_value + increment);
+        assert_eq!(counter.state.value, initial_value + increment);
     }
 
     #[webassembly_test]
@@ -122,7 +135,7 @@ mod tests {
             .expect("Execution of counter operation should not await anything");
 
         assert_matches!(result, Err(Error::MessagesNotSupported));
-        assert_eq!(counter.value, initial_value);
+        assert_eq!(counter.state.value, initial_value);
     }
 
     #[webassembly_test]
@@ -145,23 +158,24 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), expected_outcome);
-        assert_eq!(counter.value, expected_value);
+        assert_eq!(counter.state.value, expected_value);
     }
 
-    fn create_and_initialize_counter(initial_value: u64) -> Counter {
-        let mut counter = Counter::default();
+    fn create_and_initialize_counter(initial_value: u64) -> CounterContract {
+        let counter = Counter::default();
+        let mut contract = CounterContract { state: counter };
 
         mock_application_parameters(&());
 
-        let result = counter
+        let result = contract
             .initialize(&mut ContractRuntime::default(), initial_value)
             .now_or_never()
             .expect("Initialization of counter state should not await anything");
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), ExecutionOutcome::default());
-        assert_eq!(counter.value, initial_value);
+        assert_eq!(contract.state.value, initial_value);
 
-        counter
+        contract
     }
 }
