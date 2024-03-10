@@ -48,7 +48,6 @@ impl Contract for SocialContract {
 
     async fn initialize(
         &mut self,
-        _runtime: &mut ContractRuntime,
         _argument: (),
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
@@ -59,7 +58,6 @@ impl Contract for SocialContract {
 
     async fn execute_operation(
         &mut self,
-        _runtime: &mut ContractRuntime,
         operation: Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         match operation {
@@ -75,7 +73,6 @@ impl Contract for SocialContract {
 
     async fn execute_message(
         &mut self,
-        _runtime: &mut ContractRuntime,
         message: Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         let mut outcome = ExecutionOutcome::default();
@@ -101,7 +98,6 @@ impl Contract for SocialContract {
 
     async fn handle_application_call(
         &mut self,
-        _runtime: &mut ContractRuntime,
         _call: (),
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         Err(Error::ApplicationCallsNotSupported)

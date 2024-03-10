@@ -121,7 +121,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// to channels and messages to be sent to this application on another chain.
     async fn initialize(
         &mut self,
-        runtime: &mut ContractRuntime,
         argument: Self::InitializationArgument,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error>;
 
@@ -134,7 +133,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// to channels and messages to be sent to this application on another chain.
     async fn execute_operation(
         &mut self,
-        runtime: &mut ContractRuntime,
         operation: Self::Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error>;
 
@@ -154,7 +152,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// on another chain and subscription or unsubscription requests to channels.
     async fn execute_message(
         &mut self,
-        runtime: &mut ContractRuntime,
         message: Self::Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error>;
 
@@ -174,7 +171,6 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     ///   and channel subscription and unsubscription requests.
     async fn handle_application_call(
         &mut self,
-        runtime: &mut ContractRuntime,
         argument: Self::ApplicationCall,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error>;
 
@@ -186,10 +182,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     ///
     /// The default implementation persists the state, so if this method is overriden, care must be
     /// taken to persist the state manually.
-    async fn finalize(
-        &mut self,
-        _runtime: &mut ContractRuntime,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+    async fn finalize(&mut self) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         Self::Storage::store(self.state_mut()).await;
         Ok(ExecutionOutcome::default())
     }

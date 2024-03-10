@@ -46,7 +46,6 @@ impl Contract for NativeFungibleTokenContract {
 
     async fn initialize(
         &mut self,
-        _runtime: &mut ContractRuntime,
         state: Self::InitializationArgument,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
@@ -67,7 +66,6 @@ impl Contract for NativeFungibleTokenContract {
 
     async fn execute_operation(
         &mut self,
-        _runtime: &mut ContractRuntime,
         operation: Self::Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         match operation {
@@ -120,7 +118,6 @@ impl Contract for NativeFungibleTokenContract {
     // to be the only message used here, simple message (no authentication, not tracked)
     async fn execute_message(
         &mut self,
-        _runtime: &mut ContractRuntime,
         message: Self::Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Messages for now don't do anything, just pass messages around
@@ -147,7 +144,6 @@ impl Contract for NativeFungibleTokenContract {
 
     async fn handle_application_call(
         &mut self,
-        _runtime: &mut ContractRuntime,
         call: ApplicationCall,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         match call {

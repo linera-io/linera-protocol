@@ -40,7 +40,6 @@ impl Contract for ApplicationContract {{
 
     async fn initialize(
         &mut self,
-        _runtime: &mut ContractRuntime,
         _argument: Self::InitializationArgument,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {{
         Ok(ExecutionOutcome::default())
@@ -48,7 +47,6 @@ impl Contract for ApplicationContract {{
 
     async fn execute_operation(
         &mut self,
-        _runtime: &mut ContractRuntime,
         _operation: Self::Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {{
         Ok(ExecutionOutcome::default())
@@ -56,7 +54,6 @@ impl Contract for ApplicationContract {{
 
     async fn execute_message(
         &mut self,
-        _runtime: &mut ContractRuntime,
         _message: Self::Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {{
         Ok(ExecutionOutcome::default())
@@ -64,7 +61,6 @@ impl Contract for ApplicationContract {{
 
     async fn handle_application_call(
         &mut self,
-        _runtime: &mut ContractRuntime,
         _call: Self::ApplicationCall,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {{
         Ok(ApplicationCallOutcome::default())
