@@ -149,7 +149,7 @@ where
 
     let application = application.get_or_insert_with(|| {
         let state = Application::Storage::load().blocking_wait();
-        Application::new(state)
+        Application::new(state, ContractRuntime::default())
             .blocking_wait()
             .expect("Failed to create application contract hnadler instance")
     });

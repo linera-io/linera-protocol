@@ -21,6 +21,7 @@ use thiserror::Error;
 
 pub struct CrowdFundingContract {
     state: CrowdFunding,
+    runtime: ContractRuntime,
 }
 
 linera_sdk::contract!(CrowdFundingContract);
@@ -35,8 +36,8 @@ impl Contract for CrowdFundingContract {
     type Storage = ViewStateStorage<Self>;
     type State = CrowdFunding;
 
-    async fn new(state: CrowdFunding) -> Result<Self, Self::Error> {
-        Ok(CrowdFundingContract { state })
+    async fn new(state: CrowdFunding, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+        Ok(CrowdFundingContract { state, runtime })
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
@@ -63,14 +64,15 @@ impl Contract for CrowdFundingContract {
 
     async fn execute_operation(
         &mut self,
-        runtime: &mut ContractRuntime,
+        _runtime: &mut ContractRuntime,
         operation: Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         let mut outcome = ExecutionOutcome::default();
 
         match operation {
             Operation::Pledge { owner, amount } => {
-                if runtime.chain_id() == system_api::current_application_id().creation.chain_id {
+                if self.runtime.chain_id() == system_api::current_application_id().creation.chain_id
+                {
                     self.execute_pledge_with_account(owner, amount).await?;
                 } else {
                     self.execute_pledge_with_transfer(&mut outcome, owner, amount)?;
@@ -85,13 +87,14 @@ impl Contract for CrowdFundingContract {
 
     async fn execute_message(
         &mut self,
-        runtime: &mut ContractRuntime,
+        _runtime: &mut ContractRuntime,
         message: Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         match message {
             Message::PledgeWithAccount { owner, amount } => {
                 ensure!(
-                    runtime.chain_id() == system_api::current_application_id().creation.chain_id,
+                    self.runtime.chain_id()
+                        == system_api::current_application_id().creation.chain_id,
                     Error::CampaignChainOnly
                 );
                 self.execute_pledge_with_account(owner, amount).await?;

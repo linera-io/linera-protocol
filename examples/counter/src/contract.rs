@@ -29,7 +29,7 @@ impl Contract for CounterContract {
     type Storage = SimpleStateStorage<Self>;
     type State = Counter;
 
-    async fn new(state: Counter) -> Result<Self, Self::Error> {
+    async fn new(state: Counter, _runtime: ContractRuntime) -> Result<Self, Self::Error> {
         Ok(CounterContract { state })
     }
 

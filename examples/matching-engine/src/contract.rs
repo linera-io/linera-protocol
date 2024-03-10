@@ -22,6 +22,7 @@ use linera_sdk::{
 
 pub struct MatchingEngineContract {
     state: MatchingEngine,
+    runtime: ContractRuntime,
 }
 
 linera_sdk::contract!(MatchingEngineContract);
@@ -56,8 +57,8 @@ impl Contract for MatchingEngineContract {
     type Storage = ViewStateStorage<Self>;
     type State = MatchingEngine;
 
-    async fn new(state: MatchingEngine) -> Result<Self, Self::Error> {
-        Ok(MatchingEngineContract { state })
+    async fn new(state: MatchingEngine, runtime: ContractRuntime) -> Result<Self, Self::Error> {
+        Ok(MatchingEngineContract { state, runtime })
     }
 
     fn state_mut(&mut self) -> &mut Self::State {
@@ -81,16 +82,20 @@ impl Contract for MatchingEngineContract {
     /// locally. Otherwise, it gets transmitted as a message to the chain of the engine.
     async fn execute_operation(
         &mut self,
-        runtime: &mut ContractRuntime,
+        _runtime: &mut ContractRuntime,
         operation: Operation,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         let mut outcome = ExecutionOutcome::default();
         match operation {
             Operation::ExecuteOrder { order } => {
                 let owner = Self::get_owner(&order);
-                let chain_id = runtime.chain_id();
-                Self::check_account_authentication(None, runtime.authenticated_signer(), owner)?;
-                if chain_id == runtime.application_id().creation.chain_id {
+                let chain_id = self.runtime.chain_id();
+                Self::check_account_authentication(
+                    None,
+                    self.runtime.authenticated_signer(),
+                    owner,
+                )?;
+                if chain_id == self.runtime.application_id().creation.chain_id {
                     self.execute_order_local(order, chain_id).await?;
                 } else {
                     self.execute_order_remote(&mut outcome, order)?;
@@ -114,20 +119,25 @@ impl Contract for MatchingEngineContract {
     /// Execution of the order on the creation chain
     async fn execute_message(
         &mut self,
-        runtime: &mut ContractRuntime,
+        _runtime: &mut ContractRuntime,
         message: Message,
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         ensure!(
-            runtime.chain_id() == runtime.application_id().creation.chain_id,
+            self.runtime.chain_id() == self.runtime.application_id().creation.chain_id,
             Self::Error::MatchingEngineChainOnly
         );
         match message {
             Message::ExecuteOrder { order } => {
                 let owner = Self::get_owner(&order);
-                let message_id = runtime
+                let message_id = self
+                    .runtime
                     .message_id()
                     .expect("Incoming message ID has to be available when executing a message");
-                Self::check_account_authentication(None, runtime.authenticated_signer(), owner)?;
+                Self::check_account_authentication(
+                    None,
+                    self.runtime.authenticated_signer(),
+                    owner,
+                )?;
                 self.execute_order_local(order, message_id.chain_id).await?;
             }
         }
@@ -138,20 +148,20 @@ impl Contract for MatchingEngineContract {
     /// one or a remote one.
     async fn handle_application_call(
         &mut self,
-        runtime: &mut ContractRuntime,
+        _runtime: &mut ContractRuntime,
         argument: ApplicationCall,
     ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         let mut outcome = ApplicationCallOutcome::default();
         match argument {
             ApplicationCall::ExecuteOrder { order } => {
                 let owner = Self::get_owner(&order);
-                let chain_id = runtime.chain_id();
+                let chain_id = self.runtime.chain_id();
                 Self::check_account_authentication(
-                    runtime.authenticated_caller_id(),
-                    runtime.authenticated_signer(),
+                    self.runtime.authenticated_caller_id(),
+                    self.runtime.authenticated_signer(),
                     owner,
                 )?;
-                if chain_id == runtime.application_id().creation.chain_id {
+                if chain_id == self.runtime.application_id().creation.chain_id {
                     self.execute_order_local(order, chain_id).await?;
                 } else {
                     self.execute_order_remote(&mut outcome.execution_outcome, order)?;
