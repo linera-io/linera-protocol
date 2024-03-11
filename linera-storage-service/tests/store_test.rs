@@ -46,8 +46,6 @@ async fn test_service_store_writes_from_state() {
 async fn test_service_admin() {
     let endpoint = get_free_port().await.unwrap();
     let _guard = get_storage_service_guard(&endpoint).run_service().await;
-    let config = service_config_from_endpoint(&endpoint)
-        .await
-        .expect("config");
+    let config = service_config_from_endpoint(&endpoint).expect("config");
     admin_test::<ServiceStoreClient>(&config).await;
 }

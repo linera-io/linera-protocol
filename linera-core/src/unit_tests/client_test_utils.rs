@@ -798,7 +798,7 @@ impl StorageBuilder for ServiceStorageBuilder {
             let spanner = StorageServiceBuilder::new(&self.endpoint, binary);
             self._guard = Some(spanner.run_service().await.expect("child"));
         }
-        let store_config = service_config_from_endpoint(&self.endpoint).await?;
+        let store_config = service_config_from_endpoint(&self.endpoint)?;
         let namespace = format!("{}_{}", self.namespace, self.instance_counter);
         self.instance_counter += 1;
         Ok(ServiceStorage::new_for_testing(

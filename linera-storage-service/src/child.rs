@@ -8,6 +8,14 @@ use port_selector::random_free_tcp_port;
 use std::time::Duration;
 use tokio::process::{Child, Command};
 
+pub async fn get_free_port_noiter() -> Result<String> {
+    let port = random_free_tcp_port();
+    if let Some(port) = port {
+        return Ok(format!("127.0.0.1:{}", port));
+    }
+    bail!("Failed to obtain a port");
+}
+
 pub async fn get_free_port() -> Result<String> {
     for i in 1..10 {
         let port = random_free_tcp_port();

@@ -62,7 +62,7 @@ pub fn create_shared_store_common_config() -> CommonStoreConfig {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ServiceStoreConfig {
     /// The endpoint used by the shared store
     pub endpoint: String,
