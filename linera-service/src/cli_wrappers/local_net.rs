@@ -39,90 +39,84 @@ use std::ops::Deref;
 #[cfg(feature = "rocksdb")]
 use linera_views::rocks_db::{create_rocks_db_test_config, RocksDbStoreConfig};
 
-struct LocalServerInternal {
-    pub service_config: ServiceStoreConfig,
+
+trait LocalServerInternal: Sized {
+    type Config;
+
+    async fn new() -> Result<Self>;
+
+    fn get_config(&self) -> Self::Config;
+}
+
+struct LocalServerServiceInternal {
+    service_config: ServiceStoreConfig,
     _service_guard: StorageServiceGuard,
-    #[cfg(feature = "rocksdb")]
-    pub rocks_db_config: RocksDbStoreConfig,
-    #[cfg(feature = "rocksdb")]
-    _temp_dir: TempDir,
 }
 
-pub struct LocalServerConfig {
-    pub service_config: ServiceStoreConfig,
-    #[cfg(feature = "rocksdb")]
-    pub rocks_db_config: RocksDbStoreConfig,
-}
+impl LocalServerInternal for LocalServerServiceInternal {
+    type Config = ServiceStoreConfig;
 
-impl LocalServerInternal {
-    async fn service_info() -> Result<(ServiceStoreConfig, StorageServiceGuard)> {
+    async fn new() -> Result<Self> {
         let endpoint = get_free_port().await.unwrap();
         let service_config = service_config_from_endpoint(&endpoint)?;
         let binary = get_service_storage_binary().await?.display().to_string();
         let spanner = StorageServiceBuilder::new(&endpoint, binary);
-        let service_guard = spanner.run_service().await?;
-        Ok((service_config, service_guard))
+        let _service_guard = spanner.run_service().await?;
+        Ok(Self { service_config, _service_guard})
     }
 
-    #[cfg(feature = "rocksdb")]
-    pub async fn new() -> Result<Self> {
-        let (service_config, _service_guard) = Self::service_info().await?;
+    fn get_config(&self) -> Self::Config {
+        self.service_config.clone()
+    }
+}
+
+#[cfg(feature = "rocksdb")]
+struct LocalServerRocksDbInternal {
+    rocks_db_config: RocksDbStoreConfig,
+    _temp_dir: TempDir,
+}
+
+#[cfg(feature = "rocksdb")]
+impl LocalServerInternal for LocalServerRocksDbInternal {
+    type Config = RocksDbStoreConfig;
+
+    async fn new() -> Result<Self> {
         let (rocks_db_config, _temp_dir) = create_rocks_db_test_config().await;
-        Ok(Self {
-            service_config,
-            _service_guard,
-            rocks_db_config,
-            _temp_dir,
-        })
+        Ok(Self { rocks_db_config, _temp_dir })
     }
 
-    #[cfg(not(feature = "rocksdb"))]
-    pub async fn new() -> Result<Self> {
-        let (service_config, _service_guard) = Self::service_info().await?;
-        Ok(Self {
-            service_config,
-            _service_guard,
-        })
-    }
-
-    #[cfg(feature = "rocksdb")]
-    pub fn get_config(&self) -> LocalServerConfig {
-        let service_config = self.service_config.clone();
-        let rocks_db_config = self.rocks_db_config.clone();
-        LocalServerConfig {
-            service_config,
-            rocks_db_config,
-        }
-    }
-
-    #[cfg(not(feature = "rocksdb"))]
-    pub fn get_config(&self) -> LocalServerConfig {
-        let service_config = self.service_config.clone();
-        LocalServerConfig { service_config }
+    fn get_config(&self) -> Self::Config {
+        self.rocks_db_config.clone()
     }
 }
 
-pub struct LocalServer {
-    internal_server: RwLock<Option<LocalServerInternal>>,
+struct LocalServer<L> {
+    internal_server: RwLock<Option<L>>,
 }
 
-impl Default for LocalServer {
+impl<L> Default for LocalServer<L>
+where
+    L: LocalServerInternal,
+{
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl LocalServer {
+impl<L> LocalServer<L>
+where
+    L: LocalServerInternal,
+{
     pub fn new() -> Self {
         Self {
             internal_server: RwLock::new(None),
         }
     }
 
-    pub async fn get_config(&self) -> LocalServerConfig {
+    pub async fn get_config(&self) -> L::Config {
         let mut w = self.internal_server.write().await;
         if w.is_none() {
-            *w = Some(LocalServerInternal::new().await.expect("server"));
+            *w = Some(L::new().await.expect("local server"));
         }
         let Some(internal_server) = w.deref() else {
             unreachable!();
@@ -131,8 +125,46 @@ impl LocalServer {
     }
 }
 
+
 // A static data to store the integration test server
-pub static LOCAL_SERVER: Lazy<LocalServer> = Lazy::new(LocalServer::new);
+type LocalServerService = LocalServer<LocalServerServiceInternal>;
+static LOCAL_SERVER_SERVICE: Lazy<LocalServerService> = Lazy::new(LocalServerService::new);
+
+#[cfg(feature = "rocksdb")]
+type LocalServerRocksDb = LocalServer<LocalServerRocksDbInternal>;
+#[cfg(feature = "rocksdb")]
+static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServerRocksDb> = Lazy::new(LocalServerRocksDb::new);
+
+enum LocalServerConfig {
+    Service { service_config: ServiceStoreConfig },
+    #[cfg(feature = "rocksdb")]
+    RocksDb { rocks_db_config: RocksDbStoreConfig },
+}
+
+async fn get_server_config(database: Database) -> Option<LocalServerConfig> {
+    match database {
+        Database::Service => {
+            let service_config = LOCAL_SERVER_SERVICE.get_config().await;
+            let server_config = LocalServerConfig::Service { service_config };
+            Some(server_config)
+        },
+        Database::RocksDb => {
+            #[cfg(feature = "rocksdb")]
+            {
+                let rocks_db_config = LOCAL_SERVER_ROCKS_DB.get_config().await;
+                let server_config = LocalServerConfig::RocksDb { rocks_db_config };
+                Some(server_config)
+            }
+            #[cfg(not(feature = "rocksdb"))]
+            {
+                None
+            }
+        },
+        _ => None,
+    }
+}
+
+
 
 /// The information needed to start a [`LocalNet`].
 pub struct LocalNetConfig {
@@ -160,7 +192,7 @@ pub struct LocalNet {
     table_name: String,
     set_init: HashSet<(usize, usize)>,
     tmp_dir: Arc<TempDir>,
-    server_config: LocalServerConfig,
+    server_config: Option<LocalServerConfig>,
 }
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -255,7 +287,7 @@ impl LineraNetConfig for LocalNetConfig {
     type Net = LocalNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
-        let server_config = LOCAL_SERVER.get_config().await;
+        let server_config = get_server_config(self.database).await;
         ensure!(
             self.num_shards == 1 || self.database != Database::RocksDb,
             "Multiple shards not supported with RocksDB"
@@ -331,7 +363,7 @@ impl LocalNet {
         table_name: String,
         num_initial_validators: usize,
         num_shards: usize,
-        server_config: LocalServerConfig,
+        server_config: Option<LocalServerConfig>,
     ) -> Result<Self> {
         Ok(Self {
             database,
@@ -491,14 +523,26 @@ impl LocalNet {
         };
         let (storage, key) = match self.database {
             Database::Service => {
-                let endpoint = &self.server_config.service_config.endpoint;
+                let LocalServerConfig::Service { service_config } = self.server_config.as_ref().unwrap() else {
+                    unreachable!();
+                };
+                let endpoint = &service_config.endpoint;
                 let endpoint = endpoint.strip_prefix("http://").unwrap();
                 (
                     format!("service:http://{}:{}", endpoint, namespace),
                     (validator, 0),
                 )
             }
-            Database::RocksDb => (format!("rocksdb:{}", namespace), (validator, shard)),
+            Database::RocksDb => {
+                let LocalServerConfig::RocksDb { rocks_db_config } = self.server_config.as_ref().unwrap() else {
+                    unreachable!();
+                };
+                let path_buf = rocks_db_config.path_buf.to_str().unwrap();
+                (
+                    format!("rocksdb:{}:{}", path_buf, namespace),
+                    (validator, shard)
+                )
+            },
             Database::DynamoDb => (
                 format!("dynamodb:{}:localstack", namespace,),
                 (validator, 0),
