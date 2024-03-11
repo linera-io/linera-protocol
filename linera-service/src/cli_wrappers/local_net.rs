@@ -118,9 +118,6 @@ impl LocalServer {
 // A static data to store the integration test server
 pub static LOCAL_SERVER: Lazy<LocalServer> = Lazy::new(|| LocalServer::new());
 
-/// The endpoint used for all the tests
-const END_TO_END_STORAGE_SERVICE_ENDPOINT: &str = "127.0.0.1:8742";
-
 /// The information needed to start a [`LocalNet`].
 pub struct LocalNetConfig {
     pub database: Database,
@@ -147,7 +144,6 @@ pub struct LocalNet {
     table_name: String,
     set_init: HashSet<(usize, usize)>,
     tmp_dir: Arc<TempDir>,
-    _guard: Option<StorageServiceGuard>,
     server_config: LocalServerConfig,
 }
 
@@ -248,15 +244,6 @@ impl LineraNetConfig for LocalNetConfig {
             self.num_shards == 1 || self.database != Database::RocksDb,
             "Multiple shards not supported with RocksDB"
         );
-        let guard = match self.database {
-            Database::Service => {
-                let binary = get_service_storage_binary().await?.display().to_string();
-                let builder =
-                    StorageServiceBuilder::new(END_TO_END_STORAGE_SERVICE_ENDPOINT, binary);
-                Some(builder.run_service().await.expect("child"))
-            }
-            _ => None,
-        };
         let mut net = LocalNet::new(
             self.database,
             self.network,
@@ -265,7 +252,6 @@ impl LineraNetConfig for LocalNetConfig {
             self.num_initial_validators,
             self.num_shards,
             server_config,
-            guard,
         )?;
         let client = net.make_client().await;
         ensure!(
@@ -330,7 +316,6 @@ impl LocalNet {
         num_initial_validators: usize,
         num_shards: usize,
         server_config: LocalServerConfig,
-        guard: Option<StorageServiceGuard>,
     ) -> Result<Self> {
         Ok(Self {
             database,
@@ -344,7 +329,6 @@ impl LocalNet {
             table_name,
             set_init: HashSet::new(),
             tmp_dir: Arc::new(tempdir()?),
-            _guard: guard,
             server_config,
         })
     }
@@ -490,13 +474,11 @@ impl LocalNet {
             Database::ScyllaDb => format!("{}_server_{}_db", self.table_name, validator),
         };
         let (storage, key) = match self.database {
-            Database::Service => (
-                format!(
-                    "service:http://{}:{}",
-                    END_TO_END_STORAGE_SERVICE_ENDPOINT, namespace,
-                ),
-                (validator, 0),
-            ),
+            Database::Service => {
+                let endpoint = &self.server_config.service_config.endpoint;
+                (format!("service:http://{}:{}", endpoint, namespace),
+                 (validator, 0))
+            },
             Database::RocksDb => (
                 format!("rocksdb:{}", namespace),
                 (validator, shard),
