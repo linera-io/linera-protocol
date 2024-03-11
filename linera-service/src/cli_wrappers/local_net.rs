@@ -42,7 +42,7 @@ use {
 };
 
 
-struct IntegrationTestServerInternal {
+struct LocalServerInternal {
     pub service_config: ServiceStoreConfig,
     _service_guard: StorageServiceGuard,
     #[cfg(feature = "rocksdb")]
@@ -51,13 +51,13 @@ struct IntegrationTestServerInternal {
     _temp_dir: TempDir,
 }
 
-pub struct IntegrationTestServerConfig {
+pub struct LocalServerConfig {
     pub service_config: ServiceStoreConfig,
     #[cfg(feature = "rocksdb")]
     pub rocks_db_config: RocksDbStoreConfig,
 }
 
-impl IntegrationTestServerInternal {
+impl LocalServerInternal {
     async fn service_info() -> Result<(ServiceStoreConfig, StorageServiceGuard)> {
         let endpoint = get_free_port().await.unwrap();
         let service_config = service_config_from_endpoint(&endpoint)?;
@@ -81,32 +81,32 @@ impl IntegrationTestServerInternal {
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn get_config(&self) -> IntegrationTestServerConfig {
+    pub fn get_config(&self) -> LocalServerConfig {
         let service_config = self.service_config.clone();
         let rocks_db_config = self.rocks_db_config.clone();
-        IntegrationTestServerConfig { service_config, rocks_db_config }
+        LocalServerConfig { service_config, rocks_db_config }
     }
 
     #[cfg(not(feature = "rocksdb"))]
-    pub fn get_config(&self) -> IntegrationTestServerConfig {
+    pub fn get_config(&self) -> LocalServerConfig {
         let service_config = self.service_config.clone();
-        IntegrationTestServerConfig { service_config }
+        LocalServerConfig { service_config }
     }
 }
 
-pub struct IntegrationTestServer {
-    internal_server: RwLock<Option<IntegrationTestServerInternal>>,
+pub struct LocalServer {
+    internal_server: RwLock<Option<LocalServerInternal>>,
 }
 
-impl IntegrationTestServer {
+impl LocalServer {
     pub fn new() -> Self {
         Self { internal_server: RwLock::new(None) }
     }
 
-    pub async fn get_config(&self) -> IntegrationTestServerConfig {
+    pub async fn get_config(&self) -> LocalServerConfig {
         let mut w = self.internal_server.write().await;
         if w.is_none() {
-            *w = Some(IntegrationTestServerInternal::new().await.expect("server"));
+            *w = Some(LocalServerInternal::new().await.expect("server"));
         }
         let Some(internal_server) = w.deref() else {
             unreachable!();
@@ -116,7 +116,7 @@ impl IntegrationTestServer {
 }
 
 // A static data to store the integration test server
-pub static INTEGRATION_TEST_SERVER: Lazy<IntegrationTestServer> = Lazy::new(|| IntegrationTestServer::new());
+pub static LOCAL_SERVER: Lazy<LocalServer> = Lazy::new(|| LocalServer::new());
 
 /// The endpoint used for all the tests
 const END_TO_END_STORAGE_SERVICE_ENDPOINT: &str = "127.0.0.1:8742";
@@ -148,6 +148,7 @@ pub struct LocalNet {
     set_init: HashSet<(usize, usize)>,
     tmp_dir: Arc<TempDir>,
     _guard: Option<StorageServiceGuard>,
+    server_config: LocalServerConfig,
 }
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -242,7 +243,7 @@ impl LineraNetConfig for LocalNetConfig {
     type Net = LocalNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
-        let _server_config = INTEGRATION_TEST_SERVER.get_config().await;
+        let server_config = LOCAL_SERVER.get_config().await;
         ensure!(
             self.num_shards == 1 || self.database != Database::RocksDb,
             "Multiple shards not supported with RocksDB"
@@ -263,6 +264,7 @@ impl LineraNetConfig for LocalNetConfig {
             self.table_name,
             self.num_initial_validators,
             self.num_shards,
+            server_config,
             guard,
         )?;
         let client = net.make_client().await;
@@ -327,6 +329,7 @@ impl LocalNet {
         table_name: String,
         num_initial_validators: usize,
         num_shards: usize,
+        server_config: LocalServerConfig,
         guard: Option<StorageServiceGuard>,
     ) -> Result<Self> {
         Ok(Self {
@@ -342,6 +345,7 @@ impl LocalNet {
             set_init: HashSet::new(),
             tmp_dir: Arc::new(tempdir()?),
             _guard: guard,
+            server_config,
         })
     }
 
