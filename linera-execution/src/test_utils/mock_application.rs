@@ -6,9 +6,9 @@
 #![allow(dead_code)]
 
 use crate::{
-    ApplicationCallOutcome, CalleeContext, ContractSyncRuntime, ExecutionError, MessageContext,
-    OperationContext, QueryContext, RawExecutionOutcome, ServiceSyncRuntime, SessionCallOutcome,
-    UserContract, UserContractModule, UserService, UserServiceModule,
+    ApplicationCallOutcome, CalleeContext, ContractSyncRuntime, ExecutionError, FinalizeContext,
+    MessageContext, OperationContext, QueryContext, RawExecutionOutcome, ServiceSyncRuntime,
+    SessionCallOutcome, UserContract, UserContractModule, UserService, UserServiceModule,
 };
 use linera_base::identifiers::SessionId;
 use std::{
@@ -347,6 +347,13 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntime> {
             ),
             None => panic!("Unexpected call to `handle_session_call`"),
         }
+    }
+
+    fn finalize(
+        &mut self,
+        _context: FinalizeContext,
+    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
+        Ok(RawExecutionOutcome::default())
     }
 }
 
