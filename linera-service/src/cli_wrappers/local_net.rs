@@ -476,6 +476,7 @@ impl LocalNet {
         let (storage, key) = match self.database {
             Database::Service => {
                 let endpoint = &self.server_config.service_config.endpoint;
+                let endpoint = endpoint.strip_prefix("http://").unwrap();
                 (format!("service:http://{}:{}", endpoint, namespace),
                  (validator, 0))
             },
