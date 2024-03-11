@@ -73,6 +73,7 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.delete_storage_first() {
+            batch.delete_key_prefix(self.context.base_key());
             self.stored_hash = None;
         }
         self.inner.flush(batch)?;

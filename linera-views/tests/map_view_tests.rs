@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    map_view::ByteMapView,
+    map_view::MemoizedByteMapView,
     memory::create_memory_context,
     test_utils,
     views::{CryptoHashRootView, CryptoHashView, RootView, View},
@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {
-    pub map: ByteMapView<C, u8>,
+    pub map: MemoizedByteMapView<C, u8>,
 }
 
 fn remove_by_prefix<V>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8>) {
