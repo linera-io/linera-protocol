@@ -1279,7 +1279,7 @@ where
     }
 }
 
-impl<C, W> DeleteStorageFirst for ByteCollectionView<C,W> {
+impl<C, W> DeleteStorageFirst for ByteCollectionView<C, W> {
     fn delete_storage_first(&self) -> bool {
         self.delete_storage_first
     }
