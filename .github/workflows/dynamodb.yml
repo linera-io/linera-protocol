@@ -60,4 +60,5 @@ jobs:
         AWS_SECRET_ACCESS_KEY: test
         LOCALSTACK_ENDPOINT: http://localhost:8000
       run: |
+        ulimit -s unlimited
         cargo test --locked --features aws -- dynamo

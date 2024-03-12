@@ -72,6 +72,7 @@ jobs:
         cargo build --locked
     - name: Run all tests using the default features
       run: |
+        ulimit -s unlimited
         cargo test --locked
     - name: Run some extra execution tests with wasmtime
       run: |

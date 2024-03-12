@@ -56,4 +56,5 @@ jobs:
         docker run --name my_scylla_container -d -p 9042:9042 scylladb/scylla
     - name: Run ScyllaDB tests
       run: |
+        ulimit -s unlimited
         cargo test --locked --features scylladb -- scylla
