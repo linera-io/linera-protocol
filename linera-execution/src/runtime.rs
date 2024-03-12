@@ -343,15 +343,6 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
 }
 
 impl SyncRuntimeInternal<UserContractInstance> {
-    fn load_contract(
-        &mut self,
-        id: UserApplicationId,
-    ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
-        self.execution_state_sender
-            .send_request(|callback| Request::LoadContract { id, callback })?
-            .recv_response()
-    }
-
     /// Loads a contract instance, initializing it with this runtime if needed.
     fn load_contract_instance(
         &mut self,
@@ -969,7 +960,7 @@ impl ContractSyncRuntime {
             UserAction::Message(context, _) => Some(context.into()),
             _ => None,
         };
-        let mut runtime = SyncRuntimeInternal::new(
+        let mut runtime = ContractSyncRuntime::new(SyncRuntimeInternal::new(
             chain_id,
             action.height(),
             action.signer(),
@@ -978,45 +969,90 @@ impl ContractSyncRuntime {
             execution_state_sender,
             refund_grant_to,
             resource_controller,
-        );
-        let (code, description) = runtime.load_contract(application_id)?;
-        let signer = action.signer();
-        runtime.push_application(ApplicationStatus {
-            caller_id: None,
-            id: application_id,
-            parameters: description.parameters,
-            signer,
-        });
-        let mut runtime = ContractSyncRuntime::new(runtime);
-        let execution_result = {
-            let mut code = code.instantiate(runtime.clone())?;
-            match action {
-                UserAction::Initialize(context, argument) => code.initialize(context, argument),
-                UserAction::Operation(context, operation) => {
-                    code.execute_operation(context, operation)
-                }
-                UserAction::Message(context, message) => code.execute_message(context, message),
-            }
-        };
+        ));
+        runtime.execute(application_id, action.signer(), move |code| match action {
+            UserAction::Initialize(context, argument) => code.initialize(context, argument),
+            UserAction::Operation(context, operation) => code.execute_operation(context, operation),
+            UserAction::Message(context, message) => code.execute_message(context, message),
+        })?;
         // Ensure the `loaded_applications` are cleared to prevent circular references in the
         // `runtime`
         runtime.inner().loaded_applications.clear();
-        let mut runtime = runtime
+        let runtime = runtime
             .into_inner()
             .expect("Runtime clones should have been freed by now");
-        let execution_outcome = execution_result?;
-        assert_eq!(runtime.call_stack.len(), 1);
-        assert_eq!(runtime.call_stack[0].id, application_id);
-        assert_eq!(runtime.active_applications.len(), 1);
-        assert!(runtime.active_applications.contains(&application_id));
         // Check that all sessions were properly closed.
         if let Some(session_id) = runtime.session_manager.states.keys().next() {
             return Err(ExecutionError::SessionWasNotClosed(*session_id));
         }
-        // Charge for the message grants and add the results of the last call to the
-        // execution results.
-        runtime.handle_outcome(execution_outcome, signer, application_id)?;
         Ok((runtime.execution_outcomes, runtime.resource_controller))
+    }
+
+    /// Executes a `closure` with the contract code for the `application_id`.
+    ///
+    /// Automatically clears the `loaded_applications` if an error occurs, allowing for a safe
+    /// early return in the caller.
+    fn execute(
+        &mut self,
+        application_id: UserApplicationId,
+        signer: Option<Owner>,
+        closure: impl FnOnce(
+            &mut UserContractInstance,
+        ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>,
+    ) -> Result<(), ExecutionError> {
+        match self.try_execute(application_id, signer, closure) {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                // Ensure the `loaded_applications` are cleared to prevent circular references in
+                // the `runtime`
+                self.inner().loaded_applications.clear();
+                Err(error)
+            }
+        }
+    }
+
+    /// Tries to execute a `closure` with the contract code for the `application_id`.
+    ///
+    /// If an error occurs, the caller *must* clear the `loaded_applications` to prevent a deadlock
+    /// happening because the runtime never gets dropped due to circular references.
+    fn try_execute(
+        &mut self,
+        application_id: UserApplicationId,
+        signer: Option<Owner>,
+        closure: impl FnOnce(
+            &mut UserContractInstance,
+        ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>,
+    ) -> Result<(), ExecutionError> {
+        let contract = {
+            let cloned_runtime = self.0.clone();
+            let mut runtime = self.inner();
+            let application = runtime.load_contract_instance(cloned_runtime, application_id)?;
+
+            runtime.push_application(ApplicationStatus {
+                caller_id: None,
+                id: application_id,
+                parameters: application.parameters,
+                signer,
+            });
+
+            application.instance
+        };
+
+        let outcome = closure(
+            &mut contract
+                .try_lock()
+                .expect("Application should not be already executing"),
+        )?;
+
+        let mut runtime = self.inner();
+        assert_eq!(runtime.call_stack.len(), 1);
+        assert_eq!(runtime.call_stack[0].id, application_id);
+        assert_eq!(runtime.active_applications.len(), 1);
+        assert!(runtime.active_applications.contains(&application_id));
+
+        runtime.handle_outcome(outcome, signer, application_id)?;
+
+        Ok(())
     }
 }
 
