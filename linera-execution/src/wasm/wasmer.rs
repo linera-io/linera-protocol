@@ -312,7 +312,11 @@ where
         &mut self,
         _context: FinalizeContext,
     ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
-        Ok(RawExecutionOutcome::default())
+        self.configure_initial_fuel()?;
+        let result = contract::Contract::finalize(&self.application, &mut self.store)
+            .map(|inner| inner.map(RawExecutionOutcome::from));
+        self.persist_remaining_fuel()?;
+        result?.map_err(ExecutionError::UserError)
     }
 }
 

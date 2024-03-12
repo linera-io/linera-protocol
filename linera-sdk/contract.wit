@@ -13,6 +13,8 @@ handle-session-call: func(
     forwarded-sessions: list<session-id>,
 ) -> result<session-call-outcome, string>
 
+finalize: func() -> result<execution-outcome, string>
+
 record message-id {
     chain-id: chain-id,
     height: block-height,

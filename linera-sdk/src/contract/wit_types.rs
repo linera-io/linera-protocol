@@ -58,4 +58,8 @@ impl contract::Contract for Contract {
         unsafe { __contract_handle_session_call(argument, session_state, forwarded_sessions) }
             .map(|outcome| outcome.into())
     }
+
+    fn finalize() -> Result<ExecutionOutcome, String> {
+        Ok(crate::ExecutionOutcome::default().into())
+    }
 }
