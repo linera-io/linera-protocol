@@ -39,7 +39,6 @@ use std::ops::Deref;
 #[cfg(feature = "rocksdb")]
 use linera_views::rocks_db::{create_rocks_db_test_config, RocksDbStoreConfig};
 
-
 trait LocalServerInternal: Sized {
     type Config;
 
@@ -62,7 +61,10 @@ impl LocalServerInternal for LocalServerServiceInternal {
         let binary = get_service_storage_binary().await?.display().to_string();
         let spanner = StorageServiceBuilder::new(&endpoint, binary);
         let _service_guard = spanner.run_service().await?;
-        Ok(Self { service_config, _service_guard})
+        Ok(Self {
+            service_config,
+            _service_guard,
+        })
     }
 
     fn get_config(&self) -> Self::Config {
@@ -82,7 +84,10 @@ impl LocalServerInternal for LocalServerRocksDbInternal {
 
     async fn new() -> Result<Self> {
         let (rocks_db_config, _temp_dir) = create_rocks_db_test_config().await;
-        Ok(Self { rocks_db_config, _temp_dir })
+        Ok(Self {
+            rocks_db_config,
+            _temp_dir,
+        })
     }
 
     fn get_config(&self) -> Self::Config {
@@ -125,7 +130,6 @@ where
     }
 }
 
-
 // A static data to store the integration test server
 type LocalServerService = LocalServer<LocalServerServiceInternal>;
 static LOCAL_SERVER_SERVICE: Lazy<LocalServerService> = Lazy::new(LocalServerService::new);
@@ -135,10 +139,15 @@ type LocalServerRocksDb = LocalServer<LocalServerRocksDbInternal>;
 #[cfg(feature = "rocksdb")]
 static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServerRocksDb> = Lazy::new(LocalServerRocksDb::new);
 
+#[derive(Debug)]
 enum LocalServerConfig {
-    Service { service_config: ServiceStoreConfig },
+    Service {
+        service_config: ServiceStoreConfig,
+    },
     #[cfg(feature = "rocksdb")]
-    RocksDb { rocks_db_config: RocksDbStoreConfig },
+    RocksDb {
+        rocks_db_config: RocksDbStoreConfig,
+    },
 }
 
 async fn get_server_config(database: Database) -> Option<LocalServerConfig> {
@@ -147,7 +156,7 @@ async fn get_server_config(database: Database) -> Option<LocalServerConfig> {
             let service_config = LOCAL_SERVER_SERVICE.get_config().await;
             let server_config = LocalServerConfig::Service { service_config };
             Some(server_config)
-        },
+        }
         Database::RocksDb => {
             #[cfg(feature = "rocksdb")]
             {
@@ -159,12 +168,10 @@ async fn get_server_config(database: Database) -> Option<LocalServerConfig> {
             {
                 None
             }
-        },
+        }
         _ => None,
     }
 }
-
-
 
 /// The information needed to start a [`LocalNet`].
 pub struct LocalNetConfig {
@@ -515,15 +522,16 @@ impl LocalNet {
     }
 
     async fn run_server(&mut self, validator: usize, shard: usize) -> Result<Child> {
-        let namespace = match self.database {
-            Database::Service => format!("{}_server_{}_db", self.table_name, validator),
-            Database::RocksDb => format!("server_{}_{}.db", validator, shard),
-            Database::DynamoDb => format!("{}_server_{}.db", self.table_name, validator),
-            Database::ScyllaDb => format!("{}_server_{}_db", self.table_name, validator),
+        let shard_str = match self.database {
+            Database::RocksDb => format!("_{}", shard),
+            _ => String::new(),
         };
+        let namespace = format!("{}_server_{}{}_db", self.table_name, validator, shard_str);
         let (storage, key) = match self.database {
             Database::Service => {
-                let LocalServerConfig::Service { service_config } = self.server_config.as_ref().unwrap() else {
+                let LocalServerConfig::Service { service_config } =
+                    self.server_config.as_ref().unwrap()
+                else {
                     unreachable!();
                 };
                 let endpoint = &service_config.endpoint;
@@ -534,15 +542,17 @@ impl LocalNet {
                 )
             }
             Database::RocksDb => {
-                let LocalServerConfig::RocksDb { rocks_db_config } = self.server_config.as_ref().unwrap() else {
+                let LocalServerConfig::RocksDb { rocks_db_config } =
+                    self.server_config.as_ref().unwrap()
+                else {
                     unreachable!();
                 };
                 let path_buf = rocks_db_config.path_buf.to_str().unwrap();
                 (
                     format!("rocksdb:{}:{}", path_buf, namespace),
-                    (validator, shard)
+                    (validator, shard),
                 )
-            },
+            }
             Database::DynamoDb => (
                 format!("dynamodb:{}:localstack", namespace,),
                 (validator, 0),
