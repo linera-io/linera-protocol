@@ -29,7 +29,7 @@ pub trait ContractStateStorage<Application> {
     async fn load() -> Application;
 
     /// Stores the `Application` state.
-    async fn store(state: Application);
+    async fn store(state: &mut Application);
 
     /// Executes an `operation` with the `Application` state.
     ///
@@ -49,8 +49,8 @@ pub trait ContractStateStorage<Application> {
         let application = Self::load().await;
 
         operation(application)
-            .and_then(|(application, result)| async move {
-                Self::store(application).await;
+            .and_then(|(mut application, result)| async move {
+                Self::store(&mut application).await;
                 Ok(result)
             })
             .await
@@ -76,7 +76,7 @@ where
         }
     }
 
-    async fn store(state: Application) {
+    async fn store(state: &mut Application) {
         let mut batch = Batch::new();
 
         batch
@@ -99,7 +99,7 @@ where
         system_api::load_view().await
     }
 
-    async fn store(state: Application) {
+    async fn store(state: &mut Application) {
         system_api::store_view(state).await;
     }
 }

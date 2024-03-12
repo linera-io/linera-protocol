@@ -22,7 +22,7 @@ pub async fn load_view<State: View<ViewStorageContext>>() -> State {
 }
 
 /// Saves the application state.
-pub async fn store_view<State: RootView<ViewStorageContext>>(mut state: State) {
+pub async fn store_view<State: RootView<ViewStorageContext>>(state: &mut State) {
     state.save().await.expect("save operation failed");
 }
 
