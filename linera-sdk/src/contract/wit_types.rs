@@ -14,8 +14,8 @@ pub use self::contract::{
     SessionCallOutcome, SessionId, SessionState,
 };
 use super::{
-    __contract_execute_message, __contract_execute_operation, __contract_handle_application_call,
-    __contract_handle_session_call, __contract_initialize,
+    __contract_execute_message, __contract_execute_operation, __contract_finalize,
+    __contract_handle_application_call, __contract_handle_session_call, __contract_initialize,
 };
 
 /// Implementation of the contract WIT entrypoints.
@@ -60,6 +60,6 @@ impl contract::Contract for Contract {
     }
 
     fn finalize() -> Result<ExecutionOutcome, String> {
-        Ok(crate::ExecutionOutcome::default().into())
+        unsafe { __contract_finalize().map(|outcome| outcome.into()) }
     }
 }

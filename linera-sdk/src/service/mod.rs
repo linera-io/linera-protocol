@@ -84,6 +84,18 @@ macro_rules! service {
         ) -> Result<$crate::SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String> {
             unreachable!("Contract entrypoint should not be called in service");
         }
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_finalize() -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
+            unreachable!("Contract entrypoint should not be called in service");
+        }
+
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_finish_transaction() -> Result<(), String> {
+            unreachable!("Contract entrypoint should not be called in service");
+        }
     };
 }
 

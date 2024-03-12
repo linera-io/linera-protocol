@@ -137,6 +137,12 @@ macro_rules! contract {
             )
         }
 
+        #[doc(hidden)]
+        #[no_mangle]
+        fn __contract_finalize() -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
+            Ok($crate::ExecutionOutcome::default())
+        }
+
         /// Stub of a `main` entrypoint so that the binary doesn't fail to compile on targets other
         /// than WebAssembly.
         #[cfg(not(target_arch = "wasm32"))]
@@ -188,4 +194,6 @@ extern "Rust" {
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String>;
+
+    fn __contract_finalize() -> Result<ExecutionOutcome<Vec<u8>>, String>;
 }
