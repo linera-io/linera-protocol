@@ -7,7 +7,7 @@ use crate::{
         get_upper_bound, AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyValueStore,
         ReadableKeyValueStore, WritableKeyValueStore,
     },
-    lru_caching::LruCachingStore,
+    lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
 };
 use async_trait::async_trait;
@@ -18,6 +18,7 @@ use std::{
     path::PathBuf,
     sync::Arc,
 };
+use tempfile::TempDir;
 use thiserror::Error;
 
 #[cfg(with_metrics)]
@@ -26,13 +27,9 @@ use crate::metering::{
 };
 
 #[cfg(any(test, feature = "test"))]
-use {
-    crate::{lru_caching::TEST_CACHE_SIZE, test_utils::generate_test_namespace},
-    tempfile::TempDir,
-};
+use crate::test_utils::generate_test_namespace;
 
 /// The number of streams for the test
-#[cfg(any(test, feature = "test"))]
 const TEST_ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
 
 // The maximum size of values in RocksDB is 3 GB
@@ -346,7 +343,6 @@ pub struct RocksDbStore {
 }
 
 /// Creates the common initialization for RocksDB
-#[cfg(any(test, feature = "test"))]
 pub fn create_rocks_db_common_config() -> CommonStoreConfig {
     CommonStoreConfig {
         max_concurrent_queries: None,
@@ -356,7 +352,6 @@ pub fn create_rocks_db_common_config() -> CommonStoreConfig {
 }
 
 /// Returns the test config and a guard for the temporary directory
-#[cfg(any(test, feature = "test"))]
 pub async fn create_rocks_db_test_config() -> (RocksDbStoreConfig, TempDir) {
     let dir = TempDir::new().unwrap();
     let path_buf = dir.path().to_path_buf();
