@@ -152,7 +152,16 @@ macro_rules! contract {
         #[doc(hidden)]
         #[no_mangle]
         fn __contract_finalize() -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
-            Ok($crate::ExecutionOutcome::default())
+            use $crate::util::BlockingWait;
+            $crate::contract::run_async_entrypoint::<$application, _, _, _>(
+                unsafe { &mut APPLICATION },
+                move |application| {
+                    application
+                        .finalize(&mut $crate::ContractRuntime::default())
+                        .blocking_wait()
+                        .map(|outcome| outcome.into_raw())
+                },
+            )
         }
 
         /// Stub of a `main` entrypoint so that the binary doesn't fail to compile on targets other

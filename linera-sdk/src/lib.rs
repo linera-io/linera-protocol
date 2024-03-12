@@ -219,6 +219,22 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>;
 
+    /// Finishes the execution of the current transaction.
+    ///
+    /// This is called once before a transaction ends, to allow all applications that participated
+    /// in the transaction to perform any final operations, and optionally it may also cancel the
+    /// transaction if there are any pendencies.
+    ///
+    /// The default implementation persists the state, so if this method is overriden, care must be
+    /// taken to persist the state manually.
+    async fn finalize(
+        &mut self,
+        _runtime: &mut ContractRuntime,
+    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
+        Self::Storage::store(self).await;
+        Ok(ExecutionOutcome::default())
+    }
+
     /// Calls another application.
     fn call_application<A: ContractAbi + Send>(
         &mut self,
