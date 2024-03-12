@@ -13,7 +13,9 @@ use crate::{
 };
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{Amount, ApplicationPermissions, ArithmeticError, BlockHeight, Timestamp},
+    data_types::{
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, Resources, Timestamp,
+    },
     ensure,
     identifiers::{Account, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
@@ -421,25 +423,39 @@ impl SyncRuntimeInternal<UserContractInstance> {
             signer,
             ..
         } = self.pop_application();
-
-        // Interpret the results of the call and charge for the message grants.
-        let outcome = raw_outcome
-            .execution_outcome
-            .with_refund_grant_to(self.refund_grant_to)
-            .with_authenticated_signer(signer)
-            .into_priced(&self.resource_controller.policy)?;
-        for message in &outcome.messages {
-            self.resource_controller.track_grant(message.grant)?;
-        }
-        self.execution_outcomes
-            .push(ExecutionOutcome::User(callee_id, outcome));
         let caller_id = self.application_id()?;
         let sessions = self.make_sessions(raw_outcome.create_sessions, callee_id, caller_id);
         let outcome = CallOutcome {
             value: raw_outcome.value,
             sessions,
         };
+        self.handle_outcome(raw_outcome.execution_outcome, signer, callee_id)?;
         Ok(outcome)
+    }
+
+    /// Handles a newly produced [`RawExecutionOutcome`], conditioning and adding it to the stack
+    /// of outcomes.
+    ///
+    /// Calculates the fees, charges for the grants and attaches the authenticated `signer` and the
+    /// destination of grant refunds.
+    fn handle_outcome(
+        &mut self,
+        raw_outcome: RawExecutionOutcome<Vec<u8>, Resources>,
+        signer: Option<Owner>,
+        application_id: UserApplicationId,
+    ) -> Result<(), ExecutionError> {
+        let outcome = raw_outcome
+            .with_refund_grant_to(self.refund_grant_to)
+            .with_authenticated_signer(signer)
+            .into_priced(&self.resource_controller.policy)?;
+
+        for message in &outcome.messages {
+            self.resource_controller.track_grant(message.grant)?;
+        }
+
+        self.execution_outcomes
+            .push(ExecutionOutcome::User(application_id, outcome));
+        Ok(())
     }
 
     fn forward_sessions(
@@ -999,16 +1015,7 @@ impl ContractSyncRuntime {
         }
         // Charge for the message grants and add the results of the last call to the
         // execution results.
-        let outcome = execution_outcome
-            .with_authenticated_signer(signer)
-            .with_refund_grant_to(refund_grant_to)
-            .into_priced(&runtime.resource_controller.policy)?;
-        for message in &outcome.messages {
-            runtime.resource_controller.track_grant(message.grant)?;
-        }
-        runtime
-            .execution_outcomes
-            .push(ExecutionOutcome::User(application_id, outcome));
+        runtime.handle_outcome(execution_outcome, signer, application_id)?;
         Ok((runtime.execution_outcomes, runtime.resource_controller))
     }
 }
