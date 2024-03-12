@@ -16,7 +16,6 @@ use crate::{
     log::ContractLogger, util::BlockingWait, ApplicationCallOutcome, Contract, ExecutionOutcome,
     SessionCallOutcome, SessionId,
 };
-use std::future::Future;
 
 /// Declares an implementation of the [`Contract`][`crate::Contract`] trait, exporting it from the
 /// Wasm module.
@@ -27,18 +26,23 @@ use std::future::Future;
 macro_rules! contract {
     ($application:ty) => {
         #[doc(hidden)]
+        static mut APPLICATION: Option<$application> = None;
+
+        #[doc(hidden)]
         #[no_mangle]
         fn __contract_initialize(
             argument: Vec<u8>,
         ) -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
-            $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
-                move |mut application| async move {
+            use $crate::util::BlockingWait;
+            $crate::contract::run_async_entrypoint::<$application, _, _, _>(
+                unsafe { &mut APPLICATION },
+                move |application| {
                     let argument = serde_json::from_slice(&argument)?;
 
                     application
                         .initialize(&mut $crate::ContractRuntime::default(), argument)
-                        .await
-                        .map(|outcome| (application, outcome.into_raw()))
+                        .blocking_wait()
+                        .map(|outcome| outcome.into_raw())
                 },
             )
         }
@@ -48,15 +52,17 @@ macro_rules! contract {
         fn __contract_execute_operation(
             operation: Vec<u8>,
         ) -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
-            $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
-                move |mut application| async move {
+            use $crate::util::BlockingWait;
+            $crate::contract::run_async_entrypoint::<$application, _, _, _>(
+                unsafe { &mut APPLICATION },
+                move |application| {
                     let operation: <$application as $crate::abi::ContractAbi>::Operation =
                         bcs::from_bytes(&operation)?;
 
                     application
                         .execute_operation(&mut $crate::ContractRuntime::default(), operation)
-                        .await
-                        .map(|outcome| (application, outcome.into_raw()))
+                        .blocking_wait()
+                        .map(|outcome| outcome.into_raw())
                 },
             )
         }
@@ -66,15 +72,17 @@ macro_rules! contract {
         fn __contract_execute_message(
             message: Vec<u8>,
         ) -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
-            $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
-                move |mut application| async move {
+            use $crate::util::BlockingWait;
+            $crate::contract::run_async_entrypoint::<$application, _, _, _>(
+                unsafe { &mut APPLICATION },
+                move |application| {
                     let message: <$application as $crate::abi::ContractAbi>::Message =
                         bcs::from_bytes(&message)?;
 
                     application
                         .execute_message(&mut $crate::ContractRuntime::default(), message)
-                        .await
-                        .map(|outcome| (application, outcome.into_raw()))
+                        .blocking_wait()
+                        .map(|outcome| outcome.into_raw())
                 },
             )
         }
@@ -85,8 +93,10 @@ macro_rules! contract {
             argument: Vec<u8>,
             forwarded_sessions: Vec<$crate::SessionId>,
         ) -> Result<$crate::ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String> {
-            $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
-                move |mut application| async move {
+            use $crate::util::BlockingWait;
+            $crate::contract::run_async_entrypoint::<$application, _, _, _>(
+                unsafe { &mut APPLICATION },
+                move |application| {
                     let argument: <$application as $crate::abi::ContractAbi>::ApplicationCall =
                         bcs::from_bytes(&argument)?;
                     let forwarded_sessions = forwarded_sessions
@@ -100,8 +110,8 @@ macro_rules! contract {
                             argument,
                             forwarded_sessions,
                         )
-                        .await
-                        .map(|outcome| (application, outcome.into_raw()))
+                        .blocking_wait()
+                        .map(|outcome| outcome.into_raw())
                 },
             )
         }
@@ -113,8 +123,10 @@ macro_rules! contract {
             argument: Vec<u8>,
             forwarded_sessions: Vec<$crate::SessionId>,
         ) -> Result<$crate::SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String> {
-            $crate::contract::run_async_entrypoint::<$application, _, _, _, _>(
-                move |mut application| async move {
+            use $crate::util::BlockingWait;
+            $crate::contract::run_async_entrypoint::<$application, _, _, _>(
+                unsafe { &mut APPLICATION },
+                move |application| {
                     let session_state: <$application as $crate::abi::ContractAbi>::SessionState =
                         bcs::from_bytes(&session_state)?;
                     let argument: <$application as $crate::abi::ContractAbi>::SessionCall =
@@ -131,8 +143,8 @@ macro_rules! contract {
                             argument,
                             forwarded_sessions,
                         )
-                        .await
-                        .map(|outcome| (application, outcome.into_raw()))
+                        .blocking_wait()
+                        .map(|outcome| outcome.into_raw())
                 },
             )
         }
@@ -158,21 +170,25 @@ macro_rules! contract {
 
 /// Runs an asynchronous entrypoint in a blocking manner, by repeatedly polling the entrypoint
 /// future.
-pub fn run_async_entrypoint<Application, Entrypoint, Output, Error, RawOutput>(
-    entrypoint: impl FnOnce(Application) -> Entrypoint + Send,
+pub fn run_async_entrypoint<Application, Output, Error, RawOutput>(
+    application: &mut Option<Application>,
+    entrypoint: impl FnOnce(&mut Application) -> Result<Output, Error> + Send,
 ) -> Result<RawOutput, String>
 where
     Application: Contract,
-    Entrypoint: Future<Output = Result<(Application, Output), Error>> + Send,
     Output: Into<RawOutput> + Send + 'static,
     Error: ToString + 'static,
 {
     ContractLogger::install();
 
-    <Application as Contract>::Storage::execute_with_state(entrypoint)
-        .blocking_wait()
-        .map(|output| output.into())
-        .map_err(|error| error.to_string())
+    let application =
+        application.get_or_insert_with(|| Application::Storage::load().blocking_wait());
+
+    let output = entrypoint(application).map_err(|error| error.to_string())?;
+
+    Application::Storage::store(application).blocking_wait();
+
+    Ok(output.into())
 }
 
 // Import entrypoint proxy functions that applications implement with the `contract!` macro.
