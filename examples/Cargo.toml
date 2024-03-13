@@ -5,6 +5,7 @@ members = [
     "counter",
     "crowd-funding",
     "fungible",
+    "llm",
     "matching-engine",
     "meta-counter",
     "native-fungible",
