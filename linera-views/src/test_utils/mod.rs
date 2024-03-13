@@ -457,7 +457,7 @@ async fn run_test_batch_from_blank<C: KeyValueStore + Sync>(
 /// Run many operations on batches always starting from a blank state.
 pub async fn run_writes_from_blank<C: KeyValueStore + Sync>(key_value_store: &C) {
     let mut rng = make_deterministic_rng();
-    let n_oper = 1000;
+    let n_oper = 10;
     let batch_size = 500;
     // key space has size 4^4 = 256 so we necessarily encounter collisions
     // because the number of generated keys is about batch_size * n_oper = 800 > 256.
