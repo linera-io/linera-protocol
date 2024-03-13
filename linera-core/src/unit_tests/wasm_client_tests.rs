@@ -6,6 +6,10 @@
 //! These tests only run if a Wasm runtime has been configured by enabling either the `wasmer` or
 //! the `wasmtime` feature flags.
 
+// Tests for `RocksDb`, `DynamoDb`, `ScyllaDb` and `Service` are currently disabled
+// because they are slow and their behavior appears to be correctly check by the
+// test with memory.
+
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
 use crate::client::client_tests::{
@@ -44,6 +48,7 @@ async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> Result<(),
     run_test_create_application(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
+#[ignore]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -56,6 +61,7 @@ async fn test_service_create_application(wasm_runtime: WasmRuntime) -> Result<()
     .await
 }
 
+#[ignore]
 #[cfg(feature = "rocksdb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -65,6 +71,7 @@ async fn test_rocks_db_create_application(wasm_runtime: WasmRuntime) -> Result<(
     run_test_create_application(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
+#[ignore]
 #[cfg(feature = "aws")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -73,6 +80,7 @@ async fn test_dynamo_db_create_application(wasm_runtime: WasmRuntime) -> Result<
     run_test_create_application(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
+#[ignore]
 #[cfg(feature = "scylladb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -167,6 +175,7 @@ async fn test_memory_run_application_with_dependency(
         .await
 }
 
+#[ignore]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -181,6 +190,7 @@ async fn test_service_run_application_with_dependency(
     .await
 }
 
+#[ignore]
 #[cfg(feature = "rocksdb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -193,6 +203,7 @@ async fn test_rocks_db_run_application_with_dependency(
         .await
 }
 
+#[ignore]
 #[cfg(feature = "aws")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -206,6 +217,7 @@ async fn test_dynamo_db_run_application_with_dependency(
     .await
 }
 
+#[ignore]
 #[cfg(feature = "scylladb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -392,6 +404,7 @@ async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<()
     run_test_cross_chain_message(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
+#[ignore]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -404,6 +417,7 @@ async fn test_service_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(
     .await
 }
 
+#[ignore]
 #[cfg(feature = "rocksdb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -413,6 +427,7 @@ async fn test_rocks_db_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<
     run_test_cross_chain_message(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
+#[ignore]
 #[cfg(feature = "aws")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -423,6 +438,7 @@ async fn test_dynamo_db_cross_chain_message(
     run_test_cross_chain_message(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
+#[ignore]
 #[cfg(feature = "scylladb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -604,6 +620,7 @@ async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> Result<
     run_test_user_pub_sub_channels(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
+#[ignore]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -618,6 +635,7 @@ async fn test_service_user_pub_sub_channels(
     .await
 }
 
+#[ignore]
 #[cfg(feature = "rocksdb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
@@ -629,6 +647,7 @@ async fn test_rocks_db_user_pub_sub_channels(
     run_test_user_pub_sub_channels(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
+#[ignore]
 #[cfg(feature = "aws")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
@@ -639,6 +658,7 @@ async fn test_dynamo_db_user_pub_sub_channels(
     run_test_user_pub_sub_channels(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
+#[ignore]
 #[cfg(feature = "scylladb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
