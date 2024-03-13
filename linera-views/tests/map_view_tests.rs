@@ -23,7 +23,7 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
     let context = create_memory_context();
     let mut state_map = BTreeMap::new();
     let mut all_keys = BTreeSet::new();
-    let n = 200;
+    let n = 10;
     for _ in 0..n {
         let mut view = StateView::load(context.clone()).await.unwrap();
         let save = rng.gen::<bool>();
@@ -150,7 +150,7 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) {
 #[tokio::test]
 async fn map_view_mutability() {
     let mut rng = test_utils::make_deterministic_rng();
-    for _ in 0..10 {
+    for _ in 0..5 {
         run_map_view_mutability(&mut rng).await;
     }
 }

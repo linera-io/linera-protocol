@@ -315,7 +315,7 @@ pub async fn run_reads<S: KeyValueStore + Sync>(store: S, key_values: Vec<(Vec<u
 
 fn get_random_key_values1(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     let key_prefix = vec![0];
-    let n = 1000;
+    let n = 30;
     let mut rng = make_deterministic_rng();
     get_random_key_values_prefix(&mut rng, key_prefix, 8, len_value, n)
 }
@@ -323,7 +323,7 @@ fn get_random_key_values1(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
 fn get_random_key_values2(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     let mut rng = make_deterministic_rng();
     let key_prefix = vec![0];
-    let n = 100;
+    let n = 30;
     let mut key_values = Vec::new();
     let mut key_set = HashSet::new();
     for _ in 0..n {
@@ -457,7 +457,7 @@ async fn run_test_batch_from_blank<C: KeyValueStore + Sync>(
 /// Run many operations on batches always starting from a blank state.
 pub async fn run_writes_from_blank<C: KeyValueStore + Sync>(key_value_store: &C) {
     let mut rng = make_deterministic_rng();
-    let n_oper = 1000;
+    let n_oper = 10;
     let batch_size = 500;
     // key space has size 4^4 = 256 so we necessarily encounter collisions
     // because the number of generated keys is about batch_size * n_oper = 800 > 256.

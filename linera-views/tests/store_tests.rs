@@ -66,7 +66,7 @@ async fn test_reads_key_value_store_view_memory() {
 }
 
 #[tokio::test]
-async fn test_reads_memory_specific() {
+async fn test_specific_reads_memory() {
     let key_value_store = create_memory_store();
     let key_values = vec![
         (vec![0, 1, 255], Vec::new()),
