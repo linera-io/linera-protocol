@@ -8,8 +8,8 @@ use crate::{
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
     ExecutionError, ExecutionOutcome, MessageContext, RawExecutionOutcome, ServiceRuntime,
-    SessionId, UserApplicationDescription, UserApplicationId, UserContractCode,
-    UserContractInstance, UserServiceInstance,
+    SessionId, UserApplicationDescription, UserApplicationId, UserContractInstance,
+    UserServiceInstance,
 };
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -54,6 +54,11 @@ pub struct SyncRuntimeInternal<UserInstance> {
 
     /// How to interact with the storage view of the execution state.
     execution_state_sender: ExecutionStateSender,
+
+    /// If applications are being finalized.
+    ///
+    /// If [`true`], disables cross-application calls.
+    is_finalizing: bool,
 
     /// Application instances loaded in this transaction.
     loaded_applications: HashMap<UserApplicationId, LoadedApplication<UserInstance>>,
@@ -278,6 +283,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             next_message_index,
             executing_message,
             execution_state_sender,
+            is_finalizing: false,
             loaded_applications: HashMap::new(),
             call_stack: Vec::new(),
             active_applications: HashSet::new(),
@@ -374,6 +380,14 @@ impl SyncRuntimeInternal<UserContractInstance> {
         forwarded_sessions: &[SessionId],
     ) -> Result<(Arc<Mutex<UserContractInstance>>, CalleeContext), ExecutionError> {
         self.check_for_reentrancy(callee_id)?;
+
+        ensure!(
+            !self.is_finalizing,
+            ExecutionError::CrossApplicationCallInFinalize {
+                caller_id: Box::new(self.current_application().id),
+                callee_id: Box::new(callee_id),
+            }
+        );
 
         // Load the application.
         let application = self.load_contract_instance(this, callee_id)?;
