@@ -7,8 +7,8 @@ use crate::{
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
-    ExecutionError, ExecutionOutcome, MessageContext, RawExecutionOutcome, ServiceRuntime,
-    SessionId, UserApplicationDescription, UserApplicationId, UserContractInstance,
+    ExecutionError, ExecutionOutcome, FinalizeContext, MessageContext, RawExecutionOutcome,
+    ServiceRuntime, SessionId, UserApplicationDescription, UserApplicationId, UserContractInstance,
     UserServiceInstance,
 };
 use custom_debug_derive::Debug;
@@ -24,6 +24,7 @@ use linera_views::batch::Batch;
 use oneshot::Receiver;
 use std::{
     collections::{hash_map, BTreeMap, HashMap, HashSet},
+    mem,
     sync::{Arc, Mutex},
 };
 
@@ -979,24 +980,31 @@ impl ContractSyncRuntime {
             UserAction::Message(context, _) => Some(context.into()),
             _ => None,
         };
+        let signer = action.signer();
+        let height = action.height();
+        let next_message_index = action.next_message_index();
         let mut runtime = ContractSyncRuntime::new(SyncRuntimeInternal::new(
             chain_id,
-            action.height(),
-            action.signer(),
-            action.next_message_index(),
+            height,
+            signer,
+            next_message_index,
             executing_message,
             execution_state_sender,
             refund_grant_to,
             resource_controller,
         ));
-        runtime.execute(application_id, action.signer(), move |code| match action {
+        let finalize_context = FinalizeContext {
+            authenticated_signer: signer,
+            chain_id,
+            height,
+            next_message_index,
+        };
+        runtime.execute(application_id, signer, move |code| match action {
             UserAction::Initialize(context, argument) => code.initialize(context, argument),
             UserAction::Operation(context, operation) => code.execute_operation(context, operation),
             UserAction::Message(context, message) => code.execute_message(context, message),
         })?;
-        // Ensure the `loaded_applications` are cleared to prevent circular references in the
-        // `runtime`
-        runtime.inner().loaded_applications.clear();
+        runtime.finalize(finalize_context)?;
         let runtime = runtime
             .into_inner()
             .expect("Runtime clones should have been freed by now");
@@ -1005,6 +1013,25 @@ impl ContractSyncRuntime {
             return Err(ExecutionError::SessionWasNotClosed(*session_id));
         }
         Ok((runtime.execution_outcomes, runtime.resource_controller))
+    }
+
+    /// Notifies all loaded applications that execution is finalizing.
+    fn finalize(&mut self, context: FinalizeContext) -> Result<(), ExecutionError> {
+        let applications = mem::take(&mut self.inner().applications_to_finalize)
+            .into_iter()
+            .rev();
+
+        self.inner().is_finalizing = true;
+
+        for application in applications {
+            self.execute(application, context.authenticated_signer, |contract| {
+                contract.finalize(context)
+            })?;
+        }
+
+        self.inner().loaded_applications.clear();
+
+        Ok(())
     }
 
     /// Executes a `closure` with the contract code for the `application_id`.
