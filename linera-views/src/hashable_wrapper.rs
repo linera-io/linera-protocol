@@ -10,12 +10,15 @@ use async_lock::Mutex;
 use async_trait::async_trait;
 use futures::join;
 use serde::{de::DeserializeOwned, Serialize};
-use std::ops::{Deref, DerefMut};
+use std::{
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 /// A hash for ContainerView and storing of the hash for memoization purposes
 #[derive(Debug)]
 pub struct WrappedHashableContainerView<C, W, O> {
-    context: C,
+    _phantom: PhantomData<C>,
     stored_hash: Option<O>,
     hash: Mutex<Option<O>>,
     inner: W,
@@ -46,7 +49,7 @@ where
     W::Hasher: Hasher<Output = O>,
 {
     fn context(&self) -> &C {
-        &self.context
+        self.inner.context()
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
@@ -59,7 +62,7 @@ where
         let hash = hash?;
         let inner = inner?;
         Ok(Self {
-            context,
+            _phantom: PhantomData,
             stored_hash: hash,
             hash: Mutex::new(hash),
             inner,
@@ -73,13 +76,17 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.delete_storage_first() {
-            batch.delete_key_prefix(self.context.base_key());
+            let mut key_prefix = self.inner.context().base_key();
+            key_prefix.pop();
+            batch.delete_key_prefix(key_prefix);
             self.stored_hash = None;
         }
         self.inner.flush(batch)?;
         let hash = *self.hash.get_mut();
         if self.stored_hash != hash {
-            let key = self.context.base_tag(KeyTag::Hash as u8);
+            let mut key = self.inner.context().base_key();
+            let entry = key.last_mut().unwrap();
+            *entry = KeyTag::Hash as u8;
             match hash {
                 None => batch.delete_key(key),
                 Some(hash) => batch.put_key_value(key, &hash)?,
@@ -105,7 +112,7 @@ where
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(WrappedHashableContainerView {
-            context: self.context.clone(),
+            _phantom: PhantomData,
             stored_hash: self.stored_hash,
             hash: Mutex::new(*self.hash.get_mut()),
             inner: self.inner.clone_unchecked()?,

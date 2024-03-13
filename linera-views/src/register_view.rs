@@ -71,7 +71,7 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         if self.delete_storage_first {
-            batch.delete_key_prefix(self.context.base_key());
+            batch.delete_key(self.context.base_key());
             self.stored_value = Box::default();
         } else if let Some(value) = self.update.take() {
             let key = self.context.base_key();
