@@ -37,7 +37,7 @@ pub(crate) enum KeyTag {
     Namespace,
 }
 
-pub enum ServiceStoreServer {
+enum ServiceStoreServer {
     Memory(MemoryStore),
     /// The RocksDb key value store
     #[cfg(feature = "rocksdb")]
@@ -293,6 +293,8 @@ impl StoreProcessor for ServiceStoreServer {
                 }
                 Operation::Put(key_value) => {
                     batch.put_key_value_bytes(key_value.key, key_value.value);
+                }
+                Operation::Append(_) => {
                 }
                 Operation::DeletePrefix(key_prefix) => {
                     batch.delete_key_prefix(key_prefix);
