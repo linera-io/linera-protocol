@@ -4,7 +4,7 @@
 use linera_views::{
     common::Context,
     memory::create_memory_context,
-    reentrant_collection_view::MemoizedReentrantCollectionView,
+    reentrant_collection_view::HashedReentrantCollectionView,
     register_view::RegisterView,
     test_utils,
     views::{CryptoHashRootView, CryptoHashView, RootView, View, ViewError},
@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(CryptoHashRootView)]
 struct StateView<C> {
-    pub v: MemoizedReentrantCollectionView<C, u8, RegisterView<C, u32>>,
+    pub v: HashedReentrantCollectionView<C, u8, RegisterView<C, u32>>,
 }
 
 impl<C> StateView<C>

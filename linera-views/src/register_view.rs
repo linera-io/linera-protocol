@@ -213,5 +213,5 @@ impl<C, T> DeleteStorageFirst for RegisterView<C, T> {
 }
 
 /// Type wrapping `RegisterView` while memoizing the hash.
-pub type MemoizedRegisterView<C, T> =
+pub type HashedRegisterView<C, T> =
     WrappedHashableContainerView<C, RegisterView<C, T>, HasherOutput>;

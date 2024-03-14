@@ -633,26 +633,6 @@ where
         )
         .await
     }
-
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
-        #[cfg(with_metrics)]
-        let _hash_latency = MAP_VIEW_HASH_RUNTIME.measure_latency();
-        let mut hasher = sha3::Sha3_256::default();
-        let mut count = 0;
-        let prefix = Vec::new();
-        self.for_each_key_value(
-            |index, value| {
-                count += 1;
-                hasher.update_with_bytes(index)?;
-                hasher.update_with_bytes(value)?;
-                Ok(())
-            },
-            prefix,
-        )
-        .await?;
-        hasher.update_with_bcs_bytes(&count)?;
-        Ok(hasher.finalize())
-    }
 }
 
 impl<C, V> ByteMapView<C, V>
@@ -773,11 +753,27 @@ where
     type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        self.compute_hash().await
+        self.hash().await
     }
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        self.compute_hash().await
+        #[cfg(with_metrics)]
+        let _hash_latency = MAP_VIEW_HASH_RUNTIME.measure_latency();
+        let mut hasher = sha3::Sha3_256::default();
+        let mut count = 0;
+        let prefix = Vec::new();
+        self.for_each_key_value(
+            |index, value| {
+                count += 1;
+                hasher.update_with_bytes(index)?;
+                hasher.update_with_bytes(value)?;
+                Ok(())
+            },
+            prefix,
+        )
+        .await?;
+        hasher.update_with_bcs_bytes(&count)?;
+        Ok(hasher.finalize())
     }
 }
 
@@ -1629,14 +1625,13 @@ impl<C, I, V> DeleteStorageFirst for CustomMapView<C, I, V> {
 }
 
 /// Type wrapping `ByteMapView` while memoizing the hash.
-pub type MemoizedByteMapView<C, V> =
-    WrappedHashableContainerView<C, ByteMapView<C, V>, HasherOutput>;
+pub type HashedByteMapView<C, V> = WrappedHashableContainerView<C, ByteMapView<C, V>, HasherOutput>;
 
 /// Type wrapping `MapView` while memoizing the hash.
-pub type MemoizedMapView<C, I, V> = WrappedHashableContainerView<C, MapView<C, I, V>, HasherOutput>;
+pub type HashedMapView<C, I, V> = WrappedHashableContainerView<C, MapView<C, I, V>, HasherOutput>;
 
 /// Type wrapping `CustomMapView` while memoizing the hash.
-pub type MemoizedCustomMapView<C, I, V> =
+pub type HashedCustomMapView<C, I, V> =
     WrappedHashableContainerView<C, CustomMapView<C, I, V>, HasherOutput>;
 
 #[cfg(test)]

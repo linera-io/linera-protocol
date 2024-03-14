@@ -8,20 +8,20 @@ use linera_views::{
         Batch, WriteOperation,
         WriteOperation::{Delete, DeletePrefix, Put},
     },
-    collection_view::MemoizedCollectionView,
+    collection_view::HashedCollectionView,
     common::Context,
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView, ViewContainer},
-    log_view::MemoizedLogView,
+    log_view::HashedLogView,
     lru_caching::{LruCachingMemoryContext, LruCachingStore},
-    map_view::MemoizedMapView,
+    map_view::HashedMapView,
     memory::{
         create_memory_context, MemoryContext, MemoryStore, MemoryStoreMap,
         TEST_MEMORY_MAX_STREAM_QUERIES,
     },
-    queue_view::MemoizedQueueView,
-    reentrant_collection_view::MemoizedReentrantCollectionView,
-    register_view::MemoizedRegisterView,
-    set_view::MemoizedSetView,
+    queue_view::HashedQueueView,
+    reentrant_collection_view::HashedReentrantCollectionView,
+    register_view::HashedRegisterView,
+    set_view::HashedSetView,
     test_utils::{
         self, get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
         random_shuffle, span_random_reordering_put_delete,
@@ -59,20 +59,20 @@ use std::collections::BTreeSet;
 #[allow(clippy::type_complexity)]
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {
-    pub x1: MemoizedRegisterView<C, u64>,
-    pub x2: MemoizedRegisterView<C, u32>,
-    pub log: MemoizedLogView<C, u32>,
-    pub map: MemoizedMapView<C, String, usize>,
-    pub set: MemoizedSetView<C, usize>,
-    pub queue: MemoizedQueueView<C, u64>,
-    pub collection: MemoizedCollectionView<C, String, MemoizedLogView<C, u32>>,
-    pub collection2: MemoizedCollectionView<
+    pub x1: HashedRegisterView<C, u64>,
+    pub x2: HashedRegisterView<C, u32>,
+    pub log: HashedLogView<C, u32>,
+    pub map: HashedMapView<C, String, usize>,
+    pub set: HashedSetView<C, usize>,
+    pub queue: HashedQueueView<C, u64>,
+    pub collection: HashedCollectionView<C, String, HashedLogView<C, u32>>,
+    pub collection2: HashedCollectionView<
         C,
         String,
-        MemoizedCollectionView<C, String, MemoizedRegisterView<C, u32>>,
+        HashedCollectionView<C, String, HashedRegisterView<C, u32>>,
     >,
-    pub collection3: MemoizedCollectionView<C, String, MemoizedQueueView<C, u64>>,
-    pub collection4: MemoizedReentrantCollectionView<C, String, MemoizedQueueView<C, u64>>,
+    pub collection3: HashedCollectionView<C, String, HashedQueueView<C, u64>>,
+    pub collection4: HashedReentrantCollectionView<C, String, HashedQueueView<C, u64>>,
     pub key_value_store: KeyValueStoreView<C>,
 }
 
@@ -887,8 +887,8 @@ async fn test_store_rollback() {
 
 #[tokio::test]
 async fn test_collection_removal() -> anyhow::Result<()> {
-    type EntryType = MemoizedRegisterView<MemoryContext<()>, u8>;
-    type CollectionViewType = MemoizedCollectionView<MemoryContext<()>, u8, EntryType>;
+    type EntryType = HashedRegisterView<MemoryContext<()>, u8>;
+    type CollectionViewType = HashedCollectionView<MemoryContext<()>, u8, EntryType>;
 
     let context = create_memory_context();
 
@@ -918,13 +918,13 @@ async fn test_removal_api_first_second_condition(
     first_condition: bool,
     second_condition: bool,
 ) -> anyhow::Result<()> {
-    type EntryType = MemoizedRegisterView<MemoryContext<()>, u8>;
-    type CollectionViewType = MemoizedCollectionView<MemoryContext<()>, u8, EntryType>;
+    type EntryType = HashedRegisterView<MemoryContext<()>, u8>;
+    type CollectionViewType = HashedCollectionView<MemoryContext<()>, u8, EntryType>;
 
     let context = create_memory_context();
 
     // First add an entry `1` with value `100` and commit
-    let mut collection: CollectionViewType = MemoizedCollectionView::load(context.clone()).await?;
+    let mut collection: CollectionViewType = HashedCollectionView::load(context.clone()).await?;
     let entry = collection.load_entry_mut(&1).await?;
     entry.set(100);
     let mut batch = Batch::new();
@@ -932,7 +932,7 @@ async fn test_removal_api_first_second_condition(
     collection.context().write_batch(batch).await?;
 
     // Reload the collection view and remove the entry, but don't commit yet
-    let mut collection: CollectionViewType = MemoizedCollectionView::load(context.clone()).await?;
+    let mut collection: CollectionViewType = HashedCollectionView::load(context.clone()).await?;
     collection.remove_entry(&1).unwrap();
 
     // Now, read the entry with a different value if a certain condition is true
@@ -952,7 +952,7 @@ async fn test_removal_api_first_second_condition(
     collection.flush(&mut batch)?;
     collection.context().write_batch(batch).await?;
 
-    let mut collection: CollectionViewType = MemoizedCollectionView::load(context.clone()).await?;
+    let mut collection: CollectionViewType = HashedCollectionView::load(context.clone()).await?;
     let expected_val = if second_condition {
         Some(100)
     } else if first_condition {

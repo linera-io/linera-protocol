@@ -1298,13 +1298,13 @@ impl<C, I, W> DeleteStorageFirst for CustomCollectionView<C, I, W> {
 }
 
 /// Type wrapping `ByteCollectionView` while memoizing the hash.
-pub type MemoizedByteCollectionView<C, W> =
+pub type HashedByteCollectionView<C, W> =
     WrappedHashableContainerView<C, ByteCollectionView<C, W>, HasherOutput>;
 
 /// Type wrapping `CollectionView` while memoizing the hash.
-pub type MemoizedCollectionView<C, I, W> =
+pub type HashedCollectionView<C, I, W> =
     WrappedHashableContainerView<C, CollectionView<C, I, W>, HasherOutput>;
 
 /// Type wrapping `CustomCollectionView` while memoizing the hash.
-pub type MemoizedCustomCollectionView<C, I, W> =
+pub type HashedCustomCollectionView<C, I, W> =
     WrappedHashableContainerView<C, CustomCollectionView<C, I, W>, HasherOutput>;

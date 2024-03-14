@@ -22,9 +22,9 @@ use linera_base::{
 use crate::test_utils::SystemExecutionState;
 use linera_views::{
     common::Context,
-    map_view::MemoizedMapView,
-    register_view::MemoizedRegisterView,
-    set_view::MemoizedSetView,
+    map_view::HashedMapView,
+    register_view::HashedRegisterView,
+    set_view::HashedSetView,
     views::{HashableView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -64,32 +64,32 @@ static OPEN_CHAIN_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
 #[derive(Debug, HashableView)]
 pub struct SystemExecutionStateView<C> {
     /// How the chain was created. May be unknown for inactive chains.
-    pub description: MemoizedRegisterView<C, Option<ChainDescription>>,
+    pub description: HashedRegisterView<C, Option<ChainDescription>>,
     /// The number identifying the current configuration.
-    pub epoch: MemoizedRegisterView<C, Option<Epoch>>,
+    pub epoch: HashedRegisterView<C, Option<Epoch>>,
     /// The admin of the chain.
-    pub admin_id: MemoizedRegisterView<C, Option<ChainId>>,
+    pub admin_id: HashedRegisterView<C, Option<ChainId>>,
     /// Track the channels that we have subscribed to.
-    pub subscriptions: MemoizedSetView<C, ChannelSubscription>,
+    pub subscriptions: HashedSetView<C, ChannelSubscription>,
     /// The committees that we trust, indexed by epoch number.
     // Not using a `MapView` because the set active of committees is supposed to be
     // small. Plus, currently, we would create the `BTreeMap` anyway in various places
     // (e.g. the `OpenChain` operation).
-    pub committees: MemoizedRegisterView<C, BTreeMap<Epoch, Committee>>,
+    pub committees: HashedRegisterView<C, BTreeMap<Epoch, Committee>>,
     /// Ownership of the chain.
-    pub ownership: MemoizedRegisterView<C, ChainOwnership>,
+    pub ownership: HashedRegisterView<C, ChainOwnership>,
     /// Balance of the chain. (Available to any user able to create blocks in the chain.)
-    pub balance: MemoizedRegisterView<C, Amount>,
+    pub balance: HashedRegisterView<C, Amount>,
     /// Balances attributed to a given owner.
-    pub balances: MemoizedMapView<C, Owner, Amount>,
+    pub balances: HashedMapView<C, Owner, Amount>,
     /// The timestamp of the most recent block.
-    pub timestamp: MemoizedRegisterView<C, Timestamp>,
+    pub timestamp: HashedRegisterView<C, Timestamp>,
     /// Track the locations of known bytecodes as well as the descriptions of known applications.
     pub registry: ApplicationRegistryView<C>,
     /// Whether this chain has been closed.
-    pub closed: MemoizedRegisterView<C, bool>,
+    pub closed: HashedRegisterView<C, bool>,
     /// Permissions for applications on this chain.
-    pub application_permissions: MemoizedRegisterView<C, ApplicationPermissions>,
+    pub application_permissions: HashedRegisterView<C, ApplicationPermissions>,
 }
 
 /// The configuration for a new chain.

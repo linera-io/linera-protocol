@@ -315,15 +315,6 @@ where
             )
         }
     }
-
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
-        #[cfg(with_metrics)]
-        let _hash_latency = LOG_VIEW_HASH_RUNTIME.measure_latency();
-        let elements = self.read(..).await?;
-        let mut hasher = sha3::Sha3_256::default();
-        hasher.update_with_bcs_bytes(&elements)?;
-        Ok(hasher.finalize())
-    }
 }
 
 #[async_trait]
@@ -336,11 +327,16 @@ where
     type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        self.compute_hash().await
+        self.hash().await
     }
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        self.compute_hash().await
+        #[cfg(with_metrics)]
+        let _hash_latency = LOG_VIEW_HASH_RUNTIME.measure_latency();
+        let elements = self.read(..).await?;
+        let mut hasher = sha3::Sha3_256::default();
+        hasher.update_with_bcs_bytes(&elements)?;
+        Ok(hasher.finalize())
     }
 }
 
@@ -351,4 +347,4 @@ impl<C, T> DeleteStorageFirst for LogView<C, T> {
 }
 
 /// Type wrapping `LogView` while memoizing the hash.
-pub type MemoizedLogView<C, T> = WrappedHashableContainerView<C, LogView<C, T>, HasherOutput>;
+pub type HashedLogView<C, T> = WrappedHashableContainerView<C, LogView<C, T>, HasherOutput>;

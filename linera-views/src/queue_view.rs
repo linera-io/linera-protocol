@@ -380,16 +380,6 @@ where
         self.read_front(count).await
     }
 
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
-        #[cfg(with_metrics)]
-        let _hash_latency = QUEUE_VIEW_HASH_RUNTIME.measure_latency();
-        let count = self.count();
-        let elements = self.read_front(count).await?;
-        let mut hasher = sha3::Sha3_256::default();
-        hasher.update_with_bcs_bytes(&elements)?;
-        Ok(hasher.finalize())
-    }
-
     async fn load_all(&mut self) -> Result<(), ViewError> {
         if !self.delete_storage_first {
             let stored_remainder = self.stored_count();
@@ -440,11 +430,17 @@ where
     type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        self.compute_hash().await
+        self.hash().await
     }
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        self.compute_hash().await
+        #[cfg(with_metrics)]
+        let _hash_latency = QUEUE_VIEW_HASH_RUNTIME.measure_latency();
+        let count = self.count();
+        let elements = self.read_front(count).await?;
+        let mut hasher = sha3::Sha3_256::default();
+        hasher.update_with_bcs_bytes(&elements)?;
+        Ok(hasher.finalize())
     }
 }
 
@@ -455,4 +451,4 @@ impl<C, T> DeleteStorageFirst for QueueView<C, T> {
 }
 
 /// Type wrapping `QueueView` while memoizing the hash.
-pub type MemoizedQueueView<C, T> = WrappedHashableContainerView<C, QueueView<C, T>, HasherOutput>;
+pub type HashedQueueView<C, T> = WrappedHashableContainerView<C, QueueView<C, T>, HasherOutput>;

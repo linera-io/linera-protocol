@@ -1689,13 +1689,13 @@ impl<C, I, W> DeleteStorageFirst for ReentrantCustomCollectionView<C, I, W> {
 }
 
 /// Type wrapping `ReentrantByteCollectionView` while memoizing the hash.
-pub type MemoizedReentrantByteCollectionView<C, W> =
+pub type HashedReentrantByteCollectionView<C, W> =
     WrappedHashableContainerView<C, ReentrantByteCollectionView<C, W>, HasherOutput>;
 
 /// Type wrapping `ReentrantCollectionView` while memoizing the hash.
-pub type MemoizedReentrantCollectionView<C, I, W> =
+pub type HashedReentrantCollectionView<C, I, W> =
     WrappedHashableContainerView<C, ReentrantCollectionView<C, I, W>, HasherOutput>;
 
 /// Type wrapping `ReentrantCustomCollectionView` while memoizing the hash.
-pub type MemoizedReentrantCustomCollectionView<C, I, W> =
+pub type HashedReentrantCustomCollectionView<C, I, W> =
     WrappedHashableContainerView<C, ReentrantCustomCollectionView<C, I, W>, HasherOutput>;

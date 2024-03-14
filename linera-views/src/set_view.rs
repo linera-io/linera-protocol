@@ -304,8 +304,21 @@ where
         })
         .await
     }
+}
 
-    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+#[async_trait]
+impl<C> HashableView<C> for ByteSetView<C>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+{
+    type Hasher = sha3::Sha3_256;
+
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        self.hash().await
+    }
+
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
         let _hash_latency = SET_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
@@ -318,23 +331,6 @@ where
         .await?;
         hasher.update_with_bcs_bytes(&count)?;
         Ok(hasher.finalize())
-    }
-}
-
-#[async_trait]
-impl<C> HashableView<C> for ByteSetView<C>
-where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-{
-    type Hasher = sha3::Sha3_256;
-
-    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        self.compute_hash().await
-    }
-
-    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        self.compute_hash().await
     }
 }
 
@@ -860,11 +856,11 @@ impl<C, I> DeleteStorageFirst for CustomSetView<C, I> {
 }
 
 /// Type wrapping `ByteSetView` while memoizing the hash.
-pub type MemoizedByteSetView<C> = WrappedHashableContainerView<C, ByteSetView<C>, HasherOutput>;
+pub type HashedByteSetView<C> = WrappedHashableContainerView<C, ByteSetView<C>, HasherOutput>;
 
 /// Type wrapping `SetView` while memoizing the hash.
-pub type MemoizedSetView<C, I> = WrappedHashableContainerView<C, SetView<C, I>, HasherOutput>;
+pub type HashedSetView<C, I> = WrappedHashableContainerView<C, SetView<C, I>, HasherOutput>;
 
 /// Type wrapping `CustomSetView` while memoizing the hash.
-pub type MemoizedCustomSetView<C, I> =
+pub type HashedCustomSetView<C, I> =
     WrappedHashableContainerView<C, CustomSetView<C, I>, HasherOutput>;
