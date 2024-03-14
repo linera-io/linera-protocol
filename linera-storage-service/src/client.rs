@@ -4,7 +4,7 @@
 use crate::{
     common::{ServiceContextError, ServiceStoreConfig},
     key_value_store::{
-        statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
+        statement::Operation, store_processor_client::StoreProcessorClient, KeyValue, KeyValueAppend,
         ReplyContainsKey, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
         ReplyListAll, ReplyReadMultiValues, ReplyReadValue, RequestClearJournal,
         RequestContainsKey, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
@@ -21,11 +21,19 @@ use linera_views::{
         WritableKeyValueStore, MIN_VIEW_TAG,
     },
 };
+use linera_views::batch::WriteOperation;
+use std::mem;
 use std::sync::Arc;
 use tonic::transport::{Channel, Endpoint};
 
 #[cfg(any(test, feature = "test"))]
 use linera_views::test_utils::generate_test_namespace;
+
+// The maximal block size on GRPC is 4M.
+// That size is the one that shows up everywhere and in particular
+// for tonic.
+// We decrease the 4194304 to 4000000 for safety reasons.
+const MAX_GRPC_REQUEST_SIZE: usize = 4000000;
 
 /// Key tags to create the sub keys used for storing data on storage.
 #[repr(u8)]
@@ -164,31 +172,54 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         use crate::client::Operation;
         use linera_views::batch::WriteOperation;
         let mut statements = Vec::new();
+        let mut block_size = 0;
         for operation in batch.operations {
-            let operation = match operation {
+            let operation_size = match &operation {
                 WriteOperation::Delete { key } => {
-                    let mut full_key = self.namespace.clone();
-                    full_key.extend(key);
-                    Operation::Delete(full_key)
+                    key.len()
                 }
                 WriteOperation::Put { key, value } => {
-                    let mut full_key = self.namespace.clone();
-                    full_key.extend(key);
-                    Operation::Put(KeyValue {
-                        key: full_key,
-                        value,
-                    })
+                    key.len() + value.len()
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    let mut full_key_prefix = self.namespace.clone();
-                    full_key_prefix.extend(key_prefix);
-                    Operation::DeletePrefix(full_key_prefix)
+                    key_prefix.len()
                 }
             };
-            let statement = Statement {
-                operation: Some(operation),
-            };
-            statements.push(statement);
+            if operation_size + block_size < MAX_GRPC_REQUEST_SIZE {
+                let statement = self.get_statement(operation);
+                statements.push(statement);
+                block_size += operation_size;
+            } else {
+                if statements.len() > 0 {
+                    self.submit_statements(mem::take(&mut statements), base_key).await?;
+                    block_size = 0;
+                }
+                if operation_size > MAX_GRPC_REQUEST_SIZE {
+                    let WriteOperation::Put { key, value } = operation else {
+                        unreachable!();
+                    };
+                    let mut full_key = self.namespace.clone();
+                    full_key.extend(key);
+                    let value_blocks = value.chunks(MAX_GRPC_REQUEST_SIZE).collect::<Vec<_>>();
+                    let n_block = value_blocks.len();
+                    for i_block in 0..n_block {
+                        let last = i_block + 1 < n_block;
+                        let operation = Operation::Append(KeyValueAppend {
+                            key: full_key.clone(),
+                            value: value_blocks[i_block].to_vec(),
+                            last,
+                        });
+                        statements = vec![Statement {
+                            operation: Some(operation),
+                        }];
+                        self.submit_statements(mem::take(&mut statements), base_key).await?;
+                    }
+                } else {
+                    let statement = self.get_statement(operation);
+                    statements.push(statement);
+                    block_size = operation_size;
+                }
+            }
         }
         let query = RequestWriteBatch {
             statements,
@@ -232,6 +263,44 @@ impl ServiceStoreClient {
         let mut key = vec![KeyTag::Key as u8];
         bcs::serialize_into(&mut key, namespace)?;
         Ok(key)
+    }
+
+    async fn submit_statements(&self, statements: Vec<Statement>, base_key: &[u8]) -> Result<(), ServiceContextError> {
+        let query = RequestWriteBatch {
+            statements,
+            base_key: base_key.to_vec(),
+        };
+        let request = tonic::Request::new(query);
+        let mut client = self.client.write().await;
+        let _guard = self.acquire().await;
+        let _response = client.process_write_batch(request).await?;
+        Ok(())
+    }
+
+    fn get_statement(&self, operation: WriteOperation) -> Statement {
+        let operation = match operation {
+            WriteOperation::Delete { key } => {
+                let mut full_key = self.namespace.clone();
+                full_key.extend(key);
+                Operation::Delete(full_key)
+            }
+            WriteOperation::Put { key, value } => {
+                let mut full_key = self.namespace.clone();
+                full_key.extend(key);
+                Operation::Put(KeyValue {
+                    key: full_key,
+                    value,
+                })
+            }
+            WriteOperation::DeletePrefix { key_prefix } => {
+                let mut full_key_prefix = self.namespace.clone();
+                full_key_prefix.extend(key_prefix);
+                Operation::DeletePrefix(full_key_prefix)
+            }
+        };
+        Statement {
+            operation: Some(operation),
+        }
     }
 }
 
