@@ -83,6 +83,8 @@ where
     initial_fuel: u64,
 }
 
+// TODO(#1785): Simplify by using proper fuel getter and setter methods from Wasmtime once the
+// dependency is updated
 impl<Runtime> WasmtimeContractInstance<Runtime>
 where
     Runtime: ContractRuntime + Send + Sync,
