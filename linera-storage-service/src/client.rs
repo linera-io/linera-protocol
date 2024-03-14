@@ -190,12 +190,12 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
                 statements.push(statement);
                 block_size += operation_size;
             } else {
-                if statements.len() > 0 {
-                    self.submit_statements(mem::take(&mut statements), base_key).await?;
-                    block_size = 0;
-                }
+                self.submit_statements(mem::take(&mut statements), base_key).await?;
+                block_size = 0;
                 if operation_size > MAX_GRPC_REQUEST_SIZE {
+                    // One single operation is especially big. So split it in blocks.
                     let WriteOperation::Put { key, value } = operation else {
+                        // Only the put can go over the limit
                         unreachable!();
                     };
                     let mut full_key = self.namespace.clone();
@@ -215,21 +215,14 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
                         self.submit_statements(mem::take(&mut statements), base_key).await?;
                     }
                 } else {
+                    // The operation is small enough, it is just that we have many so we need to split.
                     let statement = self.get_statement(operation);
                     statements.push(statement);
                     block_size = operation_size;
                 }
             }
         }
-        let query = RequestWriteBatch {
-            statements,
-            base_key: base_key.to_vec(),
-        };
-        let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
-        let _guard = self.acquire().await;
-        let _response = client.process_write_batch(request).await?;
-        Ok(())
+        self.submit_statements(mem::take(&mut statements), base_key).await
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), ServiceContextError> {
@@ -266,14 +259,16 @@ impl ServiceStoreClient {
     }
 
     async fn submit_statements(&self, statements: Vec<Statement>, base_key: &[u8]) -> Result<(), ServiceContextError> {
-        let query = RequestWriteBatch {
-            statements,
-            base_key: base_key.to_vec(),
-        };
-        let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
-        let _guard = self.acquire().await;
-        let _response = client.process_write_batch(request).await?;
+        if statements.len() > 0 {
+            let query = RequestWriteBatch {
+                statements,
+                base_key: base_key.to_vec(),
+            };
+            let request = tonic::Request::new(query);
+            let mut client = self.client.write().await;
+            let _guard = self.acquire().await;
+            let _response = client.process_write_batch(request).await?;
+        }
         Ok(())
     }
 
