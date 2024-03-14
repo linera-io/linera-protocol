@@ -9,7 +9,7 @@ message KeyValue {
 message KeyValueAppend {
   bytes key = 1;
   bytes value = 2;
-  bool status = 3;
+  bool last = 3;
 }
 
 message Statement {

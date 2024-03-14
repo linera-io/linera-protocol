@@ -303,7 +303,20 @@ impl StoreProcessor for ServiceStoreServer {
                 Operation::Put(key_value) => {
                     batch.put_key_value_bytes(key_value.key, key_value.value);
                 }
-                Operation::Append(_) => {
+                Operation::Append(key_value_append) => {
+                    let mut pending_big_puts = self.pending_big_puts.write().await;
+                    match pending_big_puts.get_mut(&key_value_append.key) {
+                        None => {
+                            pending_big_puts.insert(key_value_append.key.clone(), key_value_append.value);
+                        },
+                        Some(value) => {
+                            value.extend(key_value_append.value);
+                        },
+                    }
+                    if key_value_append.last {
+                        let value = pending_big_puts.remove(&key_value_append.key).unwrap();
+                        batch.put_key_value_bytes(key_value_append.key, value);
+                    }
                 }
                 Operation::DeletePrefix(key_prefix) => {
                     batch.delete_key_prefix(key_prefix);
