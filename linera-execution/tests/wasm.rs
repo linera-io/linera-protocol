@@ -96,10 +96,16 @@ async fn test_fuel_for_counter_wasm_application(
             .await?;
         assert_eq!(
             outcomes,
-            vec![ExecutionOutcome::User(
-                app_id.forget_abi(),
-                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
-            )]
+            vec![
+                ExecutionOutcome::User(
+                    app_id.forget_abi(),
+                    RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+                ),
+                ExecutionOutcome::User(
+                    app_id.forget_abi(),
+                    RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+                ),
+            ]
         );
     }
     assert_eq!(controller.tracker.fuel, expected_fuel);

@@ -146,6 +146,9 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         },
     ));
 
+    target_application.expect_call(ExpectedCall::default_finalize());
+    caller_application.expect_call(ExpectedCall::default_finalize());
+
     let context = OperationContext {
         authenticated_signer: Some(owner),
         ..make_operation_context()
@@ -184,7 +187,19 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
                 RawExecutionOutcome::default()
                     .with_authenticated_signer(Some(owner))
                     .with_refund_grant_to(Some(account))
-            )
+            ),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default()
+                    .with_refund_grant_to(Some(account))
+                    .with_authenticated_signer(Some(owner))
+            ),
+            ExecutionOutcome::User(
+                caller_id,
+                RawExecutionOutcome::default()
+                    .with_authenticated_signer(Some(owner))
+                    .with_refund_grant_to(Some(account))
+            ),
         ]
     );
 
@@ -242,6 +257,9 @@ async fn test_leaking_session() -> anyhow::Result<()> {
             })
         },
     ));
+
+    target_application.expect_call(ExpectedCall::default_finalize());
+    caller_application.expect_call(ExpectedCall::default_finalize());
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
@@ -304,6 +322,9 @@ async fn test_simple_session() -> anyhow::Result<()> {
         },
     ));
 
+    target_application.expect_call(ExpectedCall::default_finalize());
+    caller_application.expect_call(ExpectedCall::default_finalize());
+
     let context = make_operation_context();
     let mut controller = ResourceController::default();
     let outcomes = view
@@ -325,6 +346,14 @@ async fn test_simple_session() -> anyhow::Result<()> {
         vec![
             ExecutionOutcome::User(
                 target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                caller_id,
                 RawExecutionOutcome::default().with_refund_grant_to(Some(account))
             ),
             ExecutionOutcome::User(
@@ -424,6 +453,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
             Ok(RawExecutionOutcome::default().with_message(dummy_message))
         }
     }));
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
@@ -469,7 +499,11 @@ async fn test_simple_message() -> anyhow::Result<()> {
                 RawExecutionOutcome::default()
                     .with_message(dummy_message)
                     .with_refund_grant_to(Some(account))
-            )
+            ),
+            ExecutionOutcome::User(
+                application_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
         ]
     );
 
@@ -524,6 +558,9 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         }
     }));
 
+    target_application.expect_call(ExpectedCall::default_finalize());
+    caller_application.expect_call(ExpectedCall::default_finalize());
+
     let context = make_operation_context();
     let mut controller = ResourceController::default();
     let outcomes = view
@@ -564,6 +601,14 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
                 RawExecutionOutcome::default()
                     .with_message(dummy_message)
                     .with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                caller_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
             ),
             ExecutionOutcome::User(
                 caller_id,
@@ -655,6 +700,10 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
         }
     }));
 
+    target_application.expect_call(ExpectedCall::default_finalize());
+    middle_application.expect_call(ExpectedCall::default_finalize());
+    caller_application.expect_call(ExpectedCall::default_finalize());
+
     let context = make_operation_context();
     let mut controller = ResourceController::default();
     let outcomes = view
@@ -698,6 +747,18 @@ async fn test_message_from_session_call() -> anyhow::Result<()> {
                 RawExecutionOutcome::default()
                     .with_message(dummy_message)
                     .with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                middle_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                caller_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
             ),
             ExecutionOutcome::User(
                 middle_id,
@@ -802,6 +863,10 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         }
     }));
 
+    sending_target_application.expect_call(ExpectedCall::default_finalize());
+    silent_target_application.expect_call(ExpectedCall::default_finalize());
+    caller_application.expect_call(ExpectedCall::default_finalize());
+
     // Execute the operation, starting the test scenario
     let context = make_operation_context();
     let mut controller = ResourceController::default();
@@ -879,6 +944,18 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
                     .with_message(first_message)
                     .with_refund_grant_to(Some(account))
             ),
+            ExecutionOutcome::User(
+                sending_target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                silent_target_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account)),
+            ),
+            ExecutionOutcome::User(
+                caller_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
         ]
     );
 
@@ -926,6 +1003,8 @@ async fn test_open_chain() {
             Ok(RawExecutionOutcome::default())
         }
     }));
+    application.expect_call(ExpectedCall::default_finalize());
+
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
@@ -1001,6 +1080,8 @@ async fn test_close_chain() {
             Ok(RawExecutionOutcome::default())
         },
     ));
+    application.expect_call(ExpectedCall::default_finalize());
+
     let mut controller = ResourceController::default();
     let operation = Operation::User {
         application_id,
@@ -1017,12 +1098,15 @@ async fn test_close_chain() {
     view.execute_operation(context, operation.into(), &mut controller)
         .await
         .unwrap();
+
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             runtime.close_chain().unwrap();
             Ok(RawExecutionOutcome::default())
         },
     ));
+    application.expect_call(ExpectedCall::default_finalize());
+
     let operation = Operation::User {
         application_id,
         bytes: vec![],

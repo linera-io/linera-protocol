@@ -128,6 +128,7 @@ async fn test_application_permissions() {
     application.expect_call(ExpectedCall::execute_operation(|_, _, _| {
         Ok(RawExecutionOutcome::default())
     }));
+    application.expect_call(ExpectedCall::default_finalize());
     let app_operation = Operation::User {
         application_id,
         bytes: b"foo".to_vec(),
@@ -150,6 +151,7 @@ async fn test_application_permissions() {
     application.expect_call(ExpectedCall::execute_operation(|_, _, _| {
         Ok(RawExecutionOutcome::default())
     }));
+    application.expect_call(ExpectedCall::default_finalize());
     let valid_block = make_child_block(&value).with_operation(app_operation);
     chain.execute_block(&valid_block, time).await.unwrap();
 }
