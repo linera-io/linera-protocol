@@ -323,7 +323,9 @@ impl StoreProcessor for ServiceStoreServer {
                 }
             }
         }
-        self.write_batch(batch, &base_key).await?;
+        if batch.size() > 0 {
+            self.write_batch(batch, &base_key).await?;
+        }
         let response = ReplyWriteBatch {};
         Ok(Response::new(response))
     }
