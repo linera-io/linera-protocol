@@ -6,7 +6,7 @@ use crate::{
     key_value_store::{
         statement::Operation, store_processor_client::StoreProcessorClient, KeyValue, KeyValueAppend,
         ReplyContainsKey, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
-        ReplyListAll, ReplyReadMultiValues, ReplyReadValue, RequestClearJournal,
+        ReplyListAll, ReplyReadMultiValues, ReplyReadValue,
         RequestContainsKey, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
         RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
         RequestListAll, RequestReadMultiValues, RequestReadValue, RequestWriteBatch, Statement,
@@ -168,7 +168,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
 impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), ServiceContextError> {
+    async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ServiceContextError> {
         use crate::client::Operation;
         use linera_views::batch::WriteOperation;
         let mut statements = Vec::new();
@@ -190,7 +190,7 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
                 statements.push(statement);
                 block_size += operation_size;
             } else {
-                self.submit_statements(mem::take(&mut statements), base_key).await?;
+                self.submit_statements(mem::take(&mut statements)).await?;
                 block_size = 0;
                 if operation_size > MAX_GRPC_REQUEST_SIZE {
                     // One single operation is especially big. So split it in blocks.
@@ -212,7 +212,7 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
                         statements = vec![Statement {
                             operation: Some(operation),
                         }];
-                        self.submit_statements(mem::take(&mut statements), base_key).await?;
+                        self.submit_statements(mem::take(&mut statements)).await?;
                     }
                 } else {
                     // The operation is small enough, it is just that we have many so we need to split.
@@ -222,19 +222,10 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
                 }
             }
         }
-        self.submit_statements(mem::take(&mut statements), base_key).await
+        self.submit_statements(mem::take(&mut statements)).await
     }
 
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), ServiceContextError> {
-        let mut full_base_key = self.namespace.clone();
-        full_base_key.extend(base_key);
-        let query = RequestClearJournal {
-            base_key: full_base_key,
-        };
-        let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
-        let _guard = self.acquire().await;
-        let _response = client.process_clear_journal(request).await?;
+    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), ServiceContextError> {
         Ok(())
     }
 }
@@ -258,11 +249,10 @@ impl ServiceStoreClient {
         Ok(key)
     }
 
-    async fn submit_statements(&self, statements: Vec<Statement>, base_key: &[u8]) -> Result<(), ServiceContextError> {
+    async fn submit_statements(&self, statements: Vec<Statement>) -> Result<(), ServiceContextError> {
         if statements.len() > 0 {
             let query = RequestWriteBatch {
                 statements,
-                base_key: base_key.to_vec(),
             };
             let request = tonic::Request::new(query);
             let mut client = self.client.write().await;

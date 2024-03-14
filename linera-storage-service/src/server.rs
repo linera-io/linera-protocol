@@ -4,9 +4,9 @@
 use crate::key_value_store::{
     statement::Operation,
     store_processor_server::{StoreProcessor, StoreProcessorServer},
-    KeyValue, OptValue, ReplyClearJournal, ReplyContainsKey, ReplyCreateNamespace, ReplyDeleteAll,
+    KeyValue, OptValue, ReplyContainsKey, ReplyCreateNamespace, ReplyDeleteAll,
     ReplyDeleteNamespace, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
-    ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplyWriteBatch, RequestClearJournal,
+    ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplyWriteBatch,
     RequestContainsKey, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
     RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListAll,
     RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
@@ -130,31 +130,17 @@ impl ServiceStoreServer {
         }
     }
 
-    pub async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Status> {
+    pub async fn write_batch(&self, batch: Batch) -> Result<(), Status> {
         match &self.store {
             ServiceStoreServerInternal::Memory(store) => store
-                .write_batch(batch, base_key)
+                .write_batch(batch, &[])
                 .await
                 .map_err(|_e| Status::not_found("write_batch")),
             #[cfg(feature = "rocksdb")]
             ServiceStoreServerInternal::RocksDb(store) => store
-                .write_batch(batch, base_key)
+                .write_batch(batch, &[])
                 .await
                 .map_err(|_e| Status::not_found("write_batch")),
-        }
-    }
-
-    pub async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Status> {
-        match &self.store {
-            ServiceStoreServerInternal::Memory(store) => store
-                .clear_journal(base_key)
-                .await
-                .map_err(|_e| Status::not_found("clear_journal")),
-            #[cfg(feature = "rocksdb")]
-            ServiceStoreServerInternal::RocksDb(store) => store
-                .clear_journal(base_key)
-                .await
-                .map_err(|_e| Status::not_found("clear_journal")),
         }
     }
 
@@ -166,7 +152,7 @@ impl ServiceStoreServer {
         let mut batch = Batch::new();
         batch.delete_key_prefix(vec![KeyTag::Key as u8]);
         batch.delete_key_prefix(vec![KeyTag::Namespace as u8]);
-        self.write_batch(batch, &[]).await
+        self.write_batch(batch).await
     }
 
     pub async fn exists_namespace(&self, namespace: &[u8]) -> Result<bool, Status> {
@@ -180,7 +166,7 @@ impl ServiceStoreServer {
         full_key.extend(namespace);
         let mut batch = Batch::new();
         batch.put_key_value_bytes(full_key, vec![]);
-        self.write_batch(batch, &[]).await
+        self.write_batch(batch).await
     }
 
     pub async fn delete_namespace(&self, namespace: &[u8]) -> Result<(), Status> {
@@ -191,7 +177,7 @@ impl ServiceStoreServer {
         let mut key_prefix = vec![KeyTag::Key as u8];
         key_prefix.extend(namespace);
         batch.delete_key_prefix(key_prefix);
-        self.write_batch(batch, &[]).await
+        self.write_batch(batch).await
     }
 }
 
@@ -292,7 +278,6 @@ impl StoreProcessor for ServiceStoreServer {
         let request = request.into_inner();
         let RequestWriteBatch {
             statements,
-            base_key,
         } = request;
         let mut batch = Batch::default();
         for statement in statements {
@@ -324,20 +309,9 @@ impl StoreProcessor for ServiceStoreServer {
             }
         }
         if batch.size() > 0 {
-            self.write_batch(batch, &base_key).await?;
+            self.write_batch(batch).await?;
         }
         let response = ReplyWriteBatch {};
-        Ok(Response::new(response))
-    }
-
-    async fn process_clear_journal(
-        &self,
-        request: Request<RequestClearJournal>,
-    ) -> Result<Response<ReplyClearJournal>, Status> {
-        let request = request.into_inner();
-        let RequestClearJournal { base_key } = request;
-        self.clear_journal(&base_key).await?;
-        let response = ReplyClearJournal {};
         Ok(Response::new(response))
     }
 
