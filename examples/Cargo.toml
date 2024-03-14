@@ -8,6 +8,7 @@ members = [
     "matching-engine",
     "meta-counter",
     "native-fungible",
+    "non-fungible",
     "social",
 ]
 
@@ -15,6 +16,7 @@ members = [
 assert_matches = "1.5.0"
 async-graphql = { version = "7.0.2", default-features = false }
 async-trait = "0.1.58"
+base64 = "0.22.0"
 bcs = "0.1.3"
 futures = "0.3.24"
 futures-util = "0.3.26"
@@ -24,6 +26,7 @@ linera-views = { path = "../linera-views", default-features = false }
 log = "0.4.20"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.93"
+sha3 = "0.10.8"
 thiserror = "1.0.38"
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 webassembly-test = "0.1.0"
@@ -34,6 +37,7 @@ counter = { path = "./counter" }
 crowd-funding = { path = "./crowd-funding" }
 fungible = { path = "./fungible" }
 native-fungible = { path = "./native-fungible" }
+non-fungible = { path = "./non-fungible" }
 amm = { path = "./amm" }
 matching-engine = { path = "./matching-engine" }
 
