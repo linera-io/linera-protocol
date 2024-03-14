@@ -249,6 +249,12 @@ impl ExpectedCall {
         ExpectedCall::Finalize(Box::new(handler))
     }
 
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::finalize`]
+    /// implementation, which is handled by the default implementation which does nothing.
+    pub fn default_finalize() -> Self {
+        Self::finalize(|_, _| Ok(RawExecutionOutcome::default()))
+    }
+
     /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
     /// [`UserService::handle_query`] implementation, which is handled by the provided `handler`.
     pub fn handle_query(
