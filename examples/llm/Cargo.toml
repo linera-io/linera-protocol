@@ -15,6 +15,8 @@ serde_json.workspace = true
 thiserror.workspace = true
 log = "0.4.21"
 fs-err = "2.11.0"
+candle-transformers = "0.4.1"
+tokenizers = { version = "0.15.0", default-features = false, features = ["unstable_wasm"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
