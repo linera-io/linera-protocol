@@ -9,7 +9,7 @@ use crate::{
         ReplyListAll, ReplyReadMultiValues, ReplyReadValue,
         RequestContainsKey, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
         RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
-        RequestListAll, RequestReadMultiValues, RequestReadValue, RequestWriteBatch, Statement,
+        RequestListAll, RequestReadMultiValues, RequestReadValue, RequestWriteBatchExtended, Statement,
     },
 };
 use async_lock::{RwLock, Semaphore, SemaphoreGuard};
@@ -251,13 +251,13 @@ impl ServiceStoreClient {
 
     async fn submit_statements(&self, statements: Vec<Statement>) -> Result<(), ServiceContextError> {
         if statements.len() > 0 {
-            let query = RequestWriteBatch {
+            let query = RequestWriteBatchExtended {
                 statements,
             };
             let request = tonic::Request::new(query);
             let mut client = self.client.write().await;
             let _guard = self.acquire().await;
-            let _response = client.process_write_batch(request).await?;
+            let _response = client.process_write_batch_extended(request).await?;
         }
         Ok(())
     }

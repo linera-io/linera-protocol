@@ -71,11 +71,11 @@ message ReplyFindKeyValuesByPrefix {
 }
 
 
-message RequestWriteBatch {
+message RequestWriteBatchExtended {
   repeated Statement statements = 1;
 }
 
-message ReplyWriteBatch {
+message ReplyWriteBatchExtended {
 }
 
 
@@ -124,7 +124,7 @@ service StoreProcessor {
   rpc ProcessReadMultiValues (RequestReadMultiValues) returns (ReplyReadMultiValues) {}
   rpc ProcessFindKeysByPrefix (RequestFindKeysByPrefix) returns (ReplyFindKeysByPrefix) {}
   rpc ProcessFindKeyValuesByPrefix (RequestFindKeyValuesByPrefix) returns (ReplyFindKeyValuesByPrefix) {}
-  rpc ProcessWriteBatch (RequestWriteBatch) returns (ReplyWriteBatch) {}
+  rpc ProcessWriteBatchExtended (RequestWriteBatchExtended) returns (ReplyWriteBatchExtended) {}
   rpc ProcessCreateNamespace (RequestCreateNamespace) returns (ReplyCreateNamespace) {}
   rpc ProcessExistsNamespace (RequestExistsNamespace) returns (ReplyExistsNamespace) {}
   rpc ProcessDeleteNamespace (RequestDeleteNamespace) returns (ReplyDeleteNamespace) {}

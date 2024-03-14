@@ -6,10 +6,10 @@ use crate::key_value_store::{
     store_processor_server::{StoreProcessor, StoreProcessorServer},
     KeyValue, OptValue, ReplyContainsKey, ReplyCreateNamespace, ReplyDeleteAll,
     ReplyDeleteNamespace, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
-    ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplyWriteBatch,
+    ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplyWriteBatchExtended,
     RequestContainsKey, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
     RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListAll,
-    RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
+    RequestReadMultiValues, RequestReadValue, RequestWriteBatchExtended,
 };
 use std::sync::Arc;
 use async_lock::RwLock;
@@ -271,12 +271,12 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    async fn process_write_batch(
+    async fn process_write_batch_extended(
         &self,
-        request: Request<RequestWriteBatch>,
-    ) -> Result<Response<ReplyWriteBatch>, Status> {
+        request: Request<RequestWriteBatchExtended>,
+    ) -> Result<Response<ReplyWriteBatchExtended>, Status> {
         let request = request.into_inner();
-        let RequestWriteBatch {
+        let RequestWriteBatchExtended {
             statements,
         } = request;
         let mut batch = Batch::default();
@@ -311,7 +311,7 @@ impl StoreProcessor for ServiceStoreServer {
         if batch.size() > 0 {
             self.write_batch(batch).await?;
         }
-        let response = ReplyWriteBatch {};
+        let response = ReplyWriteBatchExtended {};
         Ok(Response::new(response))
     }
 
