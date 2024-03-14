@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_execution::ResourceControlPolicy;
 use linera_storage_service::{
-    child::{get_free_port, StorageServiceBuilder, StorageServiceGuard},
+    child::{get_free_port, StorageService, StorageServiceGuard},
     client::service_config_from_endpoint,
     common::{get_service_storage_binary, ServiceStoreConfig},
 };
@@ -56,8 +56,8 @@ impl LocalServerInternal for LocalServerServiceInternal {
         let endpoint = get_free_port().await.unwrap();
         let service_config = service_config_from_endpoint(&endpoint)?;
         let binary = get_service_storage_binary().await?.display().to_string();
-        let builder = StorageServiceBuilder::new(&endpoint, binary);
-        let _service_guard = builder.run_service().await?;
+        let service = StorageService::new(&endpoint, binary);
+        let _service_guard = service.run().await?;
         Ok(Self {
             service_config,
             _service_guard,

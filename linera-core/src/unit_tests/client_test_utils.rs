@@ -37,7 +37,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use {
     linera_storage::ServiceStorage,
     linera_storage_service::{
-        child::{StorageServiceBuilder, StorageServiceGuard},
+        child::{StorageService, StorageServiceGuard},
         client::service_config_from_endpoint,
         common::get_service_storage_binary,
     },
@@ -795,8 +795,8 @@ impl StorageBuilder for ServiceStorageBuilder {
     async fn build(&mut self) -> anyhow::Result<Self::Storage> {
         if self._guard.is_none() && self.use_child {
             let binary = get_service_storage_binary().await?.display().to_string();
-            let builder = StorageServiceBuilder::new(&self.endpoint, binary);
-            self._guard = Some(builder.run_service().await.expect("child"));
+            let service = StorageService::new(&self.endpoint, binary);
+            self._guard = Some(service.run().await.expect("child"));
         }
         let store_config = service_config_from_endpoint(&self.endpoint)?;
         let namespace = format!("{}_{}", self.namespace, self.instance_counter);

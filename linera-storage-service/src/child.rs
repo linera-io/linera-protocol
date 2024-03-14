@@ -20,7 +20,7 @@ pub async fn get_free_port() -> Result<String> {
 }
 
 /// Configuration for a storage service running as a child process
-pub struct StorageServiceBuilder {
+pub struct StorageService {
     endpoint: String,
     binary: String,
 }
@@ -33,7 +33,7 @@ pub struct StorageServiceGuard {
     _child: Child,
 }
 
-impl StorageServiceBuilder {
+impl StorageService {
     /// Creates a new `StorageServiceChild`
     pub fn new(endpoint: &str, binary: String) -> Self {
         Self {
@@ -61,7 +61,7 @@ impl StorageServiceBuilder {
         bail!("Failed to start child server");
     }
 
-    pub async fn run_service(&self) -> Result<StorageServiceGuard> {
+    pub async fn run(&self) -> Result<StorageServiceGuard> {
         self.wait_for_absence().await?;
         let mut command = self.command().await;
         let _child = command.spawn_into()?;
