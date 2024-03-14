@@ -5,68 +5,50 @@ mod state;
 use self::state::Llm;
 use async_trait::async_trait;
 use linera_sdk::{
-    base::{SessionId, WithContractAbi},
-    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, SessionCallOutcome,
+    base::WithContractAbi,
+    Contract, ContractRuntime,
     ViewStateStorage,
 };
 use thiserror::Error;
 
-linera_sdk::contract!(Llm);
+pub struct LlmContract {
+    state: Llm,
+    runtime: ContractRuntime<Self>
+}
 
-impl WithContractAbi for Llm {
+linera_sdk::contract!(LlmContract);
+
+impl WithContractAbi for LlmContract {
     type Abi = llm::LlmAbi;
 }
 
 #[async_trait]
-impl Contract for Llm {
+impl Contract for LlmContract {
     type Error = ContractError;
     type Storage = ViewStateStorage<Self>;
+    type State = Llm;
+    type Message = ();
+    type InitializationArgument = ();
+    type Parameters = ();
 
-    async fn initialize(
-        &mut self,
-        _runtime: &mut ContractRuntime,
-        _argument: Self::InitializationArgument,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        Ok(ExecutionOutcome::default())
+    async fn new(state: Llm, runtime: ContractRuntime<Self>) -> Result<Self, Self::Error> {
+        Ok(LlmContract { state, runtime })
     }
 
-    async fn execute_operation(
-        &mut self,
-        _runtime: &mut ContractRuntime,
-        _operation: Self::Operation,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        Ok(ExecutionOutcome::default())
+    fn state_mut(&mut self) -> &mut Self::State {
+        &mut self.state
     }
 
-    async fn execute_message(
-        &mut self,
-        _runtime: &mut ContractRuntime,
-        _message: Self::Message,
-    ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
-        Ok(ExecutionOutcome::default())
+    async fn initialize(&mut self, _value: ()) -> Result<(), Self::Error> {
+        Ok(())
     }
 
-    async fn handle_application_call(
-        &mut self,
-        _runtime: &mut ContractRuntime,
-        _call: Self::ApplicationCall,
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<
-        ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>,
-        Self::Error,
-    > {
-        Ok(ApplicationCallOutcome::default())
+    async fn execute_operation(&mut self, _operation: ()) -> Result<(), Self::Error> {
+        Ok(())
     }
 
-    async fn handle_session_call(
-        &mut self,
-        _runtime: &mut ContractRuntime,
-        _session: Self::SessionState,
-        _call: Self::SessionCall,
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
-    {
-        Ok(SessionCallOutcome::default())
+    async fn execute_message(&mut self, _message: ()) -> Result<(), Self::Error> {
+        Err(ContractError::MessagesNotSupported)
     }
 }
 
@@ -81,4 +63,8 @@ pub enum ContractError {
     #[error("Failed to deserialize JSON string")]
     JsonError(#[from] serde_json::Error),
     // Add more error variants here.
+
+    /// Llm application doesn't support any cross-chain messages.
+    #[error("Llm application doesn't support any cross-chain messages")]
+    MessagesNotSupported,
 }
