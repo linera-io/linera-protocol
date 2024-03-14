@@ -146,26 +146,28 @@ enum LocalServerConfig {
     },
 }
 
-async fn get_server_config(database: Database) -> Option<LocalServerConfig> {
-    match database {
-        Database::Service => {
-            let service_config = LOCAL_SERVER_SERVICE.get_config().await;
-            let server_config = LocalServerConfig::Service { service_config };
-            Some(server_config)
-        }
-        Database::RocksDb => {
-            #[cfg(feature = "rocksdb")]
-            {
-                let rocks_db_config = LOCAL_SERVER_ROCKS_DB.get_config().await;
-                let server_config = LocalServerConfig::RocksDb { rocks_db_config };
+impl LocalServerConfig {
+    async fn make_testing_config(database: Database) -> Option<Self> {
+        match database {
+            Database::Service => {
+                let service_config = LOCAL_SERVER_SERVICE.get_config().await;
+                let server_config = LocalServerConfig::Service { service_config };
                 Some(server_config)
             }
-            #[cfg(not(feature = "rocksdb"))]
-            {
-                None
+            Database::RocksDb => {
+                #[cfg(feature = "rocksdb")]
+                {
+                    let rocks_db_config = LOCAL_SERVER_ROCKS_DB.get_config().await;
+                    let server_config = LocalServerConfig::RocksDb { rocks_db_config };
+                    Some(server_config)
+                }
+                #[cfg(not(feature = "rocksdb"))]
+                {
+                    None
+                }
             }
+            _ => None,
         }
-        _ => None,
     }
 }
 
@@ -290,7 +292,7 @@ impl LineraNetConfig for LocalNetConfig {
     type Net = LocalNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
-        let server_config = get_server_config(self.database).await;
+        let server_config = LocalServerConfig::make_testing_config(self.database).await;
         ensure!(
             self.num_shards == 1 || self.database != Database::RocksDb,
             "Multiple shards not supported with RocksDB"
