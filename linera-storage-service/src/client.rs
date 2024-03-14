@@ -203,10 +203,11 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
                     let value_blocks = value.chunks(MAX_GRPC_REQUEST_SIZE).collect::<Vec<_>>();
                     let n_block = value_blocks.len();
                     for i_block in 0..n_block {
-                        let last = i_block + 1 < n_block;
+                        let last = i_block + 1 == n_block;
+                        let value = value_blocks[i_block].to_vec();
                         let operation = Operation::Append(KeyValueAppend {
                             key: full_key.clone(),
-                            value: value_blocks[i_block].to_vec(),
+                            value,
                             last,
                         });
                         statements = vec![Statement {
@@ -250,6 +251,7 @@ impl ServiceStoreClient {
     }
 
     async fn submit_statements(&self, statements: Vec<Statement>) -> Result<(), ServiceContextError> {
+        println!("submit_statements |statements|={}", statements.len());
         if statements.len() > 0 {
             let query = RequestWriteBatchExtended {
                 statements,
