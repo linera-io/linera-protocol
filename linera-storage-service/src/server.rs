@@ -11,6 +11,8 @@ use crate::key_value_store::{
     RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListAll,
     RequestReadMultiValues, RequestReadValue, RequestWriteBatch,
 };
+use std::sync::Arc;
+use async_lock::RwLock;
 use linera_views::{
     batch::Batch,
     common::{
@@ -47,7 +49,7 @@ enum ServiceStoreServerInternal {
 
 struct ServiceStoreServer {
     store: ServiceStoreServerInternal,
-    pending_big_puts: BTreeMap<Vec<u8>, Vec<u8>>,
+    pending_big_puts: Arc<RwLock<BTreeMap<Vec<u8>, Vec<u8>>>>,
 }
 
 
@@ -400,7 +402,7 @@ async fn main() {
             (store, endpoint)
         }
     };
-    let pending_big_puts = BTreeMap::default();
+    let pending_big_puts = Arc::new(RwLock::new(BTreeMap::default()));
     let store = ServiceStoreServer { store, pending_big_puts };
     let endpoint = endpoint.parse().unwrap();
     Server::builder()
