@@ -59,8 +59,8 @@ impl LocalServerInternal for LocalServerServiceInternal {
         let endpoint = get_free_port().await.unwrap();
         let service_config = service_config_from_endpoint(&endpoint)?;
         let binary = get_service_storage_binary().await?.display().to_string();
-        let spanner = StorageServiceBuilder::new(&endpoint, binary);
-        let _service_guard = spanner.run_service().await?;
+        let builder = StorageServiceBuilder::new(&endpoint, binary);
+        let _service_guard = builder.run_service().await?;
         Ok(Self {
             service_config,
             _service_guard,
@@ -131,13 +131,10 @@ where
 }
 
 // A static data to store the integration test server
-type LocalServerService = LocalServer<LocalServerServiceInternal>;
-static LOCAL_SERVER_SERVICE: Lazy<LocalServerService> = Lazy::new(LocalServerService::new);
+static LOCAL_SERVER_SERVICE: Lazy<LocalServer<LocalServerServiceInternal>> = Lazy::new(LocalServer::new);
 
 #[cfg(feature = "rocksdb")]
-type LocalServerRocksDb = LocalServer<LocalServerRocksDbInternal>;
-#[cfg(feature = "rocksdb")]
-static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServerRocksDb> = Lazy::new(LocalServerRocksDb::new);
+static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServer<LocalServerRocksDbInternal>> = Lazy::new(LocalServer::new);
 
 #[derive(Debug)]
 enum LocalServerConfig {

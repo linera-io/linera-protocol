@@ -795,8 +795,8 @@ impl StorageBuilder for ServiceStorageBuilder {
     async fn build(&mut self) -> anyhow::Result<Self::Storage> {
         if self._guard.is_none() && self.use_child {
             let binary = get_service_storage_binary().await?.display().to_string();
-            let spanner = StorageServiceBuilder::new(&self.endpoint, binary);
-            self._guard = Some(spanner.run_service().await.expect("child"));
+            let builder = StorageServiceBuilder::new(&self.endpoint, binary);
+            self._guard = Some(builder.run_service().await.expect("child"));
         }
         let store_config = service_config_from_endpoint(&self.endpoint)?;
         let namespace = format!("{}_{}", self.namespace, self.instance_counter);
