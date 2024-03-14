@@ -6,19 +6,23 @@ use crate::{
     util::ChildExt,
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};
+use async_lock::RwLock;
 use async_trait::async_trait;
 use linera_base::{
     command::{resolve_binary, CommandExt},
     data_types::Amount,
+    sync::Lazy,
 };
 use linera_execution::ResourceControlPolicy;
 use linera_storage_service::{
-    child::{StorageServiceBuilder, StorageServiceGuard},
-    common::get_service_storage_binary,
+    child::{get_free_port, StorageServiceBuilder, StorageServiceGuard},
+    client::service_config_from_endpoint,
+    common::{get_service_storage_binary, ServiceStoreConfig},
 };
 use std::{
     collections::{BTreeMap, HashSet},
     env,
+    ops::Deref,
     sync::Arc,
     time::Duration,
 };
@@ -28,13 +32,6 @@ use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
 use tracing::{info, warn};
-
-use async_lock::RwLock;
-use linera_base::sync::Lazy;
-use linera_storage_service::{
-    child::get_free_port, client::service_config_from_endpoint, common::ServiceStoreConfig,
-};
-use std::ops::Deref;
 
 #[cfg(feature = "rocksdb")]
 use linera_views::rocks_db::{create_rocks_db_test_config, RocksDbStoreConfig};
@@ -119,11 +116,11 @@ where
     }
 
     pub async fn get_config(&self) -> L::Config {
-        let mut w = self.internal_server.write().await;
-        if w.is_none() {
-            *w = Some(L::new().await.expect("local server"));
+        let mut server = self.internal_server.write().await;
+        if server.is_none() {
+            *server = Some(L::new().await.expect("local server"));
         }
-        let Some(internal_server) = w.deref() else {
+        let Some(internal_server) = server.deref() else {
             unreachable!();
         };
         internal_server.get_config()
@@ -131,10 +128,12 @@ where
 }
 
 // A static data to store the integration test server
-static LOCAL_SERVER_SERVICE: Lazy<LocalServer<LocalServerServiceInternal>> = Lazy::new(LocalServer::new);
+static LOCAL_SERVER_SERVICE: Lazy<LocalServer<LocalServerServiceInternal>> =
+    Lazy::new(LocalServer::new);
 
 #[cfg(feature = "rocksdb")]
-static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServer<LocalServerRocksDbInternal>> = Lazy::new(LocalServer::new);
+static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServer<LocalServerRocksDbInternal>> =
+    Lazy::new(LocalServer::new);
 
 #[derive(Debug)]
 enum LocalServerConfig {
