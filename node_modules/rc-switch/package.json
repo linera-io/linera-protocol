@@ -1,0 +1,76 @@
+{
+  "name": "rc-switch",
+  "version": "4.1.0",
+  "description": "switch ui component for react",
+  "keywords": [
+    "react",
+    "react-component",
+    "react-switch",
+    "switch"
+  ],
+  "homepage": "http://github.com/react-component/switch",
+  "bugs": {
+    "url": "http://github.com/react-component/switch/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:react-component/switch.git"
+  },
+  "license": "MIT",
+  "main": "lib/index",
+  "module": "./es/index",
+  "files": [
+    "assets/*.css",
+    "es",
+    "lib"
+  ],
+  "scripts": {
+    "compile": "father build && lessc assets/index.less assets/index.css",
+    "docs:build": "dumi build",
+    "docs:deploy": "gh-pages -d .doc",
+    "gh-pages": "npm run docs:build && npm run docs:deploy",
+    "lint": "eslint .",
+    "lint-staged": "lint-staged",
+    "prepare": "husky install",
+    "prepublishOnly": "npm run compile && np --yolo --no-publish",
+    "postpublish": "npm run gh-pages",
+    "start": "dumi dev",
+    "test": "umi-test"
+  },
+  "lint-staged": {
+    "**/*.{js,jsx,tsx,ts,md,json}": [
+      "prettier --write"
+    ]
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.21.0",
+    "classnames": "^2.2.1",
+    "rc-util": "^5.30.0"
+  },
+  "devDependencies": {
+    "@rc-component/father-plugin": "^1.0.0",
+    "@types/classnames": "^2.2.10",
+    "@types/jest": "^26.0.4",
+    "@umijs/fabric": "^3.0.0",
+    "dumi": "^1.1.0",
+    "enzyme": "^3.0.0",
+    "enzyme-adapter-react-16": "^1.0.1",
+    "enzyme-to-json": "^3.0.0",
+    "eslint": "^7.0.0",
+    "father": "^4.0.0",
+    "gh-pages": "^4.0.0",
+    "husky": "^8.0.1",
+    "less": "^3.11.1",
+    "lint-staged": "^13.2.1",
+    "np": "^7.1.0",
+    "prettier": "^2.8.8",
+    "react": "^16.0.0",
+    "react-dom": "^16.0.0",
+    "react-test-renderer": "^16.0.0",
+    "umi-test": "^1.9.7"
+  },
+  "peerDependencies": {
+    "react": ">=16.9.0",
+    "react-dom": ">=16.9.0"
+  }
+}

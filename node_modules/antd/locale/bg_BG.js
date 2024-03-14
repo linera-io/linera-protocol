@@ -1,0 +1,1 @@
+module.exports = require('../lib/locale/bg_BG');

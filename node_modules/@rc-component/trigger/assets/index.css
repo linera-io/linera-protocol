@@ -1,0 +1,133 @@
+.rc-trigger-popup {
+  position: absolute;
+  top: -9999px;
+  left: -9999px;
+  z-index: 1050;
+}
+.rc-trigger-popup-hidden {
+  display: none;
+}
+.rc-trigger-popup-zoom-enter,
+.rc-trigger-popup-zoom-appear {
+  opacity: 0;
+  animation-play-state: paused;
+  animation-timing-function: cubic-bezier(0.18, 0.89, 0.32, 1.28);
+  animation-duration: 0.3s;
+  animation-fill-mode: both;
+}
+.rc-trigger-popup-zoom-leave {
+  animation-duration: 0.3s;
+  animation-fill-mode: both;
+  animation-play-state: paused;
+  animation-timing-function: cubic-bezier(0.6, -0.3, 0.74, 0.05);
+}
+.rc-trigger-popup-zoom-enter.rc-trigger-popup-zoom-enter-active,
+.rc-trigger-popup-zoom-appear.rc-trigger-popup-zoom-appear-active {
+  animation-name: rcTriggerZoomIn;
+  animation-play-state: running;
+}
+.rc-trigger-popup-zoom-leave.rc-trigger-popup-zoom-leave-active {
+  animation-name: rcTriggerZoomOut;
+  animation-play-state: running;
+}
+.rc-trigger-popup-arrow {
+  z-index: 1;
+  width: 0px;
+  height: 0px;
+  background: #000;
+  border-radius: 100vw;
+  box-shadow: 0 0 0 3px black;
+}
+@keyframes rcTriggerZoomIn {
+  0% {
+    transform: scale(0, 0);
+    transform-origin: var(--arrow-x, 50%) var(--arrow-y, 50%);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1, 1);
+    transform-origin: var(--arrow-x, 50%) var(--arrow-y, 50%);
+    opacity: 1;
+  }
+}
+@keyframes rcTriggerZoomOut {
+  0% {
+    transform: scale(1, 1);
+    transform-origin: var(--arrow-x, 50%) var(--arrow-y, 50%);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0, 0);
+    transform-origin: var(--arrow-x, 50%) var(--arrow-y, 50%);
+    opacity: 0;
+  }
+}
+.rc-trigger-popup-mask {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  bottom: 0;
+  background-color: #373737;
+  background-color: rgba(55, 55, 55, 0.6);
+  height: 100%;
+  filter: alpha(opacity=50);
+  z-index: 1050;
+}
+.rc-trigger-popup-mask-hidden {
+  display: none;
+}
+.rc-trigger-popup-fade-enter,
+.rc-trigger-popup-fade-appear {
+  opacity: 0;
+  animation-duration: 0.3s;
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.55, 0, 0.55, 0.2);
+  animation-play-state: paused;
+}
+.rc-trigger-popup-fade-leave {
+  animation-duration: 0.3s;
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.55, 0, 0.55, 0.2);
+  animation-play-state: paused;
+}
+.rc-trigger-popup-fade-enter.rc-trigger-popup-fade-enter-active,
+.rc-trigger-popup-fade-appear.rc-trigger-popup-fade-appear-active {
+  animation-name: rcTriggerMaskFadeIn;
+  animation-play-state: running;
+}
+.rc-trigger-popup-fade-leave.rc-trigger-popup-fade-leave-active {
+  animation-name: rcDialogFadeOut;
+  animation-play-state: running;
+}
+@keyframes rcTriggerMaskFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes rcDialogFadeOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.rc-trigger-popup-mobile {
+  transition: all 0.3s;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+}
+.rc-trigger-popup-mobile-fade-appear-start,
+.rc-trigger-popup-mobile-fade-enter-start {
+  transform: translateY(100%);
+}
+.rc-trigger-popup-mobile-fade-leave-active {
+  transform: translateY(100%);
+}

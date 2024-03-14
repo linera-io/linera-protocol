@@ -1,0 +1,147 @@
+.rc-notification {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  max-height: 100vh;
+  padding: 10px;
+  align-items: flex-end;
+  width: 340px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  height: 100vh;
+  box-sizing: border-box;
+  pointer-events: none;
+  flex-direction: column;
+}
+.rc-notification-top,
+.rc-notification-topLeft,
+.rc-notification-topRight {
+  top: 0;
+}
+.rc-notification-bottom,
+.rc-notification-bottomRight,
+.rc-notification-bottomLeft {
+  bottom: 0;
+}
+.rc-notification-bottomRight,
+.rc-notification-topRight {
+  right: 0;
+}
+.rc-notification-notice {
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  line-height: 1.5;
+  width: 100%;
+}
+.rc-notification-notice-wrapper {
+  pointer-events: auto;
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  border-radius: 3px 3px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+  margin: 0 0 16px;
+  border: 1px solid #999;
+  border: 0px solid rgba(0, 0, 0, 0);
+  background: #fff;
+  width: 300px;
+}
+.rc-notification-notice-content {
+  padding: 7px 20px 7px 10px;
+}
+.rc-notification-notice-closable .rc-notification-notice-content {
+  padding-right: 20px;
+}
+.rc-notification-notice-close {
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  color: #000;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1;
+  text-decoration: none;
+  text-shadow: 0 1px 0 #fff;
+  outline: none;
+  cursor: pointer;
+  opacity: 0.2;
+  filter: alpha(opacity=20);
+}
+.rc-notification-notice-close-x:after {
+  content: '×';
+}
+.rc-notification-notice-close:hover {
+  text-decoration: none;
+  opacity: 1;
+  filter: alpha(opacity=100);
+}
+.rc-notification-fade {
+  overflow: hidden;
+  transition: all 0.3s;
+}
+.rc-notification-fade-appear-prepare {
+  pointer-events: none;
+  opacity: 0 !important;
+}
+.rc-notification-fade-appear-start {
+  transform: translateX(100%);
+  opacity: 0;
+}
+.rc-notification-fade-appear-active {
+  transform: translateX(0);
+  opacity: 1;
+}
+.rc-notification-stack > .rc-notification-notice-wrapper {
+  transition: all 0.3s;
+  position: absolute;
+  top: 12px;
+  opacity: 1;
+}
+.rc-notification-stack > .rc-notification-notice-wrapper:not(:nth-last-child(-n + 3)) {
+  opacity: 0;
+  right: 34px;
+  width: 252px;
+  overflow: hidden;
+  color: transparent;
+  pointer-events: none;
+}
+.rc-notification-stack > .rc-notification-notice-wrapper:nth-last-child(1) {
+  right: 10px;
+}
+.rc-notification-stack > .rc-notification-notice-wrapper:nth-last-child(2) {
+  right: 18px;
+  width: 284px;
+  color: transparent;
+  overflow: hidden;
+}
+.rc-notification-stack > .rc-notification-notice-wrapper:nth-last-child(3) {
+  right: 26px;
+  width: 268px;
+  color: transparent;
+  overflow: hidden;
+}
+.rc-notification-stack.rc-notification-stack-expanded > .rc-notification-notice-wrapper:not(:nth-last-child(-n + 1)) {
+  opacity: 1;
+  width: 300px;
+  right: 10px;
+  overflow: unset;
+  color: inherit;
+  pointer-events: auto;
+}
+.rc-notification-stack.rc-notification-stack-expanded > .rc-notification-notice-wrapper::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -16px;
+  width: 100%;
+  height: calc(100% + 32px);
+  background: transparent;
+  pointer-events: auto;
+  color: #000000;
+}
+.rc-notification-stack.rc-notification-bottomRight > .rc-notification-notice-wrapper {
+  top: unset;
+  bottom: 12px;
+}

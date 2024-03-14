@@ -1,0 +1,43 @@
+import type { CSSMotionProps } from 'rc-motion';
+import * as React from 'react';
+import type { TriggerProps } from '../';
+import type { AlignType, ArrowPos, ArrowTypeOuter } from '../interface';
+export interface PopupProps {
+    prefixCls: string;
+    className?: string;
+    style?: React.CSSProperties;
+    popup?: TriggerProps['popup'];
+    target: HTMLElement;
+    onMouseEnter?: React.MouseEventHandler<HTMLDivElement>;
+    onMouseLeave?: React.MouseEventHandler<HTMLDivElement>;
+    onPointerEnter?: React.MouseEventHandler<HTMLDivElement>;
+    zIndex?: number;
+    mask?: boolean;
+    onVisibleChanged: (visible: boolean) => void;
+    align?: AlignType;
+    arrow?: ArrowTypeOuter;
+    arrowPos: ArrowPos;
+    open: boolean;
+    /** Tell Portal that should keep in screen. e.g. should wait all motion end */
+    keepDom: boolean;
+    fresh?: boolean;
+    onClick?: React.MouseEventHandler<HTMLDivElement>;
+    motion?: CSSMotionProps;
+    maskMotion?: CSSMotionProps;
+    forceRender?: boolean;
+    getPopupContainer?: TriggerProps['getPopupContainer'];
+    autoDestroy?: boolean;
+    portal: React.ComponentType<any>;
+    ready: boolean;
+    offsetX: number;
+    offsetY: number;
+    offsetR: number;
+    offsetB: number;
+    onAlign: VoidFunction;
+    onPrepare: () => Promise<void>;
+    stretch?: string;
+    targetWidth?: number;
+    targetHeight?: number;
+}
+declare const Popup: React.ForwardRefExoticComponent<PopupProps & React.RefAttributes<HTMLDivElement>>;
+export default Popup;

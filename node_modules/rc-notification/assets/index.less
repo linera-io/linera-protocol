@@ -1,0 +1,235 @@
+@notificationPrefixCls: rc-notification;
+
+.@{notificationPrefixCls} {
+  // ====================== Notification ======================
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  max-height: 100vh;
+  padding: 10px;
+  align-items: flex-end;
+  width: 340px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  height: 100vh;
+  box-sizing: border-box;
+  pointer-events: none;
+  flex-direction: column;
+
+  // Position
+  &-top,
+  &-topLeft,
+  &-topRight {
+    top: 0;
+  }
+
+  &-bottom,
+  &-bottomRight,
+  &-bottomLeft {
+    bottom: 0;
+  }
+
+  &-bottomRight,
+  &-topRight {
+    right: 0;
+  }
+
+  // ========================= Notice =========================
+  &-notice {
+    position: relative;
+    display: block;
+    box-sizing: border-box;
+    line-height: 1.5;
+    width: 100%;
+
+    &-wrapper {
+      pointer-events: auto;
+      position: relative;
+      display: block;
+      box-sizing: border-box;
+      border-radius: 3px 3px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+      margin: 0 0 16px;
+      border: 1px solid #999;
+      border: 0px solid rgba(0, 0, 0, 0);
+      background: #fff;
+      width: 300px;
+    }
+
+    // Content
+    &-content {
+      padding: 7px 20px 7px 10px;
+    }
+
+    &-closable &-content {
+      padding-right: 20px;
+    }
+
+    &-close {
+      position: absolute;
+      top: 3px;
+      right: 5px;
+      color: #000;
+      font-weight: 700;
+      font-size: 16px;
+      line-height: 1;
+      text-decoration: none;
+      text-shadow: 0 1px 0 #fff;
+      outline: none;
+      cursor: pointer;
+      opacity: 0.2;
+      filter: alpha(opacity=20);
+
+      &-x:after {
+        content: '×';
+      }
+
+      &:hover {
+        text-decoration: none;
+        opacity: 1;
+        filter: alpha(opacity=100);
+      }
+    }
+  }
+
+  &-fade {
+    overflow: hidden;
+    transition: all 0.3s;
+  }
+
+  &-fade-appear-prepare {
+    pointer-events: none;
+    opacity: 0 !important;
+  }
+
+  &-fade-appear-start {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  &-fade-appear-active {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  // .fade-effect() {
+  //   animation-duration: 0.3s;
+  //   animation-timing-function: cubic-bezier(0.55, 0, 0.55, 0.2);
+  //   animation-fill-mode: both;
+  // }
+
+  // &-fade-appear,
+  // &-fade-enter {
+  //   opacity: 0;
+  //   animation-play-state: paused;
+  //   .fade-effect();
+  // }
+
+  // &-fade-leave {
+  //   .fade-effect();
+  //   animation-play-state: paused;
+  // }
+
+  // &-fade-appear&-fade-appear-active,
+  // &-fade-enter&-fade-enter-active {
+  //   animation-name: rcNotificationFadeIn;
+  //   animation-play-state: running;
+  // }
+
+  // &-fade-leave&-fade-leave-active {
+  //   animation-name: rcDialogFadeOut;
+  //   animation-play-state: running;
+  // }
+
+  // @keyframes rcNotificationFadeIn {
+  //   0% {
+  //     opacity: 0;
+  //   }
+  //   100% {
+  //     opacity: 1;
+  //   }
+  // }
+
+  // @keyframes rcDialogFadeOut {
+  //   0% {
+  //     opacity: 1;
+  //   }
+  //   100% {
+  //     opacity: 0;
+  //   }
+  // }
+
+  // ========================= Stack =========================
+  &-stack {
+    & > .@{notificationPrefixCls}-notice {
+      &-wrapper {
+        transition: all 0.3s;
+        position: absolute;
+        top: 12px;
+        opacity: 1;
+
+        &:not(:nth-last-child(-n + 3)) {
+          opacity: 0;
+          right: 34px;
+          width: 252px;
+          overflow: hidden;
+          color: transparent;
+          pointer-events: none;
+        }
+
+        &:nth-last-child(1) {
+          right: 10px;
+        }
+
+        &:nth-last-child(2) {
+          right: 18px;
+          width: 284px;
+          color: transparent;
+          overflow: hidden;
+        }
+
+        &:nth-last-child(3) {
+          right: 26px;
+          width: 268px;
+          color: transparent;
+          overflow: hidden;
+        }
+      }
+    }
+
+    &&-expanded {
+      & > .@{notificationPrefixCls}-notice {
+        &-wrapper {
+          &:not(:nth-last-child(-n + 1)) {
+            opacity: 1;
+            width: 300px;
+            right: 10px;
+            overflow: unset;
+            color: inherit;
+            pointer-events: auto;
+          }
+
+          &::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: -16px;
+            width: 100%;
+            height: calc(100% + 32px);
+            background: transparent;
+            pointer-events: auto;
+            color: rgb(0,0,0);
+          }
+        }
+      }
+    }
+
+    &.@{notificationPrefixCls}-bottomRight {
+      & > .@{notificationPrefixCls}-notice-wrapper {
+        top: unset;
+        bottom: 12px;
+      }
+    }
+  }
+}

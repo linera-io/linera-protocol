@@ -1,0 +1,1 @@
+module.exports = require('../lib/locale/cs_CZ');

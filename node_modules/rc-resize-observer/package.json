@@ -1,0 +1,85 @@
+{
+  "name": "rc-resize-observer",
+  "version": "1.4.0",
+  "description": "Resize observer for React",
+  "keywords": [
+    "react",
+    "react-component",
+    "react-resize-observer",
+    "resize-observer"
+  ],
+  "main": "./lib/index",
+  "module": "./es/index",
+  "files": [
+    "assets/*.css",
+    "assets/*.less",
+    "es",
+    "lib",
+    "dist"
+  ],
+  "homepage": "https://react-component.github.io/resize-observer",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:react-component/resize-observer.git"
+  },
+  "bugs": {
+    "url": "http://github.com/react-component/resize-observer/issues"
+  },
+  "license": "MIT",
+  "scripts": {
+    "start": "dumi dev",
+    "build": "dumi build",
+    "compile": "father build && lessc assets/index.less assets/index.css",
+    "deploy": "UMI_ENV=gh npm run build && gh-pages -d .doc",
+    "gh-pages": "npm run deploy",
+    "prepublishOnly": "npm run compile && np --no-cleanup --yolo --no-publish",
+    "postpublish": "npm run gh-pages",
+    "lint": "eslint src/ --ext .ts,.tsx,.jsx,.js,.md",
+    "prettier": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "test": "rc-test",
+    "coverage": "rc-test --coverage",
+    "now-build": "npm run build"
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.20.7",
+    "classnames": "^2.2.1",
+    "rc-util": "^5.38.0",
+    "resize-observer-polyfill": "^1.5.1"
+  },
+  "devDependencies": {
+    "@rc-component/father-plugin": "^1.0.0",
+    "@testing-library/react": "^12.1.5",
+    "@types/classnames": "^2.2.9",
+    "@types/jest": "^26.0.6",
+    "@types/react": "^16.9.2",
+    "@types/react-dom": "^16.9.0",
+    "@umijs/fabric": "^2.0.9",
+    "coveralls": "^3.0.6",
+    "cross-env": "^7.0.2",
+    "dumi": "^1.1.12",
+    "enzyme": "^3.0.0",
+    "enzyme-adapter-react-16": "^1.15.6",
+    "enzyme-to-json": "^3.4.0",
+    "father": "^4.0.0",
+    "gh-pages": "^3.1.0",
+    "glob": "^7.1.6",
+    "less": "^3.10.3",
+    "np": "^6.2.4",
+    "prettier": "^2.1.1",
+    "pretty-quick": "^3.0.1",
+    "rc-test": "^7.0.15",
+    "react": "^16.0.0",
+    "react-dom": "^16.0.0",
+    "regenerator-runtime": "^0.13.7"
+  },
+  "peerDependencies": {
+    "react": ">=16.9.0",
+    "react-dom": ">=16.9.0"
+  },
+  "cnpm": {
+    "mode": "npm"
+  },
+  "tnpm": {
+    "mode": "npm"
+  }
+}

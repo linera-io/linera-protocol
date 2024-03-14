@@ -1,0 +1,79 @@
+@triggerPrefixCls: rc-trigger-popup;
+
+.@{triggerPrefixCls} {
+  position: absolute;
+  top: -9999px;
+  left: -9999px;
+  z-index: 1050;
+
+  &-hidden {
+    display: none;
+  }
+
+  .effect() {
+    animation-duration: 0.3s;
+    animation-fill-mode: both;
+  }
+
+  &-zoom-enter,
+  &-zoom-appear {
+    opacity: 0;
+    animation-play-state: paused;
+    animation-timing-function: cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    .effect();
+  }
+
+  &-zoom-leave {
+    .effect();
+    animation-play-state: paused;
+    animation-timing-function: cubic-bezier(0.6, -0.3, 0.74, 0.05);
+  }
+
+  &-zoom-enter&-zoom-enter-active,
+  &-zoom-appear&-zoom-appear-active {
+    animation-name: rcTriggerZoomIn;
+    animation-play-state: running;
+  }
+
+  &-zoom-leave&-zoom-leave-active {
+    animation-name: rcTriggerZoomOut;
+    animation-play-state: running;
+  }
+
+  &-arrow {
+    z-index: 1;
+    width: 0px;
+    height: 0px;
+    background: #000;
+    border-radius: 100vw;
+    box-shadow: 0 0 0 3px black;
+  }
+
+  @keyframes rcTriggerZoomIn {
+    0% {
+      transform: scale(0, 0);
+      transform-origin: var(--arrow-x, 50%) var(--arrow-y, 50%);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1, 1);
+      transform-origin: var(--arrow-x, 50%) var(--arrow-y, 50%);
+      opacity: 1;
+    }
+  }
+  @keyframes rcTriggerZoomOut {
+    0% {
+      transform: scale(1, 1);
+      transform-origin: var(--arrow-x, 50%) var(--arrow-y, 50%);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(0, 0);
+      transform-origin: var(--arrow-x, 50%) var(--arrow-y, 50%);
+      opacity: 0;
+    }
+  }
+}
+
+@import './index/Mask';
+@import './index/Mobile';
