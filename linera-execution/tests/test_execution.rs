@@ -317,6 +317,75 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Tests if `finalize` from a called application can cause execution to fail.
+#[tokio::test]
+async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Result<()> {
+    let mut state = SystemExecutionState::default();
+    state.description = Some(ChainDescription::Root(0));
+    let mut view = state.into_view().await;
+
+    let mut applications = register_mock_applications(&mut view, 4).await?;
+    let (first_id, first_application) = applications
+        .next()
+        .expect("First mock application should be registered");
+    let (second_id, second_application) = applications
+        .next()
+        .expect("Second mock application should be registered");
+    let (third_id, third_application) = applications
+        .next()
+        .expect("Third mock application should be registered");
+    let (fourth_id, fourth_application) = applications
+        .next()
+        .expect("Fourth mock application should be registered");
+
+    first_application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            runtime.try_call_application(false, second_id, vec![], vec![])?;
+            Ok(RawExecutionOutcome::default())
+        },
+    ));
+    second_application.expect_call(ExpectedCall::handle_application_call(
+        move |runtime, _context, _argument, _forwarded_sessions| {
+            runtime.try_call_application(false, third_id, vec![], vec![])?;
+            Ok(ApplicationCallOutcome::default())
+        },
+    ));
+    third_application.expect_call(ExpectedCall::handle_application_call(
+        move |runtime, _context, _argument, _forwarded_sessions| {
+            runtime.try_call_application(false, fourth_id, vec![], vec![])?;
+            Ok(ApplicationCallOutcome::default())
+        },
+    ));
+    fourth_application.expect_call(ExpectedCall::handle_application_call(
+        |_runtime, _context, _argument, _forwarded_sessions| Ok(ApplicationCallOutcome::default()),
+    ));
+
+    let error_message = "Third application aborted execution";
+
+    fourth_application.expect_call(ExpectedCall::default_finalize());
+    third_application.expect_call(ExpectedCall::finalize(|_runtime, _context| {
+        Err(ExecutionError::UserError(error_message.to_owned()))
+    }));
+    second_application.expect_call(ExpectedCall::default_finalize());
+    first_application.expect_call(ExpectedCall::default_finalize());
+
+    let context = make_operation_context();
+    let mut controller = ResourceController::default();
+    let result = view
+        .execute_operation(
+            context,
+            Operation::User {
+                application_id: first_id,
+                bytes: vec![],
+            },
+            &mut controller,
+        )
+        .await;
+
+    assert_matches!(result, Err(ExecutionError::UserError(message)) if message == error_message);
+    Ok(())
+}
+
 /// Tests if a session is called correctly during execution.
 #[tokio::test]
 async fn test_simple_session() -> anyhow::Result<()> {
