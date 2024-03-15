@@ -85,7 +85,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let _guard = self.acquire().await;
         let response = client.process_read_value(request).await?;
         let response = response.get_ref();
-        let ReplyReadValue { value } = response;
+        let ReplyReadValue { value, recover_key, n_block } = response;
         Ok(value.clone())
     }
 
@@ -118,7 +118,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let _guard = self.acquire().await;
         let response = client.process_read_multi_values(request).await?;
         let response = response.into_inner();
-        let ReplyReadMultiValues { values } = response;
+        let ReplyReadMultiValues { values, recover_key, n_block } = response;
         let values = values.into_iter().map(|x| x.value).collect::<Vec<_>>();
         Ok(values)
     }
@@ -137,7 +137,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let _guard = self.acquire().await;
         let response = client.process_find_keys_by_prefix(request).await?;
         let response = response.into_inner();
-        let ReplyFindKeysByPrefix { keys } = response;
+        let ReplyFindKeysByPrefix { keys, recover_key, n_block } = response;
         Ok(keys)
     }
 
@@ -155,7 +155,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let _guard = self.acquire().await;
         let response = client.process_find_key_values_by_prefix(request).await?;
         let response = response.into_inner();
-        let ReplyFindKeyValuesByPrefix { key_values } = response;
+        let ReplyFindKeyValuesByPrefix { key_values, recover_key, n_block } = response;
         let key_values = key_values
             .into_iter()
             .map(|x| (x.key, x.value))

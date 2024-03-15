@@ -32,6 +32,8 @@ message RequestReadValue {
 
 message ReplyReadValue {
   optional bytes value = 1;
+  int64 recover_key = 2;
+  int32 n_block = 3;
 }
 
 
@@ -50,6 +52,8 @@ message RequestReadMultiValues {
 
 message ReplyReadMultiValues {
   repeated OptValue values = 1;
+  int64 recover_key = 2;
+  int32 n_block = 3;
 }
 
 
@@ -59,6 +63,8 @@ message RequestFindKeysByPrefix {
 
 message ReplyFindKeysByPrefix {
   repeated bytes keys = 1;
+  int64 recover_key = 2;
+  int32 n_block = 3;
 }
 
 
@@ -68,6 +74,8 @@ message RequestFindKeyValuesByPrefix {
 
 message ReplyFindKeyValuesByPrefix {
   repeated KeyValue key_values = 1;
+  int64 recover_key = 2;
+  int32 n_block = 3;
 }
 
 
@@ -80,7 +88,7 @@ message ReplyWriteBatchExtended {
 
 
 message RequestSpecificBlock {
-  bytes key = 1;
+  int64 recover_key = 1;
   int32 index = 2;
 }
 
@@ -135,6 +143,7 @@ service StoreProcessor {
   rpc ProcessFindKeysByPrefix (RequestFindKeysByPrefix) returns (ReplyFindKeysByPrefix) {}
   rpc ProcessFindKeyValuesByPrefix (RequestFindKeyValuesByPrefix) returns (ReplyFindKeyValuesByPrefix) {}
   rpc ProcessWriteBatchExtended (RequestWriteBatchExtended) returns (ReplyWriteBatchExtended) {}
+  rpc ProcessSpecificBlock (RequestSpecificBlock) returns (ReplySpecificBlock) {}
   rpc ProcessCreateNamespace (RequestCreateNamespace) returns (ReplyCreateNamespace) {}
   rpc ProcessExistsNamespace (RequestExistsNamespace) returns (ReplyExistsNamespace) {}
   rpc ProcessDeleteNamespace (RequestDeleteNamespace) returns (ReplyDeleteNamespace) {}

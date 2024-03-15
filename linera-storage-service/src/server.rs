@@ -10,7 +10,9 @@ use crate::key_value_store::{
     RequestContainsKey, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
     RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListAll,
     RequestReadMultiValues, RequestReadValue, RequestWriteBatchExtended,
+    RequestSpecificBlock, ReplySpecificBlock,
 };
+use serde::Serialize;
 use std::sync::Arc;
 use async_lock::RwLock;
 use linera_views::{
@@ -31,6 +33,12 @@ pub mod key_value_store {
     tonic::include_proto!("key_value_store.v1");
 }
 
+// The maximal block size on GRPC is 4M.
+// That size is the one that shows up everywhere and in particular
+// for tonic.
+// We decrease the 4194304 to 4000000 for safety reasons.
+const MAX_GRPC_REPLY_SIZE: usize = 4000000;
+
 /// Key tags to create the sub keys used for storing data on storage.
 #[repr(u8)]
 pub(crate) enum KeyTag {
@@ -49,8 +57,9 @@ enum ServiceStoreServerInternal {
 
 struct ServiceStoreServer {
     store: ServiceStoreServerInternal,
+    index: Arc<RwLock<i64>>,
     pending_big_puts: Arc<RwLock<BTreeMap<Vec<u8>, Vec<u8>>>>,
-    pending_big_read: Arc<RwLock<BTreeMap<Vec<u8>, Vec<Vec<u8>>>>>,
+    pending_big_read: Arc<RwLock<BTreeMap<i64, Vec<Vec<u8>>>>>,
 }
 
 
@@ -180,6 +189,18 @@ impl ServiceStoreServer {
         batch.delete_key_prefix(key_prefix);
         self.write_batch(batch).await
     }
+
+    pub async fn insert_pending_read<S: Serialize>(&self, value: S) -> (i64, i32) {
+        let value = bcs::to_bytes(&value).unwrap();
+        let blocks = value.chunks(MAX_GRPC_REPLY_SIZE).map(|x| x.to_vec()).collect::<Vec<_>>();
+        let n_block = blocks.len() as i32;
+        let mut pending_big_read = self.pending_big_read.write().await;
+        let mut index = self.index.write().await;
+        let pos = *index;
+        *index += 1;
+        pending_big_read.insert(pos, blocks);
+        (pos, n_block)
+    }
 }
 
 #[derive(clap::Parser)]
@@ -213,7 +234,16 @@ impl StoreProcessor for ServiceStoreServer {
         let request = request.into_inner();
         let RequestReadValue { key } = request;
         let value = self.read_value_bytes(&key).await?;
-        let response = ReplyReadValue { value };
+        let size = match &value {
+            None => 0,
+            Some(value) => value.len(),
+        };
+        let response = if size < MAX_GRPC_REPLY_SIZE {
+            ReplyReadValue { value, recover_key: 0 ,n_block: 0 }
+        } else {
+            let (recover_key, n_block) = self.insert_pending_read(value).await;
+            ReplyReadValue { value: None, recover_key, n_block }
+        };
         Ok(Response::new(response))
     }
 
@@ -234,12 +264,21 @@ impl StoreProcessor for ServiceStoreServer {
     ) -> Result<Response<ReplyReadMultiValues>, Status> {
         let request = request.into_inner();
         let RequestReadMultiValues { keys } = request;
-        let values = self.read_multi_values_bytes(keys).await?;
-        let values = values
-            .into_iter()
-            .map(|value| OptValue { value })
-            .collect::<Vec<_>>();
-        let response = ReplyReadMultiValues { values };
+        let values = self.read_multi_values_bytes(keys.clone()).await?;
+        let size = values.iter().map(|x| match x {
+            None => 0,
+            Some(entry) => entry.len()
+        }).sum::<usize>();
+        let response = if size < MAX_GRPC_REPLY_SIZE {
+            let values = values
+                .into_iter()
+                .map(|value| OptValue { value })
+                .collect::<Vec<_>>();
+            ReplyReadMultiValues { values, recover_key: 0, n_block: 0 }
+        } else {
+            let (recover_key, n_block) = self.insert_pending_read(values).await;
+            ReplyReadMultiValues { values: Vec::default(), recover_key, n_block }
+        };
         Ok(Response::new(response))
     }
 
@@ -250,7 +289,13 @@ impl StoreProcessor for ServiceStoreServer {
         let request = request.into_inner();
         let RequestFindKeysByPrefix { key_prefix } = request;
         let keys = self.find_keys_by_prefix(&key_prefix).await?;
-        let response = ReplyFindKeysByPrefix { keys };
+        let size = keys.iter().map(|x| x.len()).sum::<usize>();
+        let response = if size < MAX_GRPC_REPLY_SIZE {
+            ReplyFindKeysByPrefix { keys, recover_key: 0, n_block: 0 }
+        } else {
+            let (recover_key, n_block) = self.insert_pending_read(keys).await;
+            ReplyFindKeysByPrefix { keys: Vec::default(), recover_key, n_block }
+        };
         Ok(Response::new(response))
     }
 
@@ -261,14 +306,20 @@ impl StoreProcessor for ServiceStoreServer {
         let request = request.into_inner();
         let RequestFindKeyValuesByPrefix { key_prefix } = request;
         let key_values = self.find_key_values_by_prefix(&key_prefix).await?;
-        let key_values = key_values
-            .into_iter()
-            .map(|x| KeyValue {
-                key: x.0,
-                value: x.1,
-            })
-            .collect::<Vec<_>>();
-        let response = ReplyFindKeyValuesByPrefix { key_values };
+        let size = key_values.iter().map(|x| x.0.len() + x.1.len()).sum::<usize>();
+        let response = if size < MAX_GRPC_REPLY_SIZE {
+            let key_values = key_values
+                .into_iter()
+                .map(|x| KeyValue {
+                    key: x.0,
+                    value: x.1,
+                })
+                .collect::<Vec<_>>();
+            ReplyFindKeyValuesByPrefix { key_values, recover_key: 0, n_block: 0 }
+        } else {
+            let (recover_key, n_block) = self.insert_pending_read(key_values).await;
+            ReplyFindKeyValuesByPrefix { key_values: Vec::default(), recover_key, n_block }
+        };
         Ok(Response::new(response))
     }
 
@@ -321,12 +372,16 @@ impl StoreProcessor for ServiceStoreServer {
         request: Request<RequestSpecificBlock>,
     ) -> Result<Response<ReplySpecificBlock>, Status> {
         let request = request.into_inner();
-        let RequestSpecificBlock { key, index } = request;
+        let RequestSpecificBlock { recover_key, index } = request;
         let mut pending_big_read = self.pending_big_read.write().await;
-        let Some(entry) = pending_big_read.get(&key) else {
+        let Some(entry) = pending_big_read.get(&recover_key) else {
             unreachable!();
-        }
+        };
+        let index = index as usize;
         let block = entry[index].clone();
+        if entry.len() == index + 1 {
+            pending_big_read.remove(&recover_key);
+        }
         let response = ReplySpecificBlock { block };
         Ok(Response::new(response))
     }
@@ -407,9 +462,10 @@ async fn main() {
             (store, endpoint)
         }
     };
+    let index = Arc::new(RwLock::new(0));
     let pending_big_puts = Arc::new(RwLock::new(BTreeMap::default()));
     let pending_big_read = Arc::new(RwLock::new(BTreeMap::default()));
-    let store = ServiceStoreServer { store, pending_big_puts, pending_big_read };
+    let store = ServiceStoreServer { store, index, pending_big_puts, pending_big_read };
     let endpoint = endpoint.parse().unwrap();
     Server::builder()
         .add_service(StoreProcessorServer::new(store))

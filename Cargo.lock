@@ -3511,6 +3511,7 @@ dependencies = [
  "port-selector",
  "proptest",
  "prost",
+ "serde",
  "serde-reflection",
  "serde_yaml 0.8.26",
  "similar-asserts",
