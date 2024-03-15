@@ -78,8 +78,13 @@ where
 
     /// The application's memory state.
     store: Store<ContractState<Runtime>>,
+
+    /// The starting amount of fuel.
+    initial_fuel: u64,
 }
 
+// TODO(#1785): Simplify by using proper fuel getter and setter methods from Wasmtime once the
+// dependency is updated
 impl<Runtime> WasmtimeContractInstance<Runtime>
 where
     Runtime: ContractRuntime + Send + Sync,
@@ -88,21 +93,40 @@ where
         let runtime = &mut self.store.data_mut().runtime;
         let fuel = runtime.remaining_fuel()?;
 
+        self.initial_fuel = fuel;
+
         self.store
-            .add_fuel(fuel)
-            .expect("Fuel consumption wasn't properly enabled");
+            .add_fuel(1)
+            .expect("Fuel consumption should be enabled");
+
+        let existing_fuel = self
+            .store
+            .consume_fuel(0)
+            .expect("Fuel consumption should be enabled");
+
+        if existing_fuel > fuel {
+            self.store
+                .consume_fuel(existing_fuel - fuel)
+                .expect("Existing fuel was incorrectly calculated");
+        } else {
+            self.store
+                .add_fuel(fuel - existing_fuel)
+                .expect("Fuel consumption wasn't properly enabled");
+        }
 
         Ok(())
     }
 
     fn persist_remaining_fuel(&mut self) -> Result<(), ExecutionError> {
-        let consumed_fuel = self
+        let remaining_fuel = self
             .store
-            .fuel_consumed()
+            .consume_fuel(0)
             .expect("Failed to read consumed fuel");
         let runtime = &mut self.store.data_mut().runtime;
 
-        runtime.consume_fuel(consumed_fuel)
+        assert!(self.initial_fuel >= remaining_fuel);
+
+        runtime.consume_fuel(self.initial_fuel - remaining_fuel)
     }
 }
 
@@ -154,7 +178,11 @@ where
         )
         .map_err(WasmExecutionError::LoadContractModule)?;
 
-        Ok(Self { application, store })
+        Ok(Self {
+            application,
+            store,
+            initial_fuel: 0,
+        })
     }
 }
 
