@@ -1,0 +1,52 @@
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+var _cssinjs = require("@ant-design/cssinjs");
+const getHorizontalStyle = token => {
+  const {
+    componentCls,
+    motionDurationSlow,
+    horizontalLineHeight,
+    colorSplit,
+    lineWidth,
+    lineType,
+    itemPaddingInline
+  } = token;
+  return {
+    [`${componentCls}-horizontal`]: {
+      lineHeight: horizontalLineHeight,
+      border: 0,
+      borderBottom: `${(0, _cssinjs.unit)(lineWidth)} ${lineType} ${colorSplit}`,
+      boxShadow: 'none',
+      '&::after': {
+        display: 'block',
+        clear: 'both',
+        height: 0,
+        content: '"\\20"'
+      },
+      // ======================= Item =======================
+      [`${componentCls}-item, ${componentCls}-submenu`]: {
+        position: 'relative',
+        display: 'inline-block',
+        verticalAlign: 'bottom',
+        paddingInline: itemPaddingInline
+      },
+      [`> ${componentCls}-item:hover,
+        > ${componentCls}-item-active,
+        > ${componentCls}-submenu ${componentCls}-submenu-title:hover`]: {
+        backgroundColor: 'transparent'
+      },
+      [`${componentCls}-item, ${componentCls}-submenu-title`]: {
+        transition: [`border-color ${motionDurationSlow}`, `background ${motionDurationSlow}`].join(',')
+      },
+      // ===================== Sub Menu =====================
+      [`${componentCls}-submenu-arrow`]: {
+        display: 'none'
+      }
+    }
+  };
+};
+var _default = exports.default = getHorizontalStyle;

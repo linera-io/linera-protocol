@@ -1,0 +1,82 @@
+.rc-collapse-motion {
+  transition: height 0.3s, opacity 0.3s;
+}
+.rc-collapse-content-hidden {
+  display: none;
+}
+.rc-collapse {
+  background-color: #f7f7f7;
+  border-radius: 3px;
+  border: 1px solid #d9d9d9;
+}
+.rc-collapse > .rc-collapse-item {
+  border-top: 1px solid #d9d9d9;
+}
+.rc-collapse > .rc-collapse-item:first-child {
+  border-top: none;
+}
+.rc-collapse > .rc-collapse-item > .rc-collapse-header {
+  display: flex;
+  align-items: center;
+  line-height: 22px;
+  padding: 10px 16px;
+  color: #666;
+  cursor: pointer;
+}
+.rc-collapse > .rc-collapse-item > .rc-collapse-header .arrow {
+  display: inline-block;
+  content: '\20';
+  width: 0;
+  height: 0;
+  font-size: 0;
+  line-height: 0;
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  border-left: 4px solid #666;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+.rc-collapse > .rc-collapse-item > .rc-collapse-header .rc-collapse-extra {
+  margin: 0 16px 0 auto;
+}
+.rc-collapse > .rc-collapse-item .rc-collapse-header-collapsible-only {
+  cursor: default;
+}
+.rc-collapse > .rc-collapse-item .rc-collapse-header-collapsible-only .rc-collapse-header-text {
+  cursor: pointer;
+}
+.rc-collapse > .rc-collapse-item .rc-collapse-header-collapsible-only .rc-collapse-expand-icon {
+  cursor: pointer;
+}
+.rc-collapse > .rc-collapse-item .rc-collapse-icon-collapsible-only {
+  cursor: default;
+}
+.rc-collapse > .rc-collapse-item .rc-collapse-icon-collapsible-only .rc-collapse-expand-icon {
+  cursor: pointer;
+}
+.rc-collapse > .rc-collapse-item-disabled > .rc-collapse-header {
+  cursor: not-allowed;
+  color: #999;
+  background-color: #f3f3f3;
+}
+.rc-collapse-content {
+  overflow: hidden;
+  color: #666;
+  padding: 0 16px;
+  background-color: #fff;
+}
+.rc-collapse-content > .rc-collapse-content-box {
+  margin-top: 16px;
+  margin-bottom: 16px;
+}
+.rc-collapse-item:last-child > .rc-collapse-content {
+  border-radius: 0 0 3px 3px;
+}
+.rc-collapse > .rc-collapse-item-active > .rc-collapse-header .arrow {
+  position: relative;
+  top: 2px;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 4px solid #666;
+  margin-right: 6px;
+}

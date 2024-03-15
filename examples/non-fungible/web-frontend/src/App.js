@@ -1,7 +1,9 @@
 import { useState } from "react";
 import React from "react";
 import { gql, useMutation, useLazyQuery, useSubscription } from "@apollo/client";
-import { Card, Container, CardContent, Typography, Button, Dialog, DialogTitle, DialogContent, TextField, DialogActions, Paper, TableContainer, Table, TableHead, TableRow, TableCell, TableBody, CircularProgress } from '@mui/material';
+import { Card, Typography, Button, Table, Layout, Modal, Form, Input, Space, Alert, Descriptions } from 'antd';
+
+const { Title } = Typography;
 
 const GET_OWNED_NFTS = gql`
   query OwnedNfts($owner: AccountOwner) {
@@ -40,14 +42,16 @@ function App({ chainId, owner }) {
   const [tokenID, setTokenID] = useState('');
   const [targetChainID, setTargetChainID] = useState('');
   const [targetOwner, setTargetOwner] = useState('');
+  const [transferForm] = Form.useForm();
 
   // Mint dialog
   const [name, setName] = useState('');
   const [payload, setPayload] = useState(0);
+  const [mintForm] = Form.useForm();
 
   let [
     getOwnedNfts,
-    { data: ownedNftsData, loading: ownedNftsLoading, error: ownedNftsError },
+    { data: ownedNftsData, called: ownedNftsCalled, loading: ownedNftsLoading },
   ] = useLazyQuery(GET_OWNED_NFTS, {
     fetchPolicy: "network-only",
     variables: { owner: `User:${owner}` },
@@ -56,6 +60,7 @@ function App({ chainId, owner }) {
   const [transferNft, { loading: transferLoading }] = useMutation(TRANSFER_NFT, {
     onError: (error) => setTransferError("Transfer Error: " + error.message),
     onCompleted: () => {
+      handleTransferClose();
       getOwnedNfts(); // Refresh owned NFTs list
     },
   });
@@ -63,11 +68,12 @@ function App({ chainId, owner }) {
   const [mintNft, { loading: mintLoading }] = useMutation(MINT_NFT, {
     onError: (error) => setMintError("Mint Error: " + error.message),
     onCompleted: () => {
+      handleMintClose();
       getOwnedNfts(); // Refresh owned NFTs list
     },
   });
 
-  if (!ownedNftsLoading) {
+  if (!ownedNftsCalled) {
     void getOwnedNfts();
   }
 
@@ -77,14 +83,25 @@ function App({ chainId, owner }) {
   });
 
   const handleMintOpen = () => setMintOpen(true);
-  const handleMintClose = () => setMintOpen(false);
+  const handleMintClose = () => {
+    setMintOpen(false);
+    resetMintDialog();
+  }
 
-  const handleTransferOpen = () => setTransferOpen(true);
-  const handleTransferClose = () => setTransferOpen(false);
+  const handleTransferOpen = (token_id) => {
+    setTokenID(token_id);
+    setTransferOpen(true);
+  };
+  const handleTransferClose = () => {
+    setTransferOpen(false);
+    resetTransferDialog();
+  }
 
   const resetMintDialog = () => {
     setName("");
     setPayload("");
+    setMintError("");
+    mintForm.resetFields();
   };
 
   // Placeholder for form submission logic
@@ -95,15 +112,14 @@ function App({ chainId, owner }) {
         payload: Number(payload),
       },
     }).then(r => console.log("NFT minted: " + JSON.stringify(r, null, 2)));
-
-    handleMintClose();
-    resetMintDialog();
   };
 
   const resetTransferDialog = () => {
     setTokenID("");
     setTargetChainID("");
     setTargetOwner("");
+    setTransferError("");
+    transferForm.resetFields();
   };
 
   const handleTransferSubmit = () => {
@@ -117,102 +133,258 @@ function App({ chainId, owner }) {
         }
       },
     }).then(r => console.log("NFT transferred: " + JSON.stringify(r, null, 2)));
-
-    handleTransferClose();
-    resetTransferDialog();
   };
 
+  const onTransferValuesChange = (values) => {
+    if (values.target_chain_id !== undefined) {
+      setTargetChainID(values.target_chain_id);
+    }
+
+    if (values.target_owner !== undefined) {
+      setTargetOwner(values.target_owner);
+    }
+  };
+
+  const onMintValuesChange = (values) => {
+    if (values.name !== undefined) {
+      setName(values.name);
+    }
+
+    if (values.payload !== undefined) {
+      setPayload(values.payload);
+    }
+  };
+
+  const columns = [
+    {
+      title: 'Token Id',
+      dataIndex: 'token_id',
+      key: 'token_id',
+    },
+    {
+      title: 'Name',
+      dataIndex: 'name',
+      key: 'name',
+    },
+    {
+      title: 'Minter',
+      dataIndex: 'minter',
+      key: 'minter',
+    },
+    {
+      title: 'Payload',
+      dataIndex: 'payload',
+      key: 'payload',
+    },
+    {
+      title: 'Transfer',
+      dataIndex: 'transfer',
+      key: 'transfer',
+      render: (_, nft) => (
+        <Button onClick={() => handleTransferOpen(nft.token_id)}>Transfer</Button>
+      ),
+    }
+  ];
+
+  const userInfoItems = [
+    {
+      key: 'account',
+      label: 'Account',
+      children: owner,
+    },
+    {
+      key: 'chain',
+      label: 'Chain',
+      children: chainId,
+    }
+  ];
+
   return (
-    <Container sx={{ mt: 4, overflowX: 'auto' }}>
+    <Layout sx={{ mt: 4, overflowX: 'auto' }}>
       <Card sx={{ minWidth: 'auto', width: '100%', mx: 'auto', my: 2 }}>
-        <CardContent error={ownedNftsError}>
-          <Typography style={{ fontWeight: 'bold' }} variant="h5" component="div" gutterBottom>Linera NFT</Typography>
-          <Typography style={{ fontWeight: 'bold' }} sx={{ mb: 1.5 }} color="text.secondary">Account: </Typography>
-          <Typography sx={{ mb: 1.5 }} color="text.secondary">{owner}</Typography>
-          <Typography style={{ fontWeight: 'bold' }} sx={{ mb: 1.5 }} color="text.secondary">Chain: </Typography>
-          <Typography sx={{ mb: 1.5 }} color="text.secondary">{chainId}</Typography>
+        <Title>Linera NFT</Title>
+        <Space
+          direction="vertical"
+          style={{
+            display: 'flex',
+          }}
+        >
+          <Descriptions title="User Info" items={userInfoItems} column={1} />
 
-          <Typography style={{ fontWeight: 'bold' }} variant="h6" gutterBottom>Your Owned NFTs:</Typography>
-          {ownedNftsData ? (
-            Object.keys(ownedNftsData.ownedNfts).length === 0 ? (
-              <Typography variant="body1" gutterBottom>No owned NFTs</Typography>
-            ) : (
-              <TableContainer component={Paper}>
-                <Table sx={{ minWidth: 'auto' }} aria-label="simple table">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ borderRight: '1px solid rgba(224, 224, 224, 1)' }}>Token Id</TableCell>
-                      <TableCell sx={{ borderRight: '1px solid rgba(224, 224, 224, 1)' }} align="center">Name</TableCell>
-                      <TableCell sx={{ borderRight: '1px solid rgba(224, 224, 224, 1)' }} align="center">Minter</TableCell>
-                      <TableCell align="center">Payload</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {Object.entries(ownedNftsData.ownedNfts).map(([token_id, nft]) => (
-                      <TableRow
-                        key={token_id}
-                        sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-                      >
-                        <TableCell sx={{ borderRight: '1px solid rgba(224, 224, 224, 1)' }} component="th" scope="row">
-                          {token_id}
-                        </TableCell>
-                        <TableCell sx={{ borderRight: '1px solid rgba(224, 224, 224, 1)' }} align="center">{nft.name}</TableCell>
-                        <TableCell sx={{ borderRight: '1px solid rgba(224, 224, 224, 1)' }} align="center">{nft.minter}</TableCell>
-                        <TableCell align="center">{nft.payload}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )
-          ) : (
-            <CircularProgress size={50} color="primary" />
-          )}
+          <Typography style={{ fontWeight: 'bold' }} variant="h6">Your Owned NFTs:</Typography>
+          <Table columns={columns} loading={ownedNftsLoading} dataSource={ownedNftsData ? Object.entries(ownedNftsData.ownedNfts).map(([token_id, nft]) => {
+            return {
+              key: token_id,
+              token_id: token_id,
+              name: nft.name,
+              minter: nft.minter,
+              payload: nft.payload,
+            };
+          }) : []} />
 
-          <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: '20px' }}>
-            <Button variant="contained" onClick={handleMintOpen}>Mint</Button>
-            <Button variant="contained" onClick={handleTransferOpen}>Transfer</Button>
-          </div>
-        </CardContent>
+          <Button type="primary" onClick={handleMintOpen}>Mint</Button>
+        </Space>
 
-        <Dialog open={isMintOpen} onClose={handleMintClose} error={mintError}>
-          <DialogTitle>Mint NFT</DialogTitle>
-          <DialogContent>
-            <TextField autoFocus margin="dense" id="name" label="Name" type="text" fullWidth variant="standard"
-              value={name} onChange={(val) => setName(val.target.value)}
-            />
-            <TextField autoFocus margin="dense" id="payload" label="Payload" type="text" fullWidth variant="standard"
-              value={payload} onChange={(val) => setPayload(val.target.value)}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleMintClose}>Cancel</Button>
-            <Button onClick={handleMintSubmit}>Submit</Button>
-            {mintLoading && <CircularProgress size={24} color="primary" />}
-          </DialogActions>
-        </Dialog>
+        <Modal title="Mint NFT" open={isMintOpen} footer={null} onCancel={handleMintClose}>
+          <Form name="basic"
+            labelCol={{
+              span: 8,
+            }}
+            wrapperCol={{
+              span: 16,
+            }}
+            style={{
+              maxWidth: 600,
+            }}
+            form={mintForm}
+            autoComplete="off"
+            onValuesChange={onMintValuesChange}
+            disabled={mintLoading}
+          >
+            <Space
+              direction="vertical"
+              style={{
+                display: 'flex',
+              }}
+            >
+              {mintError ? (
+                <Alert
+                  message="Error"
+                  description={mintError}
+                  type="error"
+                  showIcon
+                />
+              ) : null}
+              <Form.Item
+                label="Name"
+                name="name"
+                rules={[
+                  {
+                    required: true,
+                    message: 'Please input the name!',
+                  },
+                ]}
+              >
+                <Input />
+              </Form.Item>
+            </Space>
 
-        <Dialog open={isTransferOpen} onClose={handleTransferClose} error={transferError}>
-          <DialogTitle>Transfer NFT</DialogTitle>
-          <DialogContent>
-            <TextField autoFocus margin="dense" id="token_id" label="Token Id" type="text" fullWidth variant="standard"
-              value={tokenID} onChange={(val) => setTokenID(val.target.value)}
-            />
-            <TextField autoFocus margin="dense" id="target_chain_id" label="Target Chain Id" type="text" fullWidth variant="standard"
-              value={targetChainID} onChange={(val) => setTargetChainID(val.target.value)}
-            />
-            <TextField autoFocus margin="dense" id="target_owner" label="Target Owner" type="text" fullWidth variant="standard"
-              value={targetOwner} onChange={(val) => setTargetOwner(val.target.value)}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleTransferClose}>Cancel</Button>
-            <Button onClick={handleTransferSubmit}>Submit</Button>
-            {transferLoading && <CircularProgress size={24} color="primary" />}
-          </DialogActions>
-        </Dialog>
+            <Form.Item
+              label="Payload"
+              name="payload"
+              rules={[
+                {
+                  required: true,
+                  message: 'Please input the payload!',
+                },
+              ]}
+            >
+              <Input />
+            </Form.Item>
+
+            <Form.Item
+              wrapperCol={{
+                offset: 8,
+                span: 16,
+              }}
+            >
+              <Space>
+                <Button type="primary" onClick={handleMintSubmit} loading={mintLoading}>
+                  Submit
+                </Button>
+                <Button onClick={handleMintClose}>
+                  Cancel
+                </Button>
+              </Space>
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        <Modal title="Transfer NFT" open={isTransferOpen} footer={null} onCancel={handleTransferClose}>
+          <Form name="basic"
+            labelCol={{
+              span: 8,
+            }}
+            wrapperCol={{
+              span: 16,
+            }}
+            style={{
+              maxWidth: 600,
+            }}
+            initialValues={{
+              token_id: tokenID,
+            }}
+            form={transferForm}
+            autoComplete="off"
+            onValuesChange={onTransferValuesChange}
+            disabled={transferLoading}
+          >
+            {transferError ? (
+              <Alert
+                message="Error"
+                description={transferError}
+                type="error"
+                showIcon
+              />
+            ) : null}
+            <Form.Item
+              label="Token Id"
+              name="token_id"
+              rules={[
+                {
+                  required: true,
+                  message: 'Please input the token id!',
+                },
+              ]}
+            >
+              <Input disabled />
+            </Form.Item>
+
+            <Form.Item
+              label="Target Chain Id"
+              name="target_chain_id"
+              rules={[
+                {
+                  required: true,
+                  message: 'Please input the target chain id!',
+                },
+              ]}
+            >
+              <Input />
+            </Form.Item>
+
+            <Form.Item
+              label="Target Owner"
+              name="target_owner"
+              rules={[
+                {
+                  required: true,
+                  message: 'Please input the target owner!',
+                },
+              ]}
+            >
+              <Input />
+            </Form.Item>
+
+            <Form.Item
+              wrapperCol={{
+                offset: 8,
+                span: 16,
+              }}
+            >
+              <Space>
+                <Button type="primary" onClick={handleTransferSubmit} loading={transferLoading}>
+                  Submit
+                </Button>
+                <Button onClick={handleTransferClose}>
+                  Cancel
+                </Button>
+              </Space>
+            </Form.Item>
+          </Form>
+        </Modal>
       </Card>
-    </Container >
+    </Layout >
   );
 }
 

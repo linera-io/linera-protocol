@@ -1,0 +1,42 @@
+.rc-drawer {
+  inset: 0;
+  position: fixed;
+  z-index: 1050;
+  pointer-events: none;
+}
+.rc-drawer-inline {
+  position: absolute;
+}
+.rc-drawer-mask {
+  inset: 0;
+  position: absolute;
+  z-index: 1050;
+  background: rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+}
+.rc-drawer-content-wrapper {
+  position: absolute;
+  z-index: 1050;
+  overflow: hidden;
+  transition: transform 0.3s;
+}
+.rc-drawer-content-wrapper-hidden {
+  display: none;
+}
+.rc-drawer-left .rc-drawer-content-wrapper {
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+.rc-drawer-right .rc-drawer-content-wrapper {
+  top: 0;
+  right: 0;
+  bottom: 0;
+}
+.rc-drawer-content {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background: #fff;
+  pointer-events: auto;
+}

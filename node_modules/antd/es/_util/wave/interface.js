@@ -1,0 +1,1 @@
+export const TARGET_CLS = 'ant-wave-target';

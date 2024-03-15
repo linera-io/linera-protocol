@@ -1,0 +1,32 @@
+.rc-input {
+  &-out-of-range {
+    color: red;
+  }
+
+  &-affix-wrapper {
+    padding: 2px 8px;
+    overflow: hidden;
+    border: 1px solid lightgray;
+    border-radius: 2px;
+
+    &:hover,
+    &:focus-within {
+      border-color: #000;
+    }
+
+    input {
+      padding: 0;
+      border: none;
+      outline: none;
+    }
+  }
+
+  &-clear-icon {
+    font-size: 12px;
+    cursor: pointer;
+
+    &-hidden {
+      display: none;
+    }
+  }
+}

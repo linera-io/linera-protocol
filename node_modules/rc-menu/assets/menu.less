@@ -1,0 +1,22 @@
+@menuPrefixCls: ~'rc-menu';
+
+.@{menuPrefixCls} {
+  &:focus-visible {
+    box-shadow: 0 0 5px green;
+  }
+
+  &-horizontal {
+    display: flex;
+    flex-wrap: nowrap;
+  }
+
+  &-submenu {
+    &-hidden {
+      display: none;
+    }
+  }
+
+  &-overflow-item {
+    flex: none;
+  }
+}

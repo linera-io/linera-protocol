@@ -1,0 +1,41 @@
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+var _cssinjs = require("@ant-design/cssinjs");
+const genStepsCustomIconStyle = token => {
+  const {
+    componentCls,
+    customIconTop,
+    customIconSize,
+    customIconFontSize
+  } = token;
+  return {
+    [`${componentCls}-item-custom`]: {
+      [`> ${componentCls}-item-container > ${componentCls}-item-icon`]: {
+        height: 'auto',
+        background: 'none',
+        border: 0,
+        [`> ${componentCls}-icon`]: {
+          top: customIconTop,
+          width: customIconSize,
+          height: customIconSize,
+          fontSize: customIconFontSize,
+          lineHeight: `${(0, _cssinjs.unit)(customIconFontSize)}`
+        }
+      }
+    },
+    // Only adjust horizontal customize icon width
+    [`&:not(${componentCls}-vertical)`]: {
+      [`${componentCls}-item-custom`]: {
+        [`${componentCls}-item-icon`]: {
+          width: 'auto',
+          background: 'none'
+        }
+      }
+    }
+  };
+};
+var _default = exports.default = genStepsCustomIconStyle;

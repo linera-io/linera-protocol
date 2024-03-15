@@ -1,0 +1,139 @@
+@footer-prefix-cls: rc-footer;
+
+.@{footer-prefix-cls} {
+  position: relative;
+  clear: both;
+  color: rgba(255, 255, 255, .4);
+  font-size: 14px;
+  line-height: 1.5;
+  background-color: #000;
+
+  a {
+    transition: all .3s;
+    color: rgba(255, 255, 255, .9);
+    text-decoration: none;
+
+    &:hover {
+      color: #40a9ff;
+    }
+  }
+
+  &-container {
+    width: 100%;
+    max-width: 1200px;
+    padding: 80px 0;
+    margin: auto;
+  }
+
+  &-columns {
+    display: flex;
+    justify-content: space-around;
+  }
+
+  &-column {
+    h2 {
+      position: relative;
+      margin: 0 auto 24px;
+      font-weight: 500;
+      font-size: 16px;
+      color: #fff;
+    }
+
+    &-icon {
+      margin-right: .5em;
+      width: 22px;
+      display: inline-block;
+      vertical-align: middle;
+      top: -1px;
+      position: relative;
+      text-align: center;
+
+      > span,
+      > svg,
+      img {
+        width: 100%;
+        display: block;
+      }
+    }
+  }
+
+  &-item {
+    margin: 12px 0;
+
+    &-icon {
+      margin-right: .4em;
+      width: 16px;
+      display: inline-block;
+      vertical-align: middle;
+      top: -1px;
+      position: relative;
+      text-align: center;
+
+      > span,
+      > svg,
+      img {
+        width: 100%;
+        display: block;
+      }
+    }
+
+    &-separator {
+      margin: 0 .3em;
+    }
+  }
+
+  &-bottom {
+    &-container {
+      border-top: 1px solid rgba(255, 255, 255, .25);
+      width: 100%;
+      max-width: 1200px;
+      text-align: center;
+      margin: 0 auto;
+      padding: 16px 0;
+      line-height: 32px;
+      font-size: 16px;
+    }
+  }
+
+  &-light {
+    background-color: transparent;
+    color: rgba(0, 0, 0, .85);
+
+    h2,
+    a {
+      color: rgba(0, 0, 0, .85);
+    }
+  }
+
+  &-light &-bottom-container {
+    border-top-color: #e8e8e8;
+  }
+
+  &-light &-item-separator,
+  &-light &-item-description {
+    color: rgba(0, 0, 0, .45);
+  }
+}
+
+@media only screen and (max-width: 767.99px) {
+  .@{footer-prefix-cls} {
+    text-align: center;
+
+    &-container {
+      padding: 40px 0;
+    }
+
+    &-columns {
+      display: block;
+    }
+
+    &-column {
+      display: block;
+      margin-bottom: 40px;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+  }
+}

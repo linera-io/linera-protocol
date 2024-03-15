@@ -1,0 +1,15 @@
+@overflow-prefix-cls: rc-overflow;
+
+.@{overflow-prefix-cls} {
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+  position: relative;
+
+  &-item {
+    background: rgba(0, 255, 0, 0.2);
+    box-shadow: 0 0 1px black;
+    flex: none;
+    max-width: 100%;
+  }
+}

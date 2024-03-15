@@ -1,0 +1,6 @@
+/// <reference types="react" />
+/** Component only token. Which will handle additional calculation of alias token */
+export interface ComponentToken {
+}
+declare const _default: (prefixCls: string, rootCls?: string) => readonly [(node: import("react").ReactElement<any, string | import("react").JSXElementConstructor<any>>) => import("react").ReactElement<any, string | import("react").JSXElementConstructor<any>>, string, string | undefined];
+export default _default;

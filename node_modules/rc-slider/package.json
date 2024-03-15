@@ -1,0 +1,81 @@
+{
+  "name": "rc-slider",
+  "version": "10.5.0",
+  "description": "Slider UI component for React",
+  "engines": {
+    "node": ">=8.x"
+  },
+  "keywords": [
+    "react",
+    "react-component",
+    "react-slider",
+    "slider",
+    "input",
+    "range"
+  ],
+  "homepage": "http://github.com/react-component/slider/",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:react-component/slider.git"
+  },
+  "bugs": {
+    "url": "http://github.com/react-component/slider/issues"
+  },
+  "files": [
+    "assets/*.css",
+    "lib",
+    "es"
+  ],
+  "license": "MIT",
+  "main": "./lib/index",
+  "module": "./es/index",
+  "style": "./assets/index.css",
+  "types": "./lib/index.d.ts",
+  "scripts": {
+    "start": "dumi dev",
+    "docs:build": "dumi build",
+    "docs:deploy": "gh-pages -d .doc",
+    "compile": "father build && lessc assets/index.less assets/index.css",
+    "prepublishOnly": "npm run compile && np --yolo --no-publish",
+    "lint": "eslint src/ --ext .ts,.tsx,.jsx,.js,.md",
+    "prettier": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "test": "rc-test",
+    "coverage": "rc-test --coverage",
+    "now-build": "npm run docs:build"
+  },
+  "peerDependencies": {
+    "react": ">=16.9.0",
+    "react-dom": ">=16.9.0"
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.10.1",
+    "classnames": "^2.2.5",
+    "rc-util": "^5.27.0"
+  },
+  "devDependencies": {
+    "@rc-component/father-plugin": "^1.0.2",
+    "@testing-library/jest-dom": "^5.16.2",
+    "@testing-library/react": "^12.1.3",
+    "@types/classnames": "^2.2.9",
+    "@types/jest": "^29.5.1",
+    "@types/react": "^17.0.15",
+    "@types/react-dom": "^18.0.11",
+    "@umijs/fabric": "^2.0.0",
+    "cross-env": "^7.0.0",
+    "dumi": "^2.2.10",
+    "eslint": "^7.1.0",
+    "father": "^4.3.5",
+    "father-build": "^1.18.6",
+    "gh-pages": "^3.1.0",
+    "glob": "^7.1.6",
+    "less": "^3.10.3",
+    "np": "^7.0.0",
+    "rc-test": "^7.0.15",
+    "rc-tooltip": "^6.1.2",
+    "rc-trigger": "^5.3.4",
+    "react": "^16.0.0",
+    "react-dom": "^16.0.0",
+    "regenerator-runtime": "^0.13.9",
+    "typescript": "^4.0.5"
+  }
+}

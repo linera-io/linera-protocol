@@ -1,0 +1,26 @@
+{
+  "name": "json2mq",
+  "version": "0.2.0",
+  "description": "Generate media query string from JSON or javascript object",
+  "main": "index.js",
+  "scripts": {
+    "test": "./node_modules/.bin/mocha test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/akiran/json2mq"
+  },
+  "author": "Kiran Abburi",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/akiran/json2mq/issues"
+  },
+  "homepage": "https://github.com/akiran/json2mq",
+  "devDependencies": {
+    "mocha": "^2.0.1",
+    "should": "^4.3.0"
+  },
+  "dependencies": {
+    "string-convert": "^0.2.0"
+  }
+}

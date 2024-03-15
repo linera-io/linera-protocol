@@ -4,9 +4,7 @@
   "private": true,
   "dependencies": {
     "@apollo/client": "^3.7.10",
-    "@emotion/react": "^11.11.4",
-    "@emotion/styled": "^11.11.0",
-    "@mui/material": "^5.15.12",
+    "antd": "^5.15.2",
     "graphql": "^16.6.0",
     "graphql-ws": "^5.12.0",
     "react": "^18.2.0",

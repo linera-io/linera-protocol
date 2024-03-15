@@ -1,0 +1,107 @@
+@ColorPickerPrefixCls: rc-color-picker;
+@font-size-base: 12px;
+@vertical-space: 12px;
+@inner-border-radius: 4px;
+@outer-border-radius: 8px;
+@default-handler-size: 16px;
+@sm-handler-size: 12px;
+@handler-border-size: 2px;
+@shadow-2-down:0px 3px 6px -4px rgba(0, 0, 0, 0.12),0px 6px 16px 0px rgba(0, 0, 0, 0.08),0px 9px 28px 8px rgba(0, 0, 0, 0.05);
+
+.@{ColorPickerPrefixCls} {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  width: max-content;
+  min-width: 258px;
+  visibility: visible;
+  &-hidden {
+    display: none;
+  }
+  &-panel {
+    display: flex;
+    flex-direction: column;
+    width: 258px;
+    padding: @vertical-space;
+    background-color: #fff;
+    border-radius: @outer-border-radius;
+    box-shadow: @shadow-2-down;
+    &-disabled {
+      cursor: not-allowed;
+    }
+  }
+  &-select {
+    .@{ColorPickerPrefixCls}-palette {
+      min-height: 160px;
+      overflow: hidden;
+      border-radius: @inner-border-radius;
+      & > .@{ColorPickerPrefixCls}-gradient {
+        border-top-left-radius: 5px;
+      }
+    }
+    margin-bottom: @vertical-space;
+  }
+
+  &-saturation {
+    position: absolute;
+    border-radius: inherit;
+    inset: 0px;
+  }
+
+  &-handler {
+    box-sizing: border-box;
+    width: @default-handler-size;
+    height: @default-handler-size;
+    border: @handler-border-size solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 1px 1px rgba(0, 0, 0, 0.06);
+  }
+  &-handler-sm {
+    width: @sm-handler-size;
+    height: @sm-handler-size;
+  }
+
+  &-slider {
+    width: 100%;
+    margin-bottom: @vertical-space;
+    .@{ColorPickerPrefixCls}-palette {
+      height: 8px;
+    }
+    .@{ColorPickerPrefixCls}-gradient {
+      border-radius: @inner-border-radius;
+    }
+    &-alpha {
+      background: url('./alpha.svg');
+    }
+  }
+
+  &-color-block {
+    position: relative;
+    width: 28px;
+    height: 28px;
+    margin-left: 8px;
+    overflow: hidden;
+    background-image: url('./alpha.svg');
+    border-radius: @inner-border-radius;
+    &-inner {
+      box-sizing: border-box;
+      width: 100%;
+      height: 100%;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      border-radius: @inner-border-radius;
+    }
+  }
+  &-slider-container {
+    display: flex;
+    .@{ColorPickerPrefixCls}-slider-group {
+      flex: 1;
+      &-disabled-alpha {
+        display: flex;
+        align-items: center;
+        .@{ColorPickerPrefixCls}-slider{
+            margin-bottom: 0;
+        }
+      }
+    }
+  }
+}

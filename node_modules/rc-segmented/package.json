@@ -1,0 +1,93 @@
+{
+  "name": "rc-segmented",
+  "version": "2.3.0",
+  "description": "React segmented controls used in ant.design",
+  "keywords": [
+    "react",
+    "react-component",
+    "react-segmented",
+    "react-segmented-controls",
+    "segmented controls",
+    "antd",
+    "ant-design"
+  ],
+  "main": "./lib/index",
+  "module": "./es/index",
+  "types": "./es/index.d.ts",
+  "files": [
+    "assets/*.css",
+    "assets/*.less",
+    "es",
+    "lib",
+    "dist"
+  ],
+  "homepage": "https://react-component.github.io/segmented",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:react-component/segmented.git"
+  },
+  "bugs": {
+    "url": "http://github.com/react-component/segmented/issues"
+  },
+  "license": "MIT",
+  "scripts": {
+    "start": "dumi dev",
+    "type:check": "tsc --noEmit",
+    "docs:build": "dumi build",
+    "docs:deploy": "gh-pages -d .doc",
+    "compile": "father build && lessc assets/index.less assets/index.css",
+    "gh-pages": "GH_PAGES=1 npm run docs:build && npm run docs:deploy",
+    "prepublishOnly": "npm run compile && np --yolo --no-publish && npm run gh-pages",
+    "lint": "eslint src/ --ext .ts,.tsx,.jsx,.js,.md",
+    "prettier": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "pretty-quick": "pretty-quick",
+    "test": "jest",
+    "coverage": "jest --coverage",
+    "prepare": "husky install"
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.11.1",
+    "classnames": "^2.2.1",
+    "rc-motion": "^2.4.4",
+    "rc-util": "^5.17.0"
+  },
+  "devDependencies": {
+    "@rc-component/father-plugin": "^1.0.1",
+    "@testing-library/jest-dom": "^5.16.5",
+    "@testing-library/react": "^14.0.0",
+    "@types/classnames": "^2.2.9",
+    "@types/jest": "^29.2.4",
+    "@types/react": "^17.0.13",
+    "@types/react-dom": "^16.9.0",
+    "@umijs/fabric": "^3.0.0",
+    "@umijs/test": "^4.0.36",
+    "coveralls": "^3.0.6",
+    "cross-env": "^7.0.3",
+    "cssstyle": "^2.3.0",
+    "dumi": "^2.1.2",
+    "eslint": "^7.0.0",
+    "father": "^4.1.1",
+    "gh-pages": "^3.1.0",
+    "husky": "^8.0.0",
+    "jest": "^29.3.1",
+    "jest-environment-jsdom": "^29.3.1",
+    "less": "^3.10.3",
+    "np": "^7.0.0",
+    "prettier": "^2.0.5",
+    "pretty-quick": "^3.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.3.0"
+  },
+  "peerDependencies": {
+    "react": ">=16.0.0",
+    "react-dom": ">=16.0.0"
+  },
+  "cnpm": {
+    "mode": "npm"
+  },
+  "tnpm": {
+    "mode": "npm"
+  }
+}
