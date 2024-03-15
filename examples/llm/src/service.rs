@@ -1,5 +1,6 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
+mod random;
 mod state;
 mod token;
 
