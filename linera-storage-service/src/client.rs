@@ -10,9 +10,12 @@ use crate::{
         RequestContainsKey, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
         RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
         RequestListAll, RequestReadMultiValues, RequestReadValue, RequestWriteBatchExtended, Statement,
+        RequestSpecificBlock, ReplySpecificBlock,
     },
 };
+use serde::de::DeserializeOwned;
 use async_lock::{RwLock, Semaphore, SemaphoreGuard};
+use async_lock::RwLockWriteGuard;
 use async_trait::async_trait;
 use linera_views::{
     batch::Batch,
@@ -84,9 +87,13 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let mut client = self.client.write().await;
         let _guard = self.acquire().await;
         let response = client.process_read_value(request).await?;
-        let response = response.get_ref();
+        let response = response.into_inner();
         let ReplyReadValue { value, recover_key, n_block } = response;
-        Ok(value.clone())
+        if n_block == 0 {
+            Ok(value)
+        } else {
+            Self::read_entries(client, recover_key, n_block).await
+        }
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, ServiceContextError> {
@@ -119,8 +126,12 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let response = client.process_read_multi_values(request).await?;
         let response = response.into_inner();
         let ReplyReadMultiValues { values, recover_key, n_block } = response;
-        let values = values.into_iter().map(|x| x.value).collect::<Vec<_>>();
-        Ok(values)
+        if n_block == 0 {
+            let values = values.into_iter().map(|x| x.value).collect::<Vec<_>>();
+            Ok(values)
+        } else {
+            Self::read_entries(client, recover_key, n_block).await
+        }
     }
 
     async fn find_keys_by_prefix(
@@ -138,7 +149,11 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let response = client.process_find_keys_by_prefix(request).await?;
         let response = response.into_inner();
         let ReplyFindKeysByPrefix { keys, recover_key, n_block } = response;
-        Ok(keys)
+        if n_block == 0 {
+            Ok(keys)
+        } else {
+            Self::read_entries(client, recover_key, n_block).await
+        }
     }
 
     async fn find_key_values_by_prefix(
@@ -156,11 +171,15 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let response = client.process_find_key_values_by_prefix(request).await?;
         let response = response.into_inner();
         let ReplyFindKeyValuesByPrefix { key_values, recover_key, n_block } = response;
-        let key_values = key_values
-            .into_iter()
-            .map(|x| (x.key, x.value))
-            .collect::<Vec<_>>();
-        Ok(key_values)
+        if n_block == 0 {
+            let key_values = key_values
+                .into_iter()
+                .map(|x| (x.key, x.value))
+                .collect::<Vec<_>>();
+            Ok(key_values)
+        } else {
+            Self::read_entries(client, recover_key, n_block).await
+        }
     }
 }
 
@@ -288,6 +307,19 @@ impl ServiceStoreClient {
         Statement {
             operation: Some(operation),
         }
+    }
+
+    async fn read_entries<S: DeserializeOwned>(mut client: RwLockWriteGuard<'_, StoreProcessorClient<Channel>>, recover_key: i64, n_block: i32) -> Result<S, ServiceContextError> {
+        let mut value = Vec::new();
+        for index in 0..n_block {
+            let query = RequestSpecificBlock { recover_key, index };
+            let request = tonic::Request::new(query);
+            let response = client.process_specific_block(request).await?;
+            let response = response.into_inner();
+            let ReplySpecificBlock { block } = response;
+            value.extend(block);
+        }
+        Ok(bcs::from_bytes(&value)?)
     }
 }
 
