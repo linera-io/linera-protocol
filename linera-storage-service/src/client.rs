@@ -4,29 +4,26 @@
 use crate::{
     common::{ServiceContextError, ServiceStoreConfig},
     key_value_store::{
-        statement::Operation, store_processor_client::StoreProcessorClient, KeyValue, KeyValueAppend,
-        ReplyContainsKey, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
-        ReplyListAll, ReplyReadMultiValues, ReplyReadValue,
-        RequestContainsKey, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
-        RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
-        RequestListAll, RequestReadMultiValues, RequestReadValue, RequestWriteBatchExtended, Statement,
-        RequestSpecificBlock, ReplySpecificBlock,
+        statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
+        KeyValueAppend, ReplyContainsKey, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix,
+        ReplyFindKeysByPrefix, ReplyListAll, ReplyReadMultiValues, ReplyReadValue,
+        ReplySpecificBlock, RequestContainsKey, RequestCreateNamespace, RequestDeleteAll,
+        RequestDeleteNamespace, RequestExistsNamespace, RequestFindKeyValuesByPrefix,
+        RequestFindKeysByPrefix, RequestListAll, RequestReadMultiValues, RequestReadValue,
+        RequestSpecificBlock, RequestWriteBatchExtended, Statement,
     },
 };
-use serde::de::DeserializeOwned;
-use async_lock::{RwLock, Semaphore, SemaphoreGuard};
-use async_lock::RwLockWriteGuard;
+use async_lock::{RwLock, RwLockWriteGuard, Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use linera_views::{
-    batch::Batch,
+    batch::{Batch, WriteOperation},
     common::{
         AdminKeyValueStore, CommonStoreConfig, KeyValueStore, ReadableKeyValueStore,
         WritableKeyValueStore, MIN_VIEW_TAG,
     },
 };
-use linera_views::batch::WriteOperation;
-use std::mem;
-use std::sync::Arc;
+use serde::de::DeserializeOwned;
+use std::{mem, sync::Arc};
 use tonic::transport::{Channel, Endpoint};
 
 #[cfg(any(test, feature = "test"))]
@@ -88,7 +85,11 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let _guard = self.acquire().await;
         let response = client.process_read_value(request).await?;
         let response = response.into_inner();
-        let ReplyReadValue { value, recover_key, n_block } = response;
+        let ReplyReadValue {
+            value,
+            recover_key,
+            n_block,
+        } = response;
         if n_block == 0 {
             Ok(value)
         } else {
@@ -125,7 +126,11 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let _guard = self.acquire().await;
         let response = client.process_read_multi_values(request).await?;
         let response = response.into_inner();
-        let ReplyReadMultiValues { values, recover_key, n_block } = response;
+        let ReplyReadMultiValues {
+            values,
+            recover_key,
+            n_block,
+        } = response;
         if n_block == 0 {
             let values = values.into_iter().map(|x| x.value).collect::<Vec<_>>();
             Ok(values)
@@ -148,7 +153,11 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let _guard = self.acquire().await;
         let response = client.process_find_keys_by_prefix(request).await?;
         let response = response.into_inner();
-        let ReplyFindKeysByPrefix { keys, recover_key, n_block } = response;
+        let ReplyFindKeysByPrefix {
+            keys,
+            recover_key,
+            n_block,
+        } = response;
         if n_block == 0 {
             Ok(keys)
         } else {
@@ -170,7 +179,11 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let _guard = self.acquire().await;
         let response = client.process_find_key_values_by_prefix(request).await?;
         let response = response.into_inner();
-        let ReplyFindKeyValuesByPrefix { key_values, recover_key, n_block } = response;
+        let ReplyFindKeyValuesByPrefix {
+            key_values,
+            recover_key,
+            n_block,
+        } = response;
         if n_block == 0 {
             let key_values = key_values
                 .into_iter()
@@ -194,15 +207,9 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let mut block_size = 0;
         for operation in batch.operations {
             let operation_size = match &operation {
-                WriteOperation::Delete { key } => {
-                    key.len()
-                }
-                WriteOperation::Put { key, value } => {
-                    key.len() + value.len()
-                }
-                WriteOperation::DeletePrefix { key_prefix } => {
-                    key_prefix.len()
-                }
+                WriteOperation::Delete { key } => key.len(),
+                WriteOperation::Put { key, value } => key.len() + value.len(),
+                WriteOperation::DeletePrefix { key_prefix } => key_prefix.len(),
             };
             if operation_size + block_size < MAX_GRPC_REQUEST_SIZE {
                 let statement = self.get_statement(operation);
@@ -219,11 +226,13 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
                     };
                     let mut full_key = self.namespace.clone();
                     full_key.extend(key);
-                    let value_blocks = value.chunks(MAX_GRPC_REQUEST_SIZE).collect::<Vec<_>>();
+                    let value_blocks = value
+                        .chunks(MAX_GRPC_REQUEST_SIZE)
+                        .map(|x| x.to_vec())
+                        .collect::<Vec<_>>();
                     let n_block = value_blocks.len();
-                    for i_block in 0..n_block {
+                    for (i_block, value) in value_blocks.into_iter().enumerate() {
                         let last = i_block + 1 == n_block;
-                        let value = value_blocks[i_block].to_vec();
                         let operation = Operation::Append(KeyValueAppend {
                             key: full_key.clone(),
                             value,
@@ -269,12 +278,12 @@ impl ServiceStoreClient {
         Ok(key)
     }
 
-    async fn submit_statements(&self, statements: Vec<Statement>) -> Result<(), ServiceContextError> {
-        println!("submit_statements |statements|={}", statements.len());
-        if statements.len() > 0 {
-            let query = RequestWriteBatchExtended {
-                statements,
-            };
+    async fn submit_statements(
+        &self,
+        statements: Vec<Statement>,
+    ) -> Result<(), ServiceContextError> {
+        if !statements.is_empty() {
+            let query = RequestWriteBatchExtended { statements };
             let request = tonic::Request::new(query);
             let mut client = self.client.write().await;
             let _guard = self.acquire().await;
@@ -309,7 +318,11 @@ impl ServiceStoreClient {
         }
     }
 
-    async fn read_entries<S: DeserializeOwned>(mut client: RwLockWriteGuard<'_, StoreProcessorClient<Channel>>, recover_key: i64, n_block: i32) -> Result<S, ServiceContextError> {
+    async fn read_entries<S: DeserializeOwned>(
+        mut client: RwLockWriteGuard<'_, StoreProcessorClient<Channel>>,
+        recover_key: i64,
+        n_block: i32,
+    ) -> Result<S, ServiceContextError> {
         let mut value = Vec::new();
         for index in 0..n_block {
             let query = RequestSpecificBlock { recover_key, index };

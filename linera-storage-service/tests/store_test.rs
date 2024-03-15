@@ -5,13 +5,14 @@ use linera_storage_service::{
     child::{get_free_port, StorageService},
     client::{create_service_test_store, service_config_from_endpoint, ServiceStoreClient},
 };
-use linera_views::test_utils::{
-    admin_test, get_random_test_scenarios, run_reads, run_writes_from_blank, run_writes_from_state,
+use linera_views::{
+    batch::Batch,
+    test_utils,
+    test_utils::{
+        admin_test, get_random_byte_vector, get_random_test_scenarios, run_reads,
+        run_test_batch_from_blank, run_writes_from_blank, run_writes_from_state,
+    },
 };
-use linera_views::batch::Batch;
-use linera_views::test_utils;
-use linera_views::test_utils::get_random_byte_vector;
-use linera_views::test_utils::run_test_batch_from_blank;
 
 /// The endpoint used for the storage service tests.
 #[cfg(test)]

@@ -6,14 +6,12 @@ use crate::key_value_store::{
     store_processor_server::{StoreProcessor, StoreProcessorServer},
     KeyValue, OptValue, ReplyContainsKey, ReplyCreateNamespace, ReplyDeleteAll,
     ReplyDeleteNamespace, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
-    ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplyWriteBatchExtended,
-    RequestContainsKey, RequestCreateNamespace, RequestDeleteAll, RequestDeleteNamespace,
-    RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListAll,
-    RequestReadMultiValues, RequestReadValue, RequestWriteBatchExtended,
-    RequestSpecificBlock, ReplySpecificBlock,
+    ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplySpecificBlock,
+    ReplyWriteBatchExtended, RequestContainsKey, RequestCreateNamespace, RequestDeleteAll,
+    RequestDeleteNamespace, RequestExistsNamespace, RequestFindKeyValuesByPrefix,
+    RequestFindKeysByPrefix, RequestListAll, RequestReadMultiValues, RequestReadValue,
+    RequestSpecificBlock, RequestWriteBatchExtended,
 };
-use serde::Serialize;
-use std::sync::Arc;
 use async_lock::RwLock;
 use linera_views::{
     batch::Batch,
@@ -24,7 +22,8 @@ use linera_views::{
     memory::{create_memory_store_stream_queries, MemoryStore},
     rocks_db::{RocksDbStore, RocksDbStoreConfig},
 };
-use std::collections::BTreeMap;
+use serde::Serialize;
+use std::{collections::BTreeMap, sync::Arc};
 use tonic::{transport::Server, Request, Response, Status};
 
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -34,8 +33,8 @@ pub mod key_value_store {
 }
 
 // The maximal block size on GRPC is 4M.
-// That size is the one that shows up everywhere and in particular
-// for tonic.
+// Usually this limit is for incoming messages but Tonic also
+// implements a limit for outgoing messages.
 // We decrease the 4194304 to 4000000 for safety reasons.
 const MAX_GRPC_REPLY_SIZE: usize = 4000000;
 
@@ -61,7 +60,6 @@ struct ServiceStoreServer {
     pending_big_puts: Arc<RwLock<BTreeMap<Vec<u8>, Vec<u8>>>>,
     pending_big_read: Arc<RwLock<BTreeMap<i64, Vec<Vec<u8>>>>>,
 }
-
 
 impl ServiceStoreServer {
     pub async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Status> {
@@ -192,7 +190,10 @@ impl ServiceStoreServer {
 
     pub async fn insert_pending_read<S: Serialize>(&self, value: S) -> (i64, i32) {
         let value = bcs::to_bytes(&value).unwrap();
-        let blocks = value.chunks(MAX_GRPC_REPLY_SIZE).map(|x| x.to_vec()).collect::<Vec<_>>();
+        let blocks = value
+            .chunks(MAX_GRPC_REPLY_SIZE)
+            .map(|x| x.to_vec())
+            .collect::<Vec<_>>();
         let n_block = blocks.len() as i32;
         let mut pending_big_read = self.pending_big_read.write().await;
         let mut index = self.index.write().await;
@@ -239,10 +240,18 @@ impl StoreProcessor for ServiceStoreServer {
             Some(value) => value.len(),
         };
         let response = if size < MAX_GRPC_REPLY_SIZE {
-            ReplyReadValue { value, recover_key: 0 ,n_block: 0 }
+            ReplyReadValue {
+                value,
+                recover_key: 0,
+                n_block: 0,
+            }
         } else {
             let (recover_key, n_block) = self.insert_pending_read(value).await;
-            ReplyReadValue { value: None, recover_key, n_block }
+            ReplyReadValue {
+                value: None,
+                recover_key,
+                n_block,
+            }
         };
         Ok(Response::new(response))
     }
@@ -265,19 +274,30 @@ impl StoreProcessor for ServiceStoreServer {
         let request = request.into_inner();
         let RequestReadMultiValues { keys } = request;
         let values = self.read_multi_values_bytes(keys.clone()).await?;
-        let size = values.iter().map(|x| match x {
-            None => 0,
-            Some(entry) => entry.len()
-        }).sum::<usize>();
+        let size = values
+            .iter()
+            .map(|x| match x {
+                None => 0,
+                Some(entry) => entry.len(),
+            })
+            .sum::<usize>();
         let response = if size < MAX_GRPC_REPLY_SIZE {
             let values = values
                 .into_iter()
                 .map(|value| OptValue { value })
                 .collect::<Vec<_>>();
-            ReplyReadMultiValues { values, recover_key: 0, n_block: 0 }
+            ReplyReadMultiValues {
+                values,
+                recover_key: 0,
+                n_block: 0,
+            }
         } else {
             let (recover_key, n_block) = self.insert_pending_read(values).await;
-            ReplyReadMultiValues { values: Vec::default(), recover_key, n_block }
+            ReplyReadMultiValues {
+                values: Vec::default(),
+                recover_key,
+                n_block,
+            }
         };
         Ok(Response::new(response))
     }
@@ -291,10 +311,18 @@ impl StoreProcessor for ServiceStoreServer {
         let keys = self.find_keys_by_prefix(&key_prefix).await?;
         let size = keys.iter().map(|x| x.len()).sum::<usize>();
         let response = if size < MAX_GRPC_REPLY_SIZE {
-            ReplyFindKeysByPrefix { keys, recover_key: 0, n_block: 0 }
+            ReplyFindKeysByPrefix {
+                keys,
+                recover_key: 0,
+                n_block: 0,
+            }
         } else {
             let (recover_key, n_block) = self.insert_pending_read(keys).await;
-            ReplyFindKeysByPrefix { keys: Vec::default(), recover_key, n_block }
+            ReplyFindKeysByPrefix {
+                keys: Vec::default(),
+                recover_key,
+                n_block,
+            }
         };
         Ok(Response::new(response))
     }
@@ -306,7 +334,10 @@ impl StoreProcessor for ServiceStoreServer {
         let request = request.into_inner();
         let RequestFindKeyValuesByPrefix { key_prefix } = request;
         let key_values = self.find_key_values_by_prefix(&key_prefix).await?;
-        let size = key_values.iter().map(|x| x.0.len() + x.1.len()).sum::<usize>();
+        let size = key_values
+            .iter()
+            .map(|x| x.0.len() + x.1.len())
+            .sum::<usize>();
         let response = if size < MAX_GRPC_REPLY_SIZE {
             let key_values = key_values
                 .into_iter()
@@ -315,10 +346,18 @@ impl StoreProcessor for ServiceStoreServer {
                     value: x.1,
                 })
                 .collect::<Vec<_>>();
-            ReplyFindKeyValuesByPrefix { key_values, recover_key: 0, n_block: 0 }
+            ReplyFindKeyValuesByPrefix {
+                key_values,
+                recover_key: 0,
+                n_block: 0,
+            }
         } else {
             let (recover_key, n_block) = self.insert_pending_read(key_values).await;
-            ReplyFindKeyValuesByPrefix { key_values: Vec::default(), recover_key, n_block }
+            ReplyFindKeyValuesByPrefix {
+                key_values: Vec::default(),
+                recover_key,
+                n_block,
+            }
         };
         Ok(Response::new(response))
     }
@@ -328,9 +367,7 @@ impl StoreProcessor for ServiceStoreServer {
         request: Request<RequestWriteBatchExtended>,
     ) -> Result<Response<ReplyWriteBatchExtended>, Status> {
         let request = request.into_inner();
-        let RequestWriteBatchExtended {
-            statements,
-        } = request;
+        let RequestWriteBatchExtended { statements } = request;
         let mut batch = Batch::default();
         for statement in statements {
             match statement.operation.unwrap() {
@@ -344,11 +381,12 @@ impl StoreProcessor for ServiceStoreServer {
                     let mut pending_big_puts = self.pending_big_puts.write().await;
                     match pending_big_puts.get_mut(&key_value_append.key) {
                         None => {
-                            pending_big_puts.insert(key_value_append.key.clone(), key_value_append.value);
-                        },
+                            pending_big_puts
+                                .insert(key_value_append.key.clone(), key_value_append.value);
+                        }
                         Some(value) => {
                             value.extend(key_value_append.value);
-                        },
+                        }
                     }
                     if key_value_append.last {
                         let value = pending_big_puts.remove(&key_value_append.key).unwrap();
@@ -465,7 +503,12 @@ async fn main() {
     let index = Arc::new(RwLock::new(0));
     let pending_big_puts = Arc::new(RwLock::new(BTreeMap::default()));
     let pending_big_read = Arc::new(RwLock::new(BTreeMap::default()));
-    let store = ServiceStoreServer { store, index, pending_big_puts, pending_big_read };
+    let store = ServiceStoreServer {
+        store,
+        index,
+        pending_big_puts,
+        pending_big_read,
+    };
     let endpoint = endpoint.parse().unwrap();
     Server::builder()
         .add_service(StoreProcessorServer::new(store))
