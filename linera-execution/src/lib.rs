@@ -103,21 +103,6 @@ pub enum ExecutionError {
     #[error("The given promise is invalid or was polled once already")]
     InvalidPromise,
 
-    #[error("Session {0} does not exist or was already closed")]
-    InvalidSession(SessionId),
-    #[error("Attempted to call or forward an active session {0}")]
-    SessionIsInUse(SessionId),
-    #[error("Attempted to save a session {0} but it is not locked")]
-    SessionStateNotLocked(SessionId),
-    #[error("Session {session_id} is owned by {owned_by} but was accessed by {accessed_by}")]
-    InvalidSessionOwner {
-        session_id: Box<SessionId>,
-        accessed_by: Box<UserApplicationId>,
-        owned_by: Box<UserApplicationId>,
-    },
-    #[error("Session {0} is still opened at the end of a transaction")]
-    SessionWasNotClosed(SessionId),
-
     #[error("Attempted to perform a reentrant call to application {0}")]
     ReentrantCall(UserApplicationId),
     #[error(
@@ -143,20 +128,6 @@ pub enum ExecutionError {
     OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
     UnauthorizedApplication(UserApplicationId),
-}
-
-impl ExecutionError {
-    fn invalid_session_owner(
-        session_id: SessionId,
-        accessed_by: UserApplicationId,
-        owned_by: UserApplicationId,
-    ) -> Self {
-        Self::InvalidSessionOwner {
-            session_id: Box::new(session_id),
-            accessed_by: Box::new(accessed_by),
-            owned_by: Box::new(owned_by),
-        }
-    }
 }
 
 /// The public entry points provided by the contract part of an application.

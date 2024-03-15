@@ -72,8 +72,6 @@ pub struct SyncRuntimeInternal<UserInstance> {
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
     execution_outcomes: Vec<ExecutionOutcome>,
 
-    /// All the sessions and their IDs.
-    session_manager: SessionManager,
     /// Track application states (simple case).
     simple_user_states: BTreeMap<UserApplicationId, SimpleUserState>,
     /// Track application states (view case).
@@ -140,14 +138,6 @@ impl<Instance> Clone for LoadedApplication<Instance> {
             parameters: self.parameters.clone(),
         }
     }
-}
-
-#[derive(Debug, Default)]
-struct SessionManager {
-    /// Track the next session index to be used for each application.
-    counters: BTreeMap<UserApplicationId, u64>,
-    /// Track the current state (owner and data) of each session.
-    states: BTreeMap<SessionId, SessionState>,
 }
 
 #[derive(Debug)]
@@ -257,16 +247,6 @@ impl ViewUserState {
     }
 }
 
-#[derive(Debug)]
-struct SessionState {
-    /// Track which application can call into the session.
-    owner: UserApplicationId,
-    /// Whether the session is already active.
-    locked: bool,
-    /// Some data saved inside the session.
-    data: Vec<u8>,
-}
-
 impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -292,7 +272,6 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             call_stack: Vec::new(),
             active_applications: HashSet::new(),
             execution_outcomes: Vec::default(),
-            session_manager: SessionManager::default(),
             simple_user_states: BTreeMap::default(),
             view_user_states: BTreeMap::default(),
             refund_grant_to,
@@ -383,7 +362,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
         this: Arc<Mutex<Self>>,
         authenticated: bool,
         callee_id: UserApplicationId,
-        forwarded_sessions: &[SessionId],
+        _forwarded_sessions: &[SessionId],
     ) -> Result<(Arc<Mutex<UserContractInstance>>, CalleeContext), ExecutionError> {
         self.check_for_reentrancy(callee_id)?;
 
@@ -401,8 +380,6 @@ impl SyncRuntimeInternal<UserContractInstance> {
         let caller = self.current_application();
         let caller_id = caller.id;
         let caller_signer = caller.signer;
-        // Change the owners of forwarded sessions.
-        self.forward_sessions(forwarded_sessions, caller_id, callee_id)?;
         // Make the call to user code.
         let authenticated_signer = match caller_signer {
             Some(signer) if authenticated => Some(signer),
@@ -434,11 +411,9 @@ impl SyncRuntimeInternal<UserContractInstance> {
             signer,
             ..
         } = self.pop_application();
-        let caller_id = self.application_id()?;
-        let sessions = self.make_sessions(raw_outcome.create_sessions, callee_id, caller_id);
         let outcome = CallOutcome {
             value: raw_outcome.value,
-            sessions,
+            sessions: vec![],
         };
         self.handle_outcome(raw_outcome.execution_outcome, signer, callee_id)?;
         Ok(outcome)
@@ -467,55 +442,6 @@ impl SyncRuntimeInternal<UserContractInstance> {
         self.execution_outcomes
             .push(ExecutionOutcome::User(application_id, outcome));
         Ok(())
-    }
-
-    fn forward_sessions(
-        &mut self,
-        session_ids: &[SessionId],
-        from_id: UserApplicationId,
-        to_id: UserApplicationId,
-    ) -> Result<(), ExecutionError> {
-        let states = &mut self.session_manager.states;
-        for id in session_ids {
-            let state = states
-                .get_mut(id)
-                .ok_or(ExecutionError::InvalidSession(*id))?;
-            // Verify ownership.
-            ensure!(
-                state.owner == from_id,
-                ExecutionError::invalid_session_owner(*id, from_id, state.owner,)
-            );
-            // Transfer the session.
-            state.owner = to_id;
-        }
-        Ok(())
-    }
-
-    fn make_sessions(
-        &mut self,
-        new_sessions: Vec<Vec<u8>>,
-        creator_id: UserApplicationId,
-        receiver_id: UserApplicationId,
-    ) -> Vec<SessionId> {
-        let manager = &mut self.session_manager;
-        let states = &mut manager.states;
-        let counter = manager.counters.entry(creator_id).or_default();
-        let mut session_ids = Vec::new();
-        for data in new_sessions {
-            let id = SessionId {
-                application_id: creator_id,
-                index: *counter,
-            };
-            *counter += 1;
-            session_ids.push(id);
-            let state = SessionState {
-                owner: receiver_id,
-                locked: false,
-                data,
-            };
-            states.insert(id, state);
-        }
-        session_ids
     }
 }
 
@@ -931,10 +857,6 @@ impl ContractSyncRuntime {
         let runtime = runtime
             .into_inner()
             .expect("Runtime clones should have been freed by now");
-        // Check that all sessions were properly closed.
-        if let Some(session_id) = runtime.session_manager.states.keys().next() {
-            return Err(ExecutionError::SessionWasNotClosed(*session_id));
-        }
         Ok((runtime.execution_outcomes, runtime.resource_controller))
     }
 
