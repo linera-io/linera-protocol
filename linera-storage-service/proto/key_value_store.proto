@@ -79,6 +79,16 @@ message ReplyWriteBatchExtended {
 }
 
 
+message RequestSpecificBlock {
+  bytes key = 1;
+  int32 index = 2;
+}
+
+message ReplySpecificBlock {
+  bytes block = 1;
+}
+
+
 message RequestCreateNamespace {
   bytes namespace = 1;
 }

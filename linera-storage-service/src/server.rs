@@ -50,6 +50,7 @@ enum ServiceStoreServerInternal {
 struct ServiceStoreServer {
     store: ServiceStoreServerInternal,
     pending_big_puts: Arc<RwLock<BTreeMap<Vec<u8>, Vec<u8>>>>,
+    pending_big_read: Arc<RwLock<BTreeMap<Vec<u8>, Vec<Vec<u8>>>>>,
 }
 
 
@@ -315,6 +316,21 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
+    async fn process_specific_block(
+        &self,
+        request: Request<RequestSpecificBlock>,
+    ) -> Result<Response<ReplySpecificBlock>, Status> {
+        let request = request.into_inner();
+        let RequestSpecificBlock { key, index } = request;
+        let mut pending_big_read = self.pending_big_read.write().await;
+        let Some(entry) = pending_big_read.get(&key) else {
+            unreachable!();
+        }
+        let block = entry[index].clone();
+        let response = ReplySpecificBlock { block };
+        Ok(Response::new(response))
+    }
+
     async fn process_create_namespace(
         &self,
         request: Request<RequestCreateNamespace>,
@@ -392,7 +408,8 @@ async fn main() {
         }
     };
     let pending_big_puts = Arc::new(RwLock::new(BTreeMap::default()));
-    let store = ServiceStoreServer { store, pending_big_puts };
+    let pending_big_read = Arc::new(RwLock::new(BTreeMap::default()));
+    let store = ServiceStoreServer { store, pending_big_puts, pending_big_read };
     let endpoint = endpoint.parse().unwrap();
     Server::builder()
         .add_service(StoreProcessorServer::new(store))
