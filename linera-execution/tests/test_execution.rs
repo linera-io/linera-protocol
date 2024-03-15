@@ -278,6 +278,45 @@ async fn test_leaking_session() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Tests if `finalize` can cause execution to fail.
+#[tokio::test]
+async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
+    let mut state = SystemExecutionState::default();
+    state.description = Some(ChainDescription::Root(0));
+    let mut view = state.into_view().await;
+
+    let mut applications = register_mock_applications(&mut view, 1).await?;
+    let (id, application) = applications
+        .next()
+        .expect("Mock application should be registered");
+
+    application.expect_call(ExpectedCall::execute_operation(
+        move |_runtime, _context, _operation| Ok(RawExecutionOutcome::default()),
+    ));
+
+    let error_message = "Finalize aborted execution";
+
+    application.expect_call(ExpectedCall::finalize(|_runtime, _context| {
+        Err(ExecutionError::UserError(error_message.to_owned()))
+    }));
+
+    let context = make_operation_context();
+    let mut controller = ResourceController::default();
+    let result = view
+        .execute_operation(
+            context,
+            Operation::User {
+                application_id: id,
+                bytes: vec![],
+            },
+            &mut controller,
+        )
+        .await;
+
+    assert_matches!(result, Err(ExecutionError::UserError(message)) if message == error_message);
+    Ok(())
+}
+
 /// Tests if a session is called correctly during execution.
 #[tokio::test]
 async fn test_simple_session() -> anyhow::Result<()> {
