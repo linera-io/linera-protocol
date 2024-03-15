@@ -8,7 +8,7 @@ async-graphql.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 candle-core = "0.4.1"
-getrandom = { version = "0.2.12", features = ["custom"] }
+getrandom = { version = "0.2.12", default-features = false, features = ["custom"] }
 linera-sdk.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -17,6 +17,7 @@ log = "0.4.21"
 fs-err = "2.11.0"
 candle-transformers = "0.4.1"
 tokenizers = { version = "0.15.0", default-features = false, features = ["unstable_wasm"] }
+rand = "0.8.5"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }

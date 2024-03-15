@@ -2586,6 +2586,7 @@ dependencies = [
  "getrandom",
  "linera-sdk",
  "log",
+ "rand",
  "serde",
  "serde_json",
  "thiserror",
