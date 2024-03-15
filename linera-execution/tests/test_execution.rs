@@ -4,6 +4,7 @@
 #![allow(clippy::field_reassign_with_default)]
 
 use assert_matches::assert_matches;
+use futures::{stream, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::PublicKey,
     data_types::{Amount, ApplicationPermissions, BlockHeight, Resources, Timestamp},
@@ -19,7 +20,8 @@ use linera_execution::{
     },
     ApplicationCallOutcome, BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome,
     MessageKind, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
-    RawOutgoingMessage, ResourceController, Response, SessionCallOutcome, SystemOperation,
+    RawOutgoingMessage, ResourceControlPolicy, ResourceController, Response, SessionCallOutcome,
+    SystemOperation,
 };
 use linera_views::batch::Batch;
 use std::{collections::BTreeMap, vec};
@@ -383,6 +385,177 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
         .await;
 
     assert_matches!(result, Err(ExecutionError::UserError(message)) if message == error_message);
+    Ok(())
+}
+
+/// Tests if `finalize` can send messages.
+#[tokio::test]
+async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
+    let mut state = SystemExecutionState::default();
+    state.description = Some(ChainDescription::Root(0));
+    let mut view = state.into_view().await;
+
+    let mut applications = register_mock_applications(&mut view, 4).await?;
+    let (first_id, first_application) = applications
+        .next()
+        .expect("First mock application should be registered");
+    let (second_id, second_application) = applications
+        .next()
+        .expect("Second mock application should be registered");
+    let (third_id, third_application) = applications
+        .next()
+        .expect("Third mock application should be registered");
+    let (fourth_id, fourth_application) = applications
+        .next()
+        .expect("Fourth mock application should be registered");
+
+    let destination_chain = ChainId::from(ChainDescription::Root(1));
+    let first_message = RawOutgoingMessage {
+        destination: Destination::from(destination_chain),
+        authenticated: false,
+        grant: Resources::default(),
+        kind: MessageKind::Simple,
+        message: b"first".to_vec(),
+    };
+
+    first_application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            runtime.try_call_application(false, second_id, vec![], vec![])?;
+            Ok(RawExecutionOutcome::default())
+        },
+    ));
+    second_application.expect_call(ExpectedCall::handle_application_call(
+        move |runtime, _context, _argument, _forwarded_sessions| {
+            runtime.try_call_application(false, third_id, vec![], vec![])?;
+            Ok(ApplicationCallOutcome::default())
+        },
+    ));
+    third_application.expect_call(ExpectedCall::handle_application_call({
+        let first_message = first_message.clone();
+        move |runtime, _context, _argument, _forwarded_sessions| {
+            runtime.try_call_application(false, fourth_id, vec![], vec![])?;
+            Ok(ApplicationCallOutcome::default().with_message(first_message))
+        }
+    }));
+    fourth_application.expect_call(ExpectedCall::handle_application_call(
+        |_runtime, _context, _argument, _forwarded_sessions| Ok(ApplicationCallOutcome::default()),
+    ));
+
+    let second_message = RawOutgoingMessage {
+        destination: Destination::from(destination_chain),
+        authenticated: false,
+        grant: Resources::default(),
+        kind: MessageKind::Simple,
+        message: b"second".to_vec(),
+    };
+    let third_message = RawOutgoingMessage {
+        destination: Destination::from(destination_chain),
+        authenticated: false,
+        grant: Resources::default(),
+        kind: MessageKind::Simple,
+        message: b"third".to_vec(),
+    };
+    let fourth_message = RawOutgoingMessage {
+        destination: Destination::from(destination_chain),
+        authenticated: false,
+        grant: Resources::default(),
+        kind: MessageKind::Simple,
+        message: b"fourth".to_vec(),
+    };
+
+    fourth_application.expect_call(ExpectedCall::default_finalize());
+    third_application.expect_call(ExpectedCall::finalize({
+        let second_message = second_message.clone();
+        let third_message = third_message.clone();
+        |_runtime, _context| {
+            Ok(RawExecutionOutcome::default()
+                .with_message(second_message)
+                .with_message(third_message))
+        }
+    }));
+    second_application.expect_call(ExpectedCall::default_finalize());
+    first_application.expect_call(ExpectedCall::finalize({
+        let fourth_message = fourth_message.clone();
+        |_runtime, _context| Ok(RawExecutionOutcome::default().with_message(fourth_message))
+    }));
+
+    let context = make_operation_context();
+    let mut controller = ResourceController::default();
+    let outcomes = view
+        .execute_operation(
+            context,
+            Operation::User {
+                application_id: first_id,
+                bytes: vec![],
+            },
+            &mut controller,
+        )
+        .await?;
+
+    let applications = stream::iter([third_id, first_id])
+        .then(|id| view.system.registry.describe_application(id))
+        .try_collect()
+        .await?;
+    let registration_message = RawOutgoingMessage {
+        destination: Destination::from(destination_chain),
+        authenticated: false,
+        grant: Amount::ZERO,
+        kind: MessageKind::Simple,
+        message: SystemMessage::RegisterApplications { applications },
+    };
+    let account = Account {
+        chain_id: ChainId::root(0),
+        owner: None,
+    };
+    let fee_policy = ResourceControlPolicy::default();
+
+    assert_eq!(
+        outcomes,
+        vec![
+            ExecutionOutcome::System(
+                RawExecutionOutcome::default().with_message(registration_message)
+            ),
+            ExecutionOutcome::User(
+                fourth_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                third_id,
+                RawExecutionOutcome::default()
+                    .with_refund_grant_to(Some(account))
+                    .with_message(first_message.into_priced(&fee_policy)?)
+            ),
+            ExecutionOutcome::User(
+                second_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                first_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                fourth_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                third_id,
+                RawExecutionOutcome::default()
+                    .with_refund_grant_to(Some(account))
+                    .with_message(second_message.into_priced(&fee_policy)?)
+                    .with_message(third_message.into_priced(&fee_policy)?)
+            ),
+            ExecutionOutcome::User(
+                second_id,
+                RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            ),
+            ExecutionOutcome::User(
+                first_id,
+                RawExecutionOutcome::default()
+                    .with_refund_grant_to(Some(account))
+                    .with_message(fourth_message.into_priced(&fee_policy)?)
+            ),
+        ]
+    );
     Ok(())
 }
 
