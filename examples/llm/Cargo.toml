@@ -16,7 +16,8 @@ thiserror.workspace = true
 log = "0.4.21"
 fs-err = "2.11.0"
 candle-transformers = "0.4.1"
-tokenizers = { version = "0.15.0", default-features = false, features = ["unstable_wasm"] }
+tokenizers = { git = "https://github.com/christos-h/tokenizers", default-features = false, features = ["unstable_wasm"] }
+#tokenizers = { version = "0.15.0"}
 rand = "0.8.5"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
