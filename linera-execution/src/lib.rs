@@ -135,6 +135,8 @@ pub enum ExecutionError {
     OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
     UnauthorizedApplication(UserApplicationId),
+    #[error("Failed to make network reqwest")]
+    ReqwestError(#[from] reqwest::Error),
 }
 
 impl ExecutionError {
@@ -457,6 +459,12 @@ pub trait ServiceRuntime: BaseRuntime {
         &mut self,
         queried_id: UserApplicationId,
         argument: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError>;
+
+    /// Queries another application.
+    fn get_blob_from_url(
+        &mut self,
+        url: &str,
     ) -> Result<Vec<u8>, ExecutionError>;
 }
 

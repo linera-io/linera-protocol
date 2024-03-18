@@ -1270,6 +1270,11 @@ impl ServiceRuntime for ServiceSyncRuntime {
         self.inner().pop_application();
         Ok(response)
     }
+
+    fn get_blob_from_url(&mut self, url: &str) -> Result<Vec<u8>, ExecutionError> {
+        let response = reqwest::blocking::get(url)?;
+        Ok(response.bytes()?.to_vec())
+    }
 }
 
 /// The origin of the execution.

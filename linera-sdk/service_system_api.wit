@@ -5,6 +5,7 @@ application-parameters: func() -> list<u8>
 read-chain-balance: func() -> amount
 read-owner-balance: func(owner: owner) -> amount
 read-system-timestamp: func() -> timestamp
+get-blob-from-url: func(url: url) -> list<u8>
 
 log: func(message: string, level: log-level)
 
@@ -22,6 +23,8 @@ record application-id {
     bytecode-id: bytecode-id,
     creation: message-id,
 }
+
+type url = string
 
 type bytecode-id = message-id
 

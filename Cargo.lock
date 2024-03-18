@@ -3154,6 +3154,7 @@ dependencies = [
  "once_cell",
  "oneshot",
  "prometheus",
+ "reqwest",
  "serde",
  "serde_bytes",
  "serde_json",
