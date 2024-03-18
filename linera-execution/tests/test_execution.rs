@@ -609,6 +609,64 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Tests if an application can't perform cross-application calls during `finalize`, even if they
+/// have already called the same application.
+#[tokio::test]
+async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
+    let mut state = SystemExecutionState::default();
+    state.description = Some(ChainDescription::Root(0));
+    let mut view = state.into_view().await;
+
+    let mut applications = register_mock_applications(&mut view, 2).await?;
+    let (caller_id, caller_application) = applications
+        .next()
+        .expect("Caller mock application should be registered");
+    let (target_id, target_application) = applications
+        .next()
+        .expect("Target mock application should be registered");
+
+    caller_application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            runtime.try_call_application(false, target_id, vec![], vec![])?;
+            Ok(RawExecutionOutcome::default())
+        },
+    ));
+    target_application.expect_call(ExpectedCall::handle_application_call(
+        |_runtime, _context, _argument, _forwarded_sessions| Ok(ApplicationCallOutcome::default()),
+    ));
+
+    target_application.expect_call(ExpectedCall::default_finalize());
+    caller_application.expect_call(ExpectedCall::finalize({
+        move |runtime, _context| {
+            runtime.try_call_application(false, target_id, vec![], vec![])?;
+            Ok(RawExecutionOutcome::default())
+        }
+    }));
+
+    let context = make_operation_context();
+    let mut controller = ResourceController::default();
+    let result = view
+        .execute_operation(
+            context,
+            Operation::User {
+                application_id: caller_id,
+                bytes: vec![],
+            },
+            &mut controller,
+        )
+        .await;
+
+    let expected_caller_id = caller_id;
+    let expected_callee_id = target_id;
+    assert_matches!(
+        result,
+        Err(ExecutionError::CrossApplicationCallInFinalize { caller_id, callee_id })
+            if *caller_id == expected_caller_id && *callee_id == expected_callee_id
+    );
+
+    Ok(())
+}
+
 /// Tests if a session is called correctly during execution.
 #[tokio::test]
 async fn test_simple_session() -> anyhow::Result<()> {
