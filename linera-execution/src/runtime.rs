@@ -59,6 +59,8 @@ pub struct SyncRuntimeInternal<UserInstance> {
     ///
     /// If [`true`], disables cross-application calls.
     is_finalizing: bool,
+    /// Applications that need to be finalized.
+    applications_to_finalize: Vec<UserApplicationId>,
 
     /// Application instances loaded in this transaction.
     loaded_applications: HashMap<UserApplicationId, LoadedApplication<UserInstance>>,
@@ -284,6 +286,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             executing_message,
             execution_state_sender,
             is_finalizing: false,
+            applications_to_finalize: Vec::new(),
             loaded_applications: HashMap::new(),
             call_stack: Vec::new(),
             active_applications: HashSet::new(),
@@ -363,6 +366,8 @@ impl SyncRuntimeInternal<UserContractInstance> {
                     .recv_response()?;
 
                 let instance = code.instantiate(SyncRuntime(this))?;
+
+                self.applications_to_finalize.push(id);
                 Ok(entry
                     .insert(LoadedApplication::new(instance, description))
                     .clone())
