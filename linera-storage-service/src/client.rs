@@ -8,10 +8,10 @@ use crate::{
         statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
         KeyValueAppend, ReplyContainsKey, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix,
         ReplyFindKeysByPrefix, ReplyListAll, ReplyReadMultiValues, ReplyReadValue,
-        ReplySpecificBlock, RequestContainsKey, RequestCreateNamespace, RequestDeleteAll,
+        ReplySpecificChunk, RequestContainsKey, RequestCreateNamespace, RequestDeleteAll,
         RequestDeleteNamespace, RequestExistsNamespace, RequestFindKeyValuesByPrefix,
         RequestFindKeysByPrefix, RequestListAll, RequestReadMultiValues, RequestReadValue,
-        RequestSpecificBlock, RequestWriteBatchExtended, Statement,
+        RequestSpecificChunk, RequestWriteBatchExtended, Statement,
     },
 };
 use async_lock::{RwLock, RwLockWriteGuard, Semaphore, SemaphoreGuard};
@@ -192,35 +192,35 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         use crate::client::Operation;
         use linera_views::batch::WriteOperation;
         let mut statements = Vec::new();
-        let mut block_size = 0;
+        let mut chunk_size = 0;
         for operation in batch.operations {
             let operation_size = match &operation {
                 WriteOperation::Delete { key } => key.len(),
                 WriteOperation::Put { key, value } => key.len() + value.len(),
                 WriteOperation::DeletePrefix { key_prefix } => key_prefix.len(),
             };
-            if operation_size + block_size < MAX_PAYLOAD_SIZE {
+            if operation_size + chunk_size < MAX_PAYLOAD_SIZE {
                 let statement = self.get_statement(operation);
                 statements.push(statement);
-                block_size += operation_size;
+                chunk_size += operation_size;
             } else {
                 self.submit_statements(mem::take(&mut statements)).await?;
-                block_size = 0;
+                chunk_size = 0;
                 if operation_size > MAX_PAYLOAD_SIZE {
-                    // One single operation is especially big. So split it in blocks.
+                    // One single operation is especially big. So split it in chunks.
                     let WriteOperation::Put { key, value } = operation else {
                         // Only the put can go over the limit
                         unreachable!();
                     };
                     let mut full_key = self.namespace.clone();
                     full_key.extend(key);
-                    let value_blocks = value
+                    let value_chunks = value
                         .chunks(MAX_PAYLOAD_SIZE)
                         .map(|x| x.to_vec())
                         .collect::<Vec<_>>();
-                    let num_chunks = value_blocks.len();
-                    for (i_block, value) in value_blocks.into_iter().enumerate() {
-                        let last = i_block + 1 == num_chunks;
+                    let num_chunks = value_chunks.len();
+                    for (i_chunk, value) in value_chunks.into_iter().enumerate() {
+                        let last = i_chunk + 1 == num_chunks;
                         let operation = Operation::Append(KeyValueAppend {
                             key: full_key.clone(),
                             value,
@@ -235,7 +235,7 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
                     // The operation is small enough, it is just that we have many so we need to split.
                     let statement = self.get_statement(operation);
                     statements.push(statement);
-                    block_size = operation_size;
+                    chunk_size = operation_size;
                 }
             }
         }
@@ -313,12 +313,12 @@ impl ServiceStoreClient {
     ) -> Result<S, ServiceContextError> {
         let mut value = Vec::new();
         for index in 0..num_chunks {
-            let query = RequestSpecificBlock { recover_key, index };
+            let query = RequestSpecificChunk { recover_key, index };
             let request = tonic::Request::new(query);
-            let response = client.process_specific_block(request).await?;
+            let response = client.process_specific_chunk(request).await?;
             let response = response.into_inner();
-            let ReplySpecificBlock { block } = response;
-            value.extend(block);
+            let ReplySpecificChunk { chunk } = response;
+            value.extend(chunk);
         }
         Ok(bcs::from_bytes(&value)?)
     }

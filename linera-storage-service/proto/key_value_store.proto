@@ -87,13 +87,13 @@ message ReplyWriteBatchExtended {
 }
 
 
-message RequestSpecificBlock {
+message RequestSpecificChunk {
   int64 recover_key = 1;
   int32 index = 2;
 }
 
-message ReplySpecificBlock {
-  bytes block = 1;
+message ReplySpecificChunk {
+  bytes chunk = 1;
 }
 
 
@@ -143,7 +143,7 @@ service StoreProcessor {
   rpc ProcessFindKeysByPrefix (RequestFindKeysByPrefix) returns (ReplyFindKeysByPrefix) {}
   rpc ProcessFindKeyValuesByPrefix (RequestFindKeyValuesByPrefix) returns (ReplyFindKeyValuesByPrefix) {}
   rpc ProcessWriteBatchExtended (RequestWriteBatchExtended) returns (ReplyWriteBatchExtended) {}
-  rpc ProcessSpecificBlock (RequestSpecificBlock) returns (ReplySpecificBlock) {}
+  rpc ProcessSpecificChunk (RequestSpecificChunk) returns (ReplySpecificChunk) {}
   rpc ProcessCreateNamespace (RequestCreateNamespace) returns (ReplyCreateNamespace) {}
   rpc ProcessExistsNamespace (RequestExistsNamespace) returns (ReplyExistsNamespace) {}
   rpc ProcessDeleteNamespace (RequestDeleteNamespace) returns (ReplyDeleteNamespace) {}

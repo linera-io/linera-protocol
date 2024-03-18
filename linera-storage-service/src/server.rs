@@ -6,11 +6,11 @@ use crate::key_value_store::{
     store_processor_server::{StoreProcessor, StoreProcessorServer},
     KeyValue, OptValue, ReplyContainsKey, ReplyCreateNamespace, ReplyDeleteAll,
     ReplyDeleteNamespace, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix,
-    ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplySpecificBlock,
+    ReplyListAll, ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk,
     ReplyWriteBatchExtended, RequestContainsKey, RequestCreateNamespace, RequestDeleteAll,
     RequestDeleteNamespace, RequestExistsNamespace, RequestFindKeyValuesByPrefix,
     RequestFindKeysByPrefix, RequestListAll, RequestReadMultiValues, RequestReadValue,
-    RequestSpecificBlock, RequestWriteBatchExtended,
+    RequestSpecificChunk, RequestWriteBatchExtended,
 };
 use linera_storage_service::common::{KeyTag, MAX_PAYLOAD_SIZE};
 use async_lock::RwLock;
@@ -394,22 +394,22 @@ impl StoreProcessor for ServiceStoreServer {
         Ok(Response::new(response))
     }
 
-    async fn process_specific_block(
+    async fn process_specific_chunk(
         &self,
-        request: Request<RequestSpecificBlock>,
-    ) -> Result<Response<ReplySpecificBlock>, Status> {
+        request: Request<RequestSpecificChunk>,
+    ) -> Result<Response<ReplySpecificChunk>, Status> {
         let request = request.into_inner();
-        let RequestSpecificBlock { recover_key, index } = request;
+        let RequestSpecificChunk { recover_key, index } = request;
         let mut pending_big_reads = self.pending_big_reads.write().await;
         let Some(entry) = pending_big_reads.chunks_by_index.get(&recover_key) else {
             unreachable!();
         };
         let index = index as usize;
-        let block = entry[index].clone();
+        let chunk = entry[index].clone();
         if entry.len() == index + 1 {
             pending_big_reads.chunks_by_index.remove(&recover_key);
         }
-        let response = ReplySpecificBlock { block };
+        let response = ReplySpecificChunk { chunk };
         Ok(Response::new(response))
     }
 
