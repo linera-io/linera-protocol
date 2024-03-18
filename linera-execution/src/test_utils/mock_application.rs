@@ -6,9 +6,9 @@
 #![allow(dead_code)]
 
 use crate::{
-    ApplicationCallOutcome, CalleeContext, ContractSyncRuntime, ExecutionError, MessageContext,
-    OperationContext, QueryContext, RawExecutionOutcome, ServiceSyncRuntime, SessionCallOutcome,
-    UserContract, UserContractModule, UserService, UserServiceModule,
+    ApplicationCallOutcome, CalleeContext, ContractSyncRuntime, ExecutionError, FinalizeContext,
+    MessageContext, OperationContext, QueryContext, RawExecutionOutcome, ServiceSyncRuntime,
+    SessionCallOutcome, UserContract, UserContractModule, UserService, UserServiceModule,
 };
 use linera_base::identifiers::SessionId;
 use std::{
@@ -104,6 +104,14 @@ type HandleSessionCallHandler = Box<
         + Send
         + Sync,
 >;
+type FinalizeHandler = Box<
+    dyn FnOnce(
+            &mut ContractSyncRuntime,
+            FinalizeContext,
+        ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>
+        + Send
+        + Sync,
+>;
 type HandleQueryHandler = Box<
     dyn FnOnce(&mut ServiceSyncRuntime, QueryContext, Vec<u8>) -> Result<Vec<u8>, ExecutionError>
         + Send
@@ -122,6 +130,8 @@ pub enum ExpectedCall {
     HandleApplicationCall(HandleApplicationCallHandler),
     /// An expected call to [`UserContract::handle_session_call`].
     HandleSessionCall(HandleSessionCallHandler),
+    /// An expected call to [`UserContract::finalize`].
+    Finalize(FinalizeHandler),
     /// An expected call to [`UserService::handle_query`].
     HandleQuery(HandleQueryHandler),
 }
@@ -134,6 +144,7 @@ impl Display for ExpectedCall {
             ExpectedCall::ExecuteMessage(_) => "execute_message",
             ExpectedCall::HandleApplicationCall(_) => "handle_application_call",
             ExpectedCall::HandleSessionCall(_) => "handle_session_call",
+            ExpectedCall::Finalize(_) => "finalize",
             ExpectedCall::HandleQuery(_) => "handle_query",
         };
 
@@ -222,6 +233,26 @@ impl ExpectedCall {
             + 'static,
     ) -> Self {
         ExpectedCall::HandleSessionCall(Box::new(handler))
+    }
+
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::finalize`]
+    /// implementation, which is handled by the provided `handler`.
+    pub fn finalize(
+        handler: impl FnOnce(
+                &mut ContractSyncRuntime,
+                FinalizeContext,
+            ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>
+            + Send
+            + Sync
+            + 'static,
+    ) -> Self {
+        ExpectedCall::Finalize(Box::new(handler))
+    }
+
+    /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s [`UserContract::finalize`]
+    /// implementation, which is handled by the default implementation which does nothing.
+    pub fn default_finalize() -> Self {
+        Self::finalize(|_, _| Ok(RawExecutionOutcome::default()))
     }
 
     /// Creates an [`ExpectedCall`] to the [`MockApplicationInstance`]'s
@@ -346,6 +377,19 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntime> {
                 "Expected a call to `handle_session_call`, got a call to `{unexpected_call}` instead."
             ),
             None => panic!("Unexpected call to `handle_session_call`"),
+        }
+    }
+
+    fn finalize(
+        &mut self,
+        context: FinalizeContext,
+    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
+        match self.next_expected_call() {
+            Some(ExpectedCall::Finalize(handler)) => handler(&mut self.runtime, context),
+            Some(unexpected_call) => {
+                panic!("Expected a call to `finalize`, got a call to `{unexpected_call}` instead.")
+            }
+            None => panic!("Unexpected call to `finalize`"),
         }
     }
 }

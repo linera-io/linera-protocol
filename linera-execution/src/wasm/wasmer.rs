@@ -36,8 +36,8 @@ use super::{module_cache::ModuleCache, WasmExecutionError};
 use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
     ApplicationCallOutcome, BaseRuntime, Bytecode, CalleeContext, ContractRuntime, ExecutionError,
-    MessageContext, OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime,
-    SessionCallOutcome,
+    FinalizeContext, MessageContext, OperationContext, QueryContext, RawExecutionOutcome,
+    ServiceRuntime, SessionCallOutcome,
 };
 use bytes::Bytes;
 use linera_base::{identifiers::SessionId, sync::Lazy};
@@ -304,6 +304,17 @@ where
             &forwarded_sessions,
         )
         .map(|inner| inner.map(<(SessionCallOutcome, Vec<u8>)>::from));
+        self.persist_remaining_fuel()?;
+        result?.map_err(ExecutionError::UserError)
+    }
+
+    fn finalize(
+        &mut self,
+        _context: FinalizeContext,
+    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError> {
+        self.configure_initial_fuel()?;
+        let result = contract::Contract::finalize(&self.application, &mut self.store)
+            .map(|inner| inner.map(RawExecutionOutcome::from));
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }

@@ -13,14 +13,12 @@ use crate::{
     Contract, SimpleStateStorage, ViewStateStorage,
 };
 use async_trait::async_trait;
-use futures::TryFutureExt;
 use linera_views::{
     batch::Batch,
     common::{ReadableKeyValueStore, WritableKeyValueStore},
     views::RootView,
 };
 use serde::{de::DeserializeOwned, Serialize};
-use std::future::Future;
 
 /// The storage APIs used by a contract.
 #[async_trait]
@@ -29,33 +27,7 @@ pub trait ContractStateStorage<Application> {
     async fn load() -> Application;
 
     /// Stores the `Application` state.
-    async fn store(state: Application);
-
-    /// Executes an `operation` with the `Application` state.
-    ///
-    /// The state is only stored back in storage if the `operation` succeeds. Otherwise, the error
-    /// is returned as a [`String`].
-    async fn execute_with_state<Operation, AsyncOperation, Success, Error>(
-        operation: Operation,
-    ) -> Result<Success, String>
-    where
-        Operation: FnOnce(Application) -> AsyncOperation,
-        AsyncOperation: Future<Output = Result<(Application, Success), Error>> + Send,
-        Application: Send,
-        Operation: Send,
-        Success: Send + 'static,
-        Error: ToString + 'static,
-    {
-        let application = Self::load().await;
-
-        operation(application)
-            .and_then(|(application, result)| async move {
-                Self::store(application).await;
-                Ok(result)
-            })
-            .await
-            .map_err(|error| error.to_string())
-    }
+    async fn store(state: &mut Application);
 }
 
 #[async_trait]
@@ -76,7 +48,7 @@ where
         }
     }
 
-    async fn store(state: Application) {
+    async fn store(state: &mut Application) {
         let mut batch = Batch::new();
 
         batch
@@ -99,7 +71,7 @@ where
         system_api::load_view().await
     }
 
-    async fn store(state: Application) {
+    async fn store(state: &mut Application) {
         system_api::store_view(state).await;
     }
 }

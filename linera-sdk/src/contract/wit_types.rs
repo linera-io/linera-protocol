@@ -14,8 +14,8 @@ pub use self::contract::{
     SessionCallOutcome, SessionId, SessionState,
 };
 use super::{
-    __contract_execute_message, __contract_execute_operation, __contract_handle_application_call,
-    __contract_handle_session_call, __contract_initialize,
+    __contract_execute_message, __contract_execute_operation, __contract_finalize,
+    __contract_handle_application_call, __contract_handle_session_call, __contract_initialize,
 };
 
 /// Implementation of the contract WIT entrypoints.
@@ -57,5 +57,9 @@ impl contract::Contract for Contract {
             .collect();
         unsafe { __contract_handle_session_call(argument, session_state, forwarded_sessions) }
             .map(|outcome| outcome.into())
+    }
+
+    fn finalize() -> Result<ExecutionOutcome, String> {
+        unsafe { __contract_finalize().map(|outcome| outcome.into()) }
     }
 }

@@ -7,13 +7,15 @@ use crate::{
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
-    ExecutionError, ExecutionOutcome, MessageContext, RawExecutionOutcome, ServiceRuntime,
-    SessionId, UserApplicationDescription, UserApplicationId, UserContractCode,
-    UserContractInstance, UserServiceInstance,
+    ExecutionError, ExecutionOutcome, FinalizeContext, MessageContext, RawExecutionOutcome,
+    ServiceRuntime, SessionId, UserApplicationDescription, UserApplicationId, UserContractInstance,
+    UserServiceInstance,
 };
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{Amount, ApplicationPermissions, ArithmeticError, BlockHeight, Timestamp},
+    data_types::{
+        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, Resources, Timestamp,
+    },
     ensure,
     identifiers::{Account, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
@@ -22,6 +24,7 @@ use linera_views::batch::Batch;
 use oneshot::Receiver;
 use std::{
     collections::{hash_map, BTreeMap, HashMap, HashSet},
+    mem,
     sync::{Arc, Mutex},
 };
 
@@ -52,6 +55,13 @@ pub struct SyncRuntimeInternal<UserInstance> {
 
     /// How to interact with the storage view of the execution state.
     execution_state_sender: ExecutionStateSender,
+
+    /// If applications are being finalized.
+    ///
+    /// If [`true`], disables cross-application calls.
+    is_finalizing: bool,
+    /// Applications that need to be finalized.
+    applications_to_finalize: Vec<UserApplicationId>,
 
     /// Application instances loaded in this transaction.
     loaded_applications: HashMap<UserApplicationId, LoadedApplication<UserInstance>>,
@@ -92,7 +102,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
 }
 
 /// The runtime status of an application.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct ApplicationStatus {
     /// The caller application ID, if forwarded during the call.
     caller_id: Option<UserApplicationId>,
@@ -276,6 +286,8 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             next_message_index,
             executing_message,
             execution_state_sender,
+            is_finalizing: false,
+            applications_to_finalize: Vec::new(),
             loaded_applications: HashMap::new(),
             call_stack: Vec::new(),
             active_applications: HashSet::new(),
@@ -341,15 +353,6 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
 }
 
 impl SyncRuntimeInternal<UserContractInstance> {
-    fn load_contract(
-        &mut self,
-        id: UserApplicationId,
-    ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
-        self.execution_state_sender
-            .send_request(|callback| Request::LoadContract { id, callback })?
-            .recv_response()
-    }
-
     /// Loads a contract instance, initializing it with this runtime if needed.
     fn load_contract_instance(
         &mut self,
@@ -364,6 +367,8 @@ impl SyncRuntimeInternal<UserContractInstance> {
                     .recv_response()?;
 
                 let instance = code.instantiate(SyncRuntime(this))?;
+
+                self.applications_to_finalize.push(id);
                 Ok(entry
                     .insert(LoadedApplication::new(instance, description))
                     .clone())
@@ -381,6 +386,14 @@ impl SyncRuntimeInternal<UserContractInstance> {
         forwarded_sessions: &[SessionId],
     ) -> Result<(Arc<Mutex<UserContractInstance>>, CalleeContext), ExecutionError> {
         self.check_for_reentrancy(callee_id)?;
+
+        ensure!(
+            !self.is_finalizing,
+            ExecutionError::CrossApplicationCallInFinalize {
+                caller_id: Box::new(self.current_application().id),
+                callee_id: Box::new(callee_id),
+            }
+        );
 
         // Load the application.
         let application = self.load_contract_instance(this, callee_id)?;
@@ -421,25 +434,39 @@ impl SyncRuntimeInternal<UserContractInstance> {
             signer,
             ..
         } = self.pop_application();
-
-        // Interpret the results of the call and charge for the message grants.
-        let outcome = raw_outcome
-            .execution_outcome
-            .with_refund_grant_to(self.refund_grant_to)
-            .with_authenticated_signer(signer)
-            .into_priced(&self.resource_controller.policy)?;
-        for message in &outcome.messages {
-            self.resource_controller.track_grant(message.grant)?;
-        }
-        self.execution_outcomes
-            .push(ExecutionOutcome::User(callee_id, outcome));
         let caller_id = self.application_id()?;
         let sessions = self.make_sessions(raw_outcome.create_sessions, callee_id, caller_id);
         let outcome = CallOutcome {
             value: raw_outcome.value,
             sessions,
         };
+        self.handle_outcome(raw_outcome.execution_outcome, signer, callee_id)?;
         Ok(outcome)
+    }
+
+    /// Handles a newly produced [`RawExecutionOutcome`], conditioning and adding it to the stack
+    /// of outcomes.
+    ///
+    /// Calculates the fees, charges for the grants and attaches the authenticated `signer` and the
+    /// destination of grant refunds.
+    fn handle_outcome(
+        &mut self,
+        raw_outcome: RawExecutionOutcome<Vec<u8>, Resources>,
+        signer: Option<Owner>,
+        application_id: UserApplicationId,
+    ) -> Result<(), ExecutionError> {
+        let outcome = raw_outcome
+            .with_refund_grant_to(self.refund_grant_to)
+            .with_authenticated_signer(signer)
+            .into_priced(&self.resource_controller.policy)?;
+
+        for message in &outcome.messages {
+            self.resource_controller.track_grant(message.grant)?;
+        }
+
+        self.execution_outcomes
+            .push(ExecutionOutcome::User(application_id, outcome));
+        Ok(())
     }
 
     fn forward_sessions(
@@ -953,63 +980,126 @@ impl ContractSyncRuntime {
             UserAction::Message(context, _) => Some(context.into()),
             _ => None,
         };
-        let mut runtime = SyncRuntimeInternal::new(
+        let signer = action.signer();
+        let height = action.height();
+        let next_message_index = action.next_message_index();
+        let mut runtime = ContractSyncRuntime::new(SyncRuntimeInternal::new(
             chain_id,
-            action.height(),
-            action.signer(),
-            action.next_message_index(),
+            height,
+            signer,
+            next_message_index,
             executing_message,
             execution_state_sender,
             refund_grant_to,
             resource_controller,
-        );
-        let (code, description) = runtime.load_contract(application_id)?;
-        let signer = action.signer();
-        runtime.push_application(ApplicationStatus {
-            caller_id: None,
-            id: application_id,
-            parameters: description.parameters,
-            signer,
-        });
-        let mut runtime = ContractSyncRuntime::new(runtime);
-        let execution_result = {
-            let mut code = code.instantiate(runtime.clone())?;
-            match action {
-                UserAction::Initialize(context, argument) => code.initialize(context, argument),
-                UserAction::Operation(context, operation) => {
-                    code.execute_operation(context, operation)
-                }
-                UserAction::Message(context, message) => code.execute_message(context, message),
-            }
+        ));
+        let finalize_context = FinalizeContext {
+            authenticated_signer: signer,
+            chain_id,
+            height,
+            next_message_index,
         };
-        // Ensure the `loaded_applications` are cleared to prevent circular references in the
-        // `runtime`
-        runtime.inner().loaded_applications.clear();
-        let mut runtime = runtime
+        runtime.execute(application_id, signer, move |code| match action {
+            UserAction::Initialize(context, argument) => code.initialize(context, argument),
+            UserAction::Operation(context, operation) => code.execute_operation(context, operation),
+            UserAction::Message(context, message) => code.execute_message(context, message),
+        })?;
+        runtime.finalize(finalize_context)?;
+        let runtime = runtime
             .into_inner()
             .expect("Runtime clones should have been freed by now");
-        let execution_outcome = execution_result?;
-        assert_eq!(runtime.call_stack.len(), 1);
-        assert_eq!(runtime.call_stack[0].id, application_id);
-        assert_eq!(runtime.active_applications.len(), 1);
-        assert!(runtime.active_applications.contains(&application_id));
         // Check that all sessions were properly closed.
         if let Some(session_id) = runtime.session_manager.states.keys().next() {
             return Err(ExecutionError::SessionWasNotClosed(*session_id));
         }
-        // Charge for the message grants and add the results of the last call to the
-        // execution results.
-        let outcome = execution_outcome
-            .with_authenticated_signer(signer)
-            .with_refund_grant_to(refund_grant_to)
-            .into_priced(&runtime.resource_controller.policy)?;
-        for message in &outcome.messages {
-            runtime.resource_controller.track_grant(message.grant)?;
-        }
-        runtime
-            .execution_outcomes
-            .push(ExecutionOutcome::User(application_id, outcome));
         Ok((runtime.execution_outcomes, runtime.resource_controller))
+    }
+
+    /// Notifies all loaded applications that execution is finalizing.
+    fn finalize(&mut self, context: FinalizeContext) -> Result<(), ExecutionError> {
+        let applications = mem::take(&mut self.inner().applications_to_finalize)
+            .into_iter()
+            .rev();
+
+        self.inner().is_finalizing = true;
+
+        for application in applications {
+            self.execute(application, context.authenticated_signer, |contract| {
+                contract.finalize(context)
+            })?;
+        }
+
+        self.inner().loaded_applications.clear();
+
+        Ok(())
+    }
+
+    /// Executes a `closure` with the contract code for the `application_id`.
+    ///
+    /// Automatically clears the `loaded_applications` if an error occurs, allowing for a safe
+    /// early return in the caller.
+    fn execute(
+        &mut self,
+        application_id: UserApplicationId,
+        signer: Option<Owner>,
+        closure: impl FnOnce(
+            &mut UserContractInstance,
+        ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>,
+    ) -> Result<(), ExecutionError> {
+        match self.try_execute(application_id, signer, closure) {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                // Ensure the `loaded_applications` are cleared to prevent circular references in
+                // the `runtime`
+                self.inner().loaded_applications.clear();
+                Err(error)
+            }
+        }
+    }
+
+    /// Tries to execute a `closure` with the contract code for the `application_id`.
+    ///
+    /// If an error occurs, the caller *must* clear the `loaded_applications` to prevent a deadlock
+    /// happening because the runtime never gets dropped due to circular references.
+    fn try_execute(
+        &mut self,
+        application_id: UserApplicationId,
+        signer: Option<Owner>,
+        closure: impl FnOnce(
+            &mut UserContractInstance,
+        ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>,
+    ) -> Result<(), ExecutionError> {
+        let (contract, status) = {
+            let cloned_runtime = self.0.clone();
+            let mut runtime = self.inner();
+            let application = runtime.load_contract_instance(cloned_runtime, application_id)?;
+
+            let status = ApplicationStatus {
+                caller_id: None,
+                id: application_id,
+                parameters: application.parameters,
+                signer,
+            };
+
+            runtime.push_application(status.clone());
+
+            (application.instance, status)
+        };
+
+        let outcome = closure(
+            &mut contract
+                .try_lock()
+                .expect("Application should not be already executing"),
+        )?;
+
+        let mut runtime = self.inner();
+        let application_status = runtime.pop_application();
+        assert_eq!(application_status, status);
+        assert!(runtime.call_stack.is_empty());
+
+        runtime.handle_outcome(outcome, signer, application_id)?;
+
+        Ok(())
     }
 }
 

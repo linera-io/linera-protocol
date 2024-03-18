@@ -175,6 +175,7 @@ async fn test_fee_consumption(
             Ok(RawExecutionOutcome::default())
         },
     ));
+    application.expect_call(ExpectedCall::default_finalize());
 
     let refund_grant_to = Some(Account {
         chain_id: ChainId::root(0),
@@ -210,14 +211,24 @@ async fn test_fee_consumption(
 
     assert_eq!(
         outcomes,
-        vec![ExecutionOutcome::User(
-            application_id,
-            RawExecutionOutcome {
-                refund_grant_to,
-                authenticated_signer,
-                ..Default::default()
-            }
-        )]
+        vec![
+            ExecutionOutcome::User(
+                application_id,
+                RawExecutionOutcome {
+                    refund_grant_to,
+                    authenticated_signer,
+                    ..Default::default()
+                }
+            ),
+            ExecutionOutcome::User(
+                application_id,
+                RawExecutionOutcome {
+                    refund_grant_to,
+                    authenticated_signer,
+                    ..Default::default()
+                }
+            )
+        ]
     );
 
     match initial_grant {

@@ -120,6 +120,14 @@ pub enum ExecutionError {
 
     #[error("Attempted to perform a reentrant call to application {0}")]
     ReentrantCall(UserApplicationId),
+    #[error(
+        "Application {caller_id} attempted to perform a cross-application to {callee_id} call \
+        from `finalize`"
+    )]
+    CrossApplicationCallInFinalize {
+        caller_id: Box<UserApplicationId>,
+        callee_id: Box<UserApplicationId>,
+    },
     #[error("Failed to load bytecode from storage {0:?}")]
     ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
 
@@ -193,6 +201,12 @@ pub trait UserContract {
         argument: Vec<u8>,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<(SessionCallOutcome, Vec<u8>), ExecutionError>;
+
+    /// Finishes execution of the current transaction.
+    fn finalize(
+        &mut self,
+        context: FinalizeContext,
+    ) -> Result<RawExecutionOutcome<Vec<u8>>, ExecutionError>;
 }
 
 /// The public entry points provided by the service part of an application.
@@ -313,6 +327,18 @@ pub struct CalleeContext {
     /// `None` if the caller doesn't want this particular call to be authenticated (e.g.
     /// for safety reasons).
     pub authenticated_caller_id: Option<UserApplicationId>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct FinalizeContext {
+    /// The current chain ID.
+    pub chain_id: ChainId,
+    /// The authenticated signer of the operation, if any.
+    pub authenticated_signer: Option<Owner>,
+    /// The current block height.
+    pub height: BlockHeight,
+    /// The index of the next message to be created.
+    pub next_message_index: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
