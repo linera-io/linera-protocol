@@ -559,6 +559,56 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Tests if an application can't perform cross-application calls during `finalize`.
+#[tokio::test]
+async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
+    let mut state = SystemExecutionState::default();
+    state.description = Some(ChainDescription::Root(0));
+    let mut view = state.into_view().await;
+
+    let mut applications = register_mock_applications(&mut view, 2).await?;
+    let (caller_id, caller_application) = applications
+        .next()
+        .expect("Caller mock application should be registered");
+    let (target_id, _target_application) = applications
+        .next()
+        .expect("Target mock application should be registered");
+
+    caller_application.expect_call(ExpectedCall::execute_operation(
+        move |_runtime, _context, _operation| Ok(RawExecutionOutcome::default()),
+    ));
+
+    caller_application.expect_call(ExpectedCall::finalize({
+        move |runtime, _context| {
+            runtime.try_call_application(false, target_id, vec![], vec![])?;
+            Ok(RawExecutionOutcome::default())
+        }
+    }));
+
+    let context = make_operation_context();
+    let mut controller = ResourceController::default();
+    let result = view
+        .execute_operation(
+            context,
+            Operation::User {
+                application_id: caller_id,
+                bytes: vec![],
+            },
+            &mut controller,
+        )
+        .await;
+
+    let expected_caller_id = caller_id;
+    let expected_callee_id = target_id;
+    assert_matches!(
+        result,
+        Err(ExecutionError::CrossApplicationCallInFinalize { caller_id, callee_id })
+            if *caller_id == expected_caller_id && *callee_id == expected_callee_id
+    );
+
+    Ok(())
+}
+
 /// Tests if a session is called correctly during execution.
 #[tokio::test]
 async fn test_simple_session() -> anyhow::Result<()> {
