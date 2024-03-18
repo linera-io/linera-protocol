@@ -76,12 +76,12 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let ReplyReadValue {
             value,
             recover_key,
-            n_block,
+            num_chunks,
         } = response;
-        if n_block == 0 {
+        if num_chunks == 0 {
             Ok(value)
         } else {
-            Self::read_entries(client, recover_key, n_block).await
+            Self::read_entries(client, recover_key, num_chunks).await
         }
     }
 
@@ -117,13 +117,13 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let ReplyReadMultiValues {
             values,
             recover_key,
-            n_block,
+            num_chunks,
         } = response;
-        if n_block == 0 {
+        if num_chunks == 0 {
             let values = values.into_iter().map(|x| x.value).collect::<Vec<_>>();
             Ok(values)
         } else {
-            Self::read_entries(client, recover_key, n_block).await
+            Self::read_entries(client, recover_key, num_chunks).await
         }
     }
 
@@ -144,12 +144,12 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let ReplyFindKeysByPrefix {
             keys,
             recover_key,
-            n_block,
+            num_chunks,
         } = response;
-        if n_block == 0 {
+        if num_chunks == 0 {
             Ok(keys)
         } else {
-            Self::read_entries(client, recover_key, n_block).await
+            Self::read_entries(client, recover_key, num_chunks).await
         }
     }
 
@@ -170,16 +170,16 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let ReplyFindKeyValuesByPrefix {
             key_values,
             recover_key,
-            n_block,
+            num_chunks,
         } = response;
-        if n_block == 0 {
+        if num_chunks == 0 {
             let key_values = key_values
                 .into_iter()
                 .map(|x| (x.key, x.value))
                 .collect::<Vec<_>>();
             Ok(key_values)
         } else {
-            Self::read_entries(client, recover_key, n_block).await
+            Self::read_entries(client, recover_key, num_chunks).await
         }
     }
 }
@@ -218,9 +218,9 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
                         .chunks(MAX_PAYLOAD_SIZE)
                         .map(|x| x.to_vec())
                         .collect::<Vec<_>>();
-                    let n_block = value_blocks.len();
+                    let num_chunks = value_blocks.len();
                     for (i_block, value) in value_blocks.into_iter().enumerate() {
-                        let last = i_block + 1 == n_block;
+                        let last = i_block + 1 == num_chunks;
                         let operation = Operation::Append(KeyValueAppend {
                             key: full_key.clone(),
                             value,
@@ -309,10 +309,10 @@ impl ServiceStoreClient {
     async fn read_entries<S: DeserializeOwned>(
         mut client: RwLockWriteGuard<'_, StoreProcessorClient<Channel>>,
         recover_key: i64,
-        n_block: i32,
+        num_chunks: i32,
     ) -> Result<S, ServiceContextError> {
         let mut value = Vec::new();
-        for index in 0..n_block {
+        for index in 0..num_chunks {
             let query = RequestSpecificBlock { recover_key, index };
             let request = tonic::Request::new(query);
             let response = client.process_specific_block(request).await?;

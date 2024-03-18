@@ -39,11 +39,16 @@ enum ServiceStoreServerInternal {
     RocksDb(RocksDbStore),
 }
 
+#[derive(Default)]
+struct PendingBigReads {
+    index: i64,
+    chunks_by_index: BTreeMap<i64, Vec<Vec<u8>>>,
+}
+
 struct ServiceStoreServer {
     store: ServiceStoreServerInternal,
-    index: Arc<RwLock<i64>>,
     pending_big_puts: Arc<RwLock<BTreeMap<Vec<u8>, Vec<u8>>>>,
-    pending_big_read: Arc<RwLock<BTreeMap<i64, Vec<Vec<u8>>>>>,
+    pending_big_reads: Arc<RwLock<PendingBigReads>>,
 }
 
 impl ServiceStoreServer {
@@ -175,17 +180,16 @@ impl ServiceStoreServer {
 
     pub async fn insert_pending_read<S: Serialize>(&self, value: S) -> (i64, i32) {
         let value = bcs::to_bytes(&value).unwrap();
-        let blocks = value
+        let chunks = value
             .chunks(MAX_PAYLOAD_SIZE)
             .map(|x| x.to_vec())
             .collect::<Vec<_>>();
-        let n_block = blocks.len() as i32;
-        let mut pending_big_read = self.pending_big_read.write().await;
-        let mut index = self.index.write().await;
-        let pos = *index;
-        *index += 1;
-        pending_big_read.insert(pos, blocks);
-        (pos, n_block)
+        let num_chunks = chunks.len() as i32;
+        let mut pending_big_reads = self.pending_big_reads.write().await;
+        let pos = pending_big_reads.index;
+        pending_big_reads.index += 1;
+        pending_big_reads.chunks_by_index.insert(pos, chunks);
+        (pos, num_chunks)
     }
 }
 
@@ -228,14 +232,14 @@ impl StoreProcessor for ServiceStoreServer {
             ReplyReadValue {
                 value,
                 recover_key: 0,
-                n_block: 0,
+                num_chunks: 0,
             }
         } else {
-            let (recover_key, n_block) = self.insert_pending_read(value).await;
+            let (recover_key, num_chunks) = self.insert_pending_read(value).await;
             ReplyReadValue {
                 value: None,
                 recover_key,
-                n_block,
+                num_chunks,
             }
         };
         Ok(Response::new(response))
@@ -274,14 +278,14 @@ impl StoreProcessor for ServiceStoreServer {
             ReplyReadMultiValues {
                 values,
                 recover_key: 0,
-                n_block: 0,
+                num_chunks: 0,
             }
         } else {
-            let (recover_key, n_block) = self.insert_pending_read(values).await;
+            let (recover_key, num_chunks) = self.insert_pending_read(values).await;
             ReplyReadMultiValues {
                 values: Vec::default(),
                 recover_key,
-                n_block,
+                num_chunks,
             }
         };
         Ok(Response::new(response))
@@ -299,14 +303,14 @@ impl StoreProcessor for ServiceStoreServer {
             ReplyFindKeysByPrefix {
                 keys,
                 recover_key: 0,
-                n_block: 0,
+                num_chunks: 0,
             }
         } else {
-            let (recover_key, n_block) = self.insert_pending_read(keys).await;
+            let (recover_key, num_chunks) = self.insert_pending_read(keys).await;
             ReplyFindKeysByPrefix {
                 keys: Vec::default(),
                 recover_key,
-                n_block,
+                num_chunks,
             }
         };
         Ok(Response::new(response))
@@ -334,14 +338,14 @@ impl StoreProcessor for ServiceStoreServer {
             ReplyFindKeyValuesByPrefix {
                 key_values,
                 recover_key: 0,
-                n_block: 0,
+                num_chunks: 0,
             }
         } else {
-            let (recover_key, n_block) = self.insert_pending_read(key_values).await;
+            let (recover_key, num_chunks) = self.insert_pending_read(key_values).await;
             ReplyFindKeyValuesByPrefix {
                 key_values: Vec::default(),
                 recover_key,
-                n_block,
+                num_chunks,
             }
         };
         Ok(Response::new(response))
@@ -396,14 +400,14 @@ impl StoreProcessor for ServiceStoreServer {
     ) -> Result<Response<ReplySpecificBlock>, Status> {
         let request = request.into_inner();
         let RequestSpecificBlock { recover_key, index } = request;
-        let mut pending_big_read = self.pending_big_read.write().await;
-        let Some(entry) = pending_big_read.get(&recover_key) else {
+        let mut pending_big_reads = self.pending_big_reads.write().await;
+        let Some(entry) = pending_big_reads.chunks_by_index.get(&recover_key) else {
             unreachable!();
         };
         let index = index as usize;
         let block = entry[index].clone();
         if entry.len() == index + 1 {
-            pending_big_read.remove(&recover_key);
+            pending_big_reads.chunks_by_index.remove(&recover_key);
         }
         let response = ReplySpecificBlock { block };
         Ok(Response::new(response))
@@ -485,14 +489,12 @@ async fn main() {
             (store, endpoint)
         }
     };
-    let index = Arc::new(RwLock::new(0));
     let pending_big_puts = Arc::new(RwLock::new(BTreeMap::default()));
-    let pending_big_read = Arc::new(RwLock::new(BTreeMap::default()));
+    let pending_big_reads = Arc::new(RwLock::new(PendingBigReads::default()));
     let store = ServiceStoreServer {
         store,
-        index,
         pending_big_puts,
-        pending_big_read,
+        pending_big_reads,
     };
     let endpoint = endpoint.parse().unwrap();
     Server::builder()

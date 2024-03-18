@@ -33,7 +33,7 @@ message RequestReadValue {
 message ReplyReadValue {
   optional bytes value = 1;
   int64 recover_key = 2;
-  int32 n_block = 3;
+  int32 num_chunks = 3;
 }
 
 
@@ -53,7 +53,7 @@ message RequestReadMultiValues {
 message ReplyReadMultiValues {
   repeated OptValue values = 1;
   int64 recover_key = 2;
-  int32 n_block = 3;
+  int32 num_chunks = 3;
 }
 
 
@@ -64,7 +64,7 @@ message RequestFindKeysByPrefix {
 message ReplyFindKeysByPrefix {
   repeated bytes keys = 1;
   int64 recover_key = 2;
-  int32 n_block = 3;
+  int32 num_chunks = 3;
 }
 
 
@@ -75,7 +75,7 @@ message RequestFindKeyValuesByPrefix {
 message ReplyFindKeyValuesByPrefix {
   repeated KeyValue key_values = 1;
   int64 recover_key = 2;
-  int32 n_block = 3;
+  int32 num_chunks = 3;
 }
 
 
