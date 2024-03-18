@@ -231,14 +231,14 @@ impl StoreProcessor for ServiceStoreServer {
         let response = if size < MAX_PAYLOAD_SIZE {
             ReplyReadValue {
                 value,
-                recover_key: 0,
+                message_index: 0,
                 num_chunks: 0,
             }
         } else {
-            let (recover_key, num_chunks) = self.insert_pending_read(value).await;
+            let (message_index, num_chunks) = self.insert_pending_read(value).await;
             ReplyReadValue {
                 value: None,
-                recover_key,
+                message_index,
                 num_chunks,
             }
         };
@@ -277,14 +277,14 @@ impl StoreProcessor for ServiceStoreServer {
                 .collect::<Vec<_>>();
             ReplyReadMultiValues {
                 values,
-                recover_key: 0,
+                message_index: 0,
                 num_chunks: 0,
             }
         } else {
-            let (recover_key, num_chunks) = self.insert_pending_read(values).await;
+            let (message_index, num_chunks) = self.insert_pending_read(values).await;
             ReplyReadMultiValues {
                 values: Vec::default(),
-                recover_key,
+                message_index,
                 num_chunks,
             }
         };
@@ -302,14 +302,14 @@ impl StoreProcessor for ServiceStoreServer {
         let response = if size < MAX_PAYLOAD_SIZE {
             ReplyFindKeysByPrefix {
                 keys,
-                recover_key: 0,
+                message_index: 0,
                 num_chunks: 0,
             }
         } else {
-            let (recover_key, num_chunks) = self.insert_pending_read(keys).await;
+            let (message_index, num_chunks) = self.insert_pending_read(keys).await;
             ReplyFindKeysByPrefix {
                 keys: Vec::default(),
-                recover_key,
+                message_index,
                 num_chunks,
             }
         };
@@ -337,14 +337,14 @@ impl StoreProcessor for ServiceStoreServer {
                 .collect::<Vec<_>>();
             ReplyFindKeyValuesByPrefix {
                 key_values,
-                recover_key: 0,
+                message_index: 0,
                 num_chunks: 0,
             }
         } else {
-            let (recover_key, num_chunks) = self.insert_pending_read(key_values).await;
+            let (message_index, num_chunks) = self.insert_pending_read(key_values).await;
             ReplyFindKeyValuesByPrefix {
                 key_values: Vec::default(),
-                recover_key,
+                message_index,
                 num_chunks,
             }
         };
@@ -399,15 +399,15 @@ impl StoreProcessor for ServiceStoreServer {
         request: Request<RequestSpecificChunk>,
     ) -> Result<Response<ReplySpecificChunk>, Status> {
         let request = request.into_inner();
-        let RequestSpecificChunk { recover_key, index } = request;
+        let RequestSpecificChunk { message_index, index } = request;
         let mut pending_big_reads = self.pending_big_reads.write().await;
-        let Some(entry) = pending_big_reads.chunks_by_index.get(&recover_key) else {
+        let Some(entry) = pending_big_reads.chunks_by_index.get(&message_index) else {
             unreachable!();
         };
         let index = index as usize;
         let chunk = entry[index].clone();
         if entry.len() == index + 1 {
-            pending_big_reads.chunks_by_index.remove(&recover_key);
+            pending_big_reads.chunks_by_index.remove(&message_index);
         }
         let response = ReplySpecificChunk { chunk };
         Ok(Response::new(response))
