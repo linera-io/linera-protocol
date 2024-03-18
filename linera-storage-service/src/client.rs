@@ -16,6 +16,7 @@ use crate::{
 };
 use async_lock::{RwLock, RwLockWriteGuard, Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
+use linera_base::ensure;
 use linera_views::{
     batch::{Batch, WriteOperation},
     common::{
@@ -29,6 +30,10 @@ use tonic::transport::{Channel, Endpoint};
 
 #[cfg(any(test, feature = "test"))]
 use linera_views::test_utils::generate_test_namespace;
+
+// The maximum key size is set to 1M rather arbitrarily.
+const MAX_KEY_SIZE: usize = 1000000;
+
 
 // The shared store client.
 // * Interior mutability is required for client because
@@ -56,7 +61,7 @@ pub struct ServiceStoreClient {
 
 #[async_trait]
 impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
-    const MAX_KEY_SIZE: usize = usize::MAX;
+    const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
@@ -65,6 +70,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ServiceContextError> {
+        ensure!(key.len() <= MAX_KEY_SIZE, ServiceContextError::KeyTooLong);
         let mut full_key = self.namespace.clone();
         full_key.extend(key);
         let query = RequestReadValue { key: full_key };
@@ -86,6 +92,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, ServiceContextError> {
+        ensure!(key.len() <= MAX_KEY_SIZE, ServiceContextError::KeyTooLong);
         let mut full_key = self.namespace.clone();
         full_key.extend(key);
         let query = RequestContainsKey { key: full_key };
@@ -104,6 +111,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
     ) -> Result<Vec<Option<Vec<u8>>>, ServiceContextError> {
         let mut full_keys = Vec::new();
         for key in keys {
+            ensure!(key.len() <= MAX_KEY_SIZE, ServiceContextError::KeyTooLong);
             let mut full_key = self.namespace.clone();
             full_key.extend(&key);
             full_keys.push(full_key);
@@ -131,6 +139,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, ServiceContextError> {
+        ensure!(key_prefix.len() <= MAX_KEY_SIZE, ServiceContextError::KeyTooLong);
         let mut full_key_prefix = self.namespace.clone();
         full_key_prefix.extend(key_prefix);
         let query = RequestFindKeysByPrefix {
@@ -157,6 +166,7 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ServiceContextError> {
+        ensure!(key_prefix.len() <= MAX_KEY_SIZE, ServiceContextError::KeyTooLong);
         let mut full_key_prefix = self.namespace.clone();
         full_key_prefix.extend(key_prefix);
         let query = RequestFindKeyValuesByPrefix {
@@ -194,11 +204,13 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         let mut statements = Vec::new();
         let mut chunk_size = 0;
         for operation in batch.operations {
-            let operation_size = match &operation {
-                WriteOperation::Delete { key } => key.len(),
-                WriteOperation::Put { key, value } => key.len() + value.len(),
-                WriteOperation::DeletePrefix { key_prefix } => key_prefix.len(),
+            let (key_len, value_len) = match &operation {
+                WriteOperation::Delete { key } => (key.len(), 0),
+                WriteOperation::Put { key, value } => (key.len(), value.len()),
+                WriteOperation::DeletePrefix { key_prefix } => (key_prefix.len(), 0),
             };
+            let operation_size = key_len + value_len;
+            ensure!(key_len <= MAX_KEY_SIZE, ServiceContextError::KeyTooLong);
             if operation_size + chunk_size < MAX_PAYLOAD_SIZE {
                 let statement = self.get_statement(operation);
                 statements.push(statement);

@@ -49,6 +49,10 @@ pub enum ServiceContextError {
     #[error(transparent)]
     GrpcError(#[from] Status),
 
+    /// The key must have at most 1M
+    #[error("The key must have at most 1M")]
+    KeyTooLong,
+
     /// Transport error
     #[error(transparent)]
     TransportError(#[from] tonic::transport::Error),
