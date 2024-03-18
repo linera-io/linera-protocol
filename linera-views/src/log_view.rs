@@ -39,7 +39,7 @@ static LOG_VIEW_HASH_RUNTIME: Lazy<HistogramVec> = Lazy::new(|| {
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for the storing of the variable stored_count.
-    Store = MIN_VIEW_TAG,
+    Count = MIN_VIEW_TAG,
     /// Prefix for the indices of the log.
     Index,
 }
@@ -65,7 +65,7 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let key = context.base_tag(KeyTag::Store as u8);
+        let key = context.base_tag(KeyTag::Count as u8);
         let value = context.read_value(&key).await?;
         let stored_count = value.unwrap_or_default();
         Ok(Self {
@@ -94,7 +94,7 @@ where
                 batch.put_key_value(key, value)?;
                 self.stored_count += 1;
             }
-            let key = self.context.base_tag(KeyTag::Store as u8);
+            let key = self.context.base_tag(KeyTag::Count as u8);
             batch.put_key_value(key, &self.stored_count)?;
             self.new_values.clear();
         }

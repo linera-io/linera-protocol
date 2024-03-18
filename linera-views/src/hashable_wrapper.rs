@@ -28,7 +28,7 @@ pub struct WrappedHashableContainerView<C, W, O> {
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for the indices of the view.
-    Index = MIN_VIEW_TAG,
+    Inner = MIN_VIEW_TAG,
     /// Prefix for the hash.
     Hash,
 }
@@ -54,7 +54,7 @@ where
 
     async fn load(context: C) -> Result<Self, ViewError> {
         let hash_key = context.base_tag(KeyTag::Hash as u8);
-        let base_key = context.base_tag(KeyTag::Index as u8);
+        let base_key = context.base_tag(KeyTag::Inner as u8);
         let (hash, inner) = join!(
             context.read_value(&hash_key),
             W::load(context.clone_with_base_key(base_key))
@@ -85,8 +85,8 @@ where
         let hash = *self.hash.get_mut();
         if self.stored_hash != hash {
             let mut key = self.inner.context().base_key();
-            let entry = key.last_mut().unwrap();
-            *entry = KeyTag::Hash as u8;
+            let tag = key.last_mut().unwrap();
+            *tag = KeyTag::Hash as u8;
             match hash {
                 None => batch.delete_key(key),
                 Some(hash) => batch.put_key_value(key, &hash)?,
