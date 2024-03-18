@@ -3,6 +3,7 @@
 
 use crate::{
     common::{ServiceContextError, ServiceStoreConfig},
+    common::{KeyTag, MAX_PAYLOAD_SIZE},
     key_value_store::{
         statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
         KeyValueAppend, ReplyContainsKey, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix,
@@ -19,7 +20,7 @@ use linera_views::{
     batch::{Batch, WriteOperation},
     common::{
         AdminKeyValueStore, CommonStoreConfig, KeyValueStore, ReadableKeyValueStore,
-        WritableKeyValueStore, MIN_VIEW_TAG,
+        WritableKeyValueStore,
     },
 };
 use serde::de::DeserializeOwned;
@@ -28,19 +29,6 @@ use tonic::transport::{Channel, Endpoint};
 
 #[cfg(any(test, feature = "test"))]
 use linera_views::test_utils::generate_test_namespace;
-
-// The maximal block size on GRPC is 4M.
-// That size is the one that shows up everywhere and in particular
-// for tonic.
-// We decrease the 4194304 to 4000000 for safety reasons.
-const MAX_GRPC_REQUEST_SIZE: usize = 4000000;
-
-/// Key tags to create the sub keys used for storing data on storage.
-#[repr(u8)]
-pub(crate) enum KeyTag {
-    /// Prefix for the storage of the keys of the map
-    Key = MIN_VIEW_TAG,
-}
 
 // The shared store client.
 // * Interior mutability is required for client because
@@ -211,14 +199,14 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
                 WriteOperation::Put { key, value } => key.len() + value.len(),
                 WriteOperation::DeletePrefix { key_prefix } => key_prefix.len(),
             };
-            if operation_size + block_size < MAX_GRPC_REQUEST_SIZE {
+            if operation_size + block_size < MAX_PAYLOAD_SIZE {
                 let statement = self.get_statement(operation);
                 statements.push(statement);
                 block_size += operation_size;
             } else {
                 self.submit_statements(mem::take(&mut statements)).await?;
                 block_size = 0;
-                if operation_size > MAX_GRPC_REQUEST_SIZE {
+                if operation_size > MAX_PAYLOAD_SIZE {
                     // One single operation is especially big. So split it in blocks.
                     let WriteOperation::Put { key, value } = operation else {
                         // Only the put can go over the limit
@@ -227,7 +215,7 @@ impl WritableKeyValueStore<ServiceContextError> for ServiceStoreClient {
                     let mut full_key = self.namespace.clone();
                     full_key.extend(key);
                     let value_blocks = value
-                        .chunks(MAX_GRPC_REQUEST_SIZE)
+                        .chunks(MAX_PAYLOAD_SIZE)
                         .map(|x| x.to_vec())
                         .collect::<Vec<_>>();
                     let n_block = value_blocks.len();

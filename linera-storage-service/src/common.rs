@@ -3,6 +3,7 @@
 
 use linera_base::command::resolve_binary;
 use linera_views::{common::CommonStoreConfig, value_splitting::DatabaseConsistencyError};
+use linera_views::common::MIN_VIEW_TAG;
 use std::path::PathBuf;
 use thiserror::Error;
 use tonic::Status;
@@ -16,6 +17,23 @@ const TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES: usize = 10;
 /// The number of entries in a stream of the tests can be controlled by this parameter for tests.
 #[cfg(any(test, feature = "test"))]
 const TEST_SHARED_STORE_MAX_STREAM_QUERIES: usize = 10;
+
+// The maximal block size on GRPC is 4M.
+//
+// That size occurs in almost every use of GRPC and in particular the
+// `tonic` library. In particular for the `tonic` library, the limit is
+// both for incoming and outgoing messages.
+// We decrease the 4194304 to 4000000 for safety reasons.
+pub const MAX_PAYLOAD_SIZE: usize = 4000000;
+
+/// Key tags to create the sub keys used for storing data on storage.
+#[repr(u8)]
+pub enum KeyTag {
+    /// Prefix for the storage of the keys of the map
+    Key = MIN_VIEW_TAG,
+    /// Prefix for the storage of existence or not of the namespaces.
+    Namespace,
+}
 
 #[derive(Debug, Error)]
 pub enum ServiceContextError {

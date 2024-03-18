@@ -12,12 +12,12 @@ use crate::key_value_store::{
     RequestFindKeysByPrefix, RequestListAll, RequestReadMultiValues, RequestReadValue,
     RequestSpecificBlock, RequestWriteBatchExtended,
 };
+use linera_storage_service::common::{KeyTag, MAX_PAYLOAD_SIZE};
 use async_lock::RwLock;
 use linera_views::{
     batch::Batch,
     common::{
         AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore,
-        MIN_VIEW_TAG,
     },
     memory::{create_memory_store_stream_queries, MemoryStore},
     rocks_db::{RocksDbStore, RocksDbStoreConfig},
@@ -30,21 +30,6 @@ use tonic::{transport::Server, Request, Response, Status};
 // https://github.com/hyperium/tonic/issues/1056
 pub mod key_value_store {
     tonic::include_proto!("key_value_store.v1");
-}
-
-// The maximal block size on GRPC is 4M.
-// Usually this limit is for incoming messages but Tonic also
-// implements a limit for outgoing messages.
-// We decrease the 4194304 to 4000000 for safety reasons.
-const MAX_GRPC_REPLY_SIZE: usize = 4000000;
-
-/// Key tags to create the sub keys used for storing data on storage.
-#[repr(u8)]
-pub(crate) enum KeyTag {
-    /// Prefix for the storage of the keys of the map
-    Key = MIN_VIEW_TAG,
-    /// Prefix for the storage of existence or not of the namespaces.
-    Namespace,
 }
 
 enum ServiceStoreServerInternal {
@@ -191,7 +176,7 @@ impl ServiceStoreServer {
     pub async fn insert_pending_read<S: Serialize>(&self, value: S) -> (i64, i32) {
         let value = bcs::to_bytes(&value).unwrap();
         let blocks = value
-            .chunks(MAX_GRPC_REPLY_SIZE)
+            .chunks(MAX_PAYLOAD_SIZE)
             .map(|x| x.to_vec())
             .collect::<Vec<_>>();
         let n_block = blocks.len() as i32;
@@ -239,7 +224,7 @@ impl StoreProcessor for ServiceStoreServer {
             None => 0,
             Some(value) => value.len(),
         };
-        let response = if size < MAX_GRPC_REPLY_SIZE {
+        let response = if size < MAX_PAYLOAD_SIZE {
             ReplyReadValue {
                 value,
                 recover_key: 0,
@@ -281,7 +266,7 @@ impl StoreProcessor for ServiceStoreServer {
                 Some(entry) => entry.len(),
             })
             .sum::<usize>();
-        let response = if size < MAX_GRPC_REPLY_SIZE {
+        let response = if size < MAX_PAYLOAD_SIZE {
             let values = values
                 .into_iter()
                 .map(|value| OptValue { value })
@@ -310,7 +295,7 @@ impl StoreProcessor for ServiceStoreServer {
         let RequestFindKeysByPrefix { key_prefix } = request;
         let keys = self.find_keys_by_prefix(&key_prefix).await?;
         let size = keys.iter().map(|x| x.len()).sum::<usize>();
-        let response = if size < MAX_GRPC_REPLY_SIZE {
+        let response = if size < MAX_PAYLOAD_SIZE {
             ReplyFindKeysByPrefix {
                 keys,
                 recover_key: 0,
@@ -338,7 +323,7 @@ impl StoreProcessor for ServiceStoreServer {
             .iter()
             .map(|x| x.0.len() + x.1.len())
             .sum::<usize>();
-        let response = if size < MAX_GRPC_REPLY_SIZE {
+        let response = if size < MAX_PAYLOAD_SIZE {
             let key_values = key_values
                 .into_iter()
                 .map(|x| KeyValue {
