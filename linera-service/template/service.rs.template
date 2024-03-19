@@ -8,6 +8,7 @@ use thiserror::Error;
 
 pub struct ApplicationService {{
     _state: Application,
+    _runtime: ServiceRuntime,
 }}
 
 linera_sdk::service!(ApplicationService);
@@ -21,9 +22,10 @@ impl Service for ApplicationService {{
     type Storage = ViewStateStorage<Self>;
     type State = Application;
 
-    async fn new(state: Self::State) -> Result<Self, Self::Error> {{
+    async fn new(state: Self::State, runtime: ServiceRuntime) -> Result<Self, Self::Error> {{
         Ok(ApplicationService {{
             _state: state,
+            _runtime: runtime,
         }})
     }}
 

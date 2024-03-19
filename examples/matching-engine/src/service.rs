@@ -28,7 +28,7 @@ impl Service for MatchingEngineService {
     type Storage = ViewStateStorage<Self>;
     type State = MatchingEngine;
 
-    async fn new(state: Self::State) -> Result<Self, Self::Error> {
+    async fn new(state: Self::State, _runtime: ServiceRuntime) -> Result<Self, Self::Error> {
         Ok(MatchingEngineService {
             state: Arc::new(state),
         })

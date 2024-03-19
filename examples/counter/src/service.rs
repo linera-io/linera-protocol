@@ -25,7 +25,7 @@ impl Service for CounterService {
     type Storage = SimpleStateStorage<Self>;
     type State = Counter;
 
-    async fn new(state: Self::State) -> Result<Self, Self::Error> {
+    async fn new(state: Self::State, _runtime: ServiceRuntime) -> Result<Self, Self::Error> {
         Ok(CounterService { state })
     }
 
@@ -86,11 +86,8 @@ mod tests {
     #[webassembly_test]
     fn query() {
         let value = 61_098_721_u64;
-        let counter = Counter { value };
-        let service = CounterService::new(counter)
-            .now_or_never()
-            .expect("Service construction should not await anything")
-            .expect("Service construction should not fail");
+        let state = Counter { value };
+        let service = CounterService { state };
         let request = Request::new("{ value }");
 
         let result = service

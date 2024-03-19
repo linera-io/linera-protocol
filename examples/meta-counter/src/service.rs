@@ -25,7 +25,7 @@ impl Service for MetaCounterService {
     type Storage = SimpleStateStorage<Self>;
     type State = MetaCounter;
 
-    async fn new(state: Self::State) -> Result<Self, Self::Error> {
+    async fn new(state: Self::State, _runtime: ServiceRuntime) -> Result<Self, Self::Error> {
         Ok(MetaCounterService { _state: state })
     }
 

@@ -30,7 +30,7 @@ impl Service for CrowdFundingService {
     type Storage = ViewStateStorage<Self>;
     type State = CrowdFunding;
 
-    async fn new(state: Self::State) -> Result<Self, Self::Error> {
+    async fn new(state: Self::State, _runtime: ServiceRuntime) -> Result<Self, Self::Error> {
         Ok(CrowdFundingService {
             state: Arc::new(state),
         })
