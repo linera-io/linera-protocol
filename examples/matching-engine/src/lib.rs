@@ -67,16 +67,18 @@ OWNER_1=7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f
 OWNER_2=90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f
 CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 CHAIN_2=e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3
+PUB_KEY_1=fcf518d56455283ace2bbc11c71e684eb58af81bc98b96a18129e825ce24ea84
+PUB_KEY_2=ca909dcf60df014c166be17eb4a9f6e2f9383314a57510206a54cd841ade455e
 ```
 
-Publish and create two `fungible` application whose `application_id` will be used as a
-parameter while creating the `matching engine` example. The flag `--wait-for-outgoing-messages` waits until a quorum of validators has confirmed that all sent cross-chain messages have been delivered.
+Publish and create two `fungible` applications whose IDs will be used as a
+parameter for the `matching-engine` application. The flag `--wait-for-outgoing-messages`
+waits until a quorum of validators has confirmed that all sent cross-chain messages have been
+delivered.
 
 ```bash
-(cd examples/fungible && cargo build --release)
-
 FUN1_APP_ID=$(linera --wait-for-outgoing-messages \
-  publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
+  project publish-and-create examples/fungible \
     --json-argument "{ \"accounts\": {
         \"User:$OWNER_1\": \"100.\",
         \"User:$OWNER_2\": \"150.\"
@@ -85,25 +87,30 @@ FUN1_APP_ID=$(linera --wait-for-outgoing-messages \
 )
 
 FUN2_APP_ID=$(linera --wait-for-outgoing-messages \
-  publish-and-create examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
+  project publish-and-create examples/fungible \
     --json-argument "{ \"accounts\": {
         \"User:$OWNER_1\": \"100.\",
         \"User:$OWNER_2\": \"150.\"
     } }" \
     --json-parameters "{ \"ticker_symbol\": \"FUN2\" }" \
 )
-
 ```
 
-Now we have to publish and deploy the Matching Engine application:
+Now we publish and deploy the Matching Engine application:
 
 ```bash
-(cd examples/matching-engine && cargo build --release)
 MATCHING_ENGINE=$(linera --wait-for-outgoing-messages \
-    publish-and-create examples/target/wasm32-unknown-unknown/release/matching_engine_{contract,service}.wasm \
+    project publish-and-create examples/matching-engine \
     --json-parameters "{\"tokens\":["\"$FUN1_APP_ID\"","\"$FUN2_APP_ID\""]}" \
     --required-application-ids $FUN1_APP_ID $FUN2_APP_ID)
 ```
+
+And make sure chain 2 also has it:
+
+```bash
+linera --wait-for-outgoing-messages request-application \
+    --requester-chain-id $CHAIN_2 $MATCHING_ENGINE
+````
 
 ## Using the Matching Engine Application
 
@@ -116,14 +123,15 @@ linera service --port $PORT &
 
 ### Using GraphiQL
 
-Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE`.
+Navigate to
+[`http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE`][chain1_matching_engine]:
 
-To create a `Bid` order nature:
+To create a `Bid` order as owner 1, offering to buy 1 FUN1 for 5 FUN2:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE
-mutation ExecuteOrder {
+mutation {
   executeOrder(
-    order:{
+    order: {
         Insert : {
         owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
         amount: "1",
@@ -140,14 +148,122 @@ mutation ExecuteOrder {
 To query about the bid price:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE
-query{
+query {
   bids {
-    keys{
+    keys {
       price
     }
   }
 }
 ```
+
+
+### Atomic Swaps
+
+If you send tokens to a chain owned by someone else, you rely on them for liveness:
+If they don't handle your messages, you don't have access to your tokens.
+
+If the number of parties who want to swap tokens is limited, this can be addressed
+by making them all chain owners, allowing only matching engine operations on the chain,
+and allowing only the matching engine to close the chain.
+
+```bash
+kill %%    # Kill the service so we can use CLI commands for chain 1.
+
+linera --wait-for-outgoing-messages change-ownership \
+    --owner-public-keys $PUB_KEY_1 $PUB_KEY_2
+
+linera --wait-for-outgoing-messages change-application-permissions \
+    --execute-operations $MATCHING_ENGINE \
+    --close-chain $MATCHING_ENGINE
+
+linera service --port $PORT &
+```
+
+First, owner 2 should claim their tokens. Navigate to
+[`http://localhost:8080/chains/$CHAIN_2/applications/$FUN1_APP_ID`][chain2_fun1]:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$FUN1_APP_ID
+mutation {
+    claim(
+        sourceAccount: {
+            chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+            owner: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f",
+        }
+        amount: "100.",
+        targetAccount: {
+            chainId: "e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3",
+            owner: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
+        }
+    )
+}
+```
+
+And to [`http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID`][chain2_fun2]:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID
+mutation {
+    claim(
+        sourceAccount: {
+            chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+            owner: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f",
+        }
+        amount: "150.",
+        targetAccount: {
+            chainId: "e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3",
+            owner: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f"
+        }
+    )
+}
+```
+
+Owner 2 offers to buy 2 FUN1 for 10 FUN2. This gets partially filled, and they buy 1 FUN1
+for 5 FUN2 from owner 1. This leaves 5 FUN2 of owner 2 on chain 1. On
+[`http://localhost:8080/chains/$CHAIN_2/applications/$MATCHING_ENGINE`][chain2_matching_engine]:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$MATCHING_ENGINE
+mutation {
+  executeOrder(
+    order: {
+        Insert : {
+        owner: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f",
+        amount: "2",
+        nature: Ask,
+        price: {
+            price:5
+        }
+      }
+    }
+  )
+}
+```
+
+The only way to close the chain is via the application now. On
+[`http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE`][chain1_matching_engine]:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE
+mutation { closeChain }
+```
+
+Owner 2 should now get back their tokens, and have 145 FUN2 left. On
+[`http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID`][chain2_fun2]
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID
+query {
+    accounts {
+        entry(
+            key: "User:90d81e6e76ac75497a10a40e689de7b912db61a91b3ae28ed4d908e52e44ef7f"
+        ) {
+            value
+        }
+    }
+}
+```
+
+[chain1_matching_engine]: http://localhost:8080/chains/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65080000000000000000000000
+[chain2_matching_engine]: http://localhost:8080/chains/e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65060000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65080000000000000000000000
+[chain2_fun1]: http://localhost:8080/chains/e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65000000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65020000000000000000000000
+[chain2_fun2]: http://localhost:8080/chains/e54bdb17d41d5dbe16418f96b70e44546ccd63e6f3733ae3c192043548998ff3/applications/e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65050000000000000000000000
 */
 
 use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};

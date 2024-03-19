@@ -248,7 +248,7 @@ Specify the complete set of new owners, by public key. Existing owners that are 
 
 Changes the application permissions configuration
 
-**Usage:** `linera change-application-permissions [OPTIONS] --chain-id <CHAIN_ID>`
+**Usage:** `linera change-application-permissions [OPTIONS]`
 
 ###### **Options:**
 
