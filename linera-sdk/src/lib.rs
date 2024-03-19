@@ -487,7 +487,7 @@ where
     Message: Debug + DeserializeOwned + Serialize,
     Value: Serialize,
 {
-    /// Serializes the internal `Message`, `Value` and `SessionState` types into raw bytes.
+    /// Serializes the internal `Message` and `Value` types into raw bytes.
     pub fn into_raw(self) -> ApplicationCallOutcome<Vec<u8>, Vec<u8>> {
         let value = bcs::to_bytes(&self.value)
             .expect("Failed to serialize `ApplicationCallOutcome`'s `Value`");
