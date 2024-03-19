@@ -51,8 +51,8 @@ pub enum ServiceContextError {
     #[error(transparent)]
     GrpcError(#[from] Status),
 
-    /// The key must have at most 1M
-    #[error("The key must have at most 1M")]
+    /// The key size must be at most 1 MB
+    #[error("The key size must be at most 1 MB")]
     KeyTooLong,
 
     /// Transport error
