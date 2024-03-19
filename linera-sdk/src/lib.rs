@@ -243,11 +243,7 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
     async fn new(state: Self::State, runtime: ServiceRuntime) -> Result<Self, Self::Error>;
 
     /// Executes a read-only query on the state of this application.
-    async fn handle_query(
-        &self,
-        runtime: &ServiceRuntime,
-        query: Self::Query,
-    ) -> Result<Self::QueryResponse, Self::Error>;
+    async fn handle_query(&self, query: Self::Query) -> Result<Self::QueryResponse, Self::Error>;
 
     /// Queries another application.
     fn query_application<A: ServiceAbi>(

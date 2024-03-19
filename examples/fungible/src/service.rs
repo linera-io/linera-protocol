@@ -35,11 +35,7 @@ impl Service for FungibleTokenService {
         })
     }
 
-    async fn handle_query(
-        &self,
-        _runtime: &ServiceRuntime,
-        request: Request,
-    ) -> Result<Response, Self::Error> {
+    async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
         let schema = Schema::build(
             self.state.clone(),
             Operation::mutation_root(),

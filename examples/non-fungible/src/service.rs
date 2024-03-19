@@ -41,11 +41,7 @@ impl Service for NonFungibleTokenService {
         })
     }
 
-    async fn handle_query(
-        &self,
-        _runtime: &ServiceRuntime,
-        request: Request,
-    ) -> Result<Response, Self::Error> {
+    async fn handle_query(&self, request: Request) -> Result<Response, Self::Error> {
         let schema = Schema::build(
             QueryRoot {
                 non_fungible_token: self.state.clone(),

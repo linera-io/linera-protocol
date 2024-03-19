@@ -29,11 +29,7 @@ impl Service for ApplicationService {{
         }})
     }}
 
-    async fn handle_query(
-        &self,
-        _runtime: &ServiceRuntime,
-        _query: Self::Query,
-    ) -> Result<(), Self::Error> {{
+    async fn handle_query(&self, _query: Self::Query) -> Result<(), Self::Error> {{
         Err(ServiceError::QueriesNotSupported)
     }}
 }}

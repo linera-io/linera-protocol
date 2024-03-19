@@ -47,7 +47,7 @@ where
         let argument: Application::Query =
             serde_json::from_slice(&argument).map_err(|e| e.to_string())?;
         let query_response = application
-            .handle_query(&ServiceRuntime::default(), argument)
+            .handle_query(argument)
             .await
             .map_err(|error| error.to_string())?;
         serde_json::to_vec(&query_response).map_err(|e| e.to_string())
@@ -69,9 +69,7 @@ where
             .map_err(|error| error.to_string())?;
         let argument: Application::Query =
             serde_json::from_slice(&argument).map_err(|e| e.to_string())?;
-        let result = application
-            .handle_query(&ServiceRuntime::default(), argument)
-            .await;
+        let result = application.handle_query(argument).await;
         let query_response = result.map_err(|error| error.to_string())?;
         serde_json::to_vec(&query_response).map_err(|e| e.to_string())
     }
