@@ -45,16 +45,6 @@ pub trait ContractAbi {
     /// The argument type when this application is called from another application on the same chain.
     type ApplicationCall: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
-    /// The argument type when a session of this application is called from another
-    /// application on the same chain.
-    ///
-    /// Sessions are temporary objects that may be spawned by an application call. Once
-    /// created, they must be consumed before the current transaction ends.
-    type SessionCall: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
-
-    /// The type for the state of a session.
-    type SessionState: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
-
     /// The response type of an application call.
     type Response: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 }
@@ -90,9 +80,7 @@ where
     type Operation = <<A as WithContractAbi>::Abi as ContractAbi>::Operation;
     type ApplicationCall = <<A as WithContractAbi>::Abi as ContractAbi>::ApplicationCall;
     type Message = <<A as WithContractAbi>::Abi as ContractAbi>::Message;
-    type SessionCall = <<A as WithContractAbi>::Abi as ContractAbi>::SessionCall;
     type Response = <<A as WithContractAbi>::Abi as ContractAbi>::Response;
-    type SessionState = <<A as WithContractAbi>::Abi as ContractAbi>::SessionState;
 }
 
 /// Marker trait to help importing service types.

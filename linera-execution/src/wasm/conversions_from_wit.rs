@@ -13,7 +13,7 @@ use std::time::Duration;
 use super::{contract, contract_system_api, service_system_api};
 use crate::{
     ApplicationCallOutcome, ChannelName, Destination, MessageKind, RawExecutionOutcome,
-    RawOutgoingMessage, SessionCallOutcome, SessionId, UserApplicationId,
+    RawOutgoingMessage, UserApplicationId,
 };
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
@@ -22,23 +22,9 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 
-impl From<contract::SessionCallOutcome> for (SessionCallOutcome, Vec<u8>) {
-    fn from(outcome: contract::SessionCallOutcome) -> Self {
-        let session_call_outcome = SessionCallOutcome {
-            inner: outcome.inner.into(),
-            close_session: outcome.new_state.is_some(),
-        };
-
-        let updated_session_state = outcome.new_state.unwrap_or_default();
-
-        (session_call_outcome, updated_session_state)
-    }
-}
-
 impl From<contract::ApplicationCallOutcome> for ApplicationCallOutcome {
     fn from(outcome: contract::ApplicationCallOutcome) -> Self {
         ApplicationCallOutcome {
-            create_sessions: outcome.create_sessions,
             execution_outcome: outcome.execution_outcome.into(),
             value: outcome.value,
         }
@@ -133,15 +119,6 @@ impl From<contract::CryptoHash> for CryptoHash {
 impl From<contract::ChainId> for ChainId {
     fn from(guest: contract::ChainId) -> Self {
         ChainId(guest.into())
-    }
-}
-
-impl From<contract_system_api::SessionId> for SessionId {
-    fn from(guest: contract_system_api::SessionId) -> Self {
-        SessionId {
-            application_id: guest.application_id.into(),
-            index: guest.index,
-        }
     }
 }
 

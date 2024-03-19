@@ -202,7 +202,7 @@ CAMPAIGN=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1
 ```
 
 ```gql,uri=$CAMPAIGN
-mutation { pledgeWithTransfer(
+mutation { pledge(
     owner:"User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
     amount:"30."
 ) }
@@ -254,7 +254,7 @@ PLEDGE1=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1
 ```
 
 ```gql,uri=$PLEDGE1
-mutation { pledgeWithTransfer(
+mutation { pledge(
   owner:"User:b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd",
   amount:"80."
 ) }
@@ -294,9 +294,7 @@ impl ContractAbi for CrowdFundingAbi {
     type Operation = Operation;
     type ApplicationCall = ApplicationCall;
     type Message = Message;
-    type SessionCall = ();
     type Response = ();
-    type SessionState = ();
 }
 
 impl ServiceAbi for CrowdFundingAbi {
@@ -331,7 +329,7 @@ impl std::fmt::Display for InitializationArgument {
 #[allow(clippy::large_enum_variant)]
 pub enum Operation {
     /// Pledge some tokens to the campaign (from an account on the current chain to the campaign chain).
-    PledgeWithTransfer { owner: AccountOwner, amount: Amount },
+    Pledge { owner: AccountOwner, amount: Amount },
     /// Collect the pledges after the campaign has reached its target (campaign chain only).
     Collect,
     /// Cancel the campaign and refund all pledges after the campaign has reached its deadline (campaign chain only).
@@ -351,9 +349,7 @@ pub enum Message {
 #[allow(clippy::large_enum_variant)]
 pub enum ApplicationCall {
     /// Pledge some tokens to the campaign (from an account on the current chain).
-    PledgeWithTransfer { owner: AccountOwner, amount: Amount },
-    /// Pledge some tokens to the campaign from a session (for now, campaign chain only).
-    PledgeWithSessions { source: AccountOwner },
+    Pledge { owner: AccountOwner, amount: Amount },
     /// Collect the pledges after the campaign has reached its target (campaign chain only).
     Collect,
     /// Cancel the campaign and refund all pledges after the campaign has reached its deadline (campaign chain only).

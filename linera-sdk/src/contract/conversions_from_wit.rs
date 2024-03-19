@@ -7,38 +7,10 @@ use super::{wit_system_api, wit_types};
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight},
-    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner, SessionId},
+    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use std::time::Duration;
-
-impl From<wit_types::MessageId> for MessageId {
-    fn from(message_id: wit_types::MessageId) -> Self {
-        MessageId {
-            chain_id: message_id.chain_id.into(),
-            height: BlockHeight(message_id.height),
-            index: message_id.index,
-        }
-    }
-}
-
-impl From<wit_types::ApplicationId> for ApplicationId {
-    fn from(application_id: wit_types::ApplicationId) -> Self {
-        ApplicationId {
-            bytecode_id: BytecodeId::new(application_id.bytecode_id.into()),
-            creation: application_id.creation.into(),
-        }
-    }
-}
-
-impl From<wit_types::SessionId> for SessionId {
-    fn from(session_id: wit_types::SessionId) -> Self {
-        SessionId {
-            application_id: session_id.application_id.into(),
-            index: session_id.index,
-        }
-    }
-}
 
 impl From<wit_types::CryptoHash> for Owner {
     fn from(crypto_hash: wit_types::CryptoHash) -> Self {
@@ -109,29 +81,6 @@ impl From<wit_system_api::Amount> for Amount {
     fn from(balance: wit_system_api::Amount) -> Self {
         let value = ((balance.upper_half as u128) << 64) | (balance.lower_half as u128);
         Amount::from_attos(value)
-    }
-}
-
-impl From<wit_system_api::CallOutcome> for (Vec<u8>, Vec<SessionId>) {
-    fn from(call_outcome: wit_system_api::CallOutcome) -> (Vec<u8>, Vec<SessionId>) {
-        let value = call_outcome.value;
-
-        let sessions = call_outcome
-            .sessions
-            .into_iter()
-            .map(SessionId::from)
-            .collect();
-
-        (value, sessions)
-    }
-}
-
-impl From<wit_system_api::SessionId> for SessionId {
-    fn from(session_id: wit_system_api::SessionId) -> SessionId {
-        SessionId {
-            application_id: session_id.application_id.into(),
-            index: session_id.index,
-        }
     }
 }
 

@@ -47,7 +47,7 @@ use linera_base::{
     doc_scalar, hex_debug,
     identifiers::{
         Account, BytecodeId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId,
-        Owner, SessionId,
+        Owner,
     },
     ownership::ChainOwnership,
 };
@@ -103,21 +103,6 @@ pub enum ExecutionError {
     #[error("The given promise is invalid or was polled once already")]
     InvalidPromise,
 
-    #[error("Session {0} does not exist or was already closed")]
-    InvalidSession(SessionId),
-    #[error("Attempted to call or forward an active session {0}")]
-    SessionIsInUse(SessionId),
-    #[error("Attempted to save a session {0} but it is not locked")]
-    SessionStateNotLocked(SessionId),
-    #[error("Session {session_id} is owned by {owned_by} but was accessed by {accessed_by}")]
-    InvalidSessionOwner {
-        session_id: Box<SessionId>,
-        accessed_by: Box<UserApplicationId>,
-        owned_by: Box<UserApplicationId>,
-    },
-    #[error("Session {0} is still opened at the end of a transaction")]
-    SessionWasNotClosed(SessionId),
-
     #[error("Attempted to perform a reentrant call to application {0}")]
     ReentrantCall(UserApplicationId),
     #[error(
@@ -143,20 +128,6 @@ pub enum ExecutionError {
     OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
     UnauthorizedApplication(UserApplicationId),
-}
-
-impl ExecutionError {
-    fn invalid_session_owner(
-        session_id: SessionId,
-        accessed_by: UserApplicationId,
-        owned_by: UserApplicationId,
-    ) -> Self {
-        Self::InvalidSessionOwner {
-            session_id: Box::new(session_id),
-            accessed_by: Box::new(accessed_by),
-            owned_by: Box::new(owned_by),
-        }
-    }
 }
 
 /// The public entry points provided by the contract part of an application.
@@ -190,17 +161,7 @@ pub trait UserContract {
         &mut self,
         context: CalleeContext,
         argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallOutcome, ExecutionError>;
-
-    /// Executes a call from another application into a session created by this application.
-    fn handle_session_call(
-        &mut self,
-        context: CalleeContext,
-        session_state: Vec<u8>,
-        argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
-    ) -> Result<(SessionCallOutcome, Vec<u8>), ExecutionError>;
 
     /// Finishes execution of the current transaction.
     fn finalize(
@@ -226,8 +187,6 @@ pub struct ApplicationCallOutcome {
     pub value: Vec<u8>,
     /// The externally-visible result.
     pub execution_outcome: RawExecutionOutcome<Vec<u8>>,
-    /// The states of the new sessions to be created, if any.
-    pub create_sessions: Vec<Vec<u8>>,
 }
 
 impl ApplicationCallOutcome {
@@ -236,21 +195,6 @@ impl ApplicationCallOutcome {
         self.execution_outcome.messages.push(message);
         self
     }
-
-    /// Registers a new session to be created with the provided `session_state`.
-    pub fn with_new_session(mut self, session_state: Vec<u8>) -> Self {
-        self.create_sessions.push(session_state);
-        self
-    }
-}
-
-/// The result of calling into a session.
-#[derive(Default)]
-pub struct SessionCallOutcome {
-    /// The application result.
-    pub inner: ApplicationCallOutcome,
-    /// If true, the session should be terminated.
-    pub close_session: bool,
 }
 
 /// System runtime implementation in use.
@@ -486,14 +430,6 @@ pub trait ServiceRuntime: BaseRuntime {
     ) -> Result<Vec<u8>, ExecutionError>;
 }
 
-/// The result of calling into an application or a session.
-pub struct CallOutcome {
-    /// The return value.
-    pub value: Vec<u8>,
-    /// The new sessions now visible to the caller.
-    pub sessions: Vec<SessionId>,
-}
-
 pub trait ContractRuntime: BaseRuntime {
     /// The authenticated signer for this execution, if there is one.
     fn authenticated_signer(&mut self) -> Result<Option<Owner>, ExecutionError>;
@@ -538,18 +474,7 @@ pub trait ContractRuntime: BaseRuntime {
         authenticated: bool,
         callee_id: UserApplicationId,
         argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallOutcome, ExecutionError>;
-
-    /// Calls into a session that is in our scope. Forwarded sessions will be visible to
-    /// the application that runs `session_id`.
-    fn try_call_session(
-        &mut self,
-        authenticated: bool,
-        session_id: SessionId,
-        argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallOutcome, ExecutionError>;
+    ) -> Result<Vec<u8>, ExecutionError>;
 
     /// Opens a new chain.
     fn open_chain(

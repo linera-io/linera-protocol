@@ -6,10 +6,9 @@ use crate::{
     execution_state_actor::{ExecutionStateSender, Request},
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
-    ApplicationCallOutcome, BaseRuntime, CallOutcome, CalleeContext, ContractRuntime,
-    ExecutionError, ExecutionOutcome, FinalizeContext, MessageContext, RawExecutionOutcome,
-    ServiceRuntime, SessionId, UserApplicationDescription, UserApplicationId, UserContractInstance,
-    UserServiceInstance,
+    ApplicationCallOutcome, BaseRuntime, CalleeContext, ContractRuntime, ExecutionError,
+    ExecutionOutcome, FinalizeContext, MessageContext, RawExecutionOutcome, ServiceRuntime,
+    UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
 };
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -72,8 +71,6 @@ pub struct SyncRuntimeInternal<UserInstance> {
     /// Accumulate the externally visible results (e.g. cross-chain messages) of applications.
     execution_outcomes: Vec<ExecutionOutcome>,
 
-    /// All the sessions and their IDs.
-    session_manager: SessionManager,
     /// Track application states (simple case).
     simple_user_states: BTreeMap<UserApplicationId, SimpleUserState>,
     /// Track application states (view case).
@@ -140,14 +137,6 @@ impl<Instance> Clone for LoadedApplication<Instance> {
             parameters: self.parameters.clone(),
         }
     }
-}
-
-#[derive(Debug, Default)]
-struct SessionManager {
-    /// Track the next session index to be used for each application.
-    counters: BTreeMap<UserApplicationId, u64>,
-    /// Track the current state (owner and data) of each session.
-    states: BTreeMap<SessionId, SessionState>,
 }
 
 #[derive(Debug)]
@@ -257,16 +246,6 @@ impl ViewUserState {
     }
 }
 
-#[derive(Debug)]
-struct SessionState {
-    /// Track which application can call into the session.
-    owner: UserApplicationId,
-    /// Whether the session is already active.
-    locked: bool,
-    /// Some data saved inside the session.
-    data: Vec<u8>,
-}
-
 impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -292,7 +271,6 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
             call_stack: Vec::new(),
             active_applications: HashSet::new(),
             execution_outcomes: Vec::default(),
-            session_manager: SessionManager::default(),
             simple_user_states: BTreeMap::default(),
             view_user_states: BTreeMap::default(),
             refund_grant_to,
@@ -383,7 +361,6 @@ impl SyncRuntimeInternal<UserContractInstance> {
         this: Arc<Mutex<Self>>,
         authenticated: bool,
         callee_id: UserApplicationId,
-        forwarded_sessions: &[SessionId],
     ) -> Result<(Arc<Mutex<UserContractInstance>>, CalleeContext), ExecutionError> {
         self.check_for_reentrancy(callee_id)?;
 
@@ -401,8 +378,6 @@ impl SyncRuntimeInternal<UserContractInstance> {
         let caller = self.current_application();
         let caller_id = caller.id;
         let caller_signer = caller.signer;
-        // Change the owners of forwarded sessions.
-        self.forward_sessions(forwarded_sessions, caller_id, callee_id)?;
         // Make the call to user code.
         let authenticated_signer = match caller_signer {
             Some(signer) if authenticated => Some(signer),
@@ -428,20 +403,16 @@ impl SyncRuntimeInternal<UserContractInstance> {
     fn finish_call(
         &mut self,
         raw_outcome: ApplicationCallOutcome,
-    ) -> Result<CallOutcome, ExecutionError> {
+    ) -> Result<Vec<u8>, ExecutionError> {
         let ApplicationStatus {
             id: callee_id,
             signer,
             ..
         } = self.pop_application();
-        let caller_id = self.application_id()?;
-        let sessions = self.make_sessions(raw_outcome.create_sessions, callee_id, caller_id);
-        let outcome = CallOutcome {
-            value: raw_outcome.value,
-            sessions,
-        };
+
         self.handle_outcome(raw_outcome.execution_outcome, signer, callee_id)?;
-        Ok(outcome)
+
+        Ok(raw_outcome.value)
     }
 
     /// Handles a newly produced [`RawExecutionOutcome`], conditioning and adding it to the stack
@@ -466,132 +437,6 @@ impl SyncRuntimeInternal<UserContractInstance> {
 
         self.execution_outcomes
             .push(ExecutionOutcome::User(application_id, outcome));
-        Ok(())
-    }
-
-    fn forward_sessions(
-        &mut self,
-        session_ids: &[SessionId],
-        from_id: UserApplicationId,
-        to_id: UserApplicationId,
-    ) -> Result<(), ExecutionError> {
-        let states = &mut self.session_manager.states;
-        for id in session_ids {
-            let state = states
-                .get_mut(id)
-                .ok_or(ExecutionError::InvalidSession(*id))?;
-            // Verify ownership.
-            ensure!(
-                state.owner == from_id,
-                ExecutionError::invalid_session_owner(*id, from_id, state.owner,)
-            );
-            // Transfer the session.
-            state.owner = to_id;
-        }
-        Ok(())
-    }
-
-    fn make_sessions(
-        &mut self,
-        new_sessions: Vec<Vec<u8>>,
-        creator_id: UserApplicationId,
-        receiver_id: UserApplicationId,
-    ) -> Vec<SessionId> {
-        let manager = &mut self.session_manager;
-        let states = &mut manager.states;
-        let counter = manager.counters.entry(creator_id).or_default();
-        let mut session_ids = Vec::new();
-        for data in new_sessions {
-            let id = SessionId {
-                application_id: creator_id,
-                index: *counter,
-            };
-            *counter += 1;
-            session_ids.push(id);
-            let state = SessionState {
-                owner: receiver_id,
-                locked: false,
-                data,
-            };
-            states.insert(id, state);
-        }
-        session_ids
-    }
-
-    fn try_load_session(
-        &mut self,
-        session_id: SessionId,
-        application_id: UserApplicationId,
-    ) -> Result<Vec<u8>, ExecutionError> {
-        let state = self
-            .session_manager
-            .states
-            .get_mut(&session_id)
-            .ok_or(ExecutionError::InvalidSession(session_id))?;
-        // Verify locking.
-        ensure!(!state.locked, ExecutionError::SessionIsInUse(session_id));
-        // Verify ownership.
-        ensure!(
-            state.owner == application_id,
-            ExecutionError::invalid_session_owner(session_id, application_id, state.owner,)
-        );
-        // Lock state and return data.
-        state.locked = true;
-        Ok(state.data.clone())
-    }
-
-    fn try_save_session(
-        &mut self,
-        session_id: SessionId,
-        application_id: UserApplicationId,
-        data: Vec<u8>,
-    ) -> Result<(), ExecutionError> {
-        let state = self
-            .session_manager
-            .states
-            .get_mut(&session_id)
-            .ok_or(ExecutionError::InvalidSession(session_id))?;
-        // Verify locking.
-        ensure!(
-            state.locked,
-            ExecutionError::SessionStateNotLocked(session_id)
-        );
-        // Verify ownership.
-        ensure!(
-            state.owner == application_id,
-            ExecutionError::invalid_session_owner(session_id, application_id, state.owner,)
-        );
-        // Save data.
-        state.data = data;
-        state.locked = false;
-        Ok(())
-    }
-
-    fn try_close_session(
-        &mut self,
-        session_id: SessionId,
-        application_id: UserApplicationId,
-    ) -> Result<(), ExecutionError> {
-        let state = self
-            .session_manager
-            .states
-            .get(&session_id)
-            .ok_or(ExecutionError::InvalidSession(session_id))?;
-        // Verify locking.
-        ensure!(
-            state.locked,
-            ExecutionError::SessionStateNotLocked(session_id)
-        );
-        // Verify ownership.
-        ensure!(
-            state.owner == application_id,
-            ExecutionError::invalid_session_owner(session_id, application_id, state.owner,)
-        );
-        // Delete the session entirely.
-        self.session_manager
-            .states
-            .remove(&session_id)
-            .ok_or(ExecutionError::InvalidSession(session_id))?;
         Ok(())
     }
 }
@@ -1008,10 +853,6 @@ impl ContractSyncRuntime {
         let runtime = runtime
             .into_inner()
             .expect("Runtime clones should have been freed by now");
-        // Check that all sessions were properly closed.
-        if let Some(session_id) = runtime.session_manager.states.keys().next() {
-            return Err(ExecutionError::SessionWasNotClosed(*session_id));
-        }
         Ok((runtime.execution_outcomes, runtime.resource_controller))
     }
 
@@ -1190,69 +1031,18 @@ impl ContractRuntime for ContractSyncRuntime {
         authenticated: bool,
         callee_id: UserApplicationId,
         argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallOutcome, ExecutionError> {
+    ) -> Result<Vec<u8>, ExecutionError> {
         let cloned_self = self.clone().0;
-        let (contract, callee_context) = self.inner().prepare_for_call(
-            cloned_self,
-            authenticated,
-            callee_id,
-            &forwarded_sessions,
-        )?;
+        let (contract, callee_context) =
+            self.inner()
+                .prepare_for_call(cloned_self, authenticated, callee_id)?;
 
         let raw_outcome = contract
             .try_lock()
             .expect("Applications should not have reentrant calls")
-            .handle_application_call(callee_context, argument, forwarded_sessions)?;
+            .handle_application_call(callee_context, argument)?;
 
         self.inner().finish_call(raw_outcome)
-    }
-
-    fn try_call_session(
-        &mut self,
-        authenticated: bool,
-        session_id: SessionId,
-        argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
-    ) -> Result<CallOutcome, ExecutionError> {
-        let callee_id = session_id.application_id;
-
-        let (contract, callee_context, session_state) = {
-            let cloned_self = self.clone().0;
-            let mut this = self.inner();
-
-            // Load the session.
-            let caller_id = this.application_id()?;
-            let session_state = this.try_load_session(session_id, caller_id)?;
-
-            let (contract, callee_context) =
-                this.prepare_for_call(cloned_self, authenticated, callee_id, &forwarded_sessions)?;
-
-            Ok::<_, ExecutionError>((contract, callee_context, session_state))
-        }?;
-
-        let (raw_outcome, session_state) = contract
-            .try_lock()
-            .expect("Applications should not have reentrant calls")
-            .handle_session_call(callee_context, session_state, argument, forwarded_sessions)?;
-
-        {
-            let mut this = self.inner();
-
-            let outcome = this.finish_call(raw_outcome.inner)?;
-
-            // Update the session.
-            let caller_id = this.application_id()?;
-            if raw_outcome.close_session {
-                // Terminate the session.
-                this.try_close_session(session_id, caller_id)?;
-            } else {
-                // Save the session.
-                this.try_save_session(session_id, caller_id, session_state)?;
-            }
-
-            Ok(outcome)
-        }
     }
 
     fn open_chain(

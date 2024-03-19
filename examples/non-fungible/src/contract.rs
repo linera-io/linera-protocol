@@ -9,10 +9,9 @@ use self::state::NonFungibleToken;
 use async_trait::async_trait;
 use fungible::Account;
 use linera_sdk::{
-    base::{AccountOwner, ApplicationId, Owner, SessionId, WithContractAbi},
+    base::{AccountOwner, ApplicationId, Owner, WithContractAbi},
     contract::system_api,
-    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, SessionCallOutcome,
-    ViewStateStorage,
+    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
 use non_fungible::{Message, Nft, Operation, TokenId};
 use std::collections::BTreeSet;
@@ -149,11 +148,7 @@ impl Contract for NonFungibleToken {
         &mut self,
         runtime: &mut ContractRuntime,
         call: Self::ApplicationCall,
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<
-        ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>,
-        Self::Error,
-    > {
+    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         match call {
             Self::ApplicationCall::Mint { name, payload } => {
                 let execution_outcome = self
@@ -226,17 +221,6 @@ impl Contract for NonFungibleToken {
                 })
             }
         }
-    }
-
-    async fn handle_session_call(
-        &mut self,
-        _runtime: &mut ContractRuntime,
-        _state: Self::SessionState,
-        _request: Self::SessionCall,
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
-    {
-        Err(Error::SessionsNotSupported)
     }
 }
 
@@ -376,7 +360,4 @@ pub enum Error {
     /// Failed to deserialize JSON string
     #[error("Failed to deserialize JSON string")]
     JsonError(#[from] serde_json::Error),
-
-    #[error("Non Fungible application doesn't support any cross-application sessions")]
-    SessionsNotSupported,
 }

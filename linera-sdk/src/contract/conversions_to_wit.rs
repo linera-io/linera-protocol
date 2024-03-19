@@ -5,11 +5,11 @@
 //! [`wit-bindgen-guest-rust`].
 
 use super::{wit_system_api, wit_types};
-use crate::{ApplicationCallOutcome, ExecutionOutcome, OutgoingMessage, SessionCallOutcome};
+use crate::{ApplicationCallOutcome, ExecutionOutcome, OutgoingMessage};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, Resources},
-    identifiers::{Account, ApplicationId, ChannelName, Destination, MessageId, Owner, SessionId},
+    identifiers::{Account, ApplicationId, ChannelName, Destination, MessageId, Owner},
 };
 
 impl From<CryptoHash> for wit_system_api::CryptoHash {
@@ -71,15 +71,6 @@ impl From<ApplicationId> for wit_system_api::ApplicationId {
     }
 }
 
-impl From<SessionId> for wit_system_api::SessionId {
-    fn from(session_id: SessionId) -> Self {
-        wit_system_api::SessionId {
-            application_id: session_id.application_id.into(),
-            index: session_id.index,
-        }
-    }
-}
-
 impl From<MessageId> for wit_system_api::MessageId {
     fn from(message_id: MessageId) -> Self {
         wit_system_api::MessageId {
@@ -102,21 +93,11 @@ impl From<log::Level> for wit_system_api::LogLevel {
     }
 }
 
-impl From<ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>> for wit_types::ApplicationCallOutcome {
-    fn from(outcome: ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>) -> Self {
+impl From<ApplicationCallOutcome<Vec<u8>, Vec<u8>>> for wit_types::ApplicationCallOutcome {
+    fn from(outcome: ApplicationCallOutcome<Vec<u8>, Vec<u8>>) -> Self {
         wit_types::ApplicationCallOutcome {
             value: outcome.value,
             execution_outcome: outcome.execution_outcome.into(),
-            create_sessions: outcome.create_sessions,
-        }
-    }
-}
-
-impl From<SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>> for wit_types::SessionCallOutcome {
-    fn from(outcome: SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>) -> Self {
-        wit_types::SessionCallOutcome {
-            inner: outcome.inner.into(),
-            new_state: outcome.new_state,
         }
     }
 }

@@ -8,8 +8,6 @@ impl ContractAbi for ApplicationAbi {
     type Operation = ();
     type Message = ();
     type ApplicationCall = ();
-    type SessionCall = ();
-    type SessionState = ();
     type Response = ();
 }
 

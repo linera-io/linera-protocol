@@ -8,8 +8,7 @@ mod state;
 use self::state::Counter;
 use async_trait::async_trait;
 use linera_sdk::{
-    base::{SessionId, WithContractAbi},
-    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, SessionCallOutcome,
+    base::WithContractAbi, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome,
     SimpleStateStorage,
 };
 use thiserror::Error;
@@ -59,27 +58,12 @@ impl Contract for Counter {
         &mut self,
         _runtime: &mut ContractRuntime,
         increment: u64,
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<
-        ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>,
-        Self::Error,
-    > {
+    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         self.value += increment;
         Ok(ApplicationCallOutcome {
             value: self.value,
             ..ApplicationCallOutcome::default()
         })
-    }
-
-    async fn handle_session_call(
-        &mut self,
-        _runtime: &mut ContractRuntime,
-        _state: Self::SessionState,
-        _call: (),
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
-    {
-        Err(Error::SessionsNotSupported)
     }
 }
 
@@ -89,10 +73,6 @@ pub enum Error {
     /// Counter application doesn't support any cross-chain messages.
     #[error("Counter application doesn't support any cross-chain messages")]
     MessagesNotSupported,
-
-    /// Counter application doesn't support any cross-application sessions.
-    #[error("Counter application doesn't support any cross-application sessions")]
-    SessionsNotSupported,
 
     /// Failed to deserialize BCS bytes
     #[error("Failed to deserialize BCS bytes")]
@@ -153,34 +133,19 @@ mod tests {
         let increment = 8_u64;
 
         let result = counter
-            .handle_application_call(&mut ContractRuntime::default(), increment, vec![])
+            .handle_application_call(&mut ContractRuntime::default(), increment)
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
         let expected_value = initial_value + increment;
         let expected_outcome = ApplicationCallOutcome {
             value: expected_value,
-            create_sessions: vec![],
             execution_outcome: ExecutionOutcome::default(),
         };
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), expected_outcome);
         assert_eq!(counter.value, expected_value);
-    }
-
-    #[webassembly_test]
-    fn sessions() {
-        let initial_value = 72_u64;
-        let mut counter = create_and_initialize_counter(initial_value);
-
-        let result = counter
-            .handle_session_call(&mut ContractRuntime::default(), (), (), vec![])
-            .now_or_never()
-            .expect("Execution of counter operation should not await anything");
-
-        assert_matches!(result, Err(Error::SessionsNotSupported));
-        assert_eq!(counter.value, initial_value);
     }
 
     fn create_and_initialize_counter(initial_value: u64) -> Counter {

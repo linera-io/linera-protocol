@@ -23,8 +23,7 @@ Tokens can be transferred from an account to different destinations, such as:
 
 - other accounts on the same chain,
 - the same account on another chain,
-- other accounts on other chains,
-- sessions so that other applications can use some tokens.
+- other accounts on other chains.
 
 # Usage
 

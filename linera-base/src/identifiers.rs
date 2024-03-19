@@ -165,15 +165,6 @@ pub struct BytecodeId<A = ()> {
     _phantom: std::marker::PhantomData<A>,
 }
 
-/// The identifier of a session.
-#[cfg_attr(with_testing, derive(Default))]
-pub struct SessionId<A = ()> {
-    /// The user application that runs the session.
-    pub application_id: ApplicationId<A>,
-    /// Unique index set by the runtime.
-    pub index: u64,
-}
-
 /// The name of a subscription channel.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct ChannelName(#[serde(with = "serde_bytes")] Vec<u8>);
@@ -505,141 +496,6 @@ impl<A> ApplicationId<A> {
     }
 }
 
-// Cannot use #[derive(Clone)] because it requires `A: Clone`.
-impl<A> Clone for SessionId<A> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<A> Copy for SessionId<A> {}
-
-impl<A: PartialEq> PartialEq for SessionId<A> {
-    fn eq(&self, other: &Self) -> bool {
-        let SessionId {
-            application_id,
-            index,
-        } = other;
-        self.application_id == *application_id && self.index == *index
-    }
-}
-
-impl<A: Eq> Eq for SessionId<A> {}
-
-impl<A: PartialOrd> PartialOrd for SessionId<A> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        let SessionId {
-            application_id,
-            index,
-        } = other;
-        match self.application_id.partial_cmp(application_id) {
-            Some(std::cmp::Ordering::Equal) => self.index.partial_cmp(index),
-            result => result,
-        }
-    }
-}
-
-impl<A: Ord> Ord for SessionId<A> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let SessionId {
-            application_id,
-            index,
-        } = other;
-        match self.application_id.cmp(application_id) {
-            std::cmp::Ordering::Equal => self.index.cmp(index),
-            result => result,
-        }
-    }
-}
-
-impl<A> Debug for SessionId<A> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let SessionId {
-            application_id,
-            index,
-        } = self;
-        f.debug_struct("SessionId")
-            .field("application_id", application_id)
-            .field("index", index)
-            .finish()
-    }
-}
-
-impl SessionId {
-    /// Specializes a session ID for a given ABI.
-    pub fn with_abi<A>(self) -> SessionId<A> {
-        SessionId {
-            application_id: self.application_id.with_abi(),
-            index: self.index,
-        }
-    }
-}
-
-impl<A> SessionId<A> {
-    /// Forgets the ABI of a session ID (if any).
-    pub fn forget_abi(self) -> SessionId {
-        SessionId {
-            application_id: self.application_id.forget_abi(),
-            index: self.index,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename = "SessionId")]
-struct SerializableSessionId {
-    pub application_id: ApplicationId,
-    pub index: u64,
-}
-
-impl<A> Serialize for SessionId<A> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        if serializer.is_human_readable() {
-            let bytes = bcs::to_bytes(&SerializableSessionId {
-                application_id: self.application_id.forget_abi(),
-                index: self.index,
-            })
-            .map_err(serde::ser::Error::custom)?;
-            serializer.serialize_str(&hex::encode(bytes))
-        } else {
-            SerializableSessionId::serialize(
-                &SerializableSessionId {
-                    application_id: self.application_id.forget_abi(),
-                    index: self.index,
-                },
-                serializer,
-            )
-        }
-    }
-}
-
-impl<'de, A> Deserialize<'de> for SessionId<A> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        if deserializer.is_human_readable() {
-            let s = String::deserialize(deserializer)?;
-            let session_id_bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
-            let session_id: SerializableSessionId =
-                bcs::from_bytes(&session_id_bytes).map_err(serde::de::Error::custom)?;
-            Ok(SessionId {
-                application_id: session_id.application_id.with_abi(),
-                index: session_id.index,
-            })
-        } else {
-            let value = SerializableSessionId::deserialize(deserializer)?;
-            Ok(SessionId {
-                application_id: value.application_id.with_abi(),
-                index: value.index,
-            })
-        }
-    }
-}
-
 impl Display for Owner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         Display::fmt(&self.0, f)
@@ -800,7 +656,6 @@ bcs_scalar!(
     BytecodeId,
     "A unique identifier for an application bytecode"
 );
-bcs_scalar!(SessionId, "A unique identifier for an application session");
 doc_scalar!(ChainDescription, "How to create a chain");
 doc_scalar!(
     ChainId,

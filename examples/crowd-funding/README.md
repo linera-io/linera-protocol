@@ -196,7 +196,7 @@ CAMPAIGN=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1
 ```
 
 ```gql,uri=$CAMPAIGN
-mutation { pledgeWithTransfer(
+mutation { pledge(
     owner:"User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
     amount:"30."
 ) }
@@ -248,7 +248,7 @@ PLEDGE1=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1
 ```
 
 ```gql,uri=$PLEDGE1
-mutation { pledgeWithTransfer(
+mutation { pledge(
   owner:"User:b4f8586041a07323bd4f4ed2d758bf1b9a977eabfd4c00e2f12d08a0899485fd",
   amount:"80."
 ) }

@@ -19,9 +19,7 @@ impl ContractAbi for MetaCounterAbi {
     type Operation = Operation;
     type ApplicationCall = ();
     type Message = Message;
-    type SessionCall = ();
     type Response = ();
-    type SessionState = ();
 }
 
 #[derive(Debug, Serialize, Deserialize)]

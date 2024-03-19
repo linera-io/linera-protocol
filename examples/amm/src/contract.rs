@@ -8,12 +8,12 @@ mod state;
 use self::state::Amm;
 use amm::{AmmError, ApplicationCall, Message, Operation};
 use async_trait::async_trait;
-use fungible::{Account, Destination, FungibleTokenAbi};
+use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId, Owner, SessionId, WithContractAbi},
+    base::{AccountOwner, Amount, ApplicationId, Owner, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
-    Resources, SessionCallOutcome, ViewStateStorage,
+    Resources, ViewStateStorage,
 };
 use num_bigint::BigUint;
 use num_traits::{cast::FromPrimitive, ToPrimitive};
@@ -83,9 +83,7 @@ impl Contract for Amm {
         &mut self,
         runtime: &mut ContractRuntime,
         application_call: ApplicationCall,
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>, AmmError>
-    {
+    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, AmmError> {
         let mut outcome = ApplicationCallOutcome::default();
         match application_call {
             ApplicationCall::Swap {
@@ -110,17 +108,6 @@ impl Contract for Amm {
         }
 
         Ok(outcome)
-    }
-
-    async fn handle_session_call(
-        &mut self,
-        _runtime: &mut ContractRuntime,
-        _session: (),
-        _argument: (),
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, AmmError>
-    {
-        Err(AmmError::SessionsNotSupported)
     }
 }
 
@@ -431,7 +418,7 @@ impl Amm {
         &mut self,
         owner: &AccountOwner,
         amount: Amount,
-        destination: Destination,
+        destination: Account,
         token_idx: u32,
     ) -> Result<(), AmmError> {
         let transfer = fungible::ApplicationCall::Transfer {
@@ -440,14 +427,14 @@ impl Amm {
             destination,
         };
         let token = Self::fungible_id(token_idx).expect("failed to get the token");
-        self.call_application(true, token, &transfer, vec![])?;
+        self.call_application(true, token, &transfer)?;
         Ok(())
     }
 
     fn balance(&mut self, owner: &AccountOwner, token_idx: u32) -> Result<Amount, AmmError> {
         let balance = fungible::ApplicationCall::Balance { owner: *owner };
         let token = Self::fungible_id(token_idx).expect("failed to get the token");
-        match self.call_application(true, token, &balance, vec![])?.0 {
+        match self.call_application(true, token, &balance)? {
             fungible::FungibleResponse::Balance(balance) => Ok(balance),
             response => Err(AmmError::UnexpectedFungibleResponse(response)),
         }
@@ -459,11 +446,10 @@ impl Amm {
         token_idx: u32,
         amount: Amount,
     ) -> Result<(), AmmError> {
-        let account = Account {
+        let destination = Account {
             chain_id: system_api::current_chain_id(),
             owner: AccountOwner::Application(system_api::current_application_id()),
         };
-        let destination = Destination::Account(account);
         self.transfer(owner, amount, destination, token_idx)
     }
 
@@ -473,11 +459,10 @@ impl Amm {
         token_idx: u32,
         amount: Amount,
     ) -> Result<(), AmmError> {
-        let account = Account {
+        let destination = Account {
             chain_id: system_api::current_chain_id(),
             owner: *owner,
         };
-        let destination = Destination::Account(account);
         let owner_app = AccountOwner::Application(system_api::current_application_id());
         self.transfer(&owner_app, amount, destination, token_idx)
     }

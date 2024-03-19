@@ -9,10 +9,9 @@ use self::state::NativeFungibleToken;
 use async_trait::async_trait;
 use fungible::{ApplicationCall, FungibleResponse, Message, Operation};
 use linera_sdk::{
-    base::{Account, AccountOwner, Amount, Owner, SessionId, WithContractAbi},
+    base::{Account, AccountOwner, Amount, Owner, WithContractAbi},
     contract::system_api,
-    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, SessionCallOutcome,
-    ViewStateStorage,
+    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
 use native_fungible::TICKER_SYMBOL;
 use thiserror::Error;
@@ -133,11 +132,7 @@ impl Contract for NativeFungibleToken {
         &mut self,
         runtime: &mut ContractRuntime,
         call: ApplicationCall,
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<
-        ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>,
-        Self::Error,
-    > {
+    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         match call {
             ApplicationCall::Balance { owner } => {
                 let owner = self.normalize_owner(owner);
@@ -157,12 +152,11 @@ impl Contract for NativeFungibleToken {
                 let account_owner = owner;
                 let owner = self.normalize_owner(owner);
 
-                let fungible_target_account = self.destination_to_account(destination);
-                let target_account = self.normalize_account(fungible_target_account);
+                let target_account = self.normalize_account(destination);
 
                 system_api::transfer(Some(owner), target_account, amount);
                 let execution_outcome =
-                    self.get_transfer_outcome(account_owner, fungible_target_account, amount);
+                    self.get_transfer_outcome(account_owner, destination, amount);
                 Ok(ApplicationCallOutcome {
                     execution_outcome,
                     ..Default::default()
@@ -205,17 +199,6 @@ impl Contract for NativeFungibleToken {
                 Ok(outcome)
             }
         }
-    }
-
-    async fn handle_session_call(
-        &mut self,
-        _runtime: &mut ContractRuntime,
-        _state: Self::SessionState,
-        _request: Self::SessionCall,
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
-    {
-        Err(Error::SessionsNotSupported)
     }
 }
 
@@ -273,13 +256,6 @@ impl NativeFungibleToken {
         }
     }
 
-    fn destination_to_account(&self, destination: fungible::Destination) -> fungible::Account {
-        match destination {
-            fungible::Destination::Account(account) => account,
-            fungible::Destination::NewSession => panic!("Sessions not supported yet!"),
-        }
-    }
-
     /// Verifies that a transfer is authenticated for this local account.
     fn check_account_authentication(
         authenticated_signer: Option<Owner>,
@@ -304,10 +280,6 @@ pub enum Error {
     #[error("Source account does not have sufficient balance for transfer")]
     InsufficientBalance(#[from] state::InsufficientBalanceError),
 
-    /// Insufficient balance in session.
-    #[error("Session does not have sufficient balance for transfer")]
-    InsufficientSessionBalance,
-
     /// Requested transfer does not have permission on this account.
     #[error("The requested transfer is not correctly authenticated.")]
     IncorrectAuthentication,
@@ -319,9 +291,6 @@ pub enum Error {
     /// Failed to deserialize JSON string
     #[error("Failed to deserialize JSON string")]
     JsonError(#[from] serde_json::Error),
-
-    #[error("Native Fungible application doesn't support any cross-application sessions")]
-    SessionsNotSupported,
 
     #[error("Applications not supported yet")]
     ApplicationsNotSupported,

@@ -37,10 +37,10 @@ use crate::{
     wasm::{WasmContractModule, WasmServiceModule},
     ApplicationCallOutcome, BaseRuntime, Bytecode, CalleeContext, ContractRuntime, ExecutionError,
     FinalizeContext, MessageContext, OperationContext, QueryContext, RawExecutionOutcome,
-    ServiceRuntime, SessionCallOutcome,
+    ServiceRuntime,
 };
 use bytes::Bytes;
-use linera_base::{identifiers::SessionId, sync::Lazy};
+use linera_base::sync::Lazy;
 use std::{marker::Unpin, sync::Arc};
 use tokio::sync::Mutex;
 use wasmer::{
@@ -48,7 +48,6 @@ use wasmer::{
     Singlepass, Store,
 };
 use wasmer_middlewares::metering::{self, Metering, MeteringPoints};
-use wit_bindgen_host_wasmer_rust::Le;
 
 /// An [`Engine`] instance configured to run application services.
 static SERVICE_ENGINE: Lazy<Engine> = Lazy::new(|| {
@@ -264,46 +263,14 @@ where
         &mut self,
         _context: CalleeContext,
         argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallOutcome, ExecutionError> {
-        let forwarded_sessions = forwarded_sessions
-            .into_iter()
-            .map(contract::SessionId::from)
-            .collect::<Vec<_>>();
-
         self.configure_initial_fuel()?;
         let result = contract::Contract::handle_application_call(
             &self.application,
             &mut self.store,
             &argument,
-            &forwarded_sessions,
         )
         .map(|inner| inner.map(ApplicationCallOutcome::from));
-        self.persist_remaining_fuel()?;
-        result?.map_err(ExecutionError::UserError)
-    }
-
-    fn handle_session_call(
-        &mut self,
-        _context: CalleeContext,
-        session: Vec<u8>,
-        argument: Vec<u8>,
-        forwarded_sessions: Vec<SessionId>,
-    ) -> Result<(SessionCallOutcome, Vec<u8>), ExecutionError> {
-        let forwarded_sessions = forwarded_sessions
-            .into_iter()
-            .map(contract::SessionId::from)
-            .collect::<Vec<_>>();
-
-        self.configure_initial_fuel()?;
-        let result = contract::Contract::handle_session_call(
-            &self.application,
-            &mut self.store,
-            &session,
-            &argument,
-            &forwarded_sessions,
-        )
-        .map(|inner| inner.map(<(SessionCallOutcome, Vec<u8>)>::from));
         self.persist_remaining_fuel()?;
         result?.map_err(ExecutionError::UserError)
     }

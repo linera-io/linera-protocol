@@ -121,9 +121,7 @@ impl ContractAbi for CounterAbi {
     type Operation = u64;
     type ApplicationCall = u64;
     type Message = ();
-    type SessionCall = ();
     type Response = u64;
-    type SessionState = ();
 }
 
 impl ServiceAbi for CounterAbi {

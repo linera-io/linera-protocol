@@ -187,9 +187,7 @@ impl ContractAbi for SocialAbi {
     type Operation = Operation;
     type ApplicationCall = ();
     type Message = Message;
-    type SessionCall = ();
     type Response = ();
-    type SessionState = ();
 }
 
 impl ServiceAbi for SocialAbi {

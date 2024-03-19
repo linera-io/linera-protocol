@@ -1,49 +1,14 @@
 initialize: func(argument: list<u8>) -> result<execution-outcome, string>
 execute-operation: func(operation: list<u8>) -> result<execution-outcome, string>
 execute-message: func(message: list<u8>) -> result<execution-outcome, string>
-
-handle-application-call: func(
-    argument: list<u8>,
-    forwarded-sessions: list<session-id>,
-) -> result<application-call-outcome, string>
-
-handle-session-call: func(
-    state: session-state,
-    argument: list<u8>,
-    forwarded-sessions: list<session-id>,
-) -> result<session-call-outcome, string>
-
+handle-application-call: func(argument: list<u8>) -> result<application-call-outcome, string>
 finalize: func() -> result<execution-outcome, string>
 
-record message-id {
-    chain-id: chain-id,
-    height: block-height,
-    index: u32,
-}
-
-record application-id {
-    bytecode-id: bytecode-id,
-    creation: message-id,
-}
-
 type chain-id = crypto-hash
-type block-height = u64
-type bytecode-id = message-id
 
 record application-call-outcome {
     value: list<u8>,
     execution-outcome: execution-outcome,
-    create-sessions: list<session-state>,
-}
-
-record session-id {
-    application-id: application-id,
-    index: u64,
-}
-
-record session-call-outcome {
-    inner: application-call-outcome,
-    new-state: option<session-state>,
 }
 
 record outgoing-message {
@@ -79,8 +44,6 @@ variant destination {
 record channel-name {
     name: list<u8>,
 }
-
-type session-state = list<u8>
 
 record crypto-hash {
     part1: u64,

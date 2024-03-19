@@ -26,9 +26,7 @@ impl ContractAbi for NonFungibleTokenAbi {
     type ApplicationCall = Operation;
     type Operation = Operation;
     type Message = Message;
-    type SessionCall = ();
     type Response = ();
-    type SessionState = ();
 }
 
 impl ServiceAbi for NonFungibleTokenAbi {

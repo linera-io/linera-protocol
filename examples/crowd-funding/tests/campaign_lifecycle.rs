@@ -64,7 +64,7 @@ async fn collect_pledges() {
             .add_block(|block| {
                 block.with_operation(
                     campaign_id,
-                    Operation::PledgeWithTransfer {
+                    Operation::Pledge {
                         owner: *backer_account,
                         amount: pledge_amount,
                     },
@@ -161,7 +161,7 @@ async fn cancel_successful_campaign() {
             .add_block(|block| {
                 block.with_operation(
                     campaign_id,
-                    Operation::PledgeWithTransfer {
+                    Operation::Pledge {
                         owner: *backer_account,
                         amount: pledge_amount,
                     },

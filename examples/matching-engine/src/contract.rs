@@ -12,12 +12,12 @@ use state::{LevelView, MatchingEngine, MatchingEngineError};
 use std::cmp::min;
 
 use async_trait::async_trait;
-use fungible::{Account, Destination, FungibleTokenAbi};
+use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId, ChainId, Owner, SessionId, WithContractAbi},
+    base::{AccountOwner, Amount, ApplicationId, ChainId, Owner, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
-    Resources, SessionCallOutcome, ViewStateStorage,
+    Resources, ViewStateStorage,
 };
 
 linera_sdk::contract!(MatchingEngine);
@@ -127,11 +127,7 @@ impl Contract for MatchingEngine {
         &mut self,
         runtime: &mut ContractRuntime,
         argument: ApplicationCall,
-        _sessions: Vec<SessionId>,
-    ) -> Result<
-        ApplicationCallOutcome<Self::Message, Self::Response, Self::SessionState>,
-        Self::Error,
-    > {
+    ) -> Result<ApplicationCallOutcome<Self::Message, Self::Response>, Self::Error> {
         let mut outcome = ApplicationCallOutcome::default();
         match argument {
             ApplicationCall::ExecuteOrder { order } => {
@@ -150,17 +146,6 @@ impl Contract for MatchingEngine {
             }
         }
         Ok(outcome)
-    }
-
-    async fn handle_session_call(
-        &mut self,
-        _runtime: &mut ContractRuntime,
-        _state: Self::SessionState,
-        _call: (),
-        _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallOutcome<Self::Message, Self::Response, Self::SessionState>, Self::Error>
-    {
-        Err(Self::Error::SessionsNotSupported)
     }
 }
 
@@ -211,18 +196,17 @@ impl MatchingEngine {
         nature: &OrderNature,
         price: &Price,
     ) -> Result<(), MatchingEngineError> {
-        let account = Account {
+        let destination = Account {
             chain_id: system_api::current_chain_id(),
             owner: AccountOwner::Application(system_api::current_application_id()),
         };
-        let destination = Destination::Account(account);
         let (amount, token_idx) = Self::get_amount_idx(nature, price, amount);
         self.transfer(*owner, amount, destination, token_idx)
     }
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
     fn send_to(&mut self, transfer: Transfer) -> Result<(), MatchingEngineError> {
-        let destination = Destination::Account(transfer.account);
+        let destination = transfer.account;
         let owner_app = AccountOwner::Application(system_api::current_application_id());
         self.transfer(owner_app, transfer.amount, destination, transfer.token_idx)
     }
@@ -232,7 +216,7 @@ impl MatchingEngine {
         &mut self,
         owner: AccountOwner,
         amount: Amount,
-        destination: Destination,
+        destination: Account,
         token_idx: u32,
     ) -> Result<(), MatchingEngineError> {
         let transfer = fungible::ApplicationCall::Transfer {
@@ -241,7 +225,7 @@ impl MatchingEngine {
             destination,
         };
         let token = Self::fungible_id(token_idx).expect("failed to get the token");
-        self.call_application(true, token, &transfer, vec![])?;
+        self.call_application(true, token, &transfer)?;
         Ok(())
     }
 
@@ -327,7 +311,7 @@ impl MatchingEngine {
         } = order
         {
             // First, move the funds to the matching engine chain (under the same owner).
-            let destination = fungible::Destination::Account(Account { chain_id, owner });
+            let destination = Account { chain_id, owner };
             let (amount, token_idx) = Self::get_amount_idx(&nature, &price, &amount);
             self.transfer(owner, amount, destination, token_idx)?;
         }

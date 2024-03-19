@@ -70,30 +70,13 @@ macro_rules! service {
         #[no_mangle]
         fn __contract_handle_application_call(
             _: Vec<u8>,
-            _: Vec<$crate::contract::wit_types::SessionId>,
-        ) -> Result<$crate::ApplicationCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String> {
-            unreachable!("Contract entrypoint should not be called in service");
-        }
-
-        #[doc(hidden)]
-        #[no_mangle]
-        fn __contract_handle_session_call(
-            _: Vec<u8>,
-            _: Vec<u8>,
-            _: Vec<$crate::SessionId>,
-        ) -> Result<$crate::SessionCallOutcome<Vec<u8>, Vec<u8>, Vec<u8>>, String> {
+        ) -> Result<$crate::ApplicationCallOutcome<Vec<u8>, Vec<u8>>, String> {
             unreachable!("Contract entrypoint should not be called in service");
         }
 
         #[doc(hidden)]
         #[no_mangle]
         fn __contract_finalize() -> Result<$crate::ExecutionOutcome<Vec<u8>>, String> {
-            unreachable!("Contract entrypoint should not be called in service");
-        }
-
-        #[doc(hidden)]
-        #[no_mangle]
-        fn __contract_finish_transaction() -> Result<(), String> {
             unreachable!("Contract entrypoint should not be called in service");
         }
     };

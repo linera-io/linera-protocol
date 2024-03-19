@@ -9,7 +9,7 @@
 #![allow(clippy::duplicate_mod)]
 
 use super::{contract, contract_system_api, service_system_api};
-use crate::{CallOutcome, MessageId, SessionId, UserApplicationId};
+use crate::{MessageId, UserApplicationId};
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::Amount,
@@ -33,43 +33,6 @@ impl From<MessageId> for contract_system_api::MessageId {
             chain_id: host.chain_id.into(),
             height: host.height.0,
             index: host.index,
-        }
-    }
-}
-
-impl From<MessageId> for contract::MessageId {
-    fn from(host: MessageId) -> Self {
-        contract::MessageId {
-            chain_id: host.chain_id.into(),
-            height: host.height.0,
-            index: host.index,
-        }
-    }
-}
-
-impl From<SessionId> for contract::SessionId {
-    fn from(host: SessionId) -> Self {
-        contract::SessionId {
-            application_id: host.application_id.into(),
-            index: host.index,
-        }
-    }
-}
-
-impl From<SessionId> for contract_system_api::SessionId {
-    fn from(host: SessionId) -> Self {
-        contract_system_api::SessionId {
-            application_id: host.application_id.into(),
-            index: host.index,
-        }
-    }
-}
-
-impl From<UserApplicationId> for contract::ApplicationId {
-    fn from(host: UserApplicationId) -> Self {
-        contract::ApplicationId {
-            bytecode_id: host.bytecode_id.message_id.into(),
-            creation: host.creation.into(),
         }
     }
 }
@@ -142,19 +105,6 @@ impl From<CryptoHash> for contract_system_api::CryptoHash {
             part2,
             part3,
             part4,
-        }
-    }
-}
-
-impl From<CallOutcome> for contract_system_api::CallOutcome {
-    fn from(host: CallOutcome) -> Self {
-        contract_system_api::CallOutcome {
-            value: host.value,
-            sessions: host
-                .sessions
-                .into_iter()
-                .map(contract_system_api::SessionId::from)
-                .collect(),
         }
     }
 }
