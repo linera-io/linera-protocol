@@ -32,11 +32,11 @@ impl linera_views::views::View<custom::GenericContext<T>> for TestView {
     fn flush(
         &mut self,
         batch: &mut linera_views::batch::Batch,
-    ) -> Result<(), linera_views::views::ViewError> {
+    ) -> Result<bool, linera_views::views::ViewError> {
         use linera_views::views::View;
-        self.register.flush(batch)?;
-        self.collection.flush(batch)?;
-        Ok(())
+        let test0 = self.register.flush(batch)?;
+        let test1 = self.collection.flush(batch)?;
+        Ok(test0 && test1)
     }
     fn clear(&mut self) {
         self.register.clear();
