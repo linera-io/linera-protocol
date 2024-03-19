@@ -4,7 +4,7 @@
 use crate::{
     batch::Batch,
     common::{Context, HasherOutput},
-    hashable_wrapper::{DeleteStorageFirst, WrappedHashableContainerView},
+    hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
@@ -205,12 +205,6 @@ where
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         self.compute_hash()
-    }
-}
-
-impl<C, T> DeleteStorageFirst for RegisterView<C, T> {
-    fn delete_storage_first(&self) -> bool {
-        self.delete_storage_first
     }
 }
 

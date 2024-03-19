@@ -33,18 +33,12 @@ enum KeyTag {
     Hash,
 }
 
-/// That is used for accessing whether we need to delete the storage first before
-/// writing
-pub(crate) trait DeleteStorageFirst {
-    fn delete_storage_first(&self) -> bool;
-}
-
 #[async_trait]
 impl<C, W, O> View<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: HashableView<C> + DeleteStorageFirst + Send,
+    W: HashableView<C> + Send,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {
@@ -75,25 +69,26 @@ where
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        if self.delete_storage_first() {
-            let mut key_prefix = self.inner.context().base_key();
-            key_prefix.pop();
-            batch.delete_key_prefix(key_prefix);
-            self.stored_hash = None;
-        }
         let test = self.inner.flush(batch)?;
-        let hash = *self.hash.get_mut();
-        if self.stored_hash != hash {
+        if test {
             let mut key = self.inner.context().base_key();
             let tag = key.last_mut().unwrap();
             *tag = KeyTag::Hash as u8;
-            match hash {
-                None => batch.delete_key(key),
-                Some(hash) => batch.put_key_value(key, &hash)?,
+            batch.delete_key(key)
+        } else {
+            let hash = *self.hash.get_mut();
+            if self.stored_hash != hash {
+                let mut key = self.inner.context().base_key();
+                let tag = key.last_mut().unwrap();
+                *tag = KeyTag::Hash as u8;
+                match hash {
+                    None => batch.delete_key(key),
+                    Some(hash) => batch.put_key_value(key, &hash)?,
+                }
+                self.stored_hash = hash;
             }
-            self.stored_hash = hash;
         }
-        Ok(test))
+        Ok(test)
     }
 
     fn clear(&mut self) {
@@ -106,7 +101,7 @@ impl<C, W, O> ClonableView<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: HashableView<C> + ClonableView<C> + DeleteStorageFirst + Send,
+    W: HashableView<C> + ClonableView<C> + Send,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {
@@ -125,7 +120,7 @@ impl<C, W, O> HashableView<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: HashableView<C> + DeleteStorageFirst + Send + Sync,
+    W: HashableView<C> + Send + Sync,
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {

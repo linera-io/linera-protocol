@@ -4,7 +4,7 @@
 use crate::{
     batch::Batch,
     common::{Context, CustomSerialize, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
-    hashable_wrapper::{DeleteStorageFirst, WrappedHashableContainerView},
+    hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 use async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -1279,24 +1279,6 @@ where
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         self.collection.hash().await
-    }
-}
-
-impl<C, W> DeleteStorageFirst for ByteCollectionView<C, W> {
-    fn delete_storage_first(&self) -> bool {
-        self.delete_storage_first
-    }
-}
-
-impl<C, I, W> DeleteStorageFirst for CollectionView<C, I, W> {
-    fn delete_storage_first(&self) -> bool {
-        self.collection.delete_storage_first
-    }
-}
-
-impl<C, I, W> DeleteStorageFirst for CustomCollectionView<C, I, W> {
-    fn delete_storage_first(&self) -> bool {
-        self.collection.delete_storage_first
     }
 }
 

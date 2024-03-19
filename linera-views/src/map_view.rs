@@ -43,7 +43,7 @@ use crate::{
         contains_key, get_interval, insert_key_prefix, Context, CustomSerialize, HasherOutput,
         KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update,
     },
-    hashable_wrapper::{DeleteStorageFirst, WrappedHashableContainerView},
+    hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
@@ -1606,24 +1606,6 @@ where
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         self.map.hash().await
-    }
-}
-
-impl<C, W> DeleteStorageFirst for ByteMapView<C, W> {
-    fn delete_storage_first(&self) -> bool {
-        self.delete_storage_first
-    }
-}
-
-impl<C, I, V> DeleteStorageFirst for MapView<C, I, V> {
-    fn delete_storage_first(&self) -> bool {
-        self.map.delete_storage_first
-    }
-}
-
-impl<C, I, V> DeleteStorageFirst for CustomMapView<C, I, V> {
-    fn delete_storage_first(&self) -> bool {
-        self.map.delete_storage_first
     }
 }
 

@@ -4,7 +4,7 @@
 use crate::{
     batch::Batch,
     common::{Context, HasherOutput, MIN_VIEW_TAG},
-    hashable_wrapper::{DeleteStorageFirst, WrappedHashableContainerView},
+    hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
@@ -444,12 +444,6 @@ where
         let mut hasher = sha3::Sha3_256::default();
         hasher.update_with_bcs_bytes(&elements)?;
         Ok(hasher.finalize())
-    }
-}
-
-impl<C, T> DeleteStorageFirst for QueueView<C, T> {
-    fn delete_storage_first(&self) -> bool {
-        self.delete_storage_first
     }
 }
 
