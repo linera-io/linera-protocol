@@ -41,7 +41,7 @@ use linera_views::rocks_db::{create_rocks_db_test_config, RocksDbStoreConfig};
 trait LocalServerInternal: Sized {
     type Config;
 
-    async fn new() -> Result<Self>;
+    async fn new_test() -> Result<Self>;
 
     fn get_config(&self) -> Self::Config;
 }
@@ -54,7 +54,7 @@ struct LocalServerServiceInternal {
 impl LocalServerInternal for LocalServerServiceInternal {
     type Config = ServiceStoreConfig;
 
-    async fn new() -> Result<Self> {
+    async fn new_test() -> Result<Self> {
         let endpoint = get_free_port().await.unwrap();
         let service_config = service_config_from_endpoint(&endpoint)?;
         let binary = get_service_storage_binary().await?.display().to_string();
@@ -74,15 +74,16 @@ impl LocalServerInternal for LocalServerServiceInternal {
 #[cfg(feature = "rocksdb")]
 struct LocalServerRocksDbInternal {
     rocks_db_config: RocksDbStoreConfig,
-    _temp_dir: TempDir,
+    _temp_dir: Option<TempDir>,
 }
 
 #[cfg(feature = "rocksdb")]
 impl LocalServerInternal for LocalServerRocksDbInternal {
     type Config = RocksDbStoreConfig;
 
-    async fn new() -> Result<Self> {
-        let (rocks_db_config, _temp_dir) = create_rocks_db_test_config().await;
+    async fn new_test() -> Result<Self> {
+        let (rocks_db_config, temp_dir) = create_rocks_db_test_config().await;
+        let _temp_dir = Some(temp_dir);
         Ok(Self {
             rocks_db_config,
             _temp_dir,
@@ -120,7 +121,7 @@ where
     pub async fn get_config(&self) -> L::Config {
         let mut server = self.internal_server.write().await;
         if server.is_none() {
-            *server = Some(L::new().await.expect("local server"));
+            *server = Some(L::new_test().await.expect("local server"));
         }
         let Some(internal_server) = server.deref() else {
             unreachable!();
@@ -329,10 +330,8 @@ impl Validator {
 impl LocalNetConfig {
     pub fn new_test(database: Database, network: Network) -> Self {
         let num_shards = match database {
-            Database::Service => 4,
             Database::RocksDb => 1,
-            Database::DynamoDb => 4,
-            Database::ScyllaDb => 4,
+            _ => 4,
         };
         let server_config_builder = LocalServerConfigBuilder::TestConfig;
         let path_provider = PathProvider::new_test().unwrap();
@@ -617,7 +616,7 @@ impl LocalNet {
                 format!("rocksdb:{}:{}", path_buf, namespace)
             }
             Database::DynamoDb => {
-                format!("dynamodb:{}:localstack", namespace,)
+                format!("dynamodb:{}:localstack", namespace)
             }
             Database::ScyllaDb => {
                 format!("scylladb:{}", namespace)
