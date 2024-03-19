@@ -222,7 +222,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
 /// As opposed to the [`Contract`] interface of an application, service entry points
 /// are triggered by JSON queries (typically GraphQL). Their execution cannot modify
 /// storage and is not gas-metered.
-#[async_trait]
+#[allow(async_fn_in_trait)]
 pub trait Service: WithServiceAbi + ServiceAbi + Sized {
     /// Type used to report errors to the execution environment.
     ///
@@ -230,7 +230,7 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
     type Error: Error + From<serde_json::Error>;
 
     /// The type used to store the persisted application state.
-    type State: Sync;
+    type State;
 
     /// The desired storage backend used to store the application's state.
     ///
@@ -250,7 +250,7 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
     ) -> Result<Self::QueryResponse, Self::Error>;
 
     /// Queries another application.
-    fn query_application<A: ServiceAbi + Send>(
+    fn query_application<A: ServiceAbi>(
         application: ApplicationId<A>,
         query: &A::Query,
     ) -> Result<A::QueryResponse, Self::Error>

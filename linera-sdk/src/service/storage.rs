@@ -11,7 +11,6 @@ use crate::{
     views::{AppStateStore, ViewStorageContext},
     Service, ServiceRuntime, SimpleStateStorage, ViewStateStorage,
 };
-use async_trait::async_trait;
 use linera_views::{
     common::ReadableKeyValueStore,
     views::{RootView, View},
@@ -19,17 +18,16 @@ use linera_views::{
 use serde::{de::DeserializeOwned, Serialize};
 
 /// The storage APIs used by a service.
-#[async_trait]
+#[allow(async_fn_in_trait)]
 pub trait ServiceStateStorage {
     /// Loads the application state and run the given query.
     async fn handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String>;
 }
 
-#[async_trait]
 impl<Application> ServiceStateStorage for SimpleStateStorage<Application>
 where
-    Application: Service + Send,
-    Application::State: Default + DeserializeOwned + Serialize + Send + Sync,
+    Application: Service,
+    Application::State: Default + DeserializeOwned + Serialize,
 {
     async fn handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String> {
         let maybe_bytes = AppStateStore
@@ -56,12 +54,10 @@ where
     }
 }
 
-#[async_trait]
 impl<Application> ServiceStateStorage for ViewStateStorage<Application>
 where
-    Application: Service + Send,
-    Application::State: RootView<ViewStorageContext> + Send + Sync,
-    Application::Error: Send,
+    Application: Service,
+    Application::State: RootView<ViewStorageContext>,
 {
     async fn handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String> {
         let context = ViewStorageContext::default();

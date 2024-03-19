@@ -3,7 +3,6 @@
 mod state;
 
 use self::state::Application;
-use async_trait::async_trait;
 use linera_sdk::{{base::WithServiceAbi, Service, ServiceRuntime, ViewStateStorage}};
 use thiserror::Error;
 
@@ -17,7 +16,6 @@ impl WithServiceAbi for ApplicationService {{
     type Abi = {project_name}::ApplicationAbi;
 }}
 
-#[async_trait]
 impl Service for ApplicationService {{
     type Error = ServiceError;
     type Storage = ViewStateStorage<Self>;

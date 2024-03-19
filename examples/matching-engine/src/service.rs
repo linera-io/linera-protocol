@@ -7,7 +7,6 @@ mod state;
 
 use crate::state::{MatchingEngine, MatchingEngineError};
 use async_graphql::{EmptySubscription, Request, Response, Schema};
-use async_trait::async_trait;
 use linera_sdk::{
     base::WithServiceAbi, graphql::GraphQLMutationRoot, Service, ServiceRuntime, ViewStateStorage,
 };
@@ -24,7 +23,6 @@ impl WithServiceAbi for MatchingEngineService {
     type Abi = matching_engine::MatchingEngineAbi;
 }
 
-#[async_trait]
 impl Service for MatchingEngineService {
     type Error = MatchingEngineError;
     type Storage = ViewStateStorage<Self>;

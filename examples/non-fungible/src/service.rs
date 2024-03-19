@@ -7,7 +7,6 @@ mod state;
 
 use self::state::NonFungibleToken;
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use async_trait::async_trait;
 use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use fungible::Account;
 use linera_sdk::{
@@ -31,7 +30,6 @@ impl WithServiceAbi for NonFungibleTokenService {
     type Abi = non_fungible::NonFungibleTokenAbi;
 }
 
-#[async_trait]
 impl Service for NonFungibleTokenService {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;

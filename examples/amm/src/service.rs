@@ -8,7 +8,6 @@ mod state;
 use self::state::Amm;
 use amm::{AmmError, Operation};
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use async_trait::async_trait;
 use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime, ViewStateStorage};
 use std::sync::Arc;
 
@@ -22,7 +21,6 @@ impl WithServiceAbi for AmmService {
     type Abi = amm::AmmAbi;
 }
 
-#[async_trait]
 impl Service for AmmService {
     type Error = AmmError;
     type Storage = ViewStateStorage<Self>;

@@ -9,7 +9,6 @@ use self::state::NativeFungibleToken;
 use async_graphql::{
     ComplexObject, EmptySubscription, Object, Request, Response, Schema, SimpleObject,
 };
-use async_trait::async_trait;
 use fungible::Operation;
 use linera_sdk::{
     base::{AccountOwner, Amount, WithServiceAbi},
@@ -31,7 +30,6 @@ impl WithServiceAbi for NativeFungibleTokenService {
     type Abi = fungible::FungibleTokenAbi;
 }
 
-#[async_trait]
 impl Service for NativeFungibleTokenService {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;

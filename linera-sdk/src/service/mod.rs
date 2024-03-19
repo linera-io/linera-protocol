@@ -88,8 +88,8 @@ pub fn run_async_entrypoint<Entrypoint, Output, Error, RawOutput>(
     entrypoint: Entrypoint,
 ) -> Result<RawOutput, String>
 where
-    Entrypoint: Future<Output = Result<Output, Error>> + Send,
-    Output: Into<RawOutput> + Send + 'static,
+    Entrypoint: Future<Output = Result<Output, Error>>,
+    Output: Into<RawOutput> + 'static,
     Error: ToString + 'static,
 {
     ServiceLogger::install();

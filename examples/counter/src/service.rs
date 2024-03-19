@@ -7,7 +7,6 @@ mod state;
 
 use self::state::Counter;
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use async_trait::async_trait;
 use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime, SimpleStateStorage};
 use thiserror::Error;
 
@@ -21,7 +20,6 @@ impl WithServiceAbi for CounterService {
     type Abi = counter::CounterAbi;
 }
 
-#[async_trait]
 impl Service for CounterService {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
