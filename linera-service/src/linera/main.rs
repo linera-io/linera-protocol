@@ -30,11 +30,14 @@ use linera_execution::{
     system::{SystemChannel, UserData},
     Message, ResourceControlPolicy, SystemMessage,
 };
+use linera_views::rocks_db::RocksDbStoreConfig;
+use linera_views::common::CommonStoreConfig;
 use linera_service::{
     chain_listener::ClientContext as _,
     cli_wrappers::{
         self,
         local_net::{Database, PathProvider, LocalNetConfig, LocalServerConfigBuilder},
+        local_net::{LocalServerConfig},
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain},
@@ -1508,9 +1511,13 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                     #[cfg(not(feature = "kubernetes"))]
                     bail!("Cannot use the kubernetes flag with the kubernetes feature off")
                 } else {
-                    let server_config_builder = LocalServerConfigBuilder::TestConfig;
                     let tmp_dir = tempdir()?;
                     let path = tmp_dir.path();
+                    let path_buf = path.to_path_buf();
+                    let common_config = CommonStoreConfig::default();
+                    let rocks_db_config = RocksDbStoreConfig { path_buf, common_config };
+                    let local_server_config = Some(LocalServerConfig::RocksDb { rocks_db_config });
+                    let server_config_builder = LocalServerConfigBuilder::ExistingConfig { local_server_config };
                     let path_provider = PathProvider::new(path);
                     let config = LocalNetConfig {
                         network: Network::Grpc,

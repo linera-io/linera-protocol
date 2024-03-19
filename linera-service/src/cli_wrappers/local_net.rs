@@ -8,39 +8,53 @@ use crate::{
 use std::path::Path;
 use std::path::PathBuf;
 use anyhow::{anyhow, bail, ensure, Context, Result};
-use async_lock::RwLock;
 use async_trait::async_trait;
 use linera_base::{
     command::{resolve_binary, CommandExt},
     data_types::Amount,
-    sync::Lazy,
 };
 use linera_execution::ResourceControlPolicy;
 use linera_storage_service::{
-    child::{get_free_port, StorageService, StorageServiceGuard},
-    client::service_config_from_endpoint,
-    common::{get_service_storage_binary, ServiceStoreConfig},
+    child::StorageServiceGuard,
+    common::ServiceStoreConfig,
 };
 use std::{
     collections::{BTreeMap, HashSet},
     env,
-    ops::Deref,
     sync::Arc,
     time::Duration,
 };
-use tempfile::{tempdir, TempDir};
+use tempfile::TempDir;
 use tokio::process::{Child, Command};
 use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
 use tracing::{info, warn};
 
+#[cfg(any(test, feature = "test"))]
+use {
+    async_lock::RwLock,
+    linera_base::sync::Lazy,
+    std::ops::Deref,
+    tempfile::tempdir,
+    linera_storage_service::child::{get_free_port, StorageService},
+    linera_storage_service::{
+        client::service_config_from_endpoint,
+        common::get_service_storage_binary,
+    },
+};
+
+#[cfg(all(feature = "rocksdb", any(test, feature = "test")))]
+use linera_views::rocks_db::create_rocks_db_test_config;
+
 #[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::{create_rocks_db_test_config, RocksDbStoreConfig};
+use linera_views::rocks_db::RocksDbStoreConfig;
+
 
 trait LocalServerInternal: Sized {
     type Config;
 
+    #[cfg(any(test, feature = "test"))]
     async fn new_test() -> Result<Self>;
 
     fn get_config(&self) -> Self::Config;
@@ -54,6 +68,7 @@ struct LocalServerServiceInternal {
 impl LocalServerInternal for LocalServerServiceInternal {
     type Config = ServiceStoreConfig;
 
+    #[cfg(any(test, feature = "test"))]
     async fn new_test() -> Result<Self> {
         let endpoint = get_free_port().await.unwrap();
         let service_config = service_config_from_endpoint(&endpoint)?;
@@ -81,6 +96,7 @@ struct LocalServerRocksDbInternal {
 impl LocalServerInternal for LocalServerRocksDbInternal {
     type Config = RocksDbStoreConfig;
 
+    #[cfg(any(test, feature = "test"))]
     async fn new_test() -> Result<Self> {
         let (rocks_db_config, temp_dir) = create_rocks_db_test_config().await;
         let _temp_dir = Some(temp_dir);
@@ -95,10 +111,12 @@ impl LocalServerInternal for LocalServerRocksDbInternal {
     }
 }
 
+#[cfg(any(test, feature = "test"))]
 struct LocalServer<L> {
     internal_server: RwLock<Option<L>>,
 }
 
+#[cfg(any(test, feature = "test"))]
 impl<L> Default for LocalServer<L>
 where
     L: LocalServerInternal,
@@ -108,6 +126,7 @@ where
     }
 }
 
+#[cfg(any(test, feature = "test"))]
 impl<L> LocalServer<L>
 where
     L: LocalServerInternal,
@@ -131,10 +150,11 @@ where
 }
 
 // A static data to store the integration test server
+#[cfg(any(test, feature = "test"))]
 static LOCAL_SERVER_SERVICE: Lazy<LocalServer<LocalServerServiceInternal>> =
     Lazy::new(LocalServer::new);
 
-#[cfg(feature = "rocksdb")]
+#[cfg(all(feature = "rocksdb", any(test, feature = "test")))]
 static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServer<LocalServerRocksDbInternal>> =
     Lazy::new(LocalServer::new);
 
@@ -151,6 +171,7 @@ pub enum LocalServerConfig {
 }
 
 impl LocalServerConfig {
+    #[cfg(any(test, feature = "test"))]
     async fn make_testing_config(database: Database) -> Option<Self> {
         match database {
             Database::Service => {
@@ -176,6 +197,7 @@ impl LocalServerConfig {
 }
 
 pub enum LocalServerConfigBuilder {
+    #[cfg(any(test, feature = "test"))]
     TestConfig,
     ExistingConfig{
         local_server_config: Option<LocalServerConfig>,
@@ -183,8 +205,10 @@ pub enum LocalServerConfigBuilder {
 }
 
 impl LocalServerConfigBuilder {
+    #[allow(unused_variables)]
     pub async fn build(self, database: Database) -> Option<LocalServerConfig> {
         match self {
+            #[cfg(any(test, feature = "test"))]
             LocalServerConfigBuilder::TestConfig => {
                 LocalServerConfig::make_testing_config(database).await
             },
