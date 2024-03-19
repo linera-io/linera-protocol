@@ -91,13 +91,16 @@ where
         self.deleted_prefixes.clear();
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+        let mut delete_view = false;
         if self.delete_storage_first {
+            delete_view = true;
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Update::Set(value) = update {
                     let key = self.context.base_index(&index);
                     batch.put_key_value(key, &value)?;
+                    delete_view = false;
                 }
             }
         } else {
@@ -114,7 +117,7 @@ where
             }
         }
         self.delete_storage_first = false;
-        Ok(())
+        Ok(delete_view)
     }
 
     fn clear(&mut self) {
@@ -809,7 +812,7 @@ where
         self.map.rollback()
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         self.map.flush(batch)
     }
 
@@ -1223,7 +1226,7 @@ where
         self.map.rollback()
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         self.map.flush(batch)
     }
 

@@ -81,12 +81,15 @@ where
         self.new_values.clear();
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+        let mut delete_view = false;
         if self.delete_storage_first {
             batch.delete_key_prefix(self.context.base_key());
             self.stored_count = 0;
+            delete_view = true;
         }
         if !self.new_values.is_empty() {
+            delete_view = false;
             for value in &self.new_values {
                 let key = self
                     .context
@@ -99,7 +102,7 @@ where
             self.new_values.clear();
         }
         self.delete_storage_first = false;
-        Ok(())
+        Ok(delete_view)
     }
 
     fn clear(&mut self) {

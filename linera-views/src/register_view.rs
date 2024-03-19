@@ -69,17 +69,19 @@ where
         self.update = None;
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+        let mut delete_view = false;
         if self.delete_storage_first {
             batch.delete_key(self.context.base_key());
             self.stored_value = Box::default();
+            delete_view = true;
         } else if let Some(value) = self.update.take() {
             let key = self.context.base_key();
             batch.put_key_value(key, &value)?;
             self.stored_value = value;
         }
         self.delete_storage_first = false;
-        Ok(())
+        Ok(delete_view)
     }
 
     fn clear(&mut self) {

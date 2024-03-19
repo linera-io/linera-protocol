@@ -189,14 +189,17 @@ where
         *self.hash.get_mut() = self.stored_hash;
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+        let mut delete_view = false;
         if self.delete_storage_first {
+            delete_view = true;
             self.stored_total_size = SizeData::default();
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Update::Set(value) = update {
                     let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                     batch.put_key_value_bytes(key, value);
+                    delete_view = false;
                 }
             }
             self.stored_hash = None
@@ -229,7 +232,7 @@ where
             self.stored_total_size = self.total_size;
         }
         self.delete_storage_first = false;
-        Ok(())
+        Ok(delete_view)
     }
 
     fn clear(&mut self) {

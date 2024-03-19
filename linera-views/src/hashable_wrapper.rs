@@ -74,14 +74,14 @@ where
         *self.hash.get_mut() = self.stored_hash;
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         if self.delete_storage_first() {
             let mut key_prefix = self.inner.context().base_key();
             key_prefix.pop();
             batch.delete_key_prefix(key_prefix);
             self.stored_hash = None;
         }
-        self.inner.flush(batch)?;
+        let test = self.inner.flush(batch)?;
         let hash = *self.hash.get_mut();
         if self.stored_hash != hash {
             let mut key = self.inner.context().base_key();
@@ -93,7 +93,7 @@ where
             }
             self.stored_hash = hash;
         }
-        Ok(())
+        Ok(test))
     }
 
     fn clear(&mut self) {

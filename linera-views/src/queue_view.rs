@@ -85,9 +85,11 @@ where
         self.new_back_values.clear();
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+        let mut delete_view = false;
         if self.delete_storage_first {
             batch.delete_key_prefix(self.context.base_key());
+            delete_view = true;
         }
         if self.stored_count() == 0 {
             let key_prefix = self.context.base_tag(KeyTag::Index as u8);
@@ -102,6 +104,7 @@ where
             }
         }
         if !self.new_back_values.is_empty() {
+            delete_view = false;
             for value in &self.new_back_values {
                 let key = self
                     .context
@@ -117,7 +120,7 @@ where
         }
         self.front_delete_count = 0;
         self.delete_storage_first = false;
-        Ok(())
+        Ok(delete_view)
     }
 
     fn clear(&mut self) {

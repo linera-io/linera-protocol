@@ -63,13 +63,16 @@ where
         self.updates.clear();
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+        let mut delete_view = false;
         if self.delete_storage_first {
+            delete_view = true;
             batch.delete_key_prefix(self.context.base_key());
             for (index, update) in mem::take(&mut self.updates) {
                 if let Update::Set(_) = update {
                     let key = self.context.base_index(&index);
                     batch.put_key_value_bytes(key, Vec::new());
+                    delete_view = false;
                 }
             }
         } else {
@@ -82,7 +85,7 @@ where
             }
         }
         self.delete_storage_first = false;
-        Ok(())
+        Ok(delete_view)
     }
 
     fn clear(&mut self) {
@@ -364,7 +367,7 @@ where
         self.set.rollback()
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         self.set.flush(batch)
     }
 
@@ -613,7 +616,7 @@ where
         self.set.rollback()
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         self.set.flush(batch)
     }
 

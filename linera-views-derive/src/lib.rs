@@ -175,10 +175,10 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 #(#rollback_quotes)*
             }
 
-            fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<(), linera_views::views::ViewError> {
+            fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<bool, linera_views::views::ViewError> {
                 use linera_views::views::View;
                 #(#flush_quotes)*
-                Ok(())
+                Ok(false)
             }
 
             fn clear(&mut self) {
