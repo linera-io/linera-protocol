@@ -133,7 +133,7 @@ impl Runnable for Job {
                                 UserData::default(),
                             )
                             .await
-                            .context("failed to make transfer");
+                            .context("Failed to make transfer");
                         (result, chain_client)
                     })
                     .await?;
@@ -165,7 +165,7 @@ impl Runnable for Job {
                             let result = chain_client
                                 .open_chain(ownership, balance)
                                 .await
-                                .context("failed to open chain");
+                                .context("Failed to open chain");
                             (result, chain_client)
                         }
                     })
@@ -208,7 +208,7 @@ impl Runnable for Job {
                             let result = chain_client
                                 .open_chain(ownership, balance)
                                 .await
-                                .context("failed to open chain");
+                                .context("Failed to open chain");
                             (result, chain_client)
                         }
                     })
@@ -247,29 +247,39 @@ impl Runnable for Job {
                 execute_operations,
                 close_chain,
             } => {
-                let mut chain_client = context.make_chain_client(storage, chain_id);
+                let chain_client = context.make_chain_client(storage, chain_id);
                 info!("Changing application permissions for chain {}", chain_id);
                 let time_start = Instant::now();
-                let result = chain_client
-                    .change_application_permissions(ApplicationPermissions {
-                        execute_operations,
-                        close_chain,
+                let (certificate, _) = context
+                    .apply_client_command(chain_client, |mut chain_client| async {
+                        let result = chain_client
+                            .change_application_permissions(ApplicationPermissions {
+                                execute_operations: execute_operations.clone(),
+                                close_chain: close_chain.clone(),
+                            })
+                            .await
+                            .context("Failed to change application permissions");
+                        (result, chain_client)
                     })
-                    .await;
-                context.update_and_save_wallet(&mut chain_client).await;
-                let certificate = result.context("failed to change application permissions")?;
+                    .await?;
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
             }
 
             CloseChain { chain_id } => {
-                let mut chain_client = context.make_chain_client(storage, chain_id);
+                let chain_client = context.make_chain_client(storage, chain_id);
                 info!("Closing chain {}", chain_id);
                 let time_start = Instant::now();
-                let result = chain_client.close_chain().await;
-                context.update_and_save_wallet(&mut chain_client).await;
-                let certificate = result.context("failed to close chain")?;
+                let (certificate, _) = context
+                    .apply_client_command(chain_client, |mut chain_client| async {
+                        let result = chain_client
+                            .close_chain()
+                            .await
+                            .context("Failed to close chain");
+                        (result, chain_client)
+                    })
+                    .await?;
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
@@ -281,22 +291,27 @@ impl Runnable for Job {
                 channel,
             } => {
                 let subscriber = subscriber.unwrap_or_else(|| context.default_chain());
-                let mut chain_client = context.make_chain_client(storage, subscriber);
+                let chain_client = context.make_chain_client(storage, subscriber);
                 let time_start = Instant::now();
                 info!("Subscribing");
-                let result = match channel {
-                    SystemChannel::Admin => chain_client.subscribe_to_new_committees().await,
-                    SystemChannel::PublishedBytecodes => match publisher {
-                        Some(publisher_chainid) => {
-                            chain_client
-                                .subscribe_to_published_bytecodes(publisher_chainid)
-                                .await
-                        }
-                        None => Err(ChainClientError::InternalError("Incorrect chain ID")),
-                    },
-                };
-                context.update_and_save_wallet(&mut chain_client).await;
-                let certificate = result.context("Failed to subscribe")?;
+                let (certificate, _) = context
+                    .apply_client_command(chain_client, |mut chain_client| async {
+                        let result = match channel {
+                            SystemChannel::Admin => {
+                                chain_client.subscribe_to_new_committees().await
+                            }
+                            SystemChannel::PublishedBytecodes => match publisher {
+                                Some(publisher_chain_id) => {
+                                    chain_client
+                                        .subscribe_to_published_bytecodes(publisher_chain_id)
+                                        .await
+                                }
+                                None => Err(ChainClientError::InternalError("Incorrect chain ID")),
+                            },
+                        };
+                        (result.context("Failed to subscribe"), chain_client)
+                    })
+                    .await?;
                 let time_total = time_start.elapsed();
                 info!("Subscription confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
@@ -308,25 +323,28 @@ impl Runnable for Job {
                 channel,
             } => {
                 let subscriber = subscriber.unwrap_or_else(|| context.default_chain());
-                let mut chain_client = context.make_chain_client(storage, subscriber);
+                let chain_client = context.make_chain_client(storage, subscriber);
                 let time_start = Instant::now();
-                let result = match channel {
-                    SystemChannel::Admin => {
-                        info!("Unsubscribing from admin channel");
-                        chain_client.unsubscribe_from_new_committees().await
-                    }
-                    SystemChannel::PublishedBytecodes => match publisher {
-                        Some(publisher_chainid) => {
-                            info!("Unsubscribing from publisher {}", publisher_chainid);
-                            chain_client
-                                .unsubscribe_from_published_bytecodes(publisher_chainid)
-                                .await
-                        }
-                        None => Err(ChainClientError::InternalError("Incorrect chain ID")),
-                    },
-                };
-                context.update_and_save_wallet(&mut chain_client).await;
-                let certificate = result.context("Failed to unsubscribe")?;
+                let (certificate, _) = context
+                    .apply_client_command(chain_client, |mut chain_client| async {
+                        let result = match channel {
+                            SystemChannel::Admin => {
+                                info!("Unsubscribing from admin channel");
+                                chain_client.unsubscribe_from_new_committees().await
+                            }
+                            SystemChannel::PublishedBytecodes => match publisher {
+                                Some(publisher_chainid) => {
+                                    info!("Unsubscribing from publisher {}", publisher_chainid);
+                                    chain_client
+                                        .unsubscribe_from_published_bytecodes(publisher_chainid)
+                                        .await
+                                }
+                                None => Err(ChainClientError::InternalError("Incorrect chain ID")),
+                            },
+                        };
+                        (result.context("Failed to unsubscribe"), chain_client)
+                    })
+                    .await?;
                 let time_total = time_start.elapsed();
                 info!("Unsubscribed in {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
@@ -606,7 +624,7 @@ impl Runnable for Job {
                             let result = chain_client
                                 .stage_new_committee(committee)
                                 .await
-                                .context("failed to stage committee")
+                                .context("Failed to stage committee")
                                 .map(|outcome| outcome.map(Some));
                             (result, chain_client)
                         }
@@ -625,7 +643,7 @@ impl Runnable for Job {
                         let result = chain_client
                             .finalize_committee()
                             .await
-                            .context("failed to finalize committee");
+                            .context("Failed to finalize committee");
                         (result, chain_client)
                     })
                     .await?;
@@ -801,12 +819,10 @@ impl Runnable for Job {
                 let start_time = Instant::now();
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing bytecode on chain {}", publisher);
-                let mut chain_client = context.make_chain_client(storage, publisher);
-                let result = context
-                    .publish_bytecode(&mut chain_client, contract, service)
-                    .await;
-                context.update_and_save_wallet(&mut chain_client).await;
-                let bytecode_id = result.context("failed to publish bytecode")?;
+                let chain_client = context.make_chain_client(storage, publisher);
+                let (bytecode_id, _) = context
+                    .publish_bytecode(chain_client, contract, service)
+                    .await?;
                 println!("{}", bytecode_id);
                 info!("{}", "Bytecode published successfully!".green().bold());
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
@@ -846,7 +862,7 @@ impl Runnable for Job {
                                     required_application_ids.unwrap_or_default(),
                                 )
                                 .await
-                                .context("failed to create application")
+                                .context("Failed to create application")
                                 .map(|outcome| outcome.map(|(application_id, _)| application_id));
                             (result, chain_client)
                         }
@@ -870,15 +886,13 @@ impl Runnable for Job {
                 let start_time = Instant::now();
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing and creating application on chain {}", publisher);
-                let mut chain_client = context.make_chain_client(storage, publisher);
+                let chain_client = context.make_chain_client(storage, publisher);
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
 
-                let result = context
-                    .publish_bytecode(&mut chain_client, contract, service)
-                    .await;
-                context.update_and_save_wallet(&mut chain_client).await;
-                let bytecode_id = result.context("failed to publish bytecode")?;
+                let (bytecode_id, chain_client) = context
+                    .publish_bytecode(chain_client, contract, service)
+                    .await?;
 
                 let ((application_id, _), _) = context
                     .apply_client_command(chain_client, move |mut chain_client| {
@@ -894,7 +908,7 @@ impl Runnable for Job {
                                     required_application_ids.unwrap_or_default(),
                                 )
                                 .await
-                                .context("failed to create application");
+                                .context("Failed to create application");
                             (result, chain_client)
                         }
                     })
@@ -912,12 +926,15 @@ impl Runnable for Job {
                 let requester_chain_id =
                     requester_chain_id.unwrap_or_else(|| context.default_chain());
                 info!("Requesting application for chain {}", requester_chain_id);
-                let mut chain_client = context.make_chain_client(storage, requester_chain_id);
-                let result = chain_client
-                    .request_application(application_id, target_chain_id)
-                    .await;
-                context.update_and_save_wallet(&mut chain_client).await;
-                let certificate = result.context("failed to create application")?;
+                let chain_client = context.make_chain_client(storage, requester_chain_id);
+                let (certificate, _) = context
+                    .apply_client_command(chain_client, |mut chain_client| async {
+                        let result = chain_client
+                            .request_application(application_id, target_chain_id)
+                            .await;
+                        (result.context("Failed to create application"), chain_client)
+                    })
+                    .await?;
                 debug!("{:?}", certificate);
             }
 
@@ -955,7 +972,7 @@ impl Runnable for Job {
                     let start_time = Instant::now();
                     let publisher = publisher.unwrap_or_else(|| context.default_chain());
                     info!("Creating application on chain {}", publisher);
-                    let mut chain_client = context.make_chain_client(storage, publisher);
+                    let chain_client = context.make_chain_client(storage, publisher);
 
                     let parameters = read_json(json_parameters, json_parameters_path)?;
                     let argument = read_json(json_argument, json_argument_path)?;
@@ -964,11 +981,9 @@ impl Runnable for Job {
                     let project = project::Project::from_existing_project(project_path)?;
                     let (contract_path, service_path) = project.build(name)?;
 
-                    let result = context
-                        .publish_bytecode(&mut chain_client, contract_path, service_path)
-                        .await;
-                    context.update_and_save_wallet(&mut chain_client).await;
-                    let bytecode_id = result.context("failed to publish bytecode")?;
+                    let (bytecode_id, chain_client) = context
+                        .publish_bytecode(chain_client, contract_path, service_path)
+                        .await?;
 
                     let ((application_id, _), _) = context
                         .apply_client_command(chain_client, move |mut chain_client| {
@@ -984,7 +999,7 @@ impl Runnable for Job {
                                         required_application_ids.unwrap_or_default(),
                                     )
                                     .await
-                                    .context("failed to create application");
+                                    .context("Failed to create application");
                                 (result, chain_client)
                             }
                         })
@@ -1099,7 +1114,7 @@ impl Job {
         node_client
             .download_certificates(nodes, message_id.chain_id, target_height)
             .await
-            .context("failed to download parent chain")?;
+            .context("Failed to download parent chain")?;
 
         // The initial timestamp for the new chain is taken from the block with the message.
         let certificate = node_client

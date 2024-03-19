@@ -331,10 +331,10 @@ impl ClientContext {
 
     pub async fn publish_bytecode<S>(
         &mut self,
-        chain_client: &mut ChainClient<impl ValidatorNodeProvider + Sync + 'static, S>,
+        chain_client: ChainClient<NodeProvider, S>,
         contract: PathBuf,
         service: PathBuf,
-    ) -> anyhow::Result<BytecodeId>
+    ) -> anyhow::Result<(BytecodeId, ChainClient<NodeProvider, S>)>
     where
         S: Storage + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
@@ -350,26 +350,21 @@ impl ClientContext {
         ))?;
 
         info!("Publishing bytecode");
-        let bytecode_id = loop {
-            let stream = chain_client.subscribe().await?;
-            match chain_client
-                .publish_bytecode(contract_bytecode.clone(), service_bytecode.clone())
-                .await
-                .context("failed to publish bytecode")?
-            {
-                ClientOutcome::Committed((bytecode_id, _)) => break bytecode_id,
-                ClientOutcome::WaitForTimeout(timeout) => {
-                    wait_for_next_round(stream, timeout).await;
-                }
-            }
-        };
+        let ((bytecode_id, _), mut chain_client) = self
+            .apply_client_command(chain_client, |mut chain_client| async {
+                let result = chain_client
+                    .publish_bytecode(contract_bytecode.clone(), service_bytecode.clone())
+                    .await;
+                (result.context("Failed to publish bytecode"), chain_client)
+            })
+            .await?;
 
         info!("{}", "Bytecode published successfully!".green().bold());
 
         info!("Synchronizing client and processing inbox");
         chain_client.synchronize_from_validators().await?;
-        self.process_inbox(chain_client).await?;
-        Ok(bytecode_id)
+        self.process_inbox(&mut chain_client).await?;
+        Ok((bytecode_id, chain_client))
     }
 
     pub fn generate_key_pair(&mut self) -> KeyPair {
