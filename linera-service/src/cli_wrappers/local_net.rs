@@ -135,8 +135,9 @@ static LOCAL_SERVER_SERVICE: Lazy<LocalServer<LocalServerServiceInternal>> =
 static LOCAL_SERVER_ROCKS_DB: Lazy<LocalServer<LocalServerRocksDbInternal>> =
     Lazy::new(LocalServer::new);
 
+/// A server config to be used for the construction of the config.
 #[derive(Debug)]
-enum LocalServerConfig {
+pub enum LocalServerConfig {
     Service {
         service_config: ServiceStoreConfig,
     },
@@ -171,6 +172,27 @@ impl LocalServerConfig {
     }
 }
 
+pub enum LocalServerConfigBuilder {
+    TestConfig,
+    ExistingConfig{
+        local_server_config: Option<LocalServerConfig>,
+    }
+}
+
+impl LocalServerConfigBuilder {
+    pub async fn build(self, database: Database) -> Option<LocalServerConfig> {
+        match self {
+            LocalServerConfigBuilder::TestConfig => {
+                LocalServerConfig::make_testing_config(database).await
+            },
+            LocalServerConfigBuilder::ExistingConfig{ local_server_config } => {
+                local_server_config
+            }
+        }
+    }
+}
+
+
 /// The information needed to start a [`LocalNet`].
 pub struct LocalNetConfig {
     pub database: Database,
@@ -182,6 +204,7 @@ pub struct LocalNetConfig {
     pub num_initial_validators: usize,
     pub num_shards: usize,
     pub policy: ResourceControlPolicy,
+    pub server_config_builder: LocalServerConfigBuilder,
 }
 
 /// A set of Linera validators running locally as native processes.
@@ -273,6 +296,7 @@ impl LocalNetConfig {
             Database::DynamoDb => 4,
             Database::ScyllaDb => 4,
         };
+        let server_config_builder = LocalServerConfigBuilder::TestConfig;
         Self {
             database,
             network,
@@ -283,6 +307,7 @@ impl LocalNetConfig {
             table_name: linera_views::test_utils::generate_test_namespace(),
             num_initial_validators: 4,
             num_shards,
+            server_config_builder,
         }
     }
 }
@@ -292,7 +317,7 @@ impl LineraNetConfig for LocalNetConfig {
     type Net = LocalNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
-        let server_config = LocalServerConfig::make_testing_config(self.database).await;
+        let server_config = self.server_config_builder.build(self.database).await;
         ensure!(
             self.num_shards == 1 || self.database != Database::RocksDb,
             "Multiple shards not supported with RocksDB"
@@ -525,7 +550,11 @@ impl LocalNet {
             _ => String::new(),
         };
         let namespace = format!("{}_server_{}{}_db", self.table_name, validator, shard_str);
-        let (storage, key) = match self.database {
+        let key = match self.database {
+            Database::RocksDb => (validator, shard),
+            _ => (validator, 0),
+        };
+        let storage = match self.database {
             Database::Service => {
                 let LocalServerConfig::Service { service_config } =
                     self.server_config.as_ref().unwrap()
@@ -534,10 +563,7 @@ impl LocalNet {
                 };
                 let endpoint = &service_config.endpoint;
                 let endpoint = endpoint.strip_prefix("http://").unwrap();
-                (
-                    format!("service:http://{}:{}", endpoint, namespace),
-                    (validator, 0),
-                )
+                format!("service:http://{}:{}", endpoint, namespace)
             }
             Database::RocksDb => {
                 let LocalServerConfig::RocksDb { rocks_db_config } =
@@ -546,16 +572,14 @@ impl LocalNet {
                     unreachable!();
                 };
                 let path_buf = rocks_db_config.path_buf.to_str().unwrap();
-                (
-                    format!("rocksdb:{}:{}", path_buf, namespace),
-                    (validator, shard),
-                )
+                format!("rocksdb:{}:{}", path_buf, namespace)
             }
-            Database::DynamoDb => (
-                format!("dynamodb:{}:localstack", namespace,),
-                (validator, 0),
-            ),
-            Database::ScyllaDb => (format!("scylladb:{}", namespace), (validator, 0)),
+            Database::DynamoDb => {
+                format!("dynamodb:{}:localstack", namespace,)
+            }
+            Database::ScyllaDb => {
+                format!("scylladb:{}", namespace)
+            }
         };
         if !self.set_init.contains(&key) {
             let max_try = 4;

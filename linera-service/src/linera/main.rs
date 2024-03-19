@@ -33,7 +33,7 @@ use linera_service::{
     chain_listener::ClientContext as _,
     cli_wrappers::{
         self,
-        local_net::{Database, LocalNetConfig},
+        local_net::{Database, LocalNetConfig, LocalServerConfigBuilder},
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain},
@@ -1507,6 +1507,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                     #[cfg(not(feature = "kubernetes"))]
                     bail!("Cannot use the kubernetes flag with the kubernetes feature off")
                 } else {
+                    let server_config_builder = LocalServerConfigBuilder::TestConfig;
                     let config = LocalNetConfig {
                         network: Network::Grpc,
                         database: Database::RocksDb,
@@ -1517,6 +1518,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                         num_initial_validators: *validators,
                         num_shards: *shards,
                         policy: ResourceControlPolicy::default(),
+                        server_config_builder,
                     };
                     let (mut net, client1) = config.instantiate().await?;
                     let result = Ok(net_up(extra_wallets, &mut net, client1).await?);
