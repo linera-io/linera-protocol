@@ -158,12 +158,14 @@ query {
 
 ### Atomic Swaps
 
-If you send tokens to a chain owned by someone else, you rely on them for liveness:
-If they don't handle your messages, you don't have access to your tokens.
+In general, if you send tokens to a chain owned by someone else, you rely on them
+for asset availability: If they don't handle your messages, you don't have access to
+your tokens.
 
-If the number of parties who want to swap tokens is limited, this can be addressed
-by making them all chain owners, allowing only matching engine operations on the chain,
-and allowing only the matching engine to close the chain.
+Fortunately, Linera provides a solution based on temporary chains:
+If the number of parties who want to swap tokens is limited, we can make them all chain
+owners, allow only Matching Engine operations on the chain, and allow only the Matching
+Engine to close the chain.
 
 ```bash
 kill %%    # Kill the service so we can use CLI commands for chain 1.
