@@ -192,30 +192,26 @@ pub enum LocalServerConfig {
 
 impl LocalServerConfig {
     #[cfg(any(test, feature = "test"))]
-    async fn make_testing_config(database: Database) -> Option<Self> {
+    async fn make_testing_config(database: Database) -> Self {
         match database {
             Database::Service => {
                 let service_config = LOCAL_SERVER_SERVICE.get_config().await;
-                let server_config = LocalServerConfig::Service { service_config };
-                Some(server_config)
+                LocalServerConfig::Service { service_config }
             }
             #[cfg(feature = "rocksdb")]
             Database::RocksDb => {
                 let rocks_db_config = LOCAL_SERVER_ROCKS_DB.get_config().await;
-                let server_config = LocalServerConfig::RocksDb { rocks_db_config };
-                Some(server_config)
+                LocalServerConfig::RocksDb { rocks_db_config }
             }
             #[cfg(feature = "aws")]
             Database::DynamoDb => {
                 let dynamo_db_config = create_dynamo_db_test_config().await;
-                let server_config = LocalServerConfig::DynamoDb { dynamo_db_config };
-                Some(server_config)
+                LocalServerConfig::DynamoDb { dynamo_db_config }
             }
             #[cfg(feature = "scylladb")]
             Database::ScyllaDb => {
                 let scylla_db_config = create_scylla_db_test_config().await;
-                let server_config = LocalServerConfig::ScyllaDb { scylla_db_config };
-                Some(server_config)
+                LocalServerConfig::ScyllaDb { scylla_db_config }
             }
         }
     }
@@ -225,13 +221,13 @@ pub enum LocalServerConfigBuilder {
     #[cfg(any(test, feature = "test"))]
     TestConfig,
     ExistingConfig {
-        local_server_config: Option<LocalServerConfig>,
+        local_server_config: LocalServerConfig,
     }
 }
 
 impl LocalServerConfigBuilder {
     #[allow(unused_variables)]
-    pub async fn build(self, database: Database) -> Option<LocalServerConfig> {
+    pub async fn build(self, database: Database) -> LocalServerConfig {
         match self {
             #[cfg(any(test, feature = "test"))]
             LocalServerConfigBuilder::TestConfig => {
@@ -307,7 +303,7 @@ pub struct LocalNet {
     running_validators: BTreeMap<usize, Validator>,
     table_name: String,
     set_init: HashSet<(usize, usize)>,
-    server_config: Option<LocalServerConfig>,
+    server_config: LocalServerConfig,
     path_provider: PathProvider,
 }
 
@@ -487,7 +483,7 @@ impl LocalNet {
         table_name: String,
         num_initial_validators: usize,
         num_shards: usize,
-        server_config: Option<LocalServerConfig>,
+        server_config: LocalServerConfig,
         path_provider: PathProvider,
     ) -> Result<Self> {
         Ok(Self {
@@ -654,7 +650,7 @@ impl LocalNet {
         let storage = match self.database {
             Database::Service => {
                 let LocalServerConfig::Service { service_config } =
-                    self.server_config.as_ref().unwrap()
+                    &self.server_config
                 else {
                     unreachable!();
                 };
@@ -665,7 +661,7 @@ impl LocalNet {
             #[cfg(feature = "rocksdb")]
             Database::RocksDb => {
                 let LocalServerConfig::RocksDb { rocks_db_config } =
-                    self.server_config.as_ref().unwrap()
+                    &self.server_config
                 else {
                     unreachable!();
                 };

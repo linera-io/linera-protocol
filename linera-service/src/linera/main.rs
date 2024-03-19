@@ -1516,7 +1516,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                     let path_buf = path.to_path_buf();
                     let common_config = CommonStoreConfig::default();
                     let rocks_db_config = RocksDbStoreConfig { path_buf, common_config };
-                    let local_server_config = Some(LocalServerConfig::RocksDb { rocks_db_config });
+                    let local_server_config = LocalServerConfig::RocksDb { rocks_db_config };
                     let server_config_builder = LocalServerConfigBuilder::ExistingConfig { local_server_config };
                     let path_provider = PathProvider::new(path);
                     let config = LocalNetConfig {
