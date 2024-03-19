@@ -257,8 +257,8 @@ pub struct LocalNet {
     running_validators: BTreeMap<usize, Validator>,
     table_name: String,
     set_init: HashSet<(usize, usize)>,
-    tmp_dir: Arc<TempDir>,
     server_config: Option<LocalServerConfig>,
+    path_provider: PathProvider,
 }
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -370,6 +370,7 @@ impl LineraNetConfig for LocalNetConfig {
             self.num_initial_validators,
             self.num_shards,
             server_config,
+            self.path_provider,
         )?;
         let client = net.make_client().await;
         ensure!(
@@ -405,7 +406,7 @@ impl LineraNet for LocalNet {
 
     async fn make_client(&mut self) -> ClientWrapper {
         let client = ClientWrapper::new(
-            self.tmp_dir.clone(),
+            self.path_provider.clone(),
             self.network,
             self.testing_prng_seed,
             self.next_client_id,
@@ -434,6 +435,7 @@ impl LocalNet {
         num_initial_validators: usize,
         num_shards: usize,
         server_config: Option<LocalServerConfig>,
+        path_provider: PathProvider,
     ) -> Result<Self> {
         Ok(Self {
             database,
@@ -446,15 +448,15 @@ impl LocalNet {
             running_validators: BTreeMap::new(),
             table_name,
             set_init: HashSet::new(),
-            tmp_dir: Arc::new(tempdir()?),
             server_config,
+            path_provider,
         })
     }
 
     async fn command_for_binary(&self, name: &'static str) -> Result<Command> {
         let path = resolve_binary(name, env!("CARGO_PKG_NAME")).await?;
         let mut command = Command::new(path);
-        command.current_dir(self.tmp_dir.path());
+        command.current_dir(self.path_provider.path());
         Ok(command)
     }
 
@@ -480,7 +482,7 @@ impl LocalNet {
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {
         let n = server_number;
-        let path = self.tmp_dir.path().join(format!("validator_{n}.toml"));
+        let path = self.path_provider.path().join(format!("validator_{n}.toml"));
         let port = Self::proxy_port(n);
         let internal_port = Self::internal_port(n);
         let metrics_port = Self::proxy_metrics_port(n);

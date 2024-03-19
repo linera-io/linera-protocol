@@ -7,6 +7,7 @@ use crate::{
     faucet::ClaimOutcome,
     util::ChildExt,
 };
+use crate::cli_wrappers::local_net::PathProvider;
 use anyhow::{bail, Context, Result};
 use async_graphql::InputType;
 use linera_base::{
@@ -28,7 +29,6 @@ use std::{
     marker::PhantomData,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::Arc,
     time::Duration,
 };
 use tempfile::TempDir;
@@ -53,17 +53,17 @@ pub struct ClientWrapper {
     wallet: String,
     max_pending_messages: usize,
     network: Network,
-    pub tmp_dir: Arc<TempDir>,
+    pub path_provider: PathProvider,
 }
 
 impl ClientWrapper {
     pub fn new(
-        tmp_dir: Arc<TempDir>,
+        path_provider: PathProvider,
         network: Network,
         testing_prng_seed: Option<u64>,
         id: usize,
     ) -> Self {
-        let storage = format!("rocksdb:{}/client_{}.db", tmp_dir.path().display(), id);
+        let storage = format!("rocksdb:{}/client_{}.db", path_provider.path().display(), id);
         let wallet = format!("wallet_{}.json", id);
         Self {
             testing_prng_seed,
@@ -71,7 +71,7 @@ impl ClientWrapper {
             wallet,
             max_pending_messages: 10_000,
             network,
-            tmp_dir,
+            path_provider,
         }
     }
 
@@ -134,7 +134,7 @@ impl ClientWrapper {
         let path = resolve_binary("linera", env!("CARGO_PKG_NAME")).await?;
         let mut command = Command::new(path);
         command
-            .current_dir(self.tmp_dir.path())
+            .current_dir(self.path_provider.path())
             .args(["--wallet", &self.wallet])
             .args(["--storage", &self.storage])
             .args([
@@ -669,7 +669,7 @@ impl ClientWrapper {
     }
 
     pub fn wallet_path(&self) -> PathBuf {
-        self.tmp_dir.path().join(&self.wallet)
+        self.path_provider.path().join(&self.wallet)
     }
 
     pub fn storage_path(&self) -> &str {
@@ -751,7 +751,7 @@ impl ClientWrapper {
         is_workspace: bool,
     ) -> Result<(PathBuf, PathBuf)> {
         Command::new("cargo")
-            .current_dir(self.tmp_dir.path())
+            .current_dir(self.path_provider.path())
             .arg("build")
             .arg("--release")
             .args(["--target", "wasm32-unknown-unknown"])

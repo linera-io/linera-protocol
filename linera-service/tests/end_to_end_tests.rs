@@ -5,6 +5,7 @@
 mod common;
 
 use assert_matches::assert_matches;
+use linera_service::cli_wrappers::local_net::PathProvider;
 use async_graphql::InputType;
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::{
@@ -18,7 +19,7 @@ use linera_service::cli_wrappers::{
     ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
 };
 use serde_json::{json, Value};
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, path::PathBuf, time::Duration};
 use test_case::test_case;
 use tracing::{info, warn};
 
@@ -1694,8 +1695,8 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
 
 #[test_log::test(tokio::test)]
 async fn test_project_new() {
-    let tmp_dir = Arc::new(tempfile::tempdir().unwrap());
-    let client = ClientWrapper::new(tmp_dir, Network::Grpc, None, 0);
+    let path_provider = PathProvider::new_test().unwrap();
+    let client = ClientWrapper::new(path_provider, Network::Grpc, None, 0);
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
         .parent()
@@ -1710,8 +1711,8 @@ async fn test_project_new() {
 
 #[test_log::test(tokio::test)]
 async fn test_project_test() {
-    let tmp_dir = Arc::new(tempfile::tempdir().unwrap());
-    let client = ClientWrapper::new(tmp_dir, Network::Grpc, None, 0);
+    let path_provider = PathProvider::new_test().unwrap();
+    let client = ClientWrapper::new(path_provider, Network::Grpc, None, 0);
     client
         .project_test(&ClientWrapper::example_path("counter").unwrap())
         .await
