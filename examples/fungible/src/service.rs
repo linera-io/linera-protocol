@@ -15,24 +15,39 @@ use linera_sdk::{
 use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(FungibleToken);
+pub struct FungibleTokenService {
+    state: Arc<FungibleToken>,
+}
 
-impl WithServiceAbi for FungibleToken {
+linera_sdk::service!(FungibleTokenService);
+
+impl WithServiceAbi for FungibleTokenService {
     type Abi = fungible::FungibleTokenAbi;
 }
 
 #[async_trait]
-impl Service for FungibleToken {
+impl Service for FungibleTokenService {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
+    type State = FungibleToken;
+
+    async fn new(state: Self::State) -> Result<Self, Self::Error> {
+        Ok(FungibleTokenService {
+            state: Arc::new(state),
+        })
+    }
 
     async fn handle_query(
-        self: Arc<Self>,
+        &self,
         _runtime: &ServiceRuntime,
         request: Request,
     ) -> Result<Response, Self::Error> {
-        let schema =
-            Schema::build(self.clone(), Operation::mutation_root(), EmptySubscription).finish();
+        let schema = Schema::build(
+            self.state.clone(),
+            Operation::mutation_root(),
+            EmptySubscription,
+        )
+        .finish();
         let response = schema.execute(request).await;
         Ok(response)
     }
@@ -42,7 +57,7 @@ impl Service for FungibleToken {
 #[ComplexObject]
 impl FungibleToken {
     async fn ticker_symbol(&self) -> Result<String, async_graphql::Error> {
-        Ok(FungibleToken::parameters()?.ticker_symbol)
+        Ok(FungibleTokenService::parameters()?.ticker_symbol)
     }
 }
 

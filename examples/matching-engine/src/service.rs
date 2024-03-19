@@ -14,24 +14,39 @@ use linera_sdk::{
 use matching_engine::Operation;
 use std::sync::Arc;
 
-linera_sdk::service!(MatchingEngine);
+pub struct MatchingEngineService {
+    state: Arc<MatchingEngine>,
+}
 
-impl WithServiceAbi for MatchingEngine {
+linera_sdk::service!(MatchingEngineService);
+
+impl WithServiceAbi for MatchingEngineService {
     type Abi = matching_engine::MatchingEngineAbi;
 }
 
 #[async_trait]
-impl Service for MatchingEngine {
+impl Service for MatchingEngineService {
     type Error = MatchingEngineError;
     type Storage = ViewStateStorage<Self>;
+    type State = MatchingEngine;
+
+    async fn new(state: Self::State) -> Result<Self, Self::Error> {
+        Ok(MatchingEngineService {
+            state: Arc::new(state),
+        })
+    }
 
     async fn handle_query(
-        self: Arc<Self>,
+        &self,
         _runtime: &ServiceRuntime,
         request: Request,
     ) -> Result<Response, Self::Error> {
-        let schema =
-            Schema::build(self.clone(), Operation::mutation_root(), EmptySubscription).finish();
+        let schema = Schema::build(
+            self.state.clone(),
+            Operation::mutation_root(),
+            EmptySubscription,
+        )
+        .finish();
         let response = schema.execute(request).await;
         Ok(response)
     }

@@ -12,9 +12,11 @@ use crate::{
     Service, ServiceRuntime, SimpleStateStorage, ViewStateStorage,
 };
 use async_trait::async_trait;
-use linera_views::{common::ReadableKeyValueStore, views::RootView};
+use linera_views::{
+    common::ReadableKeyValueStore,
+    views::{RootView, View},
+};
 use serde::{de::DeserializeOwned, Serialize};
-use std::sync::Arc;
 
 /// The storage APIs used by a service.
 #[async_trait]
@@ -26,7 +28,8 @@ pub trait ServiceStateStorage {
 #[async_trait]
 impl<Application> ServiceStateStorage for SimpleStateStorage<Application>
 where
-    Application: Service + Default + DeserializeOwned + Serialize + Send + Sync,
+    Application: Service + Send,
+    Application::State: Default + DeserializeOwned + Serialize + Send + Sync,
 {
     async fn handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String> {
         let maybe_bytes = AppStateStore
@@ -37,10 +40,12 @@ where
         let state = if let Some(bytes) = maybe_bytes {
             bcs::from_bytes(&bytes).expect("Failed to deserialize application state")
         } else {
-            Application::default()
+            Application::State::default()
         };
 
-        let application: Arc<Application> = Arc::new(state);
+        let application = Application::new(state)
+            .await
+            .map_err(|error| error.to_string())?;
         let argument: Application::Query =
             serde_json::from_slice(&argument).map_err(|e| e.to_string())?;
         let query_response = application
@@ -54,16 +59,18 @@ where
 #[async_trait]
 impl<Application> ServiceStateStorage for ViewStateStorage<Application>
 where
-    Application: Service + RootView<ViewStorageContext> + Send + Sync,
+    Application: Service + Send,
+    Application::State: RootView<ViewStorageContext> + Send + Sync,
     Application::Error: Send,
 {
     async fn handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String> {
         let context = ViewStorageContext::default();
-        let application = Arc::new(
-            Application::load(context)
-                .await
-                .expect("Failed to load application state"),
-        );
+        let state = Application::State::load(context)
+            .await
+            .expect("Failed to load application state");
+        let application = Application::new(state)
+            .await
+            .map_err(|error| error.to_string())?;
         let argument: Application::Query =
             serde_json::from_slice(&argument).map_err(|e| e.to_string())?;
         let result = application

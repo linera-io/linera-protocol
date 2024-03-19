@@ -16,24 +16,39 @@ use state::Social;
 use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(Social);
+pub struct SocialService {
+    state: Arc<Social>,
+}
 
-impl WithServiceAbi for Social {
+linera_sdk::service!(SocialService);
+
+impl WithServiceAbi for SocialService {
     type Abi = social::SocialAbi;
 }
 
 #[async_trait]
-impl Service for Social {
+impl Service for SocialService {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
+    type State = Social;
+
+    async fn new(state: Self::State) -> Result<Self, Self::Error> {
+        Ok(SocialService {
+            state: Arc::new(state),
+        })
+    }
 
     async fn handle_query(
-        self: Arc<Self>,
+        &self,
         _runtime: &ServiceRuntime,
         request: Request,
     ) -> Result<Response, Self::Error> {
-        let schema =
-            Schema::build(self.clone(), Operation::mutation_root(), EmptySubscription).finish();
+        let schema = Schema::build(
+            self.state.clone(),
+            Operation::mutation_root(),
+            EmptySubscription,
+        )
+        .finish();
         let response = schema.execute(request).await;
         Ok(response)
     }

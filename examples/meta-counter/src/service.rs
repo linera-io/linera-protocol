@@ -9,22 +9,30 @@ use self::state::MetaCounter;
 use async_graphql::{Request, Response};
 use async_trait::async_trait;
 use linera_sdk::{base::WithServiceAbi, Service, ServiceRuntime, SimpleStateStorage};
-use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(MetaCounter);
+pub struct MetaCounterService {
+    _state: MetaCounter,
+}
 
-impl WithServiceAbi for MetaCounter {
+linera_sdk::service!(MetaCounterService);
+
+impl WithServiceAbi for MetaCounterService {
     type Abi = meta_counter::MetaCounterAbi;
 }
 
 #[async_trait]
-impl Service for MetaCounter {
+impl Service for MetaCounterService {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
+    type State = MetaCounter;
+
+    async fn new(state: Self::State) -> Result<Self, Self::Error> {
+        Ok(MetaCounterService { _state: state })
+    }
 
     async fn handle_query(
-        self: Arc<Self>,
+        &self,
         _runtime: &ServiceRuntime,
         request: Request,
     ) -> Result<Response, Self::Error> {

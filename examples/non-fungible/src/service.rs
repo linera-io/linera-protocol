@@ -21,25 +21,36 @@ use std::{
 };
 use thiserror::Error;
 
-linera_sdk::service!(NonFungibleToken);
+pub struct NonFungibleTokenService {
+    state: Arc<NonFungibleToken>,
+}
 
-impl WithServiceAbi for NonFungibleToken {
+linera_sdk::service!(NonFungibleTokenService);
+
+impl WithServiceAbi for NonFungibleTokenService {
     type Abi = non_fungible::NonFungibleTokenAbi;
 }
 
 #[async_trait]
-impl Service for NonFungibleToken {
+impl Service for NonFungibleTokenService {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
+    type State = NonFungibleToken;
+
+    async fn new(state: Self::State) -> Result<Self, Self::Error> {
+        Ok(NonFungibleTokenService {
+            state: Arc::new(state),
+        })
+    }
 
     async fn handle_query(
-        self: Arc<Self>,
+        &self,
         _runtime: &ServiceRuntime,
         request: Request,
     ) -> Result<Response, Self::Error> {
         let schema = Schema::build(
             QueryRoot {
-                non_fungible_token: self.clone(),
+                non_fungible_token: self.state.clone(),
             },
             MutationRoot,
             EmptySubscription,

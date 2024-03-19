@@ -58,7 +58,7 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{error::Error, fmt::Debug, sync::Arc};
+use std::{error::Error, fmt::Debug};
 
 pub use self::{
     contract::ContractRuntime,
@@ -223,11 +223,14 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
 /// are triggered by JSON queries (typically GraphQL). Their execution cannot modify
 /// storage and is not gas-metered.
 #[async_trait]
-pub trait Service: WithServiceAbi + ServiceAbi {
+pub trait Service: WithServiceAbi + ServiceAbi + Sized {
     /// Type used to report errors to the execution environment.
     ///
     /// Errors are not recoverable and always interrupt the current query.
     type Error: Error + From<serde_json::Error>;
+
+    /// The type used to store the persisted application state.
+    type State: Sync;
 
     /// The desired storage backend used to store the application's state.
     ///
@@ -236,9 +239,12 @@ pub trait Service: WithServiceAbi + ServiceAbi {
     /// Storage = SimpleStateStorage<Self>` or `type Storage = ViewStateStorage<Self>`.
     type Storage: ServiceStateStorage;
 
+    /// Creates a in-memory instance of the service handler from the application's `state`.
+    async fn new(state: Self::State) -> Result<Self, Self::Error>;
+
     /// Executes a read-only query on the state of this application.
     async fn handle_query(
-        self: Arc<Self>,
+        &self,
         runtime: &ServiceRuntime,
         query: Self::Query,
     ) -> Result<Self::QueryResponse, Self::Error>;
