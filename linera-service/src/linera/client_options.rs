@@ -254,7 +254,7 @@ pub enum ClientCommand {
     ChangeApplicationPermissions {
         /// The ID of the chain to which the new permissions will be applied.
         #[arg(long)]
-        chain_id: ChainId,
+        chain_id: Option<ChainId>,
         /// If this is not set, all system operations and application operations are allowed.
         /// If it is set, only operations from the specified applications are allowed, and
         /// no system operations.

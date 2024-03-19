@@ -247,6 +247,7 @@ impl Runnable for Job {
                 execute_operations,
                 close_chain,
             } => {
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(storage, chain_id);
                 info!("Changing application permissions for chain {}", chain_id);
                 let time_start = Instant::now();
