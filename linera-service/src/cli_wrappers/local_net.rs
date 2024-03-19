@@ -47,8 +47,20 @@ use {
 #[cfg(all(feature = "rocksdb", any(test, feature = "test")))]
 use linera_views::rocks_db::create_rocks_db_test_config;
 
+#[cfg(all(feature = "aws", any(test, feature = "test")))]
+use linera_views::dynamo_db::create_dynamo_db_test_config;
+
+#[cfg(all(feature = "scylladb", any(test, feature = "test")))]
+use linera_views::scylla_db::create_scylla_db_test_config;
+
 #[cfg(feature = "rocksdb")]
 use linera_views::rocks_db::RocksDbStoreConfig;
+
+#[cfg(feature = "aws")]
+use linera_views::dynamo_db::DynamoDbStoreConfig;
+
+#[cfg(feature = "scylladb")]
+use linera_views::scylla_db::ScyllaDbStoreConfig;
 
 
 trait LocalServerInternal: Sized {
@@ -168,6 +180,14 @@ pub enum LocalServerConfig {
     RocksDb {
         rocks_db_config: RocksDbStoreConfig,
     },
+    #[cfg(feature = "aws")]
+    DynamoDb {
+        dynamo_db_config: DynamoDbStoreConfig,
+    },
+    #[cfg(feature = "scylladb")]
+    ScyllaDb {
+        scylla_db_config: ScyllaDbStoreConfig,
+    },
 }
 
 impl LocalServerConfig {
@@ -187,11 +207,15 @@ impl LocalServerConfig {
             }
             #[cfg(feature = "aws")]
             Database::DynamoDb => {
-                None
+                let dynamo_db_config = create_dynamo_db_test_config().await;
+                let server_config = LocalServerConfig::DynamoDb { dynamo_db_config };
+                Some(server_config)
             }
             #[cfg(feature = "scylladb")]
             Database::ScyllaDb => {
-                None
+                let scylla_db_config = create_scylla_db_test_config().await;
+                let server_config = LocalServerConfig::ScyllaDb { scylla_db_config };
+                Some(server_config)
             }
         }
     }
