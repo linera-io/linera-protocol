@@ -48,6 +48,7 @@ impl Contract for NonFungibleTokenContract {
     ) -> Result<ExecutionOutcome<Self::Message>, Self::Error> {
         // Validate that the application parameters were configured correctly.
         assert!(Self::parameters().is_ok());
+        self.state.num_minted_nfts.set(0);
         Ok(ExecutionOutcome::default())
     }
 
@@ -62,7 +63,7 @@ impl Contract for NonFungibleTokenContract {
                 payload,
             } => {
                 self.check_account_authentication(minter)?;
-                Ok(self.mint(minter, name, payload).await)
+                self.mint(minter, name, payload).await
             }
 
             Operation::Transfer {
@@ -72,7 +73,7 @@ impl Contract for NonFungibleTokenContract {
             } => {
                 self.check_account_authentication(source_owner)?;
 
-                let nft = self.get_nft(&token_id).await;
+                let nft = self.get_nft(&token_id).await?;
                 self.check_account_authentication(nft.owner)?;
 
                 Ok(self.transfer(nft, target_account).await)
@@ -86,7 +87,7 @@ impl Contract for NonFungibleTokenContract {
                 self.check_account_authentication(source_account.owner)?;
 
                 if source_account.chain_id == system_api::current_chain_id() {
-                    let nft = self.get_nft(&token_id).await;
+                    let nft = self.get_nft(&token_id).await?;
                     self.check_account_authentication(nft.owner)?;
 
                     Ok(self.transfer(nft, target_account).await)
@@ -125,7 +126,7 @@ impl Contract for NonFungibleTokenContract {
             } => {
                 self.check_account_authentication(source_account.owner)?;
 
-                let nft = self.get_nft(&token_id).await;
+                let nft = self.get_nft(&token_id).await?;
                 self.check_account_authentication(nft.owner)?;
 
                 Ok(self.transfer(nft, target_account).await)
@@ -145,7 +146,7 @@ impl Contract for NonFungibleTokenContract {
             } => {
                 self.check_account_authentication(minter)?;
 
-                let execution_outcome = self.mint(minter, name, payload).await;
+                let execution_outcome = self.mint(minter, name, payload).await?;
                 Ok(ApplicationCallOutcome {
                     execution_outcome,
                     ..Default::default()
@@ -159,7 +160,7 @@ impl Contract for NonFungibleTokenContract {
             } => {
                 self.check_account_authentication(source_owner)?;
 
-                let nft = self.get_nft(&token_id).await;
+                let nft = self.get_nft(&token_id).await?;
                 self.check_account_authentication(nft.owner)?;
 
                 let execution_outcome = self.transfer(nft, target_account).await;
@@ -178,7 +179,7 @@ impl Contract for NonFungibleTokenContract {
 
                 let execution_outcome = if source_account.chain_id == system_api::current_chain_id()
                 {
-                    let nft = self.get_nft(&token_id).await;
+                    let nft = self.get_nft(&token_id).await?;
                     self.check_account_authentication(nft.owner)?;
 
                     self.transfer(nft, target_account).await
@@ -238,13 +239,15 @@ impl NonFungibleTokenContract {
         }
     }
 
-    async fn get_nft(&self, token_id: &TokenId) -> Nft {
+    async fn get_nft(&self, token_id: &TokenId) -> Result<Nft, Error> {
         self.state
             .nfts
             .get(token_id)
             .await
             .expect("Failure in retrieving NFT")
-            .expect("NFT should not be None")
+            .ok_or_else(|| Error::NftNotFound {
+                token_id: token_id.clone(),
+            })
     }
 
     async fn mint(
@@ -252,14 +255,15 @@ impl NonFungibleTokenContract {
         owner: AccountOwner,
         name: String,
         payload: Vec<u8>,
-    ) -> ExecutionOutcome<Message> {
+    ) -> Result<ExecutionOutcome<Message>, Error> {
         let token_id = Nft::create_token_id(
             &system_api::current_chain_id(),
             &system_api::current_application_id(),
             &name,
             &owner,
             &payload,
-        );
+            *self.state.num_minted_nfts.get(),
+        )?;
 
         self.add_nft(Nft {
             token_id,
@@ -270,7 +274,9 @@ impl NonFungibleTokenContract {
         })
         .await;
 
-        ExecutionOutcome::default()
+        let num_minted_nfts = self.state.num_minted_nfts.get_mut();
+        *num_minted_nfts += 1;
+        Ok(ExecutionOutcome::default())
     }
 
     fn remote_claim(
@@ -344,4 +350,7 @@ pub enum Error {
     /// Failed to deserialize JSON string
     #[error("Failed to deserialize JSON string")]
     JsonError(#[from] serde_json::Error),
+
+    #[error("NFT {token_id} not found")]
+    NftNotFound { token_id: TokenId },
 }

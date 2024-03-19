@@ -91,10 +91,18 @@ impl NonFungibleApp {
         name: &String,
         minter: &AccountOwner,
         payload: &Vec<u8>,
+        num_minted_nfts: u64,
     ) -> String {
         use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
-        let token_id_vec =
-            non_fungible::Nft::create_token_id(chain_id, application_id, name, minter, payload);
+        let token_id_vec = non_fungible::Nft::create_token_id(
+            chain_id,
+            application_id,
+            name,
+            minter,
+            payload,
+            num_minted_nfts,
+        )
+        .expect("Creating token ID should not fail");
         STANDARD_NO_PAD.encode(token_id_vec.id)
     }
 
@@ -711,6 +719,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) {
         &nft1_name,
         &nft1_minter,
         &nft1_payload,
+        0, // No NFTs are supposed to have been minted yet in this chain
     );
 
     app1.mint(&account_owner1, &nft1_name, &nft1_payload).await;
@@ -839,6 +848,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) {
         &nft2_name,
         &nft2_minter,
         &nft2_payload,
+        0, // No NFTs are supposed to have been minted yet in this chain
     );
 
     // Minting NFT from chain2
