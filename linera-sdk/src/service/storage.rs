@@ -8,7 +8,6 @@
 //! service type that implements [`linera-sdk::Service`].
 
 use crate::{
-    service::system_api,
     views::{AppStateStore, ViewStorageContext},
     Service, ServiceRuntime, SimpleStateStorage, ViewStateStorage,
 };
@@ -59,7 +58,12 @@ where
     Application::Error: Send,
 {
     async fn handle_query(argument: Vec<u8>) -> Result<Vec<u8>, String> {
-        let application: Arc<Application> = Arc::new(system_api::load_view().await);
+        let context = ViewStorageContext::default();
+        let application = Arc::new(
+            Application::load(context)
+                .await
+                .expect("Failed to load application state"),
+        );
         let argument: Application::Query =
             serde_json::from_slice(&argument).map_err(|e| e.to_string())?;
         let result = application
