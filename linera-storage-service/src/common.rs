@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::command::resolve_binary;
-use linera_views::{common::CommonStoreConfig, value_splitting::DatabaseConsistencyError};
-use linera_views::common::MIN_VIEW_TAG;
+use linera_views::{
+    common::{CommonStoreConfig, MIN_VIEW_TAG},
+    value_splitting::DatabaseConsistencyError,
+};
 use std::path::PathBuf;
 use thiserror::Error;
 use tonic::Status;

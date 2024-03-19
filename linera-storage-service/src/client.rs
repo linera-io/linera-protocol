@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    common::{ServiceContextError, ServiceStoreConfig},
-    common::{KeyTag, MAX_PAYLOAD_SIZE},
+    common::{KeyTag, ServiceContextError, ServiceStoreConfig, MAX_PAYLOAD_SIZE},
     key_value_store::{
         statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
         KeyValueAppend, ReplyContainsKey, ReplyExistsNamespace, ReplyFindKeyValuesByPrefix,
@@ -33,7 +32,6 @@ use linera_views::test_utils::generate_test_namespace;
 
 // The maximum key size is set to 1M rather arbitrarily.
 const MAX_KEY_SIZE: usize = 1000000;
-
 
 // The shared store client.
 // * Interior mutability is required for client because
@@ -139,7 +137,10 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, ServiceContextError> {
-        ensure!(key_prefix.len() <= MAX_KEY_SIZE, ServiceContextError::KeyTooLong);
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            ServiceContextError::KeyTooLong
+        );
         let mut full_key_prefix = self.namespace.clone();
         full_key_prefix.extend(key_prefix);
         let query = RequestFindKeysByPrefix {
@@ -166,7 +167,10 @@ impl ReadableKeyValueStore<ServiceContextError> for ServiceStoreClient {
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ServiceContextError> {
-        ensure!(key_prefix.len() <= MAX_KEY_SIZE, ServiceContextError::KeyTooLong);
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            ServiceContextError::KeyTooLong
+        );
         let mut full_key_prefix = self.namespace.clone();
         full_key_prefix.extend(key_prefix);
         let query = RequestFindKeyValuesByPrefix {
@@ -325,7 +329,10 @@ impl ServiceStoreClient {
     ) -> Result<S, ServiceContextError> {
         let mut value = Vec::new();
         for index in 0..num_chunks {
-            let query = RequestSpecificChunk { message_index, index };
+            let query = RequestSpecificChunk {
+                message_index,
+                index,
+            };
             let request = tonic::Request::new(query);
             let response = client.process_specific_chunk(request).await?;
             let response = response.into_inner();

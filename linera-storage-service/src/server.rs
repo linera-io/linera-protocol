@@ -12,13 +12,11 @@ use crate::key_value_store::{
     RequestFindKeysByPrefix, RequestListAll, RequestReadMultiValues, RequestReadValue,
     RequestSpecificChunk, RequestWriteBatchExtended,
 };
-use linera_storage_service::common::{KeyTag, MAX_PAYLOAD_SIZE};
 use async_lock::RwLock;
+use linera_storage_service::common::{KeyTag, MAX_PAYLOAD_SIZE};
 use linera_views::{
     batch::Batch,
-    common::{
-        AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore,
-    },
+    common::{AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
     memory::{create_memory_store_stream_queries, MemoryStore},
     rocks_db::{RocksDbStore, RocksDbStoreConfig},
 };
@@ -399,7 +397,10 @@ impl StoreProcessor for ServiceStoreServer {
         request: Request<RequestSpecificChunk>,
     ) -> Result<Response<ReplySpecificChunk>, Status> {
         let request = request.into_inner();
-        let RequestSpecificChunk { message_index, index } = request;
+        let RequestSpecificChunk {
+            message_index,
+            index,
+        } = request;
         let mut pending_big_reads = self.pending_big_reads.write().await;
         let Some(entry) = pending_big_reads.chunks_by_index.get(&message_index) else {
             unreachable!();
