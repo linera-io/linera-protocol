@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use client_context::ClientContext;
 use client_options::ClientOptions;
+use tempfile::tempdir;
 use colored::Colorize;
 use futures::{lock::Mutex, StreamExt};
 use linera_base::{
@@ -33,7 +34,7 @@ use linera_service::{
     chain_listener::ClientContext as _,
     cli_wrappers::{
         self,
-        local_net::{Database, LocalNetConfig, LocalServerConfigBuilder},
+        local_net::{Database, PathProvider, LocalNetConfig, LocalServerConfigBuilder},
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain},
@@ -1508,6 +1509,9 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                     bail!("Cannot use the kubernetes flag with the kubernetes feature off")
                 } else {
                     let server_config_builder = LocalServerConfigBuilder::TestConfig;
+                    let tmp_dir = tempdir()?;
+                    let path = tmp_dir.path();
+                    let path_provider = PathProvider::new(path);
                     let config = LocalNetConfig {
                         network: Network::Grpc,
                         database: Database::RocksDb,
@@ -1519,6 +1523,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                         num_shards: *shards,
                         policy: ResourceControlPolicy::default(),
                         server_config_builder,
+                        path_provider,
                     };
                     let (mut net, client1) = config.instantiate().await?;
                     let result = Ok(net_up(extra_wallets, &mut net, client1).await?);

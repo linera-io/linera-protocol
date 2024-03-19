@@ -5,6 +5,8 @@ use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
     util::ChildExt,
 };
+use std::path::Path;
+use std::path::PathBuf;
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use async_lock::RwLock;
 use async_trait::async_trait;
@@ -192,6 +194,41 @@ impl LocalServerConfigBuilder {
     }
 }
 
+/// Path used for the run can come from a path whose lifetime is controlled
+/// by an external user or as a temporary directory
+#[derive(Clone)]
+pub enum PathProvider {
+    ExternalPath { path_buf: PathBuf },
+    TemporaryDirectory { tmp_dir: Arc<TempDir> },
+}
+
+impl PathProvider {
+    pub fn path(&self) -> &Path {
+        match self {
+            PathProvider::ExternalPath { path_buf } => {
+                path_buf.as_path()
+            },
+            PathProvider::TemporaryDirectory { tmp_dir } => {
+                tmp_dir.path()
+            },
+        }
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    pub fn new_test() -> Result<Self> {
+        let tmp_dir = Arc::new(tempdir()?);
+        Ok(PathProvider::TemporaryDirectory { tmp_dir })
+    }
+
+    pub fn new(path: &Path) -> Self {
+        let path_buf = path.to_path_buf();
+        PathProvider::ExternalPath { path_buf }
+    }
+}
+
+
+
+
 
 /// The information needed to start a [`LocalNet`].
 pub struct LocalNetConfig {
@@ -205,6 +242,7 @@ pub struct LocalNetConfig {
     pub num_shards: usize,
     pub policy: ResourceControlPolicy,
     pub server_config_builder: LocalServerConfigBuilder,
+    pub path_provider: PathProvider,
 }
 
 /// A set of Linera validators running locally as native processes.
@@ -297,6 +335,7 @@ impl LocalNetConfig {
             Database::ScyllaDb => 4,
         };
         let server_config_builder = LocalServerConfigBuilder::TestConfig;
+        let path_provider = PathProvider::new_test().unwrap();
         Self {
             database,
             network,
@@ -308,6 +347,7 @@ impl LocalNetConfig {
             num_initial_validators: 4,
             num_shards,
             server_config_builder,
+            path_provider,
         }
     }
 }
