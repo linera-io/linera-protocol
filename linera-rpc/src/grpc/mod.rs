@@ -37,6 +37,10 @@ pub enum GrpcError {
 
     #[error(transparent)]
     InvalidUri(#[from] tonic::codegen::http::uri::InvalidUri),
+
+    #[cfg(with_server)]
+    #[error(transparent)]
+    Reflection(#[from] tonic_reflection::server::Error),
 }
 
 const MEBIBYTE: usize = 1024 * 1024;

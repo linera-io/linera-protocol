@@ -252,6 +252,10 @@ where
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
 
+        let reflection_service = tonic_reflection::server::Builder::configure()
+            .register_encoded_file_descriptor_set(crate::FILE_DESCRIPTOR_SET)
+            .build()?;
+
         let handle = tokio::spawn(
             tonic::transport::Server::builder()
                 .layer(
@@ -260,6 +264,7 @@ where
                         .into_inner(),
                 )
                 .add_service(health_service)
+                .add_service(reflection_service)
                 .add_service(worker_node)
                 .serve_with_shutdown(server_address, receiver.map(|_| ())),
         );

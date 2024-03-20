@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let out_dir: std::path::PathBuf = std::env::var("OUT_DIR")?.into();
+
     let no_includes: &[&str] = &[];
     tonic_build::configure()
+        .file_descriptor_set_path(out_dir.join("file_descriptor_set.bin"))
         .protoc_arg("--experimental_allow_proto3_optional")
         .compile(&["proto/rpc.proto"], no_includes)?;
 

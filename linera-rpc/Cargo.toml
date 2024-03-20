@@ -29,7 +29,7 @@ metrics = [
     "linera-views/metrics",
 ]
 
-server = ["tonic-health"]
+server = ["tonic-health", "tonic-reflection"]
 simple-network = ["tokio-util/net"]
 
 web = [
@@ -65,6 +65,7 @@ thiserror.workspace = true
 tokio.workspace = true
 tokio-util = { workspace = true, optional = true, features = ["codec"] }
 tonic-health = { workspace = true, optional = true }
+tonic-reflection = { workspace = true, optional = true }
 tower.workspace = true
 tracing.workspace = true
 

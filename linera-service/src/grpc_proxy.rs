@@ -214,6 +214,9 @@ impl GrpcProxy {
         let internal_server = Server::builder()
             .add_service(self.as_notifier_service())
             .serve(self.internal_address());
+        let reflection_service = tonic_reflection::server::Builder::configure()
+            .register_encoded_file_descriptor_set(linera_rpc::FILE_DESCRIPTOR_SET)
+            .build()?;
         let public_server = self
             .public_server()?
             .layer(
@@ -221,8 +224,10 @@ impl GrpcProxy {
                     .layer(PrometheusMetricsMiddlewareLayer)
                     .into_inner(),
             )
+            .accept_http1(true)
             .add_service(health_service)
             .add_service(tonic_web::enable(self.as_validator_node()))
+            .add_service(tonic_web::enable(reflection_service))
             .serve(self.public_address());
 
         select! {
