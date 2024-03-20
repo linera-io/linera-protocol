@@ -3,12 +3,9 @@
 
 use crate::{
     cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
+    storage::{StorageConfig, StorageConfigNamespace},
     util::ChildExt,
 };
-use crate::storage::StorageConfig;
-use crate::storage::StorageConfigNamespace;
-use std::path::Path;
-use std::path::PathBuf;
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use async_trait::async_trait;
 use linera_base::{
@@ -19,6 +16,7 @@ use linera_execution::ResourceControlPolicy;
 use std::{
     collections::{BTreeMap, HashSet},
     env,
+    path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
@@ -33,12 +31,10 @@ use tracing::{info, warn};
 use {
     async_lock::RwLock,
     linera_base::sync::Lazy,
+    linera_storage_service::child::{get_free_port, StorageService, StorageServiceGuard},
+    linera_storage_service::common::get_service_storage_binary,
     std::ops::Deref,
     tempfile::tempdir,
-    linera_storage_service::child::{get_free_port, StorageService, StorageServiceGuard},
-    linera_storage_service::{
-        common::get_service_storage_binary,
-    },
 };
 
 #[cfg(all(feature = "rocksdb", any(test, feature = "test")))]
@@ -183,7 +179,7 @@ pub enum StorageConfigBuilder {
     TestConfig,
     ExistingConfig {
         storage_config: StorageConfig,
-    }
+    },
 }
 
 impl StorageConfigBuilder {
@@ -191,12 +187,8 @@ impl StorageConfigBuilder {
     pub async fn build(self, database: Database) -> StorageConfig {
         match self {
             #[cfg(any(test, feature = "test"))]
-            StorageConfigBuilder::TestConfig => {
-                make_testing_config(database).await
-            },
-            StorageConfigBuilder::ExistingConfig{ storage_config } => {
-                storage_config
-            }
+            StorageConfigBuilder::TestConfig => make_testing_config(database).await,
+            StorageConfigBuilder::ExistingConfig { storage_config } => storage_config,
         }
     }
 }
@@ -212,12 +204,8 @@ pub enum PathProvider {
 impl PathProvider {
     pub fn path(&self) -> &Path {
         match self {
-            PathProvider::ExternalPath { path_buf } => {
-                path_buf.as_path()
-            },
-            PathProvider::TemporaryDirectory { tmp_dir } => {
-                tmp_dir.path()
-            },
+            PathProvider::ExternalPath { path_buf } => path_buf.as_path(),
+            PathProvider::TemporaryDirectory { tmp_dir } => tmp_dir.path(),
         }
     }
 
@@ -232,10 +220,6 @@ impl PathProvider {
         PathProvider::ExternalPath { path_buf }
     }
 }
-
-
-
-
 
 /// The information needed to start a [`LocalNet`].
 pub struct LocalNetConfig {
@@ -492,7 +476,10 @@ impl LocalNet {
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {
         let n = server_number;
-        let path = self.path_provider.path().join(format!("validator_{n}.toml"));
+        let path = self
+            .path_provider
+            .path()
+            .join(format!("validator_{n}.toml"));
         let port = Self::proxy_port(n);
         let internal_port = Self::internal_port(n);
         let metrics_port = Self::proxy_metrics_port(n);
@@ -611,7 +598,8 @@ impl LocalNet {
         let storage = StorageConfigNamespace {
             storage_config: self.storage_config.clone(),
             namespace,
-        }.to_string();
+        }
+        .to_string();
         if !self.set_init.contains(&key) {
             let max_try = 4;
             let mut i_try = 0;

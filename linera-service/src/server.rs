@@ -20,7 +20,9 @@ use linera_service::{
         CommitteeConfig, Export, GenesisConfig, Import, ValidatorConfig, ValidatorServerConfig,
     },
     prometheus_server,
-    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfig, StorageConfigNamespace},
+    storage::{
+        full_initialize_storage, run_with_storage, Runnable, StorageConfig, StorageConfigNamespace,
+    },
     util,
 };
 use linera_storage::Storage;

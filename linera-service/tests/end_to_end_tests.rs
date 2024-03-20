@@ -5,7 +5,6 @@
 mod common;
 
 use assert_matches::assert_matches;
-use linera_service::cli_wrappers::local_net::PathProvider;
 use async_graphql::InputType;
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::{
@@ -15,7 +14,7 @@ use linera_base::{
     identifiers::{Account, AccountOwner, ChainId, Owner},
 };
 use linera_service::cli_wrappers::{
-    local_net::{Database, LocalNet, LocalNetConfig},
+    local_net::{Database, LocalNet, LocalNetConfig, PathProvider},
     ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
 };
 use serde_json::{json, Value};

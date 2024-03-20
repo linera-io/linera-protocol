@@ -181,7 +181,9 @@ impl ClientContext {
         Ok(Self::create_default_config_path()?.join("wallet.json"))
     }
 
-    pub fn storage_config(options: &ClientOptions) -> Result<StorageConfigNamespace, anyhow::Error> {
+    pub fn storage_config(
+        options: &ClientOptions,
+    ) -> Result<StorageConfigNamespace, anyhow::Error> {
         match &options.storage_config {
             Some(config) => config.parse(),
             #[cfg(feature = "rocksdb")]
@@ -190,8 +192,11 @@ impl ClientContext {
                     path: Self::create_default_config_path()?.join("wallet.db"),
                 };
                 let namespace = "default".to_string();
-                Ok(StorageConfigNamespace { storage_config, namespace })
-            },
+                Ok(StorageConfigNamespace {
+                    storage_config,
+                    namespace,
+                })
+            }
             #[cfg(not(feature = "rocksdb"))]
             None => anyhow::bail!("A storage option must be provided"),
         }

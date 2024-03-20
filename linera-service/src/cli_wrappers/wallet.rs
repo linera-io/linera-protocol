@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cli_wrappers::Network,
+    cli_wrappers::{local_net::PathProvider, Network},
     config::{GenesisConfig, WalletState},
     faucet::ClaimOutcome,
     util::ChildExt,
 };
-use crate::cli_wrappers::local_net::PathProvider;
 use anyhow::{bail, Context, Result};
 use async_graphql::InputType;
 use linera_base::{
@@ -63,7 +62,11 @@ impl ClientWrapper {
         testing_prng_seed: Option<u64>,
         id: usize,
     ) -> Self {
-        let storage = format!("rocksdb:{}/client_{}.db", path_provider.path().display(), id);
+        let storage = format!(
+            "rocksdb:{}/client_{}.db",
+            path_provider.path().display(),
+            id
+        );
         let wallet = format!("wallet_{}.json", id);
         Self {
             testing_prng_seed,

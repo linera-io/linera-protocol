@@ -7,7 +7,6 @@ use async_trait::async_trait;
 use chrono::Utc;
 use client_context::ClientContext;
 use client_options::ClientOptions;
-use tempfile::tempdir;
 use colored::Colorize;
 use futures::{lock::Mutex, StreamExt};
 use linera_base::{
@@ -34,14 +33,14 @@ use linera_service::{
     chain_listener::ClientContext as _,
     cli_wrappers::{
         self,
-        local_net::{Database, PathProvider, LocalNetConfig, StorageConfigBuilder},
+        local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain},
     faucet::FaucetService,
     node_service::NodeService,
     project::{self, Project},
-    storage::{StorageConfig, Runnable},
+    storage::{Runnable, StorageConfig},
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -54,6 +53,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use tempfile::tempdir;
 use tokio::{signal::unix, sync::mpsc};
 use tracing::{debug, info, warn};
 
@@ -1512,7 +1512,8 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                     let path = tmp_dir.path();
                     let path_buf = path.to_path_buf();
                     let storage_config = StorageConfig::RocksDb { path: path_buf };
-                    let storage_config_builder = StorageConfigBuilder::ExistingConfig { storage_config };
+                    let storage_config_builder =
+                        StorageConfigBuilder::ExistingConfig { storage_config };
                     let path_provider = PathProvider::new(&path);
                     let config = LocalNetConfig {
                         network: Network::Grpc,
