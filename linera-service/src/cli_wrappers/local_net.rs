@@ -155,20 +155,32 @@ async fn make_testing_config(database: Database) -> StorageConfig {
             let endpoint = LOCAL_SERVER_SERVICE.get_config().await;
             StorageConfig::Service { endpoint }
         }
-        #[cfg(feature = "rocksdb")]
         Database::RocksDb => {
-            let path = LOCAL_SERVER_ROCKS_DB.get_config().await;
-            StorageConfig::RocksDb { path }
+            #[cfg(feature = "rocksdb")]
+            {
+                let path = LOCAL_SERVER_ROCKS_DB.get_config().await;
+                StorageConfig::RocksDb { path }
+            }
+            #[cfg(not(feature = "rocksdb"))]
+            panic!("Database::RocksDb is selected without the feature rocksdb");
         }
-        #[cfg(feature = "aws")]
         Database::DynamoDb => {
-            let use_localstack = true;
-            StorageConfig::DynamoDb { use_localstack }
+            #[cfg(feature = "aws")]
+            {
+                let use_localstack = true;
+                StorageConfig::DynamoDb { use_localstack }
+            }
+            #[cfg(not(feature = "aws"))]
+            panic!("Database::DynamoDb is selected without the feature aws");
         }
-        #[cfg(feature = "scylladb")]
         Database::ScyllaDb => {
-            let uri = create_scylla_db_test_uri();
-            StorageConfig::ScyllaDb { uri }
+            #[cfg(feature = "scylladb")]
+            {
+                let uri = create_scylla_db_test_uri();
+                StorageConfig::ScyllaDb { uri }
+            }
+            #[cfg(not(feature = "scylladb"))]
+            panic!("Database::ScyllaDb is selected without the feature sctlladb");
         }
     }
 }
@@ -258,11 +270,8 @@ const SERVER_ENV: &str = "LINERA_SERVER_PARAMS";
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum Database {
     Service,
-    #[cfg(feature = "rocksdb")]
     RocksDb,
-    #[cfg(feature = "aws")]
     DynamoDb,
-    #[cfg(feature = "scylladb")]
     ScyllaDb,
 }
 
@@ -321,7 +330,6 @@ impl Validator {
 impl LocalNetConfig {
     pub fn new_test(database: Database, network: Network) -> Self {
         let num_shards = match database {
-            #[cfg(feature = "rocksdb")]
             Database::RocksDb => 1,
             _ => 4,
         };
@@ -349,7 +357,6 @@ impl LineraNetConfig for LocalNetConfig {
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
         let server_config = self.storage_config_builder.build(self.database).await;
-        #[cfg(feature = "rocksdb")]
         ensure!(
             self.num_shards == 1 || self.database != Database::RocksDb,
             "Multiple shards not supported with RocksDB"
@@ -584,13 +591,11 @@ impl LocalNet {
 
     async fn run_server(&mut self, validator: usize, shard: usize) -> Result<Child> {
         let shard_str = match self.database {
-            #[cfg(feature = "rocksdb")]
             Database::RocksDb => format!("_{}", shard),
             _ => String::new(),
         };
         let namespace = format!("{}_server_{}{}_db", self.table_name, validator, shard_str);
         let key = match self.database {
-            #[cfg(feature = "rocksdb")]
             Database::RocksDb => (validator, shard),
             _ => (validator, 0),
         };
