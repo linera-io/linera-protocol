@@ -522,6 +522,14 @@ impl<UserInstance> BaseRuntime for SyncRuntime<UserInstance> {
         self.inner().read_owner_balance(owner)
     }
 
+    fn read_owner_balances(&mut self) -> Result<Vec<(Owner, Amount)>, ExecutionError> {
+        self.inner().read_owner_balances()
+    }
+
+    fn read_balance_owners(&mut self) -> Result<Vec<Owner>, ExecutionError> {
+        self.inner().read_balance_owners()
+    }
+
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError> {
         self.inner().chain_ownership()
     }
@@ -634,6 +642,18 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| Request::OwnerBalance { owner, callback })?
+            .recv_response()
+    }
+
+    fn read_owner_balances(&mut self) -> Result<Vec<(Owner, Amount)>, ExecutionError> {
+        self.execution_state_sender
+            .send_request(|callback| Request::OwnerBalances { callback })?
+            .recv_response()
+    }
+
+    fn read_balance_owners(&mut self) -> Result<Vec<Owner>, ExecutionError> {
+        self.execution_state_sender
+            .send_request(|callback| Request::BalanceOwners { callback })?
             .recv_response()
     }
 

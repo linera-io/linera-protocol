@@ -204,6 +204,25 @@ macro_rules! impl_service_system_api {
                 BaseRuntime::read_owner_balance(self, owner.into()).map(|balance| balance.into())
             }
 
+            fn read_owner_balances(
+                &mut self,
+            ) -> Result<Vec<(service_system_api::Owner, service_system_api::Amount)>, Self::Error>
+            {
+                BaseRuntime::read_owner_balances(self).map(|balances| {
+                    balances
+                        .into_iter()
+                        .map(|(owner, amount)| (owner.into(), amount.into()))
+                        .collect()
+                })
+            }
+
+            fn read_balance_owners(
+                &mut self,
+            ) -> Result<Vec<service_system_api::Owner>, Self::Error> {
+                BaseRuntime::read_balance_owners(self)
+                    .map(|owners| owners.into_iter().map(|owner| owner.into()).collect())
+            }
+
             fn read_system_timestamp(
                 &mut self,
             ) -> Result<service_system_api::Timestamp, Self::Error> {
