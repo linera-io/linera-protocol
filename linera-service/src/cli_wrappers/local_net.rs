@@ -16,9 +16,6 @@ use linera_base::{
     data_types::Amount,
 };
 use linera_execution::ResourceControlPolicy;
-use linera_storage_service::{
-    child::StorageServiceGuard,
-};
 use std::{
     collections::{BTreeMap, HashSet},
     env,
@@ -38,7 +35,7 @@ use {
     linera_base::sync::Lazy,
     std::ops::Deref,
     tempfile::tempdir,
-    linera_storage_service::child::{get_free_port, StorageService},
+    linera_storage_service::child::{get_free_port, StorageService, StorageServiceGuard},
     linera_storage_service::{
         common::get_service_storage_binary,
     },
@@ -50,24 +47,25 @@ use linera_views::rocks_db::create_rocks_db_test_path;
 #[cfg(all(feature = "scylladb", any(test, feature = "test")))]
 use linera_views::scylla_db::create_scylla_db_test_uri;
 
+#[cfg(any(test, feature = "test"))]
 trait LocalServerInternal: Sized {
     type Config;
 
-    #[cfg(any(test, feature = "test"))]
     async fn new_test() -> Result<Self>;
 
     fn get_config(&self) -> Self::Config;
 }
 
+#[cfg(any(test, feature = "test"))]
 struct LocalServerServiceInternal {
     service_endpoint: String,
     _service_guard: StorageServiceGuard,
 }
 
+#[cfg(any(test, feature = "test"))]
 impl LocalServerInternal for LocalServerServiceInternal {
     type Config = String;
 
-    #[cfg(any(test, feature = "test"))]
     async fn new_test() -> Result<Self> {
         let service_endpoint = get_free_port().await.unwrap();
         let binary = get_service_storage_binary().await?.display().to_string();
@@ -84,17 +82,16 @@ impl LocalServerInternal for LocalServerServiceInternal {
     }
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg(all(feature = "rocksdb", any(test, feature = "test")))]
 struct LocalServerRocksDbInternal {
     rocks_db_path: PathBuf,
     _temp_dir: Option<TempDir>,
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg(all(feature = "rocksdb", any(test, feature = "test")))]
 impl LocalServerInternal for LocalServerRocksDbInternal {
     type Config = PathBuf;
 
-    #[cfg(any(test, feature = "test"))]
     async fn new_test() -> Result<Self> {
         let (rocks_db_path, temp_dir) = create_rocks_db_test_path();
         let _temp_dir = Some(temp_dir);
