@@ -11,7 +11,6 @@ use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
-    contract::system_api,
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
     Resources, ViewStateStorage,
 };
@@ -311,7 +310,7 @@ impl AmmContract {
                 input_token_idx,
                 input_amount,
             } => {
-                let chain_id = system_api::current_application_id().creation.chain_id;
+                let chain_id = self.runtime.application_id().creation.chain_id;
                 let message = Message::Swap {
                     owner,
                     input_token_idx,
@@ -355,7 +354,7 @@ impl AmmContract {
                 input_token_idx,
                 input_amount,
             } => {
-                let chain_id = system_api::current_application_id().creation.chain_id;
+                let chain_id = self.runtime.application_id().creation.chain_id;
                 let message = Message::Swap {
                     owner,
                     input_token_idx,
@@ -418,7 +417,7 @@ impl AmmContract {
     }
 
     fn get_pool_balance(&mut self, token_idx: u32) -> Result<Amount, AmmError> {
-        let pool_owner = AccountOwner::Application(system_api::current_application_id());
+        let pool_owner = AccountOwner::Application(self.runtime.application_id());
         self.balance(&pool_owner, token_idx)
     }
 
@@ -460,8 +459,8 @@ impl AmmContract {
         amount: Amount,
     ) -> Result<(), AmmError> {
         let destination = Account {
-            chain_id: system_api::current_chain_id(),
-            owner: AccountOwner::Application(system_api::current_application_id()),
+            chain_id: self.runtime.chain_id(),
+            owner: AccountOwner::Application(self.runtime.application_id()),
         };
         self.transfer(owner, amount, destination, token_idx)
     }
@@ -473,10 +472,10 @@ impl AmmContract {
         amount: Amount,
     ) -> Result<(), AmmError> {
         let destination = Account {
-            chain_id: system_api::current_chain_id(),
+            chain_id: self.runtime.chain_id(),
             owner: *owner,
         };
-        let owner_app = AccountOwner::Application(system_api::current_application_id());
+        let owner_app = AccountOwner::Application(self.runtime.application_id());
         self.transfer(&owner_app, amount, destination, token_idx)
     }
 }

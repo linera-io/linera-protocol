@@ -10,7 +10,6 @@ use async_trait::async_trait;
 use fungible::{Account, ApplicationCall, FungibleResponse, Message, Operation};
 use linera_sdk::{
     base::{AccountOwner, Amount, WithContractAbi},
-    contract::system_api,
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
 use std::str::FromStr;
@@ -200,7 +199,7 @@ impl FungibleTokenContract {
         amount: Amount,
         target_account: Account,
     ) -> Result<ExecutionOutcome<Message>, Error> {
-        if source_account.chain_id == system_api::current_chain_id() {
+        if source_account.chain_id == self.runtime.chain_id() {
             self.state.debit(source_account.owner, amount).await?;
             Ok(self
                 .finish_transfer_to_account(amount, target_account, source_account.owner)
@@ -223,7 +222,7 @@ impl FungibleTokenContract {
         target_account: Account,
         source: AccountOwner,
     ) -> ExecutionOutcome<Message> {
-        if target_account.chain_id == system_api::current_chain_id() {
+        if target_account.chain_id == self.runtime.chain_id() {
             self.state.credit(target_account.owner, amount).await;
             ExecutionOutcome::default()
         } else {

@@ -10,7 +10,6 @@ use crowd_funding::{ApplicationCall, InitializationArgument, Message, Operation}
 use fungible::{Account, FungibleResponse, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
-    contract::system_api,
     ensure,
     views::View,
     ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
@@ -53,8 +52,9 @@ impl Contract for CrowdFundingContract {
 
         self.state.initialization_argument.set(Some(argument));
 
+        let deadline = self.initialization_argument().deadline;
         ensure!(
-            self.initialization_argument().deadline > system_api::current_system_time(),
+            deadline > self.runtime.system_time(),
             Error::DeadlineInThePast
         );
 
@@ -69,8 +69,7 @@ impl Contract for CrowdFundingContract {
 
         match operation {
             Operation::Pledge { owner, amount } => {
-                if self.runtime.chain_id() == system_api::current_application_id().creation.chain_id
-                {
+                if self.runtime.chain_id() == self.runtime.application_id().creation.chain_id {
                     self.execute_pledge_with_account(owner, amount).await?;
                 } else {
                     self.execute_pledge_with_transfer(&mut outcome, owner, amount)?;
@@ -90,8 +89,7 @@ impl Contract for CrowdFundingContract {
         match message {
             Message::PledgeWithAccount { owner, amount } => {
                 ensure!(
-                    self.runtime.chain_id()
-                        == system_api::current_application_id().creation.chain_id,
+                    self.runtime.chain_id() == self.runtime.application_id().creation.chain_id,
                     Error::CampaignChainOnly
                 );
                 self.execute_pledge_with_account(owner, amount).await?;
@@ -133,7 +131,7 @@ impl CrowdFundingContract {
     ) -> Result<(), Error> {
         ensure!(amount > Amount::ZERO, Error::EmptyPledge);
         // The campaign chain.
-        let chain_id = system_api::current_application_id().creation.chain_id;
+        let chain_id = self.runtime.application_id().creation.chain_id;
         // First, move the funds to the campaign chain (under the same owner).
         // TODO(#589): Simplify this when the messaging system guarantees atomic delivery
         // of all messages created in the same operation/message.
@@ -218,7 +216,7 @@ impl CrowdFundingContract {
         // TODO(#728): Remove this.
         #[cfg(not(any(test, feature = "test")))]
         ensure!(
-            system_api::current_system_time() >= self.initialization_argument().deadline,
+            self.runtime.system_time() >= self.initialization_argument().deadline,
             Error::DeadlineNotReached
         );
 
@@ -244,7 +242,7 @@ impl CrowdFundingContract {
 
     /// Queries the token application to determine the total amount of tokens in custody.
     fn balance(&mut self) -> Result<Amount, Error> {
-        let owner = AccountOwner::Application(system_api::current_application_id());
+        let owner = AccountOwner::Application(self.runtime.application_id());
         let response = self.call_application(
             true,
             Self::fungible_id()?,
@@ -259,11 +257,11 @@ impl CrowdFundingContract {
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
     fn send_to(&mut self, amount: Amount, owner: AccountOwner) -> Result<(), Error> {
         let destination = Account {
-            chain_id: system_api::current_chain_id(),
+            chain_id: self.runtime.chain_id(),
             owner,
         };
         let transfer = fungible::ApplicationCall::Transfer {
-            owner: AccountOwner::Application(system_api::current_application_id()),
+            owner: AccountOwner::Application(self.runtime.application_id()),
             amount,
             destination,
         };
@@ -274,8 +272,8 @@ impl CrowdFundingContract {
     /// Calls into the Fungible Token application to receive tokens from the given account.
     fn receive_from_account(&mut self, owner: AccountOwner, amount: Amount) -> Result<(), Error> {
         let destination = Account {
-            chain_id: system_api::current_chain_id(),
-            owner: AccountOwner::Application(system_api::current_application_id()),
+            chain_id: self.runtime.chain_id(),
+            owner: AccountOwner::Application(self.runtime.application_id()),
         };
         let transfer = fungible::ApplicationCall::Transfer {
             owner,

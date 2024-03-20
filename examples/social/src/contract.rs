@@ -8,7 +8,6 @@ mod state;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{ChannelName, Destination, MessageId, WithContractAbi},
-    contract::system_api,
     views::ViewError,
     ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
@@ -109,7 +108,7 @@ impl SocialContract {
         &mut self,
         text: String,
     ) -> Result<ExecutionOutcome<Message>, Error> {
-        let timestamp = system_api::current_system_time();
+        let timestamp = self.runtime.system_time();
         self.state.own_posts.push(OwnPost { timestamp, text });
         let count = self.state.own_posts.count();
         let mut posts = vec![];

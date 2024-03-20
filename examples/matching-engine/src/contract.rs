@@ -9,7 +9,6 @@ use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
-    contract::system_api,
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
     Resources, ViewStateStorage,
 };
@@ -103,7 +102,9 @@ impl Contract for MatchingEngineContract {
                         Err(error) => return Err(error),
                     }
                 }
-                system_api::close_chain().map_err(|_| MatchingEngineError::CloseChainError)?;
+                self.runtime
+                    .close_chain()
+                    .map_err(|_| MatchingEngineError::CloseChainError)?;
             }
         }
         Ok(outcome)
@@ -213,8 +214,8 @@ impl MatchingEngineContract {
         price: &Price,
     ) -> Result<(), MatchingEngineError> {
         let destination = Account {
-            chain_id: system_api::current_chain_id(),
-            owner: AccountOwner::Application(system_api::current_application_id()),
+            chain_id: self.runtime.chain_id(),
+            owner: AccountOwner::Application(self.runtime.application_id()),
         };
         let (amount, token_idx) = Self::get_amount_idx(nature, price, amount);
         self.transfer(*owner, amount, destination, token_idx)
@@ -223,7 +224,7 @@ impl MatchingEngineContract {
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
     fn send_to(&mut self, transfer: Transfer) -> Result<(), MatchingEngineError> {
         let destination = transfer.account;
-        let owner_app = AccountOwner::Application(system_api::current_application_id());
+        let owner_app = AccountOwner::Application(self.runtime.application_id());
         self.transfer(owner_app, transfer.amount, destination, transfer.token_idx)
     }
 
@@ -315,7 +316,7 @@ impl MatchingEngineContract {
         outcome: &mut ExecutionOutcome<Message>,
         order: Order,
     ) -> Result<(), MatchingEngineError> {
-        let chain_id = system_api::current_application_id().creation.chain_id;
+        let chain_id = self.runtime.application_id().creation.chain_id;
         let message = Message::ExecuteOrder {
             order: order.clone(),
         };
