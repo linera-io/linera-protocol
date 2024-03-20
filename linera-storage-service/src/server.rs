@@ -184,10 +184,10 @@ impl ServiceStoreServer {
             .collect::<Vec<_>>();
         let num_chunks = chunks.len() as i32;
         let mut pending_big_reads = self.pending_big_reads.write().await;
-        let pos = pending_big_reads.index;
+        let message_index = pending_big_reads.index;
         pending_big_reads.index += 1;
-        pending_big_reads.chunks_by_index.insert(pos, chunks);
-        (pos, num_chunks)
+        pending_big_reads.chunks_by_index.insert(message_index, chunks);
+        (message_index, num_chunks)
     }
 }
 
@@ -403,7 +403,7 @@ impl StoreProcessor for ServiceStoreServer {
         } = request;
         let mut pending_big_reads = self.pending_big_reads.write().await;
         let Some(entry) = pending_big_reads.chunks_by_index.get(&message_index) else {
-            unreachable!();
+            return Err(Status::not_found("process_specific_chunk"))
         };
         let index = index as usize;
         let chunk = entry[index].clone();
