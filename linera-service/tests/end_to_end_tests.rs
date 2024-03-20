@@ -554,6 +554,109 @@ async fn test_wasm_end_to_end_fungible(config: impl LineraNetConfig, example_nam
     net.terminate().await.unwrap();
 }
 
+#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "service_grpc")]
+#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_service_grpc")]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
+#[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "native-fungible" ; "native_aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build), "fungible" ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build), "native-fungible" ; "native_kubernetes_grpc"))]
+#[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None), "fungible" ; "remote_net_grpc"))]
+#[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None), "native-fungible" ; "native_remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_end_to_end_same_wallet_fungible(
+    config: impl LineraNetConfig,
+    example_name: &str,
+) {
+    use fungible::{FungibleTokenAbi, InitialState};
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let (mut net, client1) = config.instantiate().await.unwrap();
+
+    let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
+    // Get a chain different than the default
+    let chain2 = client1
+        .get_wallet()
+        .unwrap()
+        .chain_ids()
+        .into_iter()
+        .find(|chain_id| chain_id != &chain1)
+        .expect("Failed to obtain a chain ID from the wallet");
+
+    // The players
+    let account_owner1 = get_fungible_account_owner(&client1);
+    let account_owner2 = {
+        let wallet = client1.get_wallet().unwrap();
+        let user_chain = wallet.get(chain2).unwrap();
+        let public_key = user_chain.key_pair.as_ref().unwrap().public();
+        AccountOwner::User(public_key.into())
+    };
+    // The initial accounts on chain1
+    let accounts = BTreeMap::from([
+        (account_owner1, Amount::from_tokens(5)),
+        (account_owner2, Amount::from_tokens(2)),
+    ]);
+    let state = InitialState { accounts };
+    // Setting up the application and verifying
+    let (contract, service) = client1.build_example(example_name).await.unwrap();
+    let params = if example_name == "native-fungible" {
+        // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
+        fungible::Parameters::new("NAT")
+    } else {
+        fungible::Parameters::new("FUN")
+    };
+    let application_id = client1
+        .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
+        .await
+        .unwrap();
+
+    let mut node_service = client1.run_node_service(8080).await.unwrap();
+
+    let app1 = FungibleApp(
+        node_service
+            .make_application(&chain1, &application_id)
+            .await
+            .unwrap(),
+    );
+    app1.assert_balances([
+        (account_owner1, Amount::from_tokens(5)),
+        (account_owner2, Amount::from_tokens(2)),
+    ])
+    .await;
+
+    // Transferring
+    app1.transfer(
+        &account_owner1,
+        Amount::ONE,
+        fungible::Account {
+            chain_id: chain2,
+            owner: account_owner2,
+        },
+    )
+    .await;
+
+    // Checking the final values on chain1 and chain2.
+    app1.assert_balances([
+        (account_owner1, Amount::from_tokens(4)),
+        (account_owner2, Amount::from_tokens(2)),
+    ])
+    .await;
+
+    let app2 = FungibleApp(
+        node_service
+            .make_application(&chain2, &application_id)
+            .await
+            .unwrap(),
+    );
+    app2.assert_balances([(account_owner2, Amount::ONE)]).await;
+
+    node_service.ensure_is_running().unwrap();
+
+    net.ensure_is_running().await.unwrap();
+    net.terminate().await.unwrap();
+}
+
 #[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "service_grpc")]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -822,109 +925,6 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) {
 
     node_service1.ensure_is_running().unwrap();
     node_service2.ensure_is_running().unwrap();
-
-    net.ensure_is_running().await.unwrap();
-    net.terminate().await.unwrap();
-}
-
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "service_grpc")]
-#[test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_service_grpc")]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "fungible" ; "scylladb_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc), "native-fungible" ; "native_scylladb_grpc"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "fungible" ; "aws_grpc"))]
-#[cfg_attr(feature = "aws", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc), "native-fungible" ; "native_aws_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build), "fungible" ; "kubernetes_grpc"))]
-#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build), "native-fungible" ; "native_kubernetes_grpc"))]
-#[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None), "fungible" ; "remote_net_grpc"))]
-#[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None), "native-fungible" ; "native_remote_net_grpc"))]
-#[test_log::test(tokio::test)]
-async fn test_wasm_end_to_end_same_wallet_fungible(
-    config: impl LineraNetConfig,
-    example_name: &str,
-) {
-    use fungible::{FungibleTokenAbi, InitialState};
-
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let (mut net, client1) = config.instantiate().await.unwrap();
-
-    let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
-    // Get a chain different than the default
-    let chain2 = client1
-        .get_wallet()
-        .unwrap()
-        .chain_ids()
-        .into_iter()
-        .find(|chain_id| chain_id != &chain1)
-        .expect("Failed to obtain a chain ID from the wallet");
-
-    // The players
-    let account_owner1 = get_fungible_account_owner(&client1);
-    let account_owner2 = {
-        let wallet = client1.get_wallet().unwrap();
-        let user_chain = wallet.get(chain2).unwrap();
-        let public_key = user_chain.key_pair.as_ref().unwrap().public();
-        AccountOwner::User(public_key.into())
-    };
-    // The initial accounts on chain1
-    let accounts = BTreeMap::from([
-        (account_owner1, Amount::from_tokens(5)),
-        (account_owner2, Amount::from_tokens(2)),
-    ]);
-    let state = InitialState { accounts };
-    // Setting up the application and verifying
-    let (contract, service) = client1.build_example(example_name).await.unwrap();
-    let params = if example_name == "native-fungible" {
-        // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
-        fungible::Parameters::new("NAT")
-    } else {
-        fungible::Parameters::new("FUN")
-    };
-    let application_id = client1
-        .publish_and_create::<FungibleTokenAbi>(contract, service, &params, &state, &[], None)
-        .await
-        .unwrap();
-
-    let mut node_service = client1.run_node_service(8080).await.unwrap();
-
-    let app1 = FungibleApp(
-        node_service
-            .make_application(&chain1, &application_id)
-            .await
-            .unwrap(),
-    );
-    app1.assert_balances([
-        (account_owner1, Amount::from_tokens(5)),
-        (account_owner2, Amount::from_tokens(2)),
-    ])
-    .await;
-
-    // Transferring
-    app1.transfer(
-        &account_owner1,
-        Amount::ONE,
-        fungible::Account {
-            chain_id: chain2,
-            owner: account_owner2,
-        },
-    )
-    .await;
-
-    // Checking the final values on chain1 and chain2.
-    app1.assert_balances([
-        (account_owner1, Amount::from_tokens(4)),
-        (account_owner2, Amount::from_tokens(2)),
-    ])
-    .await;
-
-    let app2 = FungibleApp(
-        node_service
-            .make_application(&chain2, &application_id)
-            .await
-            .unwrap(),
-    );
-    app2.assert_balances([(account_owner2, Amount::ONE)]).await;
-
-    node_service.ensure_is_running().unwrap();
 
     net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
