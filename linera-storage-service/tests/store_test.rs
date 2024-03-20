@@ -58,7 +58,7 @@ async fn test_service_admin() {
 #[tokio::test]
 async fn test_service_big_raw_write() {
     let endpoint = get_free_port().await.unwrap();
-    let _guard = get_storage_service_guard(&endpoint).run_service().await;
+    let _guard = get_storage_service_guard(&endpoint).run().await;
     let key_value_store = create_service_test_store(&endpoint).await.unwrap();
     let n = 5000000;
     let mut rng = test_utils::make_deterministic_rng();
