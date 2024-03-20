@@ -41,7 +41,7 @@ where
             Application::State::default()
         };
 
-        let application = Application::new(state, ServiceRuntime::default())
+        let application = Application::new(state, ServiceRuntime::new())
             .await
             .map_err(|error| error.to_string())?;
         let argument: Application::Query =
@@ -64,7 +64,7 @@ where
         let state = Application::State::load(context)
             .await
             .expect("Failed to load application state");
-        let application = Application::new(state, ServiceRuntime::default())
+        let application = Application::new(state, ServiceRuntime::new())
             .await
             .map_err(|error| error.to_string())?;
         let argument: Application::Query =

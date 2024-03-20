@@ -8,13 +8,21 @@ use linera_base::{data_types::BlockHeight, identifiers::ChainId};
 use std::cell::Cell;
 
 /// The runtime available during execution of a query.
-#[derive(Clone, Debug, Default)]
+#[derive(Debug)]
 pub struct ServiceRuntime {
     chain_id: Cell<Option<ChainId>>,
     next_block_height: Cell<Option<BlockHeight>>,
 }
 
 impl ServiceRuntime {
+    /// Creates a new [`ServiceRuntime`] instance for a service.
+    pub(crate) fn new() -> Self {
+        ServiceRuntime {
+            chain_id: Cell::default(),
+            next_block_height: Cell::default(),
+        }
+    }
+
     /// Returns the ID of the current chain.
     pub fn chain_id(&self) -> ChainId {
         Self::fetch_value_through_cache(&self.chain_id, || wit::chain_id().into())
