@@ -20,7 +20,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tempfile::TempDir;
+use tempfile::{tempdir, TempDir};
 use tokio::process::{Child, Command};
 use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
@@ -34,7 +34,6 @@ use {
     linera_storage_service::child::{get_free_port, StorageService, StorageServiceGuard},
     linera_storage_service::common::get_service_storage_binary,
     std::ops::Deref,
-    tempfile::tempdir,
 };
 
 #[cfg(all(feature = "rocksdb", any(test, feature = "test")))]
@@ -209,8 +208,7 @@ impl PathProvider {
         }
     }
 
-    #[cfg(any(test, feature = "test"))]
-    pub fn new_test() -> Result<Self> {
+    pub fn create_temporary_directory() -> Result<Self> {
         let tmp_dir = Arc::new(tempdir()?);
         Ok(PathProvider::TemporaryDirectory { tmp_dir })
     }
