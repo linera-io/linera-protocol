@@ -1514,7 +1514,7 @@ async fn run(options: ClientOptions) -> Result<(), anyhow::Error> {
                     let storage_config = StorageConfig::RocksDb { path: path_buf };
                     let storage_config_builder =
                         StorageConfigBuilder::ExistingConfig { storage_config };
-                    let path_provider = PathProvider::new(&path);
+                    let path_provider = PathProvider::new(path);
                     let config = LocalNetConfig {
                         network: Network::Grpc,
                         database: Database::RocksDb,

@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cli_wrappers::{ClientWrapper, Faucet, FaucetOption, LineraNet, LineraNetConfig, Network},
+    cli_wrappers::{
+        local_net::PathProvider, ClientWrapper, Faucet, FaucetOption, LineraNet, LineraNetConfig,
+        Network,
+    },
     config::Export,
 };
 use anyhow::Result;
@@ -91,8 +94,11 @@ impl LineraNet for RemoteNet {
     }
 
     async fn make_client(&mut self) -> ClientWrapper {
+        let path_provider = PathProvider::TemporaryDirectory {
+            tmp_dir: self.tmp_dir.clone(),
+        };
         let client = ClientWrapper::new(
-            self.tmp_dir.clone(),
+            path_provider,
             self.network,
             self.testing_prng_seed,
             self.next_client_id,

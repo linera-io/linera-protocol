@@ -421,6 +421,7 @@ impl LineraNet for LocalNet {
 }
 
 impl LocalNet {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         database: Database,
         network: Network,

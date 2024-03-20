@@ -313,28 +313,30 @@ impl StorageConfigNamespace {
             }
         }
     }
+}
 
-    pub fn to_string(&self) -> String {
+impl std::fmt::Display for StorageConfigNamespace {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let namespace = &self.namespace;
         match &self.storage_config {
             StorageConfig::Service { endpoint } => {
-                format!("service:{}:{}", endpoint, namespace)
+                write!(f, "service:{}:{}", endpoint, namespace)
             }
             StorageConfig::Memory {} => {
-                format!("memory:{}", namespace)
+                write!(f, "memory:{}", namespace)
             }
             #[cfg(feature = "rocksdb")]
             StorageConfig::RocksDb { path } => {
-                format!("rocksdb:{}:{}", path.display(), namespace)
+                write!(f, "rocksdb:{}:{}", path.display(), namespace)
             }
             #[cfg(feature = "aws")]
             StorageConfig::DynamoDb { use_localstack } => match use_localstack {
-                true => format!("dynamodb:{}:localstack", namespace),
-                false => format!("dynamodb:{}:env", namespace),
+                true => write!(f, "dynamodb:{}:localstack", namespace),
+                false => write!(f, "dynamodb:{}:env", namespace),
             },
             #[cfg(feature = "scylladb")]
             StorageConfig::ScyllaDb { uri } => {
-                format!("scylladb:tcp:{}:{}", uri, namespace)
+                write!(f, "scylladb:tcp:{}:{}", uri, namespace)
             }
         }
     }
