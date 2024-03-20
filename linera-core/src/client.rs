@@ -1965,6 +1965,11 @@ where
             .read_values_downward(from, limit)
             .await
     }
+
+    /// Wraps this chain client into an `Arc<Mutex<_>>`.
+    pub fn into_arc(self) -> ArcChainClient<P, S> {
+        ArcChainClient::new(self)
+    }
 }
 
 /// The outcome of trying to commit a list of incoming messages and operations to the chain.
@@ -2113,14 +2118,15 @@ where
         }
     }
 
-    /// Spawns a thread that listens to notifications about the current chain from all validators,
+    /// Spawns a task that listens to notifications about the current chain from all validators,
     /// and synchronizes the local state accordingly.
-    pub async fn listen(&self) -> Result<(), ChainClientError>
+    pub async fn listen(&self) -> Result<AbortOnDrop, ChainClientError>
     where
         P: Send + 'static,
     {
         let mut senders = HashMap::new(); // Senders to cancel notification streams.
-        let mut notifications = self.lock().await.subscribe().await?;
+        let notifications = self.lock().await.subscribe().await?;
+        let (mut notifications, abort) = stream::abortable(notifications);
         if let Err(err) = self.update_streams(&mut senders).await {
             error!("Failed to update committee: {}", err);
         }
@@ -2133,8 +2139,11 @@ where
                     }
                 }
             }
+            for abort in senders.into_values() {
+                abort.abort();
+            }
         });
-        Ok(())
+        Ok(AbortOnDrop(abort))
     }
 
     async fn update_streams(
@@ -2219,5 +2228,15 @@ where
             .receive_certificates_from_validator(name, tracker, certificates)
             .await;
         Ok(())
+    }
+}
+
+/// Wrapper for `AbortHandle` that aborts when its dropped.
+#[must_use]
+pub struct AbortOnDrop(AbortHandle);
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
     }
 }
