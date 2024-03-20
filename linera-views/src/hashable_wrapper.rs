@@ -71,10 +71,9 @@ where
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let delete_view = self.inner.flush(batch)?;
         if delete_view {
-            let mut key = self.inner.context().base_key();
-            let tag = key.last_mut().unwrap();
-            *tag = KeyTag::Hash as u8;
-            batch.delete_key(key)
+            let mut key_prefix = self.inner.context().base_key();
+            key_prefix.pop();
+            batch.delete_key_prefix(key_prefix)
         } else {
             let hash = *self.hash.get_mut();
             if self.stored_hash != hash {
