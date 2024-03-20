@@ -54,6 +54,7 @@ use std::{
     convert::Infallible,
     iter,
     num::NonZeroUsize,
+    ops::Deref,
     sync::Arc,
 };
 use thiserror::Error;
@@ -483,187 +484,6 @@ where
         Ok(self.key_pair().await?.public())
     }
 
-    async fn local_chain_info(
-        this: Arc<Mutex<Self>>,
-        chain_id: ChainId,
-        local_node: &mut LocalNodeClient<S>,
-    ) -> Option<Box<ChainInfo>> {
-        let mut guard = this.lock().await;
-        let Ok(info) = local_node.local_chain_info(chain_id).await else {
-            error!("Fail to read local chain info for {chain_id}");
-            return None;
-        };
-        // Useful in case `chain_id` is the same as the local chain.
-        guard.update_from_info(&info);
-        Some(info)
-    }
-
-    async fn local_next_block_height(
-        this: Arc<Mutex<Self>>,
-        chain_id: ChainId,
-        local_node: &mut LocalNodeClient<S>,
-    ) -> Option<BlockHeight> {
-        let info = Self::local_chain_info(this, chain_id, local_node).await?;
-        Some(info.next_block_height)
-    }
-
-    async fn process_notification<A>(
-        this: Arc<Mutex<Self>>,
-        name: ValidatorName,
-        node: A,
-        mut local_node: LocalNodeClient<S>,
-        notification: Notification,
-    ) where
-        A: ValidatorNode + Send + Sync + 'static + Clone,
-    {
-        match notification.reason {
-            Reason::NewIncomingMessage { origin, height } => {
-                if Self::local_next_block_height(this.clone(), origin.sender, &mut local_node).await
-                    > Some(height)
-                {
-                    debug!("Accepting redundant notification for new message");
-                }
-                if let Err(e) = Self::find_received_certificates_from_validator(
-                    this.clone(),
-                    name,
-                    node,
-                    local_node.clone(),
-                )
-                .await
-                {
-                    error!("Fail to process notification: {e}");
-                }
-                if Self::local_next_block_height(this, origin.sender, &mut local_node).await
-                    <= Some(height)
-                {
-                    error!("Fail to synchronize new message after notification");
-                }
-            }
-            Reason::NewBlock { height, .. } => {
-                let chain_id = notification.chain_id;
-                if Self::local_next_block_height(this.clone(), chain_id, &mut local_node).await
-                    > Some(height)
-                {
-                    debug!("Accepting redundant notification for new block");
-                }
-                match local_node
-                    .try_synchronize_chain_state_from(name, node, chain_id)
-                    .await
-                {
-                    Ok(()) => {
-                        if Self::local_next_block_height(this, chain_id, &mut local_node).await
-                            <= Some(height)
-                        {
-                            error!("Fail to synchronize new block after notification");
-                        }
-                    }
-                    Err(e) => {
-                        error!("Fail to process notification: {e}");
-                    }
-                }
-            }
-            Reason::NewRound { height, round } => {
-                let chain_id = notification.chain_id;
-                if let Some(info) =
-                    Self::local_chain_info(this.clone(), chain_id, &mut local_node).await
-                {
-                    if (info.next_block_height, info.manager.current_round) >= (height, round) {
-                        debug!("Accepting redundant notification for new round");
-                    }
-                }
-                if let Err(error) = local_node
-                    .try_synchronize_chain_state_from(name, node, chain_id)
-                    .await
-                {
-                    error!("Fail to process notification: {error}");
-                }
-                let Some(info) =
-                    Self::local_chain_info(this.clone(), chain_id, &mut local_node).await
-                else {
-                    error!("Fail to read local chain info for {chain_id}");
-                    return;
-                };
-                if (info.next_block_height, info.manager.current_round) < (height, round) {
-                    error!("Fail to synchronize new block after notification");
-                }
-            }
-        }
-    }
-
-    /// Spawns a thread that listens to notifications about the current chain from all validators,
-    /// and synchronizes the local state accordingly.
-    pub async fn listen(this: Arc<Mutex<Self>>) -> Result<(), ChainClientError>
-    where
-        P: Send + 'static,
-    {
-        let mut senders = HashMap::new(); // Senders to cancel notification streams.
-        let mut notifications = this.lock().await.subscribe().await?;
-        if let Err(err) = Self::update_streams(&this, &mut senders).await {
-            error!("Failed to update committee: {}", err);
-        }
-        tokio::spawn(async move {
-            while let Some(notification) = notifications.next().await {
-                if matches!(notification.reason, Reason::NewBlock { .. }) {
-                    if let Err(err) = Self::update_streams(&this, &mut senders).await {
-                        error!("Failed to update committee: {}", err);
-                    }
-                }
-            }
-        });
-        Ok(())
-    }
-
-    async fn update_streams(
-        this: &Arc<Mutex<Self>>,
-        senders: &mut HashMap<ValidatorName, AbortHandle>,
-    ) -> Result<(), ChainClientError>
-    where
-        P: Send + 'static,
-    {
-        let (chain_id, nodes, local_node) = {
-            let mut guard = this.lock().await;
-            let committee = guard.local_committee().await?;
-            let nodes: HashMap<_, _> = guard.validator_node_provider.make_nodes(&committee)?;
-            (guard.chain_id, nodes, guard.node_client.clone())
-        };
-        // Drop removed validators.
-        senders.retain(|name, abort| {
-            if !nodes.contains_key(name) {
-                abort.abort();
-            }
-            !abort.is_aborted()
-        });
-        // Add tasks for new validators.
-        for (name, mut node) in nodes {
-            let hash_map::Entry::Vacant(entry) = senders.entry(name) else {
-                continue;
-            };
-            let (mut stream, abort) = match node.subscribe(vec![chain_id]).await {
-                Err(error) => {
-                    info!(?error, "Could not connect to validator {name}");
-                    continue;
-                }
-                Ok(stream) => stream::abortable(stream),
-            };
-            let this = this.clone();
-            let local_node = local_node.clone();
-            tokio::spawn(async move {
-                while let Some(notification) = stream.next().await {
-                    Self::process_notification(
-                        this.clone(),
-                        name,
-                        node.clone(),
-                        local_node.clone(),
-                        notification,
-                    )
-                    .await;
-                }
-            });
-            entry.insert(abort);
-        }
-        Ok(())
-    }
-
     /// Prepares the chain for the next operation.
     async fn prepare_chain(&mut self) -> Result<Box<ChainInfo>, ChainClientError> {
         // Verify that our local storage contains enough history compared to the
@@ -1060,47 +880,6 @@ where
             self.receive_certificates_from_validator(name, tracker, certificates)
                 .await;
         }
-        Ok(())
-    }
-
-    /// Attempts to download new received certificates from a particular validator.
-    ///
-    /// This is similar to `find_received_certificates` but for only one validator.
-    /// We also don't try to synchronize the admin chain.
-    pub async fn find_received_certificates_from_validator<A>(
-        this: Arc<Mutex<Self>>,
-        name: ValidatorName,
-        node: A,
-        node_client: LocalNodeClient<S>,
-    ) -> Result<(), ChainClientError>
-    where
-        A: ValidatorNode + Send + Sync + 'static + Clone,
-    {
-        let ((committees, max_epoch), chain_id, current_tracker) = {
-            let mut guard = this.lock().await;
-            (
-                guard.known_committees().await?,
-                guard.chain_id(),
-                *guard.received_certificate_trackers.get(&name).unwrap_or(&0),
-            )
-        };
-        // Proceed to downloading received certificates.
-        let (name, tracker, certificates) = Self::synchronize_received_certificates_from_validator(
-            chain_id,
-            name,
-            current_tracker,
-            committees,
-            max_epoch,
-            node,
-            node_client,
-        )
-        .await?;
-        // Process received certificates. If the client state has changed during the
-        // network calls, we should still be fine.
-        this.lock()
-            .await
-            .receive_certificates_from_validator(name, tracker, certificates)
-            .await;
         Ok(())
     }
 
@@ -2199,4 +1978,246 @@ enum ExecuteBlockOutcome {
     /// We are not the round leader and cannot do anything. Try again at the specified time or
     /// or whenever the round or block height changes.
     WaitForTimeout(RoundTimeout),
+}
+
+/// A chain client in an `Arc<Mutex<_>>`, so it can be used by different tasks and threads.
+#[derive(Debug)]
+pub struct ArcChainClient<P, S>(pub Arc<Mutex<ChainClient<P, S>>>);
+
+impl<P, S> Deref for ArcChainClient<P, S> {
+    type Target = Arc<Mutex<ChainClient<P, S>>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<P, S> Clone for ArcChainClient<P, S> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<P, S> ArcChainClient<P, S>
+where
+    P: ValidatorNodeProvider + Sync,
+    S: Storage + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
+    pub fn new(client: ChainClient<P, S>) -> Self {
+        Self(Arc::new(Mutex::new(client)))
+    }
+
+    async fn local_chain_info(
+        &self,
+        chain_id: ChainId,
+        local_node: &mut LocalNodeClient<S>,
+    ) -> Option<Box<ChainInfo>> {
+        let mut guard = self.lock().await;
+        let Ok(info) = local_node.local_chain_info(chain_id).await else {
+            error!("Fail to read local chain info for {chain_id}");
+            return None;
+        };
+        // Useful in case `chain_id` is the same as the local chain.
+        guard.update_from_info(&info);
+        Some(info)
+    }
+
+    async fn local_next_block_height(
+        &self,
+        chain_id: ChainId,
+        local_node: &mut LocalNodeClient<S>,
+    ) -> Option<BlockHeight> {
+        let info = self.local_chain_info(chain_id, local_node).await?;
+        Some(info.next_block_height)
+    }
+
+    async fn process_notification(
+        &self,
+        name: ValidatorName,
+        node: P::Node,
+        mut local_node: LocalNodeClient<S>,
+        notification: Notification,
+    ) {
+        match notification.reason {
+            Reason::NewIncomingMessage { origin, height } => {
+                if self
+                    .local_next_block_height(origin.sender, &mut local_node)
+                    .await
+                    > Some(height)
+                {
+                    debug!("Accepting redundant notification for new message");
+                }
+                if let Err(e) = self
+                    .find_received_certificates_from_validator(name, node, local_node.clone())
+                    .await
+                {
+                    error!("Fail to process notification: {e}");
+                }
+                if self
+                    .local_next_block_height(origin.sender, &mut local_node)
+                    .await
+                    <= Some(height)
+                {
+                    error!("Fail to synchronize new message after notification");
+                }
+            }
+            Reason::NewBlock { height, .. } => {
+                let chain_id = notification.chain_id;
+                if self
+                    .local_next_block_height(chain_id, &mut local_node)
+                    .await
+                    > Some(height)
+                {
+                    debug!("Accepting redundant notification for new block");
+                }
+                match local_node
+                    .try_synchronize_chain_state_from(name, node, chain_id)
+                    .await
+                {
+                    Ok(()) => {
+                        if self
+                            .local_next_block_height(chain_id, &mut local_node)
+                            .await
+                            <= Some(height)
+                        {
+                            error!("Fail to synchronize new block after notification");
+                        }
+                    }
+                    Err(e) => {
+                        error!("Fail to process notification: {e}");
+                    }
+                }
+            }
+            Reason::NewRound { height, round } => {
+                let chain_id = notification.chain_id;
+                if let Some(info) = self.local_chain_info(chain_id, &mut local_node).await {
+                    if (info.next_block_height, info.manager.current_round) >= (height, round) {
+                        debug!("Accepting redundant notification for new round");
+                    }
+                }
+                if let Err(error) = local_node
+                    .try_synchronize_chain_state_from(name, node, chain_id)
+                    .await
+                {
+                    error!("Fail to process notification: {error}");
+                }
+                let Some(info) = self.local_chain_info(chain_id, &mut local_node).await else {
+                    error!("Fail to read local chain info for {chain_id}");
+                    return;
+                };
+                if (info.next_block_height, info.manager.current_round) < (height, round) {
+                    error!("Fail to synchronize new block after notification");
+                }
+            }
+        }
+    }
+
+    /// Spawns a thread that listens to notifications about the current chain from all validators,
+    /// and synchronizes the local state accordingly.
+    pub async fn listen(&self) -> Result<(), ChainClientError>
+    where
+        P: Send + 'static,
+    {
+        let mut senders = HashMap::new(); // Senders to cancel notification streams.
+        let mut notifications = self.lock().await.subscribe().await?;
+        if let Err(err) = self.update_streams(&mut senders).await {
+            error!("Failed to update committee: {}", err);
+        }
+        let this = self.clone();
+        tokio::spawn(async move {
+            while let Some(notification) = notifications.next().await {
+                if matches!(notification.reason, Reason::NewBlock { .. }) {
+                    if let Err(err) = this.update_streams(&mut senders).await {
+                        error!("Failed to update committee: {}", err);
+                    }
+                }
+            }
+        });
+        Ok(())
+    }
+
+    async fn update_streams(
+        &self,
+        senders: &mut HashMap<ValidatorName, AbortHandle>,
+    ) -> Result<(), ChainClientError>
+    where
+        P: Send + 'static,
+    {
+        let (chain_id, nodes, local_node) = {
+            let mut guard = self.lock().await;
+            let committee = guard.local_committee().await?;
+            let nodes: HashMap<_, _> = guard.validator_node_provider.make_nodes(&committee)?;
+            (guard.chain_id, nodes, guard.node_client.clone())
+        };
+        // Drop removed validators.
+        senders.retain(|name, abort| {
+            if !nodes.contains_key(name) {
+                abort.abort();
+            }
+            !abort.is_aborted()
+        });
+        // Add tasks for new validators.
+        for (name, mut node) in nodes {
+            let hash_map::Entry::Vacant(entry) = senders.entry(name) else {
+                continue;
+            };
+            let (mut stream, abort) = match node.subscribe(vec![chain_id]).await {
+                Err(error) => {
+                    info!(?error, "Could not connect to validator {name}");
+                    continue;
+                }
+                Ok(stream) => stream::abortable(stream),
+            };
+            let this = self.clone();
+            let local_node = local_node.clone();
+            tokio::spawn(async move {
+                while let Some(notification) = stream.next().await {
+                    this.process_notification(name, node.clone(), local_node.clone(), notification)
+                        .await;
+                }
+            });
+            entry.insert(abort);
+        }
+        Ok(())
+    }
+
+    /// Attempts to download new received certificates from a particular validator.
+    ///
+    /// This is similar to `find_received_certificates` but for only one validator.
+    /// We also don't try to synchronize the admin chain.
+    pub async fn find_received_certificates_from_validator(
+        &self,
+        name: ValidatorName,
+        node: P::Node,
+        node_client: LocalNodeClient<S>,
+    ) -> Result<(), ChainClientError> {
+        let ((committees, max_epoch), chain_id, current_tracker) = {
+            let mut guard = self.lock().await;
+            (
+                guard.known_committees().await?,
+                guard.chain_id(),
+                *guard.received_certificate_trackers.get(&name).unwrap_or(&0),
+            )
+        };
+        // Proceed to downloading received certificates.
+        let (name, tracker, certificates) =
+            ChainClient::<P, S>::synchronize_received_certificates_from_validator(
+                chain_id,
+                name,
+                current_tracker,
+                committees,
+                max_epoch,
+                node,
+                node_client,
+            )
+            .await?;
+        // Process received certificates. If the client state has changed during the
+        // network calls, we should still be fine.
+        self.lock()
+            .await
+            .receive_certificates_from_validator(name, tracker, certificates)
+            .await;
+        Ok(())
+    }
 }

@@ -27,7 +27,7 @@ use linera_base::{
 };
 use linera_chain::{data_types::HashedValue, ChainStateView};
 use linera_core::{
-    client::{ChainClient, ChainClientError},
+    client::{ArcChainClient, ChainClient, ChainClientError},
     data_types::{ClientOutcome, RoundTimeout},
     node::{NotificationStream, ValidatorNodeProvider},
     worker::{Notification, Reason},
@@ -56,7 +56,7 @@ pub struct Chains {
     pub default: Option<ChainId>,
 }
 
-pub type ClientMapInner<P, S> = BTreeMap<ChainId, Arc<Mutex<ChainClient<P, S>>>>;
+pub type ClientMapInner<P, S> = BTreeMap<ChainId, ArcChainClient<P, S>>;
 pub(crate) struct ChainClients<P, S>(Arc<Mutex<ClientMapInner<P, S>>>);
 
 impl<P, S> Clone for ChainClients<P, S> {
@@ -72,7 +72,7 @@ impl<P, S> Default for ChainClients<P, S> {
 }
 
 impl<P, S> ChainClients<P, S> {
-    async fn client(&self, chain_id: &ChainId) -> Option<Arc<Mutex<ChainClient<P, S>>>> {
+    async fn client(&self, chain_id: &ChainId) -> Option<ArcChainClient<P, S>> {
         Some(self.0.lock().await.get(chain_id)?.clone())
     }
 
@@ -80,7 +80,7 @@ impl<P, S> ChainClients<P, S> {
         &self,
         chain_id: &ChainId,
     ) -> Option<OwnedMutexGuard<ChainClient<P, S>>> {
-        Some(self.client(chain_id).await?.lock_owned().await)
+        Some(self.client(chain_id).await?.0.lock_owned().await)
     }
 
     pub(crate) async fn try_client_lock(

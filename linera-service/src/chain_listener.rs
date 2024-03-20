@@ -11,7 +11,7 @@ use linera_base::{
 };
 use linera_chain::data_types::OutgoingMessage;
 use linera_core::{
-    client::ChainClient,
+    client::{ArcChainClient, ChainClient},
     node::ValidatorNodeProvider,
     worker::{Notification, Reason},
 };
@@ -124,11 +124,11 @@ where
                 return Ok(());
             };
             let client = context_guard.make_chain_client(storage.clone(), chain_id);
-            let client = Arc::new(Mutex::new(client));
+            let client = ArcChainClient::new(client);
             entry.insert(client.clone());
             client
         };
-        ChainClient::listen(client.clone()).await?;
+        client.listen().await?;
         let mut local_stream = {
             let mut guard = client.lock().await;
             let stream = guard.subscribe().await?;

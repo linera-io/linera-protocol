@@ -17,7 +17,7 @@ use linera_base::{
 };
 use linera_chain::data_types::{CertificateValue, ExecutedBlock};
 use linera_core::{
-    client::{ChainClient, ChainClientError},
+    client::{ArcChainClient, ChainClientError},
     data_types::{ChainInfoQuery, ClientOutcome},
     local_node::LocalNodeClient,
     node::ValidatorNodeProvider,
@@ -767,7 +767,7 @@ impl Runnable for Job {
                 let chain_id = chain_client.chain_id();
                 info!("Watching for notifications for chain {:?}", chain_id);
                 let mut notification_stream = chain_client.subscribe().await?;
-                ChainClient::listen(Arc::new(Mutex::new(chain_client))).await?;
+                ArcChainClient::new(chain_client).listen().await?;
                 while let Some(notification) = notification_stream.next().await {
                     if raw {
                         println!("{}", serde_json::to_string(&notification)?);
