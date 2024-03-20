@@ -117,7 +117,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     for (idx, e) in input.fields.into_iter().enumerate() {
         let name = e.clone().ident.unwrap();
         let fut = format_ident!("{}_fut", name.to_string());
-        let test_flush_ident = format_ident!("test{}", idx);
+        let test_flush_ident = format_ident!("deleted{}", idx);
         let idx_lit = syn::LitInt::new(&idx.to_string(), Span::call_site());
         let type_ident = get_type_field(e).expect("Failed to find the type");
         load_future_quotes.push(quote! {

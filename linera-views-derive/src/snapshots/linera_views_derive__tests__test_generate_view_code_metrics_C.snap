@@ -42,9 +42,9 @@ where
         batch: &mut linera_views::batch::Batch,
     ) -> Result<bool, linera_views::views::ViewError> {
         use linera_views::views::View;
-        let test0 = self.register.flush(batch)?;
-        let test1 = self.collection.flush(batch)?;
-        Ok(test0 && test1)
+        let deleted0 = self.register.flush(batch)?;
+        let deleted1 = self.collection.flush(batch)?;
+        Ok(deleted0 && deleted1)
     }
     fn clear(&mut self) {
         self.register.clear();

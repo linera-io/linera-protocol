@@ -69,8 +69,8 @@ where
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        let test = self.inner.flush(batch)?;
-        if test {
+        let delete_view = self.inner.flush(batch)?;
+        if delete_view {
             let mut key = self.inner.context().base_key();
             let tag = key.last_mut().unwrap();
             *tag = KeyTag::Hash as u8;
@@ -88,7 +88,7 @@ where
                 self.stored_hash = hash;
             }
         }
-        Ok(test)
+        Ok(delete_view)
     }
 
     fn clear(&mut self) {
