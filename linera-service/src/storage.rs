@@ -131,7 +131,8 @@ impl FromStr for StorageConfigNamespace {
         if let Some(s) = input.strip_prefix(STORAGE_SERVICE) {
             if s.is_empty() {
                 return Err(format_err!(
-                    "For Storage service, the formatting has to be service:endpoint:namespace, example service:tcp:127.0.0.1:7878:table_do_my_test"
+                    "For Storage service, the formatting has to be service:endpoint:namespace,\
+example service:tcp:127.0.0.1:7878:table_do_my_test"
                 ));
             }
             let parts = s.split(':').collect::<Vec<_>>();
