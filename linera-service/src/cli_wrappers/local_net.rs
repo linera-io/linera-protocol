@@ -326,7 +326,7 @@ impl LocalNetConfig {
             _ => 4,
         };
         let storage_config_builder = StorageConfigBuilder::TestConfig;
-        let path_provider = PathProvider::new_test().unwrap();
+        let path_provider = PathProvider::create_temporary_directory().unwrap();
         Self {
             database,
             network,

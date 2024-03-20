@@ -1694,7 +1694,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
 
 #[test_log::test(tokio::test)]
 async fn test_project_new() {
-    let path_provider = PathProvider::new_test().unwrap();
+    let path_provider = PathProvider::create_temporary_directory().unwrap();
     let client = ClientWrapper::new(path_provider, Network::Grpc, None, 0);
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
@@ -1710,7 +1710,7 @@ async fn test_project_new() {
 
 #[test_log::test(tokio::test)]
 async fn test_project_test() {
-    let path_provider = PathProvider::new_test().unwrap();
+    let path_provider = PathProvider::create_temporary_directory().unwrap();
     let client = ClientWrapper::new(path_provider, Network::Grpc, None, 0);
     client
         .project_test(&ClientWrapper::example_path("counter").unwrap())
