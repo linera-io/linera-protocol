@@ -11,7 +11,7 @@ use fungible::{ApplicationCall, FungibleResponse, Message, Operation};
 use linera_sdk::{
     base::{Account, AccountOwner, Amount, Owner, WithContractAbi},
     contract::system_api,
-    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
+    ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
 use native_fungible::TICKER_SYMBOL;
 use thiserror::Error;
@@ -74,7 +74,7 @@ impl Contract for NativeFungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                Self::check_account_authentication(self.runtime.authenticated_signer(), owner)?;
+                self.check_account_authentication(owner)?;
                 let account_owner = owner;
                 let owner = self.normalize_owner(owner);
 
@@ -91,10 +91,7 @@ impl Contract for NativeFungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                Self::check_account_authentication(
-                    self.runtime.authenticated_signer(),
-                    source_account.owner,
-                )?;
+                self.check_account_authentication(source_account.owner)?;
 
                 let fungible_source_account = source_account;
                 let fungible_target_account = target_account;
@@ -136,7 +133,7 @@ impl Contract for NativeFungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                Self::check_account_authentication(self.runtime.authenticated_signer(), owner)?;
+                self.check_account_authentication(owner)?;
                 Ok(self.get_transfer_outcome(owner, target_account, amount))
             }
         }
@@ -161,7 +158,7 @@ impl Contract for NativeFungibleTokenContract {
                 amount,
                 destination,
             } => {
-                Self::check_account_authentication(self.runtime.authenticated_signer(), owner)?;
+                self.check_account_authentication(owner)?;
                 let account_owner = owner;
                 let owner = self.normalize_owner(owner);
 
@@ -181,10 +178,7 @@ impl Contract for NativeFungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                Self::check_account_authentication(
-                    self.runtime.authenticated_signer(),
-                    source_account.owner,
-                )?;
+                self.check_account_authentication(source_account.owner)?;
 
                 let fungible_source_account = source_account;
                 let fungible_target_account = target_account;
@@ -270,14 +264,16 @@ impl NativeFungibleTokenContract {
     }
 
     /// Verifies that a transfer is authenticated for this local account.
-    fn check_account_authentication(
-        authenticated_signer: Option<Owner>,
-        owner: AccountOwner,
-    ) -> Result<(), Error> {
+    fn check_account_authentication(&mut self, owner: AccountOwner) -> Result<(), Error> {
         match owner {
-            AccountOwner::User(address) if authenticated_signer == Some(address) => Ok(()),
+            AccountOwner::User(address) => {
+                ensure!(
+                    self.runtime.authenticated_signer() == Some(address),
+                    Error::IncorrectAuthentication
+                );
+                Ok(())
+            }
             AccountOwner::Application(_) => Err(Error::ApplicationsNotSupported),
-            _ => Err(Error::IncorrectAuthentication),
         }
     }
 }

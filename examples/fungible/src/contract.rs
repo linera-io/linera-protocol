@@ -9,9 +9,9 @@ use self::state::FungibleToken;
 use async_trait::async_trait;
 use fungible::{Account, ApplicationCall, FungibleResponse, Message, Operation};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId, Owner, WithContractAbi},
+    base::{AccountOwner, Amount, WithContractAbi},
     contract::system_api,
-    ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
+    ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, ViewStateStorage,
 };
 use std::str::FromStr;
 use thiserror::Error;
@@ -72,11 +72,7 @@ impl Contract for FungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                Self::check_account_authentication(
-                    None,
-                    self.runtime.authenticated_signer(),
-                    owner,
-                )?;
+                self.check_account_authentication(owner)?;
                 self.state.debit(owner, amount).await?;
                 Ok(self
                     .finish_transfer_to_account(amount, target_account, owner)
@@ -88,11 +84,7 @@ impl Contract for FungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                Self::check_account_authentication(
-                    None,
-                    self.runtime.authenticated_signer(),
-                    source_account.owner,
-                )?;
+                self.check_account_authentication(source_account.owner)?;
                 self.claim(source_account, amount, target_account).await
             }
         }
@@ -121,11 +113,7 @@ impl Contract for FungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                Self::check_account_authentication(
-                    None,
-                    self.runtime.authenticated_signer(),
-                    owner,
-                )?;
+                self.check_account_authentication(owner)?;
                 self.state.debit(owner, amount).await?;
                 Ok(self
                     .finish_transfer_to_account(amount, target_account, owner)
@@ -151,11 +139,7 @@ impl Contract for FungibleTokenContract {
                 amount,
                 destination,
             } => {
-                Self::check_account_authentication(
-                    self.runtime.authenticated_caller_id(),
-                    self.runtime.authenticated_signer(),
-                    owner,
-                )?;
+                self.check_account_authentication(owner)?;
                 self.state.debit(owner, amount).await?;
                 let execution_outcome = self
                     .finish_transfer_to_account(amount, destination, owner)
@@ -171,11 +155,7 @@ impl Contract for FungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                Self::check_account_authentication(
-                    None,
-                    self.runtime.authenticated_signer(),
-                    source_account.owner,
-                )?;
+                self.check_account_authentication(source_account.owner)?;
                 let execution_outcome = self.claim(source_account, amount, target_account).await?;
                 Ok(ApplicationCallOutcome {
                     execution_outcome,
@@ -195,16 +175,23 @@ impl Contract for FungibleTokenContract {
 
 impl FungibleTokenContract {
     /// Verifies that a transfer is authenticated for this local account.
-    fn check_account_authentication(
-        authenticated_application_id: Option<ApplicationId>,
-        authenticated_signer: Option<Owner>,
-        owner: AccountOwner,
-    ) -> Result<(), Error> {
+    fn check_account_authentication(&mut self, owner: AccountOwner) -> Result<(), Error> {
         match owner {
-            AccountOwner::User(address) if authenticated_signer == Some(address) => Ok(()),
-            AccountOwner::Application(id) if authenticated_application_id == Some(id) => Ok(()),
-            _ => Err(Error::IncorrectAuthentication),
+            AccountOwner::User(address) => {
+                ensure!(
+                    self.runtime.authenticated_signer() == Some(address),
+                    Error::IncorrectAuthentication
+                )
+            }
+            AccountOwner::Application(id) => {
+                ensure!(
+                    self.runtime.authenticated_caller_id() == Some(id),
+                    Error::IncorrectAuthentication
+                )
+            }
         }
+
+        Ok(())
     }
 
     async fn claim(

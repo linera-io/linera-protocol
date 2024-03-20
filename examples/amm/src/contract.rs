@@ -10,7 +10,7 @@ use amm::{AmmError, ApplicationCall, Message, Operation};
 use async_trait::async_trait;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
-    base::{AccountOwner, Amount, ApplicationId, Owner, WithContractAbi},
+    base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallOutcome, Contract, ContractRuntime, ExecutionOutcome, OutgoingMessage,
     Resources, ViewStateStorage,
@@ -82,11 +82,7 @@ impl Contract for AmmContract {
                 input_token_idx,
                 input_amount,
             } => {
-                Self::check_account_authentication(
-                    None,
-                    self.runtime.authenticated_signer(),
-                    owner,
-                )?;
+                self.check_account_authentication(owner)?;
                 self.execute_swap(owner, input_token_idx, input_amount)?;
             }
         }
@@ -105,11 +101,7 @@ impl Contract for AmmContract {
                 input_token_idx,
                 input_amount,
             } => {
-                Self::check_account_authentication(
-                    self.runtime.authenticated_caller_id(),
-                    self.runtime.authenticated_signer(),
-                    owner,
-                )?;
+                self.check_account_authentication(owner)?;
                 if self.runtime.chain_id() == self.runtime.application_id().creation.chain_id {
                     self.execute_swap(owner, input_token_idx, input_amount)?;
                 } else {
@@ -127,16 +119,23 @@ impl Contract for AmmContract {
 
 impl AmmContract {
     /// authenticate the originator of the message
-    fn check_account_authentication(
-        authenticated_application_id: Option<ApplicationId>,
-        authenticated_signer: Option<Owner>,
-        owner: AccountOwner,
-    ) -> Result<(), AmmError> {
+    fn check_account_authentication(&mut self, owner: AccountOwner) -> Result<(), AmmError> {
         match owner {
-            AccountOwner::User(address) if authenticated_signer == Some(address) => Ok(()),
-            AccountOwner::Application(id) if authenticated_application_id == Some(id) => Ok(()),
-            _ => Err(AmmError::IncorrectAuthentication),
+            AccountOwner::User(address) => {
+                ensure!(
+                    self.runtime.authenticated_signer() == Some(address),
+                    AmmError::IncorrectAuthentication
+                )
+            }
+            AccountOwner::Application(id) => {
+                ensure!(
+                    self.runtime.authenticated_caller_id() == Some(id),
+                    AmmError::IncorrectAuthentication
+                )
+            }
         }
+
+        Ok(())
     }
 
     fn execute_order_local(&mut self, operation: Operation) -> Result<(), AmmError> {
