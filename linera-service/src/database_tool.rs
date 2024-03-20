@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_service::storage::StorageConfig;
+use linera_service::storage::StorageConfigNamespace;
 use linera_views::common::CommonStoreConfig;
 use std::process;
 
@@ -78,17 +78,17 @@ async fn evaluate_options(options: DatabaseToolOptions) -> Result<i32, anyhow::E
     let common_config = CommonStoreConfig::default();
     match options.command {
         DatabaseToolCommand::DeleteAll { storage_config } => {
-            let storage_config: StorageConfig = storage_config.parse()?;
+            let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
             let full_storage_config = storage_config.add_common_config(common_config).await?;
             full_storage_config.delete_all().await?;
         }
         DatabaseToolCommand::DeleteNamespace { storage_config } => {
-            let storage_config: StorageConfig = storage_config.parse()?;
+            let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
             let full_storage_config = storage_config.add_common_config(common_config).await?;
             full_storage_config.delete_namespace().await?;
         }
         DatabaseToolCommand::CheckExistence { storage_config } => {
-            let storage_config: StorageConfig = storage_config.parse()?;
+            let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
             let full_storage_config = storage_config.add_common_config(common_config).await?;
             let test = full_storage_config.test_existence().await?;
             if test {
@@ -100,7 +100,7 @@ async fn evaluate_options(options: DatabaseToolOptions) -> Result<i32, anyhow::E
             }
         }
         DatabaseToolCommand::CheckAbsence { storage_config } => {
-            let storage_config: StorageConfig = storage_config.parse()?;
+            let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
             let full_storage_config = storage_config.add_common_config(common_config).await?;
             let test = full_storage_config.test_existence().await?;
             if test {
@@ -112,12 +112,12 @@ async fn evaluate_options(options: DatabaseToolOptions) -> Result<i32, anyhow::E
             }
         }
         DatabaseToolCommand::Initialize { storage_config } => {
-            let storage_config: StorageConfig = storage_config.parse()?;
+            let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
             let full_storage_config = storage_config.add_common_config(common_config).await?;
             full_storage_config.initialize().await?;
         }
         DatabaseToolCommand::ListNamespaces { storage_config } => {
-            let storage_config: StorageConfig = storage_config.parse()?;
+            let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
             let full_storage_config = storage_config.add_common_config(common_config).await?;
             let namespaces = full_storage_config.list_all().await?;
             println!("The list of namespaces is {:?}", namespaces);

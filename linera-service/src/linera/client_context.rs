@@ -23,7 +23,7 @@ use linera_service::{
     chain_listener,
     config::{GenesisConfig, UserChain, WalletState},
     node_service::wait_for_next_round,
-    storage::StorageConfig,
+    storage::{StorageConfig, StorageConfigNamespace},
 };
 use linera_storage::Storage;
 use linera_views::views::ViewError;
@@ -181,14 +181,17 @@ impl ClientContext {
         Ok(Self::create_default_config_path()?.join("wallet.json"))
     }
 
-    pub fn storage_config(options: &ClientOptions) -> Result<StorageConfig, anyhow::Error> {
+    pub fn storage_config(options: &ClientOptions) -> Result<StorageConfigNamespace, anyhow::Error> {
         match &options.storage_config {
             Some(config) => config.parse(),
             #[cfg(feature = "rocksdb")]
-            None => Ok(StorageConfig::RocksDb {
-                path: Self::create_default_config_path()?.join("wallet.db"),
-                namespace: "default".to_string(),
-            }),
+            None => {
+                let storage_config = StorageConfig::RocksDb {
+                    path: Self::create_default_config_path()?.join("wallet.db"),
+                };
+                let namespace = "default".to_string();
+                Ok(StorageConfigNamespace { storage_config, namespace })
+            },
             #[cfg(not(feature = "rocksdb"))]
             None => anyhow::bail!("A storage option must be provided"),
         }

@@ -655,8 +655,7 @@ impl LocalNet {
                     unreachable!();
                 };
                 let endpoint = &service_config.endpoint;
-                let endpoint = endpoint.strip_prefix("http://").unwrap();
-                format!("service:http://{}:{}", endpoint, namespace)
+                format!("service:{}:{}", endpoint, namespace)
             }
             #[cfg(feature = "rocksdb")]
             Database::RocksDb => {

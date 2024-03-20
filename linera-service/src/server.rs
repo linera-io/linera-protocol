@@ -20,7 +20,7 @@ use linera_service::{
         CommitteeConfig, Export, GenesisConfig, Import, ValidatorConfig, ValidatorServerConfig,
     },
     prometheus_server,
-    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfig},
+    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfig, StorageConfigNamespace},
     util,
 };
 use linera_storage::Storage;
@@ -294,7 +294,7 @@ enum ServerCommand {
 
         /// Storage configuration for the blockchain history and security states.
         #[arg(long = "storage")]
-        storage_config: StorageConfig,
+        storage_config: StorageConfigNamespace,
 
         /// Configuration for cross-chain requests
         #[command(flatten)]
@@ -356,7 +356,7 @@ enum ServerCommand {
     Initialize {
         /// Storage configuration for the blockchain history and security states.
         #[arg(long = "storage")]
-        storage_config: StorageConfig,
+        storage_config: StorageConfigNamespace,
 
         /// Path to the file describing the initial user chains (aka genesis state)
         #[arg(long = "genesis")]
@@ -430,7 +430,7 @@ async fn run(options: ServerOptions) {
 
             #[cfg(feature = "rocksdb")]
             if server_config.internal_network.shards.len() > 1
-                && matches!(storage_config, StorageConfig::RocksDb { .. })
+                && matches!(storage_config.storage_config, StorageConfig::RocksDb { .. })
             {
                 panic!("Multiple shards not supported with RocksDB");
             }
