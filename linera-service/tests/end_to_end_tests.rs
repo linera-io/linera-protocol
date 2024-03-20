@@ -18,7 +18,7 @@ use linera_service::cli_wrappers::{
     ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
 };
 use serde_json::{json, Value};
-use std::{collections::BTreeMap, path::PathBuf, time::Duration};
+use std::{collections::BTreeMap, env, path::PathBuf, time::Duration};
 use test_case::test_case;
 use tracing::{info, warn};
 
@@ -2042,6 +2042,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) {
 
 #[test_log::test(tokio::test)]
 async fn test_project_new() {
+    let _rustflags_override = override_disable_warnings_as_errors();
     let path_provider = PathProvider::create_temporary_directory().unwrap();
     let client = ClientWrapper::new(path_provider, Network::Grpc, None, 0);
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -2072,6 +2073,7 @@ async fn test_project_test() {
 #[test_log::test(tokio::test)]
 async fn test_project_publish(database: Database, network: Network) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let _rustflags_override = override_disable_warnings_as_errors();
     let config = LocalNetConfig {
         num_initial_validators: 1,
         num_shards: 1,
@@ -2555,4 +2557,27 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) {
 
     net.ensure_is_running().await.unwrap();
     net.terminate().await.unwrap();
+}
+
+/// Clears the `RUSTFLAGS` environment variable, if it was configured to make warnings fail as
+/// errors.
+///
+/// The returned [`RestoreVarOnDrop`] restores the environment variable to its original value when
+/// it is dropped.
+fn override_disable_warnings_as_errors() -> Option<RestoreVarOnDrop> {
+    if matches!(env::var("RUSTFLAGS"), Ok(value) if value == "-D warnings") {
+        env::set_var("RUSTFLAGS", "");
+        Some(RestoreVarOnDrop)
+    } else {
+        None
+    }
+}
+
+/// Restores the `RUSTFLAGS` environment variable to make warnings fail as errors.
+struct RestoreVarOnDrop;
+
+impl Drop for RestoreVarOnDrop {
+    fn drop(&mut self) {
+        env::set_var("RUSTFLAGS", "-D warnings");
+    }
 }
